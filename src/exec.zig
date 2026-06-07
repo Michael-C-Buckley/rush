@@ -935,7 +935,7 @@ pub const Executor = struct {
 
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -985,14 +985,14 @@ pub const Executor = struct {
     fn expandHereDoc(self: *Executor, text: []const u8, quoted: bool, options: ExecuteOptions) ![]const u8 {
         if (quoted) return self.allocator.dupe(u8, text);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        return expand.expandWordScalar(self.allocator, text, .{ .env = self.envLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
+        return expand.expandWordScalar(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
         const raw = try self.allocator.dupe(u8, word.raw);
         errdefer self.allocator.free(raw);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -1069,8 +1069,17 @@ pub const Executor = struct {
         return allocator.dupe(u8, result.stdout);
     }
 
+    fn envSet(self: *Executor) expand.EnvSet {
+        return .{ .context = self, .setFn = setEnvCallback };
+    }
+
     fn envLookup(self: *Executor) expand.EnvLookup {
         return .{ .context = self, .lookupFn = lookupEnv };
+    }
+
+    fn setEnvCallback(context: ?*anyopaque, name: []const u8, value: []const u8) !void {
+        const self: *Executor = @ptrCast(@alignCast(context.?));
+        try self.setEnv(name, value);
     }
 
     fn lookupEnv(context: ?*const anyopaque, name: []const u8) ?[]const u8 {
@@ -2721,6 +2730,20 @@ test "executor field-splits unquoted parameter expansion in argv" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("one two\n", result.stdout);
+}
+
+test "executor supports POSIX parameter expansion assignment" {
+    var lowered = try parseAndLower(std.testing.allocator, "echo ${ASSIGNED:=value}; echo $ASSIGNED; echo ${ASSIGNED:+set}");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("value\nvalue\nset\n", result.stdout);
 }
 
 test "executor expands parameters from shell environment" {

@@ -16,6 +16,16 @@ pub const EnvLookup = struct {
     }
 };
 
+pub const EnvSet = struct {
+    context: ?*anyopaque = null,
+    setFn: ?*const fn (?*anyopaque, []const u8, []const u8) anyerror!void = null,
+
+    pub fn set(self: EnvSet, name: []const u8, value: []const u8) !void {
+        const set_fn = self.setFn orelse return;
+        try set_fn(self.context, name, value);
+    }
+};
+
 pub const CommandSubstitution = struct {
     context: ?*anyopaque = null,
     runFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8) anyerror![]const u8 = null,
@@ -28,6 +38,7 @@ pub const CommandSubstitution = struct {
 
 pub const Options = struct {
     env: EnvLookup = .{},
+    env_set: EnvSet = .{},
     io: ?std.Io = null,
     features: compat.Features = .{},
     command_substitution: CommandSubstitution = .{},
@@ -120,7 +131,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 
     for (parts.parts) |part| {
         const split = part.kind == .unquoted or part.kind == .parameter;
-        const rendered = try renderPart(allocator, parts.raw, part, options.env, options.command_substitution);
+        const rendered = try renderPart(allocator, parts.raw, part, options);
         defer allocator.free(rendered);
         if (split) {
             try appendSplitText(allocator, &fields, &current, rendered);
@@ -154,7 +165,7 @@ pub fn expandWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: 
     // Field splitting and pathname expansion are explicit phases even though
     // this scalar helper leaves them as no-ops. `expandWord` is the place that
     // will grow multiple fields later.
-    return renderWordParts(allocator, parts, options.env, options.command_substitution);
+    return renderWordParts(allocator, parts, options);
 }
 
 pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts {
@@ -330,12 +341,12 @@ fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
     };
 }
 
-pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, env: EnvLookup, command_substitution: CommandSubstitution) ![]const u8 {
+pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: Options) ![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
     for (word.parts) |part| {
-        const rendered = try renderPart(allocator, word.raw, part, env, command_substitution);
+        const rendered = try renderPart(allocator, word.raw, part, options);
         defer allocator.free(rendered);
         try output.appendSlice(allocator, rendered);
     }
@@ -343,25 +354,114 @@ pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, env: EnvLo
     return output.toOwnedSlice(allocator);
 }
 
-fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, env: EnvLookup, command_substitution: CommandSubstitution) ![]const u8 {
+fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) ![]const u8 {
     return switch (part.kind) {
         .unquoted, .escaped, .single_quoted => allocator.dupe(u8, part.value(raw)),
         .double_quoted => blk: {
-            const expanded = try expandParameters(allocator, part.value(raw), env);
+            const expanded = try expandParameters(allocator, part.value(raw), options.env);
             defer allocator.free(expanded);
             break :blk quoteRemove(allocator, expanded);
         },
-        .parameter => if (env.get(part.value(raw))) |value| allocator.dupe(u8, value) else allocator.alloc(u8, 0),
+        .parameter => renderParameter(allocator, part.value(raw), options),
         .arithmetic => blk: {
             const value = try evalArithmetic(part.value(raw));
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
         },
         .command_substitution => blk: {
-            const output = (try command_substitution.run(allocator, part.value(raw))) orelse try allocator.alloc(u8, 0);
+            const output = (try options.command_substitution.run(allocator, part.value(raw))) orelse try allocator.alloc(u8, 0);
             defer allocator.free(output);
             const trimmed = trimTrailingNewlines(output);
             break :blk allocator.dupe(u8, trimmed);
         },
+    };
+}
+
+const ParameterOperator = enum {
+    none,
+    length,
+    default_value,
+    assign_default,
+    alternate_value,
+    error_if_unset,
+};
+
+const ParameterExpression = struct {
+    name: []const u8,
+    operator: ParameterOperator = .none,
+    word: []const u8 = "",
+    colon: bool = false,
+};
+
+fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options) ![]const u8 {
+    const parsed = parseParameterExpression(expression);
+    const value = options.env.get(parsed.name);
+    const is_set = value != null;
+    const is_null = if (value) |text| text.len == 0 else true;
+
+    switch (parsed.operator) {
+        .none => return if (value) |text| allocator.dupe(u8, text) else allocator.alloc(u8, 0),
+        .length => {
+            const len = if (value) |text| text.len else 0;
+            return std.fmt.allocPrint(allocator, "{d}", .{len});
+        },
+        .default_value => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
+            return expandWordScalar(allocator, parsed.word, options);
+        },
+        .assign_default => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
+            const expanded = try expandWordScalar(allocator, parsed.word, options);
+            errdefer allocator.free(expanded);
+            try options.env_set.set(parsed.name, expanded);
+            return expanded;
+        },
+        .alternate_value => {
+            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.alloc(u8, 0);
+            return expandWordScalar(allocator, parsed.word, options);
+        },
+        .error_if_unset => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
+            return error.ParameterExpansionFailed;
+        },
+    }
+}
+
+fn parameterHasUsableValue(is_set: bool, is_null: bool, colon: bool) bool {
+    return if (colon) is_set and !is_null else is_set;
+}
+
+fn parseParameterExpression(expression: []const u8) ParameterExpression {
+    if (expression.len > 1 and expression[0] == '#') {
+        return .{ .name = expression[1..], .operator = .length };
+    }
+
+    var name_end: usize = 0;
+    if (expression.len > 0 and isSpecialParameterChar(expression[0])) {
+        name_end = 1;
+    } else {
+        while (name_end < expression.len and isNameContinue(expression[name_end])) : (name_end += 1) {}
+    }
+    if (name_end == 0) return .{ .name = expression };
+    if (name_end >= expression.len) return .{ .name = expression[0..name_end] };
+
+    var operator_index = name_end;
+    var colon = false;
+    if (expression[operator_index] == ':' and operator_index + 1 < expression.len) {
+        colon = true;
+        operator_index += 1;
+    }
+    const operator: ParameterOperator = switch (expression[operator_index]) {
+        '-' => .default_value,
+        '=' => .assign_default,
+        '+' => .alternate_value,
+        '?' => .error_if_unset,
+        else => return .{ .name = expression },
+    };
+    return .{
+        .name = expression[0..name_end],
+        .operator = operator,
+        .word = expression[operator_index + 1 ..],
+        .colon = colon,
     };
 }
 
@@ -754,7 +854,7 @@ test "word part rendering expands parameters outside single quotes" {
     var parts = try parseWordParts(std.testing.allocator, "'$USER'\"$USER\"-$USER");
     defer parts.deinit();
 
-    const rendered = try renderWordParts(std.testing.allocator, parts, test_env, .{});
+    const rendered = try renderWordParts(std.testing.allocator, parts, .{ .env = test_env });
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("$USERrush-user-rush-user", rendered);
@@ -772,6 +872,22 @@ test "parameter expansion supports braced names and missing values" {
     defer std.testing.allocator.free(expanded);
 
     try std.testing.expectEqualStrings("rush-user--", expanded);
+}
+
+test "parameter expansion supports POSIX operators" {
+    const defaults = try expandWordScalar(std.testing.allocator, "${USER:-fallback}:${MISSING:-fallback}:${EMPTY:-fallback}:${EMPTY-fallback}", .{ .env = test_env });
+    defer std.testing.allocator.free(defaults);
+    try std.testing.expectEqualStrings("rush-user:fallback:fallback:", defaults);
+
+    const alternate = try expandWordScalar(std.testing.allocator, "${USER:+yes}:${MISSING:+yes}:${EMPTY:+yes}:${EMPTY+yes}", .{ .env = test_env });
+    defer std.testing.allocator.free(alternate);
+    try std.testing.expectEqualStrings("yes:::yes", alternate);
+
+    const lengths = try expandWordScalar(std.testing.allocator, "${#USER}:${#MISSING}:${#EMPTY}", .{ .env = test_env });
+    defer std.testing.allocator.free(lengths);
+    try std.testing.expectEqualStrings("9:0:0", lengths);
+
+    try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }));
 }
 
 test "expand word returns fields through an explicit result" {
