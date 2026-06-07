@@ -1,0 +1,2 @@
+echo hidden >&-
+echo after

@@ -363,7 +363,10 @@ pub const Executor = struct {
             defer guard.restore(self, options.io.?);
             var result = try child.executeScriptSlice(subshell.body, options);
             defer result.deinit();
-            try writeInheritedResult(options.io.?, result);
+            writeInheritedResult(options.io.?, result) catch |err| switch (err) {
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                else => return err,
+            };
             return emptyResult(self.allocator, result.status);
         }
         var result = try child.executeScriptSlice(subshell.body, options);
@@ -389,7 +392,10 @@ pub const Executor = struct {
             defer guard.restore(self, options.io.?);
             var result = try self.executeScriptSlice(group.body, options);
             defer result.deinit();
-            try writeInheritedResult(options.io.?, result);
+            writeInheritedResult(options.io.?, result) catch |err| switch (err) {
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                else => return err,
+            };
             return emptyResult(self.allocator, result.status);
         }
         var result = try self.executeScriptSlice(group.body, options);
@@ -1069,6 +1075,15 @@ pub const Executor = struct {
 
         if (expanded.argv.len == 0) {
             try self.applyAssignments(expanded.assignments);
+            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
+                error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(expanded), "bad file descriptor"),
+                else => return err,
+            }) |guard_value| {
+                var guard = guard_value;
+                defer guard.restore(self, options.io.?);
+                return emptyResult(self.allocator, 0);
+            }
             return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, 0), options);
         }
 
@@ -1083,7 +1098,10 @@ pub const Executor = struct {
                 defer guard.restore(self, options.io.?);
                 var result = try self.executeFunctionBody(expanded, body, options);
                 defer result.deinit();
-                try writeInheritedResult(options.io.?, result);
+                writeInheritedResult(options.io.?, result) catch |err| switch (err) {
+                    error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                    else => return err,
+                };
                 return emptyResult(self.allocator, result.status);
             }
             var result = try self.executeFunctionBody(expanded, body, options);
@@ -1101,7 +1119,10 @@ pub const Executor = struct {
                 defer guard.restore(self, options.io.?);
                 var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
                 defer result.deinit();
-                try writeInheritedResult(options.io.?, result);
+                writeInheritedResult(options.io.?, result) catch |err| switch (err) {
+                    error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                    else => return err,
+                };
                 return emptyResult(self.allocator, result.status);
             }
             return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options), options);
@@ -1693,18 +1714,19 @@ const FdRedirectionGuard = struct {
         return .{ .allocator = allocator };
     }
 
-    fn saveFd(self: *FdRedirectionGuard, fd: std.posix.fd_t) !void {
+    fn saveFd(self: *FdRedirectionGuard, executor: *Executor, fd: std.posix.fd_t) !void {
         for (self.saved.items) |entry| if (entry.fd == fd) return;
-        const saved_fd = if (fd > 2) null else rawDup(fd) catch |err| switch (err) {
+        const should_save = fd <= 2 or executor.isShellFdOpen(fd);
+        const saved_fd = if (should_save) rawDup(fd) catch |err| switch (err) {
             error.BadFileDescriptor => null,
             else => return err,
-        };
+        } else null;
         try self.saved.append(self.allocator, .{ .fd = fd, .saved = saved_fd });
     }
 
     fn apply(self: *FdRedirectionGuard, executor: *Executor, io: std.Io, redirection: ir.Redirection) !void {
         if (isHereDocRedirection(redirection)) {
-            try self.saveFd(0);
+            try self.saveFd(executor, 0);
             var file = try fileFromBytes(io, redirection.here_doc orelse "");
             defer if (file.handle != 0) file.close(io);
             try rawDup2(file.handle, 0);
@@ -1712,7 +1734,7 @@ const FdRedirectionGuard = struct {
         }
         if (isStdinFileRedirection(redirection)) {
             const target = redirection.target orelse return;
-            try self.saveFd(0);
+            try self.saveFd(executor, 0);
             var file = try std.Io.Dir.cwd().openFile(io, target.text, .{});
             defer if (file.handle != 0) file.close(io);
             try rawDup2(file.handle, 0);
@@ -1721,7 +1743,7 @@ const FdRedirectionGuard = struct {
         if (isFileOutputRedirection(redirection)) {
             const target = redirection.target orelse return;
             const fd = redirectionFd(redirection) orelse 1;
-            try self.saveFd(fd);
+            try self.saveFd(executor, fd);
             var file = try openOutputRedirectionFile(io, target.text, redirection.operator, executor.shell_options.noclobber);
             defer if (file.handle != fd) file.close(io);
             try rawDup2(file.handle, fd);
@@ -1732,9 +1754,14 @@ const FdRedirectionGuard = struct {
             const default_fd: std.posix.fd_t = if (redirection.operator == .less_and) 0 else 1;
             const from_fd = redirectionFd(redirection) orelse default_fd;
             const target = redirection.target orelse return;
+            try self.saveFd(executor, from_fd);
+            if (std.mem.eql(u8, target.text, "-")) {
+                closeRawFd(io, from_fd);
+                executor.markShellFdClosed(from_fd);
+                return;
+            }
             const to_fd = parseFd(target.text) orelse return;
             if (!executor.isShellFdOpen(to_fd)) return error.BadFileDescriptor;
-            try self.saveFd(from_fd);
             try rawDup2(to_fd, from_fd);
             try executor.markShellFdOpen(from_fd);
             return;
@@ -1884,8 +1911,27 @@ fn makePipelinePipe(io: std.Io) !Executor.PipelinePipe {
 }
 
 fn closeRawFd(io: std.Io, fd: std.posix.fd_t) void {
-    var file: std.Io.File = .{ .handle = fd, .flags = .{ .nonblocking = false } };
-    file.close(io);
+    _ = io;
+    rawClose(fd) catch {};
+}
+
+fn rawClose(fd: std.posix.fd_t) !void {
+    if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) {
+        const rc = std.os.linux.close(fd);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS, .BADF => return,
+            .INTR => return rawClose(fd),
+            else => return error.Unexpected,
+        }
+    }
+    while (true) {
+        const rc = std.c.close(fd);
+        switch (std.c.errno(rc)) {
+            .SUCCESS, .BADF => return,
+            .INTR => continue,
+            else => return error.Unexpected,
+        }
+    }
 }
 
 fn setCloseOnExec(fd: std.posix.fd_t) !void {

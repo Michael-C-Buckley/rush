@@ -88,3 +88,4 @@ set -e; echo before; false; echo after
 set -o errexit; if false; then echo bad; else echo ok; fi; echo after
 set -e; set +e; false; echo after
 { echo fd3 >&3; } 3>out; echo after; /bin/cat out; /bin/sh -c "echo leak >&3" 2>/dev/null; echo status=$?
+{ echo first >&3; 3>&-; /bin/sh -c "echo nope >&3" 2>/dev/null; echo status=$?; } 3>out; echo after; /bin/cat out
