@@ -509,12 +509,12 @@ pub const Executor = struct {
         const pipe_count = pipeline.command_indexes.len - 1;
         const pipes = try self.allocator.alloc(PipelinePipe, pipe_count);
         defer self.allocator.free(pipes);
-        for (pipes) |*pipe| pipe.* = try makePipelinePipe();
+        for (pipes) |*pipe| pipe.* = try makePipelinePipe(io);
         defer for (pipes) |*pipe| pipe.close(io);
 
-        var capture_stdout = try makePipelinePipe();
+        var capture_stdout = try makePipelinePipe(io);
         defer capture_stdout.close(io);
-        var capture_stderr = try makePipelinePipe();
+        var capture_stderr = try makePipelinePipe(io);
         defer capture_stderr.close(io);
 
         const children = try self.allocator.alloc(std.process.Child, pipeline.command_indexes.len);
@@ -1137,7 +1137,7 @@ pub const Executor = struct {
     }
 };
 
-fn makePipelinePipe() !Executor.PipelinePipe {
+fn makePipelinePipe(io: std.Io) !Executor.PipelinePipe {
     const builtin = @import("builtin");
     return switch (builtin.os.tag) {
         .linux => blk: {
@@ -1160,10 +1160,31 @@ fn makePipelinePipe() !Executor.PipelinePipe {
                 .NFILE => return error.SystemFdQuotaExceeded,
                 else => return error.Unexpected,
             }
+            errdefer {
+                closeRawFd(io, fds[0]);
+                closeRawFd(io, fds[1]);
+            }
+            try setCloseOnExec(fds[0]);
+            try setCloseOnExec(fds[1]);
             break :blk filesFromPipeFds(.{ fds[0], fds[1] });
         },
         else => error.Unsupported,
     };
+}
+
+fn closeRawFd(io: std.Io, fd: std.posix.fd_t) void {
+    var file: std.Io.File = .{ .handle = fd, .flags = .{ .nonblocking = false } };
+    file.close(io);
+}
+
+fn setCloseOnExec(fd: std.posix.fd_t) !void {
+    const rc = std.c.fcntl(fd, @as(c_int, std.c.F.SETFD), @as(c_int, std.c.FD_CLOEXEC));
+    switch (std.c.errno(rc)) {
+        .SUCCESS => {},
+        .BADF => return error.FileDescriptorNotASocket,
+        .INVAL => return error.Unexpected,
+        else => return error.Unexpected,
+    }
 }
 
 fn filesFromPipeFds(fds: [2]std.posix.fd_t) Executor.PipelinePipe {
