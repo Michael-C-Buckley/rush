@@ -705,6 +705,11 @@ pub const Executor = struct {
         const redirections = try self.expandRedirections(command.redirections, options);
         defer self.freeRedirections(redirections);
         for (redirections) |redirection| {
+            if (isHereDocRedirection(redirection)) {
+                if (stdin_file.*) |file| file.close(io);
+                stdin_file.* = try fileFromBytes(io, redirection.here_doc orelse "");
+                continue;
+            }
             if (isStdinFileRedirection(redirection)) {
                 const target = redirection.target orelse continue;
                 if (stdin_file.*) |file| file.close(io);
@@ -936,6 +941,7 @@ pub const Executor = struct {
                 .io_number = if (redirection.io_number) |word| try self.expandWord(word, options) else null,
                 .operator = redirection.operator,
                 .target = if (redirection.target) |word| try self.expandWord(word, options) else null,
+                .here_doc = if (redirection.here_doc) |text| try self.allocator.dupe(u8, text) else null,
             };
             initialized += 1;
         }
@@ -1060,6 +1066,7 @@ pub const Executor = struct {
     fn freeRedirection(self: *Executor, redirection: ir.Redirection) void {
         if (redirection.io_number) |word| self.freeWord(word);
         if (redirection.target) |word| self.freeWord(word);
+        if (redirection.here_doc) |text| self.allocator.free(text);
     }
 
     fn freeWord(self: *Executor, word: ir.WordRef) void {
@@ -1077,6 +1084,12 @@ pub const Executor = struct {
     fn applyInputRedirections(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, owned_stdin: *?[]u8) ![]const u8 {
         var current = stdin;
         for (command.redirections) |redirection| {
+            if (isHereDocRedirection(redirection)) {
+                if (owned_stdin.*) |bytes| self.allocator.free(bytes);
+                owned_stdin.* = try self.allocator.dupe(u8, redirection.here_doc orelse "");
+                current = owned_stdin.*.?;
+                continue;
+            }
             if (!isStdinFileRedirection(redirection)) continue;
             const io = options.io orelse return error.MissingIoForRedirection;
             const target = redirection.target orelse continue;
@@ -1178,6 +1191,11 @@ pub const Executor = struct {
         defer if (stderr_file) |file| file.close(io);
 
         for (command.redirections) |redirection| {
+            if (isHereDocRedirection(redirection)) {
+                if (stdin_file) |file| file.close(io);
+                stdin_file = try fileFromBytes(io, redirection.here_doc orelse "");
+                continue;
+            }
             if (isStdinFileRedirection(redirection)) {
                 const target = redirection.target orelse continue;
                 if (stdin_file) |file| file.close(io);
@@ -1311,6 +1329,16 @@ fn filesFromPipeFds(fds: [2]std.posix.fd_t) Executor.PipelinePipe {
         .read = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
         .write = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
     };
+}
+
+fn fileFromBytes(io: std.Io, bytes: []const u8) !std.Io.File {
+    const name = "rush-heredoc.tmp";
+    var write_file = try std.Io.Dir.cwd().createFile(io, name, .{ .truncate = true });
+    defer write_file.close(io);
+    try writeBytesToFile(io, write_file, bytes);
+    const read_file = try std.Io.Dir.cwd().openFile(io, name, .{});
+    std.Io.Dir.cwd().deleteFile(io, name) catch {};
+    return read_file;
 }
 
 fn writeBytesToFile(io: std.Io, file: std.Io.File, bytes: []const u8) !void {
@@ -1696,6 +1724,11 @@ fn joinParams(allocator: std.mem.Allocator, params: []const []const u8) ![]const
 
 fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
+}
+
+fn isHereDocRedirection(redirection: ir.Redirection) bool {
+    const fd = redirectionFd(redirection) orelse 0;
+    return fd == 0 and (redirection.operator == .dless or redirection.operator == .dless_dash);
 }
 
 fn isStdinFileRedirection(redirection: ir.Redirection) bool {
@@ -2703,6 +2736,42 @@ test "executor applies pipefail option to pipeline status" {
     var mixed_result = try executor.executeProgram(mixed.program, .{ .io = std.testing.io, .allow_external = true });
     defer mixed_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 1), mixed_result.status);
+}
+
+test "executor supports here-doc stdin redirections" {
+    var simple = try parseAndLower(std.testing.allocator,
+        \\cat <<EOF
+        \\hello
+        \\EOF
+    );
+    defer simple.parsed.deinit();
+    defer simple.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var simple_result = try executor.executeProgram(simple.program, .{ .io = std.testing.io });
+    defer simple_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), simple_result.status);
+    try std.testing.expectEqualStrings("hello\n", simple_result.stdout);
+
+    var stripped = try parseAndLower(std.testing.allocator, "cat <<-EOF\n\tstripped\n\tEOF\n");
+    defer stripped.parsed.deinit();
+    defer stripped.program.deinit();
+    var stripped_result = try executor.executeProgram(stripped.program, .{ .io = std.testing.io });
+    defer stripped_result.deinit();
+    try std.testing.expectEqualStrings("stripped\n", stripped_result.stdout);
+
+    var piped = try parseAndLower(std.testing.allocator,
+        \\cat <<EOF | /usr/bin/cat
+        \\pipe
+        \\EOF
+    );
+    defer piped.parsed.deinit();
+    defer piped.program.deinit();
+    var piped_result = try executor.executeProgram(piped.program, .{ .io = std.testing.io, .allow_external = true });
+    defer piped_result.deinit();
+    try std.testing.expectEqualStrings("pipe\n", piped_result.stdout);
 }
 
 test "executor supports real redirections on pipeline stages" {
