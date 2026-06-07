@@ -641,12 +641,23 @@ pub const Executor = struct {
             } else {
                 const argv = try argvForCommand(self.allocator, command_without_redirs);
                 defer self.allocator.free(argv);
-                children[spawned] = try std.process.spawn(io, .{
+                children[spawned] = std.process.spawn(io, .{
                     .argv = argv,
                     .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
                     .stdout = if (stdout_file) |file| .{ .file = file } else .ignore,
                     .stderr = if (stderr_file) |file| .{ .file = file } else .inherit,
-                });
+                }) catch |err| switch (err) {
+                    error.FileNotFound => {
+                        if (stdin_file) |file| file.close(io);
+                        if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
+                        for (pipes) |*pipe| pipe.close(io);
+                        capture_stdout.close(io);
+                        capture_stderr.close(io);
+                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items);
+                    },
+                    else => return err,
+                };
                 child_stage_indexes[spawned] = index;
                 spawned += 1;
                 if (stdin_file) |file| file.close(io);
@@ -692,6 +703,14 @@ pub const Executor = struct {
             .stdout = try multi_reader.toOwnedSlice(0),
             .stderr = try multi_reader.toOwnedSlice(1),
         };
+    }
+
+    fn pipelineSpawnFailureResult(self: *Executor, io: std.Io, name: []const u8, children: []std.process.Child, threads: *std.ArrayList(std.Thread), contexts: []const *BuiltinPipelineContext) !CommandResult {
+        for (children) |*child| child.kill(io);
+        for (threads.items) |thread| thread.join();
+        for (contexts) |context| self.allocator.destroy(context);
+        threads.clearRetainingCapacity();
+        return errorResult(self.allocator, 127, name, "command not found");
     }
 
     fn applyPipelineStageRedirections(
@@ -791,12 +810,19 @@ pub const Executor = struct {
             defer self.allocator.free(argv);
 
             const is_last = index + 1 == pipeline.command_indexes.len;
-            children[index] = try std.process.spawn(io, .{
+            children[index] = std.process.spawn(io, .{
                 .argv = argv,
                 .stdin = if (previous_stdout) |file| .{ .file = file } else .ignore,
                 .stdout = .pipe,
                 .stderr = if (is_last) .pipe else .inherit,
-            });
+            }) catch |err| switch (err) {
+                error.FileNotFound => {
+                    const open_stdin = previous_stdout;
+                    previous_stdout = null;
+                    return self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin);
+                },
+                else => return err,
+            };
             spawned += 1;
 
             if (previous_stdout) |file| file.close(io);
@@ -833,6 +859,12 @@ pub const Executor = struct {
             .stdout = try multi_reader.toOwnedSlice(0),
             .stderr = try multi_reader.toOwnedSlice(1),
         };
+    }
+
+    fn externalPipelineSpawnFailureResult(self: *Executor, io: std.Io, name: []const u8, children: []std.process.Child, previous_stdout: ?std.Io.File) !CommandResult {
+        if (previous_stdout) |file| file.close(io);
+        for (children) |*child| child.kill(io);
+        return errorResult(self.allocator, 127, name, "command not found");
     }
 
     pub fn executeSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !CommandResult {
@@ -3134,6 +3166,34 @@ test "executor supports here-doc stdin redirections" {
     var quoted_result = try executor.executeProgram(quoted.program, .{ .io = std.testing.io });
     defer quoted_result.deinit();
     try std.testing.expectEqualStrings("$HD_VALUE $(echo command) $((1 + 2))\n", quoted_result.stdout);
+}
+
+test "executor cleans up pipelines when a stage command is missing" {
+    var mixed_first = try parseAndLower(std.testing.allocator, "hi | cat");
+    defer mixed_first.parsed.deinit();
+    defer mixed_first.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var mixed_first_result = try executor.executeProgram(mixed_first.program, .{ .io = std.testing.io, .allow_external = true });
+    defer mixed_first_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 127), mixed_first_result.status);
+    try std.testing.expectEqualStrings("hi: command not found\n", mixed_first_result.stderr);
+
+    var mixed_last = try parseAndLower(std.testing.allocator, "echo ok | hi");
+    defer mixed_last.parsed.deinit();
+    defer mixed_last.program.deinit();
+    var mixed_last_result = try executor.executeProgram(mixed_last.program, .{ .io = std.testing.io, .allow_external = true });
+    defer mixed_last_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 127), mixed_last_result.status);
+    try std.testing.expectEqualStrings("hi: command not found\n", mixed_last_result.stderr);
+
+    var external_first = try parseAndLower(std.testing.allocator, "hi | /usr/bin/cat");
+    defer external_first.parsed.deinit();
+    defer external_first.program.deinit();
+    var external_first_result = try executor.executeProgram(external_first.program, .{ .io = std.testing.io, .allow_external = true });
+    defer external_first_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 127), external_first_result.status);
+    try std.testing.expectEqualStrings("hi: command not found\n", external_first_result.stderr);
 }
 
 test "executor supports real redirections on pipeline stages" {
