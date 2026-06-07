@@ -1,0 +1,3 @@
+: > rw
+{ echo via3 >&3; } 3<> rw
+/bin/cat rw

@@ -1,0 +1,3 @@
+: <> created
+/bin/test -f created
+echo status=$?

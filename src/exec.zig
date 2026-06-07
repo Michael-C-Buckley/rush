@@ -1497,6 +1497,10 @@ pub const Executor = struct {
             const io = options.io orelse return error.MissingIoForRedirection;
             const target = redirection.target orelse continue;
             if (owned_stdin.*) |bytes| self.allocator.free(bytes);
+            if (redirection.operator == .less_great) {
+                var file = try openReadWriteRedirectionFile(io, target.text);
+                file.close(io);
+            }
             owned_stdin.* = try std.Io.Dir.cwd().readFileAlloc(io, target.text, self.allocator, .limited(1024 * 1024));
             current = owned_stdin.*.?;
         }
@@ -1735,9 +1739,22 @@ const FdRedirectionGuard = struct {
         if (isStdinFileRedirection(redirection)) {
             const target = redirection.target orelse return;
             try self.saveFd(executor, 0);
-            var file = try std.Io.Dir.cwd().openFile(io, target.text, .{});
+            var file = if (redirection.operator == .less_great)
+                try openReadWriteRedirectionFile(io, target.text)
+            else
+                try std.Io.Dir.cwd().openFile(io, target.text, .{});
             defer if (file.handle != 0) file.close(io);
             try rawDup2(file.handle, 0);
+            return;
+        }
+        if (redirection.operator == .less_great) {
+            const target = redirection.target orelse return;
+            const fd = redirectionFd(redirection) orelse 0;
+            try self.saveFd(executor, fd);
+            var file = try openReadWriteRedirectionFile(io, target.text);
+            defer if (file.handle != fd) file.close(io);
+            try rawDup2(file.handle, fd);
+            try executor.markShellFdOpen(fd);
             return;
         }
         if (isFileOutputRedirection(redirection)) {
@@ -2068,6 +2085,21 @@ fn writeBytesToFile(io: std.Io, file: std.Io.File, bytes: []const u8) !void {
     var writer = file.writer(io, &buffer);
     try writer.interface.writeAll(bytes);
     try writer.interface.flush();
+}
+
+fn openReadWriteRedirectionFile(io: std.Io, target: []const u8) !std.Io.File {
+    const builtin = @import("builtin");
+    return switch (builtin.os.tag) {
+        .windows, .wasi => std.Io.Dir.cwd().createFile(io, target, .{ .truncate = false }),
+        else => blk: {
+            const fd = try std.posix.openat(std.Io.Dir.cwd().handle, target, .{
+                .ACCMODE = .RDWR,
+                .CREAT = true,
+                .CLOEXEC = true,
+            }, 0o666);
+            break :blk .{ .handle = fd, .flags = .{ .nonblocking = false } };
+        },
+    };
 }
 
 fn openOutputRedirectionFile(io: std.Io, target: []const u8, operator: parser.TokenKind, noclobber: bool) !std.Io.File {
@@ -2909,7 +2941,7 @@ fn isHereDocRedirection(redirection: ir.Redirection) bool {
 
 fn isStdinFileRedirection(redirection: ir.Redirection) bool {
     const fd = redirectionFd(redirection) orelse 0;
-    return fd == 0 and redirection.operator == .less;
+    return fd == 0 and (redirection.operator == .less or redirection.operator == .less_great);
 }
 
 fn isFileOutputRedirection(redirection: ir.Redirection) bool {
