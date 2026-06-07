@@ -26,6 +26,7 @@ pub const ExecuteOptions = struct {
 pub const ShellOptions = struct {
     pipefail: bool = false,
     noglob: bool = false,
+    noclobber: bool = false,
 };
 
 pub const CommandResult = struct {
@@ -337,7 +338,10 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = redirections,
         };
-        if (try self.applyRealFdRedirectionsIfNeeded(wrapper, options)) |guard_value| {
+        if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
+            error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
+            else => return err,
+        }) |guard_value| {
             var guard = guard_value;
             defer guard.restore(options.io.?);
             var result = try child.executeScriptSlice(subshell.body, options);
@@ -359,7 +363,10 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = redirections,
         };
-        if (try self.applyRealFdRedirectionsIfNeeded(wrapper, options)) |guard_value| {
+        if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
+            error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
+            else => return err,
+        }) |guard_value| {
             var guard = guard_value;
             defer guard.restore(options.io.?);
             var result = try self.executeScriptSlice(group.body, options);
@@ -851,7 +858,7 @@ pub const Executor = struct {
             if (isFileOutputRedirection(redirection)) {
                 const target = redirection.target orelse continue;
                 const fd = redirectionFd(redirection) orelse 1;
-                const file = try openOutputRedirectionFile(io, target.text, redirection.operator == .dgreat);
+                const file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
                 switch (fd) {
                     1 => {
                         if (stdout_file.*) |old| old.close(io);
@@ -1001,7 +1008,10 @@ pub const Executor = struct {
 
         if (!options.suppress_functions and self.functions.get(expanded.argv[0].text) != null) {
             const body = self.functions.get(expanded.argv[0].text).?;
-            if (try self.applyRealFdRedirectionsIfNeeded(expanded, options)) |guard_value| {
+            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
+                error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
+                else => return err,
+            }) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(options.io.?);
                 var result = try self.executeFunctionBody(expanded, body, options);
@@ -1015,7 +1025,10 @@ pub const Executor = struct {
         }
 
         if (builtinFor(expanded.argv[0].text)) |builtin| {
-            if (try self.applyRealFdRedirectionsIfNeeded(expanded, options)) |guard_value| {
+            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
+                error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
+                else => return err,
+            }) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(options.io.?);
                 var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
@@ -1413,7 +1426,13 @@ pub const Executor = struct {
                     2 => &redirected.stderr,
                     else => continue,
                 };
-                try self.writeRedirectedStream(stream, redirection, options);
+                self.writeRedirectedStream(stream, redirection, options) catch |err| switch (err) {
+                    error.PathAlreadyExists => {
+                        redirected.deinit();
+                        return errorResult(self.allocator, 1, targetName(redirection), "cannot overwrite existing file");
+                    },
+                    else => return err,
+                };
                 continue;
             }
 
@@ -1428,10 +1447,7 @@ pub const Executor = struct {
     fn writeRedirectedStream(self: *Executor, stream: *[]u8, redirection: ir.Redirection, options: ExecuteOptions) !void {
         const io = options.io orelse return error.MissingIoForRedirection;
         const target = redirection.target orelse return;
-        const flags: std.Io.Dir.CreateFileOptions = .{
-            .truncate = redirection.operator != .dgreat,
-        };
-        var file = try std.Io.Dir.cwd().createFile(io, target.text, flags);
+        var file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
         defer file.close(io);
         var buffer: [4096]u8 = undefined;
         var writer = file.writer(io, &buffer);
@@ -1506,7 +1522,7 @@ pub const Executor = struct {
             if (isFileOutputRedirection(redirection)) {
                 const target = redirection.target orelse continue;
                 const fd = redirectionFd(redirection) orelse 1;
-                var file = try openOutputRedirectionFile(io, target.text, redirection.operator == .dgreat);
+                var file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
                 switch (fd) {
                     1 => {
                         if (stdout_file) |old| old.close(io);
@@ -1622,7 +1638,7 @@ const FdRedirectionGuard = struct {
             const target = redirection.target orelse return;
             const fd = redirectionFd(redirection) orelse 1;
             if (fd > 2) return;
-            var file = try openOutputRedirectionFile(io, target.text, redirection.operator == .dgreat);
+            var file = try openOutputRedirectionFile(io, target.text, redirection.operator, executor.shell_options.noclobber);
             defer file.close(io);
             try rawDup2(file.handle, fd);
             return;
@@ -1636,7 +1652,6 @@ const FdRedirectionGuard = struct {
             try rawDup2(to_fd, from_fd);
             return;
         }
-        _ = executor;
     }
 
     fn restore(self: *FdRedirectionGuard, io: std.Io) void {
@@ -1913,8 +1928,19 @@ fn writeBytesToFile(io: std.Io, file: std.Io.File, bytes: []const u8) !void {
     try writer.interface.flush();
 }
 
-fn openOutputRedirectionFile(io: std.Io, target: []const u8, append: bool) !std.Io.File {
-    if (!append) return std.Io.Dir.cwd().createFile(io, target, .{ .truncate = true });
+fn openOutputRedirectionFile(io: std.Io, target: []const u8, operator: parser.TokenKind, noclobber: bool) !std.Io.File {
+    return switch (operator) {
+        .dgreat => openAppendRedirectionFile(io, target),
+        .clobber => std.Io.Dir.cwd().createFile(io, target, .{ .truncate = true }),
+        .greater => if (noclobber)
+            std.Io.Dir.cwd().createFile(io, target, .{ .truncate = false, .exclusive = true })
+        else
+            std.Io.Dir.cwd().createFile(io, target, .{ .truncate = true }),
+        else => unreachable,
+    };
+}
+
+fn openAppendRedirectionFile(io: std.Io, target: []const u8) !std.Io.File {
     const builtin = @import("builtin");
     return switch (builtin.os.tag) {
         .windows, .wasi => std.Io.Dir.cwd().createFile(io, target, .{ .truncate = false }),
@@ -2499,6 +2525,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         self.shell_options.noglob = command.argv[1].text[0] == '-';
         return emptyResult(self.allocator, 0);
     }
+    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-C") or std.mem.eql(u8, command.argv[1].text, "+C"))) {
+        self.shell_options.noclobber = command.argv[1].text[0] == '-';
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
     if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
@@ -2509,6 +2539,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         }
         if (std.mem.eql(u8, command.argv[2].text, "noglob")) {
             self.shell_options.noglob = enabled;
+            return emptyResult(self.allocator, 0);
+        }
+        if (std.mem.eql(u8, command.argv[2].text, "noclobber")) {
+            self.shell_options.noclobber = enabled;
             return emptyResult(self.allocator, 0);
         }
         return errorResult(self.allocator, 2, "set", "unknown option name");
@@ -2525,9 +2559,9 @@ fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
     const stdout = if (reusable)
-        try std.fmt.allocPrint(self.allocator, "set {s}o noglob\nset {s}o pipefail\n", .{ if (self.shell_options.noglob) "-" else "+", if (self.shell_options.pipefail) "-" else "+" })
+        try std.fmt.allocPrint(self.allocator, "set {s}o noclobber\nset {s}o noglob\nset {s}o pipefail\n", .{ if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.pipefail) "-" else "+" })
     else
-        try std.fmt.allocPrint(self.allocator, "noglob\t{s}\npipefail\t{s}\n", .{ if (self.shell_options.noglob) "on" else "off", if (self.shell_options.pipefail) "on" else "off" });
+        try std.fmt.allocPrint(self.allocator, "noclobber\t{s}\nnoglob\t{s}\npipefail\t{s}\n", .{ if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.pipefail) "on" else "off" });
     errdefer self.allocator.free(stdout);
     return .{
         .allocator = self.allocator,
@@ -2658,6 +2692,17 @@ fn joinParams(allocator: std.mem.Allocator, params: []const []const u8) ![]const
 
 fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
+}
+
+fn targetName(redirection: ir.Redirection) []const u8 {
+    return if (redirection.target) |target| target.text else "redirection";
+}
+
+fn noclobberTargetName(command: ir.SimpleCommand) []const u8 {
+    for (command.redirections) |redirection| {
+        if (redirection.operator == .greater) return targetName(redirection);
+    }
+    return "redirection";
 }
 
 fn isHereDocRedirection(redirection: ir.Redirection) bool {
@@ -3841,7 +3886,7 @@ test "executor implements set shell option baseline" {
     var show = try executor.executeProgram(show_lowered.program, .{});
     defer show.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
-    try std.testing.expectEqualStrings("noglob\toff\npipefail\toff\n", show.stdout);
+    try std.testing.expectEqualStrings("noclobber\toff\nnoglob\toff\npipefail\toff\n", show.stdout);
 
     var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
     defer enable_lowered.parsed.deinit();
@@ -3856,7 +3901,7 @@ test "executor implements set shell option baseline" {
     defer reusable_lowered.program.deinit();
     var reusable = try executor.executeProgram(reusable_lowered.program, .{});
     defer reusable.deinit();
-    try std.testing.expectEqualStrings("set +o noglob\nset -o pipefail\n", reusable.stdout);
+    try std.testing.expectEqualStrings("set +o noclobber\nset +o noglob\nset -o pipefail\n", reusable.stdout);
 
     var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");
     defer disable_lowered.parsed.deinit();
@@ -3876,6 +3921,16 @@ test "executor implements set shell option baseline" {
     defer noglob.deinit();
     try std.testing.expectEqualStrings("rush-noglob-?.tmp\nrush-noglob-a.tmp\n", noglob.stdout);
     try std.testing.expect(!executor.shell_options.noglob);
+
+    const clobber_path = "rush-noclobber.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, clobber_path) catch {};
+    var noclobber_lowered = try parseAndLower(std.testing.allocator, "echo old > rush-noclobber.tmp; set -C; echo new > rush-noclobber.tmp; echo status=$?; echo forced >| rush-noclobber.tmp; /usr/bin/cat rush-noclobber.tmp");
+    defer noclobber_lowered.parsed.deinit();
+    defer noclobber_lowered.program.deinit();
+    var noclobber = try executor.executeProgram(noclobber_lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer noclobber.deinit();
+    try std.testing.expectEqualStrings("status=1\nforced\n", noclobber.stdout);
+    try std.testing.expect(executor.shell_options.noclobber);
 }
 
 test "executor applies pipefail option to pipeline status" {

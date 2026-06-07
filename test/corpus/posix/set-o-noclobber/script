@@ -1,0 +1,7 @@
+echo old > out
+set -o noclobber
+echo new > out
+echo status=$?
+set +o noclobber
+echo new > out
+/bin/cat out
