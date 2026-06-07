@@ -27,6 +27,54 @@ pub const Phase = enum {
     quote_removal,
 };
 
+pub const Span = struct {
+    start: usize,
+    end: usize,
+
+    pub fn init(start: usize, end: usize) Span {
+        std.debug.assert(end >= start);
+        return .{ .start = start, .end = end };
+    }
+
+    pub fn slice(self: Span, source: []const u8) []const u8 {
+        std.debug.assert(self.end <= source.len);
+        return source[self.start..self.end];
+    }
+};
+
+pub const WordPartKind = enum {
+    unquoted,
+    single_quoted,
+    double_quoted,
+    escaped,
+    parameter,
+};
+
+pub const WordPart = struct {
+    kind: WordPartKind,
+    span: Span,
+    value_span: Span,
+
+    pub fn source(self: WordPart, raw: []const u8) []const u8 {
+        return self.span.slice(raw);
+    }
+
+    pub fn value(self: WordPart, raw: []const u8) []const u8 {
+        return self.value_span.slice(raw);
+    }
+};
+
+pub const WordParts = struct {
+    allocator: std.mem.Allocator,
+    raw: []const u8,
+    parts: []WordPart,
+
+    pub fn deinit(self: *WordParts) void {
+        self.allocator.free(self.parts);
+        self.* = undefined;
+    }
+};
+
 pub const ExpansionResult = struct {
     allocator: std.mem.Allocator,
     fields: []const []const u8,
@@ -56,16 +104,154 @@ pub fn expandWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: 
     const tilde_expanded = try expandTilde(allocator, raw, options.env);
     defer allocator.free(tilde_expanded);
 
-    const parameter_expanded = try expandParameters(allocator, tilde_expanded, options.env);
-    defer allocator.free(parameter_expanded);
+    var parts = try parseWordParts(allocator, tilde_expanded);
+    defer parts.deinit();
 
     // Field splitting and pathname expansion are explicit phases even though
     // this scalar helper leaves them as no-ops. `expandWord` is the place that
     // will grow multiple fields later.
-    const field_split = parameter_expanded;
-    const pathname_expanded = field_split;
+    return renderWordParts(allocator, parts, options.env);
+}
 
-    return quoteRemove(allocator, pathname_expanded);
+pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts {
+    var parts: std.ArrayList(WordPart) = .empty;
+    errdefer parts.deinit(allocator);
+
+    var index: usize = 0;
+    var unquoted_start: ?usize = null;
+    while (index < raw.len) {
+        switch (raw[index]) {
+            '\'' => {
+                try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
+                const start = index;
+                index += 1;
+                const value_start = index;
+                while (index < raw.len and raw[index] != '\'') : (index += 1) {}
+                const value_end = index;
+                if (index < raw.len) index += 1;
+                try parts.append(allocator, .{
+                    .kind = .single_quoted,
+                    .span = .init(start, index),
+                    .value_span = .init(value_start, value_end),
+                });
+            },
+            '"' => {
+                try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
+                const start = index;
+                index += 1;
+                const value_start = index;
+                while (index < raw.len and raw[index] != '"') {
+                    if (raw[index] == '\\' and index + 1 < raw.len) {
+                        index += 2;
+                    } else {
+                        index += 1;
+                    }
+                }
+                const value_end = index;
+                if (index < raw.len) index += 1;
+                try parts.append(allocator, .{
+                    .kind = .double_quoted,
+                    .span = .init(start, index),
+                    .value_span = .init(value_start, value_end),
+                });
+            },
+            '\\' => {
+                try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
+                const start = index;
+                index += 1;
+                const value_start = index;
+                if (index < raw.len) index += 1;
+                try parts.append(allocator, .{
+                    .kind = .escaped,
+                    .span = .init(start, index),
+                    .value_span = .init(value_start, index),
+                });
+            },
+            '$' => if (parameterPart(raw, index)) |part| {
+                try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
+                try parts.append(allocator, part);
+                index = part.span.end;
+            } else {
+                if (unquoted_start == null) unquoted_start = index;
+                index += 1;
+            },
+            else => {
+                if (unquoted_start == null) unquoted_start = index;
+                index += 1;
+            },
+        }
+    }
+    try flushUnquoted(allocator, raw, &parts, &unquoted_start, raw.len);
+
+    return .{
+        .allocator = allocator,
+        .raw = raw,
+        .parts = try parts.toOwnedSlice(allocator),
+    };
+}
+
+fn flushUnquoted(allocator: std.mem.Allocator, raw: []const u8, parts: *std.ArrayList(WordPart), start: *?usize, end: usize) !void {
+    _ = raw;
+    const actual_start = start.* orelse return;
+    if (actual_start < end) {
+        try parts.append(allocator, .{
+            .kind = .unquoted,
+            .span = .init(actual_start, end),
+            .value_span = .init(actual_start, end),
+        });
+    }
+    start.* = null;
+}
+
+fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
+    std.debug.assert(raw[dollar] == '$');
+    const next = dollar + 1;
+    if (next >= raw.len) return null;
+
+    if (raw[next] == '{') {
+        const name_start = next + 1;
+        var name_end = name_start;
+        while (name_end < raw.len and raw[name_end] != '}') : (name_end += 1) {}
+        if (name_end >= raw.len) return null;
+        return .{
+            .kind = .parameter,
+            .span = .init(dollar, name_end + 1),
+            .value_span = .init(name_start, name_end),
+        };
+    }
+
+    if (!isNameStart(raw[next])) return null;
+    var name_end = next + 1;
+    while (name_end < raw.len and isNameContinue(raw[name_end])) : (name_end += 1) {}
+    return .{
+        .kind = .parameter,
+        .span = .init(dollar, name_end),
+        .value_span = .init(next, name_end),
+    };
+}
+
+pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, env: EnvLookup) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    for (word.parts) |part| {
+        switch (part.kind) {
+            .unquoted, .escaped => try output.appendSlice(allocator, part.value(word.raw)),
+            .single_quoted => try output.appendSlice(allocator, part.value(word.raw)),
+            .double_quoted => {
+                const expanded = try expandParameters(allocator, part.value(word.raw), env);
+                defer allocator.free(expanded);
+                const quote_removed = try quoteRemove(allocator, expanded);
+                defer allocator.free(quote_removed);
+                try output.appendSlice(allocator, quote_removed);
+            },
+            .parameter => if (env.get(part.value(word.raw))) |value| {
+                try output.appendSlice(allocator, value);
+            },
+        }
+    }
+
+    return output.toOwnedSlice(allocator);
 }
 
 pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
@@ -196,6 +382,35 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
 }
 
 const test_env: EnvLookup = .{ .lookupFn = testLookup };
+
+test "word part parser records quoted escaped and parameter regions" {
+    var parts = try parseWordParts(std.testing.allocator, "a'$USER'\"$USER\"\\ b${EMPTY}");
+    defer parts.deinit();
+
+    try std.testing.expectEqual(@as(usize, 6), parts.parts.len);
+    try std.testing.expectEqual(WordPartKind.unquoted, parts.parts[0].kind);
+    try std.testing.expectEqualStrings("a", parts.parts[0].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.single_quoted, parts.parts[1].kind);
+    try std.testing.expectEqualStrings("$USER", parts.parts[1].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.double_quoted, parts.parts[2].kind);
+    try std.testing.expectEqualStrings("$USER", parts.parts[2].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.escaped, parts.parts[3].kind);
+    try std.testing.expectEqualStrings(" ", parts.parts[3].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.unquoted, parts.parts[4].kind);
+    try std.testing.expectEqualStrings("b", parts.parts[4].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.parameter, parts.parts[5].kind);
+    try std.testing.expectEqualStrings("EMPTY", parts.parts[5].value(parts.raw));
+}
+
+test "word part rendering expands parameters outside single quotes" {
+    var parts = try parseWordParts(std.testing.allocator, "'$USER'\"$USER\"-$USER");
+    defer parts.deinit();
+
+    const rendered = try renderWordParts(std.testing.allocator, parts, test_env);
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("$USERrush-user-rush-user", rendered);
+}
 
 test "expansion phases include tilde parameter and quote removal" {
     const expanded = try expandWordScalar(std.testing.allocator, "~/src/$USER/'literal $USER'/\"x\"", .{ .env = test_env });
