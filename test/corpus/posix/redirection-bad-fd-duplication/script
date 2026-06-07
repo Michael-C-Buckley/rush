@@ -1,0 +1,2 @@
+echo leak >&3
+echo status=$?

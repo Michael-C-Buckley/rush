@@ -126,6 +126,7 @@ pub const Executor = struct {
     readonly: std.StringHashMapUnmanaged(void) = .empty,
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
+    open_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, void) = .empty,
     shell_options: ShellOptions = .{},
     global_positionals: PositionalParams = .{},
     call_frames: std.ArrayList(CallFrame) = .empty,
@@ -189,6 +190,7 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.functions.deinit(self.allocator);
+        self.open_fds.deinit(self.allocator);
         self.global_positionals.deinit(self.allocator);
         for (self.call_frames.items) |*frame| frame.deinit(self.allocator);
         self.call_frames.deinit(self.allocator);
@@ -354,10 +356,11 @@ pub const Executor = struct {
         };
         if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
             error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
+            error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(wrapper), "bad file descriptor"),
             else => return err,
         }) |guard_value| {
             var guard = guard_value;
-            defer guard.restore(options.io.?);
+            defer guard.restore(self, options.io.?);
             var result = try child.executeScriptSlice(subshell.body, options);
             defer result.deinit();
             try writeInheritedResult(options.io.?, result);
@@ -379,10 +382,11 @@ pub const Executor = struct {
         };
         if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
             error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
+            error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(wrapper), "bad file descriptor"),
             else => return err,
         }) |guard_value| {
             var guard = guard_value;
-            defer guard.restore(options.io.?);
+            defer guard.restore(self, options.io.?);
             var result = try self.executeScriptSlice(group.body, options);
             defer result.deinit();
             try writeInheritedResult(options.io.?, result);
@@ -411,6 +415,8 @@ pub const Executor = struct {
         while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
         var readonly_iter = other.readonly.iterator();
         while (readonly_iter.next()) |entry| try self.setReadonly(entry.key_ptr.*);
+        var open_fd_iter = other.open_fds.iterator();
+        while (open_fd_iter.next()) |entry| try self.open_fds.put(self.allocator, entry.key_ptr.*, {});
         var function_iter = other.functions.iterator();
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.*);
         var array_iter = other.arrays.iterator();
@@ -426,6 +432,20 @@ pub const Executor = struct {
             try copied.positionals.set(self.allocator, frame.positionals.params);
             try self.call_frames.append(self.allocator, copied);
         }
+    }
+
+    fn isShellFdOpen(self: Executor, fd: std.posix.fd_t) bool {
+        return fd <= 2 or self.open_fds.contains(fd);
+    }
+
+    fn markShellFdOpen(self: *Executor, fd: std.posix.fd_t) !void {
+        if (fd <= 2) return;
+        try self.open_fds.put(self.allocator, fd, {});
+    }
+
+    fn markShellFdClosed(self: *Executor, fd: std.posix.fd_t) void {
+        if (fd <= 2) return;
+        _ = self.open_fds.remove(fd);
     }
 
     fn setFunction(self: *Executor, name: []const u8, body: []const u8) !void {
@@ -1056,10 +1076,11 @@ pub const Executor = struct {
             const body = self.functions.get(expanded.argv[0].text).?;
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
                 error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(expanded), "bad file descriptor"),
                 else => return err,
             }) |guard_value| {
                 var guard = guard_value;
-                defer guard.restore(options.io.?);
+                defer guard.restore(self, options.io.?);
                 var result = try self.executeFunctionBody(expanded, body, options);
                 defer result.deinit();
                 try writeInheritedResult(options.io.?, result);
@@ -1073,10 +1094,11 @@ pub const Executor = struct {
         if (builtinFor(expanded.argv[0].text)) |builtin| {
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
                 error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(expanded), "bad file descriptor"),
                 else => return err,
             }) |guard_value| {
                 var guard = guard_value;
-                defer guard.restore(options.io.?);
+                defer guard.restore(self, options.io.?);
                 var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
                 defer result.deinit();
                 try writeInheritedResult(options.io.?, result);
@@ -1434,7 +1456,7 @@ pub const Executor = struct {
         if (options.external_stdio != .inherit or command.redirections.len == 0) return null;
         const io = options.io orelse return null;
         var guard = try FdRedirectionGuard.init(self.allocator, io);
-        errdefer guard.restore(io);
+        errdefer guard.restore(self, io);
         for (command.redirections) |redirection| {
             try guard.apply(self, io, redirection);
         }
@@ -1703,6 +1725,7 @@ const FdRedirectionGuard = struct {
             var file = try openOutputRedirectionFile(io, target.text, redirection.operator, executor.shell_options.noclobber);
             defer if (file.handle != fd) file.close(io);
             try rawDup2(file.handle, fd);
+            try executor.markShellFdOpen(fd);
             return;
         }
         if (redirection.operator == .greater_and or redirection.operator == .less_and) {
@@ -1710,13 +1733,15 @@ const FdRedirectionGuard = struct {
             const from_fd = redirectionFd(redirection) orelse default_fd;
             const target = redirection.target orelse return;
             const to_fd = parseFd(target.text) orelse return;
+            if (!executor.isShellFdOpen(to_fd)) return error.BadFileDescriptor;
             try self.saveFd(from_fd);
             try rawDup2(to_fd, from_fd);
+            try executor.markShellFdOpen(from_fd);
             return;
         }
     }
 
-    fn restore(self: *FdRedirectionGuard, io: std.Io) void {
+    fn restore(self: *FdRedirectionGuard, executor: *Executor, io: std.Io) void {
         if (!self.active) return;
         var index = self.saved.items.len;
         while (index > 0) {
@@ -1727,6 +1752,7 @@ const FdRedirectionGuard = struct {
                 closeRawFd(io, saved_fd);
             } else {
                 closeRawFd(io, entry.fd);
+                executor.markShellFdClosed(entry.fd);
             }
         }
         self.saved.deinit(self.allocator);
@@ -2819,6 +2845,13 @@ fn targetName(redirection: ir.Redirection) []const u8 {
 fn noclobberTargetName(command: ir.SimpleCommand) []const u8 {
     for (command.redirections) |redirection| {
         if (redirection.operator == .greater) return targetName(redirection);
+    }
+    return "redirection";
+}
+
+fn badFdTargetName(command: ir.SimpleCommand) []const u8 {
+    for (command.redirections) |redirection| {
+        if (redirection.operator == .greater_and or redirection.operator == .less_and) return targetName(redirection);
     }
     return "redirection";
 }
