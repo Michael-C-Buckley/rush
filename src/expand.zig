@@ -49,6 +49,7 @@ pub const WordPartKind = enum {
     double_quoted,
     escaped,
     parameter,
+    arithmetic,
 };
 
 pub const WordPart = struct {
@@ -194,7 +195,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                     .value_span = .init(value_start, index),
                 });
             },
-            '$' => if (parameterPart(raw, index)) |part| {
+            '$' => if (arithmeticPart(raw, index) orelse parameterPart(raw, index)) |part| {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 try parts.append(allocator, part);
                 index = part.span.end;
@@ -228,6 +229,22 @@ fn flushUnquoted(allocator: std.mem.Allocator, raw: []const u8, parts: *std.Arra
         });
     }
     start.* = null;
+}
+
+fn arithmeticPart(raw: []const u8, dollar: usize) ?WordPart {
+    if (dollar + 2 >= raw.len or raw[dollar] != '$' or raw[dollar + 1] != '(' or raw[dollar + 2] != '(') return null;
+    const value_start = dollar + 3;
+    var index = value_start;
+    while (index + 1 < raw.len) : (index += 1) {
+        if (raw[index] == ')' and raw[index + 1] == ')') {
+            return .{
+                .kind = .arithmetic,
+                .span = .init(dollar, index + 2),
+                .value_span = .init(value_start, index),
+            };
+        }
+    }
+    return null;
 }
 
 fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
@@ -279,7 +296,91 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, env
             break :blk quoteRemove(allocator, expanded);
         },
         .parameter => if (env.get(part.value(raw))) |value| allocator.dupe(u8, value) else allocator.alloc(u8, 0),
+        .arithmetic => blk: {
+            const value = try evalArithmetic(part.value(raw));
+            break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
+        },
     };
+}
+
+const ArithmeticParser = struct {
+    input: []const u8,
+    index: usize = 0,
+
+    fn parse(self: *ArithmeticParser) anyerror!i64 {
+        const value = try self.parseExpr();
+        self.skipSpace();
+        if (self.index != self.input.len) return error.InvalidArithmetic;
+        return value;
+    }
+
+    fn parseExpr(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseTerm();
+        while (true) {
+            self.skipSpace();
+            if (self.eat('+')) {
+                value += try self.parseTerm();
+            } else if (self.eat('-')) {
+                value -= try self.parseTerm();
+            } else return value;
+        }
+    }
+
+    fn parseTerm(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseFactor();
+        while (true) {
+            self.skipSpace();
+            if (self.eat('*')) {
+                value *= try self.parseFactor();
+            } else if (self.eat('/')) {
+                const rhs = try self.parseFactor();
+                if (rhs == 0) return error.DivisionByZero;
+                value = @divTrunc(value, rhs);
+            } else if (self.eat('%')) {
+                const rhs = try self.parseFactor();
+                if (rhs == 0) return error.DivisionByZero;
+                value = @rem(value, rhs);
+            } else return value;
+        }
+    }
+
+    fn parseFactor(self: *ArithmeticParser) anyerror!i64 {
+        self.skipSpace();
+        if (self.eat('+')) return self.parseFactor();
+        if (self.eat('-')) return -(try self.parseFactor());
+        if (self.eat('(')) {
+            const value = try self.parseExpr();
+            self.skipSpace();
+            if (!self.eat(')')) return error.InvalidArithmetic;
+            return value;
+        }
+        return self.parseNumber();
+    }
+
+    fn parseNumber(self: *ArithmeticParser) anyerror!i64 {
+        self.skipSpace();
+        const start = self.index;
+        while (self.index < self.input.len and std.ascii.isDigit(self.input[self.index])) : (self.index += 1) {}
+        if (start == self.index) return error.InvalidArithmetic;
+        return std.fmt.parseInt(i64, self.input[start..self.index], 10);
+    }
+
+    fn skipSpace(self: *ArithmeticParser) void {
+        while (self.index < self.input.len and isDefaultIfsWhitespace(self.input[self.index])) self.index += 1;
+    }
+
+    fn eat(self: *ArithmeticParser, c: u8) bool {
+        if (self.index < self.input.len and self.input[self.index] == c) {
+            self.index += 1;
+            return true;
+        }
+        return false;
+    }
+};
+
+pub fn evalArithmetic(input: []const u8) anyerror!i64 {
+    var arithmetic_parser: ArithmeticParser = .{ .input = input };
+    return arithmetic_parser.parse();
 }
 
 fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: []const u8) !void {
@@ -613,6 +714,28 @@ test "field splitting preserves quoted expansion results" {
     try std.testing.expectEqual(@as(usize, 2), result.fields.len);
     try std.testing.expectEqualStrings("rush-user two", result.fields[0]);
     try std.testing.expectEqualStrings("three four", result.fields[1]);
+}
+
+test "arithmetic expansion evaluates integer expressions" {
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 + 2 * 3"));
+    try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("(1 + 2) * 3"));
+    try std.testing.expectEqual(@as(i64, -4), try evalArithmetic("-8 / 2"));
+
+    var result = try expandWord(std.testing.allocator, "value=$((1 + 2 * 3))", .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), result.fields.len);
+    try std.testing.expectEqualStrings("value=7", result.fields[0]);
+}
+
+test "word part parser records arithmetic expansion regions" {
+    var parts = try parseWordParts(std.testing.allocator, "a$((1 + 2))b");
+    defer parts.deinit();
+
+    try std.testing.expectEqual(@as(usize, 3), parts.parts.len);
+    try std.testing.expectEqual(WordPartKind.unquoted, parts.parts[0].kind);
+    try std.testing.expectEqual(WordPartKind.arithmetic, parts.parts[1].kind);
+    try std.testing.expectEqualStrings("1 + 2", parts.parts[1].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.unquoted, parts.parts[2].kind);
 }
 
 test "pathname expansion matches sorted cwd entries" {

@@ -297,6 +297,7 @@ const Lexer = struct {
                 '\\' => self.consumeBackslash(),
                 '\'' => try self.consumeQuoted('\'', "unterminated single quote"),
                 '"' => try self.consumeDoubleQuoted(),
+                '$' => try self.consumeDollarExpansion(),
                 else => self.index += 1,
             }
         }
@@ -306,6 +307,25 @@ const Lexer = struct {
     fn consumeBackslash(self: *Lexer) void {
         self.index += 1;
         if (!self.isAtEnd()) self.index += 1;
+    }
+
+    fn consumeDollarExpansion(self: *Lexer) !void {
+        if (self.index + 2 >= self.source.len or self.source[self.index + 1] != '(' or self.source[self.index + 2] != '(') {
+            self.index += 1;
+            return;
+        }
+
+        const start = self.index;
+        self.index += 3;
+        while (self.index + 1 < self.source.len) : (self.index += 1) {
+            if (self.source[self.index] == ')' and self.source[self.index + 1] == ')') {
+                self.index += 2;
+                return;
+            }
+        }
+
+        self.index = self.source.len;
+        try self.addIncomplete(.init(start, self.source.len), "unterminated arithmetic expansion");
     }
 
     fn consumeQuoted(self: *Lexer, quote: u8, message: []const u8) !void {
@@ -1340,6 +1360,18 @@ test "lexer tokenizes operators and redirections with max munch" {
             .{ .kind = .eof, .span = .empty(38) },
         },
         .nodes = &.{.{ .kind = .root, .span = .init(0, 38) }},
+    });
+}
+
+test "lexer preserves arithmetic expansion as part of a word" {
+    try expectParse("echo $((1 + 2))", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 15) },
+            .{ .kind = .eof, .span = .empty(15) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 15) }},
     });
 }
 

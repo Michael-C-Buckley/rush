@@ -595,6 +595,21 @@ test "executor runs true false and echo builtins" {
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
 }
 
+test "executor expands arithmetic expressions in argv" {
+    var lowered = try parseAndLower(std.testing.allocator, "echo $((1 + 2 * 3))");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("7\n", result.stdout);
+}
+
 test "executor expands pathname patterns in argv" {
     const a = "rush-exec-glob-a.tmp";
     const b = "rush-exec-glob-b.tmp";
