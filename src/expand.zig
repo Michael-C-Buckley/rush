@@ -383,6 +383,10 @@ const ParameterOperator = enum {
     assign_default,
     alternate_value,
     error_if_unset,
+    remove_small_suffix,
+    remove_large_suffix,
+    remove_small_prefix,
+    remove_large_prefix,
 };
 
 const ParameterExpression = struct {
@@ -423,7 +427,51 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
             return error.ParameterExpansionFailed;
         },
+        .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
+            const base = value orelse "";
+            const pattern = try expandWordScalar(allocator, parsed.word, options);
+            defer allocator.free(pattern);
+            return removePattern(allocator, base, pattern, parsed.operator);
+        },
     }
+}
+
+fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: []const u8, operator: ParameterOperator) ![]const u8 {
+    return switch (operator) {
+        .remove_small_suffix => blk: {
+            var start = value.len;
+            while (true) {
+                if (globMatches(pattern, value[start..])) break :blk allocator.dupe(u8, value[0..start]);
+                if (start == 0) break;
+                start -= 1;
+            }
+            break :blk allocator.dupe(u8, value);
+        },
+        .remove_large_suffix => blk: {
+            var start: usize = 0;
+            while (start <= value.len) : (start += 1) {
+                if (globMatches(pattern, value[start..])) break :blk allocator.dupe(u8, value[0..start]);
+            }
+            break :blk allocator.dupe(u8, value);
+        },
+        .remove_small_prefix => blk: {
+            var end: usize = 0;
+            while (end <= value.len) : (end += 1) {
+                if (globMatches(pattern, value[0..end])) break :blk allocator.dupe(u8, value[end..]);
+            }
+            break :blk allocator.dupe(u8, value);
+        },
+        .remove_large_prefix => blk: {
+            var end = value.len;
+            while (true) {
+                if (globMatches(pattern, value[0..end])) break :blk allocator.dupe(u8, value[end..]);
+                if (end == 0) break;
+                end -= 1;
+            }
+            break :blk allocator.dupe(u8, value);
+        },
+        else => unreachable,
+    };
 }
 
 fn parameterHasUsableValue(is_set: bool, is_null: bool, colon: bool) bool {
@@ -455,12 +503,15 @@ fn parseParameterExpression(expression: []const u8) ParameterExpression {
         '=' => .assign_default,
         '+' => .alternate_value,
         '?' => .error_if_unset,
+        '%' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '%') .remove_large_suffix else .remove_small_suffix,
+        '#' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '#') .remove_large_prefix else .remove_small_prefix,
         else => return .{ .name = expression },
     };
+    const word_start = operator_index + @as(usize, if (operator == .remove_large_suffix or operator == .remove_large_prefix) 2 else 1);
     return .{
         .name = expression[0..name_end],
         .operator = operator,
-        .word = expression[operator_index + 1 ..],
+        .word = expression[word_start..],
         .colon = colon,
     };
 }
@@ -826,6 +877,7 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "HOME")) return "/home/rush";
     if (std.mem.eql(u8, name, "USER")) return "rush-user";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
+    if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
     return null;
 }
 
@@ -888,6 +940,12 @@ test "parameter expansion supports POSIX operators" {
     try std.testing.expectEqualStrings("9:0:0", lengths);
 
     try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }));
+}
+
+test "parameter expansion supports pattern removal operators" {
+    const expanded = try expandWordScalar(std.testing.allocator, "${PATHLIKE%/*}:${PATHLIKE%%/*}:${PATHLIKE#*/}:${PATHLIKE##*/}", .{ .env = test_env });
+    defer std.testing.allocator.free(expanded);
+    try std.testing.expectEqualStrings("/usr/local/bin::usr/local/bin/rush:rush", expanded);
 }
 
 test "expand word returns fields through an explicit result" {
