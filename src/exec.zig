@@ -406,16 +406,34 @@ pub const Executor = struct {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
 
-        const run_result = std.process.run(self.allocator, io, .{ .argv = argv }) catch |err| switch (err) {
+        var child = std.process.spawn(io, .{
+            .argv = argv,
+            .stdin = .ignore,
+            .stdout = .pipe,
+            .stderr = .pipe,
+        }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             else => return err,
         };
+        defer child.kill(io);
 
+        var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+        var multi_reader: std.Io.File.MultiReader = undefined;
+        multi_reader.init(self.allocator, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+        defer multi_reader.deinit();
+
+        while (multi_reader.fill(64, .none)) |_| {} else |err| switch (err) {
+            error.EndOfStream => {},
+            else => |e| return e,
+        }
+        try multi_reader.checkAnyError();
+
+        const term = try child.wait(io);
         return .{
             .allocator = self.allocator,
-            .status = exitStatusFromTerm(run_result.term),
-            .stdout = run_result.stdout,
-            .stderr = run_result.stderr,
+            .status = exitStatusFromTerm(term),
+            .stdout = try multi_reader.toOwnedSlice(0),
+            .stderr = try multi_reader.toOwnedSlice(1),
         };
     }
 };
@@ -899,6 +917,22 @@ test "executor wires external pipelines with real process pipes" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("hello", result.stdout);
+}
+
+test "executor captures stderr and status from spawned external commands" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'echo err >&2; exit 7'");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 7), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("err\n", result.stderr);
 }
 
 test "executor can run an external command when allowed" {
