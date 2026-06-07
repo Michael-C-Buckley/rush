@@ -193,7 +193,7 @@ pub const Executor = struct {
         }
 
         if (builtinFor(expanded.argv[0].text)) |builtin| {
-            return try self.applyOutputRedirections(expanded, try builtin(self, expanded, effective_stdin), options);
+            return try self.applyOutputRedirections(expanded, try builtin(self, expanded, effective_stdin, options), options);
         }
 
         if (!options.allow_external) {
@@ -454,7 +454,7 @@ fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {
     };
 }
 
-const BuiltinFn = *const fn (*Executor, ir.SimpleCommand, []const u8) anyerror!CommandResult;
+const BuiltinFn = *const fn (*Executor, ir.SimpleCommand, []const u8, ExecuteOptions) anyerror!CommandResult;
 
 fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, ":")) return builtinTrue;
@@ -462,23 +462,29 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "false")) return builtinFalse;
     if (std.mem.eql(u8, name, "echo")) return builtinEcho;
     if (std.mem.eql(u8, name, "cat")) return builtinCat;
+    if (std.mem.eql(u8, name, "cd")) return builtinCd;
+    if (std.mem.eql(u8, name, "pwd")) return builtinPwd;
+    if (std.mem.eql(u8, name, "export")) return builtinExport;
     return null;
 }
 
-fn builtinTrue(self: *Executor, command: ir.SimpleCommand, stdin: []const u8) !CommandResult {
+fn builtinTrue(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = command;
     _ = stdin;
+    _ = options;
     return emptyResult(self.allocator, 0);
 }
 
-fn builtinFalse(self: *Executor, command: ir.SimpleCommand, stdin: []const u8) !CommandResult {
+fn builtinFalse(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = command;
     _ = stdin;
+    _ = options;
     return emptyResult(self.allocator, 1);
 }
 
-fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8) !CommandResult {
+fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
+    _ = options;
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(self.allocator);
 
@@ -496,7 +502,8 @@ fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8) !C
     };
 }
 
-fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8) !CommandResult {
+fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = options;
     // Initial pipeline-friendly `cat`: with no operands, copy stdin to stdout.
     // File operands belong with the fuller POSIX builtin/external behavior later.
     if (command.argv.len > 1) {
@@ -508,6 +515,68 @@ fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8) !Co
         .stdout = try self.allocator.dupe(u8, stdin),
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, "cd", "too many arguments");
+    const target = if (command.argv.len == 2) command.argv[1].text else self.getEnv("HOME") orelse return errorResult(self.allocator, 1, "cd", "HOME not set");
+    std.process.setCurrentPath(io, target) catch |err| {
+        const message = try std.fmt.allocPrint(self.allocator, "{s}: {t}", .{ target, err });
+        defer self.allocator.free(message);
+        return errorResult(self.allocator, 1, "cd", message);
+    };
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = command;
+    _ = stdin;
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    const cwd = try std.process.currentPathAlloc(io, self.allocator);
+    defer self.allocator.free(cwd);
+    const stdout = try std.fmt.allocPrint(self.allocator, "{s}\n", .{cwd});
+    errdefer self.allocator.free(stdout);
+    return .{
+        .allocator = self.allocator,
+        .status = 0,
+        .stdout = stdout,
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
+}
+
+fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len == 1) {
+        var names: std.ArrayList([]const u8) = .empty;
+        defer names.deinit(self.allocator);
+        var iter = self.env.iterator();
+        while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+        std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+        var stdout: std.ArrayList(u8) = .empty;
+        errdefer stdout.deinit(self.allocator);
+        for (names.items) |name| {
+            try stdout.appendSlice(self.allocator, "export ");
+            try stdout.appendSlice(self.allocator, name);
+            try stdout.append(self.allocator, '=');
+            try stdout.appendSlice(self.allocator, self.env.get(name).?);
+            try stdout.append(self.allocator, '\n');
+        }
+        return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+    }
+
+    for (command.argv[1..]) |arg| {
+        const equals = std.mem.indexOfScalar(u8, arg.text, '=') orelse continue;
+        try self.setEnv(arg.text[0..equals], arg.text[equals + 1 ..]);
+    }
+    return emptyResult(self.allocator, 0);
+}
+
+fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
+    return std.mem.lessThan(u8, a, b);
 }
 
 fn isStdinFileRedirection(redirection: ir.Redirection) bool {
@@ -611,6 +680,40 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor implements pwd cd and export builtins" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    var pwd_lowered = try parseAndLower(std.testing.allocator, "pwd");
+    defer pwd_lowered.parsed.deinit();
+    defer pwd_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var pwd_result = try executor.executeProgram(pwd_lowered.program, .{ .io = std.testing.io });
+    defer pwd_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), pwd_result.status);
+    try std.testing.expect(std.mem.indexOf(u8, pwd_result.stdout, original_cwd) != null);
+
+    var cd_lowered = try parseAndLower(std.testing.allocator, "cd /tmp; pwd");
+    defer cd_lowered.parsed.deinit();
+    defer cd_lowered.program.deinit();
+    var cd_result = try executor.executeProgram(cd_lowered.program, .{ .io = std.testing.io });
+    defer cd_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), cd_result.status);
+    try std.testing.expectEqualStrings("/tmp\n", cd_result.stdout);
+
+    var export_lowered = try parseAndLower(std.testing.allocator, "export RUSH_TEST_EXPORT=ok; echo $RUSH_TEST_EXPORT");
+    defer export_lowered.parsed.deinit();
+    defer export_lowered.program.deinit();
+    var export_result = try executor.executeProgram(export_lowered.program, .{});
+    defer export_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), export_result.status);
+    try std.testing.expectEqualStrings("ok\n", export_result.stdout);
 }
 
 test "executor expands arithmetic expressions in argv" {
