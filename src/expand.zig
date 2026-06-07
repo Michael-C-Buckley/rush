@@ -16,10 +16,21 @@ pub const EnvLookup = struct {
     }
 };
 
+pub const CommandSubstitution = struct {
+    context: ?*anyopaque = null,
+    runFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8) anyerror![]const u8 = null,
+
+    pub fn run(self: CommandSubstitution, allocator: std.mem.Allocator, script: []const u8) !?[]const u8 {
+        const run_fn = self.runFn orelse return null;
+        return try run_fn(self.context, allocator, script);
+    }
+};
+
 pub const Options = struct {
     env: EnvLookup = .{},
     io: ?std.Io = null,
     features: compat.Features = .{},
+    command_substitution: CommandSubstitution = .{},
 };
 
 pub const Phase = enum {
@@ -52,6 +63,7 @@ pub const WordPartKind = enum {
     escaped,
     parameter,
     arithmetic,
+    command_substitution,
 };
 
 pub const WordPart = struct {
@@ -108,7 +120,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 
     for (parts.parts) |part| {
         const split = part.kind == .unquoted or part.kind == .parameter;
-        const rendered = try renderPart(allocator, parts.raw, part, options.env);
+        const rendered = try renderPart(allocator, parts.raw, part, options.env, options.command_substitution);
         defer allocator.free(rendered);
         if (split) {
             try appendSplitText(allocator, &fields, &current, rendered);
@@ -142,7 +154,7 @@ pub fn expandWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: 
     // Field splitting and pathname expansion are explicit phases even though
     // this scalar helper leaves them as no-ops. `expandWord` is the place that
     // will grow multiple fields later.
-    return renderWordParts(allocator, parts, options.env);
+    return renderWordParts(allocator, parts, options.env, options.command_substitution);
 }
 
 pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts {
@@ -199,7 +211,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                     .value_span = .init(value_start, index),
                 });
             },
-            '$' => if (arithmeticPart(raw, index) orelse parameterPart(raw, index)) |part| {
+            '$' => if (arithmeticPart(raw, index) orelse commandSubstitutionPart(raw, index) orelse parameterPart(raw, index)) |part| {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 try parts.append(allocator, part);
                 index = part.span.end;
@@ -251,6 +263,38 @@ fn arithmeticPart(raw: []const u8, dollar: usize) ?WordPart {
     return null;
 }
 
+fn commandSubstitutionPart(raw: []const u8, dollar: usize) ?WordPart {
+    if (dollar + 1 >= raw.len or raw[dollar] != '$' or raw[dollar + 1] != '(') return null;
+    // Arithmetic expansion is handled before this function.
+    if (dollar + 2 < raw.len and raw[dollar + 2] == '(') return null;
+
+    const value_start = dollar + 2;
+    var index = value_start;
+    var depth: usize = 1;
+    while (index < raw.len) : (index += 1) {
+        switch (raw[index]) {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if (depth == 0) {
+                    return .{
+                        .kind = .command_substitution,
+                        .span = .init(dollar, index + 1),
+                        .value_span = .init(value_start, index),
+                    };
+                }
+            },
+            '\'', '"' => {
+                const quote = raw[index];
+                index += 1;
+                while (index < raw.len and raw[index] != quote) : (index += 1) {}
+            },
+            else => {},
+        }
+    }
+    return null;
+}
+
 fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
     std.debug.assert(raw[dollar] == '$');
     const next = dollar + 1;
@@ -278,12 +322,12 @@ fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
     };
 }
 
-pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, env: EnvLookup) ![]const u8 {
+pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, env: EnvLookup, command_substitution: CommandSubstitution) ![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
     for (word.parts) |part| {
-        const rendered = try renderPart(allocator, word.raw, part, env);
+        const rendered = try renderPart(allocator, word.raw, part, env, command_substitution);
         defer allocator.free(rendered);
         try output.appendSlice(allocator, rendered);
     }
@@ -291,7 +335,7 @@ pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, env: EnvLo
     return output.toOwnedSlice(allocator);
 }
 
-fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, env: EnvLookup) ![]const u8 {
+fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, env: EnvLookup, command_substitution: CommandSubstitution) ![]const u8 {
     return switch (part.kind) {
         .unquoted, .escaped, .single_quoted => allocator.dupe(u8, part.value(raw)),
         .double_quoted => blk: {
@@ -303,6 +347,12 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, env
         .arithmetic => blk: {
             const value = try evalArithmetic(part.value(raw));
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
+        },
+        .command_substitution => blk: {
+            const output = (try command_substitution.run(allocator, part.value(raw))) orelse try allocator.alloc(u8, 0);
+            defer allocator.free(output);
+            const trimmed = trimTrailingNewlines(output);
+            break :blk allocator.dupe(u8, trimmed);
         },
     };
 }
@@ -385,6 +435,12 @@ const ArithmeticParser = struct {
 pub fn evalArithmetic(input: []const u8) anyerror!i64 {
     var arithmetic_parser: ArithmeticParser = .{ .input = input };
     return arithmetic_parser.parse();
+}
+
+fn trimTrailingNewlines(output: []const u8) []const u8 {
+    var end = output.len;
+    while (end > 0 and output[end - 1] == '\n') end -= 1;
+    return output[0..end];
 }
 
 fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: []const u8) !void {
@@ -641,6 +697,13 @@ fn isNameContinue(c: u8) bool {
     return isNameStart(c) or std.ascii.isDigit(c);
 }
 
+fn testCommandSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
+    if (std.mem.eql(u8, script, "echo hi")) return allocator.dupe(u8, "hi\n\n");
+    return allocator.dupe(u8, "");
+}
+
+const test_command_substitution: CommandSubstitution = .{ .runFn = testCommandSubstitution };
+
 fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "HOME")) return "/home/rush";
     if (std.mem.eql(u8, name, "USER")) return "rush-user";
@@ -673,7 +736,7 @@ test "word part rendering expands parameters outside single quotes" {
     var parts = try parseWordParts(std.testing.allocator, "'$USER'\"$USER\"-$USER");
     defer parts.deinit();
 
-    const rendered = try renderWordParts(std.testing.allocator, parts, test_env);
+    const rendered = try renderWordParts(std.testing.allocator, parts, test_env, .{});
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("$USERrush-user-rush-user", rendered);
@@ -718,6 +781,20 @@ test "field splitting preserves quoted expansion results" {
     try std.testing.expectEqual(@as(usize, 2), result.fields.len);
     try std.testing.expectEqualStrings("rush-user two", result.fields[0]);
     try std.testing.expectEqualStrings("three four", result.fields[1]);
+}
+
+test "command substitution parses and trims callback output" {
+    var parts = try parseWordParts(std.testing.allocator, "before-$(echo hi)-after");
+    defer parts.deinit();
+
+    try std.testing.expectEqual(@as(usize, 3), parts.parts.len);
+    try std.testing.expectEqual(WordPartKind.command_substitution, parts.parts[1].kind);
+    try std.testing.expectEqualStrings("echo hi", parts.parts[1].value(parts.raw));
+
+    var result = try expandWord(std.testing.allocator, "before-$(echo hi)-after", .{ .command_substitution = test_command_substitution });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), result.fields.len);
+    try std.testing.expectEqualStrings("before-hi-after", result.fields[0]);
 }
 
 test "arithmetic expansion evaluates integer expressions" {

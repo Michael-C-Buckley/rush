@@ -311,11 +311,19 @@ const Lexer = struct {
     }
 
     fn consumeDollarExpansion(self: *Lexer) !void {
-        if (self.index + 2 >= self.source.len or self.source[self.index + 1] != '(' or self.source[self.index + 2] != '(') {
+        if (self.index + 1 >= self.source.len or self.source[self.index + 1] != '(') {
             self.index += 1;
             return;
         }
 
+        if (self.index + 2 < self.source.len and self.source[self.index + 2] == '(') {
+            try self.consumeArithmeticExpansion();
+        } else {
+            try self.consumeCommandSubstitution();
+        }
+    }
+
+    fn consumeArithmeticExpansion(self: *Lexer) !void {
         const start = self.index;
         self.index += 3;
         while (self.index + 1 < self.source.len) : (self.index += 1) {
@@ -327,6 +335,31 @@ const Lexer = struct {
 
         self.index = self.source.len;
         try self.addIncomplete(.init(start, self.source.len), "unterminated arithmetic expansion");
+    }
+
+    fn consumeCommandSubstitution(self: *Lexer) !void {
+        const start = self.index;
+        self.index += 2;
+        var depth: usize = 1;
+        while (!self.isAtEnd()) {
+            switch (self.peek()) {
+                '(' => {
+                    depth += 1;
+                    self.index += 1;
+                },
+                ')' => {
+                    depth -= 1;
+                    self.index += 1;
+                    if (depth == 0) return;
+                },
+                '\'' => try self.consumeQuoted('\'', "unterminated single quote in command substitution"),
+                '"' => try self.consumeDoubleQuoted(),
+                '\\' => self.consumeBackslash(),
+                else => self.index += 1,
+            }
+        }
+
+        try self.addIncomplete(.init(start, self.source.len), "unterminated command substitution");
     }
 
     fn consumeQuoted(self: *Lexer, quote: u8, message: []const u8) !void {
@@ -1375,6 +1408,18 @@ test "lexer tokenizes operators and redirections with max munch" {
             .{ .kind = .eof, .span = .empty(38) },
         },
         .nodes = &.{.{ .kind = .root, .span = .init(0, 38) }},
+    });
+}
+
+test "lexer preserves command substitution as part of a word" {
+    try expectParse("echo $(echo hi)", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 15) },
+            .{ .kind = .eof, .span = .empty(15) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 15) }},
     });
 }
 

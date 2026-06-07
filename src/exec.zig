@@ -284,8 +284,9 @@ pub const Executor = struct {
             expanded.deinit(self.allocator);
         }
 
+        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .io = options.io, .features = options.features });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -333,8 +334,29 @@ pub const Executor = struct {
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
         const raw = try self.allocator.dupe(u8, word.raw);
         errdefer self.allocator.free(raw);
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .features = options.features });
+        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
         return .{ .span = word.span, .raw = raw, .text = text };
+    }
+
+    const CommandSubstitutionContext = struct {
+        executor: *Executor,
+        options: ExecuteOptions,
+    };
+
+    fn commandSubstitution(context: *CommandSubstitutionContext) expand.CommandSubstitution {
+        return .{ .context = context, .runFn = runCommandSubstitution };
+    }
+
+    fn runCommandSubstitution(context: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
+        const substitution_context: *CommandSubstitutionContext = @ptrCast(@alignCast(context.?));
+        var parsed = try @import("parser.zig").parse(substitution_context.executor.allocator, script, .{ .features = substitution_context.options.features });
+        defer parsed.deinit();
+        var program = try ir.lowerSimpleCommands(substitution_context.executor.allocator, parsed);
+        defer program.deinit();
+        var result = try substitution_context.executor.executeProgram(program, substitution_context.options);
+        defer result.deinit();
+        return allocator.dupe(u8, result.stdout);
     }
 
     fn envLookup(self: *Executor) expand.EnvLookup {
@@ -841,6 +863,20 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor expands command substitutions recursively" {
+    var lowered = try parseAndLower(std.testing.allocator, "echo before-$(echo hi)-after");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("before-hi-after\n", result.stdout);
 }
 
 test "executor stores Bash array runtime data" {
