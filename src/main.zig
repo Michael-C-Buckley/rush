@@ -111,21 +111,13 @@ fn diagnosticsResult(allocator: std.mem.Allocator, script: []const u8, diagnosti
     errdefer stderr.deinit(allocator);
 
     for (diagnostics) |diagnostic| {
-        const line = try std.fmt.allocPrint(allocator, "rush: {s} at {d}..{d}: {s}\n", .{
+        const line = try std.fmt.allocPrint(allocator, "rush: {s}: {s}\n", .{
             @tagName(diagnostic.kind),
-            diagnostic.span.start,
-            diagnostic.span.end,
             diagnostic.message,
         });
         defer allocator.free(line);
         try stderr.appendSlice(allocator, line);
-
-        const snippet = diagnostic.span.slice(script);
-        if (snippet.len != 0) {
-            const snippet_line = try std.fmt.allocPrint(allocator, "  {s}\n", .{snippet});
-            defer allocator.free(snippet_line);
-            try stderr.appendSlice(allocator, snippet_line);
-        }
+        try appendDiagnosticSource(allocator, &stderr, script, diagnostic.span);
     }
 
     return .{
@@ -134,6 +126,34 @@ fn diagnosticsResult(allocator: std.mem.Allocator, script: []const u8, diagnosti
         .stdout = try allocator.alloc(u8, 0),
         .stderr = try stderr.toOwnedSlice(allocator),
     };
+}
+
+fn appendDiagnosticSource(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source: []const u8, span: parser.Span) !void {
+    const line_start = findLineStart(source, span.start);
+    const line_end = findLineEnd(source, span.start);
+    const line = source[line_start..line_end];
+    const caret_start = span.start - line_start;
+    const caret_end = @max(caret_start + 1, @min(span.end, line_end) - line_start);
+
+    try out.appendSlice(allocator, "  ");
+    try out.appendSlice(allocator, line);
+    try out.append(allocator, '\n');
+    try out.appendSlice(allocator, "  ");
+    try out.appendNTimes(allocator, ' ', caret_start);
+    try out.appendNTimes(allocator, '^', caret_end - caret_start);
+    try out.append(allocator, '\n');
+}
+
+fn findLineStart(source: []const u8, offset: usize) usize {
+    var index = @min(offset, source.len);
+    while (index > 0 and source[index - 1] != '\n') index -= 1;
+    return index;
+}
+
+fn findLineEnd(source: []const u8, offset: usize) usize {
+    var index = @min(offset, source.len);
+    while (index < source.len and source[index] != '\n') index += 1;
+    return index;
 }
 
 const OutputStream = enum { stdout, stderr };
@@ -187,6 +207,8 @@ test "runScript returns parse diagnostics" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 2), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "missing command after pipeline operator") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "echo | ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "     ^") != null);
 }
 
 test "parser smoke corpus parses representative snippets" {
