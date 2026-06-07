@@ -43,9 +43,22 @@ pub const IfCommand = struct {
     else_body: ?[]const u8 = null,
 };
 
+pub const LoopKind = enum {
+    while_loop,
+    until_loop,
+};
+
+pub const LoopCommand = struct {
+    span: parser.Span,
+    kind: LoopKind,
+    condition: []const u8,
+    body: []const u8,
+};
+
 pub const StatementKind = enum {
     pipeline,
     if_command,
+    loop_command,
 };
 
 pub const Statement = struct {
@@ -59,6 +72,7 @@ pub const Program = struct {
     commands: []SimpleCommand,
     pipelines: []Pipeline,
     if_commands: []IfCommand = &.{},
+    loop_commands: []LoopCommand = &.{},
     statements: []Statement = &.{},
 
     pub fn deinit(self: *Program) void {
@@ -79,6 +93,7 @@ pub const Program = struct {
         self.allocator.free(self.commands);
         self.allocator.free(self.pipelines);
         self.allocator.free(self.if_commands);
+        self.allocator.free(self.loop_commands);
         self.allocator.free(self.statements);
         self.* = undefined;
     }
@@ -88,6 +103,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     var commands: std.ArrayList(SimpleCommand) = .empty;
     var pipelines: std.ArrayList(Pipeline) = .empty;
     var if_commands: std.ArrayList(IfCommand) = .empty;
+    var loop_commands: std.ArrayList(LoopCommand) = .empty;
     var statement_refs: std.ArrayList(LoweredStatementRef) = .empty;
     defer statement_refs.deinit(allocator);
     const missing_command = std.math.maxInt(usize);
@@ -105,6 +121,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         commands.deinit(allocator);
         pipelines.deinit(allocator);
         if_commands.deinit(allocator);
+        loop_commands.deinit(allocator);
     }
 
     for (parsed.nodes, 0..) |node, node_index| {
@@ -132,6 +149,12 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         try if_commands.append(allocator, lowerIfCommand(parsed, node));
     }
 
+    for (parsed.nodes) |node| {
+        if (node.kind != .loop_command) continue;
+        try statement_refs.append(allocator, .{ .kind = .loop_command, .index = loop_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        try loop_commands.append(allocator, lowerLoopCommand(parsed, node));
+    }
+
     std.mem.sort(LoweredStatementRef, statement_refs.items, {}, lessThanStatementRef);
     var statements: std.ArrayList(Statement) = .empty;
     errdefer statements.deinit(allocator);
@@ -150,6 +173,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         .commands = try commands.toOwnedSlice(allocator),
         .pipelines = try pipelines.toOwnedSlice(allocator),
         .if_commands = try if_commands.toOwnedSlice(allocator),
+        .loop_commands = try loop_commands.toOwnedSlice(allocator),
         .statements = try statements.toOwnedSlice(allocator),
     };
 }
@@ -163,6 +187,37 @@ const LoweredStatementRef = struct {
 
 fn lessThanStatementRef(_: void, a: LoweredStatementRef, b: LoweredStatementRef) bool {
     return a.token_start < b.token_start;
+}
+
+fn lowerLoopCommand(parsed: parser.ParseResult, node: parser.Node) LoopCommand {
+    std.debug.assert(node.kind == .loop_command);
+    const opener = parsed.tokens[node.token_start].lexeme(parsed.source);
+    var do_token: ?usize = null;
+    var done_token: ?usize = null;
+    var depth: usize = 0;
+
+    for (node.token_start..node.token_end) |token_index| {
+        const token = parsed.tokens[token_index];
+        if (token.kind != .word or !isReservedPosition(parsed, node.token_start, token_index)) continue;
+        const lexeme = token.lexeme(parsed.source);
+        if (std.mem.eql(u8, lexeme, "while") or std.mem.eql(u8, lexeme, "until")) {
+            depth += 1;
+        } else if (depth == 1 and do_token == null and std.mem.eql(u8, lexeme, "do")) {
+            do_token = token_index;
+        } else if (std.mem.eql(u8, lexeme, "done")) {
+            if (depth == 1 and done_token == null) done_token = token_index;
+            if (depth > 0) depth -= 1;
+        }
+    }
+
+    const do_index = do_token orelse node.token_end;
+    const done_index = done_token orelse node.token_end;
+    return .{
+        .span = node.span,
+        .kind = if (std.mem.eql(u8, opener, "while")) .while_loop else .until_loop,
+        .condition = spanSlice(parsed, node.token_start + 1, do_index),
+        .body = spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
+    };
 }
 
 fn lowerIfCommand(parsed: parser.ParseResult, node: parser.Node) IfCommand {
@@ -218,7 +273,7 @@ fn isReservedPosition(parsed: parser.ParseResult, start: usize, token_index: usi
         if (token.kind.isTrivia()) continue;
         if (isListSeparatorToken(token.kind)) return true;
         const lexeme = if (token.kind == .word) token.lexeme(parsed.source) else "";
-        return std.mem.eql(u8, lexeme, "then") or std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif");
+        return std.mem.eql(u8, lexeme, "then") or std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif") or std.mem.eql(u8, lexeme, "do");
     }
     return true;
 }

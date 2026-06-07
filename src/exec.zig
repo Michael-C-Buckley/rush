@@ -132,6 +132,7 @@ pub const Executor = struct {
                 last = switch (statement.kind) {
                     .pipeline => try self.executePipeline(program, program.pipelines[statement.index], options),
                     .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
+                    .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
                 };
             }
             return last;
@@ -151,6 +152,47 @@ pub const Executor = struct {
             last = try self.executeSimpleCommand(command, options);
         }
         return last;
+    }
+
+    fn executeLoopCommand(self: *Executor, command: ir.LoopCommand, options: ExecuteOptions) !CommandResult {
+        var stdout: std.ArrayList(u8) = .empty;
+        errdefer stdout.deinit(self.allocator);
+        var stderr: std.ArrayList(u8) = .empty;
+        errdefer stderr.deinit(self.allocator);
+        var status: ExitStatus = 0;
+        var iterations: usize = 0;
+
+        while (iterations < 1024) : (iterations += 1) {
+            var condition = try self.executeScriptSlice(command.condition, options);
+            defer condition.deinit();
+            try stdout.appendSlice(self.allocator, condition.stdout);
+            try stderr.appendSlice(self.allocator, condition.stderr);
+
+            const run_body = switch (command.kind) {
+                .while_loop => condition.status == 0,
+                .until_loop => condition.status != 0,
+            };
+            if (!run_body) {
+                status = 0;
+                break;
+            }
+
+            var body = try self.executeScriptSlice(command.body, options);
+            defer body.deinit();
+            try stdout.appendSlice(self.allocator, body.stdout);
+            try stderr.appendSlice(self.allocator, body.stderr);
+            status = body.status;
+        } else {
+            status = 2;
+            try stderr.appendSlice(self.allocator, "rush: loop iteration limit exceeded\n");
+        }
+
+        return .{
+            .allocator = self.allocator,
+            .status = status,
+            .stdout = try stdout.toOwnedSlice(self.allocator),
+            .stderr = try stderr.toOwnedSlice(self.allocator),
+        };
     }
 
     fn executeIfCommand(self: *Executor, command: ir.IfCommand, options: ExecuteOptions) !CommandResult {
@@ -945,6 +987,38 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor executes POSIX while and until loops" {
+    var while_lowered = try parseAndLower(std.testing.allocator, "while false; do echo no; done");
+    defer while_lowered.parsed.deinit();
+    defer while_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var while_result = try executor.executeProgram(while_lowered.program, .{});
+    defer while_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), while_result.status);
+    try std.testing.expectEqualStrings("", while_result.stdout);
+
+    var until_lowered = try parseAndLower(std.testing.allocator, "until true; do echo no; done");
+    defer until_lowered.parsed.deinit();
+    defer until_lowered.program.deinit();
+
+    var until_result = try executor.executeProgram(until_lowered.program, .{});
+    defer until_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), until_result.status);
+    try std.testing.expectEqualStrings("", until_result.stdout);
+
+    var limit_lowered = try parseAndLower(std.testing.allocator, "while true; do :; done");
+    defer limit_lowered.parsed.deinit();
+    defer limit_lowered.program.deinit();
+
+    var limit_result = try executor.executeProgram(limit_lowered.program, .{});
+    defer limit_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), limit_result.status);
+    try std.testing.expect(std.mem.indexOf(u8, limit_result.stderr, "loop iteration limit") != null);
 }
 
 test "executor executes POSIX if compound commands" {

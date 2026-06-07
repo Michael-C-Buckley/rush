@@ -167,6 +167,7 @@ pub const NodeKind = enum {
     word,
     command_substitution,
     if_command,
+    loop_command,
     parse_error,
 };
 
@@ -845,6 +846,12 @@ const SyntaxParser = struct {
                 continue;
             }
 
+            if (self.startsLoopCommand()) {
+                const loop_command = try self.parseLoopCommand();
+                try list_children.append(self.allocator, .{ .node = loop_command });
+                continue;
+            }
+
             if (self.startsPipeline()) {
                 const pipeline = try self.parsePipeline();
                 try list_children.append(self.allocator, .{ .node = pipeline });
@@ -916,6 +923,59 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, if_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseLoopCommand(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        const opener = self.current().lexeme(self.source);
+        var loop_children: std.ArrayList(SyntaxChild) = .empty;
+        defer loop_children.deinit(self.allocator);
+        var depth: usize = 0;
+        var saw_do = false;
+        var closed = false;
+
+        while (!self.at(.eof)) {
+            const token = self.current();
+            if (token.kind == .word) {
+                const lexeme = token.lexeme(self.source);
+                if (std.mem.eql(u8, lexeme, "while") or std.mem.eql(u8, lexeme, "until")) {
+                    depth += 1;
+                } else if (depth == 1 and std.mem.eql(u8, lexeme, "do")) {
+                    saw_do = true;
+                } else if (std.mem.eql(u8, lexeme, "done")) {
+                    if (depth > 0) depth -= 1;
+                }
+            }
+
+            try self.appendCurrentTokenChildTo(&loop_children);
+            if (token.kind == .word and std.mem.eql(u8, token.lexeme(self.source), "done") and depth == 0) {
+                closed = true;
+                break;
+            }
+        }
+
+        if (!saw_do) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = if (std.mem.eql(u8, opener, "while")) "missing do in while command" else "missing do in until command",
+            });
+        }
+        if (!closed) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .incomplete_input,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = if (std.mem.eql(u8, opener, "while")) "missing done to close while command" else "missing done to close until command",
+            });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, loop_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.loop_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parsePipeline(self: *SyntaxParser) !NodeId {
@@ -1084,11 +1144,17 @@ const SyntaxParser = struct {
     }
 
     fn startsListElement(self: SyntaxParser) bool {
-        return self.startsIfCommand() or self.startsPipeline();
+        return self.startsIfCommand() or self.startsLoopCommand() or self.startsPipeline();
     }
 
     fn startsIfCommand(self: SyntaxParser) bool {
         return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "if");
+    }
+
+    fn startsLoopCommand(self: SyntaxParser) bool {
+        if (!self.at(.word)) return false;
+        const lexeme = self.current().lexeme(self.source);
+        return std.mem.eql(u8, lexeme, "while") or std.mem.eql(u8, lexeme, "until");
     }
 
     fn startsPipeline(self: SyntaxParser) bool {
@@ -1096,7 +1162,7 @@ const SyntaxParser = struct {
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
-        if (self.startsIfCommand()) return false;
+        if (self.startsIfCommand() or self.startsLoopCommand()) return false;
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
 
@@ -1427,6 +1493,79 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .command_word, .span = .init(6, 10), .token_start = 4, .token_end = 5 },
             .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
         },
+    });
+}
+
+test "parser builds POSIX while and until command nodes" {
+    try expectParse("while false; do echo no; done", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 5) },
+            .{ .kind = .whitespace, .span = .init(5, 6) },
+            .{ .kind = .word, .span = .init(6, 11) },
+            .{ .kind = .semicolon, .span = .init(11, 12) },
+            .{ .kind = .whitespace, .span = .init(12, 13) },
+            .{ .kind = .word, .span = .init(13, 15) },
+            .{ .kind = .whitespace, .span = .init(15, 16) },
+            .{ .kind = .word, .span = .init(16, 20) },
+            .{ .kind = .whitespace, .span = .init(20, 21) },
+            .{ .kind = .word, .span = .init(21, 23) },
+            .{ .kind = .semicolon, .span = .init(23, 24) },
+            .{ .kind = .whitespace, .span = .init(24, 25) },
+            .{ .kind = .word, .span = .init(25, 29) },
+            .{ .kind = .eof, .span = .empty(29) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 29), .token_start = 0, .token_end = 14 },
+            .{ .kind = .loop_command, .span = .init(0, 29), .token_start = 0, .token_end = 13 },
+        },
+    });
+
+    try expectParse("until true; do echo no; done", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 5) },
+            .{ .kind = .whitespace, .span = .init(5, 6) },
+            .{ .kind = .word, .span = .init(6, 10) },
+            .{ .kind = .semicolon, .span = .init(10, 11) },
+            .{ .kind = .whitespace, .span = .init(11, 12) },
+            .{ .kind = .word, .span = .init(12, 14) },
+            .{ .kind = .whitespace, .span = .init(14, 15) },
+            .{ .kind = .word, .span = .init(15, 19) },
+            .{ .kind = .whitespace, .span = .init(19, 20) },
+            .{ .kind = .word, .span = .init(20, 22) },
+            .{ .kind = .semicolon, .span = .init(22, 23) },
+            .{ .kind = .whitespace, .span = .init(23, 24) },
+            .{ .kind = .word, .span = .init(24, 28) },
+            .{ .kind = .eof, .span = .empty(28) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 28), .token_start = 0, .token_end = 14 },
+            .{ .kind = .loop_command, .span = .init(0, 28), .token_start = 0, .token_end = 13 },
+        },
+    });
+}
+
+test "parser reports incomplete POSIX loops" {
+    try expectParse("while false; do echo no", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 5) },
+            .{ .kind = .whitespace, .span = .init(5, 6) },
+            .{ .kind = .word, .span = .init(6, 11) },
+            .{ .kind = .semicolon, .span = .init(11, 12) },
+            .{ .kind = .whitespace, .span = .init(12, 13) },
+            .{ .kind = .word, .span = .init(13, 15) },
+            .{ .kind = .whitespace, .span = .init(15, 16) },
+            .{ .kind = .word, .span = .init(16, 20) },
+            .{ .kind = .whitespace, .span = .init(20, 21) },
+            .{ .kind = .word, .span = .init(21, 23) },
+            .{ .kind = .eof, .span = .empty(23) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 23) }},
+        .diagnostics = &.{.{
+            .kind = .incomplete_input,
+            .span = .init(0, 23),
+            .message = "missing done to close while command",
+        }},
+        .incomplete = true,
     });
 }
 
