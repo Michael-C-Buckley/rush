@@ -555,6 +555,17 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
     };
     const previous_token = result.tokens[previous];
 
+    if (previous_token.kind == .word) {
+        if (nodeKindForToken(result, previous)) |node_kind| {
+            if (node_kind == .command_word) {
+                return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
+            }
+            if (node_kind == .word or node_kind == .assignment_word) {
+                return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
+            }
+        }
+    }
+
     if (previous_token.kind.isRedirectOperator()) {
         return .{ .kind = .redirect_target, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
     }
@@ -1146,7 +1157,7 @@ test "completion context finds command and argument positions" {
     var command = try parse(std.testing.allocator, "echo", .{});
     defer command.deinit();
     try std.testing.expectEqual(CompletionKind.command, completionContext(command, 2).kind);
-    try std.testing.expectEqual(CompletionKind.argument, completionContext(command, 4).kind);
+    try std.testing.expectEqual(CompletionKind.command, completionContext(command, 4).kind);
 
     var argument = try parse(std.testing.allocator, "echo hi", .{});
     defer argument.deinit();

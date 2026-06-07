@@ -40,6 +40,91 @@ pub fn main(init: std.process.Init) !u8 {
     return result.status;
 }
 
+pub const Completion = struct {
+    text: []const u8,
+};
+
+pub fn completeInput(allocator: std.mem.Allocator, io: std.Io, executor: exec.Executor, source: []const u8, cursor: usize) ![]Completion {
+    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = cursor });
+    defer parsed.deinit();
+    const context = parser.completionContext(parsed, cursor);
+    const prefix = completionPrefix(source, context);
+
+    if (isVariableCompletion(source, context)) {
+        return completeVariables(allocator, executor, prefix);
+    }
+
+    return switch (context.kind) {
+        .command => completeCommands(allocator, prefix),
+        .argument, .redirect_target => completePaths(allocator, io, prefix),
+        .assignment_name => completeVariables(allocator, executor, prefix),
+        .assignment_value, .separator, .quoted_string => allocator.alloc(Completion, 0),
+    };
+}
+
+fn isVariableCompletion(source: []const u8, context: parser.CompletionContext) bool {
+    if (context.token_index == null or context.span.start >= source.len) return false;
+    return source[context.span.start] == '$';
+}
+
+fn completionPrefix(source: []const u8, context: parser.CompletionContext) []const u8 {
+    if (context.token_index == null) return "";
+    const start = context.span.start;
+    const end = @min(context.cursor, context.span.end);
+    if (start >= end or end > source.len) return "";
+    const raw = source[start..end];
+    if (raw.len > 0 and raw[0] == '$') return raw[1..];
+    return raw;
+}
+
+fn completeCommands(allocator: std.mem.Allocator, prefix: []const u8) ![]Completion {
+    const builtins = [_][]const u8{ ":", "cat", "cd", "echo", "env", "export", "false", "pwd", "test", "true", "unset", "[" };
+    var completions: std.ArrayList(Completion) = .empty;
+    errdefer freeCompletions(allocator, completions.items);
+    for (builtins) |builtin| {
+        if (std.mem.startsWith(u8, builtin, prefix)) {
+            try completions.append(allocator, .{ .text = try allocator.dupe(u8, builtin) });
+        }
+    }
+    return completions.toOwnedSlice(allocator);
+}
+
+fn completeVariables(allocator: std.mem.Allocator, executor: exec.Executor, prefix: []const u8) ![]Completion {
+    var completions: std.ArrayList(Completion) = .empty;
+    errdefer freeCompletions(allocator, completions.items);
+    var iter = executor.env.iterator();
+    while (iter.next()) |entry| {
+        if (std.mem.startsWith(u8, entry.key_ptr.*, prefix)) {
+            try completions.append(allocator, .{ .text = try allocator.dupe(u8, entry.key_ptr.*) });
+        }
+    }
+    return completions.toOwnedSlice(allocator);
+}
+
+fn completePaths(allocator: std.mem.Allocator, io: std.Io, prefix: []const u8) ![]Completion {
+    var dir = try std.Io.Dir.cwd().openDir(io, ".", .{ .iterate = true });
+    defer dir.close(io);
+    var completions: std.ArrayList(Completion) = .empty;
+    errdefer freeCompletions(allocator, completions.items);
+    var iterator = dir.iterate();
+    while (try iterator.next(io)) |entry| {
+        if (std.mem.startsWith(u8, entry.name, prefix)) {
+            try completions.append(allocator, .{ .text = try allocator.dupe(u8, entry.name) });
+        }
+    }
+    std.mem.sort(Completion, completions.items, {}, lessThanCompletion);
+    return completions.toOwnedSlice(allocator);
+}
+
+fn lessThanCompletion(_: void, a: Completion, b: Completion) bool {
+    return std.mem.lessThan(u8, a.text, b.text);
+}
+
+pub fn freeCompletions(allocator: std.mem.Allocator, completions: []Completion) void {
+    for (completions) |completion| allocator.free(completion.text);
+    allocator.free(completions);
+}
+
 pub fn renderHighlightedInput(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
     defer parsed.deinit();
@@ -198,6 +283,34 @@ fn writeAll(io: std.Io, stream: OutputStream, bytes: []const u8) !void {
     var writer = file.writer(io, &buffer);
     try writer.interface.writeAll(bytes);
     try writer.interface.flush();
+}
+
+test "interactive completion helper suggests commands variables and paths" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("RUSH_COMPLETION_VAR", "ok");
+
+    const command_completions = try completeInput(std.testing.allocator, std.testing.io, executor, "ec", 2);
+    defer freeCompletions(std.testing.allocator, command_completions);
+    try std.testing.expect(hasCompletion(command_completions, "echo"));
+
+    const variable_completions = try completeInput(std.testing.allocator, std.testing.io, executor, "echo $RUSH", 10);
+    defer freeCompletions(std.testing.allocator, variable_completions);
+    try std.testing.expect(hasCompletion(variable_completions, "RUSH_COMPLETION_VAR"));
+
+    const path = "rush-complete-path.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    const path_completions = try completeInput(std.testing.allocator, std.testing.io, executor, "echo rush-complete", 18);
+    defer freeCompletions(std.testing.allocator, path_completions);
+    try std.testing.expect(hasCompletion(path_completions, path));
+}
+
+fn hasCompletion(completions: []const Completion, text: []const u8) bool {
+    for (completions) |completion| {
+        if (std.mem.eql(u8, completion.text, text)) return true;
+    }
+    return false;
 }
 
 test "interactive highlight renderer uses parser classifications" {
