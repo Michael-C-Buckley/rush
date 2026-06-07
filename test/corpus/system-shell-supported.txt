@@ -48,3 +48,7 @@ A=eval-ok; eval echo $A
 f() { echo function; }; command echo command-ok; command -v echo
 echo before; exit 7; echo after
 exec echo exec-ok; echo after
+readonly RO=value; echo $RO
+f() { shift; echo $1/$#; }; f a b c
+wait; echo waited
+umask 022; umask

@@ -51,7 +51,7 @@ pub const LoopControl = struct {
 };
 
 pub const CallFrame = struct {
-    params: []const []const u8,
+    params: [][]const u8,
     count: []const u8,
     joined: []const u8,
 
@@ -77,6 +77,7 @@ pub const ArrayValue = struct {
 pub const Executor = struct {
     allocator: std.mem.Allocator,
     env: std.StringHashMapUnmanaged([]const u8) = .empty,
+    readonly: std.StringHashMapUnmanaged(void) = .empty,
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
     shell_options: ShellOptions = .{},
@@ -126,6 +127,9 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.env.deinit(self.allocator);
+        var readonly_iter = self.readonly.iterator();
+        while (readonly_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.readonly.deinit(self.allocator);
         var array_iter = self.arrays.iterator();
         while (array_iter.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -179,13 +183,24 @@ pub const Executor = struct {
     }
 
     pub fn unsetEnv(self: *Executor, name: []const u8) void {
+        if (self.isReadonly(name)) return;
         if (self.env.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
         }
     }
 
+    pub fn isReadonly(self: Executor, name: []const u8) bool {
+        return self.readonly.contains(name);
+    }
+
+    pub fn setReadonly(self: *Executor, name: []const u8) !void {
+        if (self.readonly.contains(name)) return;
+        try self.readonly.put(self.allocator, try self.allocator.dupe(u8, name), {});
+    }
+
     pub fn setEnv(self: *Executor, name: []const u8, value: []const u8) !void {
+        if (self.isReadonly(name)) return error.ReadonlyVariable;
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const owned_value = try self.allocator.dupe(u8, value);
@@ -307,6 +322,8 @@ pub const Executor = struct {
         self.shell_options = other.shell_options;
         var env_iter = other.env.iterator();
         while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
+        var readonly_iter = other.readonly.iterator();
+        while (readonly_iter.next()) |entry| try self.setReadonly(entry.key_ptr.*);
         var function_iter = other.functions.iterator();
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.*);
         var array_iter = other.arrays.iterator();
@@ -1117,6 +1134,18 @@ pub const Executor = struct {
         return self.call_frames.items[self.call_frames.items.len - 1];
     }
 
+    fn currentCallFramePtr(self: *Executor) ?*CallFrame {
+        if (self.call_frames.items.len == 0) return null;
+        return &self.call_frames.items[self.call_frames.items.len - 1];
+    }
+
+    fn rebuildCallFrameDerived(self: *Executor, frame: *CallFrame) !void {
+        self.allocator.free(frame.count);
+        self.allocator.free(frame.joined);
+        frame.count = try std.fmt.allocPrint(self.allocator, "{d}", .{frame.params.len});
+        frame.joined = try joinParams(self.allocator, frame.params);
+    }
+
     const CommandSubstitutionContext = struct {
         executor: *Executor,
         options: ExecuteOptions,
@@ -1466,6 +1495,13 @@ fn shellPid() i64 {
     return @intCast(std.c.getpid());
 }
 
+fn shellUmask(mask: u16) u16 {
+    if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) {
+        return @intCast(std.os.linux.syscall1(.umask, mask));
+    }
+    return @intCast(std.c.umask(mask));
+}
+
 fn makePipelinePipe(io: std.Io) !Executor.PipelinePipe {
     const builtin = @import("builtin");
     return switch (builtin.os.tag) {
@@ -1706,7 +1742,9 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "printf")) return builtinPrintf;
     if (std.mem.eql(u8, name, "pwd")) return builtinPwd;
     if (std.mem.eql(u8, name, "read")) return builtinRead;
+    if (std.mem.eql(u8, name, "readonly")) return builtinReadonly;
     if (std.mem.eql(u8, name, "return")) return builtinReturn;
+    if (std.mem.eql(u8, name, "shift")) return builtinShift;
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
@@ -1716,6 +1754,9 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "set")) return builtinSet;
     if (std.mem.eql(u8, name, "source")) return builtinSource;
     if (std.mem.eql(u8, name, "test")) return builtinTest;
+    if (std.mem.eql(u8, name, "times")) return builtinTimes;
+    if (std.mem.eql(u8, name, "umask")) return builtinUmask;
+    if (std.mem.eql(u8, name, "wait")) return builtinWait;
     if (std.mem.eql(u8, name, "[")) return builtinTest;
     return null;
 }
@@ -2095,6 +2136,81 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         self.unsetEnv(arg.text);
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn builtinReadonly(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len == 1) {
+        var names: std.ArrayList([]const u8) = .empty;
+        defer names.deinit(self.allocator);
+        var iter = self.readonly.iterator();
+        while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+        std.mem.sort([]const u8, names.items, {}, lessThanString);
+        var stdout: std.ArrayList(u8) = .empty;
+        errdefer stdout.deinit(self.allocator);
+        for (names.items) |name| {
+            try stdout.appendSlice(self.allocator, "readonly ");
+            try stdout.appendSlice(self.allocator, name);
+            try stdout.append(self.allocator, '\n');
+        }
+        return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+    }
+    for (command.argv[1..]) |arg| {
+        if (std.mem.indexOfScalar(u8, arg.text, '=')) |equals| {
+            try self.setEnv(arg.text[0..equals], arg.text[equals + 1 ..]);
+            try self.setReadonly(arg.text[0..equals]);
+        } else {
+            try self.setReadonly(arg.text);
+        }
+    }
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    const frame = self.currentCallFramePtr() orelse return errorResult(self.allocator, 1, "shift", "not in a function");
+    const amount: usize = if (command.argv.len == 1) 1 else blk: {
+        if (command.argv.len > 2) return errorResult(self.allocator, 2, "shift", "too many arguments");
+        break :blk std.fmt.parseInt(usize, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, "shift", "numeric argument required");
+    };
+    if (amount > frame.params.len) return emptyResult(self.allocator, 1);
+    for (frame.params[0..amount]) |param| self.allocator.free(param);
+    std.mem.copyForwards([]const u8, frame.params[0 .. frame.params.len - amount], frame.params[amount..]);
+    frame.params = try self.allocator.realloc(frame.params, frame.params.len - amount);
+    try self.rebuildCallFrameDerived(frame);
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, "umask", "too many arguments");
+    const old = shellUmask(0);
+    _ = shellUmask(old);
+    if (command.argv.len == 1) {
+        const stdout = try std.fmt.allocPrint(self.allocator, "{o:0>4}\n", .{@as(u16, @intCast(old & 0o777))});
+        errdefer self.allocator.free(stdout);
+        return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
+    }
+    const new_mask = std.fmt.parseInt(u16, command.argv[1].text, 8) catch return errorResult(self.allocator, 2, "umask", "invalid mask");
+    _ = shellUmask(new_mask);
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len > 1) return errorResult(self.allocator, 127, "wait", "job ids are not implemented yet");
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = command;
+    _ = stdin;
+    _ = options;
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try self.allocator.dupe(u8, "0m0.00s 0m0.00s\n0m0.00s 0m0.00s\n"), .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -2829,6 +2945,40 @@ test "executor implements unset and env builtins" {
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "A=one\n") == null);
     try std.testing.expect(executor.getEnv("A") == null);
     try std.testing.expectEqualStrings("two", executor.getEnv("B").?);
+}
+
+test "executor implements readonly shift umask wait and times builtins" {
+    var readonly_lowered = try parseAndLower(std.testing.allocator, "readonly RO=value; unset RO; echo $RO; readonly");
+    defer readonly_lowered.parsed.deinit();
+    defer readonly_lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var readonly_result = try executor.executeProgram(readonly_lowered.program, .{});
+    defer readonly_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), readonly_result.status);
+    try std.testing.expectEqualStrings("value\nreadonly RO\n", readonly_result.stdout);
+
+    var shift_lowered = try parseAndLower(std.testing.allocator, "f() { shift; echo $1/$#; }; f a b c");
+    defer shift_lowered.parsed.deinit();
+    defer shift_lowered.program.deinit();
+    var shift_result = try executor.executeProgram(shift_lowered.program, .{});
+    defer shift_result.deinit();
+    try std.testing.expectEqualStrings("b/2\n", shift_result.stdout);
+
+    var wait_times_lowered = try parseAndLower(std.testing.allocator, "wait; times");
+    defer wait_times_lowered.parsed.deinit();
+    defer wait_times_lowered.program.deinit();
+    var wait_times_result = try executor.executeProgram(wait_times_lowered.program, .{});
+    defer wait_times_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), wait_times_result.status);
+    try std.testing.expectEqualStrings("0m0.00s 0m0.00s\n0m0.00s 0m0.00s\n", wait_times_result.stdout);
+
+    var umask_lowered = try parseAndLower(std.testing.allocator, "umask 022; umask");
+    defer umask_lowered.parsed.deinit();
+    defer umask_lowered.program.deinit();
+    var umask_result = try executor.executeProgram(umask_lowered.program, .{});
+    defer umask_result.deinit();
+    try std.testing.expectEqualStrings("0022\n", umask_result.stdout);
 }
 
 test "executor implements command eval exec and exit builtins" {
