@@ -38,4 +38,9 @@ pub fn build(b: *std.Build) void {
     const fmt_check = b.addFmt(.{ .paths = &.{ "src", "build.zig", "build.zig.zon" }, .check = true });
     fmt_step.dependOn(&fmt_check.step);
     test_step.dependOn(fmt_step);
+
+    const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
+    const cross_check = b.addSystemCommand(&.{ "sh", "scripts/check-cross-targets.sh" });
+    cross_check.step.dependOn(fmt_step);
+    cross_check_step.dependOn(&cross_check.step);
 }
