@@ -160,6 +160,7 @@ pub const NodeKind = enum {
     pipeline,
     simple_command,
     redirection,
+    io_number,
     assignment_word,
     command_word,
     word,
@@ -434,33 +435,258 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
     var lex_result = try lex(allocator, source);
     errdefer lex_result.deinit();
 
-    const nodes = try allocator.alloc(Node, 1);
-    errdefer allocator.free(nodes);
-
-    const children = try allocator.alloc(SyntaxChild, lex_result.tokens.len);
-    errdefer allocator.free(children);
-    for (children, 0..) |*child, index| {
-        child.* = .{ .token = .init(index) };
-    }
-
-    nodes[0] = .{
-        .kind = .root,
-        .span = .init(0, source.len),
-        .token_start = 0,
-        .token_end = lex_result.tokens.len,
-        .child_start = 0,
-        .child_end = children.len,
+    var parser: SyntaxParser = .{
+        .allocator = allocator,
+        .source = source,
+        .tokens = lex_result.tokens,
     };
+    errdefer parser.deinit();
+
+    try parser.diagnostics.appendSlice(allocator, lex_result.diagnostics);
+    allocator.free(lex_result.diagnostics);
+    lex_result.diagnostics = &.{};
+
+    try parser.run();
 
     return .{
         .allocator = allocator,
         .source = source,
         .tokens = lex_result.tokens,
-        .nodes = nodes,
-        .children = children,
-        .diagnostics = lex_result.diagnostics,
-        .incomplete = lex_result.incomplete,
+        .nodes = try parser.nodes.toOwnedSlice(allocator),
+        .children = try parser.children.toOwnedSlice(allocator),
+        .diagnostics = try parser.diagnostics.toOwnedSlice(allocator),
+        .incomplete = lex_result.incomplete or parser.incomplete,
     };
+}
+
+const SyntaxParser = struct {
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    tokens: []const Token,
+    index: usize = 0,
+    nodes: std.ArrayList(Node) = .empty,
+    children: std.ArrayList(SyntaxChild) = .empty,
+    diagnostics: std.ArrayList(Diagnostic) = .empty,
+    incomplete: bool = false,
+
+    fn deinit(self: *SyntaxParser) void {
+        self.nodes.deinit(self.allocator);
+        self.children.deinit(self.allocator);
+        self.diagnostics.deinit(self.allocator);
+    }
+
+    fn run(self: *SyntaxParser) !void {
+        try self.nodes.append(self.allocator, .{
+            .kind = .root,
+            .span = .init(0, self.source.len),
+            .token_start = 0,
+            .token_end = self.tokens.len,
+            .child_start = 0,
+            .child_end = 0,
+        });
+
+        var root_children: std.ArrayList(SyntaxChild) = .empty;
+        defer root_children.deinit(self.allocator);
+
+        while (!self.at(.eof)) {
+            if (self.current().kind.isTrivia() or isSimpleCommandSeparator(self.current().kind)) {
+                try root_children.append(self.allocator, .{ .token = .init(self.index) });
+                self.index += 1;
+            } else if (self.startsSimpleCommand()) {
+                const command = try self.parseSimpleCommand();
+                try root_children.append(self.allocator, .{ .node = command });
+            } else {
+                try root_children.append(self.allocator, .{ .token = .init(self.index) });
+                self.index += 1;
+            }
+        }
+
+        try root_children.append(self.allocator, .{ .token = .init(self.index) });
+
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, root_children.items);
+        self.nodes.items[0].child_start = child_start;
+        self.nodes.items[0].child_end = self.children.items.len;
+    }
+
+    fn parseSimpleCommand(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var command_children: std.ArrayList(SyntaxChild) = .empty;
+        defer command_children.deinit(self.allocator);
+        var saw_command_word = false;
+
+        while (!self.at(.eof) and !isSimpleCommandSeparator(self.current().kind)) {
+            if (self.current().kind.isTrivia()) {
+                try self.appendCurrentTokenChildTo(&command_children);
+                continue;
+            }
+
+            if (self.startsRedirection()) {
+                const redirection = try self.parseRedirection();
+                try command_children.append(self.allocator, .{ .node = redirection });
+                continue;
+            }
+
+            if (self.at(.word)) {
+                const kind: NodeKind = if (!saw_command_word and isAssignmentWord(self.current().lexeme(self.source)))
+                    .assignment_word
+                else if (!saw_command_word) blk: {
+                    saw_command_word = true;
+                    break :blk .command_word;
+                } else .word;
+                const word = try self.addLeafNode(kind, self.index);
+                try command_children.append(self.allocator, .{ .node = word });
+                self.index += 1;
+                continue;
+            }
+
+            break;
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, command_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.simple_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseRedirection(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var redirection_children: std.ArrayList(SyntaxChild) = .empty;
+        defer redirection_children.deinit(self.allocator);
+
+        if (self.startsIoNumberRedirection()) {
+            const io_number = try self.addLeafNode(.io_number, self.index);
+            try redirection_children.append(self.allocator, .{ .node = io_number });
+            self.index += 1;
+        }
+
+        std.debug.assert(self.current().kind.isRedirectOperator());
+        try self.appendCurrentTokenChildTo(&redirection_children);
+
+        while (self.current().kind == .whitespace) {
+            try self.appendCurrentTokenChildTo(&redirection_children);
+        }
+
+        if (self.at(.word)) {
+            const target = try self.addLeafNode(.word, self.index);
+            try redirection_children.append(self.allocator, .{ .node = target });
+            self.index += 1;
+        } else {
+            const span = self.previousToken().span;
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = span,
+                .message = "missing redirection target",
+            });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, redirection_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.redirection, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn addLeafNode(self: *SyntaxParser, kind: NodeKind, token_index: usize) !NodeId {
+        const child_start = self.children.items.len;
+        try self.children.append(self.allocator, .{ .token = .init(token_index) });
+        return self.addNode(kind, self.tokens[token_index].span, token_index, token_index + 1, child_start, self.children.items.len);
+    }
+
+    fn addNode(self: *SyntaxParser, kind: NodeKind, span: Span, token_start: usize, token_end: usize, child_start: usize, child_end: usize) !NodeId {
+        const id = NodeId.init(self.nodes.items.len);
+        try self.nodes.append(self.allocator, .{
+            .kind = kind,
+            .span = span,
+            .token_start = token_start,
+            .token_end = token_end,
+            .child_start = child_start,
+            .child_end = child_end,
+        });
+        return id;
+    }
+
+    fn appendCurrentTokenChildTo(self: *SyntaxParser, children: *std.ArrayList(SyntaxChild)) !void {
+        try children.append(self.allocator, .{ .token = .init(self.index) });
+        self.index += 1;
+    }
+
+    fn startsSimpleCommand(self: SyntaxParser) bool {
+        return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
+    }
+
+    fn startsRedirection(self: SyntaxParser) bool {
+        return self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
+    }
+
+    fn startsIoNumberRedirection(self: SyntaxParser) bool {
+        if (!self.at(.word) or self.index + 1 >= self.tokens.len) return false;
+        if (!isAllDigits(self.current().lexeme(self.source))) return false;
+        const next = self.tokens[self.index + 1];
+        return self.current().span.end == next.span.start and next.kind.isRedirectOperator();
+    }
+
+    fn at(self: SyntaxParser, kind: TokenKind) bool {
+        return self.current().kind == kind;
+    }
+
+    fn current(self: SyntaxParser) Token {
+        std.debug.assert(self.index < self.tokens.len);
+        return self.tokens[self.index];
+    }
+
+    fn previousToken(self: SyntaxParser) Token {
+        std.debug.assert(self.index > 0);
+        return self.tokens[self.index - 1];
+    }
+};
+
+fn isSimpleCommandSeparator(kind: TokenKind) bool {
+    return switch (kind) {
+        .newline,
+        .comment,
+        .pipe,
+        .and_if,
+        .or_if,
+        .semicolon,
+        .dsemicolon,
+        .ampersand,
+        => true,
+        else => false,
+    };
+}
+
+fn isAssignmentWord(word: []const u8) bool {
+    const equals = std.mem.indexOfScalar(u8, word, '=') orelse return false;
+    if (equals == 0) return false;
+    if (!isNameStart(word[0])) return false;
+    for (word[1..equals]) |c| {
+        if (!isNameContinue(c)) return false;
+    }
+    return true;
+}
+
+fn isNameStart(c: u8) bool {
+    return std.ascii.isAlphabetic(c) or c == '_';
+}
+
+fn isNameContinue(c: u8) bool {
+    return isNameStart(c) or std.ascii.isDigit(c);
+}
+
+fn isAllDigits(word: []const u8) bool {
+    if (word.len == 0) return false;
+    for (word) |c| {
+        if (!std.ascii.isDigit(c)) return false;
+    }
+    return true;
+}
+
+fn spanForTokenRange(tokens: []const Token, start: usize, end: usize) Span {
+    std.debug.assert(start < end);
+    return .init(tokens[start].span.start, tokens[end - 1].span.end);
 }
 
 pub const ExpectedToken = struct {
@@ -471,9 +697,9 @@ pub const ExpectedToken = struct {
 pub const ExpectedNode = struct {
     kind: NodeKind,
     span: Span,
-    token_start: usize = 0,
+    token_start: ?usize = null,
     token_end: ?usize = null,
-    child_start: usize = 0,
+    child_start: ?usize = null,
     child_end: ?usize = null,
 };
 
@@ -489,6 +715,7 @@ pub const ParseExpectation = struct {
     options: ParseOptions = .{},
     tokens: []const ExpectedToken = &.{},
     nodes: []const ExpectedNode = &.{},
+    nodes_exact: bool = false,
     children: ?[]const ExpectedChild = null,
     diagnostics: []const ExpectedDiagnostic = &.{},
     incomplete: bool = false,
@@ -501,7 +728,7 @@ pub fn expectParse(source: []const u8, expectation: ParseExpectation) !void {
     try std.testing.expectEqual(source.ptr, result.source.ptr);
     try std.testing.expectEqual(expectation.incomplete, result.incomplete);
     try expectTokens(expectation.tokens, result.tokens);
-    try expectNodes(expectation.nodes, result.nodes, result.tokens.len, result.children.len);
+    try expectNodes(expectation.nodes, result.nodes, result.tokens.len, result.children.len, expectation.nodes_exact);
     if (expectation.children) |children| {
         try expectChildren(children, result.children);
     }
@@ -516,15 +743,19 @@ fn expectTokens(expected: []const ExpectedToken, actual: []const Token) !void {
     }
 }
 
-fn expectNodes(expected: []const ExpectedNode, actual: []const Node, token_len: usize, child_len: usize) !void {
-    try std.testing.expectEqual(expected.len, actual.len);
-    for (expected, actual) |want, got| {
+fn expectNodes(expected: []const ExpectedNode, actual: []const Node, token_len: usize, child_len: usize, exact: bool) !void {
+    if (exact) {
+        try std.testing.expectEqual(expected.len, actual.len);
+    } else {
+        try std.testing.expect(actual.len >= expected.len);
+    }
+    for (expected, actual[0..expected.len]) |want, got| {
         try std.testing.expectEqual(want.kind, got.kind);
         try expectSpan(want.span, got.span);
-        try std.testing.expectEqual(want.token_start, got.token_start);
-        try std.testing.expectEqual(want.token_end orelse token_len, got.token_end);
-        try std.testing.expectEqual(want.child_start, got.child_start);
-        try std.testing.expectEqual(want.child_end orelse child_len, got.child_end);
+        if (want.token_start) |token_start| try std.testing.expectEqual(token_start, got.token_start);
+        if (want.token_end) |token_end| try std.testing.expectEqual(token_end, got.token_end) else _ = token_len;
+        if (want.child_start) |child_start| try std.testing.expectEqual(child_start, got.child_start);
+        if (want.child_end) |child_end| try std.testing.expectEqual(child_end, got.child_end) else _ = child_len;
     }
 }
 
@@ -593,24 +824,110 @@ test "tokens expose source lexemes through spans" {
     try std.testing.expectEqualStrings("hello", token.lexeme(source));
 }
 
-test "concrete syntax root covers token and child ranges" {
+test "parser builds a simple command node for a command word" {
     try expectParse("echo", .{
         .tokens = &.{
             .{ .kind = .word, .span = .init(0, 4) },
             .{ .kind = .eof, .span = .empty(4) },
         },
-        .nodes = &.{.{
-            .kind = .root,
-            .span = .init(0, 4),
-            .token_start = 0,
-            .token_end = 2,
-            .child_start = 0,
-            .child_end = 2,
-        }},
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 4), .token_start = 0, .token_end = 2, .child_start = 2, .child_end = 4 },
+            .{ .kind = .command_word, .span = .init(0, 4), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
+            .{ .kind = .simple_command, .span = .init(0, 4), .token_start = 0, .token_end = 1, .child_start = 1, .child_end = 2 },
+        },
+        .nodes_exact = true,
         .children = &.{
             .{ .token = .init(0) },
+            .{ .node = .init(1) },
+            .{ .node = .init(2) },
             .{ .token = .init(1) },
         },
+    });
+}
+
+test "parser classifies assignment words, command word, and arguments" {
+    try expectParse("FOO=bar echo hi", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 7) },
+            .{ .kind = .whitespace, .span = .init(7, 8) },
+            .{ .kind = .word, .span = .init(8, 12) },
+            .{ .kind = .whitespace, .span = .init(12, 13) },
+            .{ .kind = .word, .span = .init(13, 15) },
+            .{ .kind = .eof, .span = .empty(15) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 15), .token_start = 0, .token_end = 6, .child_start = 8, .child_end = 10 },
+            .{ .kind = .assignment_word, .span = .init(0, 7), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
+            .{ .kind = .command_word, .span = .init(8, 12), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
+            .{ .kind = .word, .span = .init(13, 15), .token_start = 4, .token_end = 5, .child_start = 2, .child_end = 3 },
+            .{ .kind = .simple_command, .span = .init(0, 15), .token_start = 0, .token_end = 5, .child_start = 3, .child_end = 8 },
+        },
+        .nodes_exact = true,
+        .children = &.{
+            .{ .token = .init(0) },
+            .{ .token = .init(2) },
+            .{ .token = .init(4) },
+            .{ .node = .init(1) },
+            .{ .token = .init(1) },
+            .{ .node = .init(2) },
+            .{ .token = .init(3) },
+            .{ .node = .init(3) },
+            .{ .node = .init(4) },
+            .{ .token = .init(5) },
+        },
+    });
+}
+
+test "parser builds redirection nodes with optional io number" {
+    try expectParse("2>out echo", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 1) },
+            .{ .kind = .greater, .span = .init(1, 2) },
+            .{ .kind = .word, .span = .init(2, 5) },
+            .{ .kind = .whitespace, .span = .init(5, 6) },
+            .{ .kind = .word, .span = .init(6, 10) },
+            .{ .kind = .eof, .span = .empty(10) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 10), .token_start = 0, .token_end = 6, .child_start = 9, .child_end = 11 },
+            .{ .kind = .io_number, .span = .init(0, 1), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
+            .{ .kind = .word, .span = .init(2, 5), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
+            .{ .kind = .redirection, .span = .init(0, 5), .token_start = 0, .token_end = 3, .child_start = 2, .child_end = 5 },
+            .{ .kind = .command_word, .span = .init(6, 10), .token_start = 4, .token_end = 5, .child_start = 5, .child_end = 6 },
+            .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5, .child_start = 6, .child_end = 9 },
+        },
+        .nodes_exact = true,
+        .children = &.{
+            .{ .token = .init(0) },
+            .{ .token = .init(2) },
+            .{ .node = .init(1) },
+            .{ .token = .init(1) },
+            .{ .node = .init(2) },
+            .{ .token = .init(4) },
+            .{ .node = .init(3) },
+            .{ .token = .init(3) },
+            .{ .node = .init(4) },
+            .{ .node = .init(5) },
+            .{ .token = .init(5) },
+        },
+    });
+}
+
+test "parser reports a missing redirection target" {
+    try expectParse("echo >", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .greater, .span = .init(5, 6) },
+            .{ .kind = .eof, .span = .empty(6) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 6) }},
+        .diagnostics = &.{.{
+            .kind = .parse_error,
+            .span = .init(5, 6),
+            .message = "missing redirection target",
+        }},
+        .incomplete = true,
     });
 }
 
