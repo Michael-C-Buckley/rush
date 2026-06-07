@@ -1431,14 +1431,30 @@ const SyntaxParser = struct {
         var substitutions = try commandSubstitutionSpans(self.allocator, self.source, token.span);
         defer substitutions.deinit(self.allocator);
         for (substitutions.items) |span| {
-            const child_start = self.children.items.len;
-            const substitution = try self.addNode(.command_substitution, span, token_index, token_index + 1, child_start, child_start);
+            const substitution = try self.addCommandSubstitutionNode(token_index, span);
             try word_children.append(self.allocator, .{ .node = substitution });
         }
 
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, word_children.items);
         return self.addNode(kind, token.span, token_index, token_index + 1, child_start, self.children.items.len);
+    }
+
+    fn addCommandSubstitutionNode(self: *SyntaxParser, token_index: usize, span: Span) !NodeId {
+        var substitution_children: std.ArrayList(SyntaxChild) = .empty;
+        defer substitution_children.deinit(self.allocator);
+
+        const inner = if (span.end >= span.start + 3) Span.init(span.start + 2, span.end - 1) else Span.empty(span.start + 2);
+        var nested = try commandSubstitutionSpans(self.allocator, self.source, inner);
+        defer nested.deinit(self.allocator);
+        for (nested.items) |nested_span| {
+            const child = try self.addCommandSubstitutionNode(token_index, nested_span);
+            try substitution_children.append(self.allocator, .{ .node = child });
+        }
+
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, substitution_children.items);
+        return self.addNode(.command_substitution, span, token_index, token_index + 1, child_start, self.children.items.len);
     }
 
     fn addNode(self: *SyntaxParser, kind: NodeKind, span: Span, token_start: usize, token_end: usize, child_start: usize, child_end: usize) !NodeId {
@@ -2285,6 +2301,66 @@ test "parser represents command substitutions as nested word syntax" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "parser nests command substitution CST nodes" {
+    var result = try parse(std.testing.allocator, "echo $(echo $(echo hi))", .{});
+    defer result.deinit();
+
+    var outer_id: ?NodeId = null;
+    var inner_id: ?NodeId = null;
+    for (result.nodes, 0..) |node, index| {
+        if (node.kind != .command_substitution) continue;
+        if (node.span.start == 5) {
+            outer_id = .init(index);
+            try expectSpan(.init(5, 23), node.span);
+        } else if (node.span.start == 12) {
+            inner_id = .init(index);
+            try expectSpan(.init(12, 22), node.span);
+        }
+    }
+    const outer = result.nodes[outer_id.?.index()];
+    const outer_children = result.nodeChildren(outer);
+    try std.testing.expectEqual(@as(usize, 1), outer_children.len);
+    try std.testing.expectEqual(inner_id.?, outer_children[0].node);
+}
+
+test "lexer command substitution handles quoted parens arithmetic and incomplete input" {
+    try expectParse("echo $(printf \"(\")", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 18) },
+            .{ .kind = .eof, .span = .empty(18) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 18) }},
+    });
+
+    try expectParse("echo $(echo $((1 + 2)))", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 23) },
+            .{ .kind = .eof, .span = .empty(23) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 23) }},
+    });
+
+    try expectParse("echo $(echo hi", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 14) },
+            .{ .kind = .eof, .span = .empty(14) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 14) }},
+        .diagnostics = &.{.{
+            .kind = .incomplete_input,
+            .span = .init(5, 14),
+            .message = "unterminated command substitution",
+        }},
+        .incomplete = true,
+    });
 }
 
 test "lexer preserves command substitution as part of a word" {

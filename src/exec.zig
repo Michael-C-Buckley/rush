@@ -2147,6 +2147,29 @@ test "executor executes POSIX if compound commands" {
     try std.testing.expectEqualStrings("elif\n", elif_result.stdout);
 }
 
+test "executor expands nested command substitutions and arithmetic inside them" {
+    var nested = try parseAndLower(std.testing.allocator, "echo $(echo $(echo hi))");
+    defer nested.parsed.deinit();
+    defer nested.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var nested_result = try executor.executeProgram(nested.program, .{});
+    defer nested_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), nested_result.status);
+    try std.testing.expectEqualStrings("hi\n", nested_result.stdout);
+
+    var arithmetic = try parseAndLower(std.testing.allocator, "echo $(echo $((1 + 2)))");
+    defer arithmetic.parsed.deinit();
+    defer arithmetic.program.deinit();
+
+    var arithmetic_result = try executor.executeProgram(arithmetic.program, .{});
+    defer arithmetic_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), arithmetic_result.status);
+    try std.testing.expectEqualStrings("3\n", arithmetic_result.stdout);
+}
+
 test "executor expands command substitutions recursively" {
     var lowered = try parseAndLower(std.testing.allocator, "echo before-$(echo hi)-after");
     defer lowered.parsed.deinit();
