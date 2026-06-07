@@ -87,16 +87,38 @@ pub const ExpansionResult = struct {
 };
 
 pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionResult {
-    const scalar = try expandWordScalar(allocator, raw, options);
-    errdefer allocator.free(scalar);
+    const tilde_expanded = try expandTilde(allocator, raw, options.env);
+    defer allocator.free(tilde_expanded);
 
-    const fields = try allocator.alloc([]const u8, 1);
-    errdefer allocator.free(fields);
-    fields[0] = scalar;
+    var parts = try parseWordParts(allocator, tilde_expanded);
+    defer parts.deinit();
+
+    var fields: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (fields.items) |field| allocator.free(field);
+        fields.deinit(allocator);
+    }
+    var current: std.ArrayList(u8) = .empty;
+    defer current.deinit(allocator);
+
+    for (parts.parts) |part| {
+        const split = part.kind == .unquoted or part.kind == .parameter;
+        const rendered = try renderPart(allocator, parts.raw, part, options.env);
+        defer allocator.free(rendered);
+        if (split) {
+            try appendSplitText(allocator, &fields, &current, rendered);
+        } else {
+            try current.appendSlice(allocator, rendered);
+        }
+    }
+
+    if (current.items.len != 0) {
+        try fields.append(allocator, try current.toOwnedSlice(allocator));
+    }
 
     return .{
         .allocator = allocator,
-        .fields = fields,
+        .fields = try fields.toOwnedSlice(allocator),
     };
 }
 
@@ -235,23 +257,40 @@ pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, env: EnvLo
     errdefer output.deinit(allocator);
 
     for (word.parts) |part| {
-        switch (part.kind) {
-            .unquoted, .escaped => try output.appendSlice(allocator, part.value(word.raw)),
-            .single_quoted => try output.appendSlice(allocator, part.value(word.raw)),
-            .double_quoted => {
-                const expanded = try expandParameters(allocator, part.value(word.raw), env);
-                defer allocator.free(expanded);
-                const quote_removed = try quoteRemove(allocator, expanded);
-                defer allocator.free(quote_removed);
-                try output.appendSlice(allocator, quote_removed);
-            },
-            .parameter => if (env.get(part.value(word.raw))) |value| {
-                try output.appendSlice(allocator, value);
-            },
-        }
+        const rendered = try renderPart(allocator, word.raw, part, env);
+        defer allocator.free(rendered);
+        try output.appendSlice(allocator, rendered);
     }
 
     return output.toOwnedSlice(allocator);
+}
+
+fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, env: EnvLookup) ![]const u8 {
+    return switch (part.kind) {
+        .unquoted, .escaped, .single_quoted => allocator.dupe(u8, part.value(raw)),
+        .double_quoted => blk: {
+            const expanded = try expandParameters(allocator, part.value(raw), env);
+            defer allocator.free(expanded);
+            break :blk quoteRemove(allocator, expanded);
+        },
+        .parameter => if (env.get(part.value(raw))) |value| allocator.dupe(u8, value) else allocator.alloc(u8, 0),
+    };
+}
+
+fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: []const u8) !void {
+    for (text) |c| {
+        if (isDefaultIfsWhitespace(c)) {
+            if (current.items.len != 0) {
+                try fields.append(allocator, try current.toOwnedSlice(allocator));
+            }
+        } else {
+            try current.append(allocator, c);
+        }
+    }
+}
+
+fn isDefaultIfsWhitespace(c: u8) bool {
+    return c == ' ' or c == '\t' or c == '\n';
 }
 
 pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
@@ -432,4 +471,23 @@ test "expand word returns fields through an explicit result" {
 
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("hello world", result.fields[0]);
+}
+
+test "field splitting uses default IFS for unquoted expansion" {
+    var result = try expandWord(std.testing.allocator, "$USER two\tthree", .{ .env = test_env });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 3), result.fields.len);
+    try std.testing.expectEqualStrings("rush-user", result.fields[0]);
+    try std.testing.expectEqualStrings("two", result.fields[1]);
+    try std.testing.expectEqualStrings("three", result.fields[2]);
+}
+
+test "field splitting preserves quoted expansion results" {
+    var result = try expandWord(std.testing.allocator, "\"$USER two\" 'three four'", .{ .env = test_env });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), result.fields.len);
+    try std.testing.expectEqualStrings("rush-user two", result.fields[0]);
+    try std.testing.expectEqualStrings("three four", result.fields[1]);
 }

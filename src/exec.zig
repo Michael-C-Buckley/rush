@@ -207,7 +207,7 @@ pub const Executor = struct {
     fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand) !ir.SimpleCommand {
         const assignments = try self.expandWords(command.assignments);
         errdefer self.freeWords(assignments);
-        const argv = try self.expandWords(command.argv);
+        const argv = try self.expandArgv(command.argv);
         errdefer self.freeWords(argv);
         const redirections = try self.expandRedirections(command.redirections);
         errdefer self.freeRedirections(redirections);
@@ -218,6 +218,28 @@ pub const Executor = struct {
             .argv = argv,
             .redirections = redirections,
         };
+    }
+
+    fn expandArgv(self: *Executor, words: []const ir.WordRef) ![]ir.WordRef {
+        var expanded: std.ArrayList(ir.WordRef) = .empty;
+        errdefer {
+            for (expanded.items) |word| self.freeWord(word);
+            expanded.deinit(self.allocator);
+        }
+
+        for (words) |word| {
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup() });
+            defer fields.deinit();
+            for (fields.fields) |field| {
+                const raw = try self.allocator.dupe(u8, word.raw);
+                errdefer self.allocator.free(raw);
+                const text = try self.allocator.dupe(u8, field);
+                errdefer self.allocator.free(text);
+                try expanded.append(self.allocator, .{ .span = word.span, .raw = raw, .text = text });
+            }
+        }
+
+        return expanded.toOwnedSlice(self.allocator);
     }
 
     fn expandWords(self: *Executor, words: []const ir.WordRef) ![]ir.WordRef {
@@ -571,6 +593,21 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor field-splits unquoted parameter expansion in argv" {
+    var lowered = try parseAndLower(std.testing.allocator, "WORDS='one two'; echo $WORDS");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("one two\n", result.stdout);
 }
 
 test "executor expands parameters from shell environment" {
