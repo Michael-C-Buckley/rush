@@ -1,0 +1,2 @@
+X=ok :
+echo $X

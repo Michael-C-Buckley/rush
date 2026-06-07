@@ -1,0 +1,1 @@
+for x in a b c; do if test "$x" = b; then continue; fi; if test "$x" = c; then break; fi; echo $x; done

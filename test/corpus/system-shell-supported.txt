@@ -73,3 +73,8 @@ cat <<EOF\nhello\nworld\nEOF
 cat <<-EOF\n\thello\n\tEOF
 ( echo sub-one; echo sub-two ) > out; echo after; /bin/cat out
 f() { echo fn-one; echo fn-two; }; f > out; echo after; /bin/cat out
+touch file; test -f file; echo file=$?; [ "abc" = "abc" ]; echo string=$?; [ 5 -gt 3 ]; echo int=$?
+false; echo $?; true; echo $?
+for x in a b c; do if test "$x" = b; then continue; fi; if test "$x" = c; then break; fi; echo $x; done
+f() { false; return 7; echo never; }; f; echo $?
+export EXPORTED=value; env | grep ^EXPORTED=

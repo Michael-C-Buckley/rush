@@ -1,0 +1,4 @@
+touch file
+test -f file; echo file=$?
+[ "abc" = "abc" ]; echo string=$?
+[ 5 -gt 3 ]; echo int=$?

@@ -1,0 +1,2 @@
+export EXPORTED=value
+env | grep ^EXPORTED=

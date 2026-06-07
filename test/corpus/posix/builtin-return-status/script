@@ -1,0 +1,3 @@
+f() { false; return 7; echo never; }
+f
+echo $?
