@@ -26,9 +26,20 @@ pub const CommandResult = struct {
     }
 };
 
+pub const ArrayValue = struct {
+    values: std.ArrayList([]const u8) = .empty,
+
+    pub fn deinit(self: *ArrayValue, allocator: std.mem.Allocator) void {
+        for (self.values.items) |value| allocator.free(value);
+        self.values.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
 pub const Executor = struct {
     allocator: std.mem.Allocator,
     env: std.StringHashMapUnmanaged([]const u8) = .empty,
+    arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         return .{ .allocator = allocator };
@@ -41,11 +52,48 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.env.deinit(self.allocator);
+        var array_iter = self.arrays.iterator();
+        while (array_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            entry.value_ptr.deinit(self.allocator);
+        }
+        self.arrays.deinit(self.allocator);
         self.* = undefined;
     }
 
     pub fn getEnv(self: Executor, name: []const u8) ?[]const u8 {
         return self.env.get(name);
+    }
+
+    pub fn setArrayElement(self: *Executor, name: []const u8, index: usize, value: []const u8) !void {
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const result = try self.arrays.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+        } else {
+            result.value_ptr.* = .{};
+        }
+        const array = result.value_ptr;
+        while (array.values.items.len <= index) {
+            try array.values.append(self.allocator, try self.allocator.alloc(u8, 0));
+        }
+        self.allocator.free(array.values.items[index]);
+        array.values.items[index] = try self.allocator.dupe(u8, value);
+    }
+
+    pub fn getArrayElement(self: Executor, name: []const u8, index: usize) ?[]const u8 {
+        const array = self.arrays.get(name) orelse return null;
+        if (index >= array.values.items.len) return null;
+        return array.values.items[index];
+    }
+
+    pub fn unsetArray(self: *Executor, name: []const u8) void {
+        if (self.arrays.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            var value = entry.value;
+            value.deinit(self.allocator);
+        }
     }
 
     pub fn unsetEnv(self: *Executor, name: []const u8) void {
@@ -793,6 +841,23 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor stores Bash array runtime data" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try executor.setArrayElement("arr", 0, "zero");
+    try executor.setArrayElement("arr", 2, "two");
+    try executor.setArrayElement("arr", 0, "ZERO");
+
+    try std.testing.expectEqualStrings("ZERO", executor.getArrayElement("arr", 0).?);
+    try std.testing.expectEqualStrings("", executor.getArrayElement("arr", 1).?);
+    try std.testing.expectEqualStrings("two", executor.getArrayElement("arr", 2).?);
+    try std.testing.expect(executor.getArrayElement("arr", 3) == null);
+
+    executor.unsetArray("arr");
+    try std.testing.expect(executor.getArrayElement("arr", 0) == null);
 }
 
 test "executor implements test and bracket builtins" {
