@@ -346,26 +346,24 @@ fn isCompoundNode(kind: parser.NodeKind) bool {
 fn collectHereDocRanges(allocator: std.mem.Allocator, parsed: parser.ParseResult) !std.ArrayList(parser.Span) {
     var ranges: std.ArrayList(parser.Span) = .empty;
     errdefer ranges.deinit(allocator);
+    var processed_lines: std.ArrayList(usize) = .empty;
+    defer processed_lines.deinit(allocator);
+
     for (parsed.nodes) |node| {
-        if (node.kind != .redirection) continue;
-        var operator: parser.TokenKind = .invalid;
-        var target_token: ?usize = null;
-        for (parsed.nodeChildren(node)) |child| switch (child) {
-            .token => |token_id| {
-                const token = parsed.tokens[token_id.index()];
-                if (token.kind.isRedirectOperator()) operator = token.kind;
-            },
-            .node => |node_id| {
-                const child_node = parsed.nodes[node_id.index()];
-                if (child_node.kind == .word) target_token = child_node.token_start;
-            },
-        };
-        if (operator != .dless and operator != .dless_dash) continue;
-        const token_index = target_token orelse continue;
-        const delimiter = try expand.quoteRemove(allocator, parsed.tokens[token_index].lexeme(parsed.source));
-        defer allocator.free(delimiter);
-        if (extractHereDocRange(parsed.source, node.span.end, delimiter, operator == .dless_dash)) |range| {
-            try ranges.append(allocator, range);
+        if (node.kind != .redirection or !isHereDocRedirectionNode(parsed, node)) continue;
+        const line = sourceLineBounds(parsed.source, node.span.start);
+        if (containsUsize(processed_lines.items, line.start)) continue;
+        try processed_lines.append(allocator, line.start);
+
+        var pending = try collectPendingHereDocsOnLine(allocator, parsed, line);
+        defer pending.deinit(allocator);
+        defer freePendingHereDocs(allocator, pending.items);
+        var body_start = hereDocBodyStartFromLine(parsed.source, line) orelse continue;
+        for (pending.items) |doc| {
+            const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs);
+            defer allocator.free(extraction.body);
+            try ranges.append(allocator, extraction.range);
+            body_start = extraction.range.end;
         }
     }
     return ranges;
@@ -816,9 +814,7 @@ fn lowerRedirection(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     };
 
     if ((result.operator == .dless or result.operator == .dless_dash) and result.target != null) {
-        if (try extractHereDoc(allocator, parsed.source, node.span.end, result.target.?.text, result.operator == .dless_dash)) |here_doc| {
-            result.here_doc = here_doc.body;
-        }
+        result.here_doc = try extractOrderedHereDocForRedirection(allocator, parsed, node);
     }
 
     return result;
@@ -829,8 +825,94 @@ const HereDocExtraction = struct {
     range: parser.Span,
 };
 
-fn extractHereDoc(allocator: std.mem.Allocator, source: []const u8, after_redirection: usize, delimiter: []const u8, strip_tabs: bool) !?HereDocExtraction {
-    const range_start = hereDocBodyStart(source, after_redirection) orelse return null;
+const SourceLine = struct {
+    start: usize,
+    end: usize,
+};
+
+const PendingHereDoc = struct {
+    redirection_start: usize,
+    delimiter: []const u8,
+    strip_tabs: bool,
+};
+
+fn extractOrderedHereDocForRedirection(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !?[]const u8 {
+    const line = sourceLineBounds(parsed.source, node.span.start);
+    var pending = try collectPendingHereDocsOnLine(allocator, parsed, line);
+    defer pending.deinit(allocator);
+    defer freePendingHereDocs(allocator, pending.items);
+
+    var body_start = hereDocBodyStartFromLine(parsed.source, line) orelse return null;
+    for (pending.items) |doc| {
+        const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs);
+        body_start = extraction.range.end;
+        if (doc.redirection_start == node.span.start) return extraction.body;
+        allocator.free(extraction.body);
+    }
+    return null;
+}
+
+fn collectPendingHereDocsOnLine(allocator: std.mem.Allocator, parsed: parser.ParseResult, line: SourceLine) !std.ArrayList(PendingHereDoc) {
+    var pending: std.ArrayList(PendingHereDoc) = .empty;
+    errdefer {
+        freePendingHereDocs(allocator, pending.items);
+        pending.deinit(allocator);
+    }
+    for (parsed.nodes) |node| {
+        if (node.kind != .redirection or node.span.start < line.start or node.span.start >= line.end) continue;
+        const info = try hereDocInfoForNode(allocator, parsed, node) orelse continue;
+        try pending.append(allocator, .{ .redirection_start = node.span.start, .delimiter = info.delimiter, .strip_tabs = info.strip_tabs });
+    }
+    std.mem.sort(PendingHereDoc, pending.items, {}, lessThanPendingHereDoc);
+    return pending;
+}
+
+fn lessThanPendingHereDoc(_: void, a: PendingHereDoc, b: PendingHereDoc) bool {
+    return a.redirection_start < b.redirection_start;
+}
+
+fn freePendingHereDocs(allocator: std.mem.Allocator, pending: []const PendingHereDoc) void {
+    for (pending) |doc| allocator.free(doc.delimiter);
+}
+
+const HereDocInfo = struct {
+    delimiter: []const u8,
+    strip_tabs: bool,
+};
+
+fn hereDocInfoForNode(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !?HereDocInfo {
+    var operator: parser.TokenKind = .invalid;
+    var target_token: ?usize = null;
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .token => |token_id| {
+            const token = parsed.tokens[token_id.index()];
+            if (token.kind.isRedirectOperator()) operator = token.kind;
+        },
+        .node => |node_id| {
+            const child_node = parsed.nodes[node_id.index()];
+            if (child_node.kind == .word) target_token = child_node.token_start;
+        },
+    };
+    if (operator != .dless and operator != .dless_dash) return null;
+    const token_index = target_token orelse return null;
+    return .{
+        .delimiter = try expand.quoteRemove(allocator, parsed.tokens[token_index].lexeme(parsed.source)),
+        .strip_tabs = operator == .dless_dash,
+    };
+}
+
+fn isHereDocRedirectionNode(parsed: parser.ParseResult, node: parser.Node) bool {
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .token => |token_id| {
+            const kind = parsed.tokens[token_id.index()].kind;
+            if (kind == .dless or kind == .dless_dash) return true;
+        },
+        .node => {},
+    };
+    return false;
+}
+
+fn extractHereDocFromBodyStart(allocator: std.mem.Allocator, source: []const u8, range_start: usize, delimiter: []const u8, strip_tabs: bool) !HereDocExtraction {
     var body: std.ArrayList(u8) = .empty;
     errdefer body.deinit(allocator);
     var index = range_start;
@@ -857,32 +939,22 @@ fn extractHereDoc(allocator: std.mem.Allocator, source: []const u8, after_redire
     return .{ .body = try body.toOwnedSlice(allocator), .range = .init(range_start, source.len) };
 }
 
-fn extractHereDocRange(source: []const u8, after_redirection: usize, delimiter: []const u8, strip_tabs: bool) ?parser.Span {
-    const range_start = hereDocBodyStart(source, after_redirection) orelse return null;
-    var index = range_start;
-    while (index <= source.len) {
-        const raw_line_start = index;
-        while (index < source.len and source[index] != '\n') : (index += 1) {}
-        const raw_line_end = index;
-        const line_start_no_tabs = if (strip_tabs) blk: {
-            var start = raw_line_start;
-            while (start < raw_line_end and source[start] == '\t') : (start += 1) {}
-            break :blk start;
-        } else raw_line_start;
-        if (std.mem.eql(u8, source[line_start_no_tabs..raw_line_end], delimiter)) {
-            const range_end = if (index < source.len and source[index] == '\n') index + 1 else index;
-            return .init(range_start, range_end);
-        }
-        if (index < source.len and source[index] == '\n') index += 1 else break;
-    }
-    return .init(range_start, source.len);
+fn sourceLineBounds(source: []const u8, offset: usize) SourceLine {
+    var start = @min(offset, source.len);
+    while (start > 0 and source[start - 1] != '\n') : (start -= 1) {}
+    var end = @min(offset, source.len);
+    while (end < source.len and source[end] != '\n') : (end += 1) {}
+    return .{ .start = start, .end = end };
 }
 
-fn hereDocBodyStart(source: []const u8, after_redirection: usize) ?usize {
-    var line_start = after_redirection;
-    while (line_start < source.len and source[line_start] != '\n') : (line_start += 1) {}
-    if (line_start >= source.len) return null;
-    return line_start + 1;
+fn hereDocBodyStartFromLine(source: []const u8, line: SourceLine) ?usize {
+    if (line.end >= source.len) return null;
+    return line.end + 1;
+}
+
+fn containsUsize(items: []const usize, needle: usize) bool {
+    for (items) |item| if (item == needle) return true;
+    return false;
 }
 
 fn wordRef(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !WordRef {

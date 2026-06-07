@@ -2866,6 +2866,32 @@ test "executor supports here-doc stdin redirections" {
     var piped_result = try executor.executeProgram(piped.program, .{ .io = std.testing.io, .allow_external = true });
     defer piped_result.deinit();
     try std.testing.expectEqualStrings("pipe\n", piped_result.stdout);
+
+    var multiple = try parseAndLower(std.testing.allocator,
+        \\cat <<FIRST <<SECOND
+        \\first body
+        \\FIRST
+        \\second body
+        \\SECOND
+    );
+    defer multiple.parsed.deinit();
+    defer multiple.program.deinit();
+    var multiple_result = try executor.executeProgram(multiple.program, .{ .io = std.testing.io });
+    defer multiple_result.deinit();
+    try std.testing.expectEqualStrings("second body\n", multiple_result.stdout);
+
+    var pipeline_multiple = try parseAndLower(std.testing.allocator,
+        \\cat <<LEFT | cat <<RIGHT
+        \\left body
+        \\LEFT
+        \\right body
+        \\RIGHT
+    );
+    defer pipeline_multiple.parsed.deinit();
+    defer pipeline_multiple.program.deinit();
+    var pipeline_multiple_result = try executor.executeProgram(pipeline_multiple.program, .{ .io = std.testing.io });
+    defer pipeline_multiple_result.deinit();
+    try std.testing.expectEqualStrings("right body\n", pipeline_multiple_result.stdout);
 }
 
 test "executor supports real redirections on pipeline stages" {
