@@ -80,3 +80,5 @@ f() { false; return 7; echo never; }; f; echo $?
 export EXPORTED=value; env | grep ^EXPORTED=
 set -- "a b" c ""; echo "$1/$2/$#"; for x in "$@"; do echo "<$x>"; done; IFS=:; echo "<$*>"; shift; echo "$1/$#"
 set -- a b; set --; echo "$#/${1:-unset}"; for x in "$@"; do echo bad; done; echo done
+touch rush-noglob-a.tmp; set -f; echo rush-noglob-?.tmp; set +f; echo rush-noglob-?.tmp
+touch rush-noglob-b.tmp; set -o noglob; echo rush-noglob-?.tmp; set +o noglob; echo rush-noglob-?.tmp

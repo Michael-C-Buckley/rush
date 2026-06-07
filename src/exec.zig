@@ -25,6 +25,7 @@ pub const ExecuteOptions = struct {
 
 pub const ShellOptions = struct {
     pipefail: bool = false,
+    noglob: bool = false,
 };
 
 pub const CommandResult = struct {
@@ -1085,7 +1086,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         const positionals: []const []const u8 = self.currentPositionals().params;
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .pathname_expansion = !self.shell_options.noglob });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -2494,12 +2495,20 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         try setGlobalPositionals(self, command.argv[2..]);
         return emptyResult(self.allocator, 0);
     }
+    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-f") or std.mem.eql(u8, command.argv[1].text, "+f"))) {
+        self.shell_options.noglob = command.argv[1].text[0] == '-';
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
     if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
         const enabled = command.argv[1].text[0] == '-';
         if (std.mem.eql(u8, command.argv[2].text, "pipefail")) {
             self.shell_options.pipefail = enabled;
+            return emptyResult(self.allocator, 0);
+        }
+        if (std.mem.eql(u8, command.argv[2].text, "noglob")) {
+            self.shell_options.noglob = enabled;
             return emptyResult(self.allocator, 0);
         }
         return errorResult(self.allocator, 2, "set", "unknown option name");
@@ -2516,9 +2525,9 @@ fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
     const stdout = if (reusable)
-        try std.fmt.allocPrint(self.allocator, "set {s}o pipefail\n", .{if (self.shell_options.pipefail) "-" else "+"})
+        try std.fmt.allocPrint(self.allocator, "set {s}o noglob\nset {s}o pipefail\n", .{ if (self.shell_options.noglob) "-" else "+", if (self.shell_options.pipefail) "-" else "+" })
     else
-        try std.fmt.allocPrint(self.allocator, "pipefail\t{s}\n", .{if (self.shell_options.pipefail) "on" else "off"});
+        try std.fmt.allocPrint(self.allocator, "noglob\t{s}\npipefail\t{s}\n", .{ if (self.shell_options.noglob) "on" else "off", if (self.shell_options.pipefail) "on" else "off" });
     errdefer self.allocator.free(stdout);
     return .{
         .allocator = self.allocator,
@@ -3832,7 +3841,7 @@ test "executor implements set shell option baseline" {
     var show = try executor.executeProgram(show_lowered.program, .{});
     defer show.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
-    try std.testing.expectEqualStrings("pipefail\toff\n", show.stdout);
+    try std.testing.expectEqualStrings("noglob\toff\npipefail\toff\n", show.stdout);
 
     var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
     defer enable_lowered.parsed.deinit();
@@ -3847,7 +3856,7 @@ test "executor implements set shell option baseline" {
     defer reusable_lowered.program.deinit();
     var reusable = try executor.executeProgram(reusable_lowered.program, .{});
     defer reusable.deinit();
-    try std.testing.expectEqualStrings("set -o pipefail\n", reusable.stdout);
+    try std.testing.expectEqualStrings("set +o noglob\nset -o pipefail\n", reusable.stdout);
 
     var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");
     defer disable_lowered.parsed.deinit();
@@ -3856,6 +3865,17 @@ test "executor implements set shell option baseline" {
     defer disabled.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), disabled.status);
     try std.testing.expect(!executor.shell_options.pipefail);
+
+    const path = "rush-noglob-a.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
+    var noglob_lowered = try parseAndLower(std.testing.allocator, "set -f; echo rush-noglob-?.tmp; set +f; echo rush-noglob-?.tmp");
+    defer noglob_lowered.parsed.deinit();
+    defer noglob_lowered.program.deinit();
+    var noglob = try executor.executeProgram(noglob_lowered.program, .{ .io = std.testing.io });
+    defer noglob.deinit();
+    try std.testing.expectEqualStrings("rush-noglob-?.tmp\nrush-noglob-a.tmp\n", noglob.stdout);
+    try std.testing.expect(!executor.shell_options.noglob);
 }
 
 test "executor applies pipefail option to pipeline status" {

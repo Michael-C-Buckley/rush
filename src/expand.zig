@@ -43,6 +43,7 @@ pub const Options = struct {
     features: compat.Features = .{},
     command_substitution: CommandSubstitution = .{},
     positionals: []const []const u8 = &.{},
+    pathname_expansion: bool = true,
 };
 
 pub const Phase = enum {
@@ -151,8 +152,10 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
         try fields.append(allocator, try current.toOwnedSlice(allocator));
     }
 
-    if (options.io) |io| {
-        try applyPathnameExpansion(allocator, io, &fields);
+    if (options.pathname_expansion) {
+        if (options.io) |io| {
+            try applyPathnameExpansion(allocator, io, &fields);
+        }
     }
 
     return .{
