@@ -474,6 +474,8 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
+    if (std.mem.eql(u8, name, "test")) return builtinTest;
+    if (std.mem.eql(u8, name, "[")) return builtinTest;
     return null;
 }
 
@@ -621,6 +623,69 @@ fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     };
 }
 
+fn builtinTest(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    const is_bracket = std.mem.eql(u8, command.argv[0].text, "[");
+    const args = command.argv[1..];
+    if (is_bracket) {
+        if (args.len == 0 or !std.mem.eql(u8, args[args.len - 1].text, "]")) {
+            return errorResult(self.allocator, 2, "[", "missing ]");
+        }
+        return emptyResult(self.allocator, if (try evalTest(self.allocator, options, args[0 .. args.len - 1])) 0 else 1);
+    }
+    return emptyResult(self.allocator, if (try evalTest(self.allocator, options, args)) 0 else 1);
+}
+
+fn evalTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []const ir.WordRef) !bool {
+    return switch (args.len) {
+        0 => false,
+        1 => args[0].text.len != 0,
+        2 => try evalUnaryTest(allocator, options, args[0].text, args[1].text),
+        3 => if (std.mem.eql(u8, args[0].text, "!"))
+            !(try evalTest(allocator, options, args[1..]))
+        else
+            try evalBinaryTest(args[0].text, args[1].text, args[2].text),
+        4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalTest(allocator, options, args[1..])) else error.InvalidTestExpression,
+        else => error.InvalidTestExpression,
+    };
+}
+
+fn evalUnaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, op: []const u8, operand: []const u8) !bool {
+    if (std.mem.eql(u8, op, "!")) return operand.len == 0;
+    if (std.mem.eql(u8, op, "-n")) return operand.len != 0;
+    if (std.mem.eql(u8, op, "-z")) return operand.len == 0;
+    if (std.mem.eql(u8, op, "-e") or std.mem.eql(u8, op, "-f") or std.mem.eql(u8, op, "-d")) {
+        const io = options.io orelse return false;
+        const stat = statPath(allocator, io, operand) catch return false;
+        if (std.mem.eql(u8, op, "-e")) return true;
+        if (std.mem.eql(u8, op, "-f")) return stat.kind == .file;
+        if (std.mem.eql(u8, op, "-d")) return stat.kind == .directory;
+    }
+    return error.InvalidTestExpression;
+}
+
+fn evalBinaryTest(left: []const u8, op: []const u8, right: []const u8) !bool {
+    if (std.mem.eql(u8, op, "=") or std.mem.eql(u8, op, "==")) return std.mem.eql(u8, left, right);
+    if (std.mem.eql(u8, op, "!=")) return !std.mem.eql(u8, left, right);
+
+    const lhs = std.fmt.parseInt(i64, left, 10) catch return error.InvalidTestExpression;
+    const rhs = std.fmt.parseInt(i64, right, 10) catch return error.InvalidTestExpression;
+    if (std.mem.eql(u8, op, "-eq")) return lhs == rhs;
+    if (std.mem.eql(u8, op, "-ne")) return lhs != rhs;
+    if (std.mem.eql(u8, op, "-gt")) return lhs > rhs;
+    if (std.mem.eql(u8, op, "-ge")) return lhs >= rhs;
+    if (std.mem.eql(u8, op, "-lt")) return lhs < rhs;
+    if (std.mem.eql(u8, op, "-le")) return lhs <= rhs;
+    return error.InvalidTestExpression;
+}
+
+fn statPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !std.Io.File.Stat {
+    _ = allocator;
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
+    return file.stat(io);
+}
+
 fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
 }
@@ -726,6 +791,40 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor implements test and bracket builtins" {
+    const path = "rush-test-builtin-file.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    const Case = struct { script: []const u8, status: ExitStatus };
+    const cases = [_]Case{
+        .{ .script = "test nonempty", .status = 0 },
+        .{ .script = "test ''", .status = 1 },
+        .{ .script = "test a = a", .status = 0 },
+        .{ .script = "test a != a", .status = 1 },
+        .{ .script = "test 3 -gt 2", .status = 0 },
+        .{ .script = "test 3 -le 2", .status = 1 },
+        .{ .script = "test -e rush-test-builtin-file.tmp", .status = 0 },
+        .{ .script = "test -f rush-test-builtin-file.tmp", .status = 0 },
+        .{ .script = "test ! -e rush-test-missing.tmp", .status = 0 },
+        .{ .script = "[ a = a ]", .status = 0 },
+        .{ .script = "[ a = b ]", .status = 1 },
+    };
+
+    for (cases) |case| {
+        var lowered = try parseAndLower(std.testing.allocator, case.script);
+        defer lowered.parsed.deinit();
+        defer lowered.program.deinit();
+
+        var executor = Executor.init(std.testing.allocator);
+        defer executor.deinit();
+
+        var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+        defer result.deinit();
+        try std.testing.expectEqual(case.status, result.status);
+    }
 }
 
 test "executor implements unset and env builtins" {
