@@ -41,6 +41,7 @@ pub const Executor = struct {
     allocator: std.mem.Allocator,
     env: std.StringHashMapUnmanaged([]const u8) = .empty,
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
+    functions: std.StringHashMapUnmanaged([]const u8) = .empty,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         return .{ .allocator = allocator };
@@ -59,6 +60,12 @@ pub const Executor = struct {
             entry.value_ptr.deinit(self.allocator);
         }
         self.arrays.deinit(self.allocator);
+        var function_iter = self.functions.iterator();
+        while (function_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.functions.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -135,6 +142,7 @@ pub const Executor = struct {
                     .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
                     .for_command => try self.executeForCommand(program.for_commands[statement.index], options),
                     .case_command => try self.executeCaseCommand(program.case_commands[statement.index], options),
+                    .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index]),
                 };
             }
             return last;
@@ -154,6 +162,26 @@ pub const Executor = struct {
             last = try self.executeSimpleCommand(command, options);
         }
         return last;
+    }
+
+    fn executeFunctionDefinition(self: *Executor, definition: ir.FunctionDefinition) !CommandResult {
+        try self.setFunction(definition.name, definition.body);
+        return emptyResult(self.allocator, 0);
+    }
+
+    fn setFunction(self: *Executor, name: []const u8, body: []const u8) !void {
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_body = try self.allocator.dupe(u8, body);
+        errdefer self.allocator.free(owned_body);
+        const result = try self.functions.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            self.allocator.free(result.value_ptr.*);
+            result.value_ptr.* = owned_body;
+        } else {
+            result.value_ptr.* = owned_body;
+        }
     }
 
     fn executeCaseCommand(self: *Executor, command: ir.CaseCommand, options: ExecuteOptions) !CommandResult {
@@ -419,6 +447,10 @@ pub const Executor = struct {
         if (expanded.argv.len == 0) {
             try self.applyAssignments(expanded.assignments);
             return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, 0), options);
+        }
+
+        if (self.functions.get(expanded.argv[0].text)) |body| {
+            return try self.applyOutputRedirections(expanded, try self.executeScriptSlice(body, options), options);
         }
 
         if (builtinFor(expanded.argv[0].text)) |builtin| {
@@ -1054,6 +1086,29 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor parses and executes POSIX shell functions" {
+    var lowered = try parseAndLower(std.testing.allocator, "greet() { echo hi; }; greet");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("hi\n", result.stdout);
+
+    var redefine = try parseAndLower(std.testing.allocator, "greet() { echo one; }; greet() { echo two; }; greet");
+    defer redefine.parsed.deinit();
+    defer redefine.program.deinit();
+
+    var redefine_result = try executor.executeProgram(redefine.program, .{});
+    defer redefine_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), redefine_result.status);
+    try std.testing.expectEqualStrings("two\n", redefine_result.stdout);
 }
 
 test "executor executes POSIX case statements" {

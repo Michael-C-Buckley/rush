@@ -171,6 +171,7 @@ pub const NodeKind = enum {
     for_command,
     bash_test_command,
     case_command,
+    function_definition,
     parse_error,
 };
 
@@ -844,6 +845,12 @@ const SyntaxParser = struct {
         defer list_children.deinit(self.allocator);
 
         while (!self.at(.eof)) {
+            if (self.startsFunctionDefinition()) {
+                const function_definition = try self.parseFunctionDefinition();
+                try list_children.append(self.allocator, .{ .node = function_definition });
+                continue;
+            }
+
             if (self.startsBashTestCommand()) {
                 const bash_test = try self.parseBashTestCommand();
                 try list_children.append(self.allocator, .{ .node = bash_test });
@@ -945,6 +952,48 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, if_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseFunctionDefinition(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var function_children: std.ArrayList(SyntaxChild) = .empty;
+        defer function_children.deinit(self.allocator);
+        var saw_open_brace = false;
+        var closed = false;
+
+        while (!self.at(.eof)) {
+            const token = self.current();
+            if (token.kind == .word) {
+                const lexeme = token.lexeme(self.source);
+                if (std.mem.eql(u8, lexeme, "{")) saw_open_brace = true;
+                if (std.mem.eql(u8, lexeme, "}")) closed = true;
+            }
+            try self.appendCurrentTokenChildTo(&function_children);
+            if (closed) break;
+        }
+
+        if (!saw_open_brace) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing function body",
+            });
+        }
+        if (!closed) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .incomplete_input,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing } to close function definition",
+            });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, function_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.function_definition, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parseCaseCommand(self: *SyntaxParser) !NodeId {
@@ -1302,7 +1351,13 @@ const SyntaxParser = struct {
     }
 
     fn startsListElement(self: SyntaxParser) bool {
-        return self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
+        return self.startsFunctionDefinition() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
+    }
+
+    fn startsFunctionDefinition(self: SyntaxParser) bool {
+        if (!self.at(.word) or self.index + 2 >= self.tokens.len) return false;
+        if (!isName(self.current().lexeme(self.source))) return false;
+        return self.tokens[self.index + 1].kind == .left_paren and self.tokens[self.index + 2].kind == .right_paren;
     }
 
     fn startsBashTestCommand(self: SyntaxParser) bool {
@@ -1332,7 +1387,7 @@ const SyntaxParser = struct {
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
-        if (self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand()) return false;
+        if (self.startsFunctionDefinition() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand()) return false;
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
 
@@ -1385,6 +1440,14 @@ fn isAssignmentWord(word: []const u8) bool {
     if (equals == 0) return false;
     if (!isNameStart(word[0])) return false;
     for (word[1..equals]) |c| {
+        if (!isNameContinue(c)) return false;
+    }
+    return true;
+}
+
+fn isName(word: []const u8) bool {
+    if (word.len == 0 or !isNameStart(word[0])) return false;
+    for (word[1..]) |c| {
         if (!isNameContinue(c)) return false;
     }
     return true;
@@ -1664,6 +1727,31 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
         },
     });
+}
+
+test "parser builds POSIX function definition nodes" {
+    var result = try parse(std.testing.allocator, "greet() { echo hi; }", .{});
+    defer result.deinit();
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .function_definition) {
+            found = true;
+            try expectSpan(.init(0, 20), node.span);
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "parser reports incomplete POSIX function definitions" {
+    var result = try parse(std.testing.allocator, "greet() { echo hi", .{});
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 17), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing } to close function definition", result.diagnostics[0].message);
 }
 
 test "parser builds POSIX case command nodes" {
