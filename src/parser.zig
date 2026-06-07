@@ -166,6 +166,7 @@ pub const NodeKind = enum {
     command_word,
     word,
     command_substitution,
+    if_command,
     parse_error,
 };
 
@@ -815,7 +816,7 @@ const SyntaxParser = struct {
             if (self.current().kind.isTrivia() and self.current().kind != .newline) {
                 try root_children.append(self.allocator, .{ .token = .init(self.index) });
                 self.index += 1;
-            } else if (self.startsPipeline()) {
+            } else if (self.startsListElement()) {
                 const list = try self.parseList();
                 try root_children.append(self.allocator, .{ .node = list });
             } else {
@@ -838,6 +839,12 @@ const SyntaxParser = struct {
         defer list_children.deinit(self.allocator);
 
         while (!self.at(.eof)) {
+            if (self.startsIfCommand()) {
+                const if_command = try self.parseIfCommand();
+                try list_children.append(self.allocator, .{ .node = if_command });
+                continue;
+            }
+
             if (self.startsPipeline()) {
                 const pipeline = try self.parsePipeline();
                 try list_children.append(self.allocator, .{ .node = pipeline });
@@ -857,6 +864,58 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, list_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.list, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseIfCommand(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var if_children: std.ArrayList(SyntaxChild) = .empty;
+        defer if_children.deinit(self.allocator);
+        var depth: usize = 0;
+        var saw_then = false;
+        var closed = false;
+
+        while (!self.at(.eof)) {
+            const token = self.current();
+            if (token.kind == .word) {
+                const lexeme = token.lexeme(self.source);
+                if (std.mem.eql(u8, lexeme, "if")) {
+                    depth += 1;
+                } else if (depth == 1 and std.mem.eql(u8, lexeme, "then")) {
+                    saw_then = true;
+                } else if (std.mem.eql(u8, lexeme, "fi")) {
+                    if (depth > 0) depth -= 1;
+                }
+            }
+
+            try self.appendCurrentTokenChildTo(&if_children);
+            if (token.kind == .word and std.mem.eql(u8, token.lexeme(self.source), "fi") and depth == 0) {
+                closed = true;
+                break;
+            }
+        }
+
+        if (!saw_then) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing then in if command",
+            });
+        }
+        if (!closed) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .incomplete_input,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing fi to close if command",
+            });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, if_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parsePipeline(self: *SyntaxParser) !NodeId {
@@ -1024,11 +1083,20 @@ const SyntaxParser = struct {
         self.index += 1;
     }
 
+    fn startsListElement(self: SyntaxParser) bool {
+        return self.startsIfCommand() or self.startsPipeline();
+    }
+
+    fn startsIfCommand(self: SyntaxParser) bool {
+        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "if");
+    }
+
     fn startsPipeline(self: SyntaxParser) bool {
         return self.startsSimpleCommand();
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
+        if (self.startsIfCommand()) return false;
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
 
@@ -1359,6 +1427,63 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .command_word, .span = .init(6, 10), .token_start = 4, .token_end = 5 },
             .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
         },
+    });
+}
+
+test "parser builds POSIX if command nodes" {
+    try expectParse("if true; then echo ok; else echo no; fi", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 2) },
+            .{ .kind = .whitespace, .span = .init(2, 3) },
+            .{ .kind = .word, .span = .init(3, 7) },
+            .{ .kind = .semicolon, .span = .init(7, 8) },
+            .{ .kind = .whitespace, .span = .init(8, 9) },
+            .{ .kind = .word, .span = .init(9, 13) },
+            .{ .kind = .whitespace, .span = .init(13, 14) },
+            .{ .kind = .word, .span = .init(14, 18) },
+            .{ .kind = .whitespace, .span = .init(18, 19) },
+            .{ .kind = .word, .span = .init(19, 21) },
+            .{ .kind = .semicolon, .span = .init(21, 22) },
+            .{ .kind = .whitespace, .span = .init(22, 23) },
+            .{ .kind = .word, .span = .init(23, 27) },
+            .{ .kind = .whitespace, .span = .init(27, 28) },
+            .{ .kind = .word, .span = .init(28, 32) },
+            .{ .kind = .whitespace, .span = .init(32, 33) },
+            .{ .kind = .word, .span = .init(33, 35) },
+            .{ .kind = .semicolon, .span = .init(35, 36) },
+            .{ .kind = .whitespace, .span = .init(36, 37) },
+            .{ .kind = .word, .span = .init(37, 39) },
+            .{ .kind = .eof, .span = .empty(39) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 39), .token_start = 0, .token_end = 21 },
+            .{ .kind = .if_command, .span = .init(0, 39), .token_start = 0, .token_end = 20 },
+        },
+    });
+}
+
+test "parser reports incomplete POSIX if commands" {
+    try expectParse("if true; then echo ok", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 2) },
+            .{ .kind = .whitespace, .span = .init(2, 3) },
+            .{ .kind = .word, .span = .init(3, 7) },
+            .{ .kind = .semicolon, .span = .init(7, 8) },
+            .{ .kind = .whitespace, .span = .init(8, 9) },
+            .{ .kind = .word, .span = .init(9, 13) },
+            .{ .kind = .whitespace, .span = .init(13, 14) },
+            .{ .kind = .word, .span = .init(14, 18) },
+            .{ .kind = .whitespace, .span = .init(18, 19) },
+            .{ .kind = .word, .span = .init(19, 21) },
+            .{ .kind = .eof, .span = .empty(21) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 21) }},
+        .diagnostics = &.{.{
+            .kind = .incomplete_input,
+            .span = .init(0, 21),
+            .message = "missing fi to close if command",
+        }},
+        .incomplete = true,
     });
 }
 
