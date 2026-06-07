@@ -22,9 +22,15 @@ pub const SimpleCommand = struct {
     redirections: []Redirection,
 };
 
+pub const Pipeline = struct {
+    span: parser.Span,
+    command_indexes: []usize,
+};
+
 pub const Program = struct {
     allocator: std.mem.Allocator,
     commands: []SimpleCommand,
+    pipelines: []Pipeline,
 
     pub fn deinit(self: *Program) void {
         for (self.commands) |command| {
@@ -32,31 +38,75 @@ pub const Program = struct {
             self.allocator.free(command.argv);
             self.allocator.free(command.redirections);
         }
+        for (self.pipelines) |pipeline| {
+            self.allocator.free(pipeline.command_indexes);
+        }
         self.allocator.free(self.commands);
+        self.allocator.free(self.pipelines);
         self.* = undefined;
     }
 };
 
 pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseResult) !Program {
     var commands: std.ArrayList(SimpleCommand) = .empty;
+    var pipelines: std.ArrayList(Pipeline) = .empty;
+    const missing_command = std.math.maxInt(usize);
+    const command_indexes_by_node = try allocator.alloc(usize, parsed.nodes.len);
+    defer allocator.free(command_indexes_by_node);
+    @memset(command_indexes_by_node, missing_command);
+
     errdefer {
         for (commands.items) |command| {
             allocator.free(command.assignments);
             allocator.free(command.argv);
             allocator.free(command.redirections);
         }
+        for (pipelines.items) |pipeline| {
+            allocator.free(pipeline.command_indexes);
+        }
         commands.deinit(allocator);
+        pipelines.deinit(allocator);
     }
 
     for (parsed.nodes, 0..) |node, node_index| {
         if (node.kind != .simple_command) continue;
+        command_indexes_by_node[node_index] = commands.items.len;
         const lowered = try lowerSimpleCommand(allocator, parsed, parser.NodeId.init(node_index));
         try commands.append(allocator, lowered);
+    }
+
+    for (parsed.nodes) |node| {
+        if (node.kind != .pipeline) continue;
+        const lowered = try lowerPipeline(allocator, parsed, node, command_indexes_by_node, missing_command);
+        try pipelines.append(allocator, lowered);
     }
 
     return .{
         .allocator = allocator,
         .commands = try commands.toOwnedSlice(allocator),
+        .pipelines = try pipelines.toOwnedSlice(allocator),
+    };
+}
+
+fn lowerPipeline(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node, command_indexes_by_node: []const usize, missing_command: usize) !Pipeline {
+    var command_indexes: std.ArrayList(usize) = .empty;
+    errdefer command_indexes.deinit(allocator);
+
+    for (parsed.nodeChildren(node)) |child| {
+        const child_node_id = switch (child) {
+            .node => |child_node| child_node,
+            .token => continue,
+        };
+        const child_node = parsed.nodes[child_node_id.index()];
+        if (child_node.kind != .simple_command) continue;
+        const command_index = command_indexes_by_node[child_node_id.index()];
+        std.debug.assert(command_index != missing_command);
+        try command_indexes.append(allocator, command_index);
+    }
+
+    return .{
+        .span = node.span,
+        .command_indexes = try command_indexes.toOwnedSlice(allocator),
     };
 }
 
@@ -157,4 +207,10 @@ test "lower preserves multiple simple commands from lists and pipelines" {
     try std.testing.expectEqualStrings("echo", program.commands[0].argv[0].text);
     try std.testing.expectEqualStrings("grep", program.commands[1].argv[0].text);
     try std.testing.expectEqualStrings("pwd", program.commands[2].argv[0].text);
+    try std.testing.expectEqual(@as(usize, 2), program.pipelines.len);
+    try std.testing.expectEqual(@as(usize, 2), program.pipelines[0].command_indexes.len);
+    try std.testing.expectEqual(@as(usize, 0), program.pipelines[0].command_indexes[0]);
+    try std.testing.expectEqual(@as(usize, 1), program.pipelines[0].command_indexes[1]);
+    try std.testing.expectEqual(@as(usize, 1), program.pipelines[1].command_indexes.len);
+    try std.testing.expectEqual(@as(usize, 2), program.pipelines[1].command_indexes[0]);
 }
