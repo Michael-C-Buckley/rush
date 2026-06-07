@@ -1,0 +1,5 @@
+cat <<FIRST <<SECOND
+first
+FIRST
+second
+SECOND

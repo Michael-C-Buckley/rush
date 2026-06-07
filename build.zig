@@ -49,4 +49,10 @@ pub fn build(b: *std.Build) void {
     corpus_check.step.dependOn(&exe.step);
     corpus_check.step.dependOn(fmt_step);
     corpus_step.dependOn(&corpus_check.step);
+
+    const posix_corpus_step = b.step("posix-corpus", "Run spec-derived POSIX expected-output corpus");
+    const posix_corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-posix-corpus.sh" });
+    posix_corpus_check.step.dependOn(&exe.step);
+    posix_corpus_check.step.dependOn(fmt_step);
+    posix_corpus_step.dependOn(&posix_corpus_check.step);
 }

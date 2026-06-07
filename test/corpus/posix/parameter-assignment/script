@@ -1,0 +1,1 @@
+unset A; echo ${A:=x}; echo $A
