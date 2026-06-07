@@ -32,3 +32,13 @@ echo a\ b c
 echo before # ignored comment
 echo one\necho two
 echo if then else fi do done case esac
+if false; then echo bad; elif true; then echo elif; else echo no; fi
+if true; then if false; then echo bad; else echo nested; fi; fi
+while false; do echo bad; done; echo after
+until true; do echo bad; done; echo after
+for x in a b; do if test "$x" = b; then echo hit; else echo miss; fi; done
+case zzz in a*) echo a ;; b*) echo b ;; *) echo star ;; esac
+f() { false; return 7; }; f; echo $?
+f() { echo $1/$2/$#; }; f alpha beta
+FOO=outer; ( FOO=inner; echo $FOO ); echo $FOO
+FOO=outer; { FOO=inner; }; echo $FOO

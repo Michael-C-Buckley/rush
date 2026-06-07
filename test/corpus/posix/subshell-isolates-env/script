@@ -1,0 +1,1 @@
+FOO=outer; ( FOO=inner; echo $FOO ); echo $FOO

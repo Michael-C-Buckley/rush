@@ -1,0 +1,1 @@
+if false; then echo bad; elif true; then echo elif; else echo no; fi

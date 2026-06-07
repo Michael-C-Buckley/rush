@@ -1,0 +1,1 @@
+case zzz in a*) echo a ;; b*) echo b ;; *) echo star ;; esac
