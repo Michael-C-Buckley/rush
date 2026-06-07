@@ -550,6 +550,7 @@ const SyntaxParser = struct {
             }
 
             if (!self.at(.pipe)) break;
+            const pipe_span = self.current().span;
             try self.appendCurrentTokenChildTo(&pipeline_children);
 
             while (self.current().kind == .whitespace) {
@@ -560,7 +561,7 @@ const SyntaxParser = struct {
                 self.incomplete = true;
                 try self.diagnostics.append(self.allocator, .{
                     .kind = .parse_error,
-                    .span = self.previousToken().span,
+                    .span = pipe_span,
                     .message = "missing command after pipeline operator",
                 });
                 break;
@@ -630,6 +631,7 @@ const SyntaxParser = struct {
         }
 
         std.debug.assert(self.current().kind.isRedirectOperator());
+        const operator_span = self.current().span;
         try self.appendCurrentTokenChildTo(&redirection_children);
 
         while (self.current().kind == .whitespace) {
@@ -641,11 +643,10 @@ const SyntaxParser = struct {
             try redirection_children.append(self.allocator, .{ .node = target });
             self.index += 1;
         } else {
-            const span = self.previousToken().span;
             self.incomplete = true;
             try self.diagnostics.append(self.allocator, .{
                 .kind = .parse_error,
-                .span = span,
+                .span = operator_span,
                 .message = "missing redirection target",
             });
         }
@@ -1002,6 +1003,44 @@ test "parser reports a missing redirection target" {
             .{ .kind = .eof, .span = .empty(6) },
         },
         .nodes = &.{.{ .kind = .root, .span = .init(0, 6) }},
+        .diagnostics = &.{.{
+            .kind = .parse_error,
+            .span = .init(5, 6),
+            .message = "missing redirection target",
+        }},
+        .incomplete = true,
+    });
+}
+
+test "parser recovers from missing pipeline rhs" {
+    try expectParse("echo | ", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .pipe, .span = .init(5, 6) },
+            .{ .kind = .whitespace, .span = .init(6, 7) },
+            .{ .kind = .eof, .span = .empty(7) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 7) }},
+        .diagnostics = &.{.{
+            .kind = .parse_error,
+            .span = .init(5, 6),
+            .message = "missing command after pipeline operator",
+        }},
+        .incomplete = true,
+    });
+}
+
+test "parser recovers from missing redirection target with trailing whitespace" {
+    try expectParse("echo > ", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .greater, .span = .init(5, 6) },
+            .{ .kind = .whitespace, .span = .init(6, 7) },
+            .{ .kind = .eof, .span = .empty(7) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 7) }},
         .diagnostics = &.{.{
             .kind = .parse_error,
             .span = .init(5, 6),
