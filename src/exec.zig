@@ -1433,7 +1433,7 @@ pub const Executor = struct {
     fn applyRealFdRedirectionsIfNeeded(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !?FdRedirectionGuard {
         if (options.external_stdio != .inherit or command.redirections.len == 0) return null;
         const io = options.io orelse return null;
-        var guard = try FdRedirectionGuard.init(io);
+        var guard = try FdRedirectionGuard.init(self.allocator, io);
         errdefer guard.restore(io);
         for (command.redirections) |redirection| {
             try guard.apply(self, io, redirection);
@@ -1657,44 +1657,60 @@ fn shellUmask(mask: u16) u16 {
 }
 
 const FdRedirectionGuard = struct {
-    saved: [3]std.posix.fd_t,
+    const SavedFd = struct {
+        fd: std.posix.fd_t,
+        saved: ?std.posix.fd_t,
+    };
+
+    allocator: std.mem.Allocator,
+    saved: std.ArrayList(SavedFd) = .empty,
     active: bool = true,
 
-    fn init(io: std.Io) !FdRedirectionGuard {
+    fn init(allocator: std.mem.Allocator, io: std.Io) !FdRedirectionGuard {
         _ = io;
-        return .{ .saved = .{ try rawDup(0), try rawDup(1), try rawDup(2) } };
+        return .{ .allocator = allocator };
+    }
+
+    fn saveFd(self: *FdRedirectionGuard, fd: std.posix.fd_t) !void {
+        for (self.saved.items) |entry| if (entry.fd == fd) return;
+        const saved_fd = if (fd > 2) null else rawDup(fd) catch |err| switch (err) {
+            error.BadFileDescriptor => null,
+            else => return err,
+        };
+        try self.saved.append(self.allocator, .{ .fd = fd, .saved = saved_fd });
     }
 
     fn apply(self: *FdRedirectionGuard, executor: *Executor, io: std.Io, redirection: ir.Redirection) !void {
-        _ = self;
         if (isHereDocRedirection(redirection)) {
+            try self.saveFd(0);
             var file = try fileFromBytes(io, redirection.here_doc orelse "");
-            defer file.close(io);
+            defer if (file.handle != 0) file.close(io);
             try rawDup2(file.handle, 0);
             return;
         }
         if (isStdinFileRedirection(redirection)) {
             const target = redirection.target orelse return;
+            try self.saveFd(0);
             var file = try std.Io.Dir.cwd().openFile(io, target.text, .{});
-            defer file.close(io);
+            defer if (file.handle != 0) file.close(io);
             try rawDup2(file.handle, 0);
             return;
         }
         if (isFileOutputRedirection(redirection)) {
             const target = redirection.target orelse return;
             const fd = redirectionFd(redirection) orelse 1;
-            if (fd > 2) return;
+            try self.saveFd(fd);
             var file = try openOutputRedirectionFile(io, target.text, redirection.operator, executor.shell_options.noclobber);
-            defer file.close(io);
+            defer if (file.handle != fd) file.close(io);
             try rawDup2(file.handle, fd);
             return;
         }
         if (redirection.operator == .greater_and or redirection.operator == .less_and) {
-            const default_fd: u8 = if (redirection.operator == .less_and) 0 else 1;
+            const default_fd: std.posix.fd_t = if (redirection.operator == .less_and) 0 else 1;
             const from_fd = redirectionFd(redirection) orelse default_fd;
             const target = redirection.target orelse return;
             const to_fd = parseFd(target.text) orelse return;
-            if (from_fd > 2 or to_fd > 2) return;
+            try self.saveFd(from_fd);
             try rawDup2(to_fd, from_fd);
             return;
         }
@@ -1702,10 +1718,18 @@ const FdRedirectionGuard = struct {
 
     fn restore(self: *FdRedirectionGuard, io: std.Io) void {
         if (!self.active) return;
-        for (self.saved, 0..) |saved_fd, index| {
-            rawDup2(saved_fd, @intCast(index)) catch {};
-            closeRawFd(io, saved_fd);
+        var index = self.saved.items.len;
+        while (index > 0) {
+            index -= 1;
+            const entry = self.saved.items[index];
+            if (entry.saved) |saved_fd| {
+                rawDup2(saved_fd, entry.fd) catch {};
+                closeRawFd(io, saved_fd);
+            } else {
+                closeRawFd(io, entry.fd);
+            }
         }
+        self.saved.deinit(self.allocator);
         self.active = false;
     }
 };
@@ -2810,22 +2834,23 @@ fn isStdinFileRedirection(redirection: ir.Redirection) bool {
 }
 
 fn isFileOutputRedirection(redirection: ir.Redirection) bool {
-    const fd = redirectionFd(redirection) orelse 1;
-    if (fd != 1 and fd != 2) return false;
     return switch (redirection.operator) {
         .greater, .dgreat, .clobber => true,
         else => false,
     };
 }
 
-fn redirectionFd(redirection: ir.Redirection) ?u8 {
+fn redirectionFd(redirection: ir.Redirection) ?std.posix.fd_t {
     if (redirection.io_number) |io_number| return parseFd(io_number.text);
     return null;
 }
 
-fn parseFd(text: []const u8) ?u8 {
-    if (text.len != 1 or !std.ascii.isDigit(text[0])) return null;
-    return text[0] - '0';
+fn parseFd(text: []const u8) ?std.posix.fd_t {
+    if (text.len == 0) return null;
+    for (text) |byte| if (!std.ascii.isDigit(byte)) return null;
+    const value = std.fmt.parseInt(std.posix.fd_t, text, 10) catch return null;
+    if (value < 0) return null;
+    return value;
 }
 
 fn emptyResult(allocator: std.mem.Allocator, status: ExitStatus) !CommandResult {
