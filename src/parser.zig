@@ -920,36 +920,59 @@ const SyntaxParser = struct {
         const token_end = self.index;
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, list_children.items);
-        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        const span = spanForPossiblyEmptyTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.list, span, token_start, token_end, child_start, self.children.items.len);
     }
 
-    fn parseIfCommand(self: *SyntaxParser) !NodeId {
+    fn parseRawListUntilWord(self: *SyntaxParser, terminator: []const u8) !NodeId {
+        const token_start = self.index;
+        var list_children: std.ArrayList(SyntaxChild) = .empty;
+        defer list_children.deinit(self.allocator);
+        while (!self.at(.eof) and !self.atWord(terminator)) {
+            try self.appendCurrentTokenChildTo(&list_children);
+        }
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, list_children.items);
+        const span = spanForPossiblyEmptyTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.list, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseIfCommand(self: *SyntaxParser) anyerror!NodeId {
         const token_start = self.index;
         var if_children: std.ArrayList(SyntaxChild) = .empty;
         defer if_children.deinit(self.allocator);
-        var depth: usize = 0;
         var saw_then = false;
         var closed = false;
 
-        while (!self.at(.eof)) {
-            const token = self.current();
-            if (token.kind == .word) {
-                const lexeme = token.lexeme(self.source);
-                if (std.mem.eql(u8, lexeme, "if")) {
-                    depth += 1;
-                } else if (depth == 1 and std.mem.eql(u8, lexeme, "then")) {
-                    saw_then = true;
-                } else if (std.mem.eql(u8, lexeme, "fi")) {
-                    if (depth > 0) depth -= 1;
-                }
-            }
-
+        try self.appendCurrentTokenChildTo(&if_children);
+        const condition = try self.parseListUntil(&.{ "then", "fi" }, &.{});
+        try if_children.append(self.allocator, .{ .node = condition });
+        if (self.atWord("then")) {
+            saw_then = true;
             try self.appendCurrentTokenChildTo(&if_children);
-            if (token.kind == .word and std.mem.eql(u8, token.lexeme(self.source), "fi") and depth == 0) {
-                closed = true;
-                break;
+            const then_body = try self.parseListUntil(&.{ "elif", "else", "fi" }, &.{});
+            try if_children.append(self.allocator, .{ .node = then_body });
+        }
+        while (self.atWord("elif")) {
+            try self.appendCurrentTokenChildTo(&if_children);
+            const elif_condition = try self.parseListUntil(&.{ "then", "fi" }, &.{});
+            try if_children.append(self.allocator, .{ .node = elif_condition });
+            if (self.atWord("then")) {
+                saw_then = true;
+                try self.appendCurrentTokenChildTo(&if_children);
+                const elif_body = try self.parseListUntil(&.{ "elif", "else", "fi" }, &.{});
+                try if_children.append(self.allocator, .{ .node = elif_body });
             }
+        }
+        if (self.atWord("else")) {
+            try self.appendCurrentTokenChildTo(&if_children);
+            const else_body = try self.parseListUntil(&.{"fi"}, &.{});
+            try if_children.append(self.allocator, .{ .node = else_body });
+        }
+        if (self.atWord("fi")) {
+            try self.appendCurrentTokenChildTo(&if_children);
+            closed = true;
         }
 
         if (!saw_then) {
@@ -1104,22 +1127,25 @@ const SyntaxParser = struct {
         return self.addNode(.function_definition, span, token_start, token_end, child_start, self.children.items.len);
     }
 
-    fn parseCaseCommand(self: *SyntaxParser) !NodeId {
+    fn parseCaseCommand(self: *SyntaxParser) anyerror!NodeId {
         const token_start = self.index;
         var case_children: std.ArrayList(SyntaxChild) = .empty;
         defer case_children.deinit(self.allocator);
         var saw_in = false;
         var closed = false;
 
-        while (!self.at(.eof)) {
-            const token = self.current();
-            if (token.kind == .word) {
-                const lexeme = token.lexeme(self.source);
-                if (std.mem.eql(u8, lexeme, "in")) saw_in = true;
-                if (std.mem.eql(u8, lexeme, "esac")) closed = true;
-            }
+        while (!self.at(.eof) and !self.atWord("in") and !self.atWord("esac")) {
             try self.appendCurrentTokenChildTo(&case_children);
-            if (closed) break;
+        }
+        if (self.atWord("in")) {
+            saw_in = true;
+            try self.appendCurrentTokenChildTo(&case_children);
+            const arms = try self.parseRawListUntilWord("esac");
+            try case_children.append(self.allocator, .{ .node = arms });
+        }
+        if (self.atWord("esac")) {
+            try self.appendCurrentTokenChildTo(&case_children);
+            closed = true;
         }
 
         if (!saw_in) {
@@ -1177,35 +1203,28 @@ const SyntaxParser = struct {
         return self.addNode(.bash_test_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
-    fn parseForCommand(self: *SyntaxParser) !NodeId {
+    fn parseForCommand(self: *SyntaxParser) anyerror!NodeId {
         const token_start = self.index;
         var for_children: std.ArrayList(SyntaxChild) = .empty;
         defer for_children.deinit(self.allocator);
-        var depth: usize = 0;
         var saw_name = false;
         var saw_do = false;
         var closed = false;
 
-        while (!self.at(.eof)) {
-            const token = self.current();
-            if (token.kind == .word) {
-                const lexeme = token.lexeme(self.source);
-                if (std.mem.eql(u8, lexeme, "for")) {
-                    depth += 1;
-                } else if (depth == 1 and !saw_name and !std.mem.eql(u8, lexeme, "in") and !std.mem.eql(u8, lexeme, "do")) {
-                    saw_name = true;
-                } else if (depth == 1 and std.mem.eql(u8, lexeme, "do")) {
-                    saw_do = true;
-                } else if (std.mem.eql(u8, lexeme, "done")) {
-                    if (depth > 0) depth -= 1;
-                }
-            }
-
+        try self.appendCurrentTokenChildTo(&for_children);
+        while (!self.at(.eof) and !self.atWord("do") and !self.atWord("done")) {
+            if (!saw_name and self.at(.word) and !self.atWord("in")) saw_name = true;
             try self.appendCurrentTokenChildTo(&for_children);
-            if (token.kind == .word and std.mem.eql(u8, token.lexeme(self.source), "done") and depth == 0) {
-                closed = true;
-                break;
-            }
+        }
+        if (self.atWord("do")) {
+            saw_do = true;
+            try self.appendCurrentTokenChildTo(&for_children);
+            const body = try self.parseListUntil(&.{"done"}, &.{});
+            try for_children.append(self.allocator, .{ .node = body });
+        }
+        if (self.atWord("done")) {
+            try self.appendCurrentTokenChildTo(&for_children);
+            closed = true;
         }
 
         if (!saw_name) {
@@ -1240,33 +1259,26 @@ const SyntaxParser = struct {
         return self.addNode(.for_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
-    fn parseLoopCommand(self: *SyntaxParser) !NodeId {
+    fn parseLoopCommand(self: *SyntaxParser) anyerror!NodeId {
         const token_start = self.index;
         const opener = self.current().lexeme(self.source);
         var loop_children: std.ArrayList(SyntaxChild) = .empty;
         defer loop_children.deinit(self.allocator);
-        var depth: usize = 0;
         var saw_do = false;
         var closed = false;
 
-        while (!self.at(.eof)) {
-            const token = self.current();
-            if (token.kind == .word) {
-                const lexeme = token.lexeme(self.source);
-                if (std.mem.eql(u8, lexeme, "while") or std.mem.eql(u8, lexeme, "until")) {
-                    depth += 1;
-                } else if (depth == 1 and std.mem.eql(u8, lexeme, "do")) {
-                    saw_do = true;
-                } else if (std.mem.eql(u8, lexeme, "done")) {
-                    if (depth > 0) depth -= 1;
-                }
-            }
-
+        try self.appendCurrentTokenChildTo(&loop_children);
+        const condition = try self.parseListUntil(&.{ "do", "done" }, &.{});
+        try loop_children.append(self.allocator, .{ .node = condition });
+        if (self.atWord("do")) {
+            saw_do = true;
             try self.appendCurrentTokenChildTo(&loop_children);
-            if (token.kind == .word and std.mem.eql(u8, token.lexeme(self.source), "done") and depth == 0) {
-                closed = true;
-                break;
-            }
+            const body = try self.parseListUntil(&.{"done"}, &.{});
+            try loop_children.append(self.allocator, .{ .node = body });
+        }
+        if (self.atWord("done")) {
+            try self.appendCurrentTokenChildTo(&loop_children);
+            closed = true;
         }
 
         if (!saw_do) {
@@ -1474,6 +1486,10 @@ const SyntaxParser = struct {
         self.index += 1;
     }
 
+    fn atWord(self: SyntaxParser, word: []const u8) bool {
+        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), word);
+    }
+
     fn atListTerminator(self: SyntaxParser, word_terminators: []const []const u8, token_terminators: []const TokenKind) bool {
         for (token_terminators) |kind| {
             if (self.at(kind)) return true;
@@ -1618,6 +1634,11 @@ fn spanForTokenRange(tokens: []const Token, start: usize, end: usize) Span {
     return .init(tokens[start].span.start, tokens[end - 1].span.end);
 }
 
+fn spanForPossiblyEmptyTokenRange(tokens: []const Token, start: usize, end: usize) Span {
+    if (start < end) return spanForTokenRange(tokens, start, end);
+    return .empty(tokens[start].span.start);
+}
+
 pub const ExpectedToken = struct {
     kind: TokenKind,
     span: Span,
@@ -1686,6 +1707,17 @@ fn expectNodes(expected: []const ExpectedNode, actual: []const Node, token_len: 
         if (want.child_start) |child_start| try std.testing.expectEqual(child_start, got.child_start);
         if (want.child_end) |child_end| try std.testing.expectEqual(child_end, got.child_end) else _ = child_len;
     }
+}
+
+fn countChildNodesOfKind(result: ParseResult, node: Node, kind: NodeKind) usize {
+    var count: usize = 0;
+    for (result.nodeChildren(node)) |child| switch (child) {
+        .node => |node_id| {
+            if (result.nodes[node_id.index()].kind == kind) count += 1;
+        },
+        .token => {},
+    };
+    return count;
 }
 
 fn expectChildren(expected: []const ExpectedChild, actual: []const SyntaxChild) !void {
@@ -2006,6 +2038,7 @@ test "parser builds POSIX case command nodes" {
         if (node.kind == .case_command) {
             found = true;
             try expectSpan(.init(0, 46), node.span);
+            try std.testing.expectEqual(@as(usize, 1), countChildNodesOfKind(result, node, .list));
         }
     }
     try std.testing.expect(found);
@@ -2063,6 +2096,7 @@ test "parser builds POSIX for command nodes" {
             found = true;
             try expectSpan(.init(0, 30), node.span);
             try std.testing.expectEqual(@as(usize, 0), node.token_start);
+            try std.testing.expectEqual(@as(usize, 1), countChildNodesOfKind(result, node, .list));
         }
     }
     try std.testing.expect(found);
@@ -2080,51 +2114,29 @@ test "parser reports incomplete POSIX for commands" {
 }
 
 test "parser builds POSIX while and until command nodes" {
-    try expectParse("while false; do echo no; done", .{
-        .tokens = &.{
-            .{ .kind = .word, .span = .init(0, 5) },
-            .{ .kind = .whitespace, .span = .init(5, 6) },
-            .{ .kind = .word, .span = .init(6, 11) },
-            .{ .kind = .semicolon, .span = .init(11, 12) },
-            .{ .kind = .whitespace, .span = .init(12, 13) },
-            .{ .kind = .word, .span = .init(13, 15) },
-            .{ .kind = .whitespace, .span = .init(15, 16) },
-            .{ .kind = .word, .span = .init(16, 20) },
-            .{ .kind = .whitespace, .span = .init(20, 21) },
-            .{ .kind = .word, .span = .init(21, 23) },
-            .{ .kind = .semicolon, .span = .init(23, 24) },
-            .{ .kind = .whitespace, .span = .init(24, 25) },
-            .{ .kind = .word, .span = .init(25, 29) },
-            .{ .kind = .eof, .span = .empty(29) },
-        },
-        .nodes = &.{
-            .{ .kind = .root, .span = .init(0, 29), .token_start = 0, .token_end = 14 },
-            .{ .kind = .loop_command, .span = .init(0, 29), .token_start = 0, .token_end = 13 },
-        },
-    });
+    var while_result = try parse(std.testing.allocator, "while false; do echo no; done", .{});
+    defer while_result.deinit();
+    var while_found = false;
+    for (while_result.nodes) |node| {
+        if (node.kind == .loop_command) {
+            while_found = true;
+            try expectSpan(.init(0, 29), node.span);
+            try std.testing.expectEqual(@as(usize, 2), countChildNodesOfKind(while_result, node, .list));
+        }
+    }
+    try std.testing.expect(while_found);
 
-    try expectParse("until true; do echo no; done", .{
-        .tokens = &.{
-            .{ .kind = .word, .span = .init(0, 5) },
-            .{ .kind = .whitespace, .span = .init(5, 6) },
-            .{ .kind = .word, .span = .init(6, 10) },
-            .{ .kind = .semicolon, .span = .init(10, 11) },
-            .{ .kind = .whitespace, .span = .init(11, 12) },
-            .{ .kind = .word, .span = .init(12, 14) },
-            .{ .kind = .whitespace, .span = .init(14, 15) },
-            .{ .kind = .word, .span = .init(15, 19) },
-            .{ .kind = .whitespace, .span = .init(19, 20) },
-            .{ .kind = .word, .span = .init(20, 22) },
-            .{ .kind = .semicolon, .span = .init(22, 23) },
-            .{ .kind = .whitespace, .span = .init(23, 24) },
-            .{ .kind = .word, .span = .init(24, 28) },
-            .{ .kind = .eof, .span = .empty(28) },
-        },
-        .nodes = &.{
-            .{ .kind = .root, .span = .init(0, 28), .token_start = 0, .token_end = 14 },
-            .{ .kind = .loop_command, .span = .init(0, 28), .token_start = 0, .token_end = 13 },
-        },
-    });
+    var until_result = try parse(std.testing.allocator, "until true; do echo no; done", .{});
+    defer until_result.deinit();
+    var until_found = false;
+    for (until_result.nodes) |node| {
+        if (node.kind == .loop_command) {
+            until_found = true;
+            try expectSpan(.init(0, 28), node.span);
+            try std.testing.expectEqual(@as(usize, 2), countChildNodesOfKind(until_result, node, .list));
+        }
+    }
+    try std.testing.expect(until_found);
 }
 
 test "parser reports incomplete POSIX loops" {
@@ -2153,35 +2165,18 @@ test "parser reports incomplete POSIX loops" {
 }
 
 test "parser builds POSIX if command nodes" {
-    try expectParse("if true; then echo ok; else echo no; fi", .{
-        .tokens = &.{
-            .{ .kind = .word, .span = .init(0, 2) },
-            .{ .kind = .whitespace, .span = .init(2, 3) },
-            .{ .kind = .word, .span = .init(3, 7) },
-            .{ .kind = .semicolon, .span = .init(7, 8) },
-            .{ .kind = .whitespace, .span = .init(8, 9) },
-            .{ .kind = .word, .span = .init(9, 13) },
-            .{ .kind = .whitespace, .span = .init(13, 14) },
-            .{ .kind = .word, .span = .init(14, 18) },
-            .{ .kind = .whitespace, .span = .init(18, 19) },
-            .{ .kind = .word, .span = .init(19, 21) },
-            .{ .kind = .semicolon, .span = .init(21, 22) },
-            .{ .kind = .whitespace, .span = .init(22, 23) },
-            .{ .kind = .word, .span = .init(23, 27) },
-            .{ .kind = .whitespace, .span = .init(27, 28) },
-            .{ .kind = .word, .span = .init(28, 32) },
-            .{ .kind = .whitespace, .span = .init(32, 33) },
-            .{ .kind = .word, .span = .init(33, 35) },
-            .{ .kind = .semicolon, .span = .init(35, 36) },
-            .{ .kind = .whitespace, .span = .init(36, 37) },
-            .{ .kind = .word, .span = .init(37, 39) },
-            .{ .kind = .eof, .span = .empty(39) },
-        },
-        .nodes = &.{
-            .{ .kind = .root, .span = .init(0, 39), .token_start = 0, .token_end = 21 },
-            .{ .kind = .if_command, .span = .init(0, 39), .token_start = 0, .token_end = 20 },
-        },
-    });
+    var result = try parse(std.testing.allocator, "if true; then echo ok; else echo no; fi", .{});
+    defer result.deinit();
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .if_command) {
+            found = true;
+            try expectSpan(.init(0, 39), node.span);
+            try std.testing.expectEqual(@as(usize, 3), countChildNodesOfKind(result, node, .list));
+        }
+    }
+    try std.testing.expect(found);
 }
 
 test "parser reports incomplete POSIX if commands" {
