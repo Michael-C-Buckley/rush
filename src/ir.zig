@@ -6,6 +6,7 @@ const parser = @import("parser.zig");
 
 pub const WordRef = struct {
     span: parser.Span,
+    raw: []const u8,
     text: []const u8,
 };
 
@@ -42,11 +43,11 @@ pub const Program = struct {
 
     pub fn deinit(self: *Program) void {
         for (self.commands) |command| {
-            for (command.assignments) |word| self.allocator.free(word.text);
-            for (command.argv) |word| self.allocator.free(word.text);
+            for (command.assignments) |word| freeWord(self.allocator, word);
+            for (command.argv) |word| freeWord(self.allocator, word);
             for (command.redirections) |redirection| {
-                if (redirection.io_number) |word| self.allocator.free(word.text);
-                if (redirection.target) |word| self.allocator.free(word.text);
+                if (redirection.io_number) |word| freeWord(self.allocator, word);
+                if (redirection.target) |word| freeWord(self.allocator, word);
             }
             self.allocator.free(command.assignments);
             self.allocator.free(command.argv);
@@ -200,22 +201,31 @@ fn lowerRedirection(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
 fn wordRef(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !WordRef {
     std.debug.assert(node.token_end == node.token_start + 1);
     const token = parsed.tokens[node.token_start];
+    const raw = try allocator.dupe(u8, token.lexeme(parsed.source));
+    errdefer allocator.free(raw);
+    const text = try expand.expandWordScalar(allocator, raw, .{});
     return .{
         .span = node.span,
-        .text = try expand.expandWordScalar(allocator, token.lexeme(parsed.source), .{}),
+        .raw = raw,
+        .text = text,
     };
 }
 
 fn freeCommand(allocator: std.mem.Allocator, command: SimpleCommand) void {
-    for (command.assignments) |word| allocator.free(word.text);
-    for (command.argv) |word| allocator.free(word.text);
+    for (command.assignments) |word| freeWord(allocator, word);
+    for (command.argv) |word| freeWord(allocator, word);
     for (command.redirections) |redirection| {
-        if (redirection.io_number) |word| allocator.free(word.text);
-        if (redirection.target) |word| allocator.free(word.text);
+        if (redirection.io_number) |word| freeWord(allocator, word);
+        if (redirection.target) |word| freeWord(allocator, word);
     }
     allocator.free(command.assignments);
     allocator.free(command.argv);
     allocator.free(command.redirections);
+}
+
+fn freeWord(allocator: std.mem.Allocator, word: WordRef) void {
+    allocator.free(word.raw);
+    allocator.free(word.text);
 }
 
 test "quote removal handles single double and backslash quoting" {

@@ -1,6 +1,7 @@
 //! Minimal command execution for lowered shell IR.
 
 const std = @import("std");
+const expand = @import("expand.zig");
 const ir = @import("ir.zig");
 
 pub const ExitStatus = u8;
@@ -179,25 +180,117 @@ pub const Executor = struct {
     }
 
     fn executeSimpleCommandWithInput(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+        const expanded = try self.expandSimpleCommand(command);
+        defer self.freeExpandedCommand(expanded);
+
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
-        const effective_stdin = try self.applyInputRedirections(command, stdin, options, &owned_stdin);
+        const effective_stdin = try self.applyInputRedirections(expanded, stdin, options, &owned_stdin);
 
-        if (command.argv.len == 0) {
-            try self.applyAssignments(command.assignments);
-            return try self.applyOutputRedirections(command, try emptyResult(self.allocator, 0), options);
+        if (expanded.argv.len == 0) {
+            try self.applyAssignments(expanded.assignments);
+            return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, 0), options);
         }
 
-        if (builtinFor(command.argv[0].text)) |builtin| {
-            return try self.applyOutputRedirections(command, try builtin(self, command, effective_stdin), options);
+        if (builtinFor(expanded.argv[0].text)) |builtin| {
+            return try self.applyOutputRedirections(expanded, try builtin(self, expanded, effective_stdin), options);
         }
 
         if (!options.allow_external) {
-            return try self.applyOutputRedirections(command, try errorResult(self.allocator, 127, command.argv[0].text, "command not found"), options);
+            return try self.applyOutputRedirections(expanded, try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found"), options);
         }
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
-        return try self.applyOutputRedirections(command, try self.executeExternal(command, io), options);
+        return try self.applyOutputRedirections(expanded, try self.executeExternal(expanded, io), options);
+    }
+
+    fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand) !ir.SimpleCommand {
+        const assignments = try self.expandWords(command.assignments);
+        errdefer self.freeWords(assignments);
+        const argv = try self.expandWords(command.argv);
+        errdefer self.freeWords(argv);
+        const redirections = try self.expandRedirections(command.redirections);
+        errdefer self.freeRedirections(redirections);
+
+        return .{
+            .span = command.span,
+            .assignments = assignments,
+            .argv = argv,
+            .redirections = redirections,
+        };
+    }
+
+    fn expandWords(self: *Executor, words: []const ir.WordRef) ![]ir.WordRef {
+        const expanded = try self.allocator.alloc(ir.WordRef, words.len);
+        errdefer self.allocator.free(expanded);
+        var initialized: usize = 0;
+        errdefer for (expanded[0..initialized]) |word| self.freeWord(word);
+
+        for (words, 0..) |word, index| {
+            expanded[index] = try self.expandWord(word);
+            initialized += 1;
+        }
+        return expanded;
+    }
+
+    fn expandRedirections(self: *Executor, redirections: []const ir.Redirection) ![]ir.Redirection {
+        const expanded = try self.allocator.alloc(ir.Redirection, redirections.len);
+        errdefer self.allocator.free(expanded);
+        var initialized: usize = 0;
+        errdefer for (expanded[0..initialized]) |redirection| self.freeRedirection(redirection);
+
+        for (redirections, 0..) |redirection, index| {
+            expanded[index] = .{
+                .span = redirection.span,
+                .io_number = if (redirection.io_number) |word| try self.expandWord(word) else null,
+                .operator = redirection.operator,
+                .target = if (redirection.target) |word| try self.expandWord(word) else null,
+            };
+            initialized += 1;
+        }
+        return expanded;
+    }
+
+    fn expandWord(self: *Executor, word: ir.WordRef) !ir.WordRef {
+        const raw = try self.allocator.dupe(u8, word.raw);
+        errdefer self.allocator.free(raw);
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup() });
+        return .{ .span = word.span, .raw = raw, .text = text };
+    }
+
+    fn envLookup(self: *Executor) expand.EnvLookup {
+        return .{ .context = self, .lookupFn = lookupEnv };
+    }
+
+    fn lookupEnv(context: ?*const anyopaque, name: []const u8) ?[]const u8 {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        return self.getEnv(name);
+    }
+
+    fn freeExpandedCommand(self: *Executor, command: ir.SimpleCommand) void {
+        self.freeWords(command.assignments);
+        self.freeWords(command.argv);
+        self.freeRedirections(command.redirections);
+    }
+
+    fn freeWords(self: *Executor, words: []const ir.WordRef) void {
+        for (words) |word| self.freeWord(word);
+        self.allocator.free(words);
+    }
+
+    fn freeRedirections(self: *Executor, redirections: []const ir.Redirection) void {
+        for (redirections) |redirection| self.freeRedirection(redirection);
+        self.allocator.free(redirections);
+    }
+
+    fn freeRedirection(self: *Executor, redirection: ir.Redirection) void {
+        if (redirection.io_number) |word| self.freeWord(word);
+        if (redirection.target) |word| self.freeWord(word);
+    }
+
+    fn freeWord(self: *Executor, word: ir.WordRef) void {
+        self.allocator.free(word.raw);
+        self.allocator.free(word.text);
     }
 
     fn applyAssignments(self: *Executor, assignments: []const ir.WordRef) !void {
@@ -478,6 +571,45 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor expands parameters from shell environment" {
+    var lowered = try parseAndLower(std.testing.allocator, "FOO=bar; echo $FOO");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("bar\n", result.stdout);
+}
+
+test "executor expands redirection targets from shell environment" {
+    const path = "rush-test-expanded-redirection.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator, "OUT=rush-test-expanded-redirection.tmp; echo hi > $OUT");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("hi\n", contents);
 }
 
 test "executor applies assignment-only commands to shell environment" {
