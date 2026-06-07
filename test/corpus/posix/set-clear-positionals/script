@@ -1,0 +1,5 @@
+set -- a b
+set --
+echo "$#/${1:-unset}"
+for x in "$@"; do echo bad; done
+echo done

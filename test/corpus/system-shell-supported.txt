@@ -78,3 +78,5 @@ false; echo $?; true; echo $?
 for x in a b c; do if test "$x" = b; then continue; fi; if test "$x" = c; then break; fi; echo $x; done
 f() { false; return 7; echo never; }; f; echo $?
 export EXPORTED=value; env | grep ^EXPORTED=
+set -- "a b" c ""; echo "$1/$2/$#"; for x in "$@"; do echo "<$x>"; done; IFS=:; echo "<$*>"; shift; echo "$1/$#"
+set -- a b; set --; echo "$#/${1:-unset}"; for x in "$@"; do echo bad; done; echo done

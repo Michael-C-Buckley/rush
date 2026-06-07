@@ -50,16 +50,55 @@ pub const LoopControl = struct {
     levels: usize,
 };
 
+pub const PositionalParams = struct {
+    params: [][]const u8 = &.{},
+    count: []const u8 = "0",
+    joined: []const u8 = "",
+    owned: bool = false,
+
+    pub fn set(self: *PositionalParams, allocator: std.mem.Allocator, args: []const []const u8) !void {
+        self.deinit(allocator);
+        var params = try allocator.alloc([]const u8, args.len);
+        errdefer allocator.free(params);
+        var initialized: usize = 0;
+        errdefer for (params[0..initialized]) |param| allocator.free(param);
+        for (args, 0..) |arg, index| {
+            params[index] = try allocator.dupe(u8, arg);
+            initialized += 1;
+        }
+        const count = try std.fmt.allocPrint(allocator, "{d}", .{args.len});
+        errdefer allocator.free(count);
+        const joined = try joinParams(allocator, params);
+        errdefer allocator.free(joined);
+        self.* = .{ .params = params, .count = count, .joined = joined, .owned = true };
+    }
+
+    pub fn rebuildDerived(self: *PositionalParams, allocator: std.mem.Allocator) !void {
+        if (self.owned) {
+            allocator.free(self.count);
+            allocator.free(self.joined);
+        }
+        self.count = try std.fmt.allocPrint(allocator, "{d}", .{self.params.len});
+        self.joined = try joinParams(allocator, self.params);
+        self.owned = true;
+    }
+
+    pub fn deinit(self: *PositionalParams, allocator: std.mem.Allocator) void {
+        if (self.owned) {
+            for (self.params) |param| allocator.free(param);
+            allocator.free(self.params);
+            allocator.free(self.count);
+            allocator.free(self.joined);
+        }
+        self.* = .{};
+    }
+};
+
 pub const CallFrame = struct {
-    params: [][]const u8,
-    count: []const u8,
-    joined: []const u8,
+    positionals: PositionalParams = .{},
 
     pub fn deinit(self: *CallFrame, allocator: std.mem.Allocator) void {
-        for (self.params) |param| allocator.free(param);
-        allocator.free(self.params);
-        allocator.free(self.count);
-        allocator.free(self.joined);
+        self.positionals.deinit(allocator);
         self.* = undefined;
     }
 };
@@ -81,6 +120,7 @@ pub const Executor = struct {
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
     shell_options: ShellOptions = .{},
+    global_positionals: PositionalParams = .{},
     call_frames: std.ArrayList(CallFrame) = .empty,
     function_depth: usize = 0,
     pending_return: ?ExitStatus = null,
@@ -142,6 +182,7 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.functions.deinit(self.allocator);
+        self.global_positionals.deinit(self.allocator);
         for (self.call_frames.items) |*frame| frame.deinit(self.allocator);
         self.call_frames.deinit(self.allocator);
         self.* = undefined;
@@ -356,20 +397,12 @@ pub const Executor = struct {
                 try self.setArrayElement(entry.key_ptr.*, index, value);
             }
         }
+        try self.global_positionals.set(self.allocator, other.global_positionals.params);
         for (other.call_frames.items) |frame| {
-            var params = try self.allocator.alloc([]const u8, frame.params.len);
-            errdefer self.allocator.free(params);
-            var initialized: usize = 0;
-            errdefer for (params[0..initialized]) |param| self.allocator.free(param);
-            for (frame.params, 0..) |param, index| {
-                params[index] = try self.allocator.dupe(u8, param);
-                initialized += 1;
-            }
-            const count = try self.allocator.dupe(u8, frame.count);
-            errdefer self.allocator.free(count);
-            const joined = try self.allocator.dupe(u8, frame.joined);
-            errdefer self.allocator.free(joined);
-            try self.call_frames.append(self.allocator, .{ .params = params, .count = count, .joined = joined });
+            var copied: CallFrame = .{};
+            errdefer copied.deinit(self.allocator);
+            try copied.positionals.set(self.allocator, frame.positionals.params);
+            try self.call_frames.append(self.allocator, copied);
         }
     }
 
@@ -1050,7 +1083,7 @@ pub const Executor = struct {
         }
 
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        const positionals: []const []const u8 = if (self.currentCallFrame()) |frame| frame.params else &.{};
+        const positionals: []const []const u8 = self.currentPositionals().params;
         for (words) |word| {
             var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals });
             defer fields.deinit();
@@ -1158,25 +1191,13 @@ pub const Executor = struct {
     }
 
     fn pushCallFrame(self: *Executor, args: []const ir.WordRef) !void {
-        var params = try self.allocator.alloc([]const u8, args.len);
-        errdefer self.allocator.free(params);
-        var initialized: usize = 0;
-        errdefer for (params[0..initialized]) |param| self.allocator.free(param);
-        for (args, 0..) |arg, index| {
-            params[index] = try self.allocator.dupe(u8, arg.text);
-            initialized += 1;
-        }
-
-        const count = try std.fmt.allocPrint(self.allocator, "{d}", .{args.len});
-        errdefer self.allocator.free(count);
-        const joined = try joinParams(self.allocator, params);
-        errdefer self.allocator.free(joined);
-
-        try self.call_frames.append(self.allocator, .{
-            .params = params,
-            .count = count,
-            .joined = joined,
-        });
+        var values = try self.allocator.alloc([]const u8, args.len);
+        defer self.allocator.free(values);
+        for (args, 0..) |arg, index| values[index] = arg.text;
+        var frame: CallFrame = .{};
+        errdefer frame.deinit(self.allocator);
+        try frame.positionals.set(self.allocator, values);
+        try self.call_frames.append(self.allocator, frame);
     }
 
     fn popCallFrame(self: *Executor) void {
@@ -1194,11 +1215,14 @@ pub const Executor = struct {
         return &self.call_frames.items[self.call_frames.items.len - 1];
     }
 
-    fn rebuildCallFrameDerived(self: *Executor, frame: *CallFrame) !void {
-        self.allocator.free(frame.count);
-        self.allocator.free(frame.joined);
-        frame.count = try std.fmt.allocPrint(self.allocator, "{d}", .{frame.params.len});
-        frame.joined = try joinParams(self.allocator, frame.params);
+    fn currentPositionals(self: Executor) PositionalParams {
+        if (self.currentCallFrame()) |frame| return frame.positionals;
+        return self.global_positionals;
+    }
+
+    fn currentPositionalsPtr(self: *Executor) *PositionalParams {
+        if (self.currentCallFramePtr()) |frame| return &frame.positionals;
+        return &self.global_positionals;
     }
 
     const CommandSubstitutionContext = struct {
@@ -1242,14 +1266,13 @@ pub const Executor = struct {
         if (std.mem.eql(u8, name, "$")) return self.pid_text[0..self.pid_text_len];
         if (std.mem.eql(u8, name, "!")) return self.last_background_pid_text[0..self.last_background_pid_text_len];
         if (std.mem.eql(u8, name, "0")) return self.arg_zero;
-        if (self.currentCallFrame()) |frame| {
-            if (std.mem.eql(u8, name, "#")) return frame.count;
-            if (std.mem.eql(u8, name, "@") or std.mem.eql(u8, name, "*")) return frame.joined;
-            if (name.len == 1 and std.ascii.isDigit(name[0]) and name[0] != '0') {
-                const index = name[0] - '1';
-                if (index < frame.params.len) return frame.params[index];
-                return "";
-            }
+        const positionals = self.currentPositionals();
+        if (std.mem.eql(u8, name, "#")) return positionals.count;
+        if (std.mem.eql(u8, name, "@") or std.mem.eql(u8, name, "*")) return positionals.joined;
+        if (name.len == 1 and std.ascii.isDigit(name[0]) and name[0] != '0') {
+            const index = name[0] - '1';
+            if (index < positionals.params.len) return positionals.params[index];
+            return null;
         }
         return self.getEnv(name);
     }
@@ -2402,16 +2425,20 @@ fn builtinReadonly(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
 fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    const frame = self.currentCallFramePtr() orelse return errorResult(self.allocator, 1, "shift", "not in a function");
+    const positionals = self.currentPositionalsPtr();
     const amount: usize = if (command.argv.len == 1) 1 else blk: {
         if (command.argv.len > 2) return errorResult(self.allocator, 2, "shift", "too many arguments");
         break :blk std.fmt.parseInt(usize, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, "shift", "numeric argument required");
     };
-    if (amount > frame.params.len) return emptyResult(self.allocator, 1);
-    for (frame.params[0..amount]) |param| self.allocator.free(param);
-    std.mem.copyForwards([]const u8, frame.params[0 .. frame.params.len - amount], frame.params[amount..]);
-    frame.params = try self.allocator.realloc(frame.params, frame.params.len - amount);
-    try self.rebuildCallFrameDerived(frame);
+    if (amount > positionals.params.len) return emptyResult(self.allocator, 1);
+    if (positionals.owned) {
+        for (positionals.params[0..amount]) |param| self.allocator.free(param);
+        std.mem.copyForwards([]const u8, positionals.params[0 .. positionals.params.len - amount], positionals.params[amount..]);
+        positionals.params = try self.allocator.realloc(positionals.params, positionals.params.len - amount);
+    } else if (amount != 0) {
+        positionals.params = &.{};
+    }
+    try positionals.rebuildDerived(self.allocator);
     return emptyResult(self.allocator, 0);
 }
 
@@ -2463,6 +2490,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     _ = options;
 
     if (command.argv.len == 1) return printShellOptions(self, false);
+    if (command.argv.len >= 2 and std.mem.eql(u8, command.argv[1].text, "--")) {
+        try setGlobalPositionals(self, command.argv[2..]);
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
     if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
@@ -2474,6 +2505,13 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         return errorResult(self.allocator, 2, "set", "unknown option name");
     }
     return errorResult(self.allocator, 2, "set", "unsupported arguments");
+}
+
+fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
+    var values = try self.allocator.alloc([]const u8, args.len);
+    defer self.allocator.free(values);
+    for (args, 0..) |arg, index| values[index] = arg.text;
+    try self.global_positionals.set(self.allocator, values);
 }
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
@@ -3187,6 +3225,24 @@ test "executor implements unset and env builtins" {
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "A=one\n") == null);
     try std.testing.expect(executor.getEnv("A") == null);
     try std.testing.expectEqualStrings("two", executor.getEnv("B").?);
+}
+
+test "executor implements global positional parameters via set --" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\set -- "a b" c ""
+        \\echo "$1/$2/$#"
+        \\for x in "$@"; do echo "<$x>"; done
+        \\IFS=:; echo "<$*>"
+        \\shift; echo "$1/$#"
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("a b/c/3\n<a b>\n<c>\n<>\n<a b:c:>\nc/2\n", result.stdout);
 }
 
 test "executor persists assignment prefixes for POSIX special builtins" {

@@ -161,7 +161,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
     };
 }
 
-pub fn expandWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: Options) ![]const u8 {
+pub fn expandWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {
     _ = options.features;
     const tilde_expanded = try expandTilde(allocator, raw, options.env);
     defer allocator.free(tilde_expanded);
@@ -375,7 +375,7 @@ fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
     };
 }
 
-pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: Options) ![]const u8 {
+pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: Options) anyerror![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
@@ -388,11 +388,11 @@ pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: O
     return output.toOwnedSlice(allocator);
 }
 
-fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) ![]const u8 {
+fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) anyerror![]const u8 {
     return switch (part.kind) {
         .unquoted, .escaped, .single_quoted => allocator.dupe(u8, part.value(raw)),
         .double_quoted => blk: {
-            const expanded = try expandParameters(allocator, part.value(raw), options.env);
+            const expanded = try expandParameters(allocator, part.value(raw), options);
             defer allocator.free(expanded);
             break :blk quoteRemoveDoubleQuotedContent(allocator, expanded);
         },
@@ -432,7 +432,7 @@ const ParameterExpression = struct {
     colon: bool = false,
 };
 
-fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options) ![]const u8 {
+fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror![]const u8 {
     const parsed = parseParameterExpression(expression);
     const value = options.env.get(parsed.name);
     const is_set = value != null;
@@ -704,7 +704,7 @@ fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
 }
 
 fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8), text: []const u8, options: Options) !void {
-    const expanded = try expandParameters(allocator, text, options.env);
+    const expanded = try expandParameters(allocator, text, options);
     defer allocator.free(expanded);
     const removed = try quoteRemoveDoubleQuotedContent(allocator, expanded);
     defer allocator.free(removed);
@@ -900,7 +900,7 @@ pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup
     return std.mem.concat(allocator, u8, &.{ home, raw[1..] });
 }
 
-pub fn expandParameters(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
+pub fn expandParameters(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
@@ -914,7 +914,7 @@ pub fn expandParameters(allocator: std.mem.Allocator, raw: []const u8, env: EnvL
                 if (index < raw.len) index += 1;
                 try output.appendSlice(allocator, raw[start..index]);
             },
-            '$' => if (try expandParameterAt(allocator, raw, &index, env, &output)) {},
+            '$' => if (try expandParameterAt(allocator, raw, &index, options, &output)) {},
             else => |c| {
                 try output.append(allocator, c);
                 index += 1;
@@ -925,7 +925,7 @@ pub fn expandParameters(allocator: std.mem.Allocator, raw: []const u8, env: EnvL
     return output.toOwnedSlice(allocator);
 }
 
-fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usize, env: EnvLookup, output: *std.ArrayList(u8)) !bool {
+fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usize, options: Options, output: *std.ArrayList(u8)) anyerror!bool {
     std.debug.assert(raw[index.*] == '$');
     const dollar = index.*;
     index.* += 1;
@@ -944,13 +944,17 @@ fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usiz
             index.* = raw.len;
             return true;
         }
-        if (env.get(raw[name_start..name_end])) |value| try output.appendSlice(allocator, value);
+        const rendered = try renderParameter(allocator, raw[name_start..name_end], options);
+        defer allocator.free(rendered);
+        try output.appendSlice(allocator, rendered);
         index.* = name_end + 1;
         return true;
     }
 
     if (isSpecialParameterChar(raw[index.*])) {
-        if (env.get(raw[index.* .. index.* + 1])) |value| try output.appendSlice(allocator, value);
+        const rendered = try renderParameter(allocator, raw[index.* .. index.* + 1], options);
+        defer allocator.free(rendered);
+        try output.appendSlice(allocator, rendered);
         index.* += 1;
         return true;
     }
@@ -965,7 +969,9 @@ fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usiz
     const name_start = index.*;
     index.* += 1;
     while (index.* < raw.len and isNameContinue(raw[index.*])) : (index.* += 1) {}
-    if (env.get(raw[name_start..index.*])) |value| try output.appendSlice(allocator, value);
+    const rendered = try renderParameter(allocator, raw[name_start..index.*], options);
+    defer allocator.free(rendered);
+    try output.appendSlice(allocator, rendered);
     return true;
 }
 
