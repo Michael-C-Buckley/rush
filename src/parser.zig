@@ -307,6 +307,7 @@ const Lexer = struct {
                 '\\' => self.consumeBackslash(),
                 '\'' => try self.consumeQuoted('\'', "unterminated single quote"),
                 '"' => try self.consumeDoubleQuoted(),
+                '`' => try self.consumeBackquoted(),
                 '$' => try self.consumeDollarExpansion(),
                 else => self.index += 1,
             }
@@ -317,6 +318,22 @@ const Lexer = struct {
     fn consumeBackslash(self: *Lexer) void {
         self.index += 1;
         if (!self.isAtEnd()) self.index += 1;
+    }
+
+    fn consumeBackquoted(self: *Lexer) !void {
+        const start = self.index;
+        self.index += 1;
+        while (!self.isAtEnd()) {
+            switch (self.peek()) {
+                '\\' => self.consumeBackslash(),
+                '`' => {
+                    self.index += 1;
+                    return;
+                },
+                else => self.index += 1,
+            }
+        }
+        try self.addIncomplete(.init(start, self.source.len), "unterminated backquote command substitution");
     }
 
     fn consumeDollarExpansion(self: *Lexer) !void {

@@ -43,3 +43,4 @@ f() { echo $1/$2/$#; }; f alpha beta
 FOO=outer; ( FOO=inner; echo $FOO ); echo $FOO
 FOO=outer; { FOO=inner; }; echo $FOO
 P=foo/bar/baz.txt; echo ${P%/*}; echo ${P%%/*}; echo ${P#*/}; echo ${P##*/}
+echo before-`echo inner`-after

@@ -230,6 +230,14 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                 if (unquoted_start == null) unquoted_start = index;
                 index += 1;
             },
+            '`' => if (backquoteCommandSubstitutionPart(raw, index)) |part| {
+                try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
+                try parts.append(allocator, part);
+                index = part.span.end;
+            } else {
+                if (unquoted_start == null) unquoted_start = index;
+                index += 1;
+            },
             else => {
                 if (unquoted_start == null) unquoted_start = index;
                 index += 1;
@@ -268,6 +276,25 @@ fn arithmeticPart(raw: []const u8, dollar: usize) ?WordPart {
                 .kind = .arithmetic,
                 .span = .init(dollar, index + 2),
                 .value_span = .init(value_start, index),
+            };
+        }
+    }
+    return null;
+}
+
+fn backquoteCommandSubstitutionPart(raw: []const u8, start: usize) ?WordPart {
+    if (raw[start] != '`') return null;
+    var index = start + 1;
+    while (index < raw.len) : (index += 1) {
+        if (raw[index] == '\\' and index + 1 < raw.len) {
+            index += 1;
+            continue;
+        }
+        if (raw[index] == '`') {
+            return .{
+                .kind = .command_substitution,
+                .span = .init(start, index + 1),
+                .value_span = .init(start + 1, index),
             };
         }
     }
@@ -368,7 +395,9 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
         },
         .command_substitution => blk: {
-            const output = (try options.command_substitution.run(allocator, part.value(raw))) orelse try allocator.alloc(u8, 0);
+            const script = try commandSubstitutionScript(allocator, raw, part);
+            defer allocator.free(script);
+            const output = (try options.command_substitution.run(allocator, script)) orelse try allocator.alloc(u8, 0);
             defer allocator.free(output);
             const trimmed = trimTrailingNewlines(output);
             break :blk allocator.dupe(u8, trimmed);
@@ -594,6 +623,29 @@ const ArithmeticParser = struct {
 pub fn evalArithmetic(input: []const u8) anyerror!i64 {
     var arithmetic_parser: ArithmeticParser = .{ .input = input };
     return arithmetic_parser.parse();
+}
+
+fn commandSubstitutionScript(allocator: std.mem.Allocator, raw: []const u8, part: WordPart) ![]const u8 {
+    const source = part.source(raw);
+    if (source.len == 0 or source[0] != '`') return allocator.dupe(u8, part.value(raw));
+
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    const value = part.value(raw);
+    var index: usize = 0;
+    while (index < value.len) {
+        if (value[index] == '\\' and index + 1 < value.len) {
+            const next = value[index + 1];
+            if (next == '`' or next == '$' or next == '\\' or next == '\n') {
+                try output.append(allocator, next);
+                index += 2;
+                continue;
+            }
+        }
+        try output.append(allocator, value[index]);
+        index += 1;
+    }
+    return output.toOwnedSlice(allocator);
 }
 
 fn trimTrailingNewlines(output: []const u8) []const u8 {
@@ -987,6 +1039,17 @@ test "command substitution parses and trims callback output" {
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("before-hi-after", result.fields[0]);
+
+    var backquote_parts = try parseWordParts(std.testing.allocator, "before-`echo hi`-after");
+    defer backquote_parts.deinit();
+    try std.testing.expectEqual(@as(usize, 3), backquote_parts.parts.len);
+    try std.testing.expectEqual(WordPartKind.command_substitution, backquote_parts.parts[1].kind);
+    try std.testing.expectEqualStrings("echo hi", backquote_parts.parts[1].value(backquote_parts.raw));
+
+    var backquote_result = try expandWord(std.testing.allocator, "before-`echo hi`-after", .{ .command_substitution = test_command_substitution });
+    defer backquote_result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), backquote_result.fields.len);
+    try std.testing.expectEqualStrings("before-hi-after", backquote_result.fields[0]);
 }
 
 test "arithmetic expansion evaluates integer expressions" {
