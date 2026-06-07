@@ -509,6 +509,13 @@ pub const Executor = struct {
         return last;
     }
 
+    fn pipelineHasRedirections(program: ir.Program, pipeline: ir.Pipeline) bool {
+        for (pipeline.command_indexes) |command_index| {
+            if (program.commands[command_index].redirections.len != 0) return true;
+        }
+        return false;
+    }
+
     fn pipelineStatus(self: Executor, statuses: []const ExitStatus) ExitStatus {
         if (statuses.len == 0) return 0;
         if (!self.shell_options.pipefail) return statuses[statuses.len - 1];
@@ -525,7 +532,7 @@ pub const Executor = struct {
         if (!options.allow_external or options.io == null or pipeline.command_indexes.len < 2) return false;
         for (pipeline.command_indexes) |command_index| {
             const command = program.commands[command_index];
-            if (command.argv.len == 0 or command.redirections.len != 0) return false;
+            if (command.argv.len == 0) return false;
         }
         return true;
     }
@@ -539,7 +546,7 @@ pub const Executor = struct {
                 break;
             }
         }
-        if (!has_builtin) return self.executeExternalPipeline(program, pipeline, io);
+        if (!has_builtin and !pipelineHasRedirections(program, pipeline)) return self.executeExternalPipeline(program, pipeline, io);
         return self.executeMixedPipeline(program, pipeline, options, io);
     }
 
@@ -597,16 +604,23 @@ pub const Executor = struct {
         for (pipeline.command_indexes, 0..) |command_index, index| {
             const command = program.commands[command_index];
             const is_last = index + 1 == pipeline.command_indexes.len;
-            const stdin_file = if (index == 0) null else takeRead(&pipes[index - 1]);
-            const stdout_file = if (is_last) takeWrite(&capture_stdout) else takeWrite(&pipes[index]);
-            const stderr_file = if (is_last) takeWrite(&capture_stderr) else null;
+            var stdin_file = if (index == 0) null else takeRead(&pipes[index - 1]);
+            var stdout_file = if (is_last) takeWrite(&capture_stdout) else takeWrite(&pipes[index]);
+            var stderr_file = if (is_last) takeWrite(&capture_stderr) else null;
+            try self.applyPipelineStageRedirections(io, command, options, &stdin_file, &stdout_file, &stderr_file);
+            const command_without_redirs: ir.SimpleCommand = .{
+                .span = command.span,
+                .assignments = command.assignments,
+                .argv = command.argv,
+                .redirections = &.{},
+            };
 
             if (builtinFor(command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
                 const context = try self.allocator.create(BuiltinPipelineContext);
                 errdefer self.allocator.destroy(context);
                 context.* = .{
                     .executor = self,
-                    .command = command,
+                    .command = command_without_redirs,
                     .options = options,
                     .io = io,
                     .stdin_file = stdin_file,
@@ -618,7 +632,7 @@ pub const Executor = struct {
                 try threads.append(self.allocator, thread);
                 try contexts.append(self.allocator, context);
             } else {
-                const argv = try argvForCommand(self.allocator, command);
+                const argv = try argvForCommand(self.allocator, command_without_redirs);
                 defer self.allocator.free(argv);
                 children[spawned] = try std.process.spawn(io, .{
                     .argv = argv,
@@ -671,6 +685,43 @@ pub const Executor = struct {
             .stdout = try multi_reader.toOwnedSlice(0),
             .stderr = try multi_reader.toOwnedSlice(1),
         };
+    }
+
+    fn applyPipelineStageRedirections(
+        self: *Executor,
+        io: std.Io,
+        command: ir.SimpleCommand,
+        options: ExecuteOptions,
+        stdin_file: *?std.Io.File,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+    ) !void {
+        const redirections = try self.expandRedirections(command.redirections, options);
+        defer self.freeRedirections(redirections);
+        for (redirections) |redirection| {
+            if (isStdinFileRedirection(redirection)) {
+                const target = redirection.target orelse continue;
+                if (stdin_file.*) |file| file.close(io);
+                stdin_file.* = try std.Io.Dir.cwd().openFile(io, target.text, .{});
+                continue;
+            }
+            if (isFileOutputRedirection(redirection)) {
+                const target = redirection.target orelse continue;
+                const fd = redirectionFd(redirection) orelse 1;
+                const file = try openOutputRedirectionFile(io, target.text, redirection.operator == .dgreat);
+                switch (fd) {
+                    1 => {
+                        if (stdout_file.*) |old| old.close(io);
+                        stdout_file.* = file;
+                    },
+                    2 => {
+                        if (stderr_file.*) |old| old.close(io);
+                        stderr_file.* = file;
+                    },
+                    else => file.close(io),
+                }
+            }
+        }
     }
 
     fn runBuiltinPipelineStage(context: *BuiltinPipelineContext) void {
@@ -2623,6 +2674,47 @@ test "executor applies pipefail option to pipeline status" {
     var mixed_result = try executor.executeProgram(mixed.program, .{ .io = std.testing.io, .allow_external = true });
     defer mixed_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 1), mixed_result.status);
+}
+
+test "executor supports real redirections on pipeline stages" {
+    const first_path = "rush-pipeline-stage-first.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, first_path) catch {};
+    var first = try parseAndLower(std.testing.allocator, "echo hidden > rush-pipeline-stage-first.tmp | cat");
+    defer first.parsed.deinit();
+    defer first.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var first_result = try executor.executeProgram(first.program, .{ .io = std.testing.io, .allow_external = true });
+    defer first_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), first_result.status);
+    try std.testing.expectEqualStrings("", first_result.stdout);
+    const first_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, first_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(first_contents);
+    try std.testing.expectEqualStrings("hidden\n", first_contents);
+
+    const last_path = "rush-pipeline-stage-last.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, last_path) catch {};
+    var last = try parseAndLower(std.testing.allocator, "/usr/bin/printf visible | cat > rush-pipeline-stage-last.tmp");
+    defer last.parsed.deinit();
+    defer last.program.deinit();
+    var last_result = try executor.executeProgram(last.program, .{ .io = std.testing.io, .allow_external = true });
+    defer last_result.deinit();
+    try std.testing.expectEqualStrings("", last_result.stdout);
+    const last_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, last_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(last_contents);
+    try std.testing.expectEqualStrings("visible", last_contents);
+
+    const input_path = "rush-pipeline-stage-input.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = "from-input" });
+    var input = try parseAndLower(std.testing.allocator, "cat < rush-pipeline-stage-input.tmp | /usr/bin/cat");
+    defer input.parsed.deinit();
+    defer input.program.deinit();
+    var input_result = try executor.executeProgram(input.program, .{ .io = std.testing.io, .allow_external = true });
+    defer input_result.deinit();
+    try std.testing.expectEqualStrings("from-input", input_result.stdout);
 }
 
 test "executor supports mixed builtin and external pipeline stages" {
