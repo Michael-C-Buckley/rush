@@ -46,6 +46,13 @@ pub const Executor = struct {
         return self.env.get(name);
     }
 
+    pub fn unsetEnv(self: *Executor, name: []const u8) void {
+        if (self.env.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value);
+        }
+    }
+
     pub fn setEnv(self: *Executor, name: []const u8, value: []const u8) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
@@ -465,6 +472,8 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "cd")) return builtinCd;
     if (std.mem.eql(u8, name, "pwd")) return builtinPwd;
     if (std.mem.eql(u8, name, "export")) return builtinExport;
+    if (std.mem.eql(u8, name, "unset")) return builtinUnset;
+    if (std.mem.eql(u8, name, "env")) return builtinEnv;
     return null;
 }
 
@@ -575,6 +584,43 @@ fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     return emptyResult(self.allocator, 0);
 }
 
+fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    for (command.argv[1..]) |arg| {
+        self.unsetEnv(arg.text);
+    }
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len != 1) return errorResult(self.allocator, 125, "env", "arguments are not implemented yet");
+
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(self.allocator);
+    var iter = self.env.iterator();
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (names.items) |name| {
+        try stdout.appendSlice(self.allocator, name);
+        try stdout.append(self.allocator, '=');
+        try stdout.appendSlice(self.allocator, self.env.get(name).?);
+        try stdout.append(self.allocator, '\n');
+    }
+
+    return .{
+        .allocator = self.allocator,
+        .status = 0,
+        .stdout = try stdout.toOwnedSlice(self.allocator),
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
+}
+
 fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
 }
@@ -680,6 +726,24 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor implements unset and env builtins" {
+    var lowered = try parseAndLower(std.testing.allocator, "export A=one B=two; unset A; env");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "B=two\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "A=one\n") == null);
+    try std.testing.expect(executor.getEnv("A") == null);
+    try std.testing.expectEqualStrings("two", executor.getEnv("B").?);
 }
 
 test "executor implements pwd cd and export builtins" {
