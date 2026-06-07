@@ -489,12 +489,12 @@ const SyntaxParser = struct {
         defer root_children.deinit(self.allocator);
 
         while (!self.at(.eof)) {
-            if (self.current().kind.isTrivia() or isSimpleCommandSeparator(self.current().kind)) {
+            if (self.current().kind.isTrivia() and self.current().kind != .newline) {
                 try root_children.append(self.allocator, .{ .token = .init(self.index) });
                 self.index += 1;
-            } else if (self.startsSimpleCommand()) {
-                const command = try self.parseSimpleCommand();
-                try root_children.append(self.allocator, .{ .node = command });
+            } else if (self.startsPipeline()) {
+                const list = try self.parseList();
+                try root_children.append(self.allocator, .{ .node = list });
             } else {
                 try root_children.append(self.allocator, .{ .token = .init(self.index) });
                 self.index += 1;
@@ -507,6 +507,74 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, root_children.items);
         self.nodes.items[0].child_start = child_start;
         self.nodes.items[0].child_end = self.children.items.len;
+    }
+
+    fn parseList(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var list_children: std.ArrayList(SyntaxChild) = .empty;
+        defer list_children.deinit(self.allocator);
+
+        while (!self.at(.eof)) {
+            if (self.startsPipeline()) {
+                const pipeline = try self.parsePipeline();
+                try list_children.append(self.allocator, .{ .node = pipeline });
+                continue;
+            }
+
+            if (self.current().kind.isTrivia() or isListSeparator(self.current().kind)) {
+                try self.appendCurrentTokenChildTo(&list_children);
+                continue;
+            }
+
+            break;
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, list_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.list, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parsePipeline(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var pipeline_children: std.ArrayList(SyntaxChild) = .empty;
+        defer pipeline_children.deinit(self.allocator);
+
+        const first_command = try self.parseSimpleCommand();
+        try pipeline_children.append(self.allocator, .{ .node = first_command });
+
+        while (!self.at(.eof)) {
+            while (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(&pipeline_children);
+            }
+
+            if (!self.at(.pipe)) break;
+            try self.appendCurrentTokenChildTo(&pipeline_children);
+
+            while (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(&pipeline_children);
+            }
+
+            if (!self.startsSimpleCommand()) {
+                self.incomplete = true;
+                try self.diagnostics.append(self.allocator, .{
+                    .kind = .parse_error,
+                    .span = self.previousToken().span,
+                    .message = "missing command after pipeline operator",
+                });
+                break;
+            }
+
+            const command = try self.parseSimpleCommand();
+            try pipeline_children.append(self.allocator, .{ .node = command });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, pipeline_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.pipeline, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parseSimpleCommand(self: *SyntaxParser) !NodeId {
@@ -613,6 +681,10 @@ const SyntaxParser = struct {
         self.index += 1;
     }
 
+    fn startsPipeline(self: SyntaxParser) bool {
+        return self.startsSimpleCommand();
+    }
+
     fn startsSimpleCommand(self: SyntaxParser) bool {
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
@@ -644,10 +716,13 @@ const SyntaxParser = struct {
 };
 
 fn isSimpleCommandSeparator(kind: TokenKind) bool {
+    return kind == .pipe or isListSeparator(kind);
+}
+
+fn isListSeparator(kind: TokenKind) bool {
     return switch (kind) {
         .newline,
         .comment,
-        .pipe,
         .and_if,
         .or_if,
         .semicolon,
@@ -831,16 +906,9 @@ test "parser builds a simple command node for a command word" {
             .{ .kind = .eof, .span = .empty(4) },
         },
         .nodes = &.{
-            .{ .kind = .root, .span = .init(0, 4), .token_start = 0, .token_end = 2, .child_start = 2, .child_end = 4 },
+            .{ .kind = .root, .span = .init(0, 4), .token_start = 0, .token_end = 2 },
             .{ .kind = .command_word, .span = .init(0, 4), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
-            .{ .kind = .simple_command, .span = .init(0, 4), .token_start = 0, .token_end = 1, .child_start = 1, .child_end = 2 },
-        },
-        .nodes_exact = true,
-        .children = &.{
-            .{ .token = .init(0) },
-            .{ .node = .init(1) },
-            .{ .node = .init(2) },
-            .{ .token = .init(1) },
+            .{ .kind = .simple_command, .span = .init(0, 4), .token_start = 0, .token_end = 1 },
         },
     });
 }
@@ -856,24 +924,11 @@ test "parser classifies assignment words, command word, and arguments" {
             .{ .kind = .eof, .span = .empty(15) },
         },
         .nodes = &.{
-            .{ .kind = .root, .span = .init(0, 15), .token_start = 0, .token_end = 6, .child_start = 8, .child_end = 10 },
+            .{ .kind = .root, .span = .init(0, 15), .token_start = 0, .token_end = 6 },
             .{ .kind = .assignment_word, .span = .init(0, 7), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
             .{ .kind = .command_word, .span = .init(8, 12), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
             .{ .kind = .word, .span = .init(13, 15), .token_start = 4, .token_end = 5, .child_start = 2, .child_end = 3 },
-            .{ .kind = .simple_command, .span = .init(0, 15), .token_start = 0, .token_end = 5, .child_start = 3, .child_end = 8 },
-        },
-        .nodes_exact = true,
-        .children = &.{
-            .{ .token = .init(0) },
-            .{ .token = .init(2) },
-            .{ .token = .init(4) },
-            .{ .node = .init(1) },
-            .{ .token = .init(1) },
-            .{ .node = .init(2) },
-            .{ .token = .init(3) },
-            .{ .node = .init(3) },
-            .{ .node = .init(4) },
-            .{ .token = .init(5) },
+            .{ .kind = .simple_command, .span = .init(0, 15), .token_start = 0, .token_end = 5 },
         },
     });
 }
@@ -889,27 +944,52 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .eof, .span = .empty(10) },
         },
         .nodes = &.{
-            .{ .kind = .root, .span = .init(0, 10), .token_start = 0, .token_end = 6, .child_start = 9, .child_end = 11 },
+            .{ .kind = .root, .span = .init(0, 10), .token_start = 0, .token_end = 6 },
             .{ .kind = .io_number, .span = .init(0, 1), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
             .{ .kind = .word, .span = .init(2, 5), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
-            .{ .kind = .redirection, .span = .init(0, 5), .token_start = 0, .token_end = 3, .child_start = 2, .child_end = 5 },
-            .{ .kind = .command_word, .span = .init(6, 10), .token_start = 4, .token_end = 5, .child_start = 5, .child_end = 6 },
-            .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5, .child_start = 6, .child_end = 9 },
+            .{ .kind = .redirection, .span = .init(0, 5), .token_start = 0, .token_end = 3 },
+            .{ .kind = .command_word, .span = .init(6, 10), .token_start = 4, .token_end = 5 },
+            .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
+        },
+    });
+}
+
+test "parser builds lists and pipelines around simple commands" {
+    try expectParse("echo hi | grep h && echo ok", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 7) },
+            .{ .kind = .whitespace, .span = .init(7, 8) },
+            .{ .kind = .pipe, .span = .init(8, 9) },
+            .{ .kind = .whitespace, .span = .init(9, 10) },
+            .{ .kind = .word, .span = .init(10, 14) },
+            .{ .kind = .whitespace, .span = .init(14, 15) },
+            .{ .kind = .word, .span = .init(15, 16) },
+            .{ .kind = .whitespace, .span = .init(16, 17) },
+            .{ .kind = .and_if, .span = .init(17, 19) },
+            .{ .kind = .whitespace, .span = .init(19, 20) },
+            .{ .kind = .word, .span = .init(20, 24) },
+            .{ .kind = .whitespace, .span = .init(24, 25) },
+            .{ .kind = .word, .span = .init(25, 27) },
+            .{ .kind = .eof, .span = .empty(27) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 27), .token_start = 0, .token_end = 16, .child_start = 26, .child_end = 28 },
+            .{ .kind = .command_word, .span = .init(0, 4), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
+            .{ .kind = .word, .span = .init(5, 7), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
+            .{ .kind = .simple_command, .span = .init(0, 8), .token_start = 0, .token_end = 4, .child_start = 2, .child_end = 6 },
+            .{ .kind = .command_word, .span = .init(10, 14), .token_start = 6, .token_end = 7, .child_start = 6, .child_end = 7 },
+            .{ .kind = .word, .span = .init(15, 16), .token_start = 8, .token_end = 9, .child_start = 7, .child_end = 8 },
+            .{ .kind = .simple_command, .span = .init(10, 17), .token_start = 6, .token_end = 10, .child_start = 8, .child_end = 12 },
+            .{ .kind = .pipeline, .span = .init(0, 17), .token_start = 0, .token_end = 10, .child_start = 12, .child_end = 16 },
+            .{ .kind = .command_word, .span = .init(20, 24), .token_start = 12, .token_end = 13, .child_start = 16, .child_end = 17 },
+            .{ .kind = .word, .span = .init(25, 27), .token_start = 14, .token_end = 15, .child_start = 17, .child_end = 18 },
+            .{ .kind = .simple_command, .span = .init(20, 27), .token_start = 12, .token_end = 15, .child_start = 18, .child_end = 21 },
+            .{ .kind = .pipeline, .span = .init(20, 27), .token_start = 12, .token_end = 15, .child_start = 21, .child_end = 22 },
+            .{ .kind = .list, .span = .init(0, 27), .token_start = 0, .token_end = 15, .child_start = 22, .child_end = 26 },
         },
         .nodes_exact = true,
-        .children = &.{
-            .{ .token = .init(0) },
-            .{ .token = .init(2) },
-            .{ .node = .init(1) },
-            .{ .token = .init(1) },
-            .{ .node = .init(2) },
-            .{ .token = .init(4) },
-            .{ .node = .init(3) },
-            .{ .token = .init(3) },
-            .{ .node = .init(4) },
-            .{ .node = .init(5) },
-            .{ .token = .init(5) },
-        },
     });
 }
 
