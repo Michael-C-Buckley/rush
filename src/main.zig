@@ -209,6 +209,8 @@ fn ansiForHighlight(kind: parser.HighlightKind) []const u8 {
 }
 
 pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io) !u8 {
+    installInteractiveSignalHandlers();
+
     var history = History.init(allocator);
     defer history.deinit();
     history.load(io, ".rush_history") catch {};
@@ -287,6 +289,17 @@ pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []
 
     return executor.executeProgram(program, options);
 }
+
+fn installInteractiveSignalHandlers() void {
+    const sigint_action: std.posix.Sigaction = .{
+        .handler = .{ .handler = handleInteractiveSigint },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    std.posix.sigaction(.INT, &sigint_action, null);
+}
+
+fn handleInteractiveSigint(_: std.posix.SIG) callconv(.c) void {}
 
 fn diagnosticsResult(allocator: std.mem.Allocator, script: []const u8, diagnostics: []const parser.Diagnostic) !exec.CommandResult {
     var stderr: std.ArrayList(u8) = .empty;
