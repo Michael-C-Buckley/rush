@@ -568,7 +568,7 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
     const clamped_cursor = @min(cursor, result.source.len);
 
     for (result.diagnostics) |diagnostic| {
-        if (diagnostic.kind == .incomplete_input and diagnostic.span.touches(clamped_cursor)) {
+        if (diagnostic.kind == .incomplete_input and diagnostic.span.touches(clamped_cursor) and diagnosticBlocksTokenCompletion(diagnostic)) {
             return .{
                 .kind = .quoted_string,
                 .cursor = clamped_cursor,
@@ -622,6 +622,10 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
     }
 
     return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+}
+
+fn diagnosticBlocksTokenCompletion(diagnostic: Diagnostic) bool {
+    return std.mem.startsWith(u8, diagnostic.message, "unterminated");
 }
 
 fn assignmentCompletionContext(result: ParseResult, token_index: usize, cursor: usize) CompletionContext {
@@ -1801,6 +1805,23 @@ test "completion context finds redirect targets and pipeline commands" {
     var pipeline = try parse(std.testing.allocator, "echo | ", .{});
     defer pipeline.deinit();
     try std.testing.expectEqual(CompletionKind.command, completionContext(pipeline, 7).kind);
+}
+
+test "completion context works inside incomplete compound commands" {
+    var brace_command = try parse(std.testing.allocator, "{ ec", .{});
+    defer brace_command.deinit();
+    try std.testing.expect(brace_command.incomplete);
+    try std.testing.expectEqual(CompletionKind.command, completionContext(brace_command, 4).kind);
+
+    var subshell_pipeline = try parse(std.testing.allocator, "( echo | ", .{});
+    defer subshell_pipeline.deinit();
+    try std.testing.expect(subshell_pipeline.incomplete);
+    try std.testing.expectEqual(CompletionKind.command, completionContext(subshell_pipeline, 9).kind);
+
+    var brace_argument = try parse(std.testing.allocator, "{ echo ar", .{});
+    defer brace_argument.deinit();
+    try std.testing.expect(brace_argument.incomplete);
+    try std.testing.expectEqual(CompletionKind.argument, completionContext(brace_argument, 9).kind);
 }
 
 test "completion context finds assignments and quoted strings" {
