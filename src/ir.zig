@@ -1,6 +1,7 @@
 //! Semantic lowering from parser CST to execution-oriented IR.
 
 const std = @import("std");
+const expand = @import("expand.zig");
 const parser = @import("parser.zig");
 
 pub const WordRef = struct {
@@ -201,7 +202,7 @@ fn wordRef(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parse
     const token = parsed.tokens[node.token_start];
     return .{
         .span = node.span,
-        .text = try quoteRemove(allocator, token.lexeme(parsed.source)),
+        .text = try expand.expandWordScalar(allocator, token.lexeme(parsed.source), .{}),
     };
 }
 
@@ -217,58 +218,16 @@ fn freeCommand(allocator: std.mem.Allocator, command: SimpleCommand) void {
     allocator.free(command.redirections);
 }
 
-pub fn quoteRemove(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
-    var output: std.ArrayList(u8) = .empty;
-    errdefer output.deinit(allocator);
-
-    var index: usize = 0;
-    while (index < raw.len) {
-        switch (raw[index]) {
-            '\'' => {
-                index += 1;
-                while (index < raw.len and raw[index] != '\'') : (index += 1) {
-                    try output.append(allocator, raw[index]);
-                }
-                if (index < raw.len) index += 1;
-            },
-            '"' => {
-                index += 1;
-                while (index < raw.len and raw[index] != '"') {
-                    if (raw[index] == '\\' and index + 1 < raw.len) {
-                        index += 1;
-                    }
-                    try output.append(allocator, raw[index]);
-                    index += 1;
-                }
-                if (index < raw.len) index += 1;
-            },
-            '\\' => {
-                index += 1;
-                if (index < raw.len) {
-                    try output.append(allocator, raw[index]);
-                    index += 1;
-                }
-            },
-            else => |c| {
-                try output.append(allocator, c);
-                index += 1;
-            },
-        }
-    }
-
-    return output.toOwnedSlice(allocator);
-}
-
 test "quote removal handles single double and backslash quoting" {
-    const single = try quoteRemove(std.testing.allocator, "'hello world'");
+    const single = try expand.quoteRemove(std.testing.allocator, "'hello world'");
     defer std.testing.allocator.free(single);
     try std.testing.expectEqualStrings("hello world", single);
 
-    const double = try quoteRemove(std.testing.allocator, "\"hello world\"");
+    const double = try expand.quoteRemove(std.testing.allocator, "\"hello world\"");
     defer std.testing.allocator.free(double);
     try std.testing.expectEqualStrings("hello world", double);
 
-    const backslash = try quoteRemove(std.testing.allocator, "hello\\ world");
+    const backslash = try expand.quoteRemove(std.testing.allocator, "hello\\ world");
     defer std.testing.allocator.free(backslash);
     try std.testing.expectEqualStrings("hello world", backslash);
 }
