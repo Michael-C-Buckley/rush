@@ -11,19 +11,119 @@ pub const Span = struct {
     start: usize,
     end: usize,
 
+    pub fn init(start: usize, end: usize) Span {
+        std.debug.assert(end >= start);
+        return .{ .start = start, .end = end };
+    }
+
+    pub fn empty(offset: usize) Span {
+        return .{ .start = offset, .end = offset };
+    }
+
     pub fn len(self: Span) usize {
         std.debug.assert(self.end >= self.start);
         return self.end - self.start;
     }
+
+    pub fn isEmpty(self: Span) bool {
+        return self.len() == 0;
+    }
+
+    pub fn contains(self: Span, offset: usize) bool {
+        return offset >= self.start and offset < self.end;
+    }
+
+    pub fn touches(self: Span, offset: usize) bool {
+        return offset >= self.start and offset <= self.end;
+    }
+
+    pub fn slice(self: Span, source: []const u8) []const u8 {
+        std.debug.assert(self.end <= source.len);
+        return source[self.start..self.end];
+    }
 };
 
 pub const TokenKind = enum {
+    invalid,
     eof,
+
+    whitespace,
+    newline,
+    comment,
+    word,
+
+    pipe,
+    and_if,
+    or_if,
+    semicolon,
+    ampersand,
+    left_paren,
+    right_paren,
+
+    less,
+    greater,
+    dless,
+    dless_dash,
+    dgreat,
+    less_and,
+    greater_and,
+    less_great,
+    clobber,
+
+    pub fn isTrivia(self: TokenKind) bool {
+        return switch (self) {
+            .whitespace, .newline, .comment => true,
+            else => false,
+        };
+    }
+
+    pub fn isOperator(self: TokenKind) bool {
+        return switch (self) {
+            .pipe,
+            .and_if,
+            .or_if,
+            .semicolon,
+            .ampersand,
+            .left_paren,
+            .right_paren,
+            .less,
+            .greater,
+            .dless,
+            .dless_dash,
+            .dgreat,
+            .less_and,
+            .greater_and,
+            .less_great,
+            .clobber,
+            => true,
+            else => false,
+        };
+    }
+
+    pub fn isRedirectOperator(self: TokenKind) bool {
+        return switch (self) {
+            .less,
+            .greater,
+            .dless,
+            .dless_dash,
+            .dgreat,
+            .less_and,
+            .greater_and,
+            .less_great,
+            .clobber,
+            => true,
+            else => false,
+        };
+    }
 };
 
 pub const Token = struct {
     kind: TokenKind,
     span: Span,
+
+    pub fn lexeme(self: Token, source: []const u8) []const u8 {
+        return self.span.slice(source);
+    }
 };
 
 pub const NodeKind = enum {
@@ -79,14 +179,14 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
     errdefer allocator.free(tokens);
     tokens[0] = .{
         .kind = .eof,
-        .span = .{ .start = source.len, .end = source.len },
+        .span = .empty(source.len),
     };
 
     const nodes = try allocator.alloc(Node, 1);
     errdefer allocator.free(nodes);
     nodes[0] = .{
         .kind = .root,
-        .span = .{ .start = 0, .end = source.len },
+        .span = .init(0, source.len),
     };
 
     return .{
@@ -162,6 +262,41 @@ fn expectDiagnostics(expected: []const ExpectedDiagnostic, actual: []const Diagn
 fn expectSpan(expected: Span, actual: Span) !void {
     try std.testing.expectEqual(expected.start, actual.start);
     try std.testing.expectEqual(expected.end, actual.end);
+}
+
+test "source spans measure, slice, and answer cursor containment" {
+    const source = "echo hello";
+    const command = Span.init(0, 4);
+    const gap = Span.empty(4);
+
+    try std.testing.expectEqual(@as(usize, 4), command.len());
+    try std.testing.expect(!command.isEmpty());
+    try std.testing.expect(gap.isEmpty());
+    try std.testing.expect(command.contains(0));
+    try std.testing.expect(command.contains(3));
+    try std.testing.expect(!command.contains(4));
+    try std.testing.expect(command.touches(4));
+    try std.testing.expectEqualStrings("echo", command.slice(source));
+}
+
+test "token model classifies trivia, operators, and redirection operators" {
+    try std.testing.expect(TokenKind.whitespace.isTrivia());
+    try std.testing.expect(TokenKind.comment.isTrivia());
+    try std.testing.expect(!TokenKind.word.isTrivia());
+
+    try std.testing.expect(TokenKind.pipe.isOperator());
+    try std.testing.expect(TokenKind.greater.isOperator());
+    try std.testing.expect(!TokenKind.word.isOperator());
+
+    try std.testing.expect(TokenKind.dless.isRedirectOperator());
+    try std.testing.expect(TokenKind.clobber.isRedirectOperator());
+    try std.testing.expect(!TokenKind.pipe.isRedirectOperator());
+}
+
+test "tokens expose source lexemes through spans" {
+    const source = "echo hello";
+    const token: Token = .{ .kind = .word, .span = .init(5, 10) };
+    try std.testing.expectEqualStrings("hello", token.lexeme(source));
 }
 
 test "parser harness checks tokens, nodes, spans, diagnostics, and incomplete flag" {
