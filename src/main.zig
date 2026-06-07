@@ -113,6 +113,80 @@ test "runScript returns parse diagnostics" {
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "missing command after pipeline operator") != null);
 }
 
+test "integration harness compares selected scripts with /bin/sh" {
+    try expectMatchesSh("echo hello");
+    try expectMatchesSh("false");
+    try expectMatchesSh("echo hello | cat");
+    try expectMatchesSh("false || echo yes");
+    try expectMatchesSh("true && echo ok");
+    try expectMatchesSh("/usr/bin/printf external");
+}
+
+test "integration harness checks redirection side effects" {
+    const rush_path = "rush-itest-rush-redir.tmp";
+    const sh_path = "rush-itest-sh-redir.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, rush_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    std.Io.Dir.cwd().deleteFile(std.testing.io, sh_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, rush_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, sh_path) catch {};
+
+    var rush_result = try runScript(std.testing.allocator, std.testing.io, "echo file > rush-itest-rush-redir.tmp");
+    defer rush_result.deinit();
+    var sh_result = try runSh(std.testing.allocator, "echo file > rush-itest-sh-redir.tmp");
+    defer sh_result.deinit();
+
+    try std.testing.expectEqual(sh_result.status, rush_result.status);
+    try std.testing.expectEqualStrings(sh_result.stdout, rush_result.stdout);
+    try std.testing.expectEqualStrings(sh_result.stderr, rush_result.stderr);
+
+    const rush_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, rush_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(rush_contents);
+    const sh_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, sh_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(sh_contents);
+    try std.testing.expectEqualStrings(sh_contents, rush_contents);
+}
+
+fn expectMatchesSh(script: []const u8) !void {
+    var rush_result = try runScript(std.testing.allocator, std.testing.io, script);
+    defer rush_result.deinit();
+    var sh_result = try runSh(std.testing.allocator, script);
+    defer sh_result.deinit();
+
+    try std.testing.expectEqual(sh_result.status, rush_result.status);
+    try std.testing.expectEqualStrings(sh_result.stdout, rush_result.stdout);
+    try std.testing.expectEqualStrings(sh_result.stderr, rush_result.stderr);
+}
+
+fn runSh(allocator: std.mem.Allocator, script: []const u8) !exec.CommandResult {
+    const result = try std.process.run(allocator, std.testing.io, .{
+        .argv = &.{ "/bin/sh", "-c", script },
+    });
+    errdefer allocator.free(result.stdout);
+    errdefer allocator.free(result.stderr);
+
+    return .{
+        .allocator = allocator,
+        .status = processStatus(result.term),
+        .stdout = result.stdout,
+        .stderr = result.stderr,
+    };
+}
+
+fn processStatus(term: std.process.Child.Term) exec.ExitStatus {
+    return switch (term) {
+        .exited => |code| code,
+        .signal => |sig| 128 + @as(u8, @intCast(@intFromEnum(sig))),
+        .stopped => |sig| 128 + @as(u8, @intCast(@intFromEnum(sig))),
+        .unknown => 1,
+    };
+}
+
 test {
     std.testing.refAllDecls(parser);
     std.testing.refAllDecls(expand);
