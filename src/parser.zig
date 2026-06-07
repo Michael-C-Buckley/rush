@@ -165,6 +165,7 @@ pub const NodeKind = enum {
     assignment_word,
     command_word,
     word,
+    command_substitution,
     parse_error,
 };
 
@@ -538,6 +539,7 @@ pub fn syntaxHighlights(allocator: std.mem.Allocator, result: ParseResult) ![]Hi
             .word => .argument,
             .assignment_word => .assignment,
             .io_number => .io_number,
+            .command_substitution => .operator,
             else => null,
         };
         if (kind) |highlight_kind| {
@@ -652,10 +654,78 @@ fn previousSignificantToken(tokens: []const Token, cursor: usize) ?usize {
 fn nodeKindForToken(result: ParseResult, token_index: usize) ?NodeKind {
     for (result.nodes) |node| {
         if (node.token_start == token_index and node.token_end == token_index + 1) {
-            return node.kind;
+            switch (node.kind) {
+                .assignment_word, .command_word, .word, .io_number => return node.kind,
+                else => {},
+            }
         }
     }
     return null;
+}
+
+fn commandSubstitutionSpans(allocator: std.mem.Allocator, source: []const u8, span: Span) !std.ArrayList(Span) {
+    var spans: std.ArrayList(Span) = .empty;
+    errdefer spans.deinit(allocator);
+
+    var index = span.start;
+    while (index < span.end) {
+        switch (source[index]) {
+            '\'' => skipQuoted(source, span.end, &index, '\''),
+            '$' => {
+                if (index + 1 < span.end and source[index + 1] == '(' and !(index + 2 < span.end and source[index + 2] == '(')) {
+                    if (commandSubstitutionEnd(source, span.end, index)) |end| {
+                        try spans.append(allocator, .init(index, end));
+                        index = end;
+                    } else {
+                        index += 1;
+                    }
+                } else {
+                    index += 1;
+                }
+            },
+            else => index += 1,
+        }
+    }
+
+    return spans;
+}
+
+fn commandSubstitutionEnd(source: []const u8, limit: usize, start: usize) ?usize {
+    var index = start + 2;
+    var depth: usize = 1;
+    while (index < limit) {
+        switch (source[index]) {
+            '(' => {
+                depth += 1;
+                index += 1;
+            },
+            ')' => {
+                depth -= 1;
+                index += 1;
+                if (depth == 0) return index;
+            },
+            '\'', '"' => skipQuoted(source, limit, &index, source[index]),
+            '\\' => {
+                index += 1;
+                if (index < limit) index += 1;
+            },
+            else => index += 1,
+        }
+    }
+    return null;
+}
+
+fn skipQuoted(source: []const u8, limit: usize, index: *usize, quote: u8) void {
+    index.* += 1;
+    while (index.* < limit and source[index.*] != quote) {
+        if (quote == '"' and source[index.*] == '\\') {
+            index.* += 1;
+            if (index.* < limit) index.* += 1;
+        } else {
+            index.* += 1;
+        }
+    }
+    if (index.* < limit) index.* += 1;
 }
 
 fn defaultHighlightKind(kind: TokenKind) HighlightKind {
@@ -856,7 +926,7 @@ const SyntaxParser = struct {
                     saw_command_word = true;
                     break :blk .command_word;
                 } else .word;
-                const word = try self.addLeafNode(kind, self.index);
+                const word = try self.addWordNode(kind, self.index);
                 try command_children.append(self.allocator, .{ .node = word });
                 self.index += 1;
                 continue;
@@ -892,7 +962,7 @@ const SyntaxParser = struct {
         }
 
         if (self.at(.word)) {
-            const target = try self.addLeafNode(.word, self.index);
+            const target = try self.addWordNode(.word, self.index);
             try redirection_children.append(self.allocator, .{ .node = target });
             self.index += 1;
         } else {
@@ -915,6 +985,25 @@ const SyntaxParser = struct {
         const child_start = self.children.items.len;
         try self.children.append(self.allocator, .{ .token = .init(token_index) });
         return self.addNode(kind, self.tokens[token_index].span, token_index, token_index + 1, child_start, self.children.items.len);
+    }
+
+    fn addWordNode(self: *SyntaxParser, kind: NodeKind, token_index: usize) !NodeId {
+        const token = self.tokens[token_index];
+        var word_children: std.ArrayList(SyntaxChild) = .empty;
+        defer word_children.deinit(self.allocator);
+        try word_children.append(self.allocator, .{ .token = .init(token_index) });
+
+        var substitutions = try commandSubstitutionSpans(self.allocator, self.source, token.span);
+        defer substitutions.deinit(self.allocator);
+        for (substitutions.items) |span| {
+            const child_start = self.children.items.len;
+            const substitution = try self.addNode(.command_substitution, span, token_index, token_index + 1, child_start, child_start);
+            try word_children.append(self.allocator, .{ .node = substitution });
+        }
+
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, word_children.items);
+        return self.addNode(kind, token.span, token_index, token_index + 1, child_start, self.children.items.len);
     }
 
     fn addNode(self: *SyntaxParser, kind: NodeKind, span: Span, token_start: usize, token_end: usize, child_start: usize, child_end: usize) !NodeId {
@@ -1409,6 +1498,22 @@ test "lexer tokenizes operators and redirections with max munch" {
         },
         .nodes = &.{.{ .kind = .root, .span = .init(0, 38) }},
     });
+}
+
+test "parser represents command substitutions as nested word syntax" {
+    var result = try parse(std.testing.allocator, "echo before-$(echo hi)-after", .{});
+    defer result.deinit();
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .command_substitution) {
+            found = true;
+            try expectSpan(.init(12, 22), node.span);
+            try std.testing.expectEqual(@as(usize, 2), node.token_start);
+            try std.testing.expectEqual(@as(usize, 3), node.token_end);
+        }
+    }
+    try std.testing.expect(found);
 }
 
 test "lexer preserves command substitution as part of a word" {
