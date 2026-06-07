@@ -44,6 +44,7 @@ pub const Options = struct {
     command_substitution: CommandSubstitution = .{},
     positionals: []const []const u8 = &.{},
     pathname_expansion: bool = true,
+    nounset: bool = false,
 };
 
 pub const Phase = enum {
@@ -442,7 +443,11 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
     const is_null = if (value) |text| text.len == 0 else true;
 
     switch (parsed.operator) {
-        .none => return if (value) |text| allocator.dupe(u8, text) else allocator.alloc(u8, 0),
+        .none => {
+            if (value) |text| return allocator.dupe(u8, text);
+            if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
+            return allocator.alloc(u8, 0);
+        },
         .length => {
             const len = if (value) |text| text.len else 0;
             return std.fmt.allocPrint(allocator, "{d}", .{len});
@@ -511,6 +516,10 @@ fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: []con
         },
         else => unreachable,
     };
+}
+
+fn isNounsetExemptParameter(name: []const u8) bool {
+    return std.mem.eql(u8, name, "@") or std.mem.eql(u8, name, "*");
 }
 
 fn parameterHasUsableValue(is_set: bool, is_null: bool, colon: bool) bool {

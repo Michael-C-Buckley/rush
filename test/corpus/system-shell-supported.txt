@@ -82,3 +82,5 @@ set -- "a b" c ""; echo "$1/$2/$#"; for x in "$@"; do echo "<$x>"; done; IFS=:; 
 set -- a b; set --; echo "$#/${1:-unset}"; for x in "$@"; do echo bad; done; echo done
 touch rush-noglob-a.tmp; set -f; echo rush-noglob-?.tmp; set +f; echo rush-noglob-?.tmp
 touch rush-noglob-b.tmp; set -o noglob; echo rush-noglob-?.tmp; set +o noglob; echo rush-noglob-?.tmp
+set -o nounset; echo ${RUSH_UNSET_FOR_TEST:-fallback}; echo ${RUSH_UNSET_FOR_TEST+yes}
+set -u; set +u; echo $RUSH_UNSET_FOR_TEST; echo after

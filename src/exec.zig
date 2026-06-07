@@ -27,6 +27,7 @@ pub const ShellOptions = struct {
     pipefail: bool = false,
     noglob: bool = false,
     noclobber: bool = false,
+    nounset: bool = false,
 };
 
 pub const CommandResult = struct {
@@ -994,7 +995,14 @@ pub const Executor = struct {
     }
 
     fn executeSimpleCommandWithInput(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-        const expanded = try self.expandSimpleCommand(command, options);
+        const expanded = self.expandSimpleCommand(command, options) catch |err| switch (err) {
+            error.NounsetParameter => {
+                self.pending_exit = 1;
+                return errorResult(self.allocator, 1, "parameter", "unset parameter");
+            },
+            error.ParameterExpansionFailed => return errorResult(self.allocator, 1, "parameter", "expansion failed"),
+            else => return err,
+        };
         defer self.freeExpandedCommand(expanded);
 
         var owned_stdin: ?[]u8 = null;
@@ -1099,7 +1107,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         const positionals: []const []const u8 = self.currentPositionals().params;
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .pathname_expansion = !self.shell_options.noglob });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -1149,14 +1157,14 @@ pub const Executor = struct {
     fn expandHereDoc(self: *Executor, text: []const u8, quoted: bool, options: ExecuteOptions) ![]const u8 {
         if (quoted) return self.allocator.dupe(u8, text);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        return expand.expandWordScalar(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
+        return expand.expandWordScalar(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
         const raw = try self.allocator.dupe(u8, word.raw);
         errdefer self.allocator.free(raw);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -2529,6 +2537,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         self.shell_options.noclobber = command.argv[1].text[0] == '-';
         return emptyResult(self.allocator, 0);
     }
+    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-u") or std.mem.eql(u8, command.argv[1].text, "+u"))) {
+        self.shell_options.nounset = command.argv[1].text[0] == '-';
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
     if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
@@ -2545,6 +2557,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
             self.shell_options.noclobber = enabled;
             return emptyResult(self.allocator, 0);
         }
+        if (std.mem.eql(u8, command.argv[2].text, "nounset")) {
+            self.shell_options.nounset = enabled;
+            return emptyResult(self.allocator, 0);
+        }
         return errorResult(self.allocator, 2, "set", "unknown option name");
     }
     return errorResult(self.allocator, 2, "set", "unsupported arguments");
@@ -2559,9 +2575,9 @@ fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
     const stdout = if (reusable)
-        try std.fmt.allocPrint(self.allocator, "set {s}o noclobber\nset {s}o noglob\nset {s}o pipefail\n", .{ if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.pipefail) "-" else "+" })
+        try std.fmt.allocPrint(self.allocator, "set {s}o noclobber\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\n", .{ if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+" })
     else
-        try std.fmt.allocPrint(self.allocator, "noclobber\t{s}\nnoglob\t{s}\npipefail\t{s}\n", .{ if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.pipefail) "on" else "off" });
+        try std.fmt.allocPrint(self.allocator, "noclobber\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\n", .{ if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off" });
     errdefer self.allocator.free(stdout);
     return .{
         .allocator = self.allocator,
@@ -3886,7 +3902,7 @@ test "executor implements set shell option baseline" {
     var show = try executor.executeProgram(show_lowered.program, .{});
     defer show.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
-    try std.testing.expectEqualStrings("noclobber\toff\nnoglob\toff\npipefail\toff\n", show.stdout);
+    try std.testing.expectEqualStrings("noclobber\toff\nnoglob\toff\nnounset\toff\npipefail\toff\n", show.stdout);
 
     var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
     defer enable_lowered.parsed.deinit();
@@ -3901,7 +3917,7 @@ test "executor implements set shell option baseline" {
     defer reusable_lowered.program.deinit();
     var reusable = try executor.executeProgram(reusable_lowered.program, .{});
     defer reusable.deinit();
-    try std.testing.expectEqualStrings("set +o noclobber\nset +o noglob\nset -o pipefail\n", reusable.stdout);
+    try std.testing.expectEqualStrings("set +o noclobber\nset +o noglob\nset +o nounset\nset -o pipefail\n", reusable.stdout);
 
     var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");
     defer disable_lowered.parsed.deinit();
@@ -3931,6 +3947,27 @@ test "executor implements set shell option baseline" {
     defer noclobber.deinit();
     try std.testing.expectEqualStrings("status=1\nforced\n", noclobber.stdout);
     try std.testing.expect(executor.shell_options.noclobber);
+
+    var nounset_lowered = try parseAndLower(std.testing.allocator, "set -u; echo $RUSH_UNSET_FOR_TEST; echo after");
+    defer nounset_lowered.parsed.deinit();
+    defer nounset_lowered.program.deinit();
+    var nounset = try executor.executeProgram(nounset_lowered.program, .{});
+    defer nounset.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), nounset.status);
+    try std.testing.expectEqualStrings("", nounset.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, nounset.stderr, "unset parameter") != null);
+    try std.testing.expect(executor.shell_options.nounset);
+
+    var nounset_disabled_executor = Executor.init(std.testing.allocator);
+    defer nounset_disabled_executor.deinit();
+    nounset_disabled_executor.shell_options.nounset = true;
+    var disable_nounset = try parseAndLower(std.testing.allocator, "set +u; echo $RUSH_UNSET_FOR_TEST; echo after");
+    defer disable_nounset.parsed.deinit();
+    defer disable_nounset.program.deinit();
+    var nounset_disabled = try nounset_disabled_executor.executeProgram(disable_nounset.program, .{});
+    defer nounset_disabled.deinit();
+    try std.testing.expectEqualStrings("\nafter\n", nounset_disabled.stdout);
+    try std.testing.expect(!nounset_disabled_executor.shell_options.nounset);
 }
 
 test "executor applies pipefail option to pipeline status" {

@@ -1,0 +1,3 @@
+set -o nounset
+echo ${RUSH_UNSET_FOR_TEST:-fallback}
+echo ${RUSH_UNSET_FOR_TEST+yes}
