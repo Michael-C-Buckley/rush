@@ -6,6 +6,7 @@
 //! incomplete-input flag for interactive parsing.
 
 const std = @import("std");
+const compat = @import("compat.zig");
 
 pub const Span = struct {
     start: usize,
@@ -412,6 +413,7 @@ pub const ParseMode = enum {
 pub const ParseOptions = struct {
     mode: ParseMode = .complete,
     cursor: ?usize = null,
+    features: compat.Features = .{},
 };
 
 pub const HighlightKind = enum {
@@ -635,7 +637,9 @@ fn defaultHighlightKind(kind: TokenKind) HighlightKind {
 }
 
 pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOptions) !ParseResult {
-    _ = options;
+    _ = options.features;
+    _ = options.mode;
+    _ = options.cursor;
 
     var lex_result = try lex(allocator, source);
     errdefer lex_result.deinit();

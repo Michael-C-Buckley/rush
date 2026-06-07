@@ -4,6 +4,7 @@
 //! can be added later without baking it into parsing or execution IR.
 
 const std = @import("std");
+const compat = @import("compat.zig");
 
 pub const EnvLookup = struct {
     context: ?*const anyopaque = null,
@@ -18,6 +19,7 @@ pub const EnvLookup = struct {
 pub const Options = struct {
     env: EnvLookup = .{},
     io: ?std.Io = null,
+    features: compat.Features = .{},
 };
 
 pub const Phase = enum {
@@ -89,6 +91,7 @@ pub const ExpansionResult = struct {
 };
 
 pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionResult {
+    _ = options.features;
     const tilde_expanded = try expandTilde(allocator, raw, options.env);
     defer allocator.free(tilde_expanded);
 
@@ -129,6 +132,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 }
 
 pub fn expandWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: Options) ![]const u8 {
+    _ = options.features;
     const tilde_expanded = try expandTilde(allocator, raw, options.env);
     defer allocator.free(tilde_expanded);
 

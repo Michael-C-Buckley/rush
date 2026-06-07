@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+pub const compat = @import("compat.zig");
 pub const parser = @import("parser.zig");
 pub const expand = @import("expand.zig");
 pub const ir = @import("ir.zig");
@@ -102,6 +103,19 @@ test "runScript executes builtins" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("hello\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "compatibility feature plumbing accepts Bash mode without changing baseline behavior" {
+    var parsed = try parser.parse(std.testing.allocator, "echo ok", .{ .features = .bash() });
+    defer parsed.deinit();
+    var program = try ir.lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(program, .{ .features = .bash() });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("ok\n", result.stdout);
 }
 
 test "runScript returns parse diagnostics" {
@@ -244,6 +258,7 @@ fn processStatus(term: std.process.Child.Term) exec.ExitStatus {
 }
 
 test {
+    std.testing.refAllDecls(compat);
     std.testing.refAllDecls(parser);
     std.testing.refAllDecls(expand);
     std.testing.refAllDecls(ir);

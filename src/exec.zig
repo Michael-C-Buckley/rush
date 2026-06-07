@@ -1,6 +1,7 @@
 //! Minimal command execution for lowered shell IR.
 
 const std = @import("std");
+const compat = @import("compat.zig");
 const expand = @import("expand.zig");
 const ir = @import("ir.zig");
 
@@ -9,6 +10,7 @@ pub const ExitStatus = u8;
 pub const ExecuteOptions = struct {
     io: ?std.Io = null,
     allow_external: bool = false,
+    features: compat.Features = .{},
 };
 
 pub const CommandResult = struct {
@@ -212,11 +214,11 @@ pub const Executor = struct {
     }
 
     fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !ir.SimpleCommand {
-        const assignments = try self.expandWords(command.assignments);
+        const assignments = try self.expandWords(command.assignments, options);
         errdefer self.freeWords(assignments);
         const argv = try self.expandArgv(command.argv, options);
         errdefer self.freeWords(argv);
-        const redirections = try self.expandRedirections(command.redirections);
+        const redirections = try self.expandRedirections(command.redirections, options);
         errdefer self.freeRedirections(redirections);
 
         return .{
@@ -235,7 +237,7 @@ pub const Executor = struct {
         }
 
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .io = options.io });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .io = options.io, .features = options.features });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -249,20 +251,20 @@ pub const Executor = struct {
         return expanded.toOwnedSlice(self.allocator);
     }
 
-    fn expandWords(self: *Executor, words: []const ir.WordRef) ![]ir.WordRef {
+    fn expandWords(self: *Executor, words: []const ir.WordRef, options: ExecuteOptions) ![]ir.WordRef {
         const expanded = try self.allocator.alloc(ir.WordRef, words.len);
         errdefer self.allocator.free(expanded);
         var initialized: usize = 0;
         errdefer for (expanded[0..initialized]) |word| self.freeWord(word);
 
         for (words, 0..) |word, index| {
-            expanded[index] = try self.expandWord(word);
+            expanded[index] = try self.expandWord(word, options);
             initialized += 1;
         }
         return expanded;
     }
 
-    fn expandRedirections(self: *Executor, redirections: []const ir.Redirection) ![]ir.Redirection {
+    fn expandRedirections(self: *Executor, redirections: []const ir.Redirection, options: ExecuteOptions) ![]ir.Redirection {
         const expanded = try self.allocator.alloc(ir.Redirection, redirections.len);
         errdefer self.allocator.free(expanded);
         var initialized: usize = 0;
@@ -271,19 +273,19 @@ pub const Executor = struct {
         for (redirections, 0..) |redirection, index| {
             expanded[index] = .{
                 .span = redirection.span,
-                .io_number = if (redirection.io_number) |word| try self.expandWord(word) else null,
+                .io_number = if (redirection.io_number) |word| try self.expandWord(word, options) else null,
                 .operator = redirection.operator,
-                .target = if (redirection.target) |word| try self.expandWord(word) else null,
+                .target = if (redirection.target) |word| try self.expandWord(word, options) else null,
             };
             initialized += 1;
         }
         return expanded;
     }
 
-    fn expandWord(self: *Executor, word: ir.WordRef) !ir.WordRef {
+    fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
         const raw = try self.allocator.dupe(u8, word.raw);
         errdefer self.allocator.free(raw);
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup() });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .features = options.features });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
