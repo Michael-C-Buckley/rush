@@ -105,21 +105,25 @@ pub const Executor = struct {
     }
 
     fn executeSimpleCommandWithInput(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+        var owned_stdin: ?[]u8 = null;
+        defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        const effective_stdin = try self.applyInputRedirections(command, stdin, options, &owned_stdin);
+
         if (command.argv.len == 0) {
             try self.applyAssignments(command.assignments);
-            return try self.applyRedirections(command, try emptyResult(self.allocator, 0), options);
+            return try self.applyOutputRedirections(command, try emptyResult(self.allocator, 0), options);
         }
 
         if (builtinFor(command.argv[0].text)) |builtin| {
-            return try self.applyRedirections(command, try builtin(self, command, stdin), options);
+            return try self.applyOutputRedirections(command, try builtin(self, command, effective_stdin), options);
         }
 
         if (!options.allow_external) {
-            return errorResult(self.allocator, 127, command.argv[0].text, "command not found");
+            return try self.applyOutputRedirections(command, try errorResult(self.allocator, 127, command.argv[0].text, "command not found"), options);
         }
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
-        return try self.applyRedirections(command, try self.executeExternal(command, io), options);
+        return try self.applyOutputRedirections(command, try self.executeExternal(command, io), options);
     }
 
     fn applyAssignments(self: *Executor, assignments: []const ir.WordRef) !void {
@@ -129,31 +133,84 @@ pub const Executor = struct {
         }
     }
 
-    fn applyRedirections(self: *Executor, command: ir.SimpleCommand, result: CommandResult, options: ExecuteOptions) !CommandResult {
+    fn applyInputRedirections(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, owned_stdin: *?[]u8) ![]const u8 {
+        var current = stdin;
+        for (command.redirections) |redirection| {
+            if (!isStdinFileRedirection(redirection)) continue;
+            const io = options.io orelse return error.MissingIoForRedirection;
+            const target = redirection.target orelse continue;
+            if (owned_stdin.*) |bytes| self.allocator.free(bytes);
+            owned_stdin.* = try std.Io.Dir.cwd().readFileAlloc(io, target.text, self.allocator, .limited(1024 * 1024));
+            current = owned_stdin.*.?;
+        }
+        return current;
+    }
+
+    fn applyOutputRedirections(self: *Executor, command: ir.SimpleCommand, result: CommandResult, options: ExecuteOptions) !CommandResult {
         var redirected = result;
         errdefer redirected.deinit();
 
         for (command.redirections) |redirection| {
-            if (!isStdoutRedirection(redirection)) continue;
-            const io = options.io orelse return error.MissingIoForRedirection;
-            const target = redirection.target orelse continue;
-            const flags: std.Io.Dir.CreateFileOptions = .{
-                .truncate = redirection.operator != .dgreat,
-            };
-            var file = try std.Io.Dir.cwd().createFile(io, target.text, flags);
-            defer file.close(io);
-            var buffer: [4096]u8 = undefined;
-            var writer = file.writer(io, &buffer);
-            if (redirection.operator == .dgreat) {
-                try writer.seekTo(try file.length(io));
+            if (isFileOutputRedirection(redirection)) {
+                const fd = redirectionFd(redirection) orelse 1;
+                const stream = switch (fd) {
+                    1 => &redirected.stdout,
+                    2 => &redirected.stderr,
+                    else => continue,
+                };
+                try self.writeRedirectedStream(stream, redirection, options);
+                continue;
             }
-            try writer.interface.writeAll(redirected.stdout);
-            try writer.interface.flush();
-            self.allocator.free(redirected.stdout);
-            redirected.stdout = try self.allocator.alloc(u8, 0);
+
+            if (redirection.operator == .greater_and) {
+                try self.applyDescriptorDuplication(&redirected, redirection);
+            }
         }
 
         return redirected;
+    }
+
+    fn writeRedirectedStream(self: *Executor, stream: *[]u8, redirection: ir.Redirection, options: ExecuteOptions) !void {
+        const io = options.io orelse return error.MissingIoForRedirection;
+        const target = redirection.target orelse return;
+        const flags: std.Io.Dir.CreateFileOptions = .{
+            .truncate = redirection.operator != .dgreat,
+        };
+        var file = try std.Io.Dir.cwd().createFile(io, target.text, flags);
+        defer file.close(io);
+        var buffer: [4096]u8 = undefined;
+        var writer = file.writer(io, &buffer);
+        if (redirection.operator == .dgreat) {
+            try writer.seekTo(try file.length(io));
+        }
+        try writer.interface.writeAll(stream.*);
+        try writer.interface.flush();
+        self.allocator.free(stream.*);
+        stream.* = try self.allocator.alloc(u8, 0);
+    }
+
+    fn applyDescriptorDuplication(self: *Executor, result: *CommandResult, redirection: ir.Redirection) !void {
+        const from_fd = redirectionFd(redirection) orelse 1;
+        const target = redirection.target orelse return;
+        const to_fd = parseFd(target.text) orelse return;
+
+        if (from_fd == 2 and to_fd == 1) {
+            const combined = try self.allocator.alloc(u8, result.stdout.len + result.stderr.len);
+            @memcpy(combined[0..result.stdout.len], result.stdout);
+            @memcpy(combined[result.stdout.len..], result.stderr);
+            self.allocator.free(result.stdout);
+            self.allocator.free(result.stderr);
+            result.stdout = combined;
+            result.stderr = try self.allocator.alloc(u8, 0);
+        } else if (from_fd == 1 and to_fd == 2) {
+            const combined = try self.allocator.alloc(u8, result.stderr.len + result.stdout.len);
+            @memcpy(combined[0..result.stderr.len], result.stderr);
+            @memcpy(combined[result.stderr.len..], result.stdout);
+            self.allocator.free(result.stdout);
+            self.allocator.free(result.stderr);
+            result.stdout = try self.allocator.alloc(u8, 0);
+            result.stderr = combined;
+        }
     }
 
     fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io) !CommandResult {
@@ -241,14 +298,28 @@ fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8) !Co
     };
 }
 
-fn isStdoutRedirection(redirection: ir.Redirection) bool {
-    if (redirection.io_number) |io_number| {
-        if (!std.mem.eql(u8, io_number.text, "1")) return false;
-    }
+fn isStdinFileRedirection(redirection: ir.Redirection) bool {
+    const fd = redirectionFd(redirection) orelse 0;
+    return fd == 0 and redirection.operator == .less;
+}
+
+fn isFileOutputRedirection(redirection: ir.Redirection) bool {
+    const fd = redirectionFd(redirection) orelse 1;
+    if (fd != 1 and fd != 2) return false;
     return switch (redirection.operator) {
         .greater, .dgreat, .clobber => true,
         else => false,
     };
+}
+
+fn redirectionFd(redirection: ir.Redirection) ?u8 {
+    if (redirection.io_number) |io_number| return parseFd(io_number.text);
+    return null;
+}
+
+fn parseFd(text: []const u8) ?u8 {
+    if (text.len != 1 or !std.ascii.isDigit(text[0])) return null;
+    return text[0] - '0';
 }
 
 fn emptyResult(allocator: std.mem.Allocator, status: ExitStatus) !CommandResult {
@@ -405,6 +476,25 @@ test "executor pipes stdout into stdin-consuming builtins" {
     try std.testing.expectEqualStrings("hello\n", result.stdout);
 }
 
+test "executor redirects stdin from files for builtins" {
+    const path = "rush-test-stdin-redirection.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "from file" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator, "cat < rush-test-stdin-redirection.tmp");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("from file", result.stdout);
+}
+
 test "executor redirects stdout to files" {
     const path = "rush-test-redirection-output.tmp";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
@@ -431,6 +521,31 @@ test "executor redirects stdout to files" {
     try std.testing.expectEqualStrings("file\n", contents);
 }
 
+test "executor redirects stderr to files" {
+    const path = "rush-test-stderr-redirection.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator, "definitely-not-a-rush-builtin 2> rush-test-stderr-redirection.tmp");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 127), result.status);
+    try std.testing.expectEqualStrings("", result.stderr);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("definitely-not-a-rush-builtin: command not found\n", contents);
+}
+
 test "executor appends stdout redirections" {
     const path = "rush-test-redirection-append.tmp";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
@@ -453,6 +568,37 @@ test "executor appends stdout redirections" {
     const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(contents);
     try std.testing.expectEqualStrings("one\ntwo\n", contents);
+}
+
+test "executor appends stderr redirections and duplicates descriptors" {
+    const path = "rush-test-stderr-append.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var append_lowered = try parseAndLower(std.testing.allocator, "missing-one 2>> rush-test-stderr-append.tmp; missing-two 2>> rush-test-stderr-append.tmp");
+    defer append_lowered.parsed.deinit();
+    defer append_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var append_result = try executor.executeProgram(append_lowered.program, .{ .io = std.testing.io });
+    defer append_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 127), append_result.status);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("missing-one: command not found\nmissing-two: command not found\n", contents);
+
+    var dup_lowered = try parseAndLower(std.testing.allocator, "missing-three 2>&1");
+    defer dup_lowered.parsed.deinit();
+    defer dup_lowered.program.deinit();
+    var dup_result = try executor.executeProgram(dup_lowered.program, .{});
+    defer dup_result.deinit();
+    try std.testing.expectEqualStrings("missing-three: command not found\n", dup_result.stdout);
+    try std.testing.expectEqualStrings("", dup_result.stderr);
 }
 
 test "executor can run an external command when allowed" {
