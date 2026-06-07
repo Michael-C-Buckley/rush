@@ -83,6 +83,11 @@ pub const Executor = struct {
     }
 
     fn executePipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) !CommandResult {
+        if (self.canExecuteExternalPipeline(program, pipeline, options)) {
+            const io = options.io orelse return error.MissingIoForExternalCommand;
+            return self.executeExternalPipeline(program, pipeline, io);
+        }
+
         var last = try emptyResult(self.allocator, 0);
         var stdin = try self.allocator.alloc(u8, 0);
         defer self.allocator.free(stdin);
@@ -98,6 +103,75 @@ pub const Executor = struct {
         }
 
         return last;
+    }
+
+    fn canExecuteExternalPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
+        _ = self;
+        if (!options.allow_external or options.io == null or pipeline.command_indexes.len < 2) return false;
+        for (pipeline.command_indexes) |command_index| {
+            const command = program.commands[command_index];
+            if (command.argv.len == 0 or command.redirections.len != 0) return false;
+            if (builtinFor(command.argv[0].text) != null) return false;
+        }
+        return true;
+    }
+
+    fn executeExternalPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, io: std.Io) !CommandResult {
+        const children = try self.allocator.alloc(std.process.Child, pipeline.command_indexes.len);
+        defer self.allocator.free(children);
+        var spawned: usize = 0;
+        errdefer for (children[0..spawned]) |*child| child.kill(io);
+
+        var previous_stdout: ?std.Io.File = null;
+        defer if (previous_stdout) |file| file.close(io);
+
+        for (pipeline.command_indexes, 0..) |command_index, index| {
+            const command = program.commands[command_index];
+            const argv = try argvForCommand(self.allocator, command);
+            defer self.allocator.free(argv);
+
+            const is_last = index + 1 == pipeline.command_indexes.len;
+            children[index] = try std.process.spawn(io, .{
+                .argv = argv,
+                .stdin = if (previous_stdout) |file| .{ .file = file } else .ignore,
+                .stdout = .pipe,
+                .stderr = if (is_last) .pipe else .inherit,
+            });
+            spawned += 1;
+
+            if (previous_stdout) |file| file.close(io);
+            previous_stdout = null;
+
+            if (!is_last) {
+                previous_stdout = children[index].stdout.?;
+                children[index].stdout = null;
+            }
+        }
+
+        const last_child = &children[pipeline.command_indexes.len - 1];
+        var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+        var multi_reader: std.Io.File.MultiReader = undefined;
+        multi_reader.init(self.allocator, io, multi_reader_buffer.toStreams(), &.{ last_child.stdout.?, last_child.stderr.? });
+        defer multi_reader.deinit();
+
+        while (multi_reader.fill(64, .none)) |_| {} else |err| switch (err) {
+            error.EndOfStream => {},
+            else => |e| return e,
+        }
+        try multi_reader.checkAnyError();
+
+        var status: ExitStatus = 0;
+        for (children[0..spawned]) |*child| {
+            const term = try child.wait(io);
+            status = exitStatusFromTerm(term);
+        }
+
+        return .{
+            .allocator = self.allocator,
+            .status = status,
+            .stdout = try multi_reader.toOwnedSlice(0),
+            .stderr = try multi_reader.toOwnedSlice(1),
+        };
     }
 
     pub fn executeSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !CommandResult {
@@ -214,11 +288,8 @@ pub const Executor = struct {
     }
 
     fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io) !CommandResult {
-        const argv = try self.allocator.alloc([]const u8, command.argv.len);
+        const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
-        for (command.argv, 0..) |word, index| {
-            argv[index] = word.text;
-        }
 
         const run_result = std.process.run(self.allocator, io, .{ .argv = argv }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
@@ -233,6 +304,14 @@ pub const Executor = struct {
         };
     }
 };
+
+fn argvForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![]const []const u8 {
+    const argv = try allocator.alloc([]const u8, command.argv.len);
+    for (command.argv, 0..) |word, index| {
+        argv[index] = word.text;
+    }
+    return argv;
+}
 
 fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {
     return switch (op) {
@@ -599,6 +678,21 @@ test "executor appends stderr redirections and duplicates descriptors" {
     defer dup_result.deinit();
     try std.testing.expectEqualStrings("missing-three: command not found\n", dup_result.stdout);
     try std.testing.expectEqualStrings("", dup_result.stderr);
+}
+
+test "executor wires external pipelines with real process pipes" {
+    var lowered = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | /usr/bin/cat");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("hello", result.stdout);
 }
 
 test "executor can run an external command when allowed" {
