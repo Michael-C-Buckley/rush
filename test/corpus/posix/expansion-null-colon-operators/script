@@ -1,0 +1,5 @@
+EMPTY=
+echo ${EMPTY-fallback}
+echo ${EMPTY:-fallback}
+echo ${EMPTY+yes}
+echo ${EMPTY:+yes}

@@ -1,0 +1,3 @@
+VAR=abcdef
+echo ${#VAR}
+echo ${#MISSING}

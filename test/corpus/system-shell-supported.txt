@@ -59,3 +59,10 @@ show() { for x in "$@"; do echo "<$x>"; done; }; show "a b" c ""
 show() { IFS=:; echo "<$*>"; }; show "a b" c ""
 echo one > out; echo two; /bin/cat out
 { echo one; echo two; } > out; echo after; /bin/cat out
+EMPTY=; echo ${EMPTY-fallback}; echo ${EMPTY:-fallback}; echo ${EMPTY+yes}; echo ${EMPTY:+yes}
+unset A; B=ok; echo ${A:-$B}
+VAR=abcdef; echo ${#VAR}; echo ${#MISSING}
+echo $((2 + 3 * 4)); echo $(((2 + 3) * 4))
+echo $(printf "a b")
+: > rush-b.tmp; : > rush-a.tmp; echo rush-?.tmp
+LIST="a\nb c"; for x in $LIST; do echo "<$x>"; done

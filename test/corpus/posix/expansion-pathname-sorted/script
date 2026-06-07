@@ -1,0 +1,3 @@
+: > rush-b.tmp
+: > rush-a.tmp
+echo rush-?.tmp
