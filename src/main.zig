@@ -32,7 +32,7 @@ pub fn main(init: std.process.Init) !u8 {
         return 2;
     }
 
-    var result = try runScript(allocator, init.io, args[2]);
+    var result = try runScriptWithOptions(allocator, init.io, args[2], .{ .io = init.io, .allow_external = true, .external_stdio = .inherit });
     defer result.deinit();
 
     try writeAll(init.io, .stdout, result.stdout);
@@ -225,7 +225,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io) !u8 {
         if (line.len == 0) continue;
         try history.add(line);
 
-        var result = try runScript(allocator, io, line);
+        var result = try runScriptWithOptions(allocator, io, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit });
         defer result.deinit();
         try writeAll(io, .stdout, result.stdout);
         try writeAll(io, .stderr, result.stderr);
@@ -267,6 +267,11 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
 }
 
 pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !exec.CommandResult {
+    return runScriptWithOptions(allocator, io, script, .{ .io = io, .allow_external = true });
+}
+
+pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
+    _ = io;
     var parsed = try parser.parse(allocator, script, .{});
     defer parsed.deinit();
 
@@ -280,7 +285,7 @@ pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
 
-    return executor.executeProgram(program, .{ .io = io, .allow_external = true });
+    return executor.executeProgram(program, options);
 }
 
 fn diagnosticsResult(allocator: std.mem.Allocator, script: []const u8, diagnostics: []const parser.Diagnostic) !exec.CommandResult {
@@ -419,6 +424,19 @@ test "runReplInput executes lines and tracks status" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
     try std.testing.expectEqualStrings("rush$ hi\nrush$ rush$ ", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "runScriptWithOptions accepts inherit mode for external commands" {
+    var result = try runScriptWithOptions(std.testing.allocator, std.testing.io, "/usr/bin/true", .{
+        .io = std.testing.io,
+        .allow_external = true,
+        .external_stdio = .inherit,
+    });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

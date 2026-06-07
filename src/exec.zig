@@ -8,10 +8,16 @@ const parser = @import("parser.zig");
 
 pub const ExitStatus = u8;
 
+pub const ExternalStdio = enum {
+    capture,
+    inherit,
+};
+
 pub const ExecuteOptions = struct {
     io: ?std.Io = null,
     allow_external: bool = false,
     features: compat.Features = .{},
+    external_stdio: ExternalStdio = .capture,
 };
 
 pub const ShellOptions = struct {
@@ -863,7 +869,7 @@ pub const Executor = struct {
         }
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
-        return try self.applyExternalPostRedirections(expanded, try self.executeExternal(expanded, io), options);
+        return try self.applyExternalPostRedirections(expanded, try self.executeExternal(expanded, io, options), options);
     }
 
     fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !ir.SimpleCommand {
@@ -1160,7 +1166,7 @@ pub const Executor = struct {
         }
     }
 
-    fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io) !CommandResult {
+    fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
 
@@ -1196,13 +1202,13 @@ pub const Executor = struct {
             }
         }
 
-        const capture_stdout = stdout_file == null;
-        const capture_stderr = stderr_file == null;
+        const capture_stdout = options.external_stdio == .capture and stdout_file == null;
+        const capture_stderr = options.external_stdio == .capture and stderr_file == null;
         var child = std.process.spawn(io, .{
             .argv = argv,
-            .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
-            .stdout = if (stdout_file) |file| .{ .file = file } else .pipe,
-            .stderr = if (stderr_file) |file| .{ .file = file } else .pipe,
+            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+            .stdout = if (stdout_file) |file| .{ .file = file } else if (capture_stdout) .pipe else .inherit,
+            .stderr = if (stderr_file) |file| .{ .file = file } else if (capture_stderr) .pipe else .inherit,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             else => return err,
