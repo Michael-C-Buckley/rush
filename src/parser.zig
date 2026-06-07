@@ -1,4 +1,4 @@
-//! Parser surface and test harness.
+//! Parser surface, lexer, and test harness.
 //!
 //! The real parser will grow from POSIX shell syntax toward Bash-compatible
 //! extensions. This file starts by defining the test-facing shape we want to
@@ -56,6 +56,7 @@ pub const TokenKind = enum {
     and_if,
     or_if,
     semicolon,
+    dsemicolon,
     ampersand,
     left_paren,
     right_paren,
@@ -83,6 +84,7 @@ pub const TokenKind = enum {
             .and_if,
             .or_if,
             .semicolon,
+            .dsemicolon,
             .ampersand,
             .left_paren,
             .right_paren,
@@ -136,6 +138,7 @@ pub const Node = struct {
 };
 
 pub const DiagnosticKind = enum {
+    lex_error,
     parse_error,
     incomplete_input,
 };
@@ -145,6 +148,197 @@ pub const Diagnostic = struct {
     span: Span,
     message: []const u8,
 };
+
+pub const LexResult = struct {
+    allocator: std.mem.Allocator,
+    tokens: []Token,
+    diagnostics: []Diagnostic,
+    incomplete: bool,
+
+    pub fn deinit(self: *LexResult) void {
+        self.allocator.free(self.tokens);
+        self.allocator.free(self.diagnostics);
+        self.* = undefined;
+    }
+};
+
+pub fn lex(allocator: std.mem.Allocator, source: []const u8) !LexResult {
+    var lexer: Lexer = .{
+        .allocator = allocator,
+        .source = source,
+    };
+    return lexer.run();
+}
+
+const Lexer = struct {
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    index: usize = 0,
+    tokens: std.ArrayList(Token) = .empty,
+    diagnostics: std.ArrayList(Diagnostic) = .empty,
+    incomplete: bool = false,
+
+    fn run(self: *Lexer) !LexResult {
+        errdefer self.tokens.deinit(self.allocator);
+        errdefer self.diagnostics.deinit(self.allocator);
+
+        while (!self.isAtEnd()) {
+            const c = self.peek();
+            switch (c) {
+                ' ', '\t', '\r' => try self.scanWhitespace(),
+                '\n' => try self.addAndAdvance(.newline, 1),
+                '#' => try self.scanComment(),
+                '|', '&', ';', '(', ')', '<', '>' => try self.scanOperator(),
+                else => try self.scanWord(),
+            }
+        }
+
+        try self.add(.eof, Span.empty(self.source.len));
+
+        const owned_tokens = try self.tokens.toOwnedSlice(self.allocator);
+        errdefer self.allocator.free(owned_tokens);
+        const owned_diagnostics = try self.diagnostics.toOwnedSlice(self.allocator);
+
+        return .{
+            .allocator = self.allocator,
+            .tokens = owned_tokens,
+            .diagnostics = owned_diagnostics,
+            .incomplete = self.incomplete,
+        };
+    }
+
+    fn scanWhitespace(self: *Lexer) !void {
+        const start = self.index;
+        while (!self.isAtEnd() and isBlank(self.peek())) {
+            self.index += 1;
+        }
+        try self.add(.whitespace, .init(start, self.index));
+    }
+
+    fn scanComment(self: *Lexer) !void {
+        const start = self.index;
+        while (!self.isAtEnd() and self.peek() != '\n') {
+            self.index += 1;
+        }
+        try self.add(.comment, .init(start, self.index));
+    }
+
+    fn scanOperator(self: *Lexer) !void {
+        const start = self.index;
+        const kind: TokenKind = switch (self.peek()) {
+            '|' => if (self.matchNext('|')) .or_if else .pipe,
+            '&' => if (self.matchNext('&')) .and_if else .ampersand,
+            ';' => if (self.matchNext(';')) .dsemicolon else .semicolon,
+            '(' => .left_paren,
+            ')' => .right_paren,
+            '<' => if (self.matchNext('<')) blk: {
+                if (self.matchNext('-')) break :blk .dless_dash;
+                break :blk .dless;
+            } else if (self.matchNext('&')) .less_and else if (self.matchNext('>')) .less_great else .less,
+            '>' => if (self.matchNext('>')) .dgreat else if (self.matchNext('&')) .greater_and else if (self.matchNext('|')) .clobber else .greater,
+            else => unreachable,
+        };
+
+        try self.add(kind, .init(start, self.index + 1));
+        self.index += 1;
+    }
+
+    fn scanWord(self: *Lexer) !void {
+        const start = self.index;
+        while (!self.isAtEnd()) {
+            const c = self.peek();
+            if (isWordBoundary(c)) break;
+
+            switch (c) {
+                '\\' => self.consumeBackslash(),
+                '\'' => try self.consumeQuoted('\'', "unterminated single quote"),
+                '"' => try self.consumeDoubleQuoted(),
+                else => self.index += 1,
+            }
+        }
+        try self.add(.word, .init(start, self.index));
+    }
+
+    fn consumeBackslash(self: *Lexer) void {
+        self.index += 1;
+        if (!self.isAtEnd()) self.index += 1;
+    }
+
+    fn consumeQuoted(self: *Lexer, quote: u8, message: []const u8) !void {
+        const start = self.index;
+        self.index += 1;
+        while (!self.isAtEnd() and self.peek() != quote) {
+            self.index += 1;
+        }
+        if (self.isAtEnd()) {
+            try self.addIncomplete(.init(start, self.source.len), message);
+            return;
+        }
+        self.index += 1;
+    }
+
+    fn consumeDoubleQuoted(self: *Lexer) !void {
+        const start = self.index;
+        self.index += 1;
+        while (!self.isAtEnd() and self.peek() != '"') {
+            if (self.peek() == '\\') {
+                self.consumeBackslash();
+            } else {
+                self.index += 1;
+            }
+        }
+        if (self.isAtEnd()) {
+            try self.addIncomplete(.init(start, self.source.len), "unterminated double quote");
+            return;
+        }
+        self.index += 1;
+    }
+
+    fn addAndAdvance(self: *Lexer, kind: TokenKind, len: usize) !void {
+        const start = self.index;
+        self.index += len;
+        try self.add(kind, .init(start, self.index));
+    }
+
+    fn addIncomplete(self: *Lexer, span: Span, message: []const u8) !void {
+        self.incomplete = true;
+        try self.diagnostics.append(self.allocator, .{
+            .kind = .incomplete_input,
+            .span = span,
+            .message = message,
+        });
+    }
+
+    fn add(self: *Lexer, kind: TokenKind, span: Span) !void {
+        try self.tokens.append(self.allocator, .{ .kind = kind, .span = span });
+    }
+
+    fn matchNext(self: *Lexer, c: u8) bool {
+        if (self.index + 1 >= self.source.len or self.source[self.index + 1] != c) return false;
+        self.index += 1;
+        return true;
+    }
+
+    fn isAtEnd(self: Lexer) bool {
+        return self.index >= self.source.len;
+    }
+
+    fn peek(self: Lexer) u8 {
+        std.debug.assert(!self.isAtEnd());
+        return self.source[self.index];
+    }
+};
+
+fn isBlank(c: u8) bool {
+    return c == ' ' or c == '\t' or c == '\r';
+}
+
+fn isWordBoundary(c: u8) bool {
+    return isBlank(c) or c == '\n' or c == '#' or switch (c) {
+        '|', '&', ';', '(', ')', '<', '>' => true,
+        else => false,
+    };
+}
 
 pub const ParseMode = enum {
     complete,
@@ -175,12 +369,8 @@ pub const ParseResult = struct {
 pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOptions) !ParseResult {
     _ = options;
 
-    const tokens = try allocator.alloc(Token, 1);
-    errdefer allocator.free(tokens);
-    tokens[0] = .{
-        .kind = .eof,
-        .span = .empty(source.len),
-    };
+    var lex_result = try lex(allocator, source);
+    errdefer lex_result.deinit();
 
     const nodes = try allocator.alloc(Node, 1);
     errdefer allocator.free(nodes);
@@ -192,10 +382,10 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
     return .{
         .allocator = allocator,
         .source = source,
-        .tokens = tokens,
+        .tokens = lex_result.tokens,
         .nodes = nodes,
-        .diagnostics = &.{},
-        .incomplete = false,
+        .diagnostics = lex_result.diagnostics,
+        .incomplete = lex_result.incomplete,
     };
 }
 
@@ -299,10 +489,99 @@ test "tokens expose source lexemes through spans" {
     try std.testing.expectEqualStrings("hello", token.lexeme(source));
 }
 
+test "lexer tokenizes words, trivia, newlines, and eof" {
+    try expectParse("echo hello\n", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 10) },
+            .{ .kind = .newline, .span = .init(10, 11) },
+            .{ .kind = .eof, .span = .empty(11) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 11) }},
+    });
+}
+
+test "lexer tokenizes operators and redirections with max munch" {
+    try expectParse("2>>log | grep x && echo ok; cat <<-EOF", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 1) },
+            .{ .kind = .dgreat, .span = .init(1, 3) },
+            .{ .kind = .word, .span = .init(3, 6) },
+            .{ .kind = .whitespace, .span = .init(6, 7) },
+            .{ .kind = .pipe, .span = .init(7, 8) },
+            .{ .kind = .whitespace, .span = .init(8, 9) },
+            .{ .kind = .word, .span = .init(9, 13) },
+            .{ .kind = .whitespace, .span = .init(13, 14) },
+            .{ .kind = .word, .span = .init(14, 15) },
+            .{ .kind = .whitespace, .span = .init(15, 16) },
+            .{ .kind = .and_if, .span = .init(16, 18) },
+            .{ .kind = .whitespace, .span = .init(18, 19) },
+            .{ .kind = .word, .span = .init(19, 23) },
+            .{ .kind = .whitespace, .span = .init(23, 24) },
+            .{ .kind = .word, .span = .init(24, 26) },
+            .{ .kind = .semicolon, .span = .init(26, 27) },
+            .{ .kind = .whitespace, .span = .init(27, 28) },
+            .{ .kind = .word, .span = .init(28, 31) },
+            .{ .kind = .whitespace, .span = .init(31, 32) },
+            .{ .kind = .dless_dash, .span = .init(32, 35) },
+            .{ .kind = .word, .span = .init(35, 38) },
+            .{ .kind = .eof, .span = .empty(38) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 38) }},
+    });
+}
+
+test "lexer preserves quoted words as one word token" {
+    try expectParse("echo 'hello world' \"again\"", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 18) },
+            .{ .kind = .whitespace, .span = .init(18, 19) },
+            .{ .kind = .word, .span = .init(19, 26) },
+            .{ .kind = .eof, .span = .empty(26) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 26) }},
+    });
+}
+
+test "lexer tokenizes comments" {
+    try expectParse("echo # hello\nnext", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .comment, .span = .init(5, 12) },
+            .{ .kind = .newline, .span = .init(12, 13) },
+            .{ .kind = .word, .span = .init(13, 17) },
+            .{ .kind = .eof, .span = .empty(17) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 17) }},
+    });
+}
+
+test "lexer reports incomplete quoted input" {
+    try expectParse("echo 'unterminated", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 18) },
+            .{ .kind = .eof, .span = .empty(18) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 18) }},
+        .diagnostics = &.{.{
+            .kind = .incomplete_input,
+            .span = .init(5, 18),
+            .message = "unterminated single quote",
+        }},
+        .incomplete = true,
+    });
+}
+
 test "parser harness checks tokens, nodes, spans, diagnostics, and incomplete flag" {
     try expectParse("", .{
-        .tokens = &.{.{ .kind = .eof, .span = .{ .start = 0, .end = 0 } }},
-        .nodes = &.{.{ .kind = .root, .span = .{ .start = 0, .end = 0 } }},
+        .tokens = &.{.{ .kind = .eof, .span = .empty(0) }},
+        .nodes = &.{.{ .kind = .root, .span = .empty(0) }},
         .diagnostics = &.{},
         .incomplete = false,
     });
@@ -310,7 +589,12 @@ test "parser harness checks tokens, nodes, spans, diagnostics, and incomplete fl
 
 test "parser harness preserves source-length spans" {
     try expectParse("echo hello", .{
-        .tokens = &.{.{ .kind = .eof, .span = .{ .start = 10, .end = 10 } }},
-        .nodes = &.{.{ .kind = .root, .span = .{ .start = 0, .end = 10 } }},
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 10) },
+            .{ .kind = .eof, .span = .empty(10) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 10) }},
     });
 }
