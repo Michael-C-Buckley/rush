@@ -959,6 +959,10 @@ pub const Executor = struct {
         }
 
         if (builtinFor(expanded.argv[0].text)) |builtin| {
+            if (isSpecialBuiltin(expanded.argv[0].text)) {
+                try self.applyAssignments(expanded.assignments);
+                return try self.applyOutputRedirections(expanded, try builtin(self, expanded, effective_stdin, options), options);
+            }
             var assignment_scope = try self.pushTemporaryAssignments(expanded.assignments);
             defer assignment_scope.restore();
             return try self.applyOutputRedirections(expanded, try builtin(self, expanded, effective_stdin, options), options);
@@ -1727,6 +1731,24 @@ fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {
 }
 
 const BuiltinFn = *const fn (*Executor, ir.SimpleCommand, []const u8, ExecuteOptions) anyerror!CommandResult;
+
+fn isSpecialBuiltin(name: []const u8) bool {
+    return std.mem.eql(u8, name, ":") or
+        std.mem.eql(u8, name, ".") or
+        std.mem.eql(u8, name, "break") or
+        std.mem.eql(u8, name, "continue") or
+        std.mem.eql(u8, name, "eval") or
+        std.mem.eql(u8, name, "exec") or
+        std.mem.eql(u8, name, "exit") or
+        std.mem.eql(u8, name, "export") or
+        std.mem.eql(u8, name, "readonly") or
+        std.mem.eql(u8, name, "return") or
+        std.mem.eql(u8, name, "set") or
+        std.mem.eql(u8, name, "shift") or
+        std.mem.eql(u8, name, "times") or
+        std.mem.eql(u8, name, "trap") or
+        std.mem.eql(u8, name, "unset");
+}
 
 fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, ".")) return builtinSource;
@@ -2945,6 +2967,20 @@ test "executor implements unset and env builtins" {
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "A=one\n") == null);
     try std.testing.expect(executor.getEnv("A") == null);
     try std.testing.expectEqualStrings("two", executor.getEnv("B").?);
+}
+
+test "executor persists assignment prefixes for POSIX special builtins" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\FOO=regular echo ok; echo ${FOO:-unset}; FOO=special export BAR=value; echo $FOO/$BAR
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqualStrings("ok\nunset\nspecial/value\n", result.stdout);
+    try std.testing.expectEqualStrings("special", executor.getEnv("FOO").?);
 }
 
 test "executor implements readonly shift umask wait and times builtins" {
