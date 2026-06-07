@@ -30,6 +30,8 @@ pub const ShellOptions = struct {
     noclobber: bool = false,
     nounset: bool = false,
     errexit: bool = false,
+    xtrace: bool = false,
+    verbose: bool = false,
 };
 
 pub const CommandResult = struct {
@@ -264,7 +266,7 @@ pub const Executor = struct {
         }
     }
 
-    pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) !CommandResult {
+    pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) anyerror!CommandResult {
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
         var stderr: std.ArrayList(u8) = .empty;
@@ -610,7 +612,7 @@ pub const Executor = struct {
         return text[index..];
     }
 
-    fn executeScriptSlice(self: *Executor, script: []const u8, options: ExecuteOptions) !CommandResult {
+    fn executeScriptSlice(self: *Executor, script: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         const trimmed = std.mem.trim(u8, script, " \t\r\n;");
         if (trimmed.len == 0) return emptyResult(self.allocator, 0);
         var parsed = try parser.parse(self.allocator, trimmed, .{ .features = options.features });
@@ -618,10 +620,17 @@ pub const Executor = struct {
         if (parsed.diagnostics.len != 0) return error.ParseError;
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         defer program.deinit();
-        return self.executeProgram(program, options);
+        var result = try self.executeProgram(program, options);
+        errdefer result.deinit();
+        if (self.shell_options.verbose and !options.suppress_errexit) {
+            const stderr = try std.mem.concat(self.allocator, u8, &.{ trimmed, "\n", result.stderr });
+            self.allocator.free(result.stderr);
+            result.stderr = stderr;
+        }
+        return result;
     }
 
-    fn executePipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) !CommandResult {
+    fn executePipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) anyerror!CommandResult {
         if (self.canExecuteRealPipeline(program, pipeline, options)) {
             const io = options.io orelse return error.MissingIoForExternalCommand;
             return self.executeRealPipeline(program, pipeline, options, io);
@@ -1009,7 +1018,21 @@ pub const Executor = struct {
         return self.executeSimpleCommandWithInput(command, "", options);
     }
 
-    fn executeSimpleCommandWithInput(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    fn executeSimpleCommandWithInput(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) anyerror!CommandResult {
+        const trace_enabled = self.shell_options.xtrace;
+        var result = try self.executeSimpleCommandWithInputInner(command, stdin, options);
+        errdefer result.deinit();
+        if (trace_enabled and command.argv.len != 0) {
+            const trace = try traceLineForCommand(self.allocator, command);
+            defer self.allocator.free(trace);
+            const stderr = try std.mem.concat(self.allocator, u8, &.{ trace, result.stderr });
+            self.allocator.free(result.stderr);
+            result.stderr = stderr;
+        }
+        return result;
+    }
+
+    fn executeSimpleCommandWithInputInner(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         const expanded = self.expandSimpleCommand(command, options) catch |err| switch (err) {
             error.NounsetParameter => {
                 self.pending_exit = 1;
@@ -1080,7 +1103,7 @@ pub const Executor = struct {
         return builtin(self, command, stdin, options);
     }
 
-    fn executeFunctionBody(self: *Executor, command: ir.SimpleCommand, body: []const u8, options: ExecuteOptions) !CommandResult {
+    fn executeFunctionBody(self: *Executor, command: ir.SimpleCommand, body: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         var assignment_scope = try self.pushTemporaryAssignments(command.assignments);
         defer assignment_scope.restore();
         try self.pushCallFrame(command.argv[1..]);
@@ -1979,6 +2002,22 @@ fn openAppendRedirectionFile(io: std.Io, target: []const u8) !std.Io.File {
     };
 }
 
+fn traceLineForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![]const u8 {
+    var line: std.ArrayList(u8) = .empty;
+    errdefer line.deinit(allocator);
+    try line.appendSlice(allocator, "+");
+    for (command.assignments) |assignment| {
+        try line.append(allocator, ' ');
+        try line.appendSlice(allocator, assignment.raw);
+    }
+    for (command.argv) |arg| {
+        try line.append(allocator, ' ');
+        try line.appendSlice(allocator, arg.raw);
+    }
+    try line.append(allocator, '\n');
+    return line.toOwnedSlice(allocator);
+}
+
 fn simpleCommandFromArgs(command: ir.SimpleCommand, start: usize) ir.SimpleCommand {
     return .{
         .span = command.span,
@@ -2560,6 +2599,14 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         self.shell_options.errexit = command.argv[1].text[0] == '-';
         return emptyResult(self.allocator, 0);
     }
+    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-x") or std.mem.eql(u8, command.argv[1].text, "+x"))) {
+        self.shell_options.xtrace = command.argv[1].text[0] == '-';
+        return emptyResult(self.allocator, 0);
+    }
+    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-v") or std.mem.eql(u8, command.argv[1].text, "+v"))) {
+        self.shell_options.verbose = command.argv[1].text[0] == '-';
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
     if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
@@ -2584,6 +2631,14 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
             self.shell_options.errexit = enabled;
             return emptyResult(self.allocator, 0);
         }
+        if (std.mem.eql(u8, command.argv[2].text, "xtrace")) {
+            self.shell_options.xtrace = enabled;
+            return emptyResult(self.allocator, 0);
+        }
+        if (std.mem.eql(u8, command.argv[2].text, "verbose")) {
+            self.shell_options.verbose = enabled;
+            return emptyResult(self.allocator, 0);
+        }
         return errorResult(self.allocator, 2, "set", "unknown option name");
     }
     return errorResult(self.allocator, 2, "set", "unsupported arguments");
@@ -2598,9 +2653,9 @@ fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
     const stdout = if (reusable)
-        try std.fmt.allocPrint(self.allocator, "set {s}o errexit\nset {s}o noclobber\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\n", .{ if (self.shell_options.errexit) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+" })
+        try std.fmt.allocPrint(self.allocator, "set {s}o errexit\nset {s}o noclobber\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\nset {s}o verbose\nset {s}o xtrace\n", .{ if (self.shell_options.errexit) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+", if (self.shell_options.verbose) "-" else "+", if (self.shell_options.xtrace) "-" else "+" })
     else
-        try std.fmt.allocPrint(self.allocator, "errexit\t{s}\nnoclobber\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\n", .{ if (self.shell_options.errexit) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off" });
+        try std.fmt.allocPrint(self.allocator, "errexit\t{s}\nnoclobber\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\nverbose\t{s}\nxtrace\t{s}\n", .{ if (self.shell_options.errexit) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off", if (self.shell_options.verbose) "on" else "off", if (self.shell_options.xtrace) "on" else "off" });
     errdefer self.allocator.free(stdout);
     return .{
         .allocator = self.allocator,
@@ -3925,7 +3980,7 @@ test "executor implements set shell option baseline" {
     var show = try executor.executeProgram(show_lowered.program, .{});
     defer show.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
-    try std.testing.expectEqualStrings("errexit\toff\nnoclobber\toff\nnoglob\toff\nnounset\toff\npipefail\toff\n", show.stdout);
+    try std.testing.expectEqualStrings("errexit\toff\nnoclobber\toff\nnoglob\toff\nnounset\toff\npipefail\toff\nverbose\toff\nxtrace\toff\n", show.stdout);
 
     var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
     defer enable_lowered.parsed.deinit();
@@ -3940,7 +3995,7 @@ test "executor implements set shell option baseline" {
     defer reusable_lowered.program.deinit();
     var reusable = try executor.executeProgram(reusable_lowered.program, .{});
     defer reusable.deinit();
-    try std.testing.expectEqualStrings("set +o errexit\nset +o noclobber\nset +o noglob\nset +o nounset\nset -o pipefail\n", reusable.stdout);
+    try std.testing.expectEqualStrings("set +o errexit\nset +o noclobber\nset +o noglob\nset +o nounset\nset -o pipefail\nset +o verbose\nset +o xtrace\n", reusable.stdout);
 
     var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");
     defer disable_lowered.parsed.deinit();
@@ -4011,6 +4066,24 @@ test "executor implements set shell option baseline" {
     defer condition.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), condition.status);
     try std.testing.expectEqualStrings("ok\nafter\n", condition.stdout);
+
+    var trace_executor = Executor.init(std.testing.allocator);
+    defer trace_executor.deinit();
+    var trace_lowered = try parseAndLower(std.testing.allocator, "set -x; echo hi; set +x; echo quiet");
+    defer trace_lowered.parsed.deinit();
+    defer trace_lowered.program.deinit();
+    var trace = try trace_executor.executeProgram(trace_lowered.program, .{});
+    defer trace.deinit();
+    try std.testing.expectEqualStrings("hi\nquiet\n", trace.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, trace.stderr, "+ echo hi\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, trace.stderr, "+ echo quiet\n") == null);
+
+    var verbose_executor = Executor.init(std.testing.allocator);
+    defer verbose_executor.deinit();
+    var verbose = try verbose_executor.executeScriptSlice("set -v\necho verbose\n", .{});
+    defer verbose.deinit();
+    try std.testing.expectEqualStrings("verbose\n", verbose.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, verbose.stderr, "echo verbose") != null);
 }
 
 test "executor applies pipefail option to pipeline status" {

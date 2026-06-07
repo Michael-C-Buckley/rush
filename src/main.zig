@@ -293,7 +293,15 @@ pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script
     if (environ_map) |map| try executor.importEnvironment(map);
     executor.arg_zero = options.arg_zero;
 
-    return executor.executeProgram(program, options);
+    var result = try executor.executeProgram(program, options);
+    errdefer result.deinit();
+    if (executor.shell_options.verbose) {
+        const trimmed = std.mem.trim(u8, script, " \t\r\n;");
+        const stderr = try std.mem.concat(allocator, u8, &.{ trimmed, "\n", result.stderr });
+        allocator.free(result.stderr);
+        result.stderr = stderr;
+    }
+    return result;
 }
 
 fn installInteractiveSignalHandlers() void {

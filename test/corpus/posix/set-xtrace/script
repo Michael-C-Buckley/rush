@@ -1,0 +1,4 @@
+set -x
+echo traced
+set +x
+echo quiet

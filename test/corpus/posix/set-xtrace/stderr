@@ -1,0 +1,2 @@
++ echo traced
++ set +x
