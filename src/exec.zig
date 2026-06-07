@@ -158,6 +158,8 @@ pub const Executor = struct {
     last_background_pid_text: [32]u8 = undefined,
     last_background_pid_text_len: usize = 0,
     prompt_builder: ?PromptBuilder = null,
+    getopts_offset: usize = 1,
+    getopts_last_optind: usize = 1,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         var executor: Executor = .{ .allocator = allocator };
@@ -461,6 +463,8 @@ pub const Executor = struct {
 
     fn copyStateFrom(self: *Executor, other: *const Executor) !void {
         self.shell_options = other.shell_options;
+        self.getopts_offset = other.getopts_offset;
+        self.getopts_last_optind = other.getopts_last_optind;
         var env_iter = other.env.iterator();
         while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
         var readonly_iter = other.readonly.iterator();
@@ -2264,6 +2268,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "return")) return builtinReturn;
     if (std.mem.eql(u8, name, "shift")) return builtinShift;
     if (std.mem.eql(u8, name, "export")) return builtinExport;
+    if (std.mem.eql(u8, name, "getopts")) return builtinGetopts;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
     if (std.mem.eql(u8, name, "eval")) return builtinEval;
@@ -2676,6 +2681,139 @@ fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         .stdout = stdout,
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn builtinGetopts(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len < 3) return errorResult(self.allocator, 2, "getopts", "usage: getopts optstring name [arg ...]");
+    const optstring = command.argv[1].text;
+    const name = command.argv[2].text;
+    if (!isShellName(name)) return errorResult(self.allocator, 2, "getopts", "invalid variable name");
+
+    const arg_count = if (command.argv.len > 3) command.argv.len - 3 else self.currentPositionals().params.len;
+    const args = try self.allocator.alloc([]const u8, arg_count);
+    defer self.allocator.free(args);
+    if (command.argv.len > 3) {
+        for (command.argv[3..], 0..) |arg, index| args[index] = arg.text;
+    } else {
+        const positionals = self.currentPositionals().params;
+        for (positionals, 0..) |param, index| args[index] = param;
+    }
+
+    var optind = getOptind(self.*);
+    if (optind != self.getopts_last_optind) self.getopts_offset = 1;
+    self.getopts_last_optind = optind;
+    const silent = optstring.len > 0 and optstring[0] == ':';
+
+    if (optind == 0) optind = 1;
+    if (optind > args.len) return finishGetoptsEnd(self, name, optind);
+
+    const arg = args[optind - 1];
+    if (arg.len < 2 or arg[0] != '-' or std.mem.eql(u8, arg, "-")) return finishGetoptsEnd(self, name, optind);
+    if (std.mem.eql(u8, arg, "--")) return finishGetoptsEnd(self, name, optind + 1);
+
+    if (self.getopts_offset >= arg.len) self.getopts_offset = 1;
+    const option = arg[self.getopts_offset];
+    const next_offset = self.getopts_offset + 1;
+    const spec = getoptsSpec(optstring, option);
+    if (spec == .invalid) {
+        if (next_offset < arg.len) {
+            self.getopts_offset = next_offset;
+        } else {
+            optind += 1;
+            self.getopts_offset = 1;
+        }
+        self.getopts_last_optind = optind;
+        try setOptind(self, optind);
+        if (silent) {
+            const optarg = [_]u8{option};
+            try self.setEnv("OPTARG", optarg[0..]);
+            try self.setEnv(name, "?");
+            return emptyResult(self.allocator, 0);
+        }
+        self.unsetEnv("OPTARG");
+        try self.setEnv(name, "?");
+        const stderr = try std.fmt.allocPrint(self.allocator, "getopts: illegal option -- {c}\n", .{option});
+        errdefer self.allocator.free(stderr);
+        return .{ .allocator = self.allocator, .status = 0, .stdout = try self.allocator.alloc(u8, 0), .stderr = stderr };
+    }
+
+    const name_value = [_]u8{option};
+    try self.setEnv(name, name_value[0..]);
+    if (spec == .requires_arg) {
+        if (next_offset < arg.len) {
+            try self.setEnv("OPTARG", arg[next_offset..]);
+            optind += 1;
+            self.getopts_offset = 1;
+        } else if (optind < args.len) {
+            try self.setEnv("OPTARG", args[optind]);
+            optind += 2;
+            self.getopts_offset = 1;
+        } else {
+            optind += 1;
+            self.getopts_offset = 1;
+            self.getopts_last_optind = optind;
+            try setOptind(self, optind);
+            const optarg = [_]u8{option};
+            try self.setEnv("OPTARG", optarg[0..]);
+            if (silent) {
+                try self.setEnv(name, ":");
+                return emptyResult(self.allocator, 0);
+            }
+            try self.setEnv(name, "?");
+            const stderr = try std.fmt.allocPrint(self.allocator, "getopts: option requires an argument -- {c}\n", .{option});
+            errdefer self.allocator.free(stderr);
+            return .{ .allocator = self.allocator, .status = 0, .stdout = try self.allocator.alloc(u8, 0), .stderr = stderr };
+        }
+    } else {
+        self.unsetEnv("OPTARG");
+        if (next_offset < arg.len) {
+            self.getopts_offset = next_offset;
+        } else {
+            optind += 1;
+            self.getopts_offset = 1;
+        }
+    }
+
+    self.getopts_last_optind = optind;
+    try setOptind(self, optind);
+    return emptyResult(self.allocator, 0);
+}
+
+const GetoptsSpec = enum { invalid, no_arg, requires_arg };
+
+fn getoptsSpec(optstring: []const u8, option: u8) GetoptsSpec {
+    if (option == ':' or option == '?') return .invalid;
+    const start: usize = if (optstring.len > 0 and optstring[0] == ':') 1 else 0;
+    var index = start;
+    while (index < optstring.len) : (index += 1) {
+        if (optstring[index] == ':') continue;
+        if (optstring[index] != option) continue;
+        return if (index + 1 < optstring.len and optstring[index + 1] == ':') .requires_arg else .no_arg;
+    }
+    return .invalid;
+}
+
+fn getOptind(self: Executor) usize {
+    const text = self.getEnv("OPTIND") orelse return 1;
+    const parsed = std.fmt.parseInt(usize, text, 10) catch return 1;
+    return if (parsed == 0) 1 else parsed;
+}
+
+fn setOptind(self: *Executor, optind: usize) !void {
+    const text = try std.fmt.allocPrint(self.allocator, "{d}", .{optind});
+    defer self.allocator.free(text);
+    try self.setEnv("OPTIND", text);
+}
+
+fn finishGetoptsEnd(self: *Executor, name: []const u8, optind: usize) !CommandResult {
+    self.getopts_offset = 1;
+    self.getopts_last_optind = optind;
+    try setOptind(self, optind);
+    try self.setEnv(name, "?");
+    self.unsetEnv("OPTARG");
+    return emptyResult(self.allocator, 1);
 }
 
 fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -3597,6 +3735,39 @@ test "executor implements test and bracket builtins" {
         defer result.deinit();
         try std.testing.expectEqual(case.status, result.status);
     }
+}
+
+test "executor implements getopts builtin" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var clustered = try parseAndLower(std.testing.allocator,
+        \\while getopts ab opt -ab; do echo "$opt:$OPTIND:${OPTARG-unset}"; done
+    );
+    defer clustered.parsed.deinit();
+    defer clustered.program.deinit();
+    var clustered_result = try executor.executeProgram(clustered.program, .{});
+    defer clustered_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), clustered_result.status);
+    try std.testing.expectEqualStrings("a:1:unset\nb:2:unset\n", clustered_result.stdout);
+
+    var with_arg = try parseAndLower(std.testing.allocator,
+        \\OPTIND=1; while getopts a:b opt -a value; do echo "$opt/$OPTARG/$OPTIND"; done
+    );
+    defer with_arg.parsed.deinit();
+    defer with_arg.program.deinit();
+    var with_arg_result = try executor.executeProgram(with_arg.program, .{});
+    defer with_arg_result.deinit();
+    try std.testing.expectEqualStrings("a/value/3\n", with_arg_result.stdout);
+
+    var silent = try parseAndLower(std.testing.allocator,
+        \\OPTIND=1; getopts :a: opt -a; echo "$opt/$OPTARG/$OPTIND"
+    );
+    defer silent.parsed.deinit();
+    defer silent.program.deinit();
+    var silent_result = try executor.executeProgram(silent.program, .{});
+    defer silent_result.deinit();
+    try std.testing.expectEqualStrings(":/a/2\n", silent_result.stdout);
 }
 
 test "executor implements unset and env builtins" {

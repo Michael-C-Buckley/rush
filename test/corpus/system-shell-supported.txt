@@ -95,3 +95,5 @@ printf "hello\n" > rw; read line <> rw; echo "$line"
 ! false; echo status=$?
 ! true; echo status=$?
 ! false | true; echo status=$?
+set -- -a value rest; while getopts a: opt; do echo "$opt/$OPTARG/$OPTIND"; done; echo end=$OPTIND
+getopts :a: opt -a; echo "$opt/$OPTARG/$OPTIND/$?"

@@ -1,0 +1,2 @@
+getopts :a: opt -a
+echo "$opt/$OPTARG/$OPTIND/$?"
