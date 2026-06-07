@@ -1,0 +1,3 @@
+printf "hello world\n" > in
+read line < in
+echo "$line"

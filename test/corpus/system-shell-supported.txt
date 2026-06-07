@@ -67,3 +67,9 @@ echo $(printf "a b")
 : > rush-b.tmp; : > rush-a.tmp; echo rush-?.tmp
 LIST="a\nb c"; for x in $LIST; do echo "<$x>"; done
 echo `printf "a\\ b"`
+echo one > out; echo two >> out; /bin/cat out
+printf "hello world\n" > in; read line < in; echo "$line"
+cat <<EOF\nhello\nworld\nEOF
+cat <<-EOF\n\thello\n\tEOF
+( echo sub-one; echo sub-two ) > out; echo after; /bin/cat out
+f() { echo fn-one; echo fn-two; }; f > out; echo after; /bin/cat out

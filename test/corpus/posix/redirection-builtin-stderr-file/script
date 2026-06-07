@@ -1,0 +1,3 @@
+shift 2> err
+echo after
+/bin/cat err
