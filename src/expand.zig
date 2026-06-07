@@ -17,6 +17,7 @@ pub const EnvLookup = struct {
 
 pub const Options = struct {
     env: EnvLookup = .{},
+    io: ?std.Io = null,
 };
 
 pub const Phase = enum {
@@ -114,6 +115,10 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 
     if (current.items.len != 0) {
         try fields.append(allocator, try current.toOwnedSlice(allocator));
+    }
+
+    if (options.io) |io| {
+        try applyPathnameExpansion(allocator, io, &fields);
     }
 
     return .{
@@ -291,6 +296,124 @@ fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const 
 
 fn isDefaultIfsWhitespace(c: u8) bool {
     return c == ' ' or c == '\t' or c == '\n';
+}
+
+fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std.ArrayList([]const u8)) !void {
+    var expanded: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (expanded.items) |field| allocator.free(field);
+        expanded.deinit(allocator);
+    }
+
+    for (fields.items) |field| {
+        if (hasGlobSyntax(field)) {
+            const matches = try globCwd(allocator, io, field);
+            defer allocator.free(matches);
+            if (matches.len != 0) {
+                allocator.free(field);
+                for (matches) |match| {
+                    try expanded.append(allocator, match);
+                }
+                continue;
+            }
+        }
+        try expanded.append(allocator, field);
+    }
+
+    fields.deinit(allocator);
+    fields.* = expanded;
+}
+
+fn globCwd(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
+    if (std.mem.indexOfScalar(u8, pattern, '/') != null) {
+        return allocator.alloc([]const u8, 0);
+    }
+
+    var dir = try std.Io.Dir.cwd().openDir(io, ".", .{ .iterate = true });
+    defer dir.close(io);
+
+    var matches: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (matches.items) |match| allocator.free(match);
+        matches.deinit(allocator);
+    }
+
+    var iterator = dir.iterate();
+    while (try iterator.next(io)) |entry| {
+        if (entry.name.len == 0) continue;
+        if (entry.name[0] == '.' and (pattern.len == 0 or pattern[0] != '.')) continue;
+        if (globMatches(pattern, entry.name)) {
+            try matches.append(allocator, try allocator.dupe(u8, entry.name));
+        }
+    }
+
+    std.mem.sort([]const u8, matches.items, {}, lessThanString);
+    return matches.toOwnedSlice(allocator);
+}
+
+fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
+    return std.mem.lessThan(u8, a, b);
+}
+
+fn hasGlobSyntax(text: []const u8) bool {
+    for (text) |c| switch (c) {
+        '*', '?', '[' => return true,
+        else => {},
+    };
+    return false;
+}
+
+fn globMatches(pattern: []const u8, text: []const u8) bool {
+    return globMatchesAt(pattern, 0, text, 0);
+}
+
+fn globMatchesAt(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) bool {
+    if (pattern_index == pattern.len) return text_index == text.len;
+
+    switch (pattern[pattern_index]) {
+        '*' => {
+            var next_text = text_index;
+            while (true) : (next_text += 1) {
+                if (globMatchesAt(pattern, pattern_index + 1, text, next_text)) return true;
+                if (next_text == text.len) break;
+            }
+            return false;
+        },
+        '?' => return text_index < text.len and globMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
+        '[' => if (matchBracket(pattern, pattern_index, text, text_index)) |matched| {
+            return matched.ok and globMatchesAt(pattern, matched.next_pattern, text, text_index + 1);
+        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
+        else => |c| return text_index < text.len and c == text[text_index] and globMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
+    }
+}
+
+const BracketMatch = struct { ok: bool, next_pattern: usize };
+
+fn matchBracket(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) ?BracketMatch {
+    if (text_index >= text.len) return .{ .ok = false, .next_pattern = pattern_index + 1 };
+    var index = pattern_index + 1;
+    if (index >= pattern.len) return null;
+    const negated = pattern[index] == '!' or pattern[index] == '^';
+    if (negated) index += 1;
+
+    var matched = false;
+    var saw_end = false;
+    while (index < pattern.len) : (index += 1) {
+        if (pattern[index] == ']') {
+            saw_end = true;
+            break;
+        }
+        if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
+            const start = pattern[index];
+            const end = pattern[index + 2];
+            if (text[text_index] >= start and text[text_index] <= end) matched = true;
+            index += 2;
+            continue;
+        }
+        if (pattern[index] == text[text_index]) matched = true;
+    }
+    if (!saw_end) return null;
+    return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1 };
 }
 
 pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
@@ -490,4 +613,28 @@ test "field splitting preserves quoted expansion results" {
     try std.testing.expectEqual(@as(usize, 2), result.fields.len);
     try std.testing.expectEqualStrings("rush-user two", result.fields[0]);
     try std.testing.expectEqualStrings("three four", result.fields[1]);
+}
+
+test "pathname expansion matches sorted cwd entries" {
+    const a = "rush-glob-a.tmp";
+    const b = "rush-glob-b.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = b, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = a, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, a) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, b) catch {};
+
+    var result = try expandWord(std.testing.allocator, "rush-glob-?.tmp", .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), result.fields.len);
+    try std.testing.expectEqualStrings(a, result.fields[0]);
+    try std.testing.expectEqualStrings(b, result.fields[1]);
+}
+
+test "pathname expansion preserves unmatched patterns" {
+    var result = try expandWord(std.testing.allocator, "rush-no-match-*.tmp", .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), result.fields.len);
+    try std.testing.expectEqualStrings("rush-no-match-*.tmp", result.fields[0]);
 }

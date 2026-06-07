@@ -180,7 +180,7 @@ pub const Executor = struct {
     }
 
     fn executeSimpleCommandWithInput(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-        const expanded = try self.expandSimpleCommand(command);
+        const expanded = try self.expandSimpleCommand(command, options);
         defer self.freeExpandedCommand(expanded);
 
         var owned_stdin: ?[]u8 = null;
@@ -204,10 +204,10 @@ pub const Executor = struct {
         return try self.applyOutputRedirections(expanded, try self.executeExternal(expanded, io), options);
     }
 
-    fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand) !ir.SimpleCommand {
+    fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !ir.SimpleCommand {
         const assignments = try self.expandWords(command.assignments);
         errdefer self.freeWords(assignments);
-        const argv = try self.expandArgv(command.argv);
+        const argv = try self.expandArgv(command.argv, options);
         errdefer self.freeWords(argv);
         const redirections = try self.expandRedirections(command.redirections);
         errdefer self.freeRedirections(redirections);
@@ -220,7 +220,7 @@ pub const Executor = struct {
         };
     }
 
-    fn expandArgv(self: *Executor, words: []const ir.WordRef) ![]ir.WordRef {
+    fn expandArgv(self: *Executor, words: []const ir.WordRef, options: ExecuteOptions) ![]ir.WordRef {
         var expanded: std.ArrayList(ir.WordRef) = .empty;
         errdefer {
             for (expanded.items) |word| self.freeWord(word);
@@ -228,7 +228,7 @@ pub const Executor = struct {
         }
 
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup() });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .io = options.io });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -593,6 +593,28 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor expands pathname patterns in argv" {
+    const a = "rush-exec-glob-a.tmp";
+    const b = "rush-exec-glob-b.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = b, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = a, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, a) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, b) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator, "echo rush-exec-glob-?.tmp");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("rush-exec-glob-a.tmp rush-exec-glob-b.tmp\n", result.stdout);
 }
 
 test "executor field-splits unquoted parameter expansion in argv" {
