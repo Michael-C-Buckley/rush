@@ -55,3 +55,5 @@ umask 022; umask
 IFS=:; LIST=:a::b:; for x in $LIST; do echo "<$x>"; done
 IFS=; LIST="a b c"; for x in $LIST; do echo "<$x>"; done
 IFS=,; LIST="a b,c"; for x in $LIST; do echo "<$x>"; done
+show() { for x in "$@"; do echo "<$x>"; done; }; show "a b" c ""
+show() { IFS=:; echo "<$*>"; }; show "a b" c ""

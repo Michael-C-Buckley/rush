@@ -42,6 +42,7 @@ pub const Options = struct {
     io: ?std.Io = null,
     features: compat.Features = .{},
     command_substitution: CommandSubstitution = .{},
+    positionals: []const []const u8 = &.{},
 };
 
 pub const Phase = enum {
@@ -128,9 +129,14 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
     }
     var current: std.ArrayList(u8) = .empty;
     defer current.deinit(allocator);
+    var force_current_field = false;
 
     const ifs = options.env.get("IFS") orelse " \t\n";
     for (parts.parts) |part| {
+        if (part.kind == .double_quoted) {
+            try appendDoubleQuotedText(allocator, &fields, &current, &force_current_field, part.value(parts.raw), options, ifs);
+            continue;
+        }
         const split = part.kind == .unquoted or part.kind == .parameter;
         const rendered = try renderPart(allocator, parts.raw, part, options);
         defer allocator.free(rendered);
@@ -141,7 +147,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
         }
     }
 
-    if (current.items.len != 0) {
+    if (current.items.len != 0 or force_current_field) {
         try fields.append(allocator, try current.toOwnedSlice(allocator));
     }
 
@@ -655,6 +661,79 @@ fn trimTrailingNewlines(output: []const u8) []const u8 {
     return output[0..end];
 }
 
+fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, text: []const u8, options: Options, ifs: []const u8) !void {
+    force_current_field.* = true;
+    var index: usize = 0;
+    var segment_start: usize = 0;
+    while (index < text.len) {
+        if (text[index] == '\\' and index + 1 < text.len) {
+            index += 2;
+            continue;
+        }
+        if (quotedPositionalAt(text, index)) |special| {
+            try appendQuotedSegment(allocator, current, text[segment_start..index], options);
+            switch (special.kind) {
+                .at => try appendQuotedAt(allocator, fields, current, force_current_field, options.positionals),
+                .star => try appendQuotedStar(allocator, current, options.positionals, ifs),
+            }
+            index = special.end;
+            segment_start = index;
+            continue;
+        }
+        index += 1;
+    }
+    try appendQuotedSegment(allocator, current, text[segment_start..], options);
+}
+
+const QuotedPositionalKind = enum { at, star };
+const QuotedPositional = struct { kind: QuotedPositionalKind, end: usize };
+
+fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
+    if (index + 1 >= text.len or text[index] != '$') return null;
+    return switch (text[index + 1]) {
+        '@' => .{ .kind = .at, .end = index + 2 },
+        '*' => .{ .kind = .star, .end = index + 2 },
+        '{' => blk: {
+            if (index + 3 < text.len and text[index + 3] == '}' and (text[index + 2] == '@' or text[index + 2] == '*')) {
+                break :blk .{ .kind = if (text[index + 2] == '@') .at else .star, .end = index + 4 };
+            }
+            break :blk null;
+        },
+        else => null,
+    };
+}
+
+fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8), text: []const u8, options: Options) !void {
+    const expanded = try expandParameters(allocator, text, options.env);
+    defer allocator.free(expanded);
+    const removed = try quoteRemove(allocator, expanded);
+    defer allocator.free(removed);
+    try current.appendSlice(allocator, removed);
+}
+
+fn appendQuotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, positionals: []const []const u8) !void {
+    if (positionals.len == 0) {
+        force_current_field.* = false;
+        return;
+    }
+    for (positionals, 0..) |param, index| {
+        try current.appendSlice(allocator, param);
+        force_current_field.* = true;
+        if (index + 1 < positionals.len) {
+            try fields.append(allocator, try current.toOwnedSlice(allocator));
+            force_current_field.* = false;
+        }
+    }
+}
+
+fn appendQuotedStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), positionals: []const []const u8, ifs: []const u8) !void {
+    const separator = if (ifs.len == 0) "" else ifs[0..1];
+    for (positionals, 0..) |param, index| {
+        if (index > 0) try current.appendSlice(allocator, separator);
+        try current.appendSlice(allocator, param);
+    }
+}
+
 fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: []const u8, ifs: []const u8) !void {
     if (ifs.len == 0) {
         try current.appendSlice(allocator, text);
@@ -1075,6 +1154,29 @@ test "field splitting honors custom and empty IFS" {
 
     try std.testing.expectEqual(@as(usize, 1), empty.fields.len);
     try std.testing.expectEqualStrings("a b c", empty.fields[0]);
+}
+
+test "quoted positional parameters preserve fields" {
+    const params = [_][]const u8{ "a b", "c", "" };
+
+    var at = try expandWord(std.testing.allocator, "\"$@\"", .{ .positionals = &params });
+    defer at.deinit();
+    try std.testing.expectEqual(@as(usize, 3), at.fields.len);
+    try std.testing.expectEqualStrings("a b", at.fields[0]);
+    try std.testing.expectEqualStrings("c", at.fields[1]);
+    try std.testing.expectEqualStrings("", at.fields[2]);
+
+    var embedded = try expandWord(std.testing.allocator, "pre\"$@\"post", .{ .positionals = &params });
+    defer embedded.deinit();
+    try std.testing.expectEqual(@as(usize, 3), embedded.fields.len);
+    try std.testing.expectEqualStrings("prea b", embedded.fields[0]);
+    try std.testing.expectEqualStrings("c", embedded.fields[1]);
+    try std.testing.expectEqualStrings("post", embedded.fields[2]);
+
+    var star = try expandWord(std.testing.allocator, "\"$*\"", .{ .positionals = &params });
+    defer star.deinit();
+    try std.testing.expectEqual(@as(usize, 1), star.fields.len);
+    try std.testing.expectEqualStrings("a b c ", star.fields[0]);
 }
 
 test "field splitting preserves quoted expansion results" {

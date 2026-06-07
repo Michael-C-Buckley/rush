@@ -1,0 +1,2 @@
+show() { IFS=:; echo "<$*>"; }
+show "a b" c ""

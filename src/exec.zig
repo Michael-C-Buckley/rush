@@ -1000,8 +1000,9 @@ pub const Executor = struct {
         }
 
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
+        const positionals: []const []const u8 = if (self.currentCallFrame()) |frame| frame.params else &.{};
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -2721,6 +2722,16 @@ test "executor provides positional parameters to shell functions" {
     defer result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("one/two/2/one two/one two\n", result.stdout);
+
+    var quoted = try parseAndLower(std.testing.allocator,
+        \\show() { for x in "$@"; do echo "<$x>"; done; IFS=:; echo "<$*>"; }
+        \\show "a b" c ""
+    );
+    defer quoted.parsed.deinit();
+    defer quoted.program.deinit();
+    var quoted_result = try executor.executeProgram(quoted.program, .{});
+    defer quoted_result.deinit();
+    try std.testing.expectEqualStrings("<a b>\n<c>\n<>\n<a b:c:>\n", quoted_result.stdout);
 
     var nested = try parseAndLower(std.testing.allocator, "inner() { echo $1/$#; }; outer() { inner nested; echo $1/$#; }; outer caller arg2");
     defer nested.parsed.deinit();
