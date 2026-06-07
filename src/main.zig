@@ -32,7 +32,7 @@ pub fn main(init: std.process.Init) !u8 {
         return 2;
     }
 
-    var result = try runScriptWithEnvironment(allocator, init.io, args[2], .{ .io = init.io, .allow_external = true, .external_stdio = .inherit }, init.environ_map);
+    var result = try runScriptWithEnvironment(allocator, init.io, args[2], .{ .io = init.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = args[0] }, init.environ_map);
     defer result.deinit();
 
     try writeAll(init.io, .stdout, result.stdout);
@@ -227,7 +227,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
         if (line.len == 0) continue;
         try history.add(line);
 
-        var result = try runScriptWithEnvironment(allocator, io, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit }, environ_map);
+        var result = try runScriptWithEnvironment(allocator, io, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" }, environ_map);
         defer result.deinit();
         try writeAll(io, .stdout, result.stdout);
         try writeAll(io, .stderr, result.stderr);
@@ -291,6 +291,7 @@ pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     if (environ_map) |map| try executor.importEnvironment(map);
+    executor.arg_zero = options.arg_zero;
 
     return executor.executeProgram(program, options);
 }

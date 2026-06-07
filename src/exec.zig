@@ -19,6 +19,7 @@ pub const ExecuteOptions = struct {
     allow_external: bool = false,
     features: compat.Features = .{},
     external_stdio: ExternalStdio = .capture,
+    arg_zero: []const u8 = "rush",
 };
 
 pub const ShellOptions = struct {
@@ -83,9 +84,19 @@ pub const Executor = struct {
     pending_return: ?ExitStatus = null,
     loop_depth: usize = 0,
     pending_loop_control: ?LoopControl = null,
+    arg_zero: []const u8 = "rush",
+    last_status_text: [3]u8 = .{ '0', 0, 0 },
+    last_status_text_len: usize = 1,
+    pid_text: [32]u8 = undefined,
+    pid_text_len: usize = 0,
+    last_background_pid_text: [32]u8 = undefined,
+    last_background_pid_text_len: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
-        return .{ .allocator = allocator };
+        var executor: Executor = .{ .allocator = allocator };
+        executor.setLastStatus(0);
+        executor.setPidText();
+        return executor;
     }
 
     pub fn importEnvironment(self: *Executor, environ_map: *const std.process.Environ.Map) !void {
@@ -93,6 +104,17 @@ pub const Executor = struct {
         while (iter.next()) |entry| {
             try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
         }
+    }
+
+    pub fn setLastStatus(self: *Executor, status: ExitStatus) void {
+        const text = std.fmt.bufPrint(&self.last_status_text, "{d}", .{status}) catch unreachable;
+        self.last_status_text_len = text.len;
+    }
+
+    fn setPidText(self: *Executor) void {
+        const pid = shellPid();
+        const text = std.fmt.bufPrint(&self.pid_text, "{d}", .{pid}) catch unreachable;
+        self.pid_text_len = text.len;
     }
 
     pub fn deinit(self: *Executor) void {
@@ -204,6 +226,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, result.stdout);
                 try stderr.appendSlice(self.allocator, result.stderr);
                 last_status = result.status;
+                self.setLastStatus(last_status);
                 if (self.pending_return != null or self.pending_loop_control != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
@@ -217,6 +240,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, result.stdout);
                 try stderr.appendSlice(self.allocator, result.stderr);
                 last_status = result.status;
+                self.setLastStatus(last_status);
                 if (self.pending_return != null or self.pending_loop_control != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
@@ -228,6 +252,7 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, result.stdout);
             try stderr.appendSlice(self.allocator, result.stderr);
             last_status = result.status;
+            self.setLastStatus(last_status);
             if (self.pending_return != null or self.pending_loop_control != null) break;
         }
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
@@ -1101,6 +1126,10 @@ pub const Executor = struct {
 
     fn lookupEnv(context: ?*const anyopaque, name: []const u8) ?[]const u8 {
         const self: *const Executor = @ptrCast(@alignCast(context.?));
+        if (std.mem.eql(u8, name, "?")) return self.last_status_text[0..self.last_status_text_len];
+        if (std.mem.eql(u8, name, "$")) return self.pid_text[0..self.pid_text_len];
+        if (std.mem.eql(u8, name, "!")) return self.last_background_pid_text[0..self.last_background_pid_text_len];
+        if (std.mem.eql(u8, name, "0")) return self.arg_zero;
         if (self.currentCallFrame()) |frame| {
             if (std.mem.eql(u8, name, "#")) return frame.count;
             if (std.mem.eql(u8, name, "@") or std.mem.eql(u8, name, "*")) return frame.joined;
@@ -1405,6 +1434,11 @@ pub const Executor = struct {
         };
     }
 };
+
+fn shellPid() i64 {
+    if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) return @intCast(std.os.linux.getpid());
+    return @intCast(std.c.getpid());
+}
 
 fn makePipelinePipe(io: std.Io) !Executor.PipelinePipe {
     const builtin = @import("builtin");
@@ -2809,6 +2843,32 @@ test "executor field-splits unquoted parameter expansion in argv" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("one two\n", result.stdout);
+}
+
+test "executor expands core POSIX special parameters" {
+    var status_lowered = try parseAndLower(std.testing.allocator, "false; echo $?; true; echo $?");
+    defer status_lowered.parsed.deinit();
+    defer status_lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var status_result = try executor.executeProgram(status_lowered.program, .{});
+    defer status_result.deinit();
+    try std.testing.expectEqualStrings("1\n0\n", status_result.stdout);
+
+    var names_lowered = try parseAndLower(std.testing.allocator, "echo $0; echo ${!}");
+    defer names_lowered.parsed.deinit();
+    defer names_lowered.program.deinit();
+    executor.arg_zero = "rush-test";
+    var names_result = try executor.executeProgram(names_lowered.program, .{});
+    defer names_result.deinit();
+    try std.testing.expectEqualStrings("rush-test\n\n", names_result.stdout);
+
+    var pid_lowered = try parseAndLower(std.testing.allocator, "test -n $$");
+    defer pid_lowered.parsed.deinit();
+    defer pid_lowered.program.deinit();
+    var pid_result = try executor.executeProgram(pid_lowered.program, .{});
+    defer pid_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), pid_result.status);
 }
 
 test "executor supports POSIX parameter expansion assignment" {
