@@ -22,9 +22,16 @@ pub const SimpleCommand = struct {
     redirections: []Redirection,
 };
 
+pub const ListOp = enum {
+    sequence,
+    and_if,
+    or_if,
+};
+
 pub const Pipeline = struct {
     span: parser.Span,
     command_indexes: []usize,
+    op_before: ListOp = .sequence,
 };
 
 pub const Program = struct {
@@ -79,9 +86,14 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         try commands.append(allocator, lowered);
     }
 
+    var previous_pipeline_token_end: ?usize = null;
     for (parsed.nodes) |node| {
         if (node.kind != .pipeline) continue;
-        const lowered = try lowerPipeline(allocator, parsed, node, command_indexes_by_node, missing_command);
+        var lowered = try lowerPipeline(allocator, parsed, node, command_indexes_by_node, missing_command);
+        if (previous_pipeline_token_end) |previous_end| {
+            lowered.op_before = listOpBetween(parsed.tokens, previous_end, node.token_start);
+        }
+        previous_pipeline_token_end = node.token_end;
         try pipelines.append(allocator, lowered);
     }
 
@@ -112,6 +124,17 @@ fn lowerPipeline(allocator: std.mem.Allocator, parsed: parser.ParseResult, node:
         .span = node.span,
         .command_indexes = try command_indexes.toOwnedSlice(allocator),
     };
+}
+
+fn listOpBetween(tokens: []const parser.Token, start: usize, end: usize) ListOp {
+    for (tokens[start..end]) |token| {
+        switch (token.kind) {
+            .and_if => return .and_if,
+            .or_if => return .or_if,
+            else => {},
+        }
+    }
+    return .sequence;
 }
 
 fn lowerSimpleCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, id: parser.NodeId) !SimpleCommand {

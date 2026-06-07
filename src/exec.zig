@@ -68,6 +68,7 @@ pub const Executor = struct {
 
         if (program.pipelines.len > 0) {
             for (program.pipelines) |pipeline| {
+                if (shouldSkipPipeline(pipeline.op_before, last.status)) continue;
                 last.deinit();
                 last = try self.executePipeline(program, pipeline, options);
             }
@@ -175,6 +176,14 @@ pub const Executor = struct {
         };
     }
 };
+
+fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {
+    return switch (op) {
+        .sequence => false,
+        .and_if => previous_status != 0,
+        .or_if => previous_status == 0,
+    };
+}
 
 const BuiltinFn = *const fn (*Executor, ir.SimpleCommand, []const u8) anyerror!CommandResult;
 
@@ -349,6 +358,36 @@ test "executor reports command not found without external execution" {
 
     try std.testing.expectEqual(@as(ExitStatus, 127), result.status);
     try std.testing.expectEqualStrings("definitely-not-a-rush-builtin: command not found\n", result.stderr);
+}
+
+test "executor short-circuits AND and OR lists" {
+    var and_lowered = try parseAndLower(std.testing.allocator, "false && echo nope");
+    defer and_lowered.parsed.deinit();
+    defer and_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var and_result = try executor.executeProgram(and_lowered.program, .{});
+    defer and_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), and_result.status);
+    try std.testing.expectEqualStrings("", and_result.stdout);
+
+    var or_lowered = try parseAndLower(std.testing.allocator, "false || echo yes");
+    defer or_lowered.parsed.deinit();
+    defer or_lowered.program.deinit();
+    var or_result = try executor.executeProgram(or_lowered.program, .{});
+    defer or_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), or_result.status);
+    try std.testing.expectEqualStrings("yes\n", or_result.stdout);
+
+    var skip_or_lowered = try parseAndLower(std.testing.allocator, "true || echo nope");
+    defer skip_or_lowered.parsed.deinit();
+    defer skip_or_lowered.program.deinit();
+    var skip_or_result = try executor.executeProgram(skip_or_lowered.program, .{});
+    defer skip_or_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), skip_or_result.status);
+    try std.testing.expectEqualStrings("", skip_or_result.stdout);
 }
 
 test "executor pipes stdout into stdin-consuming builtins" {
