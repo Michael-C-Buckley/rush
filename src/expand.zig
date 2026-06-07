@@ -394,7 +394,7 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
         .double_quoted => blk: {
             const expanded = try expandParameters(allocator, part.value(raw), options.env);
             defer allocator.free(expanded);
-            break :blk quoteRemove(allocator, expanded);
+            break :blk quoteRemoveDoubleQuotedContent(allocator, expanded);
         },
         .parameter => renderParameter(allocator, part.value(raw), options),
         .arithmetic => blk: {
@@ -706,7 +706,7 @@ fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
 fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8), text: []const u8, options: Options) !void {
     const expanded = try expandParameters(allocator, text, options.env);
     defer allocator.free(expanded);
-    const removed = try quoteRemove(allocator, expanded);
+    const removed = try quoteRemoveDoubleQuotedContent(allocator, expanded);
     defer allocator.free(removed);
     try current.appendSlice(allocator, removed);
 }
@@ -969,6 +969,21 @@ fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usiz
     return true;
 }
 
+fn quoteRemoveDoubleQuotedContent(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    var index: usize = 0;
+    while (index < raw.len) {
+        if (raw[index] == '\\' and index + 1 < raw.len and isDoubleQuoteBackslashEscaped(raw[index + 1])) {
+            index += 1;
+        }
+        try output.append(allocator, raw[index]);
+        index += 1;
+    }
+    return output.toOwnedSlice(allocator);
+}
+
 pub fn quoteRemove(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
@@ -986,7 +1001,7 @@ pub fn quoteRemove(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
             '"' => {
                 index += 1;
                 while (index < raw.len and raw[index] != '"') {
-                    if (raw[index] == '\\' and index + 1 < raw.len) {
+                    if (raw[index] == '\\' and index + 1 < raw.len and isDoubleQuoteBackslashEscaped(raw[index + 1])) {
                         index += 1;
                     }
                     try output.append(allocator, raw[index]);
@@ -1017,6 +1032,10 @@ fn isSpecialParameterChar(c: u8) bool {
 
 fn isNameStart(c: u8) bool {
     return std.ascii.isAlphabetic(c) or c == '_';
+}
+
+fn isDoubleQuoteBackslashEscaped(c: u8) bool {
+    return c == '$' or c == '`' or c == '"' or c == '\\' or c == '\n';
 }
 
 fn isNameContinue(c: u8) bool {
@@ -1186,6 +1205,16 @@ test "field splitting preserves quoted expansion results" {
     try std.testing.expectEqual(@as(usize, 2), result.fields.len);
     try std.testing.expectEqualStrings("rush-user two", result.fields[0]);
     try std.testing.expectEqualStrings("three four", result.fields[1]);
+}
+
+test "quote removal preserves non-special backslashes in double quotes" {
+    const removed = try quoteRemove(std.testing.allocator, "\"a\\ b\\$c\\\\d\"");
+    defer std.testing.allocator.free(removed);
+    try std.testing.expectEqualStrings("a\\ b$c\\d", removed);
+
+    const content = try quoteRemoveDoubleQuotedContent(std.testing.allocator, "a\\ b\\$c\\\\d");
+    defer std.testing.allocator.free(content);
+    try std.testing.expectEqualStrings("a\\ b$c\\d", content);
 }
 
 test "command substitution parses and trims callback output" {

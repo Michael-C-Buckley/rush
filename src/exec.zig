@@ -2189,7 +2189,7 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                     if (index >= format.len) {
                         try stdout.append(allocator, '\\');
                     } else {
-                        try appendEscapedByte(allocator, stdout, format[index]);
+                        try appendEscapedSequence(allocator, stdout, format[index]);
                         index += 1;
                     }
                 },
@@ -2250,24 +2250,27 @@ fn appendEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8),
         if (index >= text.len) {
             try stdout.append(allocator, '\\');
         } else {
-            try appendEscapedByte(allocator, stdout, text[index]);
+            try appendEscapedSequence(allocator, stdout, text[index]);
             index += 1;
         }
     }
 }
 
-fn appendEscapedByte(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), byte: u8) !void {
-    try stdout.append(allocator, switch (byte) {
-        'a' => 0x07,
-        'b' => 0x08,
-        'f' => 0x0c,
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-        'v' => 0x0b,
-        '\\' => '\\',
-        else => byte,
-    });
+fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), byte: u8) !void {
+    switch (byte) {
+        'a' => try stdout.append(allocator, 0x07),
+        'b' => try stdout.append(allocator, 0x08),
+        'f' => try stdout.append(allocator, 0x0c),
+        'n' => try stdout.append(allocator, '\n'),
+        'r' => try stdout.append(allocator, '\r'),
+        't' => try stdout.append(allocator, '\t'),
+        'v' => try stdout.append(allocator, 0x0b),
+        '\\' => try stdout.append(allocator, '\\'),
+        else => {
+            try stdout.append(allocator, '\\');
+            try stdout.append(allocator, byte);
+        },
+    }
 }
 
 fn isShellName(name: []const u8) bool {
@@ -3292,6 +3295,13 @@ test "executor implements read and printf builtins" {
     var escaped_result = try executor.executeProgram(escaped_lowered.program, .{});
     defer escaped_result.deinit();
     try std.testing.expectEqualStrings("x\ny", escaped_result.stdout);
+
+    var unknown_escape = try parseAndLower(std.testing.allocator, "printf 'a\\ b'");
+    defer unknown_escape.parsed.deinit();
+    defer unknown_escape.program.deinit();
+    var unknown_escape_result = try executor.executeProgram(unknown_escape.program, .{});
+    defer unknown_escape_result.deinit();
+    try std.testing.expectEqualStrings("a\\ b", unknown_escape_result.stdout);
 
     var read_lowered = try parseAndLower(std.testing.allocator,
         \\read first rest <<EOF; printf '%s/%s\n' "$first" "$rest"

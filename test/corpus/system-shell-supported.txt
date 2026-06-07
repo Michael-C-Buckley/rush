@@ -66,3 +66,4 @@ echo $((2 + 3 * 4)); echo $(((2 + 3) * 4))
 echo $(printf "a b")
 : > rush-b.tmp; : > rush-a.tmp; echo rush-?.tmp
 LIST="a\nb c"; for x in $LIST; do echo "<$x>"; done
+echo `printf "a\\ b"`
