@@ -134,6 +134,7 @@ pub const Executor = struct {
                     .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
                     .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
                     .for_command => try self.executeForCommand(program.for_commands[statement.index], options),
+                    .case_command => try self.executeCaseCommand(program.case_commands[statement.index], options),
                 };
             }
             return last;
@@ -153,6 +154,24 @@ pub const Executor = struct {
             last = try self.executeSimpleCommand(command, options);
         }
         return last;
+    }
+
+    fn executeCaseCommand(self: *Executor, command: ir.CaseCommand, options: ExecuteOptions) !CommandResult {
+        const subject_words = try self.expandWords(&.{command.word}, options);
+        defer self.freeWords(subject_words);
+        const subject = if (subject_words.len == 0) "" else subject_words[0].text;
+
+        for (command.arms) |arm| {
+            const patterns = try self.expandWords(arm.patterns, options);
+            defer self.freeWords(patterns);
+            for (patterns) |pattern| {
+                if (shellPatternMatches(pattern.text, subject)) {
+                    return self.executeScriptSlice(arm.body, options);
+                }
+            }
+        }
+
+        return emptyResult(self.allocator, 0);
     }
 
     fn executeForCommand(self: *Executor, command: ir.ForCommand, options: ExecuteOptions) !CommandResult {
@@ -959,6 +978,26 @@ fn errorResult(allocator: std.mem.Allocator, status: ExitStatus, command: []cons
     };
 }
 
+fn shellPatternMatches(pattern: []const u8, text: []const u8) bool {
+    return shellPatternMatchesFrom(pattern, text, 0, 0);
+}
+
+fn shellPatternMatchesFrom(pattern: []const u8, text: []const u8, pattern_index: usize, text_index: usize) bool {
+    if (pattern_index == pattern.len) return text_index == text.len;
+    if (pattern[pattern_index] == '*') {
+        var next_text = text_index;
+        while (next_text <= text.len) : (next_text += 1) {
+            if (shellPatternMatchesFrom(pattern, text, pattern_index + 1, next_text)) return true;
+        }
+        return false;
+    }
+    if (text_index >= text.len) return false;
+    if (pattern[pattern_index] == '?' or pattern[pattern_index] == text[text_index]) {
+        return shellPatternMatchesFrom(pattern, text, pattern_index + 1, text_index + 1);
+    }
+    return false;
+}
+
 fn exitStatusFromTerm(term: std.process.Child.Term) ExitStatus {
     return switch (term) {
         .exited => |code| code,
@@ -1015,6 +1054,29 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor executes POSIX case statements" {
+    var lowered = try parseAndLower(std.testing.allocator, "case foo in bar) echo no ;; f*) echo yes ;; *) echo fallback ;; esac");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("yes\n", result.stdout);
+
+    var fallback_lowered = try parseAndLower(std.testing.allocator, "case z in a) echo a ;; ?) echo one ;; *) echo many ;; esac");
+    defer fallback_lowered.parsed.deinit();
+    defer fallback_lowered.program.deinit();
+
+    var fallback = try executor.executeProgram(fallback_lowered.program, .{});
+    defer fallback.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), fallback.status);
+    try std.testing.expectEqualStrings("one\n", fallback.stdout);
 }
 
 test "executor executes POSIX for loops" {

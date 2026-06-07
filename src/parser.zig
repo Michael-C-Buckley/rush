@@ -170,6 +170,7 @@ pub const NodeKind = enum {
     loop_command,
     for_command,
     bash_test_command,
+    case_command,
     parse_error,
 };
 
@@ -867,6 +868,12 @@ const SyntaxParser = struct {
                 continue;
             }
 
+            if (self.startsCaseCommand()) {
+                const case_command = try self.parseCaseCommand();
+                try list_children.append(self.allocator, .{ .node = case_command });
+                continue;
+            }
+
             if (self.startsPipeline()) {
                 const pipeline = try self.parsePipeline();
                 try list_children.append(self.allocator, .{ .node = pipeline });
@@ -938,6 +945,48 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, if_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseCaseCommand(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var case_children: std.ArrayList(SyntaxChild) = .empty;
+        defer case_children.deinit(self.allocator);
+        var saw_in = false;
+        var closed = false;
+
+        while (!self.at(.eof)) {
+            const token = self.current();
+            if (token.kind == .word) {
+                const lexeme = token.lexeme(self.source);
+                if (std.mem.eql(u8, lexeme, "in")) saw_in = true;
+                if (std.mem.eql(u8, lexeme, "esac")) closed = true;
+            }
+            try self.appendCurrentTokenChildTo(&case_children);
+            if (closed) break;
+        }
+
+        if (!saw_in) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing in in case command",
+            });
+        }
+        if (!closed) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .incomplete_input,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing esac to close case command",
+            });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, case_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.case_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parseBashTestCommand(self: *SyntaxParser) !NodeId {
@@ -1253,7 +1302,7 @@ const SyntaxParser = struct {
     }
 
     fn startsListElement(self: SyntaxParser) bool {
-        return self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsPipeline();
+        return self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
     }
 
     fn startsBashTestCommand(self: SyntaxParser) bool {
@@ -1274,12 +1323,16 @@ const SyntaxParser = struct {
         return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "for");
     }
 
+    fn startsCaseCommand(self: SyntaxParser) bool {
+        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "case");
+    }
+
     fn startsPipeline(self: SyntaxParser) bool {
         return self.startsSimpleCommand();
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
-        if (self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand()) return false;
+        if (self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand()) return false;
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
 
@@ -1611,6 +1664,31 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
         },
     });
+}
+
+test "parser builds POSIX case command nodes" {
+    var result = try parse(std.testing.allocator, "case foo in f*) echo yes ;; *) echo no ;; esac", .{});
+    defer result.deinit();
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .case_command) {
+            found = true;
+            try expectSpan(.init(0, 46), node.span);
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "parser reports incomplete POSIX case commands" {
+    var result = try parse(std.testing.allocator, "case foo in f*) echo yes", .{});
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 24), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing esac to close case command", result.diagnostics[0].message);
 }
 
 test "parser builds Bash conditional command nodes in Bash mode" {

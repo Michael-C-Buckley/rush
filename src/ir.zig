@@ -62,11 +62,23 @@ pub const ForCommand = struct {
     body: []const u8,
 };
 
+pub const CaseArm = struct {
+    patterns: []WordRef,
+    body: []const u8,
+};
+
+pub const CaseCommand = struct {
+    span: parser.Span,
+    word: WordRef,
+    arms: []CaseArm,
+};
+
 pub const StatementKind = enum {
     pipeline,
     if_command,
     loop_command,
     for_command,
+    case_command,
 };
 
 pub const Statement = struct {
@@ -82,6 +94,7 @@ pub const Program = struct {
     if_commands: []IfCommand = &.{},
     loop_commands: []LoopCommand = &.{},
     for_commands: []ForCommand = &.{},
+    case_commands: []CaseCommand = &.{},
     statements: []Statement = &.{},
 
     pub fn deinit(self: *Program) void {
@@ -109,6 +122,8 @@ pub const Program = struct {
             self.allocator.free(command.words);
         }
         self.allocator.free(self.for_commands);
+        for (self.case_commands) |command| freeCaseCommand(self.allocator, command);
+        self.allocator.free(self.case_commands);
         self.allocator.free(self.statements);
         self.* = undefined;
     }
@@ -120,6 +135,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     var if_commands: std.ArrayList(IfCommand) = .empty;
     var loop_commands: std.ArrayList(LoopCommand) = .empty;
     var for_commands: std.ArrayList(ForCommand) = .empty;
+    var case_commands: std.ArrayList(CaseCommand) = .empty;
     var statement_refs: std.ArrayList(LoweredStatementRef) = .empty;
     defer statement_refs.deinit(allocator);
     const missing_command = std.math.maxInt(usize);
@@ -140,6 +156,8 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         loop_commands.deinit(allocator);
         for (for_commands.items) |command| freeForCommand(allocator, command);
         for_commands.deinit(allocator);
+        for (case_commands.items) |command| freeCaseCommand(allocator, command);
+        case_commands.deinit(allocator);
     }
 
     for (parsed.nodes, 0..) |node, node_index| {
@@ -179,6 +197,12 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         try for_commands.append(allocator, try lowerForCommand(allocator, parsed, node));
     }
 
+    for (parsed.nodes) |node| {
+        if (node.kind != .case_command) continue;
+        try statement_refs.append(allocator, .{ .kind = .case_command, .index = case_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        try case_commands.append(allocator, try lowerCaseCommand(allocator, parsed, node));
+    }
+
     std.mem.sort(LoweredStatementRef, statement_refs.items, {}, lessThanStatementRef);
     var statements: std.ArrayList(Statement) = .empty;
     errdefer statements.deinit(allocator);
@@ -199,6 +223,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         .if_commands = try if_commands.toOwnedSlice(allocator),
         .loop_commands = try loop_commands.toOwnedSlice(allocator),
         .for_commands = try for_commands.toOwnedSlice(allocator),
+        .case_commands = try case_commands.toOwnedSlice(allocator),
         .statements = try statements.toOwnedSlice(allocator),
     };
 }
@@ -212,6 +237,70 @@ const LoweredStatementRef = struct {
 
 fn lessThanStatementRef(_: void, a: LoweredStatementRef, b: LoweredStatementRef) bool {
     return a.token_start < b.token_start;
+}
+
+fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !CaseCommand {
+    std.debug.assert(node.kind == .case_command);
+    var word_token: ?usize = null;
+    var in_token: ?usize = null;
+    var esac_token: ?usize = null;
+
+    for (node.token_start + 1..node.token_end) |token_index| {
+        const token = parsed.tokens[token_index];
+        if (token.kind != .word) continue;
+        const lexeme = token.lexeme(parsed.source);
+        if (word_token == null and !std.mem.eql(u8, lexeme, "in")) {
+            word_token = token_index;
+        } else if (std.mem.eql(u8, lexeme, "in")) {
+            in_token = token_index;
+        } else if (std.mem.eql(u8, lexeme, "esac")) {
+            esac_token = token_index;
+            break;
+        }
+    }
+
+    const subject = try wordRefFromToken(allocator, parsed, word_token orelse node.token_start);
+    errdefer freeWord(allocator, subject);
+
+    var arms: std.ArrayList(CaseArm) = .empty;
+    errdefer {
+        for (arms.items) |arm| freeCaseArm(allocator, arm);
+        arms.deinit(allocator);
+    }
+
+    var index = if (in_token) |token_index| token_index + 1 else node.token_end;
+    const limit = esac_token orelse node.token_end;
+    while (index < limit) {
+        while (index < limit and parsed.tokens[index].kind.isTrivia()) : (index += 1) {}
+        if (index >= limit) break;
+
+        var patterns: std.ArrayList(WordRef) = .empty;
+        errdefer {
+            for (patterns.items) |pattern| freeWord(allocator, pattern);
+            patterns.deinit(allocator);
+        }
+        while (index < limit and parsed.tokens[index].kind != .right_paren) : (index += 1) {
+            if (parsed.tokens[index].kind == .word) {
+                try patterns.append(allocator, try wordRefFromToken(allocator, parsed, index));
+            }
+        }
+        if (index < limit and parsed.tokens[index].kind == .right_paren) index += 1;
+        const body_start = index;
+        while (index < limit and parsed.tokens[index].kind != .dsemicolon) : (index += 1) {}
+        const body_end = index;
+        if (index < limit and parsed.tokens[index].kind == .dsemicolon) index += 1;
+
+        try arms.append(allocator, .{
+            .patterns = try patterns.toOwnedSlice(allocator),
+            .body = spanSlice(parsed, body_start, body_end),
+        });
+    }
+
+    return .{
+        .span = node.span,
+        .word = subject,
+        .arms = try arms.toOwnedSlice(allocator),
+    };
 }
 
 fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !ForCommand {
@@ -480,6 +569,17 @@ fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, to
         .raw = raw,
         .text = text,
     };
+}
+
+fn freeCaseArm(allocator: std.mem.Allocator, arm: CaseArm) void {
+    for (arm.patterns) |pattern| freeWord(allocator, pattern);
+    allocator.free(arm.patterns);
+}
+
+fn freeCaseCommand(allocator: std.mem.Allocator, command: CaseCommand) void {
+    freeWord(allocator, command.word);
+    for (command.arms) |arm| freeCaseArm(allocator, arm);
+    allocator.free(command.arms);
 }
 
 fn freeForCommand(allocator: std.mem.Allocator, command: ForCommand) void {
