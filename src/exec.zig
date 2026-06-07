@@ -1,6 +1,7 @@
 //! Minimal command execution for lowered shell IR.
 
 const std = @import("std");
+const zig_builtin = @import("builtin");
 const compat = @import("compat.zig");
 const expand = @import("expand.zig");
 const ir = @import("ir.zig");
@@ -1222,16 +1223,20 @@ pub const Executor = struct {
 
         const capture_stdout = options.external_stdio == .capture and stdout_file == null;
         const capture_stderr = options.external_stdio == .capture and stderr_file == null;
+        const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit and stdin_file == null);
         var child = std.process.spawn(io, .{
             .argv = argv,
             .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stdout = if (stdout_file) |file| .{ .file = file } else if (capture_stdout) .pipe else .inherit,
             .stderr = if (stderr_file) |file| .{ .file = file } else if (capture_stderr) .pipe else .inherit,
+            .pgid = if (foreground_terminal != null) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             else => return err,
         };
         defer child.kill(io);
+        try giveTerminalToForegroundChild(&child, foreground_terminal);
+        defer restoreForegroundTerminal(foreground_terminal);
 
         var stdout: []u8 = try self.allocator.alloc(u8, 0);
         errdefer self.allocator.free(stdout);
@@ -1329,6 +1334,95 @@ fn filesFromPipeFds(fds: [2]std.posix.fd_t) Executor.PipelinePipe {
         .read = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
         .write = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
     };
+}
+
+extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
+extern "c" fn tcsetpgrp(fd: std.c.fd_t, pgrp: std.c.pid_t) c_int;
+
+const ForegroundTerminal = struct {
+    tty_fd: std.posix.fd_t,
+    previous_pgrp: std.posix.pid_t,
+};
+
+fn terminalGetPgrp(fd: std.posix.fd_t) !std.posix.pid_t {
+    if (zig_builtin.link_libc) {
+        while (true) {
+            const rc = tcgetpgrp(fd);
+            switch (std.c.errno(rc)) {
+                .SUCCESS => return @intCast(rc),
+                .BADF, .INVAL => unreachable,
+                .INTR => continue,
+                .NOTTY => return error.NotATerminal,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    return std.posix.tcgetpgrp(fd);
+}
+
+fn terminalSetPgrp(fd: std.posix.fd_t, pgrp: std.posix.pid_t) !void {
+    if (zig_builtin.link_libc) {
+        while (true) {
+            const rc = tcsetpgrp(fd, pgrp);
+            switch (std.c.errno(rc)) {
+                .SUCCESS => return,
+                .BADF, .INVAL => unreachable,
+                .INTR => continue,
+                .NOTTY => return error.NotATerminal,
+                .PERM => return error.NotAPgrpMember,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    return std.posix.tcsetpgrp(fd, pgrp);
+}
+
+fn prepareForegroundTerminal(enabled: bool) !?ForegroundTerminal {
+    if (!enabled) return null;
+    const tty_fd = std.Io.File.stdin().handle;
+    const previous_pgrp = terminalGetPgrp(tty_fd) catch |err| switch (err) {
+        error.NotATerminal => return null,
+        else => return err,
+    };
+    return .{ .tty_fd = tty_fd, .previous_pgrp = previous_pgrp };
+}
+
+fn giveTerminalToForegroundChild(child: *std.process.Child, terminal: ?ForegroundTerminal) !void {
+    const active = terminal orelse return;
+    const child_pgrp = child.id orelse return;
+    var sigttou = ignoreSignal(.TTOU);
+    defer sigttou.restore();
+    terminalSetPgrp(active.tty_fd, child_pgrp) catch |err| switch (err) {
+        error.NotATerminal, error.NotAPgrpMember => return,
+        else => return err,
+    };
+}
+
+fn restoreForegroundTerminal(terminal: ?ForegroundTerminal) void {
+    const active = terminal orelse return;
+    var sigttou = ignoreSignal(.TTOU);
+    defer sigttou.restore();
+    terminalSetPgrp(active.tty_fd, active.previous_pgrp) catch {};
+}
+
+const SignalActionGuard = struct {
+    signal: std.posix.SIG,
+    previous: std.posix.Sigaction,
+
+    fn restore(self: *SignalActionGuard) void {
+        std.posix.sigaction(self.signal, &self.previous, null);
+    }
+};
+
+fn ignoreSignal(signal: std.posix.SIG) SignalActionGuard {
+    const ignored: std.posix.Sigaction = .{
+        .handler = .{ .handler = std.posix.SIG.IGN },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    var previous: std.posix.Sigaction = undefined;
+    std.posix.sigaction(signal, &ignored, &previous);
+    return .{ .signal = signal, .previous = previous };
 }
 
 fn fileFromBytes(io: std.Io, bytes: []const u8) !std.Io.File {
