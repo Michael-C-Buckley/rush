@@ -219,15 +219,24 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
     var last_status: exec.ExitStatus = 0;
     var stdin_buffer: [4096]u8 = undefined;
     var reader = std.Io.File.stdin().reader(io, &stdin_buffer);
+    var executor = exec.Executor.init(allocator);
+    defer executor.deinit();
+    try executor.importEnvironment(environ_map);
+    executor.arg_zero = "rush";
 
     while (true) {
-        try writeAll(io, .stdout, "rush$ ");
+        const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" }, "rush$ ") catch |err| switch (err) {
+            error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
+            else => |e| return e,
+        };
+        try writeAll(io, .stdout, prompt);
+        allocator.free(prompt);
         const line = (try reader.interface.takeDelimiter('\n')) orelse break;
         if (std.mem.eql(u8, line, "exit")) break;
         if (line.len == 0) continue;
         try history.add(line);
 
-        var result = try runScriptWithEnvironment(allocator, io, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" }, environ_map);
+        var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" });
         defer result.deinit();
         try writeAll(io, .stdout, result.stdout);
         try writeAll(io, .stderr, result.stderr);
@@ -245,15 +254,19 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     var history = History.init(allocator);
     defer history.deinit();
     var last_status: exec.ExitStatus = 0;
+    var executor = exec.Executor.init(allocator);
+    defer executor.deinit();
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
-        try stdout.appendSlice(allocator, "rush$ ");
+        const prompt = try executor.renderPrompt(.{ .io = io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+        try stdout.appendSlice(allocator, prompt);
+        allocator.free(prompt);
         if (std.mem.eql(u8, line, "exit")) break;
         if (line.len == 0) continue;
         try history.add(line);
 
-        var result = try runScript(allocator, io, line);
+        var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .arg_zero = "rush" });
         defer result.deinit();
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
@@ -278,6 +291,16 @@ pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []
 
 pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map) !exec.CommandResult {
     _ = io;
+    var executor = exec.Executor.init(allocator);
+    defer executor.deinit();
+    if (environ_map) |map| try executor.importEnvironment(map);
+    executor.arg_zero = options.arg_zero;
+
+    return runScriptWithExecutor(allocator, &executor, script, options);
+}
+
+fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
+    _ = options.io;
     var parsed = try parser.parse(allocator, script, .{});
     defer parsed.deinit();
 
@@ -287,11 +310,6 @@ pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-
-    var executor = exec.Executor.init(allocator);
-    defer executor.deinit();
-    if (environ_map) |map| try executor.importEnvironment(map);
-    executor.arg_zero = options.arg_zero;
 
     var result = try executor.executeProgram(program, options);
     errdefer result.deinit();
@@ -566,6 +584,18 @@ test "executor smoke corpus returns expected statuses and output fragments" {
             try std.testing.expect(std.mem.indexOf(u8, result.stderr, case.stderr_contains) != null);
         }
     }
+}
+
+test "repl uses rush_prompt function to build prompt text" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io,
+        \\rush_prompt() { prompt segment --fg blue custom; prompt text ' > '; }
+        \\echo ok
+        \\exit
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("rush$ custom > ok\ncustom > ", result.stdout);
 }
 
 test "integration harness compares selected scripts with /bin/sh" {

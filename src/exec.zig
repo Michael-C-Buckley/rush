@@ -47,6 +47,21 @@ pub const CommandResult = struct {
     }
 };
 
+pub const PromptBuilder = struct {
+    text: std.ArrayList(u8) = .empty,
+    used: bool = false,
+
+    pub fn deinit(self: *PromptBuilder, allocator: std.mem.Allocator) void {
+        self.text.deinit(allocator);
+        self.* = undefined;
+    }
+
+    pub fn clear(self: *PromptBuilder) void {
+        self.text.clearRetainingCapacity();
+        self.used = false;
+    }
+};
+
 pub const LoopControlKind = enum {
     break_loop,
     continue_loop,
@@ -142,6 +157,7 @@ pub const Executor = struct {
     pid_text_len: usize = 0,
     last_background_pid_text: [32]u8 = undefined,
     last_background_pid_text_len: usize = 0,
+    prompt_builder: ?PromptBuilder = null,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         var executor: Executor = .{ .allocator = allocator };
@@ -191,10 +207,38 @@ pub const Executor = struct {
         }
         self.functions.deinit(self.allocator);
         self.open_fds.deinit(self.allocator);
+        if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
         self.global_positionals.deinit(self.allocator);
         for (self.call_frames.items) |*frame| frame.deinit(self.allocator);
         self.call_frames.deinit(self.allocator);
         self.* = undefined;
+    }
+
+    pub fn hasFunction(self: Executor, name: []const u8) bool {
+        return self.functions.contains(name);
+    }
+
+    pub fn renderPrompt(self: *Executor, options: ExecuteOptions, fallback: []const u8) ![]const u8 {
+        if (!self.hasFunction("rush_prompt")) return self.allocator.dupe(u8, fallback);
+
+        if (self.prompt_builder != null) return error.RecursivePrompt;
+        self.prompt_builder = .{};
+        errdefer {
+            self.prompt_builder.?.deinit(self.allocator);
+            self.prompt_builder = null;
+        }
+
+        var prompt_options = options;
+        prompt_options.external_stdio = .capture;
+        var result = try self.executeScriptSlice("rush_prompt", prompt_options);
+        defer result.deinit();
+
+        var builder = self.prompt_builder.?;
+        self.prompt_builder = null;
+        defer builder.deinit(self.allocator);
+
+        if (builder.used) return builder.text.toOwnedSlice(self.allocator);
+        return self.allocator.dupe(u8, result.stdout);
     }
 
     pub fn getEnv(self: Executor, name: []const u8) ?[]const u8 {
@@ -2212,6 +2256,8 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "continue")) return builtinContinue;
     if (std.mem.eql(u8, name, "cd")) return builtinCd;
     if (std.mem.eql(u8, name, "printf")) return builtinPrintf;
+    if (std.mem.eql(u8, name, "prompt")) return builtinPrompt;
+    if (std.mem.eql(u8, name, "prompt_pwd")) return builtinPromptPwd;
     if (std.mem.eql(u8, name, "pwd")) return builtinPwd;
     if (std.mem.eql(u8, name, "read")) return builtinRead;
     if (std.mem.eql(u8, name, "readonly")) return builtinReadonly;
@@ -2353,6 +2399,63 @@ fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         .stdout = try stdout.toOwnedSlice(self.allocator),
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn builtinPrompt(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    const builder = if (self.prompt_builder) |*builder| builder else return errorResult(self.allocator, 2, "prompt", "not rendering a prompt");
+    if (command.argv.len < 2) return errorResult(self.allocator, 2, "prompt", "missing subcommand");
+
+    const subcommand = command.argv[1].text;
+    if (std.mem.eql(u8, subcommand, "text")) {
+        try appendPromptArgs(self, builder, command.argv[2..]);
+        return emptyResult(self.allocator, 0);
+    }
+    if (std.mem.eql(u8, subcommand, "segment")) {
+        var index: usize = 2;
+        while (index < command.argv.len and std.mem.startsWith(u8, command.argv[index].text, "--")) {
+            const option = command.argv[index].text;
+            index += 1;
+            if (std.mem.eql(u8, option, "--fg") or std.mem.eql(u8, option, "--bg") or std.mem.eql(u8, option, "--max-width") or std.mem.eql(u8, option, "--min-width") or std.mem.eql(u8, option, "--truncate")) {
+                if (index >= command.argv.len) return errorResult(self.allocator, 2, "prompt", "missing option value");
+                index += 1;
+            }
+        }
+        try appendPromptArgs(self, builder, command.argv[index..]);
+        return emptyResult(self.allocator, 0);
+    }
+    if (std.mem.eql(u8, subcommand, "newline")) {
+        try builder.text.append(self.allocator, '\n');
+        builder.used = true;
+        return emptyResult(self.allocator, 0);
+    }
+    return errorResult(self.allocator, 2, "prompt", "unsupported subcommand");
+}
+
+fn appendPromptArgs(self: *Executor, builder: *PromptBuilder, args: []const ir.WordRef) !void {
+    for (args, 0..) |arg, index| {
+        if (index > 0) try builder.text.append(self.allocator, ' ');
+        try builder.text.appendSlice(self.allocator, arg.text);
+    }
+    builder.used = true;
+}
+
+fn builtinPromptPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = command;
+    _ = stdin;
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    const cwd = try std.process.currentPathAlloc(io, self.allocator);
+    defer self.allocator.free(cwd);
+    const display = if (self.getEnv("HOME")) |home| homeRelativePath(cwd, home) else cwd;
+    return stdoutLine(self.allocator, display, 0);
+}
+
+fn homeRelativePath(path: []const u8, home: []const u8) []const u8 {
+    if (home.len == 0) return path;
+    if (std.mem.eql(u8, path, home)) return "~";
+    if (std.mem.startsWith(u8, path, home) and path.len > home.len and path[home.len] == '/') return path[home.len - 1 ..];
+    return path;
 }
 
 fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
