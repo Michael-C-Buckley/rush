@@ -62,6 +62,8 @@ pub const Executor = struct {
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
     shell_options: ShellOptions = .{},
     call_frames: std.ArrayList(CallFrame) = .empty,
+    function_depth: usize = 0,
+    pending_return: ?ExitStatus = null,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         return .{ .allocator = allocator };
@@ -173,6 +175,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, result.stdout);
                 try stderr.appendSlice(self.allocator, result.stderr);
                 last_status = result.status;
+                if (self.pending_return != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         }
@@ -185,6 +188,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, result.stdout);
                 try stderr.appendSlice(self.allocator, result.stderr);
                 last_status = result.status;
+                if (self.pending_return != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         }
@@ -195,6 +199,7 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, result.stdout);
             try stderr.appendSlice(self.allocator, result.stderr);
             last_status = result.status;
+            if (self.pending_return != null) break;
         }
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
     }
@@ -685,7 +690,15 @@ pub const Executor = struct {
         if (self.functions.get(expanded.argv[0].text)) |body| {
             try self.pushCallFrame(expanded.argv[1..]);
             defer self.popCallFrame();
-            return try self.applyOutputRedirections(expanded, try self.executeScriptSlice(body, options), options);
+            self.function_depth += 1;
+            defer self.function_depth -= 1;
+            var result = try self.executeScriptSlice(body, options);
+            errdefer result.deinit();
+            if (self.pending_return) |status| {
+                self.pending_return = null;
+                result.status = status;
+            }
+            return try self.applyOutputRedirections(expanded, result, options);
         }
 
         if (builtinFor(expanded.argv[0].text)) |builtin| {
@@ -1149,6 +1162,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "cat")) return builtinCat;
     if (std.mem.eql(u8, name, "cd")) return builtinCd;
     if (std.mem.eql(u8, name, "pwd")) return builtinPwd;
+    if (std.mem.eql(u8, name, "return")) return builtinReturn;
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
@@ -1272,6 +1286,19 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         self.unsetEnv(arg.text);
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (self.function_depth == 0) return errorResult(self.allocator, 2, "return", "not in a function");
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, "return", "too many arguments");
+    const status: ExitStatus = if (command.argv.len == 2) blk: {
+        const parsed = std.fmt.parseInt(u8, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, "return", "numeric argument required");
+        break :blk parsed;
+    } else 0;
+    self.pending_return = status;
+    return emptyResult(self.allocator, status);
 }
 
 fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -1531,6 +1558,36 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor supports return builtin in shell functions" {
+    var returned = try parseAndLower(std.testing.allocator, "f() { echo before; return 7; echo after; }; f");
+    defer returned.parsed.deinit();
+    defer returned.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(returned.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 7), result.status);
+    try std.testing.expectEqualStrings("before\n", result.stdout);
+
+    var continues = try parseAndLower(std.testing.allocator, "f() { return 3; }; f; echo after");
+    defer continues.parsed.deinit();
+    defer continues.program.deinit();
+    var continues_result = try executor.executeProgram(continues.program, .{});
+    defer continues_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), continues_result.status);
+    try std.testing.expectEqualStrings("after\n", continues_result.stdout);
+
+    var outside = try parseAndLower(std.testing.allocator, "return 4");
+    defer outside.parsed.deinit();
+    defer outside.program.deinit();
+    var outside_result = try executor.executeProgram(outside.program, .{});
+    defer outside_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), outside_result.status);
+    try std.testing.expect(std.mem.indexOf(u8, outside_result.stderr, "not in a function") != null);
 }
 
 test "executor provides positional parameters to shell functions" {
