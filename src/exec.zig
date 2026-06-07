@@ -31,6 +31,20 @@ pub const CommandResult = struct {
     }
 };
 
+pub const CallFrame = struct {
+    params: []const []const u8,
+    count: []const u8,
+    joined: []const u8,
+
+    pub fn deinit(self: *CallFrame, allocator: std.mem.Allocator) void {
+        for (self.params) |param| allocator.free(param);
+        allocator.free(self.params);
+        allocator.free(self.count);
+        allocator.free(self.joined);
+        self.* = undefined;
+    }
+};
+
 pub const ArrayValue = struct {
     values: std.ArrayList([]const u8) = .empty,
 
@@ -47,6 +61,7 @@ pub const Executor = struct {
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
     shell_options: ShellOptions = .{},
+    call_frames: std.ArrayList(CallFrame) = .empty,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         return .{ .allocator = allocator };
@@ -71,6 +86,8 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.functions.deinit(self.allocator);
+        for (self.call_frames.items) |*frame| frame.deinit(self.allocator);
+        self.call_frames.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -135,13 +152,16 @@ pub const Executor = struct {
     }
 
     pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) !CommandResult {
-        var last = try emptyResult(self.allocator, 0);
+        var stdout: std.ArrayList(u8) = .empty;
+        errdefer stdout.deinit(self.allocator);
+        var stderr: std.ArrayList(u8) = .empty;
+        errdefer stderr.deinit(self.allocator);
+        var last_status: ExitStatus = 0;
 
         if (program.statements.len > 0) {
             for (program.statements) |statement| {
-                if (shouldSkipPipeline(statement.op_before, last.status)) continue;
-                last.deinit();
-                last = switch (statement.kind) {
+                if (shouldSkipPipeline(statement.op_before, last_status)) continue;
+                var result = switch (statement.kind) {
                     .pipeline => try self.executePipeline(program, program.pipelines[statement.index], options),
                     .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
                     .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
@@ -149,24 +169,34 @@ pub const Executor = struct {
                     .case_command => try self.executeCaseCommand(program.case_commands[statement.index], options),
                     .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index]),
                 };
+                defer result.deinit();
+                try stdout.appendSlice(self.allocator, result.stdout);
+                try stderr.appendSlice(self.allocator, result.stderr);
+                last_status = result.status;
             }
-            return last;
+            return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         }
 
         if (program.pipelines.len > 0) {
             for (program.pipelines) |pipeline| {
-                if (shouldSkipPipeline(pipeline.op_before, last.status)) continue;
-                last.deinit();
-                last = try self.executePipeline(program, pipeline, options);
+                if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
+                var result = try self.executePipeline(program, pipeline, options);
+                defer result.deinit();
+                try stdout.appendSlice(self.allocator, result.stdout);
+                try stderr.appendSlice(self.allocator, result.stderr);
+                last_status = result.status;
             }
-            return last;
+            return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         }
 
         for (program.commands) |command| {
-            last.deinit();
-            last = try self.executeSimpleCommand(command, options);
+            var result = try self.executeSimpleCommand(command, options);
+            defer result.deinit();
+            try stdout.appendSlice(self.allocator, result.stdout);
+            try stderr.appendSlice(self.allocator, result.stderr);
+            last_status = result.status;
         }
-        return last;
+        return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
     }
 
     fn executeFunctionDefinition(self: *Executor, definition: ir.FunctionDefinition) !CommandResult {
@@ -653,6 +683,8 @@ pub const Executor = struct {
         }
 
         if (self.functions.get(expanded.argv[0].text)) |body| {
+            try self.pushCallFrame(expanded.argv[1..]);
+            defer self.popCallFrame();
             return try self.applyOutputRedirections(expanded, try self.executeScriptSlice(body, options), options);
         }
 
@@ -746,6 +778,38 @@ pub const Executor = struct {
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
+    fn pushCallFrame(self: *Executor, args: []const ir.WordRef) !void {
+        var params = try self.allocator.alloc([]const u8, args.len);
+        errdefer self.allocator.free(params);
+        var initialized: usize = 0;
+        errdefer for (params[0..initialized]) |param| self.allocator.free(param);
+        for (args, 0..) |arg, index| {
+            params[index] = try self.allocator.dupe(u8, arg.text);
+            initialized += 1;
+        }
+
+        const count = try std.fmt.allocPrint(self.allocator, "{d}", .{args.len});
+        errdefer self.allocator.free(count);
+        const joined = try joinParams(self.allocator, params);
+        errdefer self.allocator.free(joined);
+
+        try self.call_frames.append(self.allocator, .{
+            .params = params,
+            .count = count,
+            .joined = joined,
+        });
+    }
+
+    fn popCallFrame(self: *Executor) void {
+        var frame = self.call_frames.pop().?;
+        frame.deinit(self.allocator);
+    }
+
+    fn currentCallFrame(self: Executor) ?CallFrame {
+        if (self.call_frames.items.len == 0) return null;
+        return self.call_frames.items[self.call_frames.items.len - 1];
+    }
+
     const CommandSubstitutionContext = struct {
         executor: *Executor,
         options: ExecuteOptions,
@@ -772,6 +836,15 @@ pub const Executor = struct {
 
     fn lookupEnv(context: ?*const anyopaque, name: []const u8) ?[]const u8 {
         const self: *const Executor = @ptrCast(@alignCast(context.?));
+        if (self.currentCallFrame()) |frame| {
+            if (std.mem.eql(u8, name, "#")) return frame.count;
+            if (std.mem.eql(u8, name, "@") or std.mem.eql(u8, name, "*")) return frame.joined;
+            if (name.len == 1 and std.ascii.isDigit(name[0]) and name[0] != '0') {
+                const index = name[0] - '1';
+                if (index < frame.params.len) return frame.params[index];
+                return "";
+            }
+        }
         return self.getEnv(name);
     }
 
@@ -1324,6 +1397,16 @@ fn statPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !std.Io.
     return file.stat(io);
 }
 
+fn joinParams(allocator: std.mem.Allocator, params: []const []const u8) ![]const u8 {
+    var joined: std.ArrayList(u8) = .empty;
+    errdefer joined.deinit(allocator);
+    for (params, 0..) |param, index| {
+        if (index > 0) try joined.append(allocator, ' ');
+        try joined.appendSlice(allocator, param);
+    }
+    return joined.toOwnedSlice(allocator);
+}
+
 fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
 }
@@ -1448,6 +1531,27 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor provides positional parameters to shell functions" {
+    var lowered = try parseAndLower(std.testing.allocator, "show() { echo $1/$2/$#/$@/$*; }; show one two");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("one/two/2/one two/one two\n", result.stdout);
+
+    var nested = try parseAndLower(std.testing.allocator, "inner() { echo $1/$#; }; outer() { inner nested; echo $1/$#; }; outer caller arg2");
+    defer nested.parsed.deinit();
+    defer nested.program.deinit();
+    var nested_result = try executor.executeProgram(nested.program, .{});
+    defer nested_result.deinit();
+    try std.testing.expectEqualStrings("nested/1\ncaller/2\n", nested_result.stdout);
 }
 
 test "executor parses and executes POSIX shell functions" {

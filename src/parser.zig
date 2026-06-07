@@ -439,7 +439,7 @@ fn isBlank(c: u8) bool {
 }
 
 fn isWordBoundary(c: u8) bool {
-    return isBlank(c) or c == '\n' or c == '#' or switch (c) {
+    return isBlank(c) or c == '\n' or switch (c) {
         '|', '&', ';', '(', ')', '<', '>' => true,
         else => false,
     };

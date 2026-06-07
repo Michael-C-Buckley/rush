@@ -312,6 +312,14 @@ fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
         };
     }
 
+    if (isSpecialParameterChar(raw[next])) {
+        return .{
+            .kind = .parameter,
+            .span = .init(dollar, next + 1),
+            .value_span = .init(next, next + 1),
+        };
+    }
+
     if (!isNameStart(raw[next])) return null;
     var name_end = next + 1;
     while (name_end < raw.len and isNameContinue(raw[name_end])) : (name_end += 1) {}
@@ -633,6 +641,12 @@ fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usiz
         return true;
     }
 
+    if (isSpecialParameterChar(raw[index.*])) {
+        if (env.get(raw[index.* .. index.* + 1])) |value| try output.appendSlice(allocator, value);
+        index.* += 1;
+        return true;
+    }
+
     if (!isNameStart(raw[index.*])) {
         try output.append(allocator, '$');
         try output.append(allocator, raw[index.*]);
@@ -687,6 +701,10 @@ pub fn quoteRemove(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
     }
 
     return output.toOwnedSlice(allocator);
+}
+
+fn isSpecialParameterChar(c: u8) bool {
+    return std.ascii.isDigit(c) or c == '#' or c == '@' or c == '*' or c == '?' or c == '$' or c == '!';
 }
 
 fn isNameStart(c: u8) bool {
