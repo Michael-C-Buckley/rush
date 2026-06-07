@@ -184,6 +184,8 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     defer statement_refs.deinit(allocator);
     var here_doc_ranges = try collectHereDocRanges(allocator, parsed);
     defer here_doc_ranges.deinit(allocator);
+    var nested_body_ranges = try collectNestedBodyRanges(allocator, parsed);
+    defer nested_body_ranges.deinit(allocator);
     const missing_command = std.math.maxInt(usize);
     const command_indexes_by_node = try allocator.alloc(usize, parsed.nodes.len);
     defer allocator.free(command_indexes_by_node);
@@ -215,7 +217,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     }
 
     for (parsed.nodes, 0..) |node, node_index| {
-        if (node.kind != .simple_command or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .simple_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         command_indexes_by_node[node_index] = commands.items.len;
         const lowered = try lowerSimpleCommand(allocator, parsed, parser.NodeId.init(node_index));
         try commands.append(allocator, lowered);
@@ -223,7 +225,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
 
     var previous_pipeline_token_end: ?usize = null;
     for (parsed.nodes) |node| {
-        if (node.kind != .pipeline or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .pipeline or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         var lowered = try lowerPipeline(allocator, parsed, node, command_indexes_by_node, missing_command);
         if (previous_pipeline_token_end) |previous_end| {
             lowered.op_before = listOpBetween(parsed.tokens, previous_end, node.token_start);
@@ -234,49 +236,49 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .if_command or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .if_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .if_command, .index = if_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try if_commands.append(allocator, lowerIfCommand(parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .loop_command or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .loop_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .loop_command, .index = loop_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try loop_commands.append(allocator, lowerLoopCommand(parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .for_command or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .for_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .for_command, .index = for_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try for_commands.append(allocator, try lowerForCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .case_command or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .case_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .case_command, .index = case_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try case_commands.append(allocator, try lowerCaseCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .function_definition or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .function_definition or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .function_definition, .index = function_definitions.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try function_definitions.append(allocator, try lowerFunctionDefinition(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .bash_test_command or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .bash_test_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .bash_test_command, .index = bash_test_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try bash_test_commands.append(allocator, try lowerBashTestCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .brace_group or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .brace_group or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .brace_group, .index = brace_groups.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try brace_groups.append(allocator, try lowerBraceGroup(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .subshell or spanStartsInRanges(node.span, here_doc_ranges.items)) continue;
+        if (node.kind != .subshell or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .subshell, .index = subshells.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try subshells.append(allocator, try lowerSubshell(allocator, parsed, node));
     }
@@ -307,6 +309,37 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         .brace_groups = try brace_groups.toOwnedSlice(allocator),
         .subshells = try subshells.toOwnedSlice(allocator),
         .statements = try statements.toOwnedSlice(allocator),
+    };
+}
+
+fn collectNestedBodyRanges(allocator: std.mem.Allocator, parsed: parser.ParseResult) !std.ArrayList(parser.Span) {
+    var ranges: std.ArrayList(parser.Span) = .empty;
+    errdefer ranges.deinit(allocator);
+    for (parsed.nodes) |node| {
+        if (!isCompoundNode(node.kind)) continue;
+        for (parsed.nodeChildren(node)) |child| switch (child) {
+            .node => |node_id| {
+                const child_node = parsed.nodes[node_id.index()];
+                if (child_node.kind == .list) try ranges.append(allocator, child_node.span);
+            },
+            .token => {},
+        };
+    }
+    return ranges;
+}
+
+fn isCompoundNode(kind: parser.NodeKind) bool {
+    return switch (kind) {
+        .if_command,
+        .loop_command,
+        .for_command,
+        .case_command,
+        .function_definition,
+        .bash_test_command,
+        .brace_group,
+        .subshell,
+        => true,
+        else => false,
     };
 }
 

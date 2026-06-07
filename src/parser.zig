@@ -841,12 +841,16 @@ const SyntaxParser = struct {
         self.nodes.items[0].child_end = self.children.items.len;
     }
 
-    fn parseList(self: *SyntaxParser) !NodeId {
+    fn parseList(self: *SyntaxParser) anyerror!NodeId {
+        return self.parseListUntil(&.{}, &.{});
+    }
+
+    fn parseListUntil(self: *SyntaxParser, word_terminators: []const []const u8, token_terminators: []const TokenKind) anyerror!NodeId {
         const token_start = self.index;
         var list_children: std.ArrayList(SyntaxChild) = .empty;
         defer list_children.deinit(self.allocator);
 
-        while (!self.at(.eof)) {
+        while (!self.at(.eof) and !self.atListTerminator(word_terminators, token_terminators)) {
             if (self.startsFunctionDefinition()) {
                 const function_definition = try self.parseFunctionDefinition();
                 try list_children.append(self.allocator, .{ .node = function_definition });
@@ -968,23 +972,20 @@ const SyntaxParser = struct {
         return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
-    fn parseSubshell(self: *SyntaxParser) !NodeId {
+    fn parseSubshell(self: *SyntaxParser) anyerror!NodeId {
         const token_start = self.index;
         var subshell_children: std.ArrayList(SyntaxChild) = .empty;
         defer subshell_children.deinit(self.allocator);
-        var depth: usize = 0;
         var closed = false;
 
-        while (!self.at(.eof)) {
-            const token = self.current();
-            if (token.kind == .left_paren) {
-                depth += 1;
-            } else if (token.kind == .right_paren) {
-                if (depth > 0) depth -= 1;
-                if (depth == 0) closed = true;
-            }
+        try self.appendCurrentTokenChildTo(&subshell_children);
+        if (!self.at(.right_paren) and !self.at(.eof)) {
+            const body = try self.parseListUntil(&.{}, &.{.right_paren});
+            try subshell_children.append(self.allocator, .{ .node = body });
+        }
+        if (self.at(.right_paren)) {
             try self.appendCurrentTokenChildTo(&subshell_children);
-            if (closed) break;
+            closed = true;
         }
 
         if (!closed) {
@@ -1014,26 +1015,20 @@ const SyntaxParser = struct {
         return self.addNode(.subshell, span, token_start, token_end, child_start, self.children.items.len);
     }
 
-    fn parseBraceGroup(self: *SyntaxParser) !NodeId {
+    fn parseBraceGroup(self: *SyntaxParser) anyerror!NodeId {
         const token_start = self.index;
         var group_children: std.ArrayList(SyntaxChild) = .empty;
         defer group_children.deinit(self.allocator);
-        var depth: usize = 0;
         var closed = false;
 
-        while (!self.at(.eof)) {
-            const token = self.current();
-            if (token.kind == .word) {
-                const lexeme = token.lexeme(self.source);
-                if (std.mem.eql(u8, lexeme, "{")) {
-                    depth += 1;
-                } else if (std.mem.eql(u8, lexeme, "}")) {
-                    if (depth > 0) depth -= 1;
-                    if (depth == 0) closed = true;
-                }
-            }
+        try self.appendCurrentTokenChildTo(&group_children);
+        if (!self.at(.word) or !std.mem.eql(u8, self.current().lexeme(self.source), "}")) {
+            const body = try self.parseListUntil(&.{"}"}, &.{});
+            try group_children.append(self.allocator, .{ .node = body });
+        }
+        if (self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "}")) {
             try self.appendCurrentTokenChildTo(&group_children);
-            if (closed) break;
+            closed = true;
         }
 
         if (!closed) {
@@ -1475,6 +1470,18 @@ const SyntaxParser = struct {
         self.index += 1;
     }
 
+    fn atListTerminator(self: SyntaxParser, word_terminators: []const []const u8, token_terminators: []const TokenKind) bool {
+        for (token_terminators) |kind| {
+            if (self.at(kind)) return true;
+        }
+        if (!self.at(.word)) return false;
+        const lexeme = self.current().lexeme(self.source);
+        for (word_terminators) |word| {
+            if (std.mem.eql(u8, lexeme, word)) return true;
+        }
+        return false;
+    }
+
     fn startsListElement(self: SyntaxParser) bool {
         return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
     }
@@ -1899,6 +1906,38 @@ test "parser builds POSIX brace group nodes" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "parser nests list bodies inside subshell and brace group CST nodes" {
+    var result = try parse(std.testing.allocator, "( echo sub; ( echo nested ) ); { echo group; }", .{});
+    defer result.deinit();
+
+    var subshell_with_list = false;
+    var brace_with_list = false;
+    var nested_subshells: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .subshell) {
+            nested_subshells += 1;
+            for (result.nodeChildren(node)) |child| switch (child) {
+                .node => |node_id| {
+                    if (result.nodes[node_id.index()].kind == .list) subshell_with_list = true;
+                },
+                .token => {},
+            };
+        }
+        if (node.kind == .brace_group) {
+            for (result.nodeChildren(node)) |child| switch (child) {
+                .node => |node_id| {
+                    if (result.nodes[node_id.index()].kind == .list) brace_with_list = true;
+                },
+                .token => {},
+            };
+        }
+    }
+
+    try std.testing.expect(nested_subshells >= 2);
+    try std.testing.expect(subshell_with_list);
+    try std.testing.expect(brace_with_list);
 }
 
 test "parser reports incomplete POSIX brace groups" {
