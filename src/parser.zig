@@ -394,6 +394,26 @@ pub const ParseOptions = struct {
     cursor: ?usize = null,
 };
 
+pub const HighlightKind = enum {
+    invalid,
+    eof,
+    whitespace,
+    newline,
+    comment,
+    command,
+    argument,
+    assignment,
+    io_number,
+    operator,
+    redirect,
+    diagnostic_error,
+};
+
+pub const Highlight = struct {
+    kind: HighlightKind,
+    span: Span,
+};
+
 pub const ParseResult = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
@@ -428,6 +448,61 @@ pub const ParseResult = struct {
         self.* = undefined;
     }
 };
+
+pub fn syntaxHighlights(allocator: std.mem.Allocator, result: ParseResult) ![]Highlight {
+    var highlights: std.ArrayList(Highlight) = .empty;
+    errdefer highlights.deinit(allocator);
+
+    for (result.tokens) |token| {
+        try highlights.append(allocator, .{
+            .kind = defaultHighlightKind(token.kind),
+            .span = token.span,
+        });
+    }
+
+    for (result.nodes) |node| {
+        const kind: ?HighlightKind = switch (node.kind) {
+            .command_word => .command,
+            .word => .argument,
+            .assignment_word => .assignment,
+            .io_number => .io_number,
+            else => null,
+        };
+        if (kind) |highlight_kind| {
+            for (node.token_start..node.token_end) |token_index| {
+                highlights.items[token_index].kind = highlight_kind;
+            }
+        }
+    }
+
+    for (result.diagnostics) |diagnostic| {
+        try highlights.append(allocator, .{ .kind = .diagnostic_error, .span = diagnostic.span });
+    }
+
+    return highlights.toOwnedSlice(allocator);
+}
+
+fn defaultHighlightKind(kind: TokenKind) HighlightKind {
+    return switch (kind) {
+        .invalid => .invalid,
+        .eof => .eof,
+        .whitespace => .whitespace,
+        .newline => .newline,
+        .comment => .comment,
+        .word => .argument,
+        .less,
+        .greater,
+        .dless,
+        .dless_dash,
+        .dgreat,
+        .less_and,
+        .greater_and,
+        .less_great,
+        .clobber,
+        => .redirect,
+        else => .operator,
+    };
+}
 
 pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOptions) !ParseResult {
     _ = options;
@@ -898,6 +973,35 @@ test "tokens expose source lexemes through spans" {
     const source = "echo hello";
     const token: Token = .{ .kind = .word, .span = .init(5, 10) };
     try std.testing.expectEqualStrings("hello", token.lexeme(source));
+}
+
+test "syntax highlights classify command arguments redirects and comments" {
+    var result = try parse(std.testing.allocator, "echo hi > out # c", .{});
+    defer result.deinit();
+
+    const highlights = try syntaxHighlights(std.testing.allocator, result);
+    defer std.testing.allocator.free(highlights);
+
+    try std.testing.expectEqual(HighlightKind.command, highlights[0].kind);
+    try std.testing.expectEqual(HighlightKind.whitespace, highlights[1].kind);
+    try std.testing.expectEqual(HighlightKind.argument, highlights[2].kind);
+    try std.testing.expectEqual(HighlightKind.whitespace, highlights[3].kind);
+    try std.testing.expectEqual(HighlightKind.redirect, highlights[4].kind);
+    try std.testing.expectEqual(HighlightKind.whitespace, highlights[5].kind);
+    try std.testing.expectEqual(HighlightKind.argument, highlights[6].kind);
+    try std.testing.expectEqual(HighlightKind.whitespace, highlights[7].kind);
+    try std.testing.expectEqual(HighlightKind.comment, highlights[8].kind);
+}
+
+test "syntax highlights include diagnostic error spans" {
+    var result = try parse(std.testing.allocator, "echo | ", .{});
+    defer result.deinit();
+
+    const highlights = try syntaxHighlights(std.testing.allocator, result);
+    defer std.testing.allocator.free(highlights);
+
+    try std.testing.expectEqual(HighlightKind.diagnostic_error, highlights[highlights.len - 1].kind);
+    try expectSpan(.init(5, 6), highlights[highlights.len - 1].span);
 }
 
 test "parser builds a simple command node for a command word" {
