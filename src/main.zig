@@ -18,6 +18,10 @@ pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
+    if (args.len == 1) {
+        return runInteractive(allocator, init.io);
+    }
+
     if (args.len == 2 and std.mem.eql(u8, args[1], "--help")) {
         try writeAll(init.io, .stdout, usage);
         return 0;
@@ -34,6 +38,55 @@ pub fn main(init: std.process.Init) !u8 {
     try writeAll(init.io, .stdout, result.stdout);
     try writeAll(init.io, .stderr, result.stderr);
     return result.status;
+}
+
+pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io) !u8 {
+    var last_status: exec.ExitStatus = 0;
+    var stdin_buffer: [4096]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(io, &stdin_buffer);
+
+    while (true) {
+        try writeAll(io, .stdout, "rush$ ");
+        const line = (try reader.interface.takeDelimiter('\n')) orelse break;
+        if (std.mem.eql(u8, line, "exit")) break;
+        if (line.len == 0) continue;
+
+        var result = try runScript(allocator, io, line);
+        defer result.deinit();
+        try writeAll(io, .stdout, result.stdout);
+        try writeAll(io, .stderr, result.stderr);
+        last_status = result.status;
+    }
+
+    return last_status;
+}
+
+pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8) !exec.CommandResult {
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(allocator);
+    var last_status: exec.ExitStatus = 0;
+
+    var lines = std.mem.splitScalar(u8, input, '\n');
+    while (lines.next()) |line| {
+        try stdout.appendSlice(allocator, "rush$ ");
+        if (std.mem.eql(u8, line, "exit")) break;
+        if (line.len == 0) continue;
+
+        var result = try runScript(allocator, io, line);
+        defer result.deinit();
+        try stdout.appendSlice(allocator, result.stdout);
+        try stderr.appendSlice(allocator, result.stderr);
+        last_status = result.status;
+    }
+
+    return .{
+        .allocator = allocator,
+        .status = last_status,
+        .stdout = try stdout.toOwnedSlice(allocator),
+        .stderr = try stderr.toOwnedSlice(allocator),
+    };
 }
 
 pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !exec.CommandResult {
@@ -94,6 +147,15 @@ fn writeAll(io: std.Io, stream: OutputStream, bytes: []const u8) !void {
     var writer = file.writer(io, &buffer);
     try writer.interface.writeAll(bytes);
     try writer.interface.flush();
+}
+
+test "runReplInput executes lines and tracks status" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io, "echo hi\nfalse\nexit\n");
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
+    try std.testing.expectEqualStrings("rush$ hi\nrush$ rush$ ", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "runScript executes builtins" {
