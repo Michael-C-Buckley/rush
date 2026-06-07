@@ -648,8 +648,11 @@ pub const Executor = struct {
             } else {
                 const argv = try argvForCommand(self.allocator, command_without_redirs);
                 defer self.allocator.free(argv);
+                var child_env = try self.buildProcessEnv(command.assignments);
+                defer child_env.deinit();
                 children[spawned] = std.process.spawn(io, .{
                     .argv = argv,
+                    .environ_map = &child_env,
                     .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
                     .stdout = if (stdout_file) |file| .{ .file = file } else .ignore,
                     .stderr = if (stderr_file) |file| .{ .file = file } else .inherit,
@@ -815,10 +818,13 @@ pub const Executor = struct {
             const command = program.commands[command_index];
             const argv = try argvForCommand(self.allocator, command);
             defer self.allocator.free(argv);
+            var child_env = try self.buildProcessEnv(command.assignments);
+            defer child_env.deinit();
 
             const is_last = index + 1 == pipeline.command_indexes.len;
             children[index] = std.process.spawn(io, .{
                 .argv = argv,
+                .environ_map = &child_env,
                 .stdin = if (previous_stdout) |file| .{ .file = file } else .ignore,
                 .stdout = .pipe,
                 .stderr = if (is_last) .pipe else .inherit,
@@ -892,6 +898,8 @@ pub const Executor = struct {
         }
 
         if (self.functions.get(expanded.argv[0].text)) |body| {
+            var assignment_scope = try self.pushTemporaryAssignments(expanded.assignments);
+            defer assignment_scope.restore();
             try self.pushCallFrame(expanded.argv[1..]);
             defer self.popCallFrame();
             self.function_depth += 1;
@@ -906,6 +914,8 @@ pub const Executor = struct {
         }
 
         if (builtinFor(expanded.argv[0].text)) |builtin| {
+            var assignment_scope = try self.pushTemporaryAssignments(expanded.assignments);
+            defer assignment_scope.restore();
             return try self.applyOutputRedirections(expanded, try builtin(self, expanded, effective_stdin, options), options);
         }
 
@@ -1130,11 +1140,70 @@ pub const Executor = struct {
         self.allocator.free(word.text);
     }
 
+    const SavedAssignment = struct {
+        name: []const u8,
+        old_value: ?[]const u8,
+    };
+
+    const AssignmentScope = struct {
+        executor: *Executor,
+        saved: []SavedAssignment,
+
+        fn restore(self: *AssignmentScope) void {
+            for (self.saved) |entry| {
+                if (entry.old_value) |value| {
+                    self.executor.setEnv(entry.name, value) catch {};
+                    self.executor.allocator.free(value);
+                } else {
+                    self.executor.unsetEnv(entry.name);
+                }
+                self.executor.allocator.free(entry.name);
+            }
+            self.executor.allocator.free(self.saved);
+            self.* = undefined;
+        }
+    };
+
+    fn pushTemporaryAssignments(self: *Executor, assignments: []const ir.WordRef) !AssignmentScope {
+        const saved = try self.allocator.alloc(SavedAssignment, assignments.len);
+        var initialized: usize = 0;
+        errdefer {
+            for (saved[0..initialized]) |entry| {
+                self.allocator.free(entry.name);
+                if (entry.old_value) |value| self.allocator.free(value);
+            }
+            self.allocator.free(saved);
+        }
+
+        for (assignments) |assignment| {
+            const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
+            const name = assignment.text[0..equals];
+            const old_value = if (self.getEnv(name)) |value| try self.allocator.dupe(u8, value) else null;
+            saved[initialized] = .{ .name = try self.allocator.dupe(u8, name), .old_value = old_value };
+            initialized += 1;
+            try self.setEnv(name, assignment.text[equals + 1 ..]);
+        }
+
+        return .{ .executor = self, .saved = saved[0..initialized] };
+    }
+
     fn applyAssignments(self: *Executor, assignments: []const ir.WordRef) !void {
         for (assignments) |assignment| {
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
             try self.setEnv(assignment.text[0..equals], assignment.text[equals + 1 ..]);
         }
+    }
+
+    fn buildProcessEnv(self: *Executor, assignments: []const ir.WordRef) !std.process.Environ.Map {
+        var map = std.process.Environ.Map.init(self.allocator);
+        errdefer map.deinit();
+        var iter = self.env.iterator();
+        while (iter.next()) |entry| try map.put(entry.key_ptr.*, entry.value_ptr.*);
+        for (assignments) |assignment| {
+            const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
+            try map.put(assignment.text[0..equals], assignment.text[equals + 1 ..]);
+        }
+        return map;
     }
 
     fn applyInputRedirections(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, owned_stdin: *?[]u8) ![]const u8 {
@@ -1276,11 +1345,14 @@ pub const Executor = struct {
             }
         }
 
+        var child_env = try self.buildProcessEnv(command.assignments);
+        defer child_env.deinit();
         const capture_stdout = options.external_stdio == .capture and stdout_file == null;
         const capture_stderr = options.external_stdio == .capture and stderr_file == null;
         const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit and stdin_file == null);
         var child = std.process.spawn(io, .{
             .argv = argv,
+            .environ_map = &child_env,
             .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stdout = if (stdout_file) |file| .{ .file = file } else if (capture_stdout) .pipe else .inherit,
             .stderr = if (stderr_file) |file| .{ .file = file } else if (capture_stderr) .pipe else .inherit,
@@ -2790,6 +2862,39 @@ test "executor expands redirection targets from shell environment" {
     const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(contents);
     try std.testing.expectEqualStrings("hi\n", contents);
+}
+
+test "executor applies command-prefix assignments temporarily" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\FOO=outer; FOO=inner echo "$FOO"; echo "$FOO"
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqualStrings("outer\nouter\n", result.stdout);
+    try std.testing.expectEqualStrings("outer", executor.getEnv("FOO").?);
+}
+
+test "executor passes shell environment and command assignments to external commands" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\export FOO=outer; FOO=inner /usr/bin/env | /usr/bin/grep '^FOO='
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("FOO=inner\n", result.stdout);
+    try std.testing.expectEqualStrings("outer", executor.getEnv("FOO").?);
 }
 
 test "executor applies assignment-only commands to shell environment" {

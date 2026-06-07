@@ -1,0 +1,1 @@
+FOO=outer; FOO=inner /usr/bin/env | /usr/bin/grep '^FOO='; echo "$FOO"
