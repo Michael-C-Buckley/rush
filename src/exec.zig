@@ -14,6 +14,10 @@ pub const ExecuteOptions = struct {
     features: compat.Features = .{},
 };
 
+pub const ShellOptions = struct {
+    pipefail: bool = false,
+};
+
 pub const CommandResult = struct {
     allocator: std.mem.Allocator,
     status: ExitStatus,
@@ -42,6 +46,7 @@ pub const Executor = struct {
     env: std.StringHashMapUnmanaged([]const u8) = .empty,
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
+    shell_options: ShellOptions = .{},
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         return .{ .allocator = allocator };
@@ -349,10 +354,13 @@ pub const Executor = struct {
         var last = try emptyResult(self.allocator, 0);
         var stdin = try self.allocator.alloc(u8, 0);
         defer self.allocator.free(stdin);
+        const statuses = try self.allocator.alloc(ExitStatus, pipeline.command_indexes.len);
+        defer self.allocator.free(statuses);
 
         for (pipeline.command_indexes, 0..) |command_index, index| {
             last.deinit();
             last = try self.executeSimpleCommandWithInput(program.commands[command_index], stdin, options);
+            statuses[index] = last.status;
 
             if (index + 1 < pipeline.command_indexes.len) {
                 self.allocator.free(stdin);
@@ -360,7 +368,19 @@ pub const Executor = struct {
             }
         }
 
+        last.status = self.pipelineStatus(statuses);
         return last;
+    }
+
+    fn pipelineStatus(self: Executor, statuses: []const ExitStatus) ExitStatus {
+        if (statuses.len == 0) return 0;
+        if (!self.shell_options.pipefail) return statuses[statuses.len - 1];
+        var index = statuses.len;
+        while (index > 0) {
+            index -= 1;
+            if (statuses[index] != 0) return statuses[index];
+        }
+        return 0;
     }
 
     fn canExecuteRealPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
@@ -494,22 +514,23 @@ pub const Executor = struct {
         }
         try multi_reader.checkAnyError();
 
-        var status: ExitStatus = 0;
-        const last_stage = pipeline.command_indexes.len - 1;
+        const statuses = try self.allocator.alloc(ExitStatus, pipeline.command_indexes.len);
+        defer self.allocator.free(statuses);
+        @memset(statuses, 0);
         for (children[0..spawned], child_stage_indexes[0..spawned]) |*child, stage_index| {
             const term = try child.wait(io);
-            if (stage_index == last_stage) status = exitStatusFromTerm(term);
+            statuses[stage_index] = exitStatusFromTerm(term);
         }
         for (threads.items) |thread| thread.join();
         for (contexts.items) |context| {
             defer self.allocator.destroy(context);
             if (context.err) |err| return err;
-            if (context.stage_index == last_stage) status = context.status;
+            statuses[context.stage_index] = context.status;
         }
 
         return .{
             .allocator = self.allocator,
-            .status = status,
+            .status = self.pipelineStatus(statuses),
             .stdout = try multi_reader.toOwnedSlice(0),
             .stderr = try multi_reader.toOwnedSlice(1),
         };
@@ -599,15 +620,16 @@ pub const Executor = struct {
         }
         try multi_reader.checkAnyError();
 
-        var status: ExitStatus = 0;
-        for (children[0..spawned]) |*child| {
+        const statuses = try self.allocator.alloc(ExitStatus, spawned);
+        defer self.allocator.free(statuses);
+        for (children[0..spawned], 0..) |*child, index| {
             const term = try child.wait(io);
-            status = exitStatusFromTerm(term);
+            statuses[index] = exitStatusFromTerm(term);
         }
 
         return .{
             .allocator = self.allocator,
-            .status = status,
+            .status = self.pipelineStatus(statuses),
             .stdout = try multi_reader.toOwnedSlice(0),
             .stderr = try multi_reader.toOwnedSlice(1),
         };
@@ -1987,6 +2009,38 @@ test "executor applies real redirections to spawned external commands" {
     var stdin_result = try executor.executeProgram(stdin_lowered.program, .{ .io = std.testing.io, .allow_external = true });
     defer stdin_result.deinit();
     try std.testing.expectEqualStrings("from-file", stdin_result.stdout);
+}
+
+test "executor applies pipefail option to pipeline status" {
+    var internal = try parseAndLower(std.testing.allocator, "false | true");
+    defer internal.parsed.deinit();
+    defer internal.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var default_result = try executor.executeProgram(internal.program, .{});
+    defer default_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), default_result.status);
+
+    executor.shell_options.pipefail = true;
+    var pipefail_result = try executor.executeProgram(internal.program, .{});
+    defer pipefail_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), pipefail_result.status);
+
+    var external = try parseAndLower(std.testing.allocator, "/bin/sh -c 'exit 3' | /usr/bin/true");
+    defer external.parsed.deinit();
+    defer external.program.deinit();
+    var external_result = try executor.executeProgram(external.program, .{ .io = std.testing.io, .allow_external = true });
+    defer external_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 3), external_result.status);
+
+    var mixed = try parseAndLower(std.testing.allocator, "false | /usr/bin/true");
+    defer mixed.parsed.deinit();
+    defer mixed.program.deinit();
+    var mixed_result = try executor.executeProgram(mixed.program, .{ .io = std.testing.io, .allow_external = true });
+    defer mixed_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), mixed_result.status);
 }
 
 test "executor supports mixed builtin and external pipeline stages" {
