@@ -171,6 +171,7 @@ pub const NodeKind = enum {
     for_command,
     bash_test_command,
     case_command,
+    case_item,
     function_definition,
     brace_group,
     subshell,
@@ -1157,8 +1158,14 @@ const SyntaxParser = struct {
         if (self.atWord("in")) {
             saw_in = true;
             try self.appendCurrentTokenChildTo(&case_children);
-            const arms = try self.parseRawListUntilWord("esac");
-            try case_children.append(self.allocator, .{ .node = arms });
+            while (!self.at(.eof) and !self.atWord("esac")) {
+                if (self.current().kind.isTrivia()) {
+                    try self.appendCurrentTokenChildTo(&case_children);
+                    continue;
+                }
+                const item = try self.parseCaseItem();
+                try case_children.append(self.allocator, .{ .node = item });
+            }
         }
         if (self.atWord("esac")) {
             try self.appendCurrentTokenChildTo(&case_children);
@@ -1187,6 +1194,23 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, case_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.case_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseCaseItem(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var item_children: std.ArrayList(SyntaxChild) = .empty;
+        defer item_children.deinit(self.allocator);
+
+        while (!self.at(.eof) and !self.atWord("esac")) {
+            try self.appendCurrentTokenChildTo(&item_children);
+            if (self.previousToken().kind == .dsemicolon) break;
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, item_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.case_item, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parseBashTestCommand(self: *SyntaxParser) !NodeId {
@@ -2058,14 +2082,21 @@ test "parser builds POSIX case command nodes" {
     defer result.deinit();
 
     var found = false;
+    var item_count: usize = 0;
     for (result.nodes) |node| {
         if (node.kind == .case_command) {
             found = true;
             try expectSpan(.init(0, 46), node.span);
-            try std.testing.expectEqual(@as(usize, 1), countChildNodesOfKind(result, node, .list));
+            try std.testing.expectEqual(@as(usize, 2), countChildNodesOfKind(result, node, .case_item));
+        }
+        if (node.kind == .case_item) {
+            if (item_count == 0) try expectSpan(.init(12, 27), node.span);
+            if (item_count == 1) try expectSpan(.init(28, 41), node.span);
+            item_count += 1;
         }
     }
     try std.testing.expect(found);
+    try std.testing.expectEqual(@as(usize, 2), item_count);
 }
 
 test "parser reports incomplete POSIX case commands" {
