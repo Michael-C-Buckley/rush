@@ -414,6 +414,23 @@ pub const Highlight = struct {
     span: Span,
 };
 
+pub const CompletionKind = enum {
+    command,
+    argument,
+    redirect_target,
+    assignment_name,
+    assignment_value,
+    separator,
+    quoted_string,
+};
+
+pub const CompletionContext = struct {
+    kind: CompletionKind,
+    cursor: usize,
+    token_index: ?usize = null,
+    span: Span,
+};
+
 pub const ParseResult = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
@@ -480,6 +497,99 @@ pub fn syntaxHighlights(allocator: std.mem.Allocator, result: ParseResult) ![]Hi
     }
 
     return highlights.toOwnedSlice(allocator);
+}
+
+pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
+    const clamped_cursor = @min(cursor, result.source.len);
+
+    for (result.diagnostics) |diagnostic| {
+        if (diagnostic.kind == .incomplete_input and diagnostic.span.touches(clamped_cursor)) {
+            return .{
+                .kind = .quoted_string,
+                .cursor = clamped_cursor,
+                .span = diagnostic.span,
+            };
+        }
+    }
+
+    if (tokenAtCursor(result.tokens, clamped_cursor)) |token_index| {
+        const token = result.tokens[token_index];
+        if (token.kind == .word) {
+            if (nodeKindForToken(result, token_index)) |node_kind| {
+                if (node_kind == .assignment_word) {
+                    return assignmentCompletionContext(result, token_index, clamped_cursor);
+                }
+                if (node_kind == .command_word) {
+                    return .{ .kind = .command, .cursor = clamped_cursor, .token_index = token_index, .span = token.span };
+                }
+            }
+        }
+    }
+
+    const previous = previousSignificantToken(result.tokens, clamped_cursor) orelse return .{
+        .kind = .command,
+        .cursor = clamped_cursor,
+        .span = .empty(clamped_cursor),
+    };
+    const previous_token = result.tokens[previous];
+
+    if (previous_token.kind.isRedirectOperator()) {
+        return .{ .kind = .redirect_target, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+    }
+
+    if (previous_token.kind == .pipe or isListSeparator(previous_token.kind)) {
+        return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+    }
+
+    if (previous_token.kind.isOperator()) {
+        return .{ .kind = .separator, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+    }
+
+    return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+}
+
+fn assignmentCompletionContext(result: ParseResult, token_index: usize, cursor: usize) CompletionContext {
+    const token = result.tokens[token_index];
+    const lexeme = token.lexeme(result.source);
+    const equals = std.mem.indexOfScalar(u8, lexeme, '=') orelse return .{
+        .kind = .assignment_name,
+        .cursor = cursor,
+        .token_index = token_index,
+        .span = token.span,
+    };
+    const equals_offset = token.span.start + equals;
+    return .{
+        .kind = if (cursor <= equals_offset) .assignment_name else .assignment_value,
+        .cursor = cursor,
+        .token_index = token_index,
+        .span = token.span,
+    };
+}
+
+fn tokenAtCursor(tokens: []const Token, cursor: usize) ?usize {
+    for (tokens, 0..) |token, index| {
+        if (token.kind == .eof) continue;
+        if (token.span.contains(cursor)) return index;
+    }
+    return null;
+}
+
+fn previousSignificantToken(tokens: []const Token, cursor: usize) ?usize {
+    var result: ?usize = null;
+    for (tokens, 0..) |token, index| {
+        if (token.kind == .eof or token.span.end > cursor) break;
+        if (!token.kind.isTrivia()) result = index;
+    }
+    return result;
+}
+
+fn nodeKindForToken(result: ParseResult, token_index: usize) ?NodeKind {
+    for (result.nodes) |node| {
+        if (node.token_start == token_index and node.token_end == token_index + 1) {
+            return node.kind;
+        }
+    }
+    return null;
 }
 
 fn defaultHighlightKind(kind: TokenKind) HighlightKind {
@@ -1002,6 +1112,42 @@ test "syntax highlights include diagnostic error spans" {
 
     try std.testing.expectEqual(HighlightKind.diagnostic_error, highlights[highlights.len - 1].kind);
     try expectSpan(.init(5, 6), highlights[highlights.len - 1].span);
+}
+
+test "completion context finds command and argument positions" {
+    var empty = try parse(std.testing.allocator, "", .{});
+    defer empty.deinit();
+    try std.testing.expectEqual(CompletionKind.command, completionContext(empty, 0).kind);
+
+    var command = try parse(std.testing.allocator, "echo", .{});
+    defer command.deinit();
+    try std.testing.expectEqual(CompletionKind.command, completionContext(command, 2).kind);
+    try std.testing.expectEqual(CompletionKind.argument, completionContext(command, 4).kind);
+
+    var argument = try parse(std.testing.allocator, "echo hi", .{});
+    defer argument.deinit();
+    try std.testing.expectEqual(CompletionKind.argument, completionContext(argument, 7).kind);
+}
+
+test "completion context finds redirect targets and pipeline commands" {
+    var redirect = try parse(std.testing.allocator, "echo > ", .{});
+    defer redirect.deinit();
+    try std.testing.expectEqual(CompletionKind.redirect_target, completionContext(redirect, 7).kind);
+
+    var pipeline = try parse(std.testing.allocator, "echo | ", .{});
+    defer pipeline.deinit();
+    try std.testing.expectEqual(CompletionKind.command, completionContext(pipeline, 7).kind);
+}
+
+test "completion context finds assignments and quoted strings" {
+    var assignment = try parse(std.testing.allocator, "FOO=bar echo", .{});
+    defer assignment.deinit();
+    try std.testing.expectEqual(CompletionKind.assignment_name, completionContext(assignment, 2).kind);
+    try std.testing.expectEqual(CompletionKind.assignment_value, completionContext(assignment, 5).kind);
+
+    var quoted = try parse(std.testing.allocator, "echo 'unterminated", .{});
+    defer quoted.deinit();
+    try std.testing.expectEqual(CompletionKind.quoted_string, completionContext(quoted, 10).kind);
 }
 
 test "parser builds a simple command node for a command word" {
