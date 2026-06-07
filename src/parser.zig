@@ -169,6 +169,7 @@ pub const NodeKind = enum {
     if_command,
     loop_command,
     for_command,
+    bash_test_command,
     parse_error,
 };
 
@@ -754,7 +755,6 @@ fn defaultHighlightKind(kind: TokenKind) HighlightKind {
 }
 
 pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOptions) !ParseResult {
-    _ = options.features;
     _ = options.mode;
     _ = options.cursor;
 
@@ -765,6 +765,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
         .allocator = allocator,
         .source = source,
         .tokens = lex_result.tokens,
+        .features = options.features,
     };
     errdefer parser.deinit();
 
@@ -789,6 +790,7 @@ const SyntaxParser = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
     tokens: []const Token,
+    features: compat.Features = .{},
     index: usize = 0,
     nodes: std.ArrayList(Node) = .empty,
     children: std.ArrayList(SyntaxChild) = .empty,
@@ -841,6 +843,12 @@ const SyntaxParser = struct {
         defer list_children.deinit(self.allocator);
 
         while (!self.at(.eof)) {
+            if (self.startsBashTestCommand()) {
+                const bash_test = try self.parseBashTestCommand();
+                try list_children.append(self.allocator, .{ .node = bash_test });
+                continue;
+            }
+
             if (self.startsIfCommand()) {
                 const if_command = try self.parseIfCommand();
                 try list_children.append(self.allocator, .{ .node = if_command });
@@ -930,6 +938,37 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, if_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseBashTestCommand(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var test_children: std.ArrayList(SyntaxChild) = .empty;
+        defer test_children.deinit(self.allocator);
+        var closed = false;
+
+        while (!self.at(.eof)) {
+            const token = self.current();
+            try self.appendCurrentTokenChildTo(&test_children);
+            if (token.kind == .word and std.mem.eql(u8, token.lexeme(self.source), "]]")) {
+                closed = true;
+                break;
+            }
+        }
+
+        if (!closed) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .incomplete_input,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing ]] to close Bash conditional command",
+            });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, test_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.bash_test_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parseForCommand(self: *SyntaxParser) !NodeId {
@@ -1214,7 +1253,11 @@ const SyntaxParser = struct {
     }
 
     fn startsListElement(self: SyntaxParser) bool {
-        return self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsPipeline();
+        return self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsPipeline();
+    }
+
+    fn startsBashTestCommand(self: SyntaxParser) bool {
+        return self.features.isBash() and self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "[[");
     }
 
     fn startsIfCommand(self: SyntaxParser) bool {
@@ -1236,7 +1279,7 @@ const SyntaxParser = struct {
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
-        if (self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand()) return false;
+        if (self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand()) return false;
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
 
@@ -1568,6 +1611,37 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
         },
     });
+}
+
+test "parser builds Bash conditional command nodes in Bash mode" {
+    var bash_result = try parse(std.testing.allocator, "[[ -n foo ]]", .{ .features = compat.Features.bash() });
+    defer bash_result.deinit();
+
+    var found = false;
+    for (bash_result.nodes) |node| {
+        if (node.kind == .bash_test_command) {
+            found = true;
+            try expectSpan(.init(0, 12), node.span);
+        }
+    }
+    try std.testing.expect(found);
+
+    var posix_result = try parse(std.testing.allocator, "[[ -n foo ]]", .{});
+    defer posix_result.deinit();
+    for (posix_result.nodes) |node| {
+        try std.testing.expect(node.kind != .bash_test_command);
+    }
+}
+
+test "parser reports incomplete Bash conditional commands" {
+    var result = try parse(std.testing.allocator, "[[ -n foo", .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 9), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing ]] to close Bash conditional command", result.diagnostics[0].message);
 }
 
 test "parser builds POSIX for command nodes" {
