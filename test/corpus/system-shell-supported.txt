@@ -92,3 +92,6 @@ set -e; set +e; false; echo after
 printf "hello\n" > rw; read line <> rw; echo "$line"
 : <> created; /bin/test -f created; echo status=$?
 : > rw; { echo via3 >&3; } 3<> rw; /bin/cat rw
+! false; echo status=$?
+! true; echo status=$?
+! false | true; echo status=$?

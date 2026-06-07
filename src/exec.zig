@@ -679,7 +679,7 @@ pub const Executor = struct {
             }
         }
 
-        last.status = self.pipelineStatus(statuses);
+        last.status = self.pipelineStatus(pipeline, statuses);
         return last;
     }
 
@@ -690,15 +690,18 @@ pub const Executor = struct {
         return false;
     }
 
-    fn pipelineStatus(self: Executor, statuses: []const ExitStatus) ExitStatus {
-        if (statuses.len == 0) return 0;
-        if (!self.shell_options.pipefail) return statuses[statuses.len - 1];
-        var index = statuses.len;
-        while (index > 0) {
-            index -= 1;
-            if (statuses[index] != 0) return statuses[index];
-        }
-        return 0;
+    fn pipelineStatus(self: Executor, pipeline: ir.Pipeline, statuses: []const ExitStatus) ExitStatus {
+        const status: ExitStatus = blk: {
+            if (statuses.len == 0) break :blk 0;
+            if (!self.shell_options.pipefail) break :blk statuses[statuses.len - 1];
+            var index = statuses.len;
+            while (index > 0) {
+                index -= 1;
+                if (statuses[index] != 0) break :blk statuses[index];
+            }
+            break :blk 0;
+        };
+        return if (pipeline.negated) (if (status == 0) 1 else 0) else status;
     }
 
     fn canExecuteRealPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
@@ -869,7 +872,7 @@ pub const Executor = struct {
 
         return .{
             .allocator = self.allocator,
-            .status = self.pipelineStatus(statuses),
+            .status = self.pipelineStatus(pipeline, statuses),
             .stdout = try multi_reader.toOwnedSlice(0),
             .stderr = try multi_reader.toOwnedSlice(1),
         };
@@ -1028,7 +1031,7 @@ pub const Executor = struct {
 
         return .{
             .allocator = self.allocator,
-            .status = self.pipelineStatus(statuses),
+            .status = self.pipelineStatus(pipeline, statuses),
             .stdout = try multi_reader.toOwnedSlice(0),
             .stderr = try multi_reader.toOwnedSlice(1),
         };
@@ -4220,6 +4223,31 @@ test "executor implements set shell option baseline" {
     defer verbose.deinit();
     try std.testing.expectEqualStrings("verbose\n", verbose.stdout);
     try std.testing.expect(std.mem.indexOf(u8, verbose.stderr, "echo verbose") != null);
+}
+
+test "executor applies POSIX pipeline negation" {
+    var false_negated = try parseAndLower(std.testing.allocator, "! false");
+    defer false_negated.parsed.deinit();
+    defer false_negated.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var false_result = try executor.executeProgram(false_negated.program, .{});
+    defer false_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), false_result.status);
+
+    var true_negated = try parseAndLower(std.testing.allocator, "! true");
+    defer true_negated.parsed.deinit();
+    defer true_negated.program.deinit();
+    var true_result = try executor.executeProgram(true_negated.program, .{});
+    defer true_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), true_result.status);
+
+    var pipeline_negated = try parseAndLower(std.testing.allocator, "! false | true");
+    defer pipeline_negated.parsed.deinit();
+    defer pipeline_negated.program.deinit();
+    var pipeline_result = try executor.executeProgram(pipeline_negated.program, .{});
+    defer pipeline_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), pipeline_result.status);
 }
 
 test "executor applies pipefail option to pipeline status" {

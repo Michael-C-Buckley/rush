@@ -36,6 +36,7 @@ pub const Pipeline = struct {
     span: parser.Span,
     command_indexes: []usize,
     op_before: ListOp = .sequence,
+    negated: bool = false,
 };
 
 pub const IfCommand = struct {
@@ -728,22 +729,26 @@ fn spanSlice(parsed: parser.ParseResult, token_start: usize, token_end: usize) [
 fn lowerPipeline(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node, command_indexes_by_node: []const usize, missing_command: usize) !Pipeline {
     var command_indexes: std.ArrayList(usize) = .empty;
     errdefer command_indexes.deinit(allocator);
+    var negated = false;
 
-    for (parsed.nodeChildren(node)) |child| {
-        const child_node_id = switch (child) {
-            .node => |child_node| child_node,
-            .token => continue,
-        };
-        const child_node = parsed.nodes[child_node_id.index()];
-        if (child_node.kind != .simple_command) continue;
-        const command_index = command_indexes_by_node[child_node_id.index()];
-        std.debug.assert(command_index != missing_command);
-        try command_indexes.append(allocator, command_index);
-    }
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .token => |token_index| {
+            const token = parsed.tokens[token_index.index()];
+            if (token.kind == .word and std.mem.eql(u8, token.lexeme(parsed.source), "!")) negated = true;
+        },
+        .node => |child_node_id| {
+            const child_node = parsed.nodes[child_node_id.index()];
+            if (child_node.kind != .simple_command) continue;
+            const command_index = command_indexes_by_node[child_node_id.index()];
+            std.debug.assert(command_index != missing_command);
+            try command_indexes.append(allocator, command_index);
+        },
+    };
 
     return .{
         .span = node.span,
         .command_indexes = try command_indexes.toOwnedSlice(allocator),
+        .negated = negated,
     };
 }
 
@@ -1090,6 +1095,17 @@ test "lower simple command assignments argv and redirections" {
     try std.testing.expectEqual(parser.TokenKind.greater, command.redirections[0].operator);
     try std.testing.expectEqualStrings("2", command.redirections[0].io_number.?.text);
     try std.testing.expectEqualStrings("out", command.redirections[0].target.?.text);
+}
+
+test "lower preserves POSIX pipeline negation" {
+    var parsed = try parser.parse(std.testing.allocator, "! false", .{});
+    defer parsed.deinit();
+    var program = try lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), program.pipelines.len);
+    try std.testing.expect(program.pipelines[0].negated);
+    try std.testing.expectEqual(@as(usize, 1), program.pipelines[0].command_indexes.len);
 }
 
 test "lower preserves multiple simple commands from lists and pipelines" {

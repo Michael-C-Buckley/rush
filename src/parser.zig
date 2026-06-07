@@ -1327,6 +1327,13 @@ const SyntaxParser = struct {
         var pipeline_children: std.ArrayList(SyntaxChild) = .empty;
         defer pipeline_children.deinit(self.allocator);
 
+        if (self.atWord("!")) {
+            try self.appendCurrentTokenChildTo(&pipeline_children);
+            while (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(&pipeline_children);
+            }
+        }
+
         const first_command = try self.parseSimpleCommand();
         try pipeline_children.append(self.allocator, .{ .node = first_command });
 
