@@ -31,6 +31,16 @@ pub const CommandResult = struct {
     }
 };
 
+pub const LoopControlKind = enum {
+    break_loop,
+    continue_loop,
+};
+
+pub const LoopControl = struct {
+    kind: LoopControlKind,
+    levels: usize,
+};
+
 pub const CallFrame = struct {
     params: []const []const u8,
     count: []const u8,
@@ -64,6 +74,8 @@ pub const Executor = struct {
     call_frames: std.ArrayList(CallFrame) = .empty,
     function_depth: usize = 0,
     pending_return: ?ExitStatus = null,
+    loop_depth: usize = 0,
+    pending_loop_control: ?LoopControl = null,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         return .{ .allocator = allocator };
@@ -175,7 +187,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, result.stdout);
                 try stderr.appendSlice(self.allocator, result.stderr);
                 last_status = result.status;
-                if (self.pending_return != null) break;
+                if (self.pending_return != null or self.pending_loop_control != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         }
@@ -188,7 +200,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, result.stdout);
                 try stderr.appendSlice(self.allocator, result.stderr);
                 last_status = result.status;
-                if (self.pending_return != null) break;
+                if (self.pending_return != null or self.pending_loop_control != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         }
@@ -199,7 +211,7 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, result.stdout);
             try stderr.appendSlice(self.allocator, result.stderr);
             last_status = result.status;
-            if (self.pending_return != null) break;
+            if (self.pending_return != null or self.pending_loop_control != null) break;
         }
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
     }
@@ -243,6 +255,8 @@ pub const Executor = struct {
     }
 
     fn executeForCommand(self: *Executor, command: ir.ForCommand, options: ExecuteOptions) !CommandResult {
+        self.loop_depth += 1;
+        defer self.loop_depth -= 1;
         const expanded_words = try self.expandArgv(command.words, options);
         defer self.freeWords(expanded_words);
 
@@ -259,6 +273,11 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
+            if (self.pending_return != null) break;
+            if (self.consumeLoopControl()) |control| switch (control) {
+                .break_loop => break,
+                .continue_loop => continue,
+            };
         }
 
         return .{
@@ -270,6 +289,8 @@ pub const Executor = struct {
     }
 
     fn executeLoopCommand(self: *Executor, command: ir.LoopCommand, options: ExecuteOptions) !CommandResult {
+        self.loop_depth += 1;
+        defer self.loop_depth -= 1;
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
         var stderr: std.ArrayList(u8) = .empty;
@@ -297,6 +318,11 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
+            if (self.pending_return != null) break;
+            if (self.consumeLoopControl()) |control| switch (control) {
+                .break_loop => break,
+                .continue_loop => continue,
+            };
         } else {
             status = 2;
             try stderr.appendSlice(self.allocator, "rush: loop iteration limit exceeded\n");
@@ -308,6 +334,16 @@ pub const Executor = struct {
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
         };
+    }
+
+    fn consumeLoopControl(self: *Executor) ?LoopControlKind {
+        const control = self.pending_loop_control orelse return null;
+        if (control.levels <= 1) {
+            self.pending_loop_control = null;
+            return control.kind;
+        }
+        self.pending_loop_control = .{ .kind = control.kind, .levels = control.levels - 1 };
+        return .break_loop;
     }
 
     fn executeIfCommand(self: *Executor, command: ir.IfCommand, options: ExecuteOptions) !CommandResult {
@@ -1156,10 +1192,12 @@ const BuiltinFn = *const fn (*Executor, ir.SimpleCommand, []const u8, ExecuteOpt
 
 fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, ":")) return builtinTrue;
+    if (std.mem.eql(u8, name, "break")) return builtinBreak;
     if (std.mem.eql(u8, name, "true")) return builtinTrue;
     if (std.mem.eql(u8, name, "false")) return builtinFalse;
     if (std.mem.eql(u8, name, "echo")) return builtinEcho;
     if (std.mem.eql(u8, name, "cat")) return builtinCat;
+    if (std.mem.eql(u8, name, "continue")) return builtinContinue;
     if (std.mem.eql(u8, name, "cd")) return builtinCd;
     if (std.mem.eql(u8, name, "pwd")) return builtinPwd;
     if (std.mem.eql(u8, name, "return")) return builtinReturn;
@@ -1170,6 +1208,30 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "test")) return builtinTest;
     if (std.mem.eql(u8, name, "[")) return builtinTest;
     return null;
+}
+
+fn builtinBreak(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    return setLoopControlBuiltin(self, command, .break_loop, "break");
+}
+
+fn builtinContinue(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    return setLoopControlBuiltin(self, command, .continue_loop, "continue");
+}
+
+fn setLoopControlBuiltin(self: *Executor, command: ir.SimpleCommand, kind: LoopControlKind, name: []const u8) !CommandResult {
+    if (self.loop_depth == 0) return errorResult(self.allocator, 2, name, "not in a loop");
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, name, "too many arguments");
+    const levels: usize = if (command.argv.len == 2) blk: {
+        const parsed = std.fmt.parseInt(usize, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, name, "numeric argument required");
+        if (parsed == 0) return errorResult(self.allocator, 2, name, "loop count must be positive");
+        break :blk parsed;
+    } else 1;
+    self.pending_loop_control = .{ .kind = kind, .levels = levels };
+    return emptyResult(self.allocator, 0);
 }
 
 fn builtinTrue(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -1558,6 +1620,36 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor supports break and continue builtins in loops" {
+    var break_lowered = try parseAndLower(std.testing.allocator, "for x in a b; do echo $x; break; done");
+    defer break_lowered.parsed.deinit();
+    defer break_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var break_result = try executor.executeProgram(break_lowered.program, .{});
+    defer break_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), break_result.status);
+    try std.testing.expectEqualStrings("a\n", break_result.stdout);
+
+    var continue_lowered = try parseAndLower(std.testing.allocator, "for x in a b; do continue; echo nope; done");
+    defer continue_lowered.parsed.deinit();
+    defer continue_lowered.program.deinit();
+    var continue_result = try executor.executeProgram(continue_lowered.program, .{});
+    defer continue_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), continue_result.status);
+    try std.testing.expectEqualStrings("", continue_result.stdout);
+
+    var outside = try parseAndLower(std.testing.allocator, "break");
+    defer outside.parsed.deinit();
+    defer outside.program.deinit();
+    var outside_result = try executor.executeProgram(outside.program, .{});
+    defer outside_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), outside_result.status);
+    try std.testing.expect(std.mem.indexOf(u8, outside_result.stderr, "not in a loop") != null);
 }
 
 test "executor supports return builtin in shell functions" {
