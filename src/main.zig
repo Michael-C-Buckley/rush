@@ -40,6 +40,37 @@ pub fn main(init: std.process.Init) !u8 {
     return result.status;
 }
 
+pub fn renderHighlightedInput(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
+    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
+    defer parsed.deinit();
+    const highlights = try parser.syntaxHighlights(allocator, parsed);
+    defer allocator.free(highlights);
+
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    for (highlights) |highlight| {
+        if (highlight.kind == .eof or highlight.span.isEmpty()) continue;
+        try output.appendSlice(allocator, ansiForHighlight(highlight.kind));
+        try output.appendSlice(allocator, highlight.span.slice(source));
+        try output.appendSlice(allocator, "\x1b[0m");
+    }
+    return output.toOwnedSlice(allocator);
+}
+
+fn ansiForHighlight(kind: parser.HighlightKind) []const u8 {
+    return switch (kind) {
+        .command => "\x1b[36m",
+        .argument => "\x1b[0m",
+        .assignment => "\x1b[33m",
+        .io_number => "\x1b[35m",
+        .operator => "\x1b[90m",
+        .redirect => "\x1b[35m",
+        .comment => "\x1b[32m",
+        .diagnostic_error, .invalid => "\x1b[31m",
+        .whitespace, .newline, .eof => "\x1b[0m",
+    };
+}
+
 pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io) !u8 {
     var last_status: exec.ExitStatus = 0;
     var stdin_buffer: [4096]u8 = undefined;
@@ -167,6 +198,15 @@ fn writeAll(io: std.Io, stream: OutputStream, bytes: []const u8) !void {
     var writer = file.writer(io, &buffer);
     try writer.interface.writeAll(bytes);
     try writer.interface.flush();
+}
+
+test "interactive highlight renderer uses parser classifications" {
+    const rendered = try renderHighlightedInput(std.testing.allocator, "echo hi > out # comment");
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[36mecho\x1b[0m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[35m>\x1b[0m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[32m# comment\x1b[0m") != null);
 }
 
 test "runReplInput executes lines and tracks status" {
