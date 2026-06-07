@@ -173,6 +173,7 @@ pub const NodeKind = enum {
     case_command,
     function_definition,
     brace_group,
+    subshell,
     parse_error,
 };
 
@@ -858,6 +859,12 @@ const SyntaxParser = struct {
                 continue;
             }
 
+            if (self.startsSubshell()) {
+                const subshell = try self.parseSubshell();
+                try list_children.append(self.allocator, .{ .node = subshell });
+                continue;
+            }
+
             if (self.startsBashTestCommand()) {
                 const bash_test = try self.parseBashTestCommand();
                 try list_children.append(self.allocator, .{ .node = bash_test });
@@ -959,6 +966,52 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, if_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseSubshell(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var subshell_children: std.ArrayList(SyntaxChild) = .empty;
+        defer subshell_children.deinit(self.allocator);
+        var depth: usize = 0;
+        var closed = false;
+
+        while (!self.at(.eof)) {
+            const token = self.current();
+            if (token.kind == .left_paren) {
+                depth += 1;
+            } else if (token.kind == .right_paren) {
+                if (depth > 0) depth -= 1;
+                if (depth == 0) closed = true;
+            }
+            try self.appendCurrentTokenChildTo(&subshell_children);
+            if (closed) break;
+        }
+
+        if (!closed) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .incomplete_input,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing ) to close subshell",
+            });
+        }
+
+        while (self.current().kind == .whitespace) {
+            try self.appendCurrentTokenChildTo(&subshell_children);
+        }
+        while (self.startsRedirection()) {
+            const redirection = try self.parseRedirection();
+            try subshell_children.append(self.allocator, .{ .node = redirection });
+            while (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(&subshell_children);
+            }
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, subshell_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.subshell, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parseBraceGroup(self: *SyntaxParser) !NodeId {
@@ -1407,11 +1460,15 @@ const SyntaxParser = struct {
     }
 
     fn startsListElement(self: SyntaxParser) bool {
-        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
+        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
     }
 
     fn startsBraceGroup(self: SyntaxParser) bool {
         return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "{");
+    }
+
+    fn startsSubshell(self: SyntaxParser) bool {
+        return self.at(.left_paren);
     }
 
     fn startsFunctionDefinition(self: SyntaxParser) bool {
@@ -1447,7 +1504,7 @@ const SyntaxParser = struct {
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
-        if (self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand()) return false;
+        if (self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand()) return false;
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
 
@@ -1787,6 +1844,31 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
         },
     });
+}
+
+test "parser builds POSIX subshell nodes" {
+    var result = try parse(std.testing.allocator, "( FOO=bar; echo $FOO ) > out", .{});
+    defer result.deinit();
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .subshell) {
+            found = true;
+            try expectSpan(.init(0, 28), node.span);
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "parser reports incomplete POSIX subshells" {
+    var result = try parse(std.testing.allocator, "( echo hi", .{});
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 9), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing ) to close subshell", result.diagnostics[0].message);
 }
 
 test "parser builds POSIX brace group nodes" {

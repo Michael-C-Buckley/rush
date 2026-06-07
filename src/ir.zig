@@ -90,6 +90,12 @@ pub const BraceGroup = struct {
     redirections: []Redirection,
 };
 
+pub const Subshell = struct {
+    span: parser.Span,
+    body: []const u8,
+    redirections: []Redirection,
+};
+
 pub const StatementKind = enum {
     pipeline,
     if_command,
@@ -99,6 +105,7 @@ pub const StatementKind = enum {
     function_definition,
     bash_test_command,
     brace_group,
+    subshell,
 };
 
 pub const Statement = struct {
@@ -118,6 +125,7 @@ pub const Program = struct {
     function_definitions: []FunctionDefinition = &.{},
     bash_test_commands: []BashTestCommand = &.{},
     brace_groups: []BraceGroup = &.{},
+    subshells: []Subshell = &.{},
     statements: []Statement = &.{},
 
     pub fn deinit(self: *Program) void {
@@ -156,6 +164,8 @@ pub const Program = struct {
         self.allocator.free(self.bash_test_commands);
         for (self.brace_groups) |group| freeBraceGroup(self.allocator, group);
         self.allocator.free(self.brace_groups);
+        for (self.subshells) |subshell| freeSubshell(self.allocator, subshell);
+        self.allocator.free(self.subshells);
         self.allocator.free(self.statements);
         self.* = undefined;
     }
@@ -171,6 +181,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     var function_definitions: std.ArrayList(FunctionDefinition) = .empty;
     var bash_test_commands: std.ArrayList(BashTestCommand) = .empty;
     var brace_groups: std.ArrayList(BraceGroup) = .empty;
+    var subshells: std.ArrayList(Subshell) = .empty;
     var statement_refs: std.ArrayList(LoweredStatementRef) = .empty;
     defer statement_refs.deinit(allocator);
     const missing_command = std.math.maxInt(usize);
@@ -199,6 +210,8 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         bash_test_commands.deinit(allocator);
         for (brace_groups.items) |group| freeBraceGroup(allocator, group);
         brace_groups.deinit(allocator);
+        for (subshells.items) |subshell| freeSubshell(allocator, subshell);
+        subshells.deinit(allocator);
     }
 
     for (parsed.nodes, 0..) |node, node_index| {
@@ -262,6 +275,12 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         try brace_groups.append(allocator, try lowerBraceGroup(allocator, parsed, node));
     }
 
+    for (parsed.nodes) |node| {
+        if (node.kind != .subshell) continue;
+        try statement_refs.append(allocator, .{ .kind = .subshell, .index = subshells.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        try subshells.append(allocator, try lowerSubshell(allocator, parsed, node));
+    }
+
     std.mem.sort(LoweredStatementRef, statement_refs.items, {}, lessThanStatementRef);
     var statements: std.ArrayList(Statement) = .empty;
     errdefer statements.deinit(allocator);
@@ -286,6 +305,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         .function_definitions = try function_definitions.toOwnedSlice(allocator),
         .bash_test_commands = try bash_test_commands.toOwnedSlice(allocator),
         .brace_groups = try brace_groups.toOwnedSlice(allocator),
+        .subshells = try subshells.toOwnedSlice(allocator),
         .statements = try statements.toOwnedSlice(allocator),
     };
 }
@@ -301,6 +321,30 @@ fn lessThanStatementRef(_: void, a: LoweredStatementRef, b: LoweredStatementRef)
     return a.token_start < b.token_start;
 }
 
+fn lowerSubshell(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !Subshell {
+    std.debug.assert(node.kind == .subshell);
+    var close_paren: ?usize = null;
+    for (node.token_start..node.token_end) |token_index| {
+        if (parsed.tokens[token_index].kind == .right_paren) {
+            close_paren = token_index;
+            break;
+        }
+    }
+
+    var redirections = try lowerCompoundRedirections(allocator, parsed, node);
+    errdefer {
+        for (redirections.items) |redirection| freeRedirection(allocator, redirection);
+        redirections.deinit(allocator);
+    }
+
+    const body_end = close_paren orelse node.token_end;
+    return .{
+        .span = node.span,
+        .body = spanSlice(parsed, @min(node.token_start + 1, node.token_end), body_end),
+        .redirections = try redirections.toOwnedSlice(allocator),
+    };
+}
+
 fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !BraceGroup {
     std.debug.assert(node.kind == .brace_group);
     var close_brace: ?usize = null;
@@ -312,6 +356,21 @@ fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
         }
     }
 
+    var redirections = try lowerCompoundRedirections(allocator, parsed, node);
+    errdefer {
+        for (redirections.items) |redirection| freeRedirection(allocator, redirection);
+        redirections.deinit(allocator);
+    }
+
+    const body_end = close_brace orelse node.token_end;
+    return .{
+        .span = node.span,
+        .body = spanSlice(parsed, @min(node.token_start + 1, node.token_end), body_end),
+        .redirections = try redirections.toOwnedSlice(allocator),
+    };
+}
+
+fn lowerCompoundRedirections(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !std.ArrayList(Redirection) {
     var redirections: std.ArrayList(Redirection) = .empty;
     errdefer {
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);
@@ -326,13 +385,7 @@ fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
         },
         .token => {},
     };
-
-    const body_end = close_brace orelse node.token_end;
-    return .{
-        .span = node.span,
-        .body = spanSlice(parsed, @min(node.token_start + 1, node.token_end), body_end),
-        .redirections = try redirections.toOwnedSlice(allocator),
-    };
+    return redirections;
 }
 
 fn lowerBashTestCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !BashTestCommand {
@@ -712,6 +765,11 @@ fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, to
         .raw = raw,
         .text = text,
     };
+}
+
+fn freeSubshell(allocator: std.mem.Allocator, subshell: Subshell) void {
+    for (subshell.redirections) |redirection| freeRedirection(allocator, redirection);
+    allocator.free(subshell.redirections);
 }
 
 fn freeBraceGroup(allocator: std.mem.Allocator, group: BraceGroup) void {

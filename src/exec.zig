@@ -184,6 +184,7 @@ pub const Executor = struct {
                     .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index]),
                     .bash_test_command => try self.executeBashTestCommand(program.bash_test_commands[statement.index], options),
                     .brace_group => try self.executeBraceGroup(program.brace_groups[statement.index], options),
+                    .subshell => try self.executeSubshell(program.subshells[statement.index], options),
                 };
                 defer result.deinit();
                 try stdout.appendSlice(self.allocator, result.stdout);
@@ -218,6 +219,23 @@ pub const Executor = struct {
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
     }
 
+    fn executeSubshell(self: *Executor, subshell: ir.Subshell, options: ExecuteOptions) !CommandResult {
+        var child = Executor.init(self.allocator);
+        defer child.deinit();
+        try child.copyStateFrom(self);
+        const redirections = try self.expandRedirections(subshell.redirections, options);
+        defer self.freeRedirections(redirections);
+        var result = try child.executeScriptSlice(subshell.body, options);
+        errdefer result.deinit();
+        const wrapper: ir.SimpleCommand = .{
+            .span = subshell.span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = redirections,
+        };
+        return self.applyOutputRedirections(wrapper, result, options);
+    }
+
     fn executeBraceGroup(self: *Executor, group: ir.BraceGroup, options: ExecuteOptions) !CommandResult {
         const redirections = try self.expandRedirections(group.redirections, options);
         defer self.freeRedirections(redirections);
@@ -242,6 +260,35 @@ pub const Executor = struct {
     fn executeFunctionDefinition(self: *Executor, definition: ir.FunctionDefinition) !CommandResult {
         try self.setFunction(definition.name, definition.body);
         return emptyResult(self.allocator, 0);
+    }
+
+    fn copyStateFrom(self: *Executor, other: *const Executor) !void {
+        self.shell_options = other.shell_options;
+        var env_iter = other.env.iterator();
+        while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
+        var function_iter = other.functions.iterator();
+        while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.*);
+        var array_iter = other.arrays.iterator();
+        while (array_iter.next()) |entry| {
+            for (entry.value_ptr.values.items, 0..) |value, index| {
+                try self.setArrayElement(entry.key_ptr.*, index, value);
+            }
+        }
+        for (other.call_frames.items) |frame| {
+            var params = try self.allocator.alloc([]const u8, frame.params.len);
+            errdefer self.allocator.free(params);
+            var initialized: usize = 0;
+            errdefer for (params[0..initialized]) |param| self.allocator.free(param);
+            for (frame.params, 0..) |param, index| {
+                params[index] = try self.allocator.dupe(u8, param);
+                initialized += 1;
+            }
+            const count = try self.allocator.dupe(u8, frame.count);
+            errdefer self.allocator.free(count);
+            const joined = try self.allocator.dupe(u8, frame.joined);
+            errdefer self.allocator.free(joined);
+            try self.call_frames.append(self.allocator, .{ .params = params, .count = count, .joined = joined });
+        }
     }
 
     fn setFunction(self: *Executor, name: []const u8, body: []const u8) !void {
@@ -1754,6 +1801,33 @@ test "executor executes Bash conditional command baseline" {
     var parameter_result = try executor.executeProgram(parameter.program, .{});
     defer parameter_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), parameter_result.status);
+}
+
+test "executor executes POSIX subshells with isolated state" {
+    var lowered = try parseAndLower(std.testing.allocator, "FOO=outer; ( FOO=inner; echo $FOO; f; ); echo $FOO; f");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setFunction("f", "echo outer-f");
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("inner\nouter-f\nouter\nouter-f\n", result.stdout);
+
+    const path = "rush-subshell-redirection.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    var redirected = try parseAndLower(std.testing.allocator, "( echo one; echo two ) > rush-subshell-redirection.tmp");
+    defer redirected.parsed.deinit();
+    defer redirected.program.deinit();
+    var redirected_result = try executor.executeProgram(redirected.program, .{ .io = std.testing.io });
+    defer redirected_result.deinit();
+    try std.testing.expectEqualStrings("", redirected_result.stdout);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("one\ntwo\n", contents);
 }
 
 test "executor executes POSIX brace groups in current shell" {
