@@ -1587,13 +1587,26 @@ fn ignoreSignal(signal: std.posix.SIG) SignalActionGuard {
 }
 
 fn fileFromBytes(io: std.Io, bytes: []const u8) !std.Io.File {
-    const name = "rush-heredoc.tmp";
-    var write_file = try std.Io.Dir.cwd().createFile(io, name, .{ .truncate = true });
-    defer write_file.close(io);
-    try writeBytesToFile(io, write_file, bytes);
-    const read_file = try std.Io.Dir.cwd().openFile(io, name, .{});
-    std.Io.Dir.cwd().deleteFile(io, name) catch {};
-    return read_file;
+    var name_buffer: [128]u8 = undefined;
+    var attempts: usize = 0;
+    const Counter = struct {
+        var value: std.atomic.Value(u64) = .init(0);
+    };
+    while (attempts < 32) : (attempts += 1) {
+        const suffix = Counter.value.fetchAdd(1, .monotonic);
+        const name = try std.fmt.bufPrint(&name_buffer, ".rush-heredoc-{d}-{d}.tmp", .{ shellPid(), suffix });
+        var write_file = std.Io.Dir.cwd().createFile(io, name, .{ .truncate = false, .exclusive = true }) catch |err| switch (err) {
+            error.PathAlreadyExists => continue,
+            else => return err,
+        };
+        defer write_file.close(io);
+        errdefer std.Io.Dir.cwd().deleteFile(io, name) catch {};
+        try writeBytesToFile(io, write_file, bytes);
+        const read_file = try std.Io.Dir.cwd().openFile(io, name, .{});
+        std.Io.Dir.cwd().deleteFile(io, name) catch {};
+        return read_file;
+    }
+    return error.PathAlreadyExists;
 }
 
 fn writeBytesToFile(io: std.Io, file: std.Io.File, bytes: []const u8) !void {
@@ -3276,6 +3289,31 @@ test "executor applies pipefail option to pipeline status" {
     var mixed_result = try executor.executeProgram(mixed.program, .{ .io = std.testing.io, .allow_external = true });
     defer mixed_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 1), mixed_result.status);
+}
+
+test "executor materializes here-docs without fixed temp filename" {
+    const old_path = "rush-heredoc.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, old_path) catch {};
+    var sentinel = try std.Io.Dir.cwd().createFile(std.testing.io, old_path, .{ .truncate = true });
+    defer sentinel.close(std.testing.io);
+    try writeBytesToFile(std.testing.io, sentinel, "sentinel");
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\cat <<EOF
+        \\body
+        \\EOF
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqualStrings("body\n", result.stdout);
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, old_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("sentinel", contents);
 }
 
 test "executor supports here-doc stdin redirections" {
