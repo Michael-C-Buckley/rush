@@ -183,6 +183,7 @@ pub const Executor = struct {
                     .case_command => try self.executeCaseCommand(program.case_commands[statement.index], options),
                     .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index]),
                     .bash_test_command => try self.executeBashTestCommand(program.bash_test_commands[statement.index], options),
+                    .brace_group => try self.executeBraceGroup(program.brace_groups[statement.index], options),
                 };
                 defer result.deinit();
                 try stdout.appendSlice(self.allocator, result.stdout);
@@ -215,6 +216,20 @@ pub const Executor = struct {
             if (self.pending_return != null or self.pending_loop_control != null) break;
         }
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+    }
+
+    fn executeBraceGroup(self: *Executor, group: ir.BraceGroup, options: ExecuteOptions) !CommandResult {
+        const redirections = try self.expandRedirections(group.redirections, options);
+        defer self.freeRedirections(redirections);
+        var result = try self.executeScriptSlice(group.body, options);
+        errdefer result.deinit();
+        const wrapper: ir.SimpleCommand = .{
+            .span = group.span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = redirections,
+        };
+        return self.applyOutputRedirections(wrapper, result, options);
     }
 
     fn executeBashTestCommand(self: *Executor, command: ir.BashTestCommand, options: ExecuteOptions) !CommandResult {
@@ -1739,6 +1754,32 @@ test "executor executes Bash conditional command baseline" {
     var parameter_result = try executor.executeProgram(parameter.program, .{});
     defer parameter_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), parameter_result.status);
+}
+
+test "executor executes POSIX brace groups in current shell" {
+    var lowered = try parseAndLower(std.testing.allocator, "{ FOO=bar; echo $FOO; }; echo $FOO");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("bar\nbar\n", result.stdout);
+
+    const path = "rush-brace-group-redirection.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    var redirected = try parseAndLower(std.testing.allocator, "{ echo one; echo two; } > rush-brace-group-redirection.tmp");
+    defer redirected.parsed.deinit();
+    defer redirected.program.deinit();
+    var redirected_result = try executor.executeProgram(redirected.program, .{ .io = std.testing.io });
+    defer redirected_result.deinit();
+    try std.testing.expectEqualStrings("", redirected_result.stdout);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("one\ntwo\n", contents);
 }
 
 test "executor implements source and dot builtins" {
