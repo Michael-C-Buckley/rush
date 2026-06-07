@@ -26,3 +26,9 @@ cat <<EOF\nhello\nEOF
 VALUE=ok; cat <<EOF\n$VALUE $(echo hi) $((1 + 2))\nEOF
 VALUE=ok; cat <<'EOF'\n$VALUE $(echo hi) $((1 + 2))\nEOF
 cat <<FIRST <<SECOND\nfirst\nFIRST\nsecond\nSECOND
+echo 'a b $HOME'
+A=value; echo "$A and spaces"
+echo a\ b c
+echo before # ignored comment
+echo one\necho two
+echo if then else fi do done case esac
