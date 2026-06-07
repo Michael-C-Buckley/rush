@@ -240,8 +240,7 @@ pub const Executor = struct {
                     .subshell => try self.executeSubshell(program.subshells[statement.index], options),
                 };
                 defer result.deinit();
-                try stdout.appendSlice(self.allocator, result.stdout);
-                try stderr.appendSlice(self.allocator, result.stderr);
+                try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 last_status = result.status;
                 self.setLastStatus(last_status);
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
@@ -254,8 +253,7 @@ pub const Executor = struct {
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
                 var result = try self.executePipeline(program, pipeline, options);
                 defer result.deinit();
-                try stdout.appendSlice(self.allocator, result.stdout);
-                try stderr.appendSlice(self.allocator, result.stderr);
+                try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 last_status = result.status;
                 self.setLastStatus(last_status);
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
@@ -266,13 +264,23 @@ pub const Executor = struct {
         for (program.commands) |command| {
             var result = try self.executeSimpleCommand(command, options);
             defer result.deinit();
-            try stdout.appendSlice(self.allocator, result.stdout);
-            try stderr.appendSlice(self.allocator, result.stderr);
+            try self.appendOrWriteResult(options, &stdout, &stderr, result);
             last_status = result.status;
             self.setLastStatus(last_status);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+    }
+
+    fn appendOrWriteResult(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), result: CommandResult) !void {
+        if (options.external_stdio == .inherit) {
+            if (options.io) |io| {
+                try writeInheritedResult(io, result);
+                return;
+            }
+        }
+        try stdout.appendSlice(self.allocator, result.stdout);
+        try stderr.appendSlice(self.allocator, result.stderr);
     }
 
     fn executeSubshell(self: *Executor, subshell: ir.Subshell, options: ExecuteOptions) !CommandResult {
@@ -281,28 +289,44 @@ pub const Executor = struct {
         try child.copyStateFrom(self);
         const redirections = try self.expandRedirections(subshell.redirections, options);
         defer self.freeRedirections(redirections);
-        var result = try child.executeScriptSlice(subshell.body, options);
-        errdefer result.deinit();
         const wrapper: ir.SimpleCommand = .{
             .span = subshell.span,
             .assignments = &.{},
             .argv = &.{},
             .redirections = redirections,
         };
+        if (try self.applyRealFdRedirectionsIfNeeded(wrapper, options)) |guard_value| {
+            var guard = guard_value;
+            defer guard.restore(options.io.?);
+            var result = try child.executeScriptSlice(subshell.body, options);
+            defer result.deinit();
+            try writeInheritedResult(options.io.?, result);
+            return emptyResult(self.allocator, result.status);
+        }
+        var result = try child.executeScriptSlice(subshell.body, options);
+        errdefer result.deinit();
         return self.applyOutputRedirections(wrapper, result, options);
     }
 
     fn executeBraceGroup(self: *Executor, group: ir.BraceGroup, options: ExecuteOptions) !CommandResult {
         const redirections = try self.expandRedirections(group.redirections, options);
         defer self.freeRedirections(redirections);
-        var result = try self.executeScriptSlice(group.body, options);
-        errdefer result.deinit();
         const wrapper: ir.SimpleCommand = .{
             .span = group.span,
             .assignments = &.{},
             .argv = &.{},
             .redirections = redirections,
         };
+        if (try self.applyRealFdRedirectionsIfNeeded(wrapper, options)) |guard_value| {
+            var guard = guard_value;
+            defer guard.restore(options.io.?);
+            var result = try self.executeScriptSlice(group.body, options);
+            defer result.deinit();
+            try writeInheritedResult(options.io.?, result);
+            return emptyResult(self.allocator, result.status);
+        }
+        var result = try self.executeScriptSlice(group.body, options);
+        errdefer result.deinit();
         return self.applyOutputRedirections(wrapper, result, options);
     }
 
@@ -943,29 +967,29 @@ pub const Executor = struct {
 
         if (!options.suppress_functions and self.functions.get(expanded.argv[0].text) != null) {
             const body = self.functions.get(expanded.argv[0].text).?;
-            var assignment_scope = try self.pushTemporaryAssignments(expanded.assignments);
-            defer assignment_scope.restore();
-            try self.pushCallFrame(expanded.argv[1..]);
-            defer self.popCallFrame();
-            self.function_depth += 1;
-            defer self.function_depth -= 1;
-            var result = try self.executeScriptSlice(body, options);
-            errdefer result.deinit();
-            if (self.pending_return) |status| {
-                self.pending_return = null;
-                result.status = status;
+            if (try self.applyRealFdRedirectionsIfNeeded(expanded, options)) |guard_value| {
+                var guard = guard_value;
+                defer guard.restore(options.io.?);
+                var result = try self.executeFunctionBody(expanded, body, options);
+                defer result.deinit();
+                try writeInheritedResult(options.io.?, result);
+                return emptyResult(self.allocator, result.status);
             }
+            var result = try self.executeFunctionBody(expanded, body, options);
+            errdefer result.deinit();
             return try self.applyOutputRedirections(expanded, result, options);
         }
 
         if (builtinFor(expanded.argv[0].text)) |builtin| {
-            if (isSpecialBuiltin(expanded.argv[0].text)) {
-                try self.applyAssignments(expanded.assignments);
-                return try self.applyOutputRedirections(expanded, try builtin(self, expanded, effective_stdin, options), options);
+            if (try self.applyRealFdRedirectionsIfNeeded(expanded, options)) |guard_value| {
+                var guard = guard_value;
+                defer guard.restore(options.io.?);
+                var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
+                defer result.deinit();
+                try writeInheritedResult(options.io.?, result);
+                return emptyResult(self.allocator, result.status);
             }
-            var assignment_scope = try self.pushTemporaryAssignments(expanded.assignments);
-            defer assignment_scope.restore();
-            return try self.applyOutputRedirections(expanded, try builtin(self, expanded, effective_stdin, options), options);
+            return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options), options);
         }
 
         if (!options.allow_external) {
@@ -974,6 +998,32 @@ pub const Executor = struct {
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
         return try self.applyExternalPostRedirections(expanded, try self.executeExternal(expanded, io, options), options);
+    }
+
+    fn executeBuiltinWithAssignments(self: *Executor, builtin: BuiltinFn, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+        if (isSpecialBuiltin(command.argv[0].text)) {
+            try self.applyAssignments(command.assignments);
+            return builtin(self, command, stdin, options);
+        }
+        var assignment_scope = try self.pushTemporaryAssignments(command.assignments);
+        defer assignment_scope.restore();
+        return builtin(self, command, stdin, options);
+    }
+
+    fn executeFunctionBody(self: *Executor, command: ir.SimpleCommand, body: []const u8, options: ExecuteOptions) !CommandResult {
+        var assignment_scope = try self.pushTemporaryAssignments(command.assignments);
+        defer assignment_scope.restore();
+        try self.pushCallFrame(command.argv[1..]);
+        defer self.popCallFrame();
+        self.function_depth += 1;
+        defer self.function_depth -= 1;
+        var result = try self.executeScriptSlice(body, options);
+        errdefer result.deinit();
+        if (self.pending_return) |status| {
+            self.pending_return = null;
+            result.status = status;
+        }
+        return result;
     }
 
     fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !ir.SimpleCommand {
@@ -1166,7 +1216,9 @@ pub const Executor = struct {
         defer parsed.deinit();
         var program = try ir.lowerSimpleCommands(substitution_context.executor.allocator, parsed);
         defer program.deinit();
-        var result = try substitution_context.executor.executeProgram(program, substitution_context.options);
+        var sub_options = substitution_context.options;
+        sub_options.external_stdio = .capture;
+        var result = try substitution_context.executor.executeProgram(program, sub_options);
         defer result.deinit();
         return allocator.dupe(u8, result.stdout);
     }
@@ -1293,6 +1345,17 @@ pub const Executor = struct {
             try map.put(assignment.text[0..equals], assignment.text[equals + 1 ..]);
         }
         return map;
+    }
+
+    fn applyRealFdRedirectionsIfNeeded(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !?FdRedirectionGuard {
+        if (options.external_stdio != .inherit or command.redirections.len == 0) return null;
+        const io = options.io orelse return null;
+        var guard = try FdRedirectionGuard.init(io);
+        errdefer guard.restore(io);
+        for (command.redirections) |redirection| {
+            try guard.apply(self, io, redirection);
+        }
+        return guard;
     }
 
     fn applyInputRedirections(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, owned_stdin: *?[]u8) ![]const u8 {
@@ -1505,6 +1568,149 @@ fn shellUmask(mask: u16) u16 {
         return @intCast(std.os.linux.syscall1(.umask, mask));
     }
     return @intCast(std.c.umask(mask));
+}
+
+const FdRedirectionGuard = struct {
+    saved: [3]std.posix.fd_t,
+    active: bool = true,
+
+    fn init(io: std.Io) !FdRedirectionGuard {
+        _ = io;
+        return .{ .saved = .{ try rawDup(0), try rawDup(1), try rawDup(2) } };
+    }
+
+    fn apply(self: *FdRedirectionGuard, executor: *Executor, io: std.Io, redirection: ir.Redirection) !void {
+        _ = self;
+        if (isHereDocRedirection(redirection)) {
+            var file = try fileFromBytes(io, redirection.here_doc orelse "");
+            defer file.close(io);
+            try rawDup2(file.handle, 0);
+            return;
+        }
+        if (isStdinFileRedirection(redirection)) {
+            const target = redirection.target orelse return;
+            var file = try std.Io.Dir.cwd().openFile(io, target.text, .{});
+            defer file.close(io);
+            try rawDup2(file.handle, 0);
+            return;
+        }
+        if (isFileOutputRedirection(redirection)) {
+            const target = redirection.target orelse return;
+            const fd = redirectionFd(redirection) orelse 1;
+            if (fd > 2) return;
+            var file = try openOutputRedirectionFile(io, target.text, redirection.operator == .dgreat);
+            defer file.close(io);
+            try rawDup2(file.handle, fd);
+            return;
+        }
+        if (redirection.operator == .greater_and or redirection.operator == .less_and) {
+            const default_fd: u8 = if (redirection.operator == .less_and) 0 else 1;
+            const from_fd = redirectionFd(redirection) orelse default_fd;
+            const target = redirection.target orelse return;
+            const to_fd = parseFd(target.text) orelse return;
+            if (from_fd > 2 or to_fd > 2) return;
+            try rawDup2(to_fd, from_fd);
+            return;
+        }
+        _ = executor;
+    }
+
+    fn restore(self: *FdRedirectionGuard, io: std.Io) void {
+        if (!self.active) return;
+        for (self.saved, 0..) |saved_fd, index| {
+            rawDup2(saved_fd, @intCast(index)) catch {};
+            closeRawFd(io, saved_fd);
+        }
+        self.active = false;
+    }
+};
+
+fn writeInheritedResult(io: std.Io, result: CommandResult) !void {
+    _ = io;
+    try rawWriteAll(1, result.stdout);
+    try rawWriteAll(2, result.stderr);
+}
+
+fn rawWriteAll(fd: std.posix.fd_t, bytes: []const u8) !void {
+    var remaining = bytes;
+    while (remaining.len != 0) {
+        const written = try rawWrite(fd, remaining);
+        remaining = remaining[written..];
+    }
+}
+
+fn rawWrite(fd: std.posix.fd_t, bytes: []const u8) !usize {
+    if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) {
+        const rc = std.os.linux.write(fd, bytes.ptr, bytes.len);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => return rc,
+            .BADF => return error.BadFileDescriptor,
+            .INTR => return rawWrite(fd, bytes),
+            .IO => return error.InputOutput,
+            .NOSPC => return error.NoSpaceLeft,
+            .PIPE => return error.BrokenPipe,
+            else => return error.Unexpected,
+        }
+    }
+    while (true) {
+        const rc = std.c.write(fd, bytes.ptr, bytes.len);
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .BADF => return error.BadFileDescriptor,
+            .INTR => continue,
+            .IO => return error.InputOutput,
+            .NOSPC => return error.NoSpaceLeft,
+            .PIPE => return error.BrokenPipe,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn rawDup(fd: std.posix.fd_t) !std.posix.fd_t {
+    if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) {
+        const rc = std.os.linux.dup(fd);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .BADF => return error.BadFileDescriptor,
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            else => return error.Unexpected,
+        }
+    }
+    while (true) {
+        const rc = std.c.dup(fd);
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .BADF => return error.BadFileDescriptor,
+            .INTR => continue,
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn rawDup2(old_fd: std.posix.fd_t, new_fd: std.posix.fd_t) !void {
+    if (old_fd == new_fd) return;
+    if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) {
+        const rc = std.os.linux.dup2(old_fd, new_fd);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => return,
+            .BADF => return error.BadFileDescriptor,
+            .BUSY => return error.FileBusy,
+            .INTR => return rawDup2(old_fd, new_fd),
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            else => return error.Unexpected,
+        }
+    }
+    while (true) {
+        const rc = std.c.dup2(old_fd, new_fd);
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return,
+            .BADF => return error.BadFileDescriptor,
+            .INTR => continue,
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            else => return error.Unexpected,
+        }
+    }
 }
 
 fn makePipelinePipe(io: std.Io) !Executor.PipelinePipe {

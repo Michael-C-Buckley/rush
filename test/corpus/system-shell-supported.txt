@@ -57,3 +57,5 @@ IFS=; LIST="a b c"; for x in $LIST; do echo "<$x>"; done
 IFS=,; LIST="a b,c"; for x in $LIST; do echo "<$x>"; done
 show() { for x in "$@"; do echo "<$x>"; done; }; show "a b" c ""
 show() { IFS=:; echo "<$*>"; }; show "a b" c ""
+echo one > out; echo two; /bin/cat out
+{ echo one; echo two; } > out; echo after; /bin/cat out
