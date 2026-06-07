@@ -296,9 +296,8 @@ pub const Executor = struct {
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
         var status: ExitStatus = 0;
-        var iterations: usize = 0;
 
-        while (iterations < 1024) : (iterations += 1) {
+        while (true) {
             var condition = try self.executeScriptSlice(command.condition, options);
             defer condition.deinit();
             try stdout.appendSlice(self.allocator, condition.stdout);
@@ -323,9 +322,6 @@ pub const Executor = struct {
                 .break_loop => break,
                 .continue_loop => continue,
             };
-        } else {
-            status = 2;
-            try stderr.appendSlice(self.allocator, "rush: loop iteration limit exceeded\n");
         }
 
         return .{
@@ -1794,14 +1790,14 @@ test "executor executes POSIX while and until loops" {
     try std.testing.expectEqual(@as(ExitStatus, 0), until_result.status);
     try std.testing.expectEqualStrings("", until_result.stdout);
 
-    var limit_lowered = try parseAndLower(std.testing.allocator, "while true; do :; done");
-    defer limit_lowered.parsed.deinit();
-    defer limit_lowered.program.deinit();
+    var break_lowered = try parseAndLower(std.testing.allocator, "while true; do echo once; break; done");
+    defer break_lowered.parsed.deinit();
+    defer break_lowered.program.deinit();
 
-    var limit_result = try executor.executeProgram(limit_lowered.program, .{});
-    defer limit_result.deinit();
-    try std.testing.expectEqual(@as(ExitStatus, 2), limit_result.status);
-    try std.testing.expect(std.mem.indexOf(u8, limit_result.stderr, "loop iteration limit") != null);
+    var break_result = try executor.executeProgram(break_lowered.program, .{});
+    defer break_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), break_result.status);
+    try std.testing.expectEqualStrings("once\n", break_result.stdout);
 }
 
 test "executor executes POSIX if compound commands" {
