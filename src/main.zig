@@ -130,7 +130,7 @@ fn completionPrefix(source: []const u8, context: parser.CompletionContext) []con
 }
 
 fn completeCommands(allocator: std.mem.Allocator, prefix: []const u8) ![]Completion {
-    const builtins = [_][]const u8{ ":", "cat", "cd", "echo", "env", "export", "false", "pwd", "test", "true", "unset", "[" };
+    const builtins = [_][]const u8{ ":", "cat", "cd", "echo", "env", "export", "false", "pwd", "set", "test", "true", "unset", "[" };
     var completions: std.ArrayList(Completion) = .empty;
     errdefer freeCompletions(allocator, completions.items);
     for (builtins) |builtin| {

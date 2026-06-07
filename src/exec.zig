@@ -1079,6 +1079,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
+    if (std.mem.eql(u8, name, "set")) return builtinSet;
     if (std.mem.eql(u8, name, "test")) return builtinTest;
     if (std.mem.eql(u8, name, "[")) return builtinTest;
     return null;
@@ -1198,6 +1199,38 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         self.unsetEnv(arg.text);
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+
+    if (command.argv.len == 1) return printShellOptions(self, false);
+    if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
+    if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
+    if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
+        const enabled = command.argv[1].text[0] == '-';
+        if (std.mem.eql(u8, command.argv[2].text, "pipefail")) {
+            self.shell_options.pipefail = enabled;
+            return emptyResult(self.allocator, 0);
+        }
+        return errorResult(self.allocator, 2, "set", "unknown option name");
+    }
+    return errorResult(self.allocator, 2, "set", "unsupported arguments");
+}
+
+fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
+    const stdout = if (reusable)
+        try std.fmt.allocPrint(self.allocator, "set {s}o pipefail\n", .{if (self.shell_options.pipefail) "-" else "+"})
+    else
+        try std.fmt.allocPrint(self.allocator, "pipefail\t{s}\n", .{if (self.shell_options.pipefail) "on" else "off"});
+    errdefer self.allocator.free(stdout);
+    return .{
+        .allocator = self.allocator,
+        .status = 0,
+        .stdout = stdout,
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
 }
 
 fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -2009,6 +2042,42 @@ test "executor applies real redirections to spawned external commands" {
     var stdin_result = try executor.executeProgram(stdin_lowered.program, .{ .io = std.testing.io, .allow_external = true });
     defer stdin_result.deinit();
     try std.testing.expectEqualStrings("from-file", stdin_result.stdout);
+}
+
+test "executor implements set shell option baseline" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var show_lowered = try parseAndLower(std.testing.allocator, "set -o");
+    defer show_lowered.parsed.deinit();
+    defer show_lowered.program.deinit();
+    var show = try executor.executeProgram(show_lowered.program, .{});
+    defer show.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
+    try std.testing.expectEqualStrings("pipefail\toff\n", show.stdout);
+
+    var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
+    defer enable_lowered.parsed.deinit();
+    defer enable_lowered.program.deinit();
+    var enabled = try executor.executeProgram(enable_lowered.program, .{});
+    defer enabled.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), enabled.status);
+    try std.testing.expect(executor.shell_options.pipefail);
+
+    var reusable_lowered = try parseAndLower(std.testing.allocator, "set +o");
+    defer reusable_lowered.parsed.deinit();
+    defer reusable_lowered.program.deinit();
+    var reusable = try executor.executeProgram(reusable_lowered.program, .{});
+    defer reusable.deinit();
+    try std.testing.expectEqualStrings("set -o pipefail\n", reusable.stdout);
+
+    var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");
+    defer disable_lowered.parsed.deinit();
+    defer disable_lowered.program.deinit();
+    var disabled = try executor.executeProgram(disable_lowered.program, .{});
+    defer disabled.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), disabled.status);
+    try std.testing.expect(!executor.shell_options.pipefail);
 }
 
 test "executor applies pipefail option to pipeline status" {
