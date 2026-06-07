@@ -128,13 +128,56 @@ pub const Token = struct {
     }
 };
 
+pub const NodeId = struct {
+    raw: u32,
+
+    pub fn init(raw_index: usize) NodeId {
+        std.debug.assert(raw_index < std.math.maxInt(u32));
+        return .{ .raw = @intCast(raw_index) };
+    }
+
+    pub fn index(self: NodeId) usize {
+        return self.raw;
+    }
+};
+
+pub const TokenId = struct {
+    raw: u32,
+
+    pub fn init(raw_index: usize) TokenId {
+        std.debug.assert(raw_index < std.math.maxInt(u32));
+        return .{ .raw = @intCast(raw_index) };
+    }
+
+    pub fn index(self: TokenId) usize {
+        return self.raw;
+    }
+};
+
 pub const NodeKind = enum {
     root,
+    list,
+    pipeline,
+    simple_command,
+    redirection,
+    assignment_word,
+    command_word,
+    word,
+    parse_error,
+};
+
+pub const SyntaxChild = union(enum) {
+    node: NodeId,
+    token: TokenId,
 };
 
 pub const Node = struct {
     kind: NodeKind,
     span: Span,
+    token_start: usize,
+    token_end: usize,
+    child_start: usize,
+    child_end: usize,
 };
 
 pub const DiagnosticKind = enum {
@@ -355,12 +398,31 @@ pub const ParseResult = struct {
     source: []const u8,
     tokens: []Token,
     nodes: []Node,
+    children: []SyntaxChild,
     diagnostics: []Diagnostic,
     incomplete: bool,
+
+    pub fn root(self: ParseResult) Node {
+        std.debug.assert(self.nodes.len > 0);
+        return self.nodes[0];
+    }
+
+    pub fn nodeTokens(self: ParseResult, node: Node) []const Token {
+        std.debug.assert(node.token_start <= node.token_end);
+        std.debug.assert(node.token_end <= self.tokens.len);
+        return self.tokens[node.token_start..node.token_end];
+    }
+
+    pub fn nodeChildren(self: ParseResult, node: Node) []const SyntaxChild {
+        std.debug.assert(node.child_start <= node.child_end);
+        std.debug.assert(node.child_end <= self.children.len);
+        return self.children[node.child_start..node.child_end];
+    }
 
     pub fn deinit(self: *ParseResult) void {
         self.allocator.free(self.tokens);
         self.allocator.free(self.nodes);
+        self.allocator.free(self.children);
         self.allocator.free(self.diagnostics);
         self.* = undefined;
     }
@@ -374,9 +436,20 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
 
     const nodes = try allocator.alloc(Node, 1);
     errdefer allocator.free(nodes);
+
+    const children = try allocator.alloc(SyntaxChild, lex_result.tokens.len);
+    errdefer allocator.free(children);
+    for (children, 0..) |*child, index| {
+        child.* = .{ .token = .init(index) };
+    }
+
     nodes[0] = .{
         .kind = .root,
         .span = .init(0, source.len),
+        .token_start = 0,
+        .token_end = lex_result.tokens.len,
+        .child_start = 0,
+        .child_end = children.len,
     };
 
     return .{
@@ -384,6 +457,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
         .source = source,
         .tokens = lex_result.tokens,
         .nodes = nodes,
+        .children = children,
         .diagnostics = lex_result.diagnostics,
         .incomplete = lex_result.incomplete,
     };
@@ -397,7 +471,13 @@ pub const ExpectedToken = struct {
 pub const ExpectedNode = struct {
     kind: NodeKind,
     span: Span,
+    token_start: usize = 0,
+    token_end: ?usize = null,
+    child_start: usize = 0,
+    child_end: ?usize = null,
 };
+
+pub const ExpectedChild = SyntaxChild;
 
 pub const ExpectedDiagnostic = struct {
     kind: DiagnosticKind,
@@ -409,6 +489,7 @@ pub const ParseExpectation = struct {
     options: ParseOptions = .{},
     tokens: []const ExpectedToken = &.{},
     nodes: []const ExpectedNode = &.{},
+    children: ?[]const ExpectedChild = null,
     diagnostics: []const ExpectedDiagnostic = &.{},
     incomplete: bool = false,
 };
@@ -420,7 +501,10 @@ pub fn expectParse(source: []const u8, expectation: ParseExpectation) !void {
     try std.testing.expectEqual(source.ptr, result.source.ptr);
     try std.testing.expectEqual(expectation.incomplete, result.incomplete);
     try expectTokens(expectation.tokens, result.tokens);
-    try expectNodes(expectation.nodes, result.nodes);
+    try expectNodes(expectation.nodes, result.nodes, result.tokens.len, result.children.len);
+    if (expectation.children) |children| {
+        try expectChildren(children, result.children);
+    }
     try expectDiagnostics(expectation.diagnostics, result.diagnostics);
 }
 
@@ -432,11 +516,31 @@ fn expectTokens(expected: []const ExpectedToken, actual: []const Token) !void {
     }
 }
 
-fn expectNodes(expected: []const ExpectedNode, actual: []const Node) !void {
+fn expectNodes(expected: []const ExpectedNode, actual: []const Node, token_len: usize, child_len: usize) !void {
     try std.testing.expectEqual(expected.len, actual.len);
     for (expected, actual) |want, got| {
         try std.testing.expectEqual(want.kind, got.kind);
         try expectSpan(want.span, got.span);
+        try std.testing.expectEqual(want.token_start, got.token_start);
+        try std.testing.expectEqual(want.token_end orelse token_len, got.token_end);
+        try std.testing.expectEqual(want.child_start, got.child_start);
+        try std.testing.expectEqual(want.child_end orelse child_len, got.child_end);
+    }
+}
+
+fn expectChildren(expected: []const ExpectedChild, actual: []const SyntaxChild) !void {
+    try std.testing.expectEqual(expected.len, actual.len);
+    for (expected, actual) |want, got| {
+        switch (want) {
+            .node => |want_node| switch (got) {
+                .node => |got_node| try std.testing.expectEqual(want_node, got_node),
+                .token => return error.UnexpectedTokenChild,
+            },
+            .token => |want_token| switch (got) {
+                .node => return error.UnexpectedNodeChild,
+                .token => |got_token| try std.testing.expectEqual(want_token, got_token),
+            },
+        }
     }
 }
 
@@ -487,6 +591,27 @@ test "tokens expose source lexemes through spans" {
     const source = "echo hello";
     const token: Token = .{ .kind = .word, .span = .init(5, 10) };
     try std.testing.expectEqualStrings("hello", token.lexeme(source));
+}
+
+test "concrete syntax root covers token and child ranges" {
+    try expectParse("echo", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .eof, .span = .empty(4) },
+        },
+        .nodes = &.{.{
+            .kind = .root,
+            .span = .init(0, 4),
+            .token_start = 0,
+            .token_end = 2,
+            .child_start = 0,
+            .child_end = 2,
+        }},
+        .children = &.{
+            .{ .token = .init(0) },
+            .{ .token = .init(1) },
+        },
+    });
 }
 
 test "lexer tokenizes words, trivia, newlines, and eof" {
