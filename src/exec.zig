@@ -831,6 +831,27 @@ pub const Executor = struct {
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
+    fn readSourceFile(self: *Executor, io: std.Io, name: []const u8) ![]const u8 {
+        if (std.mem.indexOfScalar(u8, name, '/') != null) {
+            return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .limited(1024 * 1024));
+        }
+
+        if (self.getEnv("PATH")) |path_value| {
+            var parts = std.mem.splitScalar(u8, path_value, ':');
+            while (parts.next()) |dir| {
+                const prefix = if (dir.len == 0) "." else dir;
+                const candidate = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ prefix, name });
+                defer self.allocator.free(candidate);
+                return std.Io.Dir.cwd().readFileAlloc(io, candidate, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+                    error.FileNotFound => continue,
+                    else => |e| return e,
+                };
+            }
+        }
+
+        return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .limited(1024 * 1024));
+    }
+
     fn pushCallFrame(self: *Executor, args: []const ir.WordRef) !void {
         var params = try self.allocator.alloc([]const u8, args.len);
         errdefer self.allocator.free(params);
@@ -1195,6 +1216,7 @@ fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {
 const BuiltinFn = *const fn (*Executor, ir.SimpleCommand, []const u8, ExecuteOptions) anyerror!CommandResult;
 
 fn builtinFor(name: []const u8) ?BuiltinFn {
+    if (std.mem.eql(u8, name, ".")) return builtinSource;
     if (std.mem.eql(u8, name, ":")) return builtinTrue;
     if (std.mem.eql(u8, name, "break")) return builtinBreak;
     if (std.mem.eql(u8, name, "true")) return builtinTrue;
@@ -1209,9 +1231,23 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
     if (std.mem.eql(u8, name, "set")) return builtinSet;
+    if (std.mem.eql(u8, name, "source")) return builtinSource;
     if (std.mem.eql(u8, name, "test")) return builtinTest;
     if (std.mem.eql(u8, name, "[")) return builtinTest;
     return null;
+}
+
+fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    if (command.argv.len < 2) return errorResult(self.allocator, 2, command.argv[0].text, "missing file operand");
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, command.argv[0].text, "arguments are not implemented yet");
+    const contents = self.readSourceFile(io, command.argv[1].text) catch |err| switch (err) {
+        error.FileNotFound => return errorResult(self.allocator, 1, command.argv[0].text, "file not found"),
+        else => |e| return e,
+    };
+    defer self.allocator.free(contents);
+    return self.executeScriptSlice(contents, options);
 }
 
 fn builtinBreak(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -1682,6 +1718,32 @@ test "executor executes Bash conditional command baseline" {
     var parameter_result = try executor.executeProgram(parameter.program, .{});
     defer parameter_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), parameter_result.status);
+}
+
+test "executor implements source and dot builtins" {
+    const path = "rush-source-test.sh";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "FOO=sourced\nf() { echo from-source; }\n" });
+
+    var lowered = try parseAndLower(std.testing.allocator, ". ./rush-source-test.sh; echo $FOO; f");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("sourced\nfrom-source\n", result.stdout);
+
+    try executor.setEnv("PATH", ".");
+    var source_lowered = try parseAndLower(std.testing.allocator, "source rush-source-test.sh; f");
+    defer source_lowered.parsed.deinit();
+    defer source_lowered.program.deinit();
+    var source_result = try executor.executeProgram(source_lowered.program, .{ .io = std.testing.io });
+    defer source_result.deinit();
+    try std.testing.expectEqualStrings("from-source\n", source_result.stdout);
 }
 
 test "executor supports break and continue builtins in loops" {
