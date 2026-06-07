@@ -1494,7 +1494,9 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "cat")) return builtinCat;
     if (std.mem.eql(u8, name, "continue")) return builtinContinue;
     if (std.mem.eql(u8, name, "cd")) return builtinCd;
+    if (std.mem.eql(u8, name, "printf")) return builtinPrintf;
     if (std.mem.eql(u8, name, "pwd")) return builtinPwd;
+    if (std.mem.eql(u8, name, "read")) return builtinRead;
     if (std.mem.eql(u8, name, "return")) return builtinReturn;
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
@@ -1577,6 +1579,54 @@ fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     };
 }
 
+fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len == 1) return errorResult(self.allocator, 2, "printf", "missing format operand");
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    try appendPrintfOutput(self.allocator, &stdout, command.argv[1].text, command.argv[2..]);
+    return .{
+        .allocator = self.allocator,
+        .status = 0,
+        .stdout = try stdout.toOwnedSlice(self.allocator),
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
+}
+
+fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = options;
+    var arg_start: usize = 1;
+    if (arg_start < command.argv.len and std.mem.eql(u8, command.argv[arg_start].text, "-r")) {
+        arg_start += 1;
+    }
+
+    const names = command.argv[arg_start..];
+    const line_end = std.mem.indexOfScalar(u8, stdin, '\n') orelse stdin.len;
+    const status: ExitStatus = if (line_end < stdin.len) 0 else 1;
+    const line = if (line_end < stdin.len and line_end > 0 and stdin[line_end - 1] == '\r') stdin[0 .. line_end - 1] else stdin[0..line_end];
+    if (names.len == 0) {
+        try self.setEnv("REPLY", line);
+        return emptyResult(self.allocator, status);
+    }
+
+    var field_start = skipIfsWhitespace(line, 0);
+    for (names, 0..) |name_word, index| {
+        if (!isShellName(name_word.text)) return errorResult(self.allocator, 2, "read", "invalid variable name");
+        if (index == names.len - 1) {
+            const value_end = trimTrailingIfsWhitespace(line, line.len);
+            const value = if (field_start <= value_end) line[field_start..value_end] else "";
+            try self.setEnv(name_word.text, value);
+            break;
+        }
+        const field_end = nextIfsWhitespace(line, field_start);
+        try self.setEnv(name_word.text, line[field_start..field_end]);
+        field_start = skipIfsWhitespace(line, field_end);
+    }
+    return emptyResult(self.allocator, status);
+}
+
 fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = options;
     // Initial pipeline-friendly `cat`: with no operands, copy stdin to stdout.
@@ -1590,6 +1640,131 @@ fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         .stdout = try self.allocator.dupe(u8, stdin),
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), format: []const u8, args: []const ir.WordRef) !void {
+    var arg_index: usize = 0;
+    var first_pass = true;
+    while (first_pass or arg_index < args.len) {
+        first_pass = false;
+        const before = arg_index;
+        var index: usize = 0;
+        while (index < format.len) {
+            switch (format[index]) {
+                '\\' => {
+                    index += 1;
+                    if (index >= format.len) {
+                        try stdout.append(allocator, '\\');
+                    } else {
+                        try appendEscapedByte(allocator, stdout, format[index]);
+                        index += 1;
+                    }
+                },
+                '%' => {
+                    index += 1;
+                    if (index >= format.len) {
+                        try stdout.append(allocator, '%');
+                        break;
+                    }
+                    const spec = format[index];
+                    index += 1;
+                    if (spec == '%') {
+                        try stdout.append(allocator, '%');
+                        continue;
+                    }
+                    const arg = if (arg_index < args.len) blk: {
+                        const value = args[arg_index].text;
+                        arg_index += 1;
+                        break :blk value;
+                    } else "";
+                    switch (spec) {
+                        's' => try stdout.appendSlice(allocator, arg),
+                        'b' => try appendEscapedString(allocator, stdout, arg),
+                        'c' => try stdout.append(allocator, if (arg.len == 0) 0 else arg[0]),
+                        'd', 'i' => {
+                            const value = std.fmt.parseInt(i64, arg, 10) catch 0;
+                            try stdout.print(allocator, "{d}", .{value});
+                        },
+                        'u' => {
+                            const value = std.fmt.parseInt(u64, arg, 10) catch 0;
+                            try stdout.print(allocator, "{d}", .{value});
+                        },
+                        else => {
+                            try stdout.append(allocator, '%');
+                            try stdout.append(allocator, spec);
+                        },
+                    }
+                },
+                else => {
+                    try stdout.append(allocator, format[index]);
+                    index += 1;
+                },
+            }
+        }
+        if (arg_index == before) break;
+    }
+}
+
+fn appendEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8) !void {
+    var index: usize = 0;
+    while (index < text.len) {
+        if (text[index] != '\\') {
+            try stdout.append(allocator, text[index]);
+            index += 1;
+            continue;
+        }
+        index += 1;
+        if (index >= text.len) {
+            try stdout.append(allocator, '\\');
+        } else {
+            try appendEscapedByte(allocator, stdout, text[index]);
+            index += 1;
+        }
+    }
+}
+
+fn appendEscapedByte(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), byte: u8) !void {
+    try stdout.append(allocator, switch (byte) {
+        'a' => 0x07,
+        'b' => 0x08,
+        'f' => 0x0c,
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        'v' => 0x0b,
+        '\\' => '\\',
+        else => byte,
+    });
+}
+
+fn isShellName(name: []const u8) bool {
+    if (name.len == 0 or !(std.ascii.isAlphabetic(name[0]) or name[0] == '_')) return false;
+    for (name[1..]) |byte| {
+        if (!(std.ascii.isAlphabetic(byte) or std.ascii.isDigit(byte) or byte == '_')) return false;
+    }
+    return true;
+}
+
+fn skipIfsWhitespace(text: []const u8, start: usize) usize {
+    var index = start;
+    while (index < text.len and isIfsWhitespace(text[index])) : (index += 1) {}
+    return index;
+}
+
+fn nextIfsWhitespace(text: []const u8, start: usize) usize {
+    var index = start;
+    while (index < text.len and !isIfsWhitespace(text[index])) : (index += 1) {}
+    return index;
+}
+
+fn trimTrailingIfsWhitespace(text: []const u8, end: usize) usize {
+    var index = end;
+    while (index > 0 and isIfsWhitespace(text[index - 1])) : (index -= 1) {}
+    return index;
+}
+
+fn isIfsWhitespace(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\n';
 }
 
 fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -2391,6 +2566,43 @@ test "executor implements unset and env builtins" {
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "A=one\n") == null);
     try std.testing.expect(executor.getEnv("A") == null);
     try std.testing.expectEqualStrings("two", executor.getEnv("B").?);
+}
+
+test "executor implements read and printf builtins" {
+    var printf_lowered = try parseAndLower(std.testing.allocator, "printf 'hello %s %d\\n' world 42");
+    defer printf_lowered.parsed.deinit();
+    defer printf_lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var printf_result = try executor.executeProgram(printf_lowered.program, .{});
+    defer printf_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), printf_result.status);
+    try std.testing.expectEqualStrings("hello world 42\n", printf_result.stdout);
+
+    var repeat_lowered = try parseAndLower(std.testing.allocator, "printf '%s:%s\\n' a b c d");
+    defer repeat_lowered.parsed.deinit();
+    defer repeat_lowered.program.deinit();
+    var repeat_result = try executor.executeProgram(repeat_lowered.program, .{});
+    defer repeat_result.deinit();
+    try std.testing.expectEqualStrings("a:b\nc:d\n", repeat_result.stdout);
+
+    var escaped_lowered = try parseAndLower(std.testing.allocator, "printf '%b' 'x\\ny'");
+    defer escaped_lowered.parsed.deinit();
+    defer escaped_lowered.program.deinit();
+    var escaped_result = try executor.executeProgram(escaped_lowered.program, .{});
+    defer escaped_result.deinit();
+    try std.testing.expectEqualStrings("x\ny", escaped_result.stdout);
+
+    var read_lowered = try parseAndLower(std.testing.allocator,
+        \\read first rest <<EOF; printf '%s/%s\n' "$first" "$rest"
+        \\one two three
+        \\EOF
+    );
+    defer read_lowered.parsed.deinit();
+    defer read_lowered.program.deinit();
+    var read_result = try executor.executeProgram(read_lowered.program, .{});
+    defer read_result.deinit();
+    try std.testing.expectEqualStrings("one/two three\n", read_result.stdout);
 }
 
 test "executor implements pwd cd and export builtins" {
