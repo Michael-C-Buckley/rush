@@ -16,6 +16,7 @@ pub const Redirection = struct {
     operator: parser.TokenKind,
     target: ?WordRef = null,
     here_doc: ?[]const u8 = null,
+    here_doc_quoted: bool = false,
 };
 
 pub const SimpleCommand = struct {
@@ -814,7 +815,10 @@ fn lowerRedirection(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     };
 
     if ((result.operator == .dless or result.operator == .dless_dash) and result.target != null) {
-        result.here_doc = try extractOrderedHereDocForRedirection(allocator, parsed, node);
+        if (try extractOrderedHereDocForRedirection(allocator, parsed, node)) |here_doc| {
+            result.here_doc = here_doc.body;
+            result.here_doc_quoted = here_doc.quoted;
+        }
     }
 
     return result;
@@ -834,9 +838,15 @@ const PendingHereDoc = struct {
     redirection_start: usize,
     delimiter: []const u8,
     strip_tabs: bool,
+    quoted: bool,
 };
 
-fn extractOrderedHereDocForRedirection(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !?[]const u8 {
+const OrderedHereDoc = struct {
+    body: []const u8,
+    quoted: bool,
+};
+
+fn extractOrderedHereDocForRedirection(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !?OrderedHereDoc {
     const line = sourceLineBounds(parsed.source, node.span.start);
     var pending = try collectPendingHereDocsOnLine(allocator, parsed, line);
     defer pending.deinit(allocator);
@@ -846,7 +856,7 @@ fn extractOrderedHereDocForRedirection(allocator: std.mem.Allocator, parsed: par
     for (pending.items) |doc| {
         const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs);
         body_start = extraction.range.end;
-        if (doc.redirection_start == node.span.start) return extraction.body;
+        if (doc.redirection_start == node.span.start) return .{ .body = extraction.body, .quoted = doc.quoted };
         allocator.free(extraction.body);
     }
     return null;
@@ -861,7 +871,7 @@ fn collectPendingHereDocsOnLine(allocator: std.mem.Allocator, parsed: parser.Par
     for (parsed.nodes) |node| {
         if (node.kind != .redirection or node.span.start < line.start or node.span.start >= line.end) continue;
         const info = try hereDocInfoForNode(allocator, parsed, node) orelse continue;
-        try pending.append(allocator, .{ .redirection_start = node.span.start, .delimiter = info.delimiter, .strip_tabs = info.strip_tabs });
+        try pending.append(allocator, .{ .redirection_start = node.span.start, .delimiter = info.delimiter, .strip_tabs = info.strip_tabs, .quoted = info.quoted });
     }
     std.mem.sort(PendingHereDoc, pending.items, {}, lessThanPendingHereDoc);
     return pending;
@@ -878,6 +888,7 @@ fn freePendingHereDocs(allocator: std.mem.Allocator, pending: []const PendingHer
 const HereDocInfo = struct {
     delimiter: []const u8,
     strip_tabs: bool,
+    quoted: bool,
 };
 
 fn hereDocInfoForNode(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !?HereDocInfo {
@@ -895,10 +906,19 @@ fn hereDocInfoForNode(allocator: std.mem.Allocator, parsed: parser.ParseResult, 
     };
     if (operator != .dless and operator != .dless_dash) return null;
     const token_index = target_token orelse return null;
+    const raw = parsed.tokens[token_index].lexeme(parsed.source);
     return .{
-        .delimiter = try expand.quoteRemove(allocator, parsed.tokens[token_index].lexeme(parsed.source)),
+        .delimiter = try expand.quoteRemove(allocator, raw),
         .strip_tabs = operator == .dless_dash,
+        .quoted = wordContainsQuotes(raw),
     };
+}
+
+fn wordContainsQuotes(raw: []const u8) bool {
+    for (raw) |byte| {
+        if (byte == '\'' or byte == '"' or byte == '\\') return true;
+    }
+    return false;
 }
 
 fn isHereDocRedirectionNode(parsed: parser.ParseResult, node: parser.Node) bool {

@@ -942,11 +942,18 @@ pub const Executor = struct {
                 .io_number = if (redirection.io_number) |word| try self.expandWord(word, options) else null,
                 .operator = redirection.operator,
                 .target = if (redirection.target) |word| try self.expandWord(word, options) else null,
-                .here_doc = if (redirection.here_doc) |text| try self.allocator.dupe(u8, text) else null,
+                .here_doc = if (redirection.here_doc) |text| try self.expandHereDoc(text, redirection.here_doc_quoted, options) else null,
+                .here_doc_quoted = redirection.here_doc_quoted,
             };
             initialized += 1;
         }
         return expanded;
+    }
+
+    fn expandHereDoc(self: *Executor, text: []const u8, quoted: bool, options: ExecuteOptions) ![]const u8 {
+        if (quoted) return self.allocator.dupe(u8, text);
+        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
+        return expand.expandWordScalar(self.allocator, text, .{ .env = self.envLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -2892,6 +2899,29 @@ test "executor supports here-doc stdin redirections" {
     var pipeline_multiple_result = try executor.executeProgram(pipeline_multiple.program, .{ .io = std.testing.io });
     defer pipeline_multiple_result.deinit();
     try std.testing.expectEqualStrings("right body\n", pipeline_multiple_result.stdout);
+
+    try executor.setEnv("HD_VALUE", "expanded");
+    var expanded = try parseAndLower(std.testing.allocator,
+        \\cat <<EOF
+        \\$HD_VALUE $(echo command) $((1 + 2))
+        \\EOF
+    );
+    defer expanded.parsed.deinit();
+    defer expanded.program.deinit();
+    var expanded_result = try executor.executeProgram(expanded.program, .{ .io = std.testing.io });
+    defer expanded_result.deinit();
+    try std.testing.expectEqualStrings("expanded command 3\n", expanded_result.stdout);
+
+    var quoted = try parseAndLower(std.testing.allocator,
+        \\cat <<'EOF'
+        \\$HD_VALUE $(echo command) $((1 + 2))
+        \\EOF
+    );
+    defer quoted.parsed.deinit();
+    defer quoted.program.deinit();
+    var quoted_result = try executor.executeProgram(quoted.program, .{ .io = std.testing.io });
+    defer quoted_result.deinit();
+    try std.testing.expectEqualStrings("$HD_VALUE $(echo command) $((1 + 2))\n", quoted_result.stdout);
 }
 
 test "executor supports real redirections on pipeline stages" {
