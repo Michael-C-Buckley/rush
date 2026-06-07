@@ -14,6 +14,8 @@ const usage =
     \\
 ;
 
+const system_config_path = "/etc/rush/config.rush";
+
 pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -223,6 +225,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
     defer executor.deinit();
     try executor.importEnvironment(environ_map);
     executor.arg_zero = "rush";
+    try loadInteractiveConfig(allocator, io, &executor);
 
     while (true) {
         const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" }, "rush$ ") catch |err| switch (err) {
@@ -322,6 +325,36 @@ fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor,
         result.stderr = stderr;
     }
     return result;
+}
+
+fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor) !void {
+    try sourceOptionalConfig(allocator, io, executor, system_config_path);
+    const user_path = try userConfigPath(allocator, executor.*);
+    defer if (user_path) |path| allocator.free(path);
+    if (user_path) |path| try sourceOptionalConfig(allocator, io, executor, path);
+}
+
+fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8) !void {
+    const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+        error.FileNotFound => return,
+        else => return err,
+    };
+    defer allocator.free(contents);
+
+    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+    if (result.stdout.len != 0) try writeAll(io, .stdout, result.stdout);
+    if (result.stderr.len != 0) try writeAll(io, .stderr, result.stderr);
+}
+
+fn userConfigPath(allocator: std.mem.Allocator, executor: exec.Executor) !?[]const u8 {
+    if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
+        if (xdg_config_home.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home, "rush", "config.rush" });
+    }
+    if (executor.getEnv("HOME")) |home| {
+        if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".config", "rush", "config.rush" });
+    }
+    return null;
 }
 
 fn installInteractiveSignalHandlers() void {
@@ -626,6 +659,27 @@ test "repl uses rush_prompt function to build prompt text" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("rush$ custom > ok\ncustom > ", result.stdout);
+}
+
+test "user config path prefers XDG_CONFIG_HOME" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("HOME", "/home/example");
+    try executor.setEnv("XDG_CONFIG_HOME", "/tmp/xdg");
+
+    const path = (try userConfigPath(std.testing.allocator, executor)).?;
+    defer std.testing.allocator.free(path);
+    try std.testing.expectEqualStrings("/tmp/xdg/rush/config.rush", path);
+}
+
+test "user config path falls back to HOME config.rush" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("HOME", "/home/example");
+
+    const path = (try userConfigPath(std.testing.allocator, executor)).?;
+    defer std.testing.allocator.free(path);
+    try std.testing.expectEqualStrings("/home/example/.config/rush/config.rush", path);
 }
 
 test "integration harness compares selected scripts with /bin/sh" {

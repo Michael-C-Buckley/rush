@@ -2740,15 +2740,24 @@ fn builtinPromptPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u
     const io = options.io orelse return error.MissingIoForBuiltin;
     const cwd = try self.logicalCwd(io);
     defer self.allocator.free(cwd);
-    const display = if (self.getEnv("HOME")) |home| homeRelativePath(cwd, home) else cwd;
-    return stdoutLine(self.allocator, display, 0);
+    const display = try homeRelativePath(self.allocator, cwd, self.getEnv("HOME"));
+    defer if (display.owned) self.allocator.free(display.text);
+    return stdoutLine(self.allocator, display.text, 0);
 }
 
-fn homeRelativePath(path: []const u8, home: []const u8) []const u8 {
-    if (home.len == 0) return path;
-    if (std.mem.eql(u8, path, home)) return "~";
-    if (std.mem.startsWith(u8, path, home) and path.len > home.len and path[home.len] == '/') return path[home.len - 1 ..];
-    return path;
+const PromptPath = struct {
+    text: []const u8,
+    owned: bool = false,
+};
+
+fn homeRelativePath(allocator: std.mem.Allocator, path: []const u8, maybe_home: ?[]const u8) !PromptPath {
+    const home = maybe_home orelse return .{ .text = path };
+    if (home.len == 0) return .{ .text = path };
+    if (std.mem.eql(u8, path, home)) return .{ .text = "~" };
+    if (std.mem.startsWith(u8, path, home) and path.len > home.len and path[home.len] == '/') {
+        return .{ .text = try std.mem.concat(allocator, u8, &.{ "~", path[home.len..] }), .owned = true };
+    }
+    return .{ .text = path };
 }
 
 fn normalizeLogicalPath(allocator: std.mem.Allocator, base: []const u8, target: []const u8) ![]const u8 {
