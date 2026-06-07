@@ -40,6 +40,58 @@ pub fn main(init: std.process.Init) !u8 {
     return result.status;
 }
 
+pub const History = struct {
+    allocator: std.mem.Allocator,
+    entries: std.ArrayList([]const u8) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator) History {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *History) void {
+        for (self.entries.items) |entry| self.allocator.free(entry);
+        self.entries.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn add(self: *History, line: []const u8) !void {
+        if (line.len == 0) return;
+        if (self.entries.items.len != 0 and std.mem.eql(u8, self.entries.items[self.entries.items.len - 1], line)) return;
+        try self.entries.append(self.allocator, try self.allocator.dupe(u8, line));
+    }
+
+    pub fn suggest(self: History, prefix: []const u8) ?[]const u8 {
+        if (prefix.len == 0) return null;
+        var index = self.entries.items.len;
+        while (index > 0) {
+            index -= 1;
+            const entry = self.entries.items[index];
+            if (std.mem.startsWith(u8, entry, prefix) and entry.len > prefix.len) return entry;
+        }
+        return null;
+    }
+
+    pub fn load(self: *History, io: std.Io, path: []const u8) !void {
+        const contents = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+            error.FileNotFound => return,
+            else => return err,
+        };
+        defer self.allocator.free(contents);
+        var lines = std.mem.splitScalar(u8, contents, '\n');
+        while (lines.next()) |line| try self.add(line);
+    }
+
+    pub fn save(self: History, io: std.Io, path: []const u8) !void {
+        var contents: std.ArrayList(u8) = .empty;
+        defer contents.deinit(self.allocator);
+        for (self.entries.items) |entry| {
+            try contents.appendSlice(self.allocator, entry);
+            try contents.append(self.allocator, '\n');
+        }
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = contents.items });
+    }
+};
+
 pub const Completion = struct {
     text: []const u8,
 };
@@ -157,6 +209,11 @@ fn ansiForHighlight(kind: parser.HighlightKind) []const u8 {
 }
 
 pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io) !u8 {
+    var history = History.init(allocator);
+    defer history.deinit();
+    history.load(io, ".rush_history") catch {};
+    defer history.save(io, ".rush_history") catch {};
+
     var last_status: exec.ExitStatus = 0;
     var stdin_buffer: [4096]u8 = undefined;
     var reader = std.Io.File.stdin().reader(io, &stdin_buffer);
@@ -166,6 +223,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io) !u8 {
         const line = (try reader.interface.takeDelimiter('\n')) orelse break;
         if (std.mem.eql(u8, line, "exit")) break;
         if (line.len == 0) continue;
+        try history.add(line);
 
         var result = try runScript(allocator, io, line);
         defer result.deinit();
@@ -182,6 +240,8 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     errdefer stdout.deinit(allocator);
     var stderr: std.ArrayList(u8) = .empty;
     errdefer stderr.deinit(allocator);
+    var history = History.init(allocator);
+    defer history.deinit();
     var last_status: exec.ExitStatus = 0;
 
     var lines = std.mem.splitScalar(u8, input, '\n');
@@ -189,6 +249,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         try stdout.appendSlice(allocator, "rush$ ");
         if (std.mem.eql(u8, line, "exit")) break;
         if (line.len == 0) continue;
+        try history.add(line);
 
         var result = try runScript(allocator, io, line);
         defer result.deinit();
@@ -283,6 +344,36 @@ fn writeAll(io: std.Io, stream: OutputStream, bytes: []const u8) !void {
     var writer = file.writer(io, &buffer);
     try writer.interface.writeAll(bytes);
     try writer.interface.flush();
+}
+
+test "history stores commands and suggests by prefix" {
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+
+    try history.add("echo first");
+    try history.add("git status");
+    try history.add("echo second");
+    try history.add("echo second");
+
+    try std.testing.expectEqual(@as(usize, 3), history.entries.items.len);
+    try std.testing.expectEqualStrings("echo second", history.suggest("ec").?);
+    try std.testing.expectEqualStrings("git status", history.suggest("git").?);
+    try std.testing.expect(history.suggest("missing") == null);
+}
+
+test "history can persist and reload" {
+    const path = "rush-history-test.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.add("echo saved");
+    try history.save(std.testing.io, path);
+
+    var loaded = History.init(std.testing.allocator);
+    defer loaded.deinit();
+    try loaded.load(std.testing.io, path);
+    try std.testing.expectEqualStrings("echo saved", loaded.suggest("echo").?);
 }
 
 test "interactive completion helper suggests commands variables and paths" {
