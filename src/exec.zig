@@ -280,6 +280,19 @@ fn parseAndLower(allocator: std.mem.Allocator, source: []const u8) !struct { par
     return .{ .parsed = parsed, .program = program };
 }
 
+test "executor uses quote-removed argv text" {
+    var lowered = try parseAndLower(std.testing.allocator, "echo 'hello world'");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqualStrings("hello world\n", result.stdout);
+}
+
 test "executor runs true false and echo builtins" {
     var lowered = try parseAndLower(std.testing.allocator, "true");
     defer lowered.parsed.deinit();

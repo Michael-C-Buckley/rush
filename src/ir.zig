@@ -34,6 +34,12 @@ pub const Program = struct {
 
     pub fn deinit(self: *Program) void {
         for (self.commands) |command| {
+            for (command.assignments) |word| self.allocator.free(word.text);
+            for (command.argv) |word| self.allocator.free(word.text);
+            for (command.redirections) |redirection| {
+                if (redirection.io_number) |word| self.allocator.free(word.text);
+                if (redirection.target) |word| self.allocator.free(word.text);
+            }
             self.allocator.free(command.assignments);
             self.allocator.free(command.argv);
             self.allocator.free(command.redirections);
@@ -57,9 +63,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
 
     errdefer {
         for (commands.items) |command| {
-            allocator.free(command.assignments);
-            allocator.free(command.argv);
-            allocator.free(command.redirections);
+            freeCommand(allocator, command);
         }
         for (pipelines.items) |pipeline| {
             allocator.free(pipeline.command_indexes);
@@ -128,9 +132,9 @@ fn lowerSimpleCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, 
         };
         const child_node = parsed.nodes[child_node_id.index()];
         switch (child_node.kind) {
-            .assignment_word => try assignments.append(allocator, wordRef(parsed, child_node)),
-            .command_word, .word => try argv.append(allocator, wordRef(parsed, child_node)),
-            .redirection => try redirections.append(allocator, lowerRedirection(parsed, child_node)),
+            .assignment_word => try assignments.append(allocator, try wordRef(allocator, parsed, child_node)),
+            .command_word, .word => try argv.append(allocator, try wordRef(allocator, parsed, child_node)),
+            .redirection => try redirections.append(allocator, try lowerRedirection(allocator, parsed, child_node)),
             else => {},
         }
     }
@@ -143,7 +147,7 @@ fn lowerSimpleCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, 
     };
 }
 
-fn lowerRedirection(parsed: parser.ParseResult, node: parser.Node) Redirection {
+fn lowerRedirection(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !Redirection {
     std.debug.assert(node.kind == .redirection);
 
     var result: Redirection = .{
@@ -159,8 +163,8 @@ fn lowerRedirection(parsed: parser.ParseResult, node: parser.Node) Redirection {
         .node => |node_id| {
             const child_node = parsed.nodes[node_id.index()];
             switch (child_node.kind) {
-                .io_number => result.io_number = wordRef(parsed, child_node),
-                .word => result.target = wordRef(parsed, child_node),
+                .io_number => result.io_number = try wordRef(allocator, parsed, child_node),
+                .word => result.target = try wordRef(allocator, parsed, child_node),
                 else => {},
             }
         },
@@ -169,13 +173,95 @@ fn lowerRedirection(parsed: parser.ParseResult, node: parser.Node) Redirection {
     return result;
 }
 
-fn wordRef(parsed: parser.ParseResult, node: parser.Node) WordRef {
+fn wordRef(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !WordRef {
     std.debug.assert(node.token_end == node.token_start + 1);
     const token = parsed.tokens[node.token_start];
     return .{
         .span = node.span,
-        .text = token.lexeme(parsed.source),
+        .text = try quoteRemove(allocator, token.lexeme(parsed.source)),
     };
+}
+
+fn freeCommand(allocator: std.mem.Allocator, command: SimpleCommand) void {
+    for (command.assignments) |word| allocator.free(word.text);
+    for (command.argv) |word| allocator.free(word.text);
+    for (command.redirections) |redirection| {
+        if (redirection.io_number) |word| allocator.free(word.text);
+        if (redirection.target) |word| allocator.free(word.text);
+    }
+    allocator.free(command.assignments);
+    allocator.free(command.argv);
+    allocator.free(command.redirections);
+}
+
+pub fn quoteRemove(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    var index: usize = 0;
+    while (index < raw.len) {
+        switch (raw[index]) {
+            '\'' => {
+                index += 1;
+                while (index < raw.len and raw[index] != '\'') : (index += 1) {
+                    try output.append(allocator, raw[index]);
+                }
+                if (index < raw.len) index += 1;
+            },
+            '"' => {
+                index += 1;
+                while (index < raw.len and raw[index] != '"') {
+                    if (raw[index] == '\\' and index + 1 < raw.len) {
+                        index += 1;
+                    }
+                    try output.append(allocator, raw[index]);
+                    index += 1;
+                }
+                if (index < raw.len) index += 1;
+            },
+            '\\' => {
+                index += 1;
+                if (index < raw.len) {
+                    try output.append(allocator, raw[index]);
+                    index += 1;
+                }
+            },
+            else => |c| {
+                try output.append(allocator, c);
+                index += 1;
+            },
+        }
+    }
+
+    return output.toOwnedSlice(allocator);
+}
+
+test "quote removal handles single double and backslash quoting" {
+    const single = try quoteRemove(std.testing.allocator, "'hello world'");
+    defer std.testing.allocator.free(single);
+    try std.testing.expectEqualStrings("hello world", single);
+
+    const double = try quoteRemove(std.testing.allocator, "\"hello world\"");
+    defer std.testing.allocator.free(double);
+    try std.testing.expectEqualStrings("hello world", double);
+
+    const backslash = try quoteRemove(std.testing.allocator, "hello\\ world");
+    defer std.testing.allocator.free(backslash);
+    try std.testing.expectEqualStrings("hello world", backslash);
+}
+
+test "lower removes quotes from execution words" {
+    var parsed = try parser.parse(std.testing.allocator, "echo 'hello world' \"again\" a\\ b", .{});
+    defer parsed.deinit();
+
+    var program = try lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+
+    const command = program.commands[0];
+    try std.testing.expectEqualStrings("echo", command.argv[0].text);
+    try std.testing.expectEqualStrings("hello world", command.argv[1].text);
+    try std.testing.expectEqualStrings("again", command.argv[2].text);
+    try std.testing.expectEqualStrings("a b", command.argv[3].text);
 }
 
 test "lower simple command assignments argv and redirections" {
