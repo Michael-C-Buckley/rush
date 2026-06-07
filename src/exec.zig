@@ -21,6 +21,7 @@ pub const ExecuteOptions = struct {
     external_stdio: ExternalStdio = .capture,
     arg_zero: []const u8 = "rush",
     suppress_functions: bool = false,
+    suppress_errexit: bool = false,
 };
 
 pub const ShellOptions = struct {
@@ -28,6 +29,7 @@ pub const ShellOptions = struct {
     noglob: bool = false,
     noclobber: bool = false,
     nounset: bool = false,
+    errexit: bool = false,
 };
 
 pub const CommandResult = struct {
@@ -287,6 +289,7 @@ pub const Executor = struct {
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 last_status = result.status;
                 self.setLastStatus(last_status);
+                self.applyErrexit(last_status, options, statement.op_before);
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
@@ -300,6 +303,7 @@ pub const Executor = struct {
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 last_status = result.status;
                 self.setLastStatus(last_status);
+                self.applyErrexit(last_status, options, pipeline.op_before);
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
@@ -311,9 +315,16 @@ pub const Executor = struct {
             try self.appendOrWriteResult(options, &stdout, &stderr, result);
             last_status = result.status;
             self.setLastStatus(last_status);
+            self.applyErrexit(last_status, options, .sequence);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+    }
+
+    fn applyErrexit(self: *Executor, status: ExitStatus, options: ExecuteOptions, op_before: ir.ListOp) void {
+        if (!self.shell_options.errexit or options.suppress_errexit or status == 0) return;
+        if (op_before == .or_if or op_before == .and_if) return;
+        self.pending_exit = status;
     }
 
     fn appendOrWriteResult(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), result: CommandResult) !void {
@@ -492,7 +503,9 @@ pub const Executor = struct {
         var status: ExitStatus = 0;
 
         while (true) {
-            var condition = try self.executeScriptSlice(command.condition, options);
+            var condition_options = options;
+            condition_options.suppress_errexit = true;
+            var condition = try self.executeScriptSlice(command.condition, condition_options);
             defer condition.deinit();
             try stdout.appendSlice(self.allocator, condition.stdout);
             try stderr.appendSlice(self.allocator, condition.stderr);
@@ -542,7 +555,9 @@ pub const Executor = struct {
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
 
-        var condition = try self.executeScriptSlice(command.condition, options);
+        var condition_options = options;
+        condition_options.suppress_errexit = true;
+        var condition = try self.executeScriptSlice(command.condition, condition_options);
         defer condition.deinit();
         try stdout.appendSlice(self.allocator, condition.stdout);
         try stderr.appendSlice(self.allocator, condition.stderr);
@@ -2541,6 +2556,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         self.shell_options.nounset = command.argv[1].text[0] == '-';
         return emptyResult(self.allocator, 0);
     }
+    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-e") or std.mem.eql(u8, command.argv[1].text, "+e"))) {
+        self.shell_options.errexit = command.argv[1].text[0] == '-';
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
     if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
@@ -2561,6 +2580,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
             self.shell_options.nounset = enabled;
             return emptyResult(self.allocator, 0);
         }
+        if (std.mem.eql(u8, command.argv[2].text, "errexit")) {
+            self.shell_options.errexit = enabled;
+            return emptyResult(self.allocator, 0);
+        }
         return errorResult(self.allocator, 2, "set", "unknown option name");
     }
     return errorResult(self.allocator, 2, "set", "unsupported arguments");
@@ -2575,9 +2598,9 @@ fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
     const stdout = if (reusable)
-        try std.fmt.allocPrint(self.allocator, "set {s}o noclobber\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\n", .{ if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+" })
+        try std.fmt.allocPrint(self.allocator, "set {s}o errexit\nset {s}o noclobber\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\n", .{ if (self.shell_options.errexit) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+" })
     else
-        try std.fmt.allocPrint(self.allocator, "noclobber\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\n", .{ if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off" });
+        try std.fmt.allocPrint(self.allocator, "errexit\t{s}\nnoclobber\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\n", .{ if (self.shell_options.errexit) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off" });
     errdefer self.allocator.free(stdout);
     return .{
         .allocator = self.allocator,
@@ -3902,7 +3925,7 @@ test "executor implements set shell option baseline" {
     var show = try executor.executeProgram(show_lowered.program, .{});
     defer show.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
-    try std.testing.expectEqualStrings("noclobber\toff\nnoglob\toff\nnounset\toff\npipefail\toff\n", show.stdout);
+    try std.testing.expectEqualStrings("errexit\toff\nnoclobber\toff\nnoglob\toff\nnounset\toff\npipefail\toff\n", show.stdout);
 
     var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
     defer enable_lowered.parsed.deinit();
@@ -3917,7 +3940,7 @@ test "executor implements set shell option baseline" {
     defer reusable_lowered.program.deinit();
     var reusable = try executor.executeProgram(reusable_lowered.program, .{});
     defer reusable.deinit();
-    try std.testing.expectEqualStrings("set +o noclobber\nset +o noglob\nset +o nounset\nset -o pipefail\n", reusable.stdout);
+    try std.testing.expectEqualStrings("set +o errexit\nset +o noclobber\nset +o noglob\nset +o nounset\nset -o pipefail\n", reusable.stdout);
 
     var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");
     defer disable_lowered.parsed.deinit();
@@ -3968,6 +3991,26 @@ test "executor implements set shell option baseline" {
     defer nounset_disabled.deinit();
     try std.testing.expectEqualStrings("\nafter\n", nounset_disabled.stdout);
     try std.testing.expect(!nounset_disabled_executor.shell_options.nounset);
+
+    var errexit_executor = Executor.init(std.testing.allocator);
+    defer errexit_executor.deinit();
+    var errexit_lowered = try parseAndLower(std.testing.allocator, "set -e; echo before; false; echo after");
+    defer errexit_lowered.parsed.deinit();
+    defer errexit_lowered.program.deinit();
+    var errexit = try errexit_executor.executeProgram(errexit_lowered.program, .{});
+    defer errexit.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), errexit.status);
+    try std.testing.expectEqualStrings("before\n", errexit.stdout);
+
+    var condition_executor = Executor.init(std.testing.allocator);
+    defer condition_executor.deinit();
+    var condition_lowered = try parseAndLower(std.testing.allocator, "set -e; if false; then echo bad; else echo ok; fi; echo after");
+    defer condition_lowered.parsed.deinit();
+    defer condition_lowered.program.deinit();
+    var condition = try condition_executor.executeProgram(condition_lowered.program, .{});
+    defer condition.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), condition.status);
+    try std.testing.expectEqualStrings("ok\nafter\n", condition.stdout);
 }
 
 test "executor applies pipefail option to pipeline status" {

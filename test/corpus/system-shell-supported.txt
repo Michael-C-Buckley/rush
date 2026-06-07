@@ -84,3 +84,6 @@ touch rush-noglob-a.tmp; set -f; echo rush-noglob-?.tmp; set +f; echo rush-noglo
 touch rush-noglob-b.tmp; set -o noglob; echo rush-noglob-?.tmp; set +o noglob; echo rush-noglob-?.tmp
 set -o nounset; echo ${RUSH_UNSET_FOR_TEST:-fallback}; echo ${RUSH_UNSET_FOR_TEST+yes}
 set -u; set +u; echo $RUSH_UNSET_FOR_TEST; echo after
+set -e; echo before; false; echo after
+set -o errexit; if false; then echo bad; else echo ok; fi; echo after
+set -e; set +e; false; echo after
