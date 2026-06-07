@@ -19,7 +19,7 @@ pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
     if (args.len == 1) {
-        return runInteractive(allocator, init.io);
+        return runInteractive(allocator, init.io, init.environ_map);
     }
 
     if (args.len == 2 and std.mem.eql(u8, args[1], "--help")) {
@@ -32,7 +32,7 @@ pub fn main(init: std.process.Init) !u8 {
         return 2;
     }
 
-    var result = try runScriptWithOptions(allocator, init.io, args[2], .{ .io = init.io, .allow_external = true, .external_stdio = .inherit });
+    var result = try runScriptWithEnvironment(allocator, init.io, args[2], .{ .io = init.io, .allow_external = true, .external_stdio = .inherit }, init.environ_map);
     defer result.deinit();
 
     try writeAll(init.io, .stdout, result.stdout);
@@ -208,7 +208,7 @@ fn ansiForHighlight(kind: parser.HighlightKind) []const u8 {
     };
 }
 
-pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io) !u8 {
+pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map) !u8 {
     installInteractiveSignalHandlers();
 
     var history = History.init(allocator);
@@ -227,7 +227,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io) !u8 {
         if (line.len == 0) continue;
         try history.add(line);
 
-        var result = try runScriptWithOptions(allocator, io, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit });
+        var result = try runScriptWithEnvironment(allocator, io, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit }, environ_map);
         defer result.deinit();
         try writeAll(io, .stdout, result.stdout);
         try writeAll(io, .stderr, result.stderr);
@@ -273,6 +273,10 @@ pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !
 }
 
 pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
+    return runScriptWithEnvironment(allocator, io, script, options, null);
+}
+
+pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map) !exec.CommandResult {
     _ = io;
     var parsed = try parser.parse(allocator, script, .{});
     defer parsed.deinit();
@@ -286,6 +290,7 @@ pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []
 
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
+    if (environ_map) |map| try executor.importEnvironment(map);
 
     return executor.executeProgram(program, options);
 }
@@ -438,6 +443,18 @@ test "runReplInput executes lines and tracks status" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
     try std.testing.expectEqualStrings("rush$ hi\nrush$ rush$ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "runScriptWithEnvironment imports initial shell variables" {
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("RUSH_IMPORTED_ENV", "present");
+
+    var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io, "echo $RUSH_IMPORTED_ENV", .{ .io = std.testing.io, .allow_external = true }, &env);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("present\n", result.stdout);
 }
 
 test "runScriptWithOptions accepts inherit mode for external commands" {

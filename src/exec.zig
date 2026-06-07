@@ -88,6 +88,13 @@ pub const Executor = struct {
         return .{ .allocator = allocator };
     }
 
+    pub fn importEnvironment(self: *Executor, environ_map: *const std.process.Environ.Map) !void {
+        var iter = environ_map.iterator();
+        while (iter.next()) |entry| {
+            try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
+        }
+    }
+
     pub fn deinit(self: *Executor) void {
         var iter = self.env.iterator();
         while (iter.next()) |entry| {
