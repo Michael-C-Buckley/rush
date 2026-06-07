@@ -44,3 +44,7 @@ FOO=outer; ( FOO=inner; echo $FOO ); echo $FOO
 FOO=outer; { FOO=inner; }; echo $FOO
 P=foo/bar/baz.txt; echo ${P%/*}; echo ${P%%/*}; echo ${P#*/}; echo ${P##*/}
 echo before-`echo inner`-after
+A=eval-ok; eval echo $A
+f() { echo function; }; command echo command-ok; command -v echo
+echo before; exit 7; echo after
+exec echo exec-ok; echo after

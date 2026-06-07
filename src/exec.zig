@@ -20,6 +20,7 @@ pub const ExecuteOptions = struct {
     features: compat.Features = .{},
     external_stdio: ExternalStdio = .capture,
     arg_zero: []const u8 = "rush",
+    suppress_functions: bool = false,
 };
 
 pub const ShellOptions = struct {
@@ -84,6 +85,7 @@ pub const Executor = struct {
     pending_return: ?ExitStatus = null,
     loop_depth: usize = 0,
     pending_loop_control: ?LoopControl = null,
+    pending_exit: ?ExitStatus = null,
     arg_zero: []const u8 = "rush",
     last_status_text: [3]u8 = .{ '0', 0, 0 },
     last_status_text_len: usize = 1,
@@ -227,7 +229,7 @@ pub const Executor = struct {
                 try stderr.appendSlice(self.allocator, result.stderr);
                 last_status = result.status;
                 self.setLastStatus(last_status);
-                if (self.pending_return != null or self.pending_loop_control != null) break;
+                if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         }
@@ -241,7 +243,7 @@ pub const Executor = struct {
                 try stderr.appendSlice(self.allocator, result.stderr);
                 last_status = result.status;
                 self.setLastStatus(last_status);
-                if (self.pending_return != null or self.pending_loop_control != null) break;
+                if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
             }
             return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         }
@@ -253,7 +255,7 @@ pub const Executor = struct {
             try stderr.appendSlice(self.allocator, result.stderr);
             last_status = result.status;
             self.setLastStatus(last_status);
-            if (self.pending_return != null or self.pending_loop_control != null) break;
+            if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
     }
@@ -922,7 +924,8 @@ pub const Executor = struct {
             return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, 0), options);
         }
 
-        if (self.functions.get(expanded.argv[0].text)) |body| {
+        if (!options.suppress_functions and self.functions.get(expanded.argv[0].text) != null) {
+            const body = self.functions.get(expanded.argv[0].text).?;
             var assignment_scope = try self.pushTemporaryAssignments(expanded.assignments);
             defer assignment_scope.restore();
             try self.pushCallFrame(expanded.argv[1..]);
@@ -1036,6 +1039,29 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context) });
         return .{ .span = word.span, .raw = raw, .text = text };
+    }
+
+    fn findExecutableInPath(self: *Executor, io: std.Io, name: []const u8) !?[]const u8 {
+        if (std.mem.indexOfScalar(u8, name, '/') != null) {
+            std.Io.Dir.cwd().access(io, name, .{ .execute = true }) catch return null;
+            return try self.allocator.dupe(u8, name);
+        }
+        const path_value = self.getEnv("PATH") orelse return null;
+        var parts = std.mem.splitScalar(u8, path_value, ':');
+        while (parts.next()) |part| {
+            const dir = if (part.len == 0) "." else part;
+            const candidate = try std.mem.concat(self.allocator, u8, &.{ dir, "/", name });
+            errdefer self.allocator.free(candidate);
+            std.Io.Dir.cwd().access(io, candidate, .{ .execute = true }) catch |err| switch (err) {
+                error.FileNotFound, error.AccessDenied, error.PermissionDenied => {
+                    self.allocator.free(candidate);
+                    continue;
+                },
+                else => return err,
+            };
+            return candidate;
+        }
+        return null;
     }
 
     fn readSourceFile(self: *Executor, io: std.Io, name: []const u8) ![]const u8 {
@@ -1633,6 +1659,21 @@ fn openOutputRedirectionFile(io: std.Io, target: []const u8, append: bool) !std.
     };
 }
 
+fn simpleCommandFromArgs(command: ir.SimpleCommand, start: usize) ir.SimpleCommand {
+    return .{
+        .span = command.span,
+        .assignments = &.{},
+        .argv = command.argv[start..],
+        .redirections = &.{},
+    };
+}
+
+fn stdoutLine(allocator: std.mem.Allocator, text: []const u8, status: ExitStatus) !CommandResult {
+    const stdout = try std.fmt.allocPrint(allocator, "{s}\n", .{text});
+    errdefer allocator.free(stdout);
+    return .{ .allocator = allocator, .status = status, .stdout = stdout, .stderr = try allocator.alloc(u8, 0) };
+}
+
 fn argvForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![]const []const u8 {
     const argv = try allocator.alloc([]const u8, command.argv.len);
     for (command.argv, 0..) |word, index| {
@@ -1659,6 +1700,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "false")) return builtinFalse;
     if (std.mem.eql(u8, name, "echo")) return builtinEcho;
     if (std.mem.eql(u8, name, "cat")) return builtinCat;
+    if (std.mem.eql(u8, name, "command")) return builtinCommand;
     if (std.mem.eql(u8, name, "continue")) return builtinContinue;
     if (std.mem.eql(u8, name, "cd")) return builtinCd;
     if (std.mem.eql(u8, name, "printf")) return builtinPrintf;
@@ -1668,6 +1710,9 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
+    if (std.mem.eql(u8, name, "eval")) return builtinEval;
+    if (std.mem.eql(u8, name, "exec")) return builtinExec;
+    if (std.mem.eql(u8, name, "exit")) return builtinExit;
     if (std.mem.eql(u8, name, "set")) return builtinSet;
     if (std.mem.eql(u8, name, "source")) return builtinSource;
     if (std.mem.eql(u8, name, "test")) return builtinTest;
@@ -1686,6 +1731,57 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     };
     defer self.allocator.free(contents);
     return self.executeScriptSlice(contents, options);
+}
+
+fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    if (command.argv.len == 1) return emptyResult(self.allocator, 0);
+    if (std.mem.eql(u8, command.argv[1].text, "-v")) {
+        if (command.argv.len != 3) return errorResult(self.allocator, 2, "command", "unsupported arguments");
+        const name = command.argv[2].text;
+        if (builtinFor(name) != null) return stdoutLine(self.allocator, name, 0);
+        if (self.functions.get(name) != null) return stdoutLine(self.allocator, name, 0);
+        if (options.io) |io| {
+            if (try self.findExecutableInPath(io, name)) |path| {
+                defer self.allocator.free(path);
+                return stdoutLine(self.allocator, path, 0);
+            }
+        }
+        return emptyResult(self.allocator, 1);
+    }
+    if (command.argv[1].text.len > 0 and command.argv[1].text[0] == '-') return errorResult(self.allocator, 2, "command", "unsupported option");
+    const nested = simpleCommandFromArgs(command, 1);
+    var nested_options = options;
+    nested_options.suppress_functions = true;
+    return self.executeSimpleCommandWithInput(nested, stdin, nested_options);
+}
+
+fn builtinEval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    var script: std.ArrayList(u8) = .empty;
+    defer script.deinit(self.allocator);
+    for (command.argv[1..], 0..) |arg, index| {
+        if (index > 0) try script.append(self.allocator, ' ');
+        try script.appendSlice(self.allocator, arg.text);
+    }
+    return self.executeScriptSlice(script.items, options);
+}
+
+fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    if (command.argv.len == 1) return emptyResult(self.allocator, 0);
+    const nested = simpleCommandFromArgs(command, 1);
+    var result = try self.executeSimpleCommandWithInput(nested, stdin, options);
+    errdefer result.deinit();
+    self.pending_exit = result.status;
+    return result;
+}
+
+fn builtinExit(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, "exit", "too many arguments");
+    const status: ExitStatus = if (command.argv.len == 2) std.fmt.parseInt(u8, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, "exit", "numeric argument required") else 0;
+    self.pending_exit = status;
+    return emptyResult(self.allocator, status);
 }
 
 fn builtinBreak(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -2733,6 +2829,40 @@ test "executor implements unset and env builtins" {
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "A=one\n") == null);
     try std.testing.expect(executor.getEnv("A") == null);
     try std.testing.expectEqualStrings("two", executor.getEnv("B").?);
+}
+
+test "executor implements command eval exec and exit builtins" {
+    var eval_lowered = try parseAndLower(std.testing.allocator, "eval echo eval-ok");
+    defer eval_lowered.parsed.deinit();
+    defer eval_lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var eval_result = try executor.executeProgram(eval_lowered.program, .{});
+    defer eval_result.deinit();
+    try std.testing.expectEqualStrings("eval-ok\n", eval_result.stdout);
+
+    var command_lowered = try parseAndLower(std.testing.allocator, "f() { echo function; }; command echo builtin; command -v echo");
+    defer command_lowered.parsed.deinit();
+    defer command_lowered.program.deinit();
+    var command_result = try executor.executeProgram(command_lowered.program, .{});
+    defer command_result.deinit();
+    try std.testing.expectEqualStrings("builtin\necho\n", command_result.stdout);
+
+    var exit_lowered = try parseAndLower(std.testing.allocator, "echo before; exit 7; echo after");
+    defer exit_lowered.parsed.deinit();
+    defer exit_lowered.program.deinit();
+    var exit_result = try executor.executeProgram(exit_lowered.program, .{});
+    defer exit_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 7), exit_result.status);
+    try std.testing.expectEqualStrings("before\n", exit_result.stdout);
+
+    var exec_lowered = try parseAndLower(std.testing.allocator, "exec echo exec-ok; echo after");
+    defer exec_lowered.parsed.deinit();
+    defer exec_lowered.program.deinit();
+    var exec_result = try executor.executeProgram(exec_lowered.program, .{});
+    defer exec_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), exec_result.status);
+    try std.testing.expectEqualStrings("exec-ok\n", exec_result.stdout);
 }
 
 test "executor implements read and printf builtins" {
