@@ -341,9 +341,9 @@ pub const Executor = struct {
     }
 
     fn executePipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) !CommandResult {
-        if (self.canExecuteExternalPipeline(program, pipeline, options)) {
+        if (self.canExecuteRealPipeline(program, pipeline, options)) {
             const io = options.io orelse return error.MissingIoForExternalCommand;
-            return self.executeExternalPipeline(program, pipeline, io);
+            return self.executeRealPipeline(program, pipeline, options, io);
         }
 
         var last = try emptyResult(self.allocator, 0);
@@ -363,15 +363,196 @@ pub const Executor = struct {
         return last;
     }
 
-    fn canExecuteExternalPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
+    fn canExecuteRealPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
         _ = self;
         if (!options.allow_external or options.io == null or pipeline.command_indexes.len < 2) return false;
         for (pipeline.command_indexes) |command_index| {
             const command = program.commands[command_index];
             if (command.argv.len == 0 or command.redirections.len != 0) return false;
-            if (builtinFor(command.argv[0].text) != null) return false;
         }
         return true;
+    }
+
+    fn executeRealPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
+        var has_builtin = false;
+        for (pipeline.command_indexes) |command_index| {
+            const command = program.commands[command_index];
+            if (builtinFor(command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
+                has_builtin = true;
+                break;
+            }
+        }
+        if (!has_builtin) return self.executeExternalPipeline(program, pipeline, io);
+        return self.executeMixedPipeline(program, pipeline, options, io);
+    }
+
+    const PipelinePipe = struct {
+        read: ?std.Io.File,
+        write: ?std.Io.File,
+
+        fn close(self: *PipelinePipe, io: std.Io) void {
+            if (self.read) |file| file.close(io);
+            if (self.write) |file| file.close(io);
+            self.* = .{ .read = null, .write = null };
+        }
+    };
+
+    const BuiltinPipelineContext = struct {
+        executor: *Executor,
+        command: ir.SimpleCommand,
+        options: ExecuteOptions,
+        io: std.Io,
+        stdin_file: ?std.Io.File,
+        stdout_file: ?std.Io.File,
+        stderr_file: ?std.Io.File,
+        stage_index: usize,
+        status: ExitStatus = 0,
+        err: ?anyerror = null,
+    };
+
+    fn executeMixedPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
+        const pipe_count = pipeline.command_indexes.len - 1;
+        const pipes = try self.allocator.alloc(PipelinePipe, pipe_count);
+        defer self.allocator.free(pipes);
+        for (pipes) |*pipe| pipe.* = try makePipelinePipe();
+        defer for (pipes) |*pipe| pipe.close(io);
+
+        var capture_stdout = try makePipelinePipe();
+        defer capture_stdout.close(io);
+        var capture_stderr = try makePipelinePipe();
+        defer capture_stderr.close(io);
+
+        const children = try self.allocator.alloc(std.process.Child, pipeline.command_indexes.len);
+        defer self.allocator.free(children);
+        const child_stage_indexes = try self.allocator.alloc(usize, pipeline.command_indexes.len);
+        defer self.allocator.free(child_stage_indexes);
+        var spawned: usize = 0;
+        errdefer for (children[0..spawned]) |*child| child.kill(io);
+
+        var threads: std.ArrayList(std.Thread) = .empty;
+        defer threads.deinit(self.allocator);
+        var contexts: std.ArrayList(*BuiltinPipelineContext) = .empty;
+        defer contexts.deinit(self.allocator);
+        errdefer {
+            for (contexts.items) |context| self.allocator.destroy(context);
+        }
+
+        for (pipeline.command_indexes, 0..) |command_index, index| {
+            const command = program.commands[command_index];
+            const is_last = index + 1 == pipeline.command_indexes.len;
+            const stdin_file = if (index == 0) null else takeRead(&pipes[index - 1]);
+            const stdout_file = if (is_last) takeWrite(&capture_stdout) else takeWrite(&pipes[index]);
+            const stderr_file = if (is_last) takeWrite(&capture_stderr) else null;
+
+            if (builtinFor(command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
+                const context = try self.allocator.create(BuiltinPipelineContext);
+                errdefer self.allocator.destroy(context);
+                context.* = .{
+                    .executor = self,
+                    .command = command,
+                    .options = options,
+                    .io = io,
+                    .stdin_file = stdin_file,
+                    .stdout_file = stdout_file,
+                    .stderr_file = stderr_file,
+                    .stage_index = index,
+                };
+                const thread = try std.Thread.spawn(.{}, runBuiltinPipelineStage, .{context});
+                try threads.append(self.allocator, thread);
+                try contexts.append(self.allocator, context);
+            } else {
+                const argv = try argvForCommand(self.allocator, command);
+                defer self.allocator.free(argv);
+                children[spawned] = try std.process.spawn(io, .{
+                    .argv = argv,
+                    .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
+                    .stdout = if (stdout_file) |file| .{ .file = file } else .ignore,
+                    .stderr = if (stderr_file) |file| .{ .file = file } else .inherit,
+                });
+                child_stage_indexes[spawned] = index;
+                spawned += 1;
+                if (stdin_file) |file| file.close(io);
+                if (stdout_file) |file| file.close(io);
+                if (stderr_file) |file| file.close(io);
+            }
+        }
+
+        for (pipes) |*pipe| pipe.close(io);
+        if (capture_stdout.write) |file| file.close(io);
+        capture_stdout.write = null;
+        if (capture_stderr.write) |file| file.close(io);
+        capture_stderr.write = null;
+
+        var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+        var multi_reader: std.Io.File.MultiReader = undefined;
+        multi_reader.init(self.allocator, io, multi_reader_buffer.toStreams(), &.{ capture_stdout.read.?, capture_stderr.read.? });
+        defer multi_reader.deinit();
+
+        while (multi_reader.fill(64, .none)) |_| {} else |err| switch (err) {
+            error.EndOfStream => {},
+            else => |e| return e,
+        }
+        try multi_reader.checkAnyError();
+
+        var status: ExitStatus = 0;
+        const last_stage = pipeline.command_indexes.len - 1;
+        for (children[0..spawned], child_stage_indexes[0..spawned]) |*child, stage_index| {
+            const term = try child.wait(io);
+            if (stage_index == last_stage) status = exitStatusFromTerm(term);
+        }
+        for (threads.items) |thread| thread.join();
+        for (contexts.items) |context| {
+            defer self.allocator.destroy(context);
+            if (context.err) |err| return err;
+            if (context.stage_index == last_stage) status = context.status;
+        }
+
+        return .{
+            .allocator = self.allocator,
+            .status = status,
+            .stdout = try multi_reader.toOwnedSlice(0),
+            .stderr = try multi_reader.toOwnedSlice(1),
+        };
+    }
+
+    fn runBuiltinPipelineStage(context: *BuiltinPipelineContext) void {
+        runBuiltinPipelineStageFallible(context) catch |err| {
+            context.err = err;
+            context.status = 2;
+        };
+    }
+
+    fn runBuiltinPipelineStageFallible(context: *BuiltinPipelineContext) !void {
+        defer if (context.stdin_file) |file| file.close(context.io);
+        defer if (context.stdout_file) |file| file.close(context.io);
+        defer if (context.stderr_file) |file| file.close(context.io);
+
+        var stdin_bytes: []u8 = try context.executor.allocator.alloc(u8, 0);
+        defer context.executor.allocator.free(stdin_bytes);
+        if (context.stdin_file) |file| {
+            context.executor.allocator.free(stdin_bytes);
+            var reader_buffer: [4096]u8 = undefined;
+            var reader = file.reader(context.io, &reader_buffer);
+            stdin_bytes = try reader.interface.allocRemaining(context.executor.allocator, .limited(1024 * 1024));
+        }
+
+        var result = try context.executor.executeSimpleCommandWithInput(context.command, stdin_bytes, context.options);
+        defer result.deinit();
+        context.status = result.status;
+        if (context.stdout_file) |file| try writeBytesToFile(context.io, file, result.stdout);
+        if (context.stderr_file) |file| try writeBytesToFile(context.io, file, result.stderr);
+    }
+
+    fn takeRead(pipe: *PipelinePipe) ?std.Io.File {
+        const file = pipe.read;
+        pipe.read = null;
+        return file;
+    }
+
+    fn takeWrite(pipe: *PipelinePipe) ?std.Io.File {
+        const file = pipe.write;
+        pipe.write = null;
+        return file;
     }
 
     fn executeExternalPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, io: std.Io) !CommandResult {
@@ -786,6 +967,49 @@ pub const Executor = struct {
         };
     }
 };
+
+fn makePipelinePipe() !Executor.PipelinePipe {
+    const builtin = @import("builtin");
+    return switch (builtin.os.tag) {
+        .linux => blk: {
+            var fds: [2]i32 = undefined;
+            const rc = std.os.linux.pipe2(&fds, .{ .CLOEXEC = true });
+            switch (std.os.linux.errno(rc)) {
+                .SUCCESS => {},
+                .MFILE => return error.ProcessFdQuotaExceeded,
+                .NFILE => return error.SystemFdQuotaExceeded,
+                else => return error.Unexpected,
+            }
+            break :blk filesFromPipeFds(fds);
+        },
+        .macos, .freebsd, .openbsd, .netbsd, .dragonfly, .illumos => blk: {
+            var fds: [2]std.c.fd_t = undefined;
+            const rc = std.c.pipe(&fds);
+            switch (std.c.errno(rc)) {
+                .SUCCESS => {},
+                .MFILE => return error.ProcessFdQuotaExceeded,
+                .NFILE => return error.SystemFdQuotaExceeded,
+                else => return error.Unexpected,
+            }
+            break :blk filesFromPipeFds(.{ fds[0], fds[1] });
+        },
+        else => error.Unsupported,
+    };
+}
+
+fn filesFromPipeFds(fds: [2]std.posix.fd_t) Executor.PipelinePipe {
+    return .{
+        .read = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
+        .write = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
+    };
+}
+
+fn writeBytesToFile(io: std.Io, file: std.Io.File, bytes: []const u8) !void {
+    var buffer: [4096]u8 = undefined;
+    var writer = file.writer(io, &buffer);
+    try writer.interface.writeAll(bytes);
+    try writer.interface.flush();
+}
 
 fn openOutputRedirectionFile(io: std.Io, target: []const u8, append: bool) !std.Io.File {
     if (!append) return std.Io.Dir.cwd().createFile(io, target, .{ .truncate = true });
@@ -1763,6 +1987,45 @@ test "executor applies real redirections to spawned external commands" {
     var stdin_result = try executor.executeProgram(stdin_lowered.program, .{ .io = std.testing.io, .allow_external = true });
     defer stdin_result.deinit();
     try std.testing.expectEqualStrings("from-file", stdin_result.stdout);
+}
+
+test "executor supports mixed builtin and external pipeline stages" {
+    var builtin_to_external = try parseAndLower(std.testing.allocator, "echo hello | /usr/bin/cat");
+    defer builtin_to_external.parsed.deinit();
+    defer builtin_to_external.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var builtin_to_external_result = try executor.executeProgram(builtin_to_external.program, .{ .io = std.testing.io, .allow_external = true });
+    defer builtin_to_external_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), builtin_to_external_result.status);
+    try std.testing.expectEqualStrings("hello\n", builtin_to_external_result.stdout);
+
+    var external_to_builtin = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | cat");
+    defer external_to_builtin.parsed.deinit();
+    defer external_to_builtin.program.deinit();
+
+    var external_to_builtin_result = try executor.executeProgram(external_to_builtin.program, .{ .io = std.testing.io, .allow_external = true });
+    defer external_to_builtin_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), external_to_builtin_result.status);
+    try std.testing.expectEqualStrings("hello", external_to_builtin_result.stdout);
+
+    var external_status = try parseAndLower(std.testing.allocator, "true | /bin/sh -c 'exit 7'");
+    defer external_status.parsed.deinit();
+    defer external_status.program.deinit();
+
+    var external_status_result = try executor.executeProgram(external_status.program, .{ .io = std.testing.io, .allow_external = true });
+    defer external_status_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 7), external_status_result.status);
+
+    var builtin_status = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | false");
+    defer builtin_status.parsed.deinit();
+    defer builtin_status.program.deinit();
+
+    var builtin_status_result = try executor.executeProgram(builtin_status.program, .{ .io = std.testing.io, .allow_external = true });
+    defer builtin_status_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), builtin_status_result.status);
 }
 
 test "executor wires external pipelines with real process pipes" {
