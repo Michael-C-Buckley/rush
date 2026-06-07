@@ -1,0 +1,18 @@
+# Supported behavior corpus compared against system POSIX-ish shells.
+# One script per non-comment line. Avoid shell-specific behavior unless Rush supports it.
+:
+true
+false
+echo hello
+echo hello world
+echo hello | cat
+false | true
+true && echo yes
+false || echo yes
+if true; then echo yes; else echo no; fi
+if false; then echo yes; else echo no; fi
+for x in a b; do echo $x; done
+case foo in f*) echo yes ;; *) echo no ;; esac
+f() { echo hi; }; f
+f() { echo $1/$#; }; f one two
+echo $(echo hi)

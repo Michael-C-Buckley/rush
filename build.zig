@@ -43,4 +43,10 @@ pub fn build(b: *std.Build) void {
     const cross_check = b.addSystemCommand(&.{ "sh", "scripts/check-cross-targets.sh" });
     cross_check.step.dependOn(fmt_step);
     cross_check_step.dependOn(&cross_check.step);
+
+    const corpus_step = b.step("corpus", "Compare supported behavior corpus against available system shells");
+    const corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-system-shell-corpus.sh" });
+    corpus_check.step.dependOn(&exe.step);
+    corpus_check.step.dependOn(fmt_step);
+    corpus_step.dependOn(&corpus_check.step);
 }
