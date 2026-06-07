@@ -79,6 +79,11 @@ pub const FunctionDefinition = struct {
     body: []const u8,
 };
 
+pub const BashTestCommand = struct {
+    span: parser.Span,
+    args: []WordRef,
+};
+
 pub const StatementKind = enum {
     pipeline,
     if_command,
@@ -86,6 +91,7 @@ pub const StatementKind = enum {
     for_command,
     case_command,
     function_definition,
+    bash_test_command,
 };
 
 pub const Statement = struct {
@@ -103,6 +109,7 @@ pub const Program = struct {
     for_commands: []ForCommand = &.{},
     case_commands: []CaseCommand = &.{},
     function_definitions: []FunctionDefinition = &.{},
+    bash_test_commands: []BashTestCommand = &.{},
     statements: []Statement = &.{},
 
     pub fn deinit(self: *Program) void {
@@ -134,6 +141,11 @@ pub const Program = struct {
         self.allocator.free(self.case_commands);
         for (self.function_definitions) |definition| self.allocator.free(definition.name);
         self.allocator.free(self.function_definitions);
+        for (self.bash_test_commands) |command| {
+            for (command.args) |arg| freeWord(self.allocator, arg);
+            self.allocator.free(command.args);
+        }
+        self.allocator.free(self.bash_test_commands);
         self.allocator.free(self.statements);
         self.* = undefined;
     }
@@ -147,6 +159,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     var for_commands: std.ArrayList(ForCommand) = .empty;
     var case_commands: std.ArrayList(CaseCommand) = .empty;
     var function_definitions: std.ArrayList(FunctionDefinition) = .empty;
+    var bash_test_commands: std.ArrayList(BashTestCommand) = .empty;
     var statement_refs: std.ArrayList(LoweredStatementRef) = .empty;
     defer statement_refs.deinit(allocator);
     const missing_command = std.math.maxInt(usize);
@@ -171,6 +184,8 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         case_commands.deinit(allocator);
         for (function_definitions.items) |definition| allocator.free(definition.name);
         function_definitions.deinit(allocator);
+        for (bash_test_commands.items) |command| freeBashTestCommand(allocator, command);
+        bash_test_commands.deinit(allocator);
     }
 
     for (parsed.nodes, 0..) |node, node_index| {
@@ -222,6 +237,12 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         try function_definitions.append(allocator, try lowerFunctionDefinition(allocator, parsed, node));
     }
 
+    for (parsed.nodes) |node| {
+        if (node.kind != .bash_test_command) continue;
+        try statement_refs.append(allocator, .{ .kind = .bash_test_command, .index = bash_test_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        try bash_test_commands.append(allocator, try lowerBashTestCommand(allocator, parsed, node));
+    }
+
     std.mem.sort(LoweredStatementRef, statement_refs.items, {}, lessThanStatementRef);
     var statements: std.ArrayList(Statement) = .empty;
     errdefer statements.deinit(allocator);
@@ -244,6 +265,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         .for_commands = try for_commands.toOwnedSlice(allocator),
         .case_commands = try case_commands.toOwnedSlice(allocator),
         .function_definitions = try function_definitions.toOwnedSlice(allocator),
+        .bash_test_commands = try bash_test_commands.toOwnedSlice(allocator),
         .statements = try statements.toOwnedSlice(allocator),
     };
 }
@@ -257,6 +279,28 @@ const LoweredStatementRef = struct {
 
 fn lessThanStatementRef(_: void, a: LoweredStatementRef, b: LoweredStatementRef) bool {
     return a.token_start < b.token_start;
+}
+
+fn lowerBashTestCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !BashTestCommand {
+    std.debug.assert(node.kind == .bash_test_command);
+    var args: std.ArrayList(WordRef) = .empty;
+    errdefer {
+        for (args.items) |arg| freeWord(allocator, arg);
+        args.deinit(allocator);
+    }
+
+    if (node.token_end > node.token_start + 1) {
+        for (node.token_start + 1..node.token_end - 1) |token_index| {
+            if (parsed.tokens[token_index].kind == .word) {
+                try args.append(allocator, try wordRefFromToken(allocator, parsed, token_index));
+            }
+        }
+    }
+
+    return .{
+        .span = node.span,
+        .args = try args.toOwnedSlice(allocator),
+    };
 }
 
 fn lowerFunctionDefinition(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !FunctionDefinition {
@@ -614,6 +658,11 @@ fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, to
         .raw = raw,
         .text = text,
     };
+}
+
+fn freeBashTestCommand(allocator: std.mem.Allocator, command: BashTestCommand) void {
+    for (command.args) |arg| freeWord(allocator, arg);
+    allocator.free(command.args);
 }
 
 fn freeCaseArm(allocator: std.mem.Allocator, arm: CaseArm) void {

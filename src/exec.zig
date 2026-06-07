@@ -182,6 +182,7 @@ pub const Executor = struct {
                     .for_command => try self.executeForCommand(program.for_commands[statement.index], options),
                     .case_command => try self.executeCaseCommand(program.case_commands[statement.index], options),
                     .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index]),
+                    .bash_test_command => try self.executeBashTestCommand(program.bash_test_commands[statement.index], options),
                 };
                 defer result.deinit();
                 try stdout.appendSlice(self.allocator, result.stdout);
@@ -214,6 +215,13 @@ pub const Executor = struct {
             if (self.pending_return != null or self.pending_loop_control != null) break;
         }
         return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+    }
+
+    fn executeBashTestCommand(self: *Executor, command: ir.BashTestCommand, options: ExecuteOptions) !CommandResult {
+        const args = try self.expandWords(command.args, options);
+        defer self.freeWords(args);
+        const matched = evalBashTest(self.allocator, options, args) catch return errorResult(self.allocator, 2, "[[", "invalid expression");
+        return emptyResult(self.allocator, if (matched) 0 else 1);
     }
 
     fn executeFunctionDefinition(self: *Executor, definition: ir.FunctionDefinition) !CommandResult {
@@ -1432,6 +1440,24 @@ fn builtinTest(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     return emptyResult(self.allocator, if (try evalTest(self.allocator, options, args)) 0 else 1);
 }
 
+fn evalBashTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []const ir.WordRef) !bool {
+    return switch (args.len) {
+        0 => false,
+        1 => args[0].text.len != 0,
+        2 => try evalUnaryTest(allocator, options, args[0].text, args[1].text),
+        3 => if (std.mem.eql(u8, args[0].text, "!"))
+            !(try evalBashTest(allocator, options, args[1..]))
+        else if (std.mem.eql(u8, args[1].text, "==") or std.mem.eql(u8, args[1].text, "="))
+            shellPatternMatches(args[2].text, args[0].text)
+        else if (std.mem.eql(u8, args[1].text, "!="))
+            !shellPatternMatches(args[2].text, args[0].text)
+        else
+            try evalBinaryTest(args[0].text, args[1].text, args[2].text),
+        4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalBashTest(allocator, options, args[1..])) else error.InvalidTestExpression,
+        else => error.InvalidTestExpression,
+    };
+}
+
 fn evalTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []const ir.WordRef) !bool {
     return switch (args.len) {
         0 => false,
@@ -1569,8 +1595,14 @@ fn exitStatusFromTerm(term: std.process.Child.Term) ExitStatus {
     };
 }
 
-fn parseAndLower(allocator: std.mem.Allocator, source: []const u8) !struct { parsed: parser.ParseResult, program: ir.Program } {
-    var parsed = try parser.parse(allocator, source, .{});
+const LoweredForTest = struct { parsed: parser.ParseResult, program: ir.Program };
+
+fn parseAndLower(allocator: std.mem.Allocator, source: []const u8) !LoweredForTest {
+    return parseAndLowerWithOptions(allocator, source, .{});
+}
+
+fn parseAndLowerWithOptions(allocator: std.mem.Allocator, source: []const u8, options: parser.ParseOptions) !LoweredForTest {
+    var parsed = try parser.parse(allocator, source, options);
     errdefer parsed.deinit();
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     errdefer program.deinit();
@@ -1616,6 +1648,40 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor executes Bash conditional command baseline" {
+    var pattern = try parseAndLowerWithOptions(std.testing.allocator, "[[ foobar == foo* ]]", .{ .features = compat.Features.bash() });
+    defer pattern.parsed.deinit();
+    defer pattern.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var pattern_result = try executor.executeProgram(pattern.program, .{});
+    defer pattern_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), pattern_result.status);
+
+    var string_false = try parseAndLowerWithOptions(std.testing.allocator, "[[ foo == bar ]]", .{ .features = compat.Features.bash() });
+    defer string_false.parsed.deinit();
+    defer string_false.program.deinit();
+    var string_false_result = try executor.executeProgram(string_false.program, .{});
+    defer string_false_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), string_false_result.status);
+
+    var integer = try parseAndLowerWithOptions(std.testing.allocator, "[[ 5 -gt 3 ]]", .{ .features = compat.Features.bash() });
+    defer integer.parsed.deinit();
+    defer integer.program.deinit();
+    var integer_result = try executor.executeProgram(integer.program, .{});
+    defer integer_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), integer_result.status);
+
+    var parameter = try parseAndLowerWithOptions(std.testing.allocator, "FOO=bar; [[ $FOO == b* ]]", .{ .features = compat.Features.bash() });
+    defer parameter.parsed.deinit();
+    defer parameter.program.deinit();
+    var parameter_result = try executor.executeProgram(parameter.program, .{});
+    defer parameter_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), parameter_result.status);
 }
 
 test "executor supports break and continue builtins in loops" {
