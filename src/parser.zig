@@ -168,6 +168,7 @@ pub const NodeKind = enum {
     command_substitution,
     if_command,
     loop_command,
+    for_command,
     parse_error,
 };
 
@@ -852,6 +853,12 @@ const SyntaxParser = struct {
                 continue;
             }
 
+            if (self.startsForCommand()) {
+                const for_command = try self.parseForCommand();
+                try list_children.append(self.allocator, .{ .node = for_command });
+                continue;
+            }
+
             if (self.startsPipeline()) {
                 const pipeline = try self.parsePipeline();
                 try list_children.append(self.allocator, .{ .node = pipeline });
@@ -923,6 +930,69 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, if_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseForCommand(self: *SyntaxParser) !NodeId {
+        const token_start = self.index;
+        var for_children: std.ArrayList(SyntaxChild) = .empty;
+        defer for_children.deinit(self.allocator);
+        var depth: usize = 0;
+        var saw_name = false;
+        var saw_do = false;
+        var closed = false;
+
+        while (!self.at(.eof)) {
+            const token = self.current();
+            if (token.kind == .word) {
+                const lexeme = token.lexeme(self.source);
+                if (std.mem.eql(u8, lexeme, "for")) {
+                    depth += 1;
+                } else if (depth == 1 and !saw_name and !std.mem.eql(u8, lexeme, "in") and !std.mem.eql(u8, lexeme, "do")) {
+                    saw_name = true;
+                } else if (depth == 1 and std.mem.eql(u8, lexeme, "do")) {
+                    saw_do = true;
+                } else if (std.mem.eql(u8, lexeme, "done")) {
+                    if (depth > 0) depth -= 1;
+                }
+            }
+
+            try self.appendCurrentTokenChildTo(&for_children);
+            if (token.kind == .word and std.mem.eql(u8, token.lexeme(self.source), "done") and depth == 0) {
+                closed = true;
+                break;
+            }
+        }
+
+        if (!saw_name) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing loop variable in for command",
+            });
+        }
+        if (!saw_do) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing do in for command",
+            });
+        }
+        if (!closed) {
+            self.incomplete = true;
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .incomplete_input,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing done to close for command",
+            });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, for_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.for_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
     fn parseLoopCommand(self: *SyntaxParser) !NodeId {
@@ -1144,7 +1214,7 @@ const SyntaxParser = struct {
     }
 
     fn startsListElement(self: SyntaxParser) bool {
-        return self.startsIfCommand() or self.startsLoopCommand() or self.startsPipeline();
+        return self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsPipeline();
     }
 
     fn startsIfCommand(self: SyntaxParser) bool {
@@ -1157,12 +1227,16 @@ const SyntaxParser = struct {
         return std.mem.eql(u8, lexeme, "while") or std.mem.eql(u8, lexeme, "until");
     }
 
+    fn startsForCommand(self: SyntaxParser) bool {
+        return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "for");
+    }
+
     fn startsPipeline(self: SyntaxParser) bool {
         return self.startsSimpleCommand();
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
-        if (self.startsIfCommand() or self.startsLoopCommand()) return false;
+        if (self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand()) return false;
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
 
@@ -1494,6 +1568,32 @@ test "parser builds redirection nodes with optional io number" {
             .{ .kind = .simple_command, .span = .init(0, 10), .token_start = 0, .token_end = 5 },
         },
     });
+}
+
+test "parser builds POSIX for command nodes" {
+    var result = try parse(std.testing.allocator, "for x in a b; do echo $x; done", .{});
+    defer result.deinit();
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .for_command) {
+            found = true;
+            try expectSpan(.init(0, 30), node.span);
+            try std.testing.expectEqual(@as(usize, 0), node.token_start);
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "parser reports incomplete POSIX for commands" {
+    var result = try parse(std.testing.allocator, "for x in a b; do echo $x", .{});
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
+    try expectSpan(.init(0, 24), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing done to close for command", result.diagnostics[0].message);
 }
 
 test "parser builds POSIX while and until command nodes" {

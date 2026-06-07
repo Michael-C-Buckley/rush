@@ -133,6 +133,7 @@ pub const Executor = struct {
                     .pipeline => try self.executePipeline(program, program.pipelines[statement.index], options),
                     .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
                     .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
+                    .for_command => try self.executeForCommand(program.for_commands[statement.index], options),
                 };
             }
             return last;
@@ -152,6 +153,33 @@ pub const Executor = struct {
             last = try self.executeSimpleCommand(command, options);
         }
         return last;
+    }
+
+    fn executeForCommand(self: *Executor, command: ir.ForCommand, options: ExecuteOptions) !CommandResult {
+        const expanded_words = try self.expandArgv(command.words, options);
+        defer self.freeWords(expanded_words);
+
+        var stdout: std.ArrayList(u8) = .empty;
+        errdefer stdout.deinit(self.allocator);
+        var stderr: std.ArrayList(u8) = .empty;
+        errdefer stderr.deinit(self.allocator);
+        var status: ExitStatus = 0;
+
+        for (expanded_words) |word| {
+            try self.setEnv(command.name, word.text);
+            var body = try self.executeScriptSlice(command.body, options);
+            defer body.deinit();
+            try stdout.appendSlice(self.allocator, body.stdout);
+            try stderr.appendSlice(self.allocator, body.stderr);
+            status = body.status;
+        }
+
+        return .{
+            .allocator = self.allocator,
+            .status = status,
+            .stdout = try stdout.toOwnedSlice(self.allocator),
+            .stderr = try stderr.toOwnedSlice(self.allocator),
+        };
     }
 
     fn executeLoopCommand(self: *Executor, command: ir.LoopCommand, options: ExecuteOptions) !CommandResult {
@@ -987,6 +1015,29 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor executes POSIX for loops" {
+    var lowered = try parseAndLower(std.testing.allocator, "for x in a b; do echo $x; done");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("a\nb\n", result.stdout);
+
+    var split_lowered = try parseAndLower(std.testing.allocator, "WORDS='c d'; for x in $WORDS; do echo $x; done");
+    defer split_lowered.parsed.deinit();
+    defer split_lowered.program.deinit();
+
+    var split_result = try executor.executeProgram(split_lowered.program, .{});
+    defer split_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), split_result.status);
+    try std.testing.expectEqualStrings("c\nd\n", split_result.stdout);
 }
 
 test "executor executes POSIX while and until loops" {
