@@ -26,6 +26,7 @@ while IFS= read -r script || [ -n "$script" ]; do
     ''|'#'*) continue ;;
   esac
   case_no=$((case_no + 1))
+  decoded_script=$(printf '%b' "$script")
   for shell in $shells; do
     tmp=$(mktemp -d)
     rush_out=$tmp/rush.out
@@ -33,9 +34,9 @@ while IFS= read -r script || [ -n "$script" ]; do
     shell_out=$tmp/shell.out
     shell_err=$tmp/shell.err
 
-    (cd "$tmp" && "$RUSH" -c "$script" >"$rush_out" 2>"$rush_err") || rush_status=$?
+    (cd "$tmp" && "$RUSH" -c "$decoded_script" >"$rush_out" 2>"$rush_err") || rush_status=$?
     rush_status=${rush_status:-0}
-    (cd "$tmp" && "$shell" -c "$script" >"$shell_out" 2>"$shell_err") || shell_status=$?
+    (cd "$tmp" && "$shell" -c "$decoded_script" >"$shell_out" 2>"$shell_err") || shell_status=$?
     shell_status=${shell_status:-0}
 
     if [ "$rush_status" -ne "$shell_status" ] || ! cmp -s "$rush_out" "$shell_out" || ! cmp -s "$rush_err" "$shell_err"; then

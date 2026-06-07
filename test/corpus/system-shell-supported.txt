@@ -16,3 +16,13 @@ case foo in f*) echo yes ;; *) echo no ;; esac
 f() { echo hi; }; f
 f() { echo $1/$#; }; f one two
 echo $(echo hi)
+CORPUS_USER=present; echo ${CORPUS_USER:-fallback}
+echo ${RUSH_CORPUS_MISSING:-fallback}
+EMPTY=; echo ${EMPTY:-fallback}/${EMPTY-fallback}
+VALUE=ok; echo ${VALUE:+alt}/${RUSH_CORPUS_MISSING:+alt}
+VALUE=ok; echo ${#VALUE}/${#RUSH_CORPUS_MISSING}
+unset RUSH_CORPUS_ASSIGNED; echo ${RUSH_CORPUS_ASSIGNED:=set}; echo $RUSH_CORPUS_ASSIGNED
+cat <<EOF\nhello\nEOF
+VALUE=ok; cat <<EOF\n$VALUE $(echo hi) $((1 + 2))\nEOF
+VALUE=ok; cat <<'EOF'\n$VALUE $(echo hi) $((1 + 2))\nEOF
+cat <<FIRST <<SECOND\nfirst\nFIRST\nsecond\nSECOND
