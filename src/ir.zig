@@ -36,10 +36,30 @@ pub const Pipeline = struct {
     op_before: ListOp = .sequence,
 };
 
+pub const IfCommand = struct {
+    span: parser.Span,
+    condition: []const u8,
+    then_body: []const u8,
+    else_body: ?[]const u8 = null,
+};
+
+pub const StatementKind = enum {
+    pipeline,
+    if_command,
+};
+
+pub const Statement = struct {
+    kind: StatementKind,
+    index: usize,
+    op_before: ListOp = .sequence,
+};
+
 pub const Program = struct {
     allocator: std.mem.Allocator,
     commands: []SimpleCommand,
     pipelines: []Pipeline,
+    if_commands: []IfCommand = &.{},
+    statements: []Statement = &.{},
 
     pub fn deinit(self: *Program) void {
         for (self.commands) |command| {
@@ -58,6 +78,8 @@ pub const Program = struct {
         }
         self.allocator.free(self.commands);
         self.allocator.free(self.pipelines);
+        self.allocator.free(self.if_commands);
+        self.allocator.free(self.statements);
         self.* = undefined;
     }
 };
@@ -65,6 +87,9 @@ pub const Program = struct {
 pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseResult) !Program {
     var commands: std.ArrayList(SimpleCommand) = .empty;
     var pipelines: std.ArrayList(Pipeline) = .empty;
+    var if_commands: std.ArrayList(IfCommand) = .empty;
+    var statement_refs: std.ArrayList(LoweredStatementRef) = .empty;
+    defer statement_refs.deinit(allocator);
     const missing_command = std.math.maxInt(usize);
     const command_indexes_by_node = try allocator.alloc(usize, parsed.nodes.len);
     defer allocator.free(command_indexes_by_node);
@@ -79,6 +104,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         }
         commands.deinit(allocator);
         pipelines.deinit(allocator);
+        if_commands.deinit(allocator);
     }
 
     for (parsed.nodes, 0..) |node, node_index| {
@@ -96,14 +122,121 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
             lowered.op_before = listOpBetween(parsed.tokens, previous_end, node.token_start);
         }
         previous_pipeline_token_end = node.token_end;
+        try statement_refs.append(allocator, .{ .kind = .pipeline, .index = pipelines.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try pipelines.append(allocator, lowered);
+    }
+
+    for (parsed.nodes) |node| {
+        if (node.kind != .if_command) continue;
+        try statement_refs.append(allocator, .{ .kind = .if_command, .index = if_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        try if_commands.append(allocator, lowerIfCommand(parsed, node));
+    }
+
+    std.mem.sort(LoweredStatementRef, statement_refs.items, {}, lessThanStatementRef);
+    var statements: std.ArrayList(Statement) = .empty;
+    errdefer statements.deinit(allocator);
+    var previous_statement_end: ?usize = null;
+    for (statement_refs.items) |statement_ref| {
+        var statement: Statement = .{ .kind = statement_ref.kind, .index = statement_ref.index };
+        if (previous_statement_end) |previous_end| {
+            statement.op_before = listOpBetween(parsed.tokens, previous_end, statement_ref.token_start);
+        }
+        previous_statement_end = statement_ref.token_end;
+        try statements.append(allocator, statement);
     }
 
     return .{
         .allocator = allocator,
         .commands = try commands.toOwnedSlice(allocator),
         .pipelines = try pipelines.toOwnedSlice(allocator),
+        .if_commands = try if_commands.toOwnedSlice(allocator),
+        .statements = try statements.toOwnedSlice(allocator),
     };
+}
+
+const LoweredStatementRef = struct {
+    kind: StatementKind,
+    index: usize,
+    token_start: usize,
+    token_end: usize,
+};
+
+fn lessThanStatementRef(_: void, a: LoweredStatementRef, b: LoweredStatementRef) bool {
+    return a.token_start < b.token_start;
+}
+
+fn lowerIfCommand(parsed: parser.ParseResult, node: parser.Node) IfCommand {
+    std.debug.assert(node.kind == .if_command);
+    var then_token: ?usize = null;
+    var else_token: ?usize = null;
+    var fi_token: ?usize = null;
+    var depth: usize = 0;
+
+    for (node.token_start..node.token_end) |token_index| {
+        const token = parsed.tokens[token_index];
+        if (token.kind != .word or !isReservedPosition(parsed, node.token_start, token_index)) continue;
+        const lexeme = token.lexeme(parsed.source);
+        if (std.mem.eql(u8, lexeme, "if")) {
+            depth += 1;
+        } else if (std.mem.eql(u8, lexeme, "fi")) {
+            if (depth == 1 and fi_token == null) fi_token = token_index;
+            if (depth > 0) depth -= 1;
+        } else if (depth == 1 and then_token == null and std.mem.eql(u8, lexeme, "then")) {
+            then_token = token_index;
+        } else if (depth == 1 and else_token == null and (std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif"))) {
+            else_token = token_index;
+        }
+    }
+
+    const then_index = then_token orelse node.token_end;
+    const fi_index = fi_token orelse node.token_end;
+    const condition_start = node.token_start + 1;
+    const condition_end = then_index;
+    const body_start = @min(then_index + 1, node.token_end);
+    const body_end = else_token orelse fi_index;
+    const else_body = if (else_token) |else_index| blk: {
+        if (std.mem.eql(u8, parsed.tokens[else_index].lexeme(parsed.source), "elif")) {
+            break :blk spanSlice(parsed, else_index, fi_index);
+        }
+        break :blk spanSlice(parsed, @min(else_index + 1, node.token_end), fi_index);
+    } else null;
+
+    return .{
+        .span = node.span,
+        .condition = spanSlice(parsed, condition_start, condition_end),
+        .then_body = spanSlice(parsed, body_start, body_end),
+        .else_body = else_body,
+    };
+}
+
+fn isReservedPosition(parsed: parser.ParseResult, start: usize, token_index: usize) bool {
+    if (token_index == start) return true;
+    var index = token_index;
+    while (index > start) {
+        index -= 1;
+        const token = parsed.tokens[index];
+        if (token.kind.isTrivia()) continue;
+        if (isListSeparatorToken(token.kind)) return true;
+        const lexeme = if (token.kind == .word) token.lexeme(parsed.source) else "";
+        return std.mem.eql(u8, lexeme, "then") or std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif");
+    }
+    return true;
+}
+
+fn isListSeparatorToken(kind: parser.TokenKind) bool {
+    return switch (kind) {
+        .newline, .semicolon, .and_if, .or_if, .ampersand => true,
+        else => false,
+    };
+}
+
+fn spanSlice(parsed: parser.ParseResult, token_start: usize, token_end: usize) []const u8 {
+    if (token_start >= token_end or token_start >= parsed.tokens.len) return "";
+    const end_index = @min(token_end, parsed.tokens.len);
+    const start = parsed.tokens[token_start].span.start;
+    const end = parsed.tokens[end_index - 1].span.end;
+    if (end < start) return "";
+    return parsed.source[start..end];
 }
 
 fn lowerPipeline(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node, command_indexes_by_node: []const usize, missing_command: usize) !Pipeline {

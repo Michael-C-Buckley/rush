@@ -4,6 +4,7 @@ const std = @import("std");
 const compat = @import("compat.zig");
 const expand = @import("expand.zig");
 const ir = @import("ir.zig");
+const parser = @import("parser.zig");
 
 pub const ExitStatus = u8;
 
@@ -124,6 +125,18 @@ pub const Executor = struct {
     pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) !CommandResult {
         var last = try emptyResult(self.allocator, 0);
 
+        if (program.statements.len > 0) {
+            for (program.statements) |statement| {
+                if (shouldSkipPipeline(statement.op_before, last.status)) continue;
+                last.deinit();
+                last = switch (statement.kind) {
+                    .pipeline => try self.executePipeline(program, program.pipelines[statement.index], options),
+                    .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
+                };
+            }
+            return last;
+        }
+
         if (program.pipelines.len > 0) {
             for (program.pipelines) |pipeline| {
                 if (shouldSkipPipeline(pipeline.op_before, last.status)) continue;
@@ -138,6 +151,76 @@ pub const Executor = struct {
             last = try self.executeSimpleCommand(command, options);
         }
         return last;
+    }
+
+    fn executeIfCommand(self: *Executor, command: ir.IfCommand, options: ExecuteOptions) !CommandResult {
+        var stdout: std.ArrayList(u8) = .empty;
+        errdefer stdout.deinit(self.allocator);
+        var stderr: std.ArrayList(u8) = .empty;
+        errdefer stderr.deinit(self.allocator);
+
+        var condition = try self.executeScriptSlice(command.condition, options);
+        defer condition.deinit();
+        try stdout.appendSlice(self.allocator, condition.stdout);
+        try stderr.appendSlice(self.allocator, condition.stderr);
+
+        var status: ExitStatus = 0;
+        if (condition.status == 0) {
+            var body = try self.executeScriptSlice(command.then_body, options);
+            defer body.deinit();
+            try stdout.appendSlice(self.allocator, body.stdout);
+            try stderr.appendSlice(self.allocator, body.stderr);
+            status = body.status;
+        } else if (command.else_body) |else_body| {
+            var body = try self.executeElseBody(else_body, options);
+            defer body.deinit();
+            try stdout.appendSlice(self.allocator, body.stdout);
+            try stderr.appendSlice(self.allocator, body.stderr);
+            status = body.status;
+        } else {
+            status = 0;
+        }
+
+        return .{
+            .allocator = self.allocator,
+            .status = status,
+            .stdout = try stdout.toOwnedSlice(self.allocator),
+            .stderr = try stderr.toOwnedSlice(self.allocator),
+        };
+    }
+
+    fn executeElseBody(self: *Executor, else_body: []const u8, options: ExecuteOptions) !CommandResult {
+        const trimmed = trimLeftShellSeparators(else_body);
+        if (std.mem.startsWith(u8, trimmed, "elif")) {
+            const rest = trimLeftShellWhitespace(trimmed[4..]);
+            const script = try std.fmt.allocPrint(self.allocator, "if {s} fi", .{rest});
+            defer self.allocator.free(script);
+            return self.executeScriptSlice(script, options);
+        }
+        return self.executeScriptSlice(else_body, options);
+    }
+
+    fn trimLeftShellSeparators(text: []const u8) []const u8 {
+        var index: usize = 0;
+        while (index < text.len and (text[index] == ' ' or text[index] == '\t' or text[index] == '\r' or text[index] == '\n' or text[index] == ';')) : (index += 1) {}
+        return text[index..];
+    }
+
+    fn trimLeftShellWhitespace(text: []const u8) []const u8 {
+        var index: usize = 0;
+        while (index < text.len and (text[index] == ' ' or text[index] == '\t' or text[index] == '\r' or text[index] == '\n')) : (index += 1) {}
+        return text[index..];
+    }
+
+    fn executeScriptSlice(self: *Executor, script: []const u8, options: ExecuteOptions) !CommandResult {
+        const trimmed = std.mem.trim(u8, script, " \t\r\n;");
+        if (trimmed.len == 0) return emptyResult(self.allocator, 0);
+        var parsed = try parser.parse(self.allocator, trimmed, .{ .features = options.features });
+        defer parsed.deinit();
+        if (parsed.diagnostics.len != 0) return error.ParseError;
+        var program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        defer program.deinit();
+        return self.executeProgram(program, options);
     }
 
     fn executePipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) !CommandResult {
@@ -815,8 +898,7 @@ fn exitStatusFromTerm(term: std.process.Child.Term) ExitStatus {
     };
 }
 
-fn parseAndLower(allocator: std.mem.Allocator, source: []const u8) !struct { parsed: @import("parser.zig").ParseResult, program: ir.Program } {
-    const parser = @import("parser.zig");
+fn parseAndLower(allocator: std.mem.Allocator, source: []const u8) !struct { parsed: parser.ParseResult, program: ir.Program } {
     var parsed = try parser.parse(allocator, source, .{});
     errdefer parsed.deinit();
     var program = try ir.lowerSimpleCommands(allocator, parsed);
@@ -863,6 +945,38 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor executes POSIX if compound commands" {
+    var true_lowered = try parseAndLower(std.testing.allocator, "if true; then echo yes; else echo no; fi");
+    defer true_lowered.parsed.deinit();
+    defer true_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var true_result = try executor.executeProgram(true_lowered.program, .{});
+    defer true_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), true_result.status);
+    try std.testing.expectEqualStrings("yes\n", true_result.stdout);
+
+    var false_lowered = try parseAndLower(std.testing.allocator, "if false; then echo yes; else echo no; fi");
+    defer false_lowered.parsed.deinit();
+    defer false_lowered.program.deinit();
+
+    var false_result = try executor.executeProgram(false_lowered.program, .{});
+    defer false_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), false_result.status);
+    try std.testing.expectEqualStrings("no\n", false_result.stdout);
+
+    var elif_lowered = try parseAndLower(std.testing.allocator, "if false; then echo no; elif true; then echo elif; else echo else; fi");
+    defer elif_lowered.parsed.deinit();
+    defer elif_lowered.program.deinit();
+
+    var elif_result = try executor.executeProgram(elif_lowered.program, .{});
+    defer elif_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), elif_result.status);
+    try std.testing.expectEqualStrings("elif\n", elif_result.stdout);
 }
 
 test "executor expands command substitutions recursively" {
