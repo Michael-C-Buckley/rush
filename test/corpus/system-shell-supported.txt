@@ -52,3 +52,6 @@ readonly RO=value; echo $RO
 f() { shift; echo $1/$#; }; f a b c
 wait; echo waited
 umask 022; umask
+IFS=:; LIST=:a::b:; for x in $LIST; do echo "<$x>"; done
+IFS=; LIST="a b c"; for x in $LIST; do echo "<$x>"; done
+IFS=,; LIST="a b,c"; for x in $LIST; do echo "<$x>"; done

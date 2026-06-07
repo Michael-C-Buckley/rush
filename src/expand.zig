@@ -129,12 +129,13 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
     var current: std.ArrayList(u8) = .empty;
     defer current.deinit(allocator);
 
+    const ifs = options.env.get("IFS") orelse " \t\n";
     for (parts.parts) |part| {
         const split = part.kind == .unquoted or part.kind == .parameter;
         const rendered = try renderPart(allocator, parts.raw, part, options);
         defer allocator.free(rendered);
         if (split) {
-            try appendSplitText(allocator, &fields, &current, rendered);
+            try appendSplitText(allocator, &fields, &current, rendered, ifs);
         } else {
             try current.appendSlice(allocator, rendered);
         }
@@ -654,20 +655,45 @@ fn trimTrailingNewlines(output: []const u8) []const u8 {
     return output[0..end];
 }
 
-fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: []const u8) !void {
-    for (text) |c| {
-        if (isDefaultIfsWhitespace(c)) {
+fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: []const u8, ifs: []const u8) !void {
+    if (ifs.len == 0) {
+        try current.appendSlice(allocator, text);
+        return;
+    }
+
+    var index: usize = 0;
+    while (index < text.len) {
+        const c = text[index];
+        if (!isIfsChar(ifs, c)) {
+            try current.append(allocator, c);
+            index += 1;
+            continue;
+        }
+
+        if (isIfsWhitespace(ifs, c)) {
             if (current.items.len != 0) {
                 try fields.append(allocator, try current.toOwnedSlice(allocator));
             }
-        } else {
-            try current.append(allocator, c);
+            while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
+            continue;
         }
+
+        try fields.append(allocator, try current.toOwnedSlice(allocator));
+        index += 1;
+        while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
     }
 }
 
 fn isDefaultIfsWhitespace(c: u8) bool {
     return c == ' ' or c == '\t' or c == '\n';
+}
+
+fn isIfsChar(ifs: []const u8, c: u8) bool {
+    return std.mem.indexOfScalar(u8, ifs, c) != null;
+}
+
+fn isIfsWhitespace(ifs: []const u8, c: u8) bool {
+    return (c == ' ' or c == '\t' or c == '\n') and isIfsChar(ifs, c);
 }
 
 fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std.ArrayList([]const u8)) !void {
@@ -935,6 +961,22 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
 
 const test_env: EnvLookup = .{ .lookupFn = testLookup };
 
+fn testIfsLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, name, "IFS")) return ":,";
+    if (std.mem.eql(u8, name, "LIST")) return ":a::b:";
+    return testLookup(null, name);
+}
+
+const test_ifs_env: EnvLookup = .{ .lookupFn = testIfsLookup };
+
+fn testEmptyIfsLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, name, "IFS")) return "";
+    if (std.mem.eql(u8, name, "LIST")) return "a b c";
+    return testLookup(null, name);
+}
+
+const test_empty_ifs_env: EnvLookup = .{ .lookupFn = testEmptyIfsLookup };
+
 test "word part parser records quoted escaped and parameter regions" {
     var parts = try parseWordParts(std.testing.allocator, "a'$USER'\"$USER\"\\ b${EMPTY}");
     defer parts.deinit();
@@ -1016,6 +1058,23 @@ test "field splitting uses default IFS for unquoted expansion" {
     try std.testing.expectEqualStrings("rush-user", result.fields[0]);
     try std.testing.expectEqualStrings("two", result.fields[1]);
     try std.testing.expectEqualStrings("three", result.fields[2]);
+}
+
+test "field splitting honors custom and empty IFS" {
+    var custom = try expandWord(std.testing.allocator, "$LIST", .{ .env = test_ifs_env });
+    defer custom.deinit();
+
+    try std.testing.expectEqual(@as(usize, 4), custom.fields.len);
+    try std.testing.expectEqualStrings("", custom.fields[0]);
+    try std.testing.expectEqualStrings("a", custom.fields[1]);
+    try std.testing.expectEqualStrings("", custom.fields[2]);
+    try std.testing.expectEqualStrings("b", custom.fields[3]);
+
+    var empty = try expandWord(std.testing.allocator, "$LIST", .{ .env = test_empty_ifs_env });
+    defer empty.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), empty.fields.len);
+    try std.testing.expectEqualStrings("a b c", empty.fields[0]);
 }
 
 test "field splitting preserves quoted expansion results" {
