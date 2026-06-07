@@ -113,6 +113,62 @@ test "runScript returns parse diagnostics" {
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "missing command after pipeline operator") != null);
 }
 
+test "parser smoke corpus parses representative snippets" {
+    const snippets = [_][]const u8{
+        "",
+        "   \t  ",
+        "echo hello",
+        "FOO=bar echo hi",
+        "echo 'quoted text' \"double quoted\"",
+        "echo hello | cat",
+        "false || echo recovered",
+        "true && echo ok",
+        "echo > out",
+        "echo | ",
+        "echo 'unterminated",
+        "2>err missing-command",
+    };
+
+    for (snippets) |snippet| {
+        var parsed = try parser.parse(std.testing.allocator, snippet, .{ .mode = .interactive });
+        defer parsed.deinit();
+        try std.testing.expect(parsed.tokens.len >= 1);
+        try std.testing.expect(parsed.nodes.len >= 1);
+    }
+}
+
+test "executor smoke corpus returns expected statuses and output fragments" {
+    const Case = struct {
+        script: []const u8,
+        status: exec.ExitStatus,
+        stdout_contains: []const u8 = "",
+        stderr_contains: []const u8 = "",
+    };
+    const cases = [_]Case{
+        .{ .script = "", .status = 0 },
+        .{ .script = "true", .status = 0 },
+        .{ .script = "false", .status = 1 },
+        .{ .script = "echo smoke", .status = 0, .stdout_contains = "smoke\n" },
+        .{ .script = "echo smoke | cat", .status = 0, .stdout_contains = "smoke\n" },
+        .{ .script = "false || echo recovered", .status = 0, .stdout_contains = "recovered\n" },
+        .{ .script = "true && echo ok", .status = 0, .stdout_contains = "ok\n" },
+        .{ .script = "missing-command", .status = 127, .stderr_contains = "command not found" },
+        .{ .script = "echo | ", .status = 2, .stderr_contains = "missing command after pipeline operator" },
+    };
+
+    for (cases) |case| {
+        var result = try runScript(std.testing.allocator, std.testing.io, case.script);
+        defer result.deinit();
+        try std.testing.expectEqual(case.status, result.status);
+        if (case.stdout_contains.len != 0) {
+            try std.testing.expect(std.mem.indexOf(u8, result.stdout, case.stdout_contains) != null);
+        }
+        if (case.stderr_contains.len != 0) {
+            try std.testing.expect(std.mem.indexOf(u8, result.stderr, case.stderr_contains) != null);
+        }
+    }
+}
+
 test "integration harness compares selected scripts with /bin/sh" {
     try expectMatchesSh("echo hello");
     try expectMatchesSh("false");
