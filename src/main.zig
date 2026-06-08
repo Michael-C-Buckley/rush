@@ -307,7 +307,7 @@ fn queryHistoryEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, prefix: 
 
     const sql = switch (direction) {
         .previous =>
-        \\select id, command from history h
+        \\select id, command, started_at from history h
         \\where (?1 is null or id < ?1)
         \\  and (?2 = '' or command like ?2 escape '\')
         \\  and not exists (
@@ -318,7 +318,7 @@ fn queryHistoryEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, prefix: 
         \\order by id desc limit 1
         ,
         .next =>
-        \\select id, command from history h
+        \\select id, command, started_at from history h
         \\where id > ?1
         \\  and (?2 = '' or command like ?2 escape '\')
         \\  and not exists (
@@ -342,7 +342,7 @@ fn queryHistoryEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, prefix: 
     if (rc == sqlite.SQLITE_DONE) return null;
     if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
     const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse return null;
-    return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, std.mem.span(command_text)) };
+    return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, std.mem.span(command_text)), .when = sqlite.sqlite3_column_int64(stmt, 2) };
 }
 
 fn appendSqlLikePrefix(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8), prefix: []const u8) !void {
@@ -366,7 +366,7 @@ fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, qu
     const offset = if (cursor) |value| @max(value, 0) else 0;
     const sql = switch (direction) {
         .previous =>
-        \\select h.id, h.command
+        \\select h.id, h.command, h.started_at
         \\from history_fts f
         \\join history h on h.id = f.rowid
         \\where history_fts match ?1
@@ -378,7 +378,7 @@ fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, qu
         \\limit 1 offset ?2
         ,
         .next =>
-        \\select h.id, h.command
+        \\select h.id, h.command, h.started_at
         \\from history_fts f
         \\join history h on h.id = f.rowid
         \\where history_fts match ?1
@@ -398,7 +398,7 @@ fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, qu
     if (rc == sqlite.SQLITE_DONE) return null;
     if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
     const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse return null;
-    return .{ .id = offset + 1, .text = try allocator.dupe(u8, std.mem.span(command_text)) };
+    return .{ .id = offset + 1, .text = try allocator.dupe(u8, std.mem.span(command_text)), .when = sqlite.sqlite3_column_int64(stmt, 2) };
 }
 
 fn appendHistoryFtsQuery(allocator: std.mem.Allocator, output: *std.ArrayList(u8), query: []const u8) !void {
@@ -1099,6 +1099,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
             .history = .{
+                .now = unixTimestamp(io),
                 .context = &history,
                 .previous = previousHistoryEntry,
                 .next = nextHistoryEntry,
@@ -1468,10 +1469,12 @@ test "history search uses fts ranking and hides older duplicates" {
     const first = (try history.searchEntry(std.testing.allocator, "git sta", null)).?;
     defer first.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("git status", first.text);
+    try std.testing.expectEqual(@as(i64, 30), first.when);
 
     const second = (try history.searchEntry(std.testing.allocator, "git sta", first.id)).?;
     defer second.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo git status", second.text);
+    try std.testing.expectEqual(@as(i64, 40), second.when);
 
     try std.testing.expect(try history.searchEntry(std.testing.allocator, "gco", null) == null);
 }

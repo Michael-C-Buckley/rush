@@ -216,6 +216,7 @@ pub const Prompt = struct {
 
 pub const HistoryView = struct {
     entries: []const []const u8 = &.{},
+    now: i64 = 0,
     context: ?*anyopaque = null,
     previous: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, i64) anyerror!?HistoryEntry = null,
@@ -226,6 +227,7 @@ pub const HistoryView = struct {
     pub const HistoryEntry = struct {
         id: i64,
         text: []const u8,
+        when: i64 = 0,
 
         pub fn deinit(self: HistoryEntry, allocator: std.mem.Allocator) void {
             allocator.free(self.text);
@@ -503,14 +505,22 @@ pub const LineSession = struct {
                 for (self.history_search_matches.items) |entry| {
                     const label = try styledHistorySearchLabel(allocator, entry.text, self.history_search_query.items);
                     try styled_labels.append(allocator, label);
-                    try history_candidates.append(allocator, .{
+                    const description = try historySearchDescription(allocator, self.history.now, entry.when);
+                    history_candidates.append(allocator, .{
                         .value = entry.text,
                         .display = label,
-                        .description = "history",
+                        .description = description,
                         .kind = .plain,
                         .replace_start = 0,
                         .replace_end = self.editor.buffer.text().len,
-                    });
+                    }) catch |err| {
+                        allocator.free(description);
+                        return err;
+                    };
+                    styled_labels.append(allocator, description) catch |err| {
+                        allocator.free(description);
+                        return err;
+                    };
                 }
             } else {
                 try history_candidates.append(allocator, .{
@@ -845,7 +855,28 @@ pub const LineSession = struct {
 };
 
 fn cloneHistoryEntry(allocator: std.mem.Allocator, entry: HistoryView.HistoryEntry) !HistoryView.HistoryEntry {
-    return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text) };
+    return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text), .when = entry.when };
+}
+
+fn historySearchDescription(allocator: std.mem.Allocator, now: i64, when: i64) ![]const u8 {
+    if (now <= 0 or when <= 0) return allocator.dupe(u8, "history");
+    var age_buffer: [16]u8 = undefined;
+    const age = relativeAge(&age_buffer, now, when);
+    return std.fmt.allocPrint(allocator, "history · {s}", .{age});
+}
+
+pub fn relativeAge(buffer: *[16]u8, now: i64, when: i64) []const u8 {
+    const elapsed = @max(now - when, 0);
+    const value = if (elapsed < 60)
+        elapsed
+    else if (elapsed < 60 * 60)
+        @divTrunc(elapsed, 60)
+    else if (elapsed < 24 * 60 * 60)
+        @divTrunc(elapsed, 60 * 60)
+    else
+        @divTrunc(elapsed, 24 * 60 * 60);
+    const suffix: u8 = if (elapsed < 60) 's' else if (elapsed < 60 * 60) 'm' else if (elapsed < 24 * 60 * 60) 'h' else 'd';
+    return std.fmt.bufPrint(buffer, "{d}{c}", .{ value, suffix }) catch unreachable;
 }
 
 fn styledHistorySearchLabel(allocator: std.mem.Allocator, text: []const u8, query: []const u8) ![]const u8 {
@@ -2085,6 +2116,15 @@ test "render line wraps styled diagnostic spans" {
     try std.testing.expect(std.mem.endsWith(u8, rendered, "\r\x1b[8C"));
 }
 
+test "relative age formats compact units" {
+    var buffer: [16]u8 = undefined;
+    try std.testing.expectEqualStrings("30s", relativeAge(&buffer, 100, 70));
+    try std.testing.expectEqualStrings("12m", relativeAge(&buffer, 12 * 60 + 5, 5));
+    try std.testing.expectEqualStrings("1h", relativeAge(&buffer, 60 * 60 + 10, 10));
+    try std.testing.expectEqualStrings("3d", relativeAge(&buffer, 3 * 24 * 60 * 60 + 9, 9));
+    try std.testing.expectEqualStrings("0s", relativeAge(&buffer, 10, 20));
+}
+
 test "line session navigates full history from empty buffer" {
     const entries = [_][]const u8{ "echo one", "echo two" };
     var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries });
@@ -2118,6 +2158,11 @@ test "line session searches history by draft prefix" {
 
 const TestHistorySearch = struct {
     entries: []const []const u8,
+    whens: []const i64 = &.{},
+
+    fn when(self: TestHistorySearch, index: usize) i64 {
+        return if (index < self.whens.len) self.whens[index] else 0;
+    }
 };
 
 fn testSearchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?HistoryView.HistoryEntry {
@@ -2127,7 +2172,7 @@ fn testSearchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, que
         index -= 1;
         const entry = history.entries[index];
         if (completion.fuzzyMatchRank(entry, query) != null) {
-            return .{ .id = @intCast(index), .text = try allocator.dupe(u8, entry) };
+            return .{ .id = @intCast(index), .text = try allocator.dupe(u8, entry), .when = history.when(index) };
         }
     }
     return null;
@@ -2139,7 +2184,7 @@ fn testSearchNextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator,
     while (index < history.entries.len) : (index += 1) {
         const entry = history.entries[index];
         if (completion.fuzzyMatchRank(entry, query) != null) {
-            return .{ .id = @intCast(index), .text = try allocator.dupe(u8, entry) };
+            return .{ .id = @intCast(index), .text = try allocator.dupe(u8, entry), .when = history.when(index) };
         }
     }
     return null;
@@ -2147,8 +2192,9 @@ fn testSearchNextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator,
 
 test "history search seeds query from current buffer and renders menu-style match" {
     const entries = [_][]const u8{ "echo one", "git status", "git diff" };
-    var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    const whens = [_]i64{ 10, 60, 90 };
+    var history: TestHistorySearch = .{ .entries = &entries, .whens = &whens };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .now = 120, .context = &history, .search = testSearchHistoryEntry });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git" });
@@ -2165,7 +2211,7 @@ test "history search seeds query from current buffer and renders menu-style matc
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2mplain") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mhistory") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mhistory · 30s") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
 }
 
@@ -2299,7 +2345,7 @@ test "history search uses fuzzy query matching" {
     try std.testing.expectEqual(@as(usize, 0), session.history_search_matches.items.len);
 }
 
-test "history search tab cycles matches and enter accepts" {
+test "history search first tab cycles the already-open menu" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
     var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
@@ -2309,6 +2355,7 @@ test "history search tab cycles matches and enter accepts" {
     try session.handleKey(.{ .key = .ctrl_r });
     try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
     try std.testing.expectEqual(@as(usize, 3), session.history_search_matches.items.len);
+    try std.testing.expectEqual(@as(usize, 0), session.history_search_selected);
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
