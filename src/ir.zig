@@ -57,6 +57,7 @@ pub const LoopCommand = struct {
     kind: LoopKind,
     condition: []const u8,
     body: []const u8,
+    redirections: []Redirection,
 };
 
 pub const ForCommand = struct {
@@ -150,6 +151,7 @@ pub const Program = struct {
         self.allocator.free(self.commands);
         self.allocator.free(self.pipelines);
         self.allocator.free(self.if_commands);
+        for (self.loop_commands) |command| freeLoopCommand(self.allocator, command);
         self.allocator.free(self.loop_commands);
         for (self.for_commands) |command| {
             self.allocator.free(command.name);
@@ -251,7 +253,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     for (parsed.nodes) |node| {
         if (node.kind != .loop_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .loop_command, .index = loop_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
-        try loop_commands.append(allocator, lowerLoopCommand(parsed, node));
+        try loop_commands.append(allocator, try lowerLoopCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
@@ -634,7 +636,7 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
     };
 }
 
-fn lowerLoopCommand(parsed: parser.ParseResult, node: parser.Node) LoopCommand {
+fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !LoopCommand {
     std.debug.assert(node.kind == .loop_command);
     const opener = parsed.tokens[node.token_start].lexeme(parsed.source);
     var do_token: ?usize = null;
@@ -657,11 +659,17 @@ fn lowerLoopCommand(parsed: parser.ParseResult, node: parser.Node) LoopCommand {
 
     const do_index = do_token orelse node.token_end;
     const done_index = done_token orelse node.token_end;
+    var redirections = try lowerCompoundRedirections(allocator, parsed, node);
+    errdefer {
+        for (redirections.items) |redirection| freeRedirection(allocator, redirection);
+        redirections.deinit(allocator);
+    }
     return .{
         .span = node.span,
         .kind = if (std.mem.eql(u8, opener, "while")) .while_loop else .until_loop,
         .condition = spanSlice(parsed, node.token_start + 1, do_index),
         .body = spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
+        .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
 
@@ -1063,6 +1071,11 @@ fn freeForCommand(allocator: std.mem.Allocator, command: ForCommand) void {
     allocator.free(command.name);
     for (command.words) |word| freeWord(allocator, word);
     allocator.free(command.words);
+}
+
+fn freeLoopCommand(allocator: std.mem.Allocator, command: LoopCommand) void {
+    for (command.redirections) |redirection| freeRedirection(allocator, redirection);
+    allocator.free(command.redirections);
 }
 
 fn freeCommand(allocator: std.mem.Allocator, command: SimpleCommand) void {

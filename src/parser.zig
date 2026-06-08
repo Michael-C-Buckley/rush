@@ -1412,6 +1412,16 @@ const SyntaxParser = struct {
             try self.appendCurrentTokenChildTo(&loop_children);
             closed = true;
         }
+        while (self.current().kind == .whitespace) {
+            try self.appendCurrentTokenChildTo(&loop_children);
+        }
+        while (self.startsRedirection()) {
+            const redirection = try self.parseRedirection();
+            try loop_children.append(self.allocator, .{ .node = redirection });
+            while (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(&loop_children);
+            }
+        }
 
         if (!saw_do) {
             self.incomplete = true;

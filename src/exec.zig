@@ -417,6 +417,8 @@ pub const Executor = struct {
     getopts_offset: usize = 1,
     getopts_last_optind: usize = 1,
     parameter_error: expand.ParameterError = .{},
+    script_stdin: ?[]const u8 = null,
+    script_stdin_offset: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         var executor: Executor = .{ .allocator = allocator };
@@ -1250,6 +1252,19 @@ pub const Executor = struct {
     fn executeLoopCommand(self: *Executor, command: ir.LoopCommand, options: ExecuteOptions) !CommandResult {
         self.loop_depth += 1;
         defer self.loop_depth -= 1;
+        var owned_stdin: ?[]u8 = null;
+        defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        const prior_stdin = self.script_stdin;
+        const prior_stdin_offset = self.script_stdin_offset;
+        defer {
+            self.script_stdin = prior_stdin;
+            self.script_stdin_offset = prior_stdin_offset;
+        }
+        const redirected_stdin = try self.applyLoopInputRedirections(command, options, &owned_stdin);
+        if (redirected_stdin) |stdin| {
+            self.script_stdin = stdin;
+            self.script_stdin_offset = 0;
+        }
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
         var stderr: std.ArrayList(u8) = .empty;
@@ -1291,6 +1306,26 @@ pub const Executor = struct {
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
         };
+    }
+
+    fn applyLoopInputRedirections(self: *Executor, command: ir.LoopCommand, options: ExecuteOptions, owned_stdin: *?[]u8) !?[]const u8 {
+        if (command.redirections.len == 0) return null;
+        if (!hasInputRedirection(command.redirections)) return null;
+        const wrapper: ir.SimpleCommand = .{
+            .span = command.span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = try self.expandRedirections(command.redirections, options),
+        };
+        defer self.freeRedirections(wrapper.redirections);
+        return try self.applyInputRedirections(wrapper, "", options, owned_stdin);
+    }
+
+    fn hasInputRedirection(redirections: []const ir.Redirection) bool {
+        for (redirections) |redirection| {
+            if (isHereDocRedirection(redirection) or isStdinFileRedirection(redirection)) return true;
+        }
+        return false;
     }
 
     fn consumeLoopControl(self: *Executor) ?LoopControlKind {
@@ -4191,9 +4226,9 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     }
 
     const names = command.argv[arg_start..];
-    const line_end = std.mem.indexOfScalar(u8, stdin, '\n') orelse stdin.len;
-    const status: ExitStatus = if (line_end < stdin.len) 0 else 1;
-    const raw_line = if (line_end < stdin.len and line_end > 0 and stdin[line_end - 1] == '\r') stdin[0 .. line_end - 1] else stdin[0..line_end];
+    const read_input = nextReadInput(self, stdin);
+    const status = read_input.status;
+    const raw_line = read_input.line;
     const line = if (raw_mode) try self.allocator.dupe(u8, raw_line) else try unescapeReadLine(self.allocator, raw_line);
     defer self.allocator.free(line);
     if (names.len == 0) {
@@ -4215,6 +4250,33 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         try self.setEnv(name_word.text, field);
     }
     return emptyResult(self.allocator, status);
+}
+
+const ReadInput = struct {
+    line: []const u8,
+    status: ExitStatus,
+};
+
+fn nextReadInput(self: *Executor, stdin: []const u8) ReadInput {
+    if (stdin.len != 0) return readInputFromSlice(stdin);
+    const script_stdin = self.script_stdin orelse return .{ .line = "", .status = 1 };
+    if (self.script_stdin_offset >= script_stdin.len) return .{ .line = "", .status = 1 };
+    const remaining = script_stdin[self.script_stdin_offset..];
+    const line_end = std.mem.indexOfScalar(u8, remaining, '\n') orelse remaining.len;
+    const status: ExitStatus = if (line_end < remaining.len) 0 else 1;
+    self.script_stdin_offset += @min(line_end + 1, remaining.len);
+    return .{ .line = trimReadCarriageReturn(remaining[0..line_end]), .status = status };
+}
+
+fn readInputFromSlice(stdin: []const u8) ReadInput {
+    const line_end = std.mem.indexOfScalar(u8, stdin, '\n') orelse stdin.len;
+    const status: ExitStatus = if (line_end < stdin.len) 0 else 1;
+    return .{ .line = trimReadCarriageReturn(stdin[0..line_end]), .status = status };
+}
+
+fn trimReadCarriageReturn(line: []const u8) []const u8 {
+    if (line.len > 0 and line[line.len - 1] == '\r') return line[0 .. line.len - 1];
+    return line;
 }
 
 fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -5876,6 +5938,22 @@ test "executor executes POSIX while and until loops" {
     defer break_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), break_result.status);
     try std.testing.expectEqualStrings("once\n", break_result.stdout);
+}
+
+test "executor feeds loop input redirection through read conditions" {
+    const path = "rush-loop-read-input.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    var lowered = try parseAndLower(std.testing.allocator, "printf 'a\\nb\\n' > rush-loop-read-input.tmp; n=0; while read line; do n=$((n + 1)); echo \"$n:$line\"; done < rush-loop-read-input.tmp; echo done=$n");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("1:a\n2:b\ndone=2\n", result.stdout);
 }
 
 test "executor executes POSIX if compound commands" {
