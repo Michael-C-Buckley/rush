@@ -3,6 +3,7 @@
 const Self = @This();
 
 const std = @import("std");
+const completion = @import("completion.zig");
 const vaxis = @import("vaxis");
 
 pub const KeyEvent = struct {
@@ -20,6 +21,7 @@ pub const Key = union(enum) {
     right,
     up,
     down,
+    tab,
     home,
     end,
     escape,
@@ -67,6 +69,18 @@ pub const EditBuffer = struct {
         if (!std.unicode.utf8ValidateSlice(text_bytes)) return error.InvalidUtf8;
         try self.bytes.insertSlice(self.allocator, self.cursor_byte, text_bytes);
         self.cursor_byte += text_bytes.len;
+    }
+
+    pub fn replaceRange(self: *EditBuffer, start: usize, end: usize, replacement: []const u8) !void {
+        if (start > end or end > self.bytes.items.len) return error.InvalidRange;
+        if (!std.unicode.utf8ValidateSlice(replacement)) return error.InvalidUtf8;
+        try self.bytes.replaceRange(self.allocator, start, end - start, replacement);
+        self.cursor_byte = start + replacement.len;
+    }
+
+    pub fn applyCompletionEdit(self: *EditBuffer, edit: completion.Edit) !void {
+        try self.replaceRange(edit.replace_start, edit.replace_end, edit.replacement);
+        if (edit.append_space) try self.insertText(" ");
     }
 
     pub fn moveLeft(self: *EditBuffer) void {
@@ -124,7 +138,7 @@ pub const Editor = struct {
             .end => self.buffer.moveEnd(),
             .backspace => self.buffer.deletePrevious(),
             .delete => self.buffer.deleteNext(),
-            .enter, .up, .down, .escape, .ctrl_c, .ctrl_d => {},
+            .enter, .up, .down, .tab, .escape, .ctrl_c, .ctrl_d => {},
         }
     }
 };
@@ -206,7 +220,15 @@ pub const LineSession = struct {
             },
             .up => try self.historyPrevious(),
             .down => try self.historyNext(),
+            .tab => {},
             else => try self.editor.handleKey(event),
+        }
+    }
+
+    pub fn applyCompletion(self: *LineSession, application: completion.Application) !void {
+        switch (application) {
+            .edit => |edit| try self.editor.buffer.applyCompletionEdit(edit),
+            .none, .ambiguous => {},
         }
     }
 
@@ -379,6 +401,7 @@ fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
         vaxis.Key.right => .right,
         vaxis.Key.up => .up,
         vaxis.Key.down => .down,
+        vaxis.Key.tab => .tab,
         vaxis.Key.home => .home,
         vaxis.Key.end => .end,
         vaxis.Key.escape => .escape,
@@ -442,6 +465,34 @@ test "edit buffer reports cursor display width with vaxis" {
 
     try buffer.insertText("a界");
     try std.testing.expectEqual(@as(u16, 3), buffer.cursorDisplayWidth(.unicode));
+}
+
+test "line session applies completion edit" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+    try session.editor.buffer.replace("git st");
+
+    const application: completion.Application = .{ .edit = .{
+        .replace_start = 4,
+        .replace_end = 6,
+        .replacement = "status",
+        .append_space = true,
+    } };
+    try session.applyCompletion(application);
+
+    try std.testing.expectEqualStrings("git status ", session.editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, "git status ".len), session.editor.buffer.cursor_byte);
+}
+
+test "line session leaves ambiguous and empty completions unchanged" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+    try session.editor.buffer.replace("git ");
+
+    try session.applyCompletion(.ambiguous);
+    try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
+    try session.applyCompletion(.none);
+    try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
 }
 
 test "line session submits an owned copy on enter" {

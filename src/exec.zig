@@ -156,6 +156,8 @@ pub const CompletionEvalContext = struct {
     argument_index: usize = 0,
     previous: []const u8 = "",
     position: parser.CompletionKind = .command,
+    replace_start: usize = 0,
+    replace_end: usize = 0,
 };
 
 const PromptStyle = struct {
@@ -425,6 +427,12 @@ pub const Executor = struct {
 
         var builder = self.completion_builder.?;
         self.completion_builder = null;
+        for (builder.candidates.items) |*candidate| {
+            if (candidate.replace_start == 0 and candidate.replace_end == 0) {
+                candidate.replace_start = context.replace_start;
+                candidate.replace_end = context.replace_end;
+            }
+        }
         self.completion_context = null;
         return builder.finish(self.allocator);
     }
@@ -3123,6 +3131,8 @@ fn completionEvalContextForInput(allocator: std.mem.Allocator, source: []const u
         .argument_index = argument_index,
         .previous = previous,
         .position = context.kind,
+        .replace_start = context.span.start,
+        .replace_end = @min(context.cursor, context.span.end),
     };
 }
 

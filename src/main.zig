@@ -247,6 +247,17 @@ pub fn freeCompletions(allocator: std.mem.Allocator, completions: []Completion) 
     allocator.free(completions);
 }
 
+const InteractiveCompletionContext = struct {
+    executor: *exec.Executor,
+};
+
+fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8, cursor: usize) !completion_model.Application {
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true });
+    defer completion_context.executor.freeCompletions(candidates);
+    return completion_model.applyCandidates(allocator, candidates);
+}
+
 pub fn renderHighlightedInput(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
     defer parsed.deinit();
@@ -302,7 +313,13 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
             else => |e| return e,
         };
-        const read_result = try terminal.readLine(.{ .prompt = prompt, .history = .{ .entries = history.entries.items } });
+        var completion_context: InteractiveCompletionContext = .{ .executor = &executor };
+        const read_result = try terminal.readLine(.{
+            .prompt = prompt,
+            .history = .{ .entries = history.entries.items },
+            .completion_context = &completion_context,
+            .complete = completeInteractiveLine,
+        });
         allocator.free(prompt);
         const line = switch (read_result) {
             .submitted => |line| line,

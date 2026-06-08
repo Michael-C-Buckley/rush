@@ -7,6 +7,7 @@ const builtin = @import("builtin");
 const vaxis = @import("vaxis");
 
 const line_editor = @import("line_editor.zig");
+const completion = @import("completion.zig");
 
 const read_chunk_size = 4096;
 
@@ -170,6 +171,8 @@ pub const TerminalParser = struct {
 pub const ReadLineOptions = struct {
     prompt: []const u8,
     history: line_editor.HistoryView = .{},
+    completion_context: ?*anyopaque = null,
+    complete: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8, usize) anyerror!completion.Application = null,
 };
 
 pub const ReadLineResult = union(enum) {
@@ -267,7 +270,15 @@ pub const TerminalSession = struct {
             try self.terminal_parser.feed(bytes, &self.events);
             for (self.events.items) |event| {
                 switch (event) {
-                    .key_press => |key| try session.handleKey(key),
+                    .key_press => |key| {
+                        if (key.key == .tab and options.complete != null and options.completion_context != null) {
+                            const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
+                            defer application.deinit(self.allocator);
+                            try session.applyCompletion(application);
+                        } else {
+                            try session.handleKey(key);
+                        }
+                    },
                     .paste_start => session.beginPaste(),
                     .paste_end => session.endPaste(),
                     .capability => |capability| try self.capabilities.apply(self.allocator, &self.tty, capability),
