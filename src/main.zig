@@ -764,7 +764,52 @@ test "repl uses rush_prompt function to build prompt text" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("rush$ custom > ok\ncustom > ", result.stdout);
+    try std.testing.expectEqualStrings("rush$ \x1b[38;5;4mcustom\x1b[0m > ok\n\x1b[38;5;4mcustom\x1b[0m > ", result.stdout);
+}
+
+test "prompt segment supports foreground and background colors" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt segment --fg bright-blue --bg black custom; }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+
+    const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("\x1b[38;5;12m\x1b[48;5;0mcustom\x1b[0m", prompt);
+}
+
+test "prompt segment supports indexed and rgb colors" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt segment --fg '#7aa2f7' --bg index:236 custom; }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+
+    const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("\x1b[38;2;122;162;247m\x1b[48;5;236mcustom\x1b[0m", prompt);
+}
+
+test "prompt segment supports text attributes" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt segment --bold --italic --underline --reverse --strikethrough custom; }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+
+    const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("\x1b[1m\x1b[3m\x1b[4m\x1b[7m\x1b[9mcustom\x1b[0m", prompt);
 }
 
 test "user config path prefers XDG_CONFIG_HOME" {

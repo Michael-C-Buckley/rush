@@ -6,6 +6,7 @@ const compat = @import("compat.zig");
 const expand = @import("expand.zig");
 const ir = @import("ir.zig");
 const parser = @import("parser.zig");
+const vaxis = @import("vaxis");
 
 pub const ExitStatus = u8;
 
@@ -59,6 +60,78 @@ pub const PromptBuilder = struct {
     pub fn clear(self: *PromptBuilder) void {
         self.text.clearRetainingCapacity();
         self.used = false;
+    }
+
+    pub fn appendText(self: *PromptBuilder, allocator: std.mem.Allocator, args: []const ir.WordRef) !void {
+        for (args, 0..) |arg, index| {
+            if (index > 0) try self.text.append(allocator, ' ');
+            try self.text.appendSlice(allocator, arg.text);
+        }
+        self.used = true;
+    }
+
+    pub fn appendSegment(self: *PromptBuilder, allocator: std.mem.Allocator, style: PromptStyle, args: []const ir.WordRef) !void {
+        try self.appendAnsiAttributes(allocator, style);
+        try self.appendAnsiColor(allocator, .fg, style.fg);
+        try self.appendAnsiColor(allocator, .bg, style.bg);
+        try self.appendText(allocator, args);
+        if (style.hasStyle()) try self.text.appendSlice(allocator, "\x1b[0m");
+    }
+
+    fn appendAnsiAttributes(self: *PromptBuilder, allocator: std.mem.Allocator, style: PromptStyle) !void {
+        if (style.bold) try self.text.appendSlice(allocator, "\x1b[1m");
+        if (style.dim) try self.text.appendSlice(allocator, "\x1b[2m");
+        if (style.italic) try self.text.appendSlice(allocator, "\x1b[3m");
+        if (style.underline) try self.text.appendSlice(allocator, "\x1b[4m");
+        if (style.blink) try self.text.appendSlice(allocator, "\x1b[5m");
+        if (style.reverse) try self.text.appendSlice(allocator, "\x1b[7m");
+        if (style.strikethrough) try self.text.appendSlice(allocator, "\x1b[9m");
+    }
+
+    fn appendAnsiColor(self: *PromptBuilder, allocator: std.mem.Allocator, kind: enum { fg, bg }, color: vaxis.Color) !void {
+        switch (color) {
+            .default => {},
+            .index => |index| {
+                const sequence = switch (kind) {
+                    .fg => try std.fmt.allocPrint(allocator, "\x1b[38;5;{d}m", .{index}),
+                    .bg => try std.fmt.allocPrint(allocator, "\x1b[48;5;{d}m", .{index}),
+                };
+                defer allocator.free(sequence);
+                try self.text.appendSlice(allocator, sequence);
+            },
+            .rgb => |rgb| {
+                const sequence = switch (kind) {
+                    .fg => try std.fmt.allocPrint(allocator, "\x1b[38;2;{d};{d};{d}m", .{ rgb[0], rgb[1], rgb[2] }),
+                    .bg => try std.fmt.allocPrint(allocator, "\x1b[48;2;{d};{d};{d}m", .{ rgb[0], rgb[1], rgb[2] }),
+                };
+                defer allocator.free(sequence);
+                try self.text.appendSlice(allocator, sequence);
+            },
+        }
+    }
+};
+
+const PromptStyle = struct {
+    fg: vaxis.Color = .default,
+    bg: vaxis.Color = .default,
+    bold: bool = false,
+    dim: bool = false,
+    italic: bool = false,
+    underline: bool = false,
+    blink: bool = false,
+    reverse: bool = false,
+    strikethrough: bool = false,
+
+    fn hasStyle(self: PromptStyle) bool {
+        return self.fg != .default or
+            self.bg != .default or
+            self.bold or
+            self.dim or
+            self.italic or
+            self.underline or
+            self.blink or
+            self.reverse or
+            self.strikethrough;
     }
 };
 
@@ -2785,15 +2858,40 @@ fn builtinPrompt(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     }
     if (std.mem.eql(u8, subcommand, "segment")) {
         var index: usize = 2;
+        var style: PromptStyle = .{};
         while (index < command.argv.len and std.mem.startsWith(u8, command.argv[index].text, "--")) {
             const option = command.argv[index].text;
             index += 1;
-            if (std.mem.eql(u8, option, "--fg") or std.mem.eql(u8, option, "--bg") or std.mem.eql(u8, option, "--max-width") or std.mem.eql(u8, option, "--min-width") or std.mem.eql(u8, option, "--truncate")) {
+            if (std.mem.eql(u8, option, "--fg")) {
+                if (index >= command.argv.len) return errorResult(self.allocator, 2, "prompt", "missing option value");
+                style.fg = parsePromptColor(command.argv[index].text) orelse return errorResult(self.allocator, 2, "prompt", "unsupported foreground color");
+                index += 1;
+            } else if (std.mem.eql(u8, option, "--bg")) {
+                if (index >= command.argv.len) return errorResult(self.allocator, 2, "prompt", "missing option value");
+                style.bg = parsePromptColor(command.argv[index].text) orelse return errorResult(self.allocator, 2, "prompt", "unsupported background color");
+                index += 1;
+            } else if (std.mem.eql(u8, option, "--max-width") or std.mem.eql(u8, option, "--min-width") or std.mem.eql(u8, option, "--truncate")) {
                 if (index >= command.argv.len) return errorResult(self.allocator, 2, "prompt", "missing option value");
                 index += 1;
+            } else if (std.mem.eql(u8, option, "--bold")) {
+                style.bold = true;
+            } else if (std.mem.eql(u8, option, "--dim")) {
+                style.dim = true;
+            } else if (std.mem.eql(u8, option, "--italic")) {
+                style.italic = true;
+            } else if (std.mem.eql(u8, option, "--underline")) {
+                style.underline = true;
+            } else if (std.mem.eql(u8, option, "--blink")) {
+                style.blink = true;
+            } else if (std.mem.eql(u8, option, "--reverse")) {
+                style.reverse = true;
+            } else if (std.mem.eql(u8, option, "--strikethrough")) {
+                style.strikethrough = true;
+            } else {
+                return errorResult(self.allocator, 2, "prompt", "unsupported segment option");
             }
         }
-        try appendPromptArgs(self, builder, command.argv[index..]);
+        try builder.appendSegment(self.allocator, style, command.argv[index..]);
         return emptyResult(self.allocator, 0);
     }
     if (std.mem.eql(u8, subcommand, "newline")) {
@@ -2805,11 +2903,36 @@ fn builtinPrompt(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 }
 
 fn appendPromptArgs(self: *Executor, builder: *PromptBuilder, args: []const ir.WordRef) !void {
-    for (args, 0..) |arg, index| {
-        if (index > 0) try builder.text.append(self.allocator, ' ');
-        try builder.text.appendSlice(self.allocator, arg.text);
+    try builder.appendText(self.allocator, args);
+}
+
+fn parsePromptColor(name: []const u8) ?vaxis.Color {
+    if (std.mem.eql(u8, name, "default")) return .default;
+    if (std.mem.eql(u8, name, "black")) return .{ .index = 0 };
+    if (std.mem.eql(u8, name, "red")) return .{ .index = 1 };
+    if (std.mem.eql(u8, name, "green")) return .{ .index = 2 };
+    if (std.mem.eql(u8, name, "yellow")) return .{ .index = 3 };
+    if (std.mem.eql(u8, name, "blue")) return .{ .index = 4 };
+    if (std.mem.eql(u8, name, "magenta")) return .{ .index = 5 };
+    if (std.mem.eql(u8, name, "cyan")) return .{ .index = 6 };
+    if (std.mem.eql(u8, name, "white")) return .{ .index = 7 };
+    if (std.mem.eql(u8, name, "bright-black")) return .{ .index = 8 };
+    if (std.mem.eql(u8, name, "bright-red")) return .{ .index = 9 };
+    if (std.mem.eql(u8, name, "bright-green")) return .{ .index = 10 };
+    if (std.mem.eql(u8, name, "bright-yellow")) return .{ .index = 11 };
+    if (std.mem.eql(u8, name, "bright-blue")) return .{ .index = 12 };
+    if (std.mem.eql(u8, name, "bright-magenta")) return .{ .index = 13 };
+    if (std.mem.eql(u8, name, "bright-cyan")) return .{ .index = 14 };
+    if (std.mem.eql(u8, name, "bright-white")) return .{ .index = 15 };
+    if (std.mem.startsWith(u8, name, "index:")) {
+        const index = std.fmt.parseUnsigned(u8, name["index:".len..], 10) catch return null;
+        return .{ .index = index };
     }
-    builder.used = true;
+    if (name.len == 7 and name[0] == '#') {
+        const value = std.fmt.parseUnsigned(u24, name[1..], 16) catch return null;
+        return vaxis.Color.rgbFromUint(value);
+    }
+    return null;
 }
 
 fn builtinPromptPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
