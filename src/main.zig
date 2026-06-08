@@ -604,8 +604,58 @@ const InteractiveCompletionContext = struct {
     executor: *exec.Executor,
     history: *const History,
     cache: *CompletionCache,
+    loader: *CompletionScriptLoader,
     io: std.Io,
     cwd: []const u8 = "",
+    arg_zero: []const u8 = "rush",
+};
+
+const CompletionScriptLoader = struct {
+    allocator: std.mem.Allocator,
+    attempted: std.StringHashMapUnmanaged(void) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator) CompletionScriptLoader {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *CompletionScriptLoader) void {
+        var iter = self.attempted.iterator();
+        while (iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.attempted.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn ensureLoaded(self: *CompletionScriptLoader, io: std.Io, executor: *exec.Executor, command: []const u8, arg_zero: []const u8) !void {
+        if (!validCompletionScriptCommand(command)) return;
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const result = try self.attempted.getOrPut(self.allocator, owned_command);
+        if (result.found_existing) {
+            self.allocator.free(owned_command);
+            return;
+        }
+
+        try self.loadDataDirs(io, executor, command, arg_zero);
+        if (try xdgDataHomeCompletionPath(self.allocator, executor.*, command)) |path| {
+            defer self.allocator.free(path);
+            sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
+        }
+        if (try xdgConfigCompletionPath(self.allocator, executor.*, command)) |path| {
+            defer self.allocator.free(path);
+            sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
+        }
+    }
+
+    fn loadDataDirs(self: *CompletionScriptLoader, io: std.Io, executor: *exec.Executor, command: []const u8, arg_zero: []const u8) !void {
+        const data_dirs = executor.getEnv("XDG_DATA_DIRS") orelse "/usr/local/share:/usr/share";
+        var iter = std.mem.splitScalar(u8, data_dirs, ':');
+        while (iter.next()) |dir| {
+            if (dir.len == 0) continue;
+            const path = try completionPathInDir(self.allocator, dir, command);
+            defer self.allocator.free(path);
+            sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
+        }
+    }
 };
 
 const CompletionCache = struct {
@@ -741,8 +791,55 @@ fn completionCacheKey(buffer: []u8, source: []const u8, cursor: usize, cwd: []co
     return std.fmt.bufPrint(buffer, "{s}\x00{d}\x00{s}", .{ source, cursor, cwd });
 }
 
+fn validCompletionScriptCommand(command: []const u8) bool {
+    if (command.len == 0 or std.mem.eql(u8, command, ".") or std.mem.eql(u8, command, "..")) return false;
+    for (command) |byte| switch (byte) {
+        '/', 0 => return false,
+        else => {},
+    };
+    return true;
+}
+
+fn completionPathInDir(allocator: std.mem.Allocator, dir: []const u8, command: []const u8) ![]const u8 {
+    const file_name = try std.fmt.allocPrint(allocator, "{s}.rush", .{command});
+    defer allocator.free(file_name);
+    return std.fs.path.join(allocator, &.{ dir, "rush", "completions", file_name });
+}
+
+fn xdgDataHomeCompletionPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
+    if (executor.getEnv("XDG_DATA_HOME")) |xdg_data_home| {
+        if (xdg_data_home.len != 0) return try completionPathInDir(allocator, xdg_data_home, command);
+    }
+    if (executor.getEnv("HOME")) |home| {
+        if (home.len != 0) {
+            const data_home = try std.fs.path.join(allocator, &.{ home, ".local", "share" });
+            defer allocator.free(data_home);
+            return try completionPathInDir(allocator, data_home, command);
+        }
+    }
+    return null;
+}
+
+fn xdgConfigCompletionPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
+    if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
+        if (xdg_config_home.len != 0) return try completionPathInDir(allocator, xdg_config_home, command);
+    }
+    if (executor.getEnv("HOME")) |home| {
+        if (home.len != 0) {
+            const config_home = try std.fs.path.join(allocator, &.{ home, ".config" });
+            defer allocator.free(config_home);
+            return try completionPathInDir(allocator, config_home, command);
+        }
+    }
+    return null;
+}
+
 fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8, cursor: usize) !completion_model.Application {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    const eval_context = try exec.completionEvalContextForInput(allocator, source, cursor);
+    if (eval_context.position != .command) {
+        try completion_context.loader.ensureLoaded(completion_context.io, completion_context.executor, eval_context.command, completion_context.arg_zero);
+    }
     if (completion_context.cache.get(source, cursor, completion_context.cwd)) |cached| {
         try completion_context.cache.startRefresh(completion_context.executor, completion_context.history, completion_context.io, source, cursor, completion_context.cwd);
         return completion_model.applyCandidatesForInput(allocator, source, cached);
@@ -959,6 +1056,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
     var completion_cache = CompletionCache.init(completion_allocator);
     defer completion_cache.deinit();
+    var completion_loader = CompletionScriptLoader.init(allocator);
+    defer completion_loader.deinit();
 
     while (true) {
         const notifications = try executor.drainJobNotifications();
@@ -971,7 +1070,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
         try terminal.reportCurrentDirectory(cwd_buffer[0..cwd_len], history.hostname);
-        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .io = io, .cwd = cwd_buffer[0..cwd_len] };
+        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd_buffer[0..cwd_len], .arg_zero = options.arg_zero };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
             .history = .{
@@ -1367,6 +1466,57 @@ test "completion cache replaces existing entries" {
     const cached = cache.get("git ch", 6, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
     try std.testing.expectEqual(@as(usize, 1), cached.len);
     try std.testing.expectEqualStrings("cherry-pick", cached[0].value);
+}
+
+test "completion script paths follow XDG data and config homes" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("HOME", "/home/me");
+    try executor.setEnv("XDG_DATA_HOME", "/data");
+    try executor.setEnv("XDG_CONFIG_HOME", "/config");
+
+    const data_path = (try xdgDataHomeCompletionPath(std.testing.allocator, executor, "git")).?;
+    defer std.testing.allocator.free(data_path);
+    try std.testing.expectEqualStrings("/data/rush/completions/git.rush", data_path);
+
+    const config_path = (try xdgConfigCompletionPath(std.testing.allocator, executor, "git")).?;
+    defer std.testing.allocator.free(config_path);
+    try std.testing.expectEqualStrings("/config/rush/completions/git.rush", config_path);
+}
+
+test "completion script command names are safe file basenames" {
+    try std.testing.expect(validCompletionScriptCommand("git"));
+    try std.testing.expect(validCompletionScriptCommand("kubectl-krew"));
+    try std.testing.expect(!validCompletionScriptCommand(""));
+    try std.testing.expect(!validCompletionScriptCommand("."));
+    try std.testing.expect(!validCompletionScriptCommand(".."));
+    try std.testing.expect(!validCompletionScriptCommand("../git"));
+    try std.testing.expect(!validCompletionScriptCommand("path/git"));
+}
+
+test "completion scripts lazy-load from XDG data home" {
+    const root = "rush-completion-loader-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data =
+        \\__rush_complete_tool() { completion candidate loaded --kind subcommand; }
+        \\complete tool --function __rush_complete_tool
+    });
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_DIRS", "");
+    try executor.setEnv("XDG_DATA_HOME", root);
+
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+
+    try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
+
+    const provider = executor.completionProvider("tool") orelse return error.MissingCompletionProvider;
+    try std.testing.expectEqualStrings("__rush_complete_tool", provider.function);
+    try std.testing.expect(loader.attempted.contains("tool"));
 }
 
 test "completion cache refresh updates entries in background" {
