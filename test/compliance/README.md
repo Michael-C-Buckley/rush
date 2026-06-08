@@ -65,6 +65,10 @@ The compliance report uses this metadata to print POSIX corpus case counts by ar
 
 `expansion-submatrix.md` tracks POSIX expansion phases, current corpus coverage, known gaps, and follow-up tasks. Use it when adding expansion corpus cases or changing parameter, command substitution, arithmetic, field splitting, pathname, or quote-removal behavior.
 
+## Builtin submatrix
+
+`builtin-submatrix.md` tracks POSIX special builtins, regular utility builtins, job-control builtins, Rush helper builtins, and their diagnostic/operand gaps. Use it when changing builtin behavior or adding negative builtin corpus cases.
+
 ## Error consequence submatrix
 
 `error-consequences.md` tracks syntax, expansion, redirection, special-builtin, and builtin diagnostic consequences separately from normal behavior coverage. Use it when adding negative corpus cases or implementing stricter POSIX shell-error behavior.
