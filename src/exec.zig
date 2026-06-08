@@ -714,6 +714,12 @@ pub const Executor = struct {
         return std.mem.eql(u8, pwd, cwd);
     }
 
+    fn physicalCwd(self: *Executor, io: std.Io) ![]u8 {
+        const cwd = try std.process.currentPathAlloc(io, self.allocator);
+        defer self.allocator.free(cwd);
+        return self.allocator.dupe(u8, cwd);
+    }
+
     fn clearEnvironment(self: *Executor) void {
         var iter = self.env.iterator();
         while (iter.next()) |entry| {
@@ -5483,8 +5489,24 @@ fn isReadIfsNonWhitespace(byte: u8, ifs: []const u8) bool {
 fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
-    if (command.argv.len > 2) return errorResult(self.allocator, 2, "cd", "too many arguments");
-    const operand = if (command.argv.len == 2) command.argv[1].text else self.getEnv("HOME") orelse return errorResult(self.allocator, 1, "cd", "HOME not set");
+
+    var arg_index: usize = 1;
+    var physical = false;
+    if (arg_index < command.argv.len) {
+        const option = command.argv[arg_index].text;
+        if (std.mem.eql(u8, option, "-L")) {
+            physical = false;
+            arg_index += 1;
+        } else if (std.mem.eql(u8, option, "-P")) {
+            physical = true;
+            arg_index += 1;
+        } else if (std.mem.startsWith(u8, option, "-") and !std.mem.eql(u8, option, "-")) {
+            return errorResult(self.allocator, 2, "cd", "unsupported option");
+        }
+    }
+    if (command.argv.len > arg_index + 1) return errorResult(self.allocator, 2, "cd", "too many arguments");
+
+    const operand = if (arg_index < command.argv.len) command.argv[arg_index].text else self.getEnv("HOME") orelse return errorResult(self.allocator, 1, "cd", "HOME not set");
     const oldpwd_target = std.mem.eql(u8, operand, "-");
     const target = if (oldpwd_target) self.getEnv("OLDPWD") orelse return errorResult(self.allocator, 1, "cd", "OLDPWD not set") else operand;
     const old_pwd = try self.logicalCwd(io);
@@ -5493,13 +5515,16 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     const cd_target = try resolveCdTarget(self, io, target);
     defer cd_target.deinit(self.allocator);
 
-    const new_pwd = try normalizeLogicalPath(self.allocator, old_pwd, cd_target.path);
-    errdefer self.allocator.free(new_pwd);
     std.process.setCurrentPath(io, cd_target.path) catch |err| {
         const message = try std.fmt.allocPrint(self.allocator, "{s}: {t}", .{ cd_target.path, err });
         defer self.allocator.free(message);
         return errorResult(self.allocator, 1, "cd", message);
     };
+    const new_pwd = if (physical)
+        try self.physicalCwd(io)
+    else
+        try normalizeLogicalPath(self.allocator, old_pwd, cd_target.path);
+    errdefer self.allocator.free(new_pwd);
     try self.setEnv("OLDPWD", old_pwd);
     try self.setEnv("PWD", new_pwd);
     const stdout = if (oldpwd_target or cd_target.print_path) try std.fmt.allocPrint(self.allocator, "{s}\n", .{new_pwd}) else try self.allocator.alloc(u8, 0);
@@ -5562,10 +5587,11 @@ fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         }
     }
 
-    const cwd = if (physical)
-        try std.process.currentPathAlloc(io, self.allocator)
-    else
-        try self.logicalCwd(io);
+    const cwd = if (physical) try self.physicalCwd(io) else blk: {
+        const logical = try self.logicalCwd(io);
+        defer self.allocator.free(logical);
+        break :blk try self.allocator.dupe(u8, logical);
+    };
     defer self.allocator.free(cwd);
     const stdout = try std.fmt.allocPrint(self.allocator, "{s}\n", .{cwd});
     errdefer self.allocator.free(stdout);
