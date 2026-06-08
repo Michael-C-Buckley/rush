@@ -155,6 +155,7 @@ pub const HistoryView = struct {
 pub const CompletionMenu = struct {
     candidates: []completion.Candidate = &.{},
     selected: usize = 0,
+    window_start: usize = 0,
 
     pub fn deinit(self: *CompletionMenu, allocator: std.mem.Allocator) void {
         if (self.candidates.len != 0) completion.freeCandidates(allocator, self.candidates);
@@ -165,6 +166,7 @@ pub const CompletionMenu = struct {
         self.deinit(allocator);
         self.candidates = try completion.cloneCandidates(allocator, candidates);
         self.selected = 0;
+        self.window_start = 0;
     }
 
     pub fn clear(self: *CompletionMenu, allocator: std.mem.Allocator) void {
@@ -188,6 +190,23 @@ pub const CompletionMenu = struct {
     pub fn selectedCandidate(self: CompletionMenu) ?completion.Candidate {
         if (self.candidates.len == 0) return null;
         return self.candidates[self.selected];
+    }
+
+    pub fn visibleWindowStart(self: *CompletionMenu, max_rows: usize) usize {
+        if (self.candidates.len == 0) return 0;
+        const visible_rows = @max(max_rows, 1);
+        if (self.candidates.len <= visible_rows) {
+            self.window_start = 0;
+            return 0;
+        }
+        const last_start = self.candidates.len - visible_rows;
+        self.window_start = @min(self.window_start, last_start);
+        if (self.selected < self.window_start) {
+            self.window_start = self.selected;
+        } else if (self.selected >= self.window_start + visible_rows) {
+            self.window_start = self.selected + 1 - visible_rows;
+        }
+        return self.window_start;
     }
 };
 
@@ -310,6 +329,7 @@ pub const LineSession = struct {
         render_options.prompt = self.prompt;
         render_options.completion_menu = self.completion_menu.candidates;
         render_options.completion_selection = self.completion_menu.selected;
+        render_options.completion_window_start = self.completion_menu.visibleWindowStart(render_options.menuCandidateRows());
         return renderLine(allocator, self.editor, render_options);
     }
 
@@ -399,10 +419,15 @@ pub const RenderOptions = struct {
     prompt: Prompt = .{ .bytes = "" },
     completion_menu: []const completion.Candidate = &.{},
     completion_selection: usize = 0,
+    completion_window_start: usize = 0,
     width: u16 = 80,
     height: u16 = 24,
     width_method: vaxis.gwidth.Method = .unicode,
     synchronized_output: bool = true,
+
+    fn menuCandidateRows(self: RenderOptions) usize {
+        return @max(@as(usize, @intCast(self.height)) -| 2, 1);
+    }
 };
 
 pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderOptions) ![]const u8 {
@@ -415,7 +440,7 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     try output.appendSlice(allocator, editor.buffer.text());
     try output.appendSlice(allocator, "\x1b[J");
 
-    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.completion_selection, options.width, options.height);
+    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height);
 
     const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
     const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
@@ -430,11 +455,11 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     return output.toOwnedSlice(allocator);
 }
 
-fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, selected: usize, width: u16, height: u16) !usize {
+fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16) !usize {
     if (candidates.len == 0) return 0;
     var rows: usize = 0;
     const max_rows = @max(@as(usize, @intCast(height)) -| 2, 1);
-    const window = completionMenuWindow(candidates.len, selected, max_rows);
+    const window = completionMenuWindow(candidates.len, selected, window_start, max_rows);
     const label_width = @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
     const kind_width = @as(usize, 10);
     const fixed_width = 2 + label_width + 1 + kind_width + 1;
@@ -469,10 +494,15 @@ const CompletionMenuWindow = struct {
     end: usize,
 };
 
-fn completionMenuWindow(count: usize, selected: usize, max_rows: usize) CompletionMenuWindow {
+fn completionMenuWindow(count: usize, selected: usize, window_start: usize, max_rows: usize) CompletionMenuWindow {
     if (count <= max_rows) return .{ .start = 0, .end = count };
     const selected_row = @min(selected, count - 1);
-    var start = if (selected_row >= max_rows) selected_row + 1 - max_rows else 0;
+    var start = @min(window_start, count - max_rows);
+    if (selected_row < start) {
+        start = selected_row;
+    } else if (selected_row >= start + max_rows) {
+        start = selected_row + 1 - max_rows;
+    }
     if (start + max_rows > count) start = count - max_rows;
     return .{ .start = start, .end = start + max_rows };
 }
@@ -781,6 +811,35 @@ test "completion menu visible window follows selection" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "three") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[7m❯ three") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 3-3 of 3") != null);
+}
+
+test "completion menu only pins selection to bottom while scrolling down" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "one", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "two", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "three", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "four", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    try session.handleKey(.{ .key = .down });
+    try session.handleKey(.{ .key = .down });
+
+    const scrolled_down = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 4 });
+    defer std.testing.allocator.free(scrolled_down);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "one") == null);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "two") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[7m❯ three") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "showing 2-3 of 4") != null);
+
+    try session.handleKey(.{ .key = .up });
+    const moved_up = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 4 });
+    defer std.testing.allocator.free(moved_up);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "one") == null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[7m❯ two") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "three") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "showing 2-3 of 4") != null);
 }
 
 test "completion menu truncates long columns to terminal width" {
