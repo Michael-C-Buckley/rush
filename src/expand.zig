@@ -567,10 +567,19 @@ const ArithmeticParser = struct {
     index: usize = 0,
 
     fn parse(self: *ArithmeticParser) anyerror!i64 {
-        const value = try self.parseAssignment();
+        const value = try self.parseComma();
         self.skipSpace();
         if (self.index != self.input.len) return error.InvalidArithmetic;
         return value;
+    }
+
+    fn parseComma(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseAssignment();
+        while (true) {
+            self.skipSpace();
+            if (!self.eat(',')) return value;
+            value = try self.parseAssignment();
+        }
     }
 
     fn parseAssignment(self: *ArithmeticParser) anyerror!i64 {
@@ -603,7 +612,7 @@ const ArithmeticParser = struct {
             }
         }
         self.index = saved;
-        return self.parseExpr();
+        return self.parseTernary();
     }
 
     const AssignmentOperator = enum { assign, add_assign, sub_assign, mul_assign, div_assign, mod_assign };
@@ -611,6 +620,7 @@ const ArithmeticParser = struct {
     fn assignmentOperator(self: *ArithmeticParser) ?AssignmentOperator {
         if (self.index >= self.input.len) return null;
         if (self.input[self.index] == '=') {
+            if (self.index + 1 < self.input.len and self.input[self.index + 1] == '=') return null;
             self.index += 1;
             return .assign;
         }
@@ -627,7 +637,105 @@ const ArithmeticParser = struct {
         return op;
     }
 
-    fn parseExpr(self: *ArithmeticParser) anyerror!i64 {
+    fn parseTernary(self: *ArithmeticParser) anyerror!i64 {
+        const condition = try self.parseLogicalOr();
+        self.skipSpace();
+        if (!self.eat('?')) return condition;
+        const when_true = try self.parseComma();
+        self.skipSpace();
+        if (!self.eat(':')) return error.InvalidArithmetic;
+        const when_false = try self.parseTernary();
+        return if (condition != 0) when_true else when_false;
+    }
+
+    fn parseLogicalOr(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseLogicalAnd();
+        while (true) {
+            self.skipSpace();
+            if (!self.eatString("||")) return value;
+            const rhs = try self.parseLogicalAnd();
+            value = if (value != 0 or rhs != 0) 1 else 0;
+        }
+    }
+
+    fn parseLogicalAnd(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseBitwiseOr();
+        while (true) {
+            self.skipSpace();
+            if (!self.eatString("&&")) return value;
+            const rhs = try self.parseBitwiseOr();
+            value = if (value != 0 and rhs != 0) 1 else 0;
+        }
+    }
+
+    fn parseBitwiseOr(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseBitwiseXor();
+        while (true) {
+            self.skipSpace();
+            if (self.startsWith("||") or !self.eat('|')) return value;
+            value |= try self.parseBitwiseXor();
+        }
+    }
+
+    fn parseBitwiseXor(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseBitwiseAnd();
+        while (true) {
+            self.skipSpace();
+            if (!self.eat('^')) return value;
+            value ^= try self.parseBitwiseAnd();
+        }
+    }
+
+    fn parseBitwiseAnd(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseEquality();
+        while (true) {
+            self.skipSpace();
+            if (self.startsWith("&&") or !self.eat('&')) return value;
+            value &= try self.parseEquality();
+        }
+    }
+
+    fn parseEquality(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseRelational();
+        while (true) {
+            self.skipSpace();
+            if (self.eatString("==")) {
+                value = if (value == try self.parseRelational()) 1 else 0;
+            } else if (self.eatString("!=")) {
+                value = if (value != try self.parseRelational()) 1 else 0;
+            } else return value;
+        }
+    }
+
+    fn parseRelational(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseShift();
+        while (true) {
+            self.skipSpace();
+            if (self.eatString("<=")) {
+                value = if (value <= try self.parseShift()) 1 else 0;
+            } else if (self.eatString(">=")) {
+                value = if (value >= try self.parseShift()) 1 else 0;
+            } else if (!self.startsWith("<<") and self.eat('<')) {
+                value = if (value < try self.parseShift()) 1 else 0;
+            } else if (!self.startsWith(">>") and self.eat('>')) {
+                value = if (value > try self.parseShift()) 1 else 0;
+            } else return value;
+        }
+    }
+
+    fn parseShift(self: *ArithmeticParser) anyerror!i64 {
+        var value = try self.parseAdditive();
+        while (true) {
+            self.skipSpace();
+            if (self.eatString("<<")) {
+                value = value << shiftAmount(try self.parseAdditive());
+            } else if (self.eatString(">>")) {
+                value = value >> shiftAmount(try self.parseAdditive());
+            } else return value;
+        }
+    }
+
+    fn parseAdditive(self: *ArithmeticParser) anyerror!i64 {
         var value = try self.parseTerm();
         while (true) {
             self.skipSpace();
@@ -661,8 +769,10 @@ const ArithmeticParser = struct {
         self.skipSpace();
         if (self.eat('+')) return self.parseFactor();
         if (self.eat('-')) return -(try self.parseFactor());
+        if (self.eat('!')) return if ((try self.parseFactor()) == 0) 1 else 0;
+        if (self.eat('~')) return ~(try self.parseFactor());
         if (self.eat('(')) {
-            const value = try self.parseAssignment();
+            const value = try self.parseComma();
             self.skipSpace();
             if (!self.eat(')')) return error.InvalidArithmetic;
             return value;
@@ -709,7 +819,21 @@ const ArithmeticParser = struct {
         }
         return false;
     }
+
+    fn eatString(self: *ArithmeticParser, text: []const u8) bool {
+        if (!self.startsWith(text)) return false;
+        self.index += text.len;
+        return true;
+    }
+
+    fn startsWith(self: ArithmeticParser, text: []const u8) bool {
+        return self.index + text.len <= self.input.len and std.mem.eql(u8, self.input[self.index .. self.index + text.len], text);
+    }
 };
+
+fn shiftAmount(value: i64) u6 {
+    return @intCast(@as(u64, @intCast(if (value < 0) -value else value)) & 63);
+}
 
 pub fn evalArithmetic(input: []const u8, env: EnvLookup, env_set: EnvSet) anyerror!i64 {
     var arithmetic_parser: ArithmeticParser = .{ .input = input, .env = env, .env_set = env_set };
@@ -1410,6 +1534,15 @@ test "arithmetic expansion evaluates integer expressions" {
     try std.testing.expectEqual(@as(i64, -4), try evalArithmetic("-8 / 2", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 5), try evalArithmetic("USER_NUM + 2", test_env, .{}));
     try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("UNKNOWN + USER", test_env, .{}));
+    try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("3 > 2", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("3 == 2", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 || 0", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("1 && 0", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 5), try evalArithmetic("(5 & 3) | 4", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 16), try evalArithmetic("1 << 4", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("0 ? 1 : 7", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("1, 2, 9", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, -6), try evalArithmetic("~5", .{}, .{}));
 
     var variable = try expandWord(std.testing.allocator, "value=$((USER_NUM + 4))", .{ .env = test_env });
     defer variable.deinit();
