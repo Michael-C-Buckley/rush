@@ -745,6 +745,7 @@ pub const RenderOptions = struct {
     suggestion: []const u8 = "",
     status_line: []const u8 = "",
     diagnostic_line: []const u8 = "",
+    diagnostic_spans: []const DiagnosticSpan = &.{},
     semantic_prompt_marks: bool = false,
     width: u16 = 80,
     height: u16 = 24,
@@ -753,6 +754,27 @@ pub const RenderOptions = struct {
 
     fn menuCandidateRows(self: RenderOptions) usize {
         return @max(@as(usize, @intCast(self.height)) -| 2, 1);
+    }
+};
+
+pub const DiagnosticSeverity = enum {
+    warning,
+    err,
+};
+
+pub const DiagnosticSpan = struct {
+    start: usize,
+    end: usize,
+    severity: DiagnosticSeverity,
+};
+
+pub const DiagnosticRender = struct {
+    line: []const u8,
+    spans: []const DiagnosticSpan = &.{},
+
+    pub fn deinit(self: DiagnosticRender, allocator: std.mem.Allocator) void {
+        allocator.free(self.line);
+        allocator.free(self.spans);
     }
 };
 
@@ -775,7 +797,7 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     errdefer input_line.deinit(allocator);
     try input_line.appendSlice(allocator, options.prompt.bytes);
     if (options.semantic_prompt_marks) try input_line.appendSlice(allocator, semanticPromptEnd);
-    try input_line.appendSlice(allocator, editor.buffer.text());
+    try appendDiagnosticStyledInput(allocator, &input_line, editor.buffer.text(), options.diagnostic_spans);
     if (options.suggestion.len != 0 and renderableInlineText(options.suggestion)) {
         try input_line.appendSlice(allocator, "\x1b[90m");
         try input_line.appendSlice(allocator, options.suggestion);
@@ -801,6 +823,46 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
         .lines = try lines.toOwnedSlice(allocator),
         .cursor_row = cursor_position.row,
         .cursor_col = cursor_position.col,
+    };
+}
+
+fn appendDiagnosticStyledInput(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8, spans: []const DiagnosticSpan) !void {
+    if (spans.len == 0) {
+        try out.appendSlice(allocator, text);
+        return;
+    }
+
+    var active: ?DiagnosticSeverity = null;
+    var i: usize = 0;
+    while (i < text.len) {
+        var iter = vaxis.unicode.graphemeIterator(text[i..]);
+        const grapheme = iter.next() orelse break;
+        const grapheme_end = i + grapheme.len;
+        const severity = diagnosticSeverityAt(spans, i, grapheme_end);
+        if (active != severity) {
+            if (active != null) try out.appendSlice(allocator, "\x1b[24;39m");
+            if (severity) |value| try out.appendSlice(allocator, diagnosticUnderlineAnsi(value));
+            active = severity;
+        }
+        try out.appendSlice(allocator, text[i..grapheme_end]);
+        i = grapheme_end;
+    }
+    if (active != null) try out.appendSlice(allocator, "\x1b[24;39m");
+    if (i < text.len) try out.appendSlice(allocator, text[i..]);
+}
+
+fn diagnosticSeverityAt(spans: []const DiagnosticSpan, start: usize, end: usize) ?DiagnosticSeverity {
+    for (spans) |span| {
+        const span_end = @max(span.end, span.start + 1);
+        if (start < span_end and end > span.start) return span.severity;
+    }
+    return null;
+}
+
+fn diagnosticUnderlineAnsi(severity: DiagnosticSeverity) []const u8 {
+    return switch (severity) {
+        .warning => "\x1b[4;33m",
+        .err => "\x1b[4;31m",
     };
 }
 
@@ -1696,6 +1758,41 @@ test "line session renders with its prompt" {
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("\r\x1b[2Krush> x\x1b[J\r\x1b[7C", rendered);
+}
+
+test "render line styles diagnostic spans without moving cursor" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.buffer.replace("git comit");
+
+    const spans = [_]DiagnosticSpan{.{ .start = 4, .end = 9, .severity = .err }};
+    const rendered = try renderLine(std.testing.allocator, editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .diagnostic_spans = &spans,
+        .synchronized_output = false,
+    });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4;31mcomit\x1b[24;39m\x1b[J\r\x1b[11C", rendered);
+}
+
+test "render line wraps styled diagnostic spans" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.buffer.replace("git commit --amend");
+
+    const spans = [_]DiagnosticSpan{.{ .start = 11, .end = 18, .severity = .warning }};
+    const rendered = try renderLine(std.testing.allocator, editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .diagnostic_spans = &spans,
+        .width = 12,
+        .synchronized_output = false,
+    });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[4;33m--amend\x1b[24;39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\r\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, rendered, "\r\x1b[8C"));
 }
 
 test "line session navigates full history from empty buffer" {

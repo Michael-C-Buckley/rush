@@ -195,7 +195,7 @@ pub const ReadLineOptions = struct {
     completion_context: ?*anyopaque = null,
     complete: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8, usize) anyerror!completion.Application = null,
     diagnostic_context: ?*anyopaque = null,
-    diagnose: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?[]const u8 = null,
+    diagnose: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?line_editor.DiagnosticRender = null,
 };
 
 pub const ReadLineResult = union(enum) {
@@ -443,16 +443,17 @@ fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
 }
 
 fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize, options: ReadLineOptions) !void {
-    const diagnostic_line = if (options.diagnose != null and options.diagnostic_context != null)
+    const diagnostic = if (options.diagnose != null and options.diagnostic_context != null)
         try options.diagnose.?(options.diagnostic_context.?, allocator, session.editor.buffer.text())
     else
         null;
-    defer if (diagnostic_line) |line| allocator.free(line);
+    defer if (diagnostic) |render| render.deinit(allocator);
     var frame = try session.renderFrame(allocator, .{
         .width = winsize.cols,
         .height = winsize.rows,
         .width_method = capabilities.widthMethod(),
-        .diagnostic_line = diagnostic_line orelse "",
+        .diagnostic_line = if (diagnostic) |render| render.line else "",
+        .diagnostic_spans = if (diagnostic) |render| render.spans else &.{},
         .semantic_prompt_marks = true,
     });
     defer frame.deinit(allocator);

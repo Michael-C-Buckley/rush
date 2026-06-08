@@ -762,13 +762,15 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
-fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8) !?[]const u8 {
+fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8) !?line_editor.DiagnosticRender {
     if (source.len == 0) return null;
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
         const diagnostic = parsed.diagnostics[0];
-        return std.fmt.allocPrint(allocator, "\x1b[31m{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ @tagName(diagnostic.kind), diagnostic.message });
+        return .{
+            .line = try std.fmt.allocPrint(allocator, "\x1b[31m{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ @tagName(diagnostic.kind), diagnostic.message }),
+        };
     }
 
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
@@ -780,7 +782,20 @@ fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, so
         .warning => "\x1b[33m",
         .err => "\x1b[31m",
     };
-    return std.fmt.allocPrint(allocator, "{s}{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ color, @tagName(diagnostic.kind), diagnostic.message });
+    const spans = try allocator.alloc(line_editor.DiagnosticSpan, 1);
+    errdefer allocator.free(spans);
+    spans[0] = .{
+        .start = diagnostic.start,
+        .end = diagnostic.end,
+        .severity = switch (diagnostic.severity) {
+            .warning => .warning,
+            .err => .err,
+        },
+    };
+    return .{
+        .line = try std.fmt.allocPrint(allocator, "{s}{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ color, @tagName(diagnostic.kind), diagnostic.message }),
+        .spans = spans,
+    };
 }
 
 fn rankCompletionCandidates(allocator: std.mem.Allocator, candidates: []completion_model.Candidate, history: History, cwd: []const u8) !void {
