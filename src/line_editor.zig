@@ -489,7 +489,7 @@ test "line session leaves ambiguous and empty completions unchanged" {
     defer session.deinit();
     try session.editor.buffer.replace("git ");
 
-    try session.applyCompletion(.ambiguous);
+    try session.applyCompletion(.{ .ambiguous = &.{} });
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
     try session.applyCompletion(.none);
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());

@@ -41,15 +41,34 @@ pub const Edit = struct {
 pub const Application = union(enum) {
     none,
     edit: Edit,
-    ambiguous,
+    ambiguous: []Candidate,
 
     pub fn deinit(self: Application, allocator: std.mem.Allocator) void {
         switch (self) {
             .edit => |edit| allocator.free(edit.replacement),
-            .none, .ambiguous => {},
+            .ambiguous => |candidates| freeCandidates(allocator, candidates),
+            .none => {},
         }
     }
 };
+
+pub fn freeCandidates(allocator: std.mem.Allocator, candidates: []Candidate) void {
+    for (candidates) |candidate| {
+        freeCandidateFields(allocator, candidate);
+    }
+    allocator.free(candidates);
+}
+
+fn freeCandidateFields(allocator: std.mem.Allocator, candidate: Candidate) void {
+    allocator.free(candidate.value);
+    if (candidate.display) |display| allocator.free(display);
+    if (candidate.description) |description| allocator.free(description);
+    if (candidate.option) |option| {
+        if (option.long) |long| allocator.free(long);
+        if (option.short) |short| allocator.free(short);
+        if (option.argument) |argument| allocator.free(argument);
+    }
+}
 
 pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) !Application {
     if (candidates.len == 0) return .none;
@@ -81,7 +100,7 @@ pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candida
         } };
     }
 
-    return .ambiguous;
+    return .{ .ambiguous = try cloneCandidates(allocator, candidates) };
 }
 
 pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8, candidates: []const Candidate) !Application {
@@ -110,6 +129,41 @@ fn commonCandidatePrefix(candidates: []const Candidate) []const u8 {
         prefix = prefix[0..index];
     }
     return prefix;
+}
+
+fn cloneCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) ![]Candidate {
+    const cloned = try allocator.alloc(Candidate, candidates.len);
+    errdefer allocator.free(cloned);
+    var initialized: usize = 0;
+    errdefer for (cloned[0..initialized]) |candidate| freeCandidateFields(allocator, candidate);
+    for (candidates, 0..) |candidate, index| {
+        cloned[index] = try cloneCandidate(allocator, candidate);
+        initialized += 1;
+    }
+    return cloned;
+}
+
+fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate {
+    var cloned = candidate;
+    cloned.value = try allocator.dupe(u8, candidate.value);
+    errdefer allocator.free(cloned.value);
+    if (candidate.display) |display| cloned.display = try allocator.dupe(u8, display);
+    errdefer if (cloned.display) |display| allocator.free(display);
+    if (candidate.description) |description| cloned.description = try allocator.dupe(u8, description);
+    errdefer if (cloned.description) |description| allocator.free(description);
+    if (candidate.option) |option| {
+        cloned.option = .{
+            .long = if (option.long) |long| try allocator.dupe(u8, long) else null,
+            .short = if (option.short) |short| try allocator.dupe(u8, short) else null,
+            .argument = if (option.argument) |argument| try allocator.dupe(u8, argument) else null,
+        };
+    }
+    errdefer if (cloned.option) |option| {
+        if (option.long) |long| allocator.free(long);
+        if (option.short) |short| allocator.free(short);
+        if (option.argument) |argument| allocator.free(argument);
+    };
+    return cloned;
 }
 
 test "application handles no candidates" {
@@ -159,7 +213,7 @@ test "application reports ambiguous candidates" {
     const application = try applyCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(Application.ambiguous, application);
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
 }
 
 test "application filters candidates by replacement prefix" {

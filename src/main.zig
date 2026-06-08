@@ -803,7 +803,7 @@ test "completion application reports ambiguous candidates" {
     const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(CompletionApplication.ambiguous, application);
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
 }
 
 test "completion ranking prefers recent successful same-cwd history" {
