@@ -398,7 +398,7 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
         .double_quoted => renderDoubleQuotedContent(allocator, part.value(raw), options),
         .parameter => renderParameter(allocator, part.value(raw), options),
         .arithmetic => blk: {
-            const value = try evalArithmetic(part.value(raw));
+            const value = try evalArithmetic(part.value(raw), options.env);
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
         },
         .command_substitution => blk: {
@@ -562,6 +562,7 @@ fn parseParameterExpression(expression: []const u8) ParameterExpression {
 
 const ArithmeticParser = struct {
     input: []const u8,
+    env: EnvLookup = .{},
     index: usize = 0,
 
     fn parse(self: *ArithmeticParser) anyerror!i64 {
@@ -611,7 +612,18 @@ const ArithmeticParser = struct {
             if (!self.eat(')')) return error.InvalidArithmetic;
             return value;
         }
+        if (self.index < self.input.len and isNameStart(self.input[self.index])) return self.parseIdentifier();
         return self.parseNumber();
+    }
+
+    fn parseIdentifier(self: *ArithmeticParser) anyerror!i64 {
+        const start = self.index;
+        self.index += 1;
+        while (self.index < self.input.len and isNameContinue(self.input[self.index])) : (self.index += 1) {}
+        const name = self.input[start..self.index];
+        const value = self.env.get(name) orelse return 0;
+        if (value.len == 0) return 0;
+        return std.fmt.parseInt(i64, value, 10) catch 0;
     }
 
     fn parseNumber(self: *ArithmeticParser) anyerror!i64 {
@@ -635,8 +647,8 @@ const ArithmeticParser = struct {
     }
 };
 
-pub fn evalArithmetic(input: []const u8) anyerror!i64 {
-    var arithmetic_parser: ArithmeticParser = .{ .input = input };
+pub fn evalArithmetic(input: []const u8, env: EnvLookup) anyerror!i64 {
+    var arithmetic_parser: ArithmeticParser = .{ .input = input, .env = env };
     return arithmetic_parser.parse();
 }
 
@@ -710,7 +722,7 @@ fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, pa
     return switch (part.kind) {
         .parameter => renderParameter(allocator, part.value(raw), options),
         .arithmetic => blk: {
-            const value = try evalArithmetic(part.value(raw));
+            const value = try evalArithmetic(part.value(raw), options.env);
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
         },
         .command_substitution => blk: {
@@ -1120,6 +1132,7 @@ const test_command_substitution: CommandSubstitution = .{ .runFn = testCommandSu
 fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "HOME")) return "/home/rush";
     if (std.mem.eql(u8, name, "USER")) return "rush-user";
+    if (std.mem.eql(u8, name, "USER_NUM")) return "3";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
     return null;
@@ -1328,9 +1341,16 @@ test "command substitution parses and trims callback output" {
 }
 
 test "arithmetic expansion evaluates integer expressions" {
-    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 + 2 * 3"));
-    try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("(1 + 2) * 3"));
-    try std.testing.expectEqual(@as(i64, -4), try evalArithmetic("-8 / 2"));
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 + 2 * 3", .{}));
+    try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("(1 + 2) * 3", .{}));
+    try std.testing.expectEqual(@as(i64, -4), try evalArithmetic("-8 / 2", .{}));
+    try std.testing.expectEqual(@as(i64, 5), try evalArithmetic("USER_NUM + 2", test_env));
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("UNKNOWN + USER", test_env));
+
+    var variable = try expandWord(std.testing.allocator, "value=$((USER_NUM + 4))", .{ .env = test_env });
+    defer variable.deinit();
+    try std.testing.expectEqual(@as(usize, 1), variable.fields.len);
+    try std.testing.expectEqualStrings("value=7", variable.fields[0]);
 
     var result = try expandWord(std.testing.allocator, "value=$((1 + 2 * 3))", .{});
     defer result.deinit();

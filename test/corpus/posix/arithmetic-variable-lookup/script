@@ -1,0 +1,4 @@
+x=2
+y=5
+echo $((x + y * 2))
+echo $((unset_name + x))
