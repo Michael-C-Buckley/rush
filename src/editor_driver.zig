@@ -234,7 +234,7 @@ pub const TerminalSession = struct {
         var wake = try makePipe(io);
         errdefer wake.close(io);
         var resize = try ResizeSignalSource.init(io);
-        errdefer resize.deinit(io);
+        errdefer resize.deinitUnregistered(io);
         var loop = try event_loop.EventLoop.init();
         errdefer loop.deinit();
         try loop.addReadFd(wake.read.handle, .tty_input);
@@ -267,8 +267,8 @@ pub const TerminalSession = struct {
         self.events.deinit(self.allocator);
         self.terminal_parser.deinit();
         self.reader.deinit();
+        self.resize.deinit(self.io, &self.loop);
         self.loop.deinit();
-        self.resize.deinit(self.io);
         self.wake.read.close(self.io);
         self.tty.deinit();
         self.allocator.free(self.tty_buffer);
@@ -381,7 +381,7 @@ pub const TerminalSession = struct {
         for (self.events.items[old_len..]) |event| {
             if (event == .resize and !self.capabilities.in_band_resize) {
                 self.capabilities.in_band_resize = true;
-                self.resize.disable(self.io);
+                try self.resize.disable(self.io, &self.loop);
             }
         }
     }
@@ -463,20 +463,28 @@ const ResizeSignalSource = struct {
         _ = rawRead(pipe.read.handle, &buffer) catch {};
     }
 
-    fn disable(self: *ResizeSignalSource, io: std.Io) void {
+    fn disable(self: *ResizeSignalSource, io: std.Io, loop: *event_loop.EventLoop) !void {
         ResizeSignalFd.value.store(invalid_fd, .release);
         if (self.previous) |previous| {
             std.posix.sigaction(.WINCH, &previous, null);
             self.previous = null;
         }
         if (self.pipe) |*pipe| {
+            try loop.removeFd(pipe.read.handle);
             pipe.close(io);
             self.pipe = null;
         }
     }
 
-    fn deinit(self: *ResizeSignalSource, io: std.Io) void {
-        self.disable(io);
+    fn deinit(self: *ResizeSignalSource, io: std.Io, loop: *event_loop.EventLoop) void {
+        self.disable(io, loop) catch {};
+        self.* = undefined;
+    }
+
+    fn deinitUnregistered(self: *ResizeSignalSource, io: std.Io) void {
+        ResizeSignalFd.value.store(invalid_fd, .release);
+        if (self.previous) |previous| std.posix.sigaction(.WINCH, &previous, null);
+        if (self.pipe) |*pipe| pipe.close(io);
         self.* = undefined;
     }
 };

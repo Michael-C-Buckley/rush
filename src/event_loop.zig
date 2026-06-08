@@ -44,6 +44,18 @@ const KqueueEventLoop = struct {
         _ = try std.Io.Kqueue.kevent(self.fd, &.{change}, &.{}, null);
     }
 
+    pub fn removeFd(self: *KqueueEventLoop, fd: std.posix.fd_t) !void {
+        const change: std.posix.Kevent = .{
+            .ident = @intCast(fd),
+            .filter = std.c.EVFILT.READ,
+            .flags = std.c.EV.DELETE,
+            .fflags = 0,
+            .data = 0,
+            .udata = 0,
+        };
+        _ = try std.Io.Kqueue.kevent(self.fd, &.{change}, &.{}, null);
+    }
+
     pub fn wait(self: *KqueueEventLoop, out: []Event) ![]Event {
         var events: [16]std.posix.Kevent = undefined;
         const count = try std.Io.Kqueue.kevent(self.fd, &.{}, events[0..@min(events.len, out.len)], null);
@@ -77,6 +89,14 @@ const EpollEventLoop = struct {
         };
         const rc = std.os.linux.epoll_ctl(self.fd, std.os.linux.EPOLL.CTL_ADD, fd, &event);
         switch (std.os.linux.errno(rc)) {
+            .SUCCESS => {},
+            else => return error.Unexpected,
+        }
+    }
+
+    pub fn removeFd(self: *EpollEventLoop, fd: std.posix.fd_t) !void {
+        const rc = std.os.linux.epoll_ctl(self.fd, std.os.linux.EPOLL.CTL_DEL, fd, null);
+        switch (std.os.linux.E.init(rc)) {
             .SUCCESS => {},
             else => return error.Unexpected,
         }
