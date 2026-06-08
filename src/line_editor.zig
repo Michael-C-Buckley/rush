@@ -199,6 +199,7 @@ pub const LineSession = struct {
     history_index: ?usize = null,
     saved_edit: std.ArrayList(u8) = .empty,
     completion_menu: CompletionMenu = .{},
+    rendered_menu_rows: usize = 0,
     state: State = .editing,
     submitted_line: ?[]const u8 = null,
     paste_depth: usize = 0,
@@ -305,12 +306,15 @@ pub const LineSession = struct {
         if (self.paste_depth != 0) self.paste_depth -= 1;
     }
 
-    pub fn render(self: LineSession, allocator: std.mem.Allocator, options: RenderOptions) ![]const u8 {
+    pub fn render(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) ![]const u8 {
         var render_options = options;
         render_options.prompt = self.prompt;
         render_options.completion_menu = self.completion_menu.candidates;
         render_options.completion_selection = self.completion_menu.selected;
-        return renderLine(allocator, self.editor, render_options);
+        render_options.previous_menu_rows = self.rendered_menu_rows;
+        const rendered = try renderLine(allocator, self.editor, render_options);
+        self.rendered_menu_rows = renderedMenuRows(self.completion_menu.candidates.len, self.completion_menu.selected, options.height);
+        return rendered;
     }
 
     pub fn takeSubmittedLine(self: *LineSession) ?[]const u8 {
@@ -399,6 +403,7 @@ pub const RenderOptions = struct {
     prompt: Prompt = .{ .bytes = "" },
     completion_menu: []const completion.Candidate = &.{},
     completion_selection: usize = 0,
+    previous_menu_rows: usize = 0,
     width: u16 = 80,
     height: u16 = 24,
     width_method: vaxis.gwidth.Method = .unicode,
@@ -414,14 +419,19 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     try output.appendSlice(allocator, options.prompt.bytes);
     try output.appendSlice(allocator, editor.buffer.text());
 
-    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.completion_selection, options.height);
+    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.completion_selection, options.width, options.height);
+    const rendered_rows = @max(menu_rows, options.previous_menu_rows);
+    var clear_row = menu_rows;
+    while (clear_row < options.previous_menu_rows) : (clear_row += 1) {
+        try output.appendSlice(allocator, "\r\n\x1b[2K");
+    }
 
     const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
     const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
-    const cursor_sequence = if (menu_rows == 0)
+    const cursor_sequence = if (rendered_rows == 0)
         try std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{cursor_width})
     else
-        try std.fmt.allocPrint(allocator, "\x1b[{d}A\r\x1b[{d}C", .{ menu_rows, cursor_width });
+        try std.fmt.allocPrint(allocator, "\x1b[{d}A\r\x1b[{d}C", .{ rendered_rows, cursor_width });
     defer allocator.free(cursor_sequence);
     try output.appendSlice(allocator, cursor_sequence);
     if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026l");
@@ -429,34 +439,81 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     return output.toOwnedSlice(allocator);
 }
 
-fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, selected: usize, height: u16) !usize {
+fn renderedMenuRows(candidate_count: usize, selected: usize, height: u16) usize {
+    if (candidate_count == 0) return 0;
+    const max_rows = @max(@as(usize, @intCast(height)) -| 2, 1);
+    const window = completionMenuWindow(candidate_count, selected, max_rows);
+    var rows = window.end - window.start;
+    if (window.start != 0 or window.end != candidate_count) rows += 1;
+    return rows;
+}
+
+fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, selected: usize, width: u16, height: u16) !usize {
     if (candidates.len == 0) return 0;
     var rows: usize = 0;
     const max_rows = @max(@as(usize, @intCast(height)) -| 2, 1);
-    const visible_count = @min(candidates.len, max_rows);
-    for (candidates[0..visible_count], 0..) |candidate, index| {
+    const window = completionMenuWindow(candidates.len, selected, max_rows);
+    const label_width = @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
+    const kind_width = @as(usize, 10);
+    const fixed_width = 2 + label_width + 1 + kind_width + 1;
+    const description_width = @as(usize, @intCast(width)) -| fixed_width;
+    for (candidates[window.start..window.end], window.start..) |candidate, index| {
         const label = candidate.display orelse candidate.value;
         try output.appendSlice(allocator, "\r\n");
         if (index == selected) try output.appendSlice(allocator, "\x1b[7m❯ ") else try output.appendSlice(allocator, "  ");
-        const header = try std.fmt.allocPrint(allocator, "{s:<20} {s:<10}", .{ label, @tagName(candidate.kind) });
-        defer allocator.free(header);
-        try output.appendSlice(allocator, header);
+        try appendPaddedCell(allocator, output, label, label_width);
+        try output.append(allocator, ' ');
+        try appendPaddedCell(allocator, output, @tagName(candidate.kind), kind_width);
         if (candidate.description) |description| {
-            if (description.len != 0) {
+            if (description.len != 0 and description_width != 0) {
                 try output.append(allocator, ' ');
-                try output.appendSlice(allocator, description);
+                try appendTruncated(allocator, output, description, description_width);
             }
         }
         if (index == selected) try output.appendSlice(allocator, "\x1b[27m");
         rows += 1;
     }
-    if (candidates.len > visible_count) {
-        const more = try std.fmt.allocPrint(allocator, "\r\n  … {d} more", .{candidates.len - visible_count});
+    if (window.start != 0 or window.end != candidates.len) {
+        const more = try std.fmt.allocPrint(allocator, "\r\n  showing {d}-{d} of {d}", .{ window.start + 1, window.end, candidates.len });
         defer allocator.free(more);
         try output.appendSlice(allocator, more);
         rows += 1;
     }
     return rows;
+}
+
+const CompletionMenuWindow = struct {
+    start: usize,
+    end: usize,
+};
+
+fn completionMenuWindow(count: usize, selected: usize, max_rows: usize) CompletionMenuWindow {
+    if (count <= max_rows) return .{ .start = 0, .end = count };
+    const selected_row = @min(selected, count - 1);
+    var start = if (selected_row >= max_rows) selected_row + 1 - max_rows else 0;
+    if (start + max_rows > count) start = count - max_rows;
+    return .{ .start = start, .end = start + max_rows };
+}
+
+fn appendPaddedCell(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8, width: usize) !void {
+    const before = output.items.len;
+    try appendTruncated(allocator, output, text, width);
+    const written = output.items.len - before;
+    if (written < width) try output.appendNTimes(allocator, ' ', width - written);
+}
+
+fn appendTruncated(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8, width: usize) !void {
+    if (width == 0) return;
+    if (text.len <= width) {
+        try output.appendSlice(allocator, text);
+        return;
+    }
+    if (width == 1) {
+        try output.appendSlice(allocator, "…");
+        return;
+    }
+    try output.appendSlice(allocator, text[0 .. width - 1]);
+    try output.appendSlice(allocator, "…");
 }
 
 pub fn visibleWidth(bytes: []const u8, method: vaxis.gwidth.Method) u16 {
@@ -654,6 +711,27 @@ test "completion menu selection accepts selected candidate" {
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
 }
 
+test "accepting completion clears previously rendered menu rows" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git che");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const menu_frame = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(menu_frame);
+    try std.testing.expect(std.mem.indexOf(u8, menu_frame, "checkout") != null);
+
+    try session.handleKey(.{ .key = .enter });
+    const accepted_frame = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(accepted_frame);
+    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "\r\n\x1b[2K\r\n\x1b[2K") != null);
+    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "\x1b[2A") != null);
+}
+
 test "completion menu selection wraps with arrow keys" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
@@ -697,8 +775,47 @@ test "completion menu respects render height" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "one") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "two") == null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "… 2 more") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 1-1 of 3") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
+}
+
+test "completion menu visible window follows selection" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git ");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "one", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+        .{ .value = "two", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+        .{ .value = "three", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    try session.handleKey(.{ .key = .down });
+    try session.handleKey(.{ .key = .down });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 3 });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "one") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "three") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[7m❯ three") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 3-3 of 3") != null);
+}
+
+test "completion menu truncates long columns to terminal width" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{.{
+        .value = "extraordinarily-long-subcommand-name",
+        .description = "this description is intentionally too long for the menu",
+        .kind = .subcommand,
+        .replace_start = 0,
+        .replace_end = 0,
+    }};
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .width = 32 });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "extraordina…") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "intentionally") == null);
 }
 
 test "line session submits an owned copy on enter" {

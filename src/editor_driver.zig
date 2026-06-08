@@ -302,7 +302,7 @@ pub const TerminalSession = struct {
         }, options.history);
         defer session.deinit();
 
-        try renderSession(self.allocator, &self.tty, session, self.capabilities, self.winsize);
+        try renderSession(self.allocator, &self.tty, &session, self.capabilities, self.winsize);
         try self.reader.arm();
         while (session.state == .editing) {
             var render_needed = false;
@@ -349,7 +349,7 @@ pub const TerminalSession = struct {
                 }
             }
             if (session.state == .editing) {
-                if (render_needed) try renderSession(self.allocator, &self.tty, session, self.capabilities, self.winsize);
+                if (render_needed) try renderSession(self.allocator, &self.tty, &session, self.capabilities, self.winsize);
                 try self.reader.arm();
             }
         }
@@ -405,7 +405,7 @@ fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
         a.y_pixel == b.y_pixel;
 }
 
-fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize) !void {
+fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize) !void {
     const rendered = try session.render(allocator, .{
         .width = winsize.cols,
         .height = winsize.rows,
