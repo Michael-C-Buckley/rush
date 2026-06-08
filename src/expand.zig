@@ -135,6 +135,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 
     var parts = try parseWordParts(allocator, tilde_expanded);
     defer parts.deinit();
+    const pathname_expansion_safe = !hasQuotedGlobSyntax(parts);
 
     var fields: std.ArrayList([]const u8) = .empty;
     errdefer {
@@ -176,7 +177,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
         try fields.append(allocator, try current.toOwnedSlice(allocator));
     }
 
-    if (options.pathname_expansion) {
+    if (options.pathname_expansion and pathname_expansion_safe) {
         if (options.io) |io| {
             try applyPathnameExpansion(allocator, io, &fields);
         }
@@ -1216,6 +1217,16 @@ fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
 fn hasGlobSyntax(text: []const u8) bool {
     for (text) |c| switch (c) {
         '*', '?', '[' => return true,
+        else => {},
+    };
+    return false;
+}
+
+fn hasQuotedGlobSyntax(parts: WordParts) bool {
+    for (parts.parts) |part| switch (part.kind) {
+        .escaped, .single_quoted, .double_quoted => {
+            if (hasGlobSyntax(part.value(parts.raw))) return true;
+        },
         else => {},
     };
     return false;

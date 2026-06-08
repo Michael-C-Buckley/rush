@@ -128,6 +128,7 @@ parameter-pattern-removal	expansion	behavior	-
 pathname-dotfiles	expansion	behavior	pathname expansion only matches leading dot with explicit dot pattern
 pathname-bracket-negation	expansion	behavior	bracket expression negation in pathname expansion
 pathname-bracket-ranges	expansion	behavior	bracket expression ranges in pathname expansion
+pathname-escaped-metacharacter	expansion	behavior	escaped pathname metacharacters are literal
 pathname-slash-components	expansion	behavior	pathname expansion matches slash-separated components
 pathname-unmatched-slash	expansion	behavior	unmatched slash-containing patterns remain literal
 pipeline-negation-false	grammar	behavior	-

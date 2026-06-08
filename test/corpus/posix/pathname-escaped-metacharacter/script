@@ -1,0 +1,3 @@
+: > 'rush-escape-*.tmp'
+: > rush-escape-a.tmp
+echo rush-escape-\*.tmp
