@@ -1,0 +1,3 @@
+/bin/sleep 0 &
+bg
+wait

@@ -63,12 +63,11 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | --- | --- | --- | --- |
 | `jobs` | `builtin-jobs` | visible table, `-l`, `-p`, numeric and `%` job operands | current job marker, stopped/running/done refresh, richer job specs |
 | `fg` | `job-fg-bg` | current and explicit tracked jobs wait and propagate status | stopped-job continuation, full terminal handoff, richer job specs |
-| `bg` | `job-fg-bg` | missing | continue stopped jobs, diagnostics until stopped-job tracking exists |
+| `bg` | `job-fg-bg` | current and explicit tracked jobs report as backgrounded | stopped-job continuation, `SIGCONT`, richer job specs |
 
 Follow-up tasks:
 
-- `#152 Deepen jobs builtin options and operands`
-- `#154 Add bg builtin baseline`
+- stopped-job tracking and full terminal mode restoration should be tracked separately from the baseline job-control builtins.
 
 ## Negative diagnostics coverage targets
 

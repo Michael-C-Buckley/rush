@@ -179,6 +179,7 @@ const builtin_names = [_][]const u8{
     ".",
     ":",
     "alias",
+    "bg",
     "break",
     "true",
     "false",
@@ -3232,6 +3233,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, ".")) return builtinSource;
     if (std.mem.eql(u8, name, ":")) return builtinTrue;
     if (std.mem.eql(u8, name, "alias")) return builtinAlias;
+    if (std.mem.eql(u8, name, "bg")) return builtinBg;
     if (std.mem.eql(u8, name, "break")) return builtinBreak;
     if (std.mem.eql(u8, name, "true")) return builtinTrue;
     if (std.mem.eql(u8, name, "false")) return builtinFalse;
@@ -4746,6 +4748,19 @@ fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: 
             }
         },
     }
+}
+
+fn builtinBg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, "bg", "too many arguments");
+    const job = if (command.argv.len == 1)
+        self.currentBackgroundJob() orelse return errorResult(self.allocator, 1, "bg", "no current job")
+    else
+        self.findBackgroundJobBySpec(command.argv[1].text) orelse return errorResult(self.allocator, 127, "bg", "unknown job");
+    const stdout = try std.fmt.allocPrint(self.allocator, "[{d}] {s} &\n", .{ job.id, job.command });
+    errdefer self.allocator.free(stdout);
+    return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -6717,6 +6732,20 @@ test "executor runs compound async jobs as waitable children" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("compound\n", result.stdout);
+}
+
+test "executor backgrounds current and selected tracked jobs" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & bg; /bin/sleep 0 & bg %2; wait");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("[1] /bin/sleep 0 &\n[2] /bin/sleep 0 &\n", result.stdout);
 }
 
 test "executor foregrounds current and selected background jobs" {

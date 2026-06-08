@@ -20,6 +20,7 @@ backquote-command-substitution	expansion	behavior	-
 backquote-preserves-nonspecial-backslash	expansion	behavior	-
 backslash-escaped-space	expansion	behavior	-
 basic-colon	builtin	behavior	-
+bg-current-job	job_control	job	bg reports the current tracked background job
 brace-group-current-env	grammar	behavior	-
 brace-group-real-fd-redirection	grammar	behavior	-
 builtin-alias-list	builtin	builtin	-
