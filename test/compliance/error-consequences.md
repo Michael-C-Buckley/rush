@@ -50,7 +50,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 
 ### Syntax errors
 
-Current coverage includes a missing pipeline command, malformed case items, malformed if/for/while/until/function constructs including invalid for loop variables, missing grouping terminators, missing redirection targets, here-doc delimiter diagnostics, and strict-mode reserved-word placement. Some parser diagnostics are intentionally recovery-oriented outside strict mode.
+Current coverage includes a missing pipeline command, malformed case items, malformed if/for/while/until/function constructs including invalid for loop variables, missing grouping terminators, unterminated quote/substitution forms, missing redirection targets, here-doc delimiter diagnostics, and strict-mode reserved-word placement. Some parser diagnostics are intentionally recovery-oriented outside strict mode.
 
 ### Expansion errors
 

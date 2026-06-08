@@ -1,0 +1,3 @@
+rush: incomplete_input: unterminated backquote command substitution
+  echo `unterminated
+       ^^^^^^^^^^^^^

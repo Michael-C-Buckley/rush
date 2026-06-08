@@ -1,0 +1,3 @@
+rush: incomplete_input: unterminated double quote
+  echo "unterminated
+       ^^^^^^^^^^^^^
