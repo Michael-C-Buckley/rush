@@ -1275,7 +1275,7 @@ pub const Executor = struct {
                     try self.appendStructuredCompletionCandidate(builder, value, rule.description, .subcommand, null, context, true);
                 },
                 .option => {
-                    if (context.position != .option) continue;
+                    if (context.position != .option and !(context.position == .subcommand and context.prefix.len == 0)) continue;
                     if (!completionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
                     if (rule.option.long) |long| {
                         var spelling_buffer: [256]u8 = undefined;
@@ -9005,6 +9005,7 @@ test "structured completion rules emit subcommand and option candidates" {
         \\  completion candidate HEAD --kind plain
         \\}
         \\complete git --subcommand commit --description commit
+        \\complete git --option --long help --description help
         \\complete 'git commit' --option --long amend --description amend
         \\complete 'git commit' --argument --function __git_commit_args
     );
@@ -9035,9 +9036,13 @@ test "structured completion rules emit subcommand and option candidates" {
     const trailing_subcommands = try executor.collectCompletionsForInput("git ", "git ".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(trailing_subcommands);
     try expectCandidate(trailing_subcommands, "commit", .subcommand);
+    try expectCandidate(trailing_subcommands, "--help", .option);
     const trailing_commit = findCandidate(trailing_subcommands, "commit") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqual(@as(usize, "git ".len), trailing_commit.replace_start);
     try std.testing.expectEqual(@as(usize, "git ".len), trailing_commit.replace_end);
+    const trailing_help = findCandidate(trailing_subcommands, "--help") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "git ".len), trailing_help.replace_start);
+    try std.testing.expectEqual(@as(usize, "git ".len), trailing_help.replace_end);
 
     const options = try executor.collectCompletionsForInput("git commit --a", "git commit --a".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(options);
