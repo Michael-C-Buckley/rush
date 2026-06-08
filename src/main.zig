@@ -46,22 +46,61 @@ pub fn main(init: std.process.Init) !u8 {
 
 pub const History = struct {
     allocator: std.mem.Allocator,
+    records: std.ArrayList(HistoryRecord) = .empty,
     entries: std.ArrayList([]const u8) = .empty,
+
+    pub const HistoryRecord = struct {
+        cmd: []const u8,
+        when: i64 = 0,
+        status: exec.ExitStatus = 0,
+        cwd: []const u8 = "",
+    };
 
     pub fn init(allocator: std.mem.Allocator) History {
         return .{ .allocator = allocator };
     }
 
     pub fn deinit(self: *History) void {
-        for (self.entries.items) |entry| self.allocator.free(entry);
+        for (self.records.items) |record| {
+            self.allocator.free(record.cmd);
+            self.allocator.free(record.cwd);
+        }
+        self.records.deinit(self.allocator);
         self.entries.deinit(self.allocator);
         self.* = undefined;
     }
 
     pub fn add(self: *History, line: []const u8) !void {
+        try self.addRecord(.{ .cmd = line });
+    }
+
+    pub fn addCommand(self: *History, io: std.Io, line: []const u8, status: exec.ExitStatus) !void {
         if (line.len == 0) return;
-        if (self.entries.items.len != 0 and std.mem.eql(u8, self.entries.items[self.entries.items.len - 1], line)) return;
-        try self.entries.append(self.allocator, try self.allocator.dupe(u8, line));
+        var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
+        const cwd = cwd_buffer[0..cwd_len];
+        try self.addRecord(.{
+            .cmd = line,
+            .when = unixTimestamp(),
+            .status = status,
+            .cwd = cwd,
+        });
+    }
+
+    fn addRecord(self: *History, record: HistoryRecord) !void {
+        if (record.cmd.len == 0) return;
+        if (self.entries.items.len != 0 and std.mem.eql(u8, self.entries.items[self.entries.items.len - 1], record.cmd)) return;
+        const cmd = try self.allocator.dupe(u8, record.cmd);
+        errdefer self.allocator.free(cmd);
+        const cwd = try self.allocator.dupe(u8, record.cwd);
+        errdefer self.allocator.free(cwd);
+        try self.records.append(self.allocator, .{
+            .cmd = cmd,
+            .when = record.when,
+            .status = record.status,
+            .cwd = cwd,
+        });
+        try self.entries.append(self.allocator, cmd);
     }
 
     pub fn suggest(self: History, prefix: []const u8) ?[]const u8 {
@@ -82,19 +121,39 @@ pub const History = struct {
         };
         defer self.allocator.free(contents);
         var lines = std.mem.splitScalar(u8, contents, '\n');
-        while (lines.next()) |line| try self.add(line);
+        while (lines.next()) |line| {
+            if (line.len == 0) continue;
+            var parsed = std.json.parseFromSlice(HistoryRecord, self.allocator, line, .{ .ignore_unknown_fields = true }) catch continue;
+            defer parsed.deinit();
+            try self.addRecord(parsed.value);
+        }
     }
 
     pub fn save(self: History, io: std.Io, path: []const u8) !void {
         var contents: std.ArrayList(u8) = .empty;
         defer contents.deinit(self.allocator);
-        for (self.entries.items) |entry| {
-            try contents.appendSlice(self.allocator, entry);
+        for (self.records.items) |record| {
+            var writer: std.Io.Writer.Allocating = .init(self.allocator);
+            defer writer.deinit();
+            var jw: std.json.Stringify = .{ .writer = &writer.writer, .options = .{} };
+            try jw.write(record);
+            const line = try writer.toOwnedSlice();
+            defer self.allocator.free(line);
+            try contents.appendSlice(self.allocator, line);
             try contents.append(self.allocator, '\n');
         }
+        if (std.fs.path.dirname(path)) |parent| try std.Io.Dir.cwd().createDirPath(io, parent);
         try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = contents.items });
     }
 };
+
+fn unixTimestamp() i64 {
+    var ts: std.posix.timespec = undefined;
+    switch (std.posix.errno(std.posix.system.clock_gettime(.REALTIME, &ts))) {
+        .SUCCESS => return ts.sec,
+        else => return 0,
+    }
+}
 
 pub const Completion = struct {
     text: []const u8,
@@ -217,8 +276,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
 
     var history = History.init(allocator);
     defer history.deinit();
-    history.load(io, ".rush_history") catch {};
-    defer history.save(io, ".rush_history") catch {};
+    const history_path = try historyPath(allocator, environ_map);
+    defer if (history_path) |path| allocator.free(path);
+    if (history_path) |path| history.load(io, path) catch {};
+    defer if (history_path) |path| history.save(io, path) catch {};
 
     var last_status: exec.ExitStatus = 0;
     var executor = exec.Executor.init(allocator);
@@ -242,7 +303,6 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
         defer allocator.free(line);
         if (std.mem.eql(u8, line, "exit")) break;
         if (line.len == 0) continue;
-        try history.add(line);
 
         {
             try terminal.suspendRawMode();
@@ -254,6 +314,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             try writeAll(io, .stdout, result.stdout);
             try writeAll(io, .stderr, result.stderr);
             last_status = result.status;
+            try history.addCommand(io, line, result.status);
 
             try terminal.resumeRawMode();
             raw_suspended = false;
@@ -371,6 +432,16 @@ fn userConfigPath(allocator: std.mem.Allocator, executor: exec.Executor) !?[]con
     return null;
 }
 
+fn historyPath(allocator: std.mem.Allocator, environ_map: *const std.process.Environ.Map) !?[]const u8 {
+    if (environ_map.get("XDG_STATE_HOME")) |xdg_state_home| {
+        if (xdg_state_home.len != 0) return try std.fs.path.join(allocator, &.{ xdg_state_home, "rush", "history" });
+    }
+    if (environ_map.get("HOME")) |home| {
+        if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".local", "state", "rush", "history" });
+    }
+    return null;
+}
+
 fn installInteractiveSignalHandlers() void {
     const sigint_action: std.posix.Sigaction = .{
         .handler = .{ .handler = handleInteractiveSigint },
@@ -466,13 +537,32 @@ test "history can persist and reload" {
 
     var history = History.init(std.testing.allocator);
     defer history.deinit();
-    try history.add("echo saved");
+    try history.addRecord(.{ .cmd = "echo saved", .when = 42, .status = 0, .cwd = "/tmp" });
     try history.save(std.testing.io, path);
 
     var loaded = History.init(std.testing.allocator);
     defer loaded.deinit();
     try loaded.load(std.testing.io, path);
     try std.testing.expectEqualStrings("echo saved", loaded.suggest("echo").?);
+    try std.testing.expectEqual(@as(i64, 42), loaded.records.items[0].when);
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), loaded.records.items[0].status);
+    try std.testing.expectEqualStrings("/tmp", loaded.records.items[0].cwd);
+}
+
+test "history path follows XDG state home then HOME fallback" {
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+
+    try env.put("XDG_STATE_HOME", "/state");
+    try env.put("HOME", "/home/me");
+    const xdg_path = (try historyPath(std.testing.allocator, &env)).?;
+    defer std.testing.allocator.free(xdg_path);
+    try std.testing.expectEqualStrings("/state/rush/history", xdg_path);
+
+    try env.put("XDG_STATE_HOME", "");
+    const home_path = (try historyPath(std.testing.allocator, &env)).?;
+    defer std.testing.allocator.free(home_path);
+    try std.testing.expectEqualStrings("/home/me/.local/state/rush/history", home_path);
 }
 
 test "interactive completion helper suggests commands variables and paths" {
