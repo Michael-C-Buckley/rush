@@ -352,7 +352,13 @@ pub const TerminalSession = struct {
                 }
             }
             if (session.state == .editing) {
-                if (render_needed) try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize);
+                if (render_needed) {
+                    if (session.takeClearScreenRequest()) {
+                        self.renderer.reset(self.allocator);
+                        try writeTtyAll(&self.tty, "\x1b[H\x1b[2J");
+                    }
+                    try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize);
+                }
                 try self.reader.arm();
             }
         }

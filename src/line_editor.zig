@@ -27,6 +27,15 @@ pub const Key = union(enum) {
     escape,
     ctrl_c,
     ctrl_d,
+    clear_screen,
+    delete_to_start,
+    delete_to_end,
+    delete_previous_word,
+    delete_next_word,
+    yank,
+    transpose_chars,
+    word_left,
+    word_right,
 };
 
 pub const Modifiers = packed struct(u8) {
@@ -99,6 +108,14 @@ pub const EditBuffer = struct {
         self.cursor_byte = self.bytes.items.len;
     }
 
+    pub fn moveWordLeft(self: *EditBuffer) void {
+        self.cursor_byte = previousWordStart(self.bytes.items, self.cursor_byte);
+    }
+
+    pub fn moveWordRight(self: *EditBuffer) void {
+        self.cursor_byte = nextWordEnd(self.bytes.items, self.cursor_byte);
+    }
+
     pub fn deletePrevious(self: *EditBuffer) void {
         const start = previousGraphemeStart(self.bytes.items, self.cursor_byte);
         if (start == self.cursor_byte) return;
@@ -110,6 +127,47 @@ pub const EditBuffer = struct {
         const end = nextGraphemeEnd(self.bytes.items, self.cursor_byte);
         if (end == self.cursor_byte) return;
         self.bytes.replaceRange(self.allocator, self.cursor_byte, end - self.cursor_byte, "") catch unreachable;
+    }
+
+    pub fn deleteToStart(self: *EditBuffer) void {
+        if (self.cursor_byte == 0) return;
+        self.bytes.replaceRange(self.allocator, 0, self.cursor_byte, "") catch unreachable;
+        self.cursor_byte = 0;
+    }
+
+    pub fn deleteToEnd(self: *EditBuffer) void {
+        if (self.cursor_byte == self.bytes.items.len) return;
+        self.bytes.replaceRange(self.allocator, self.cursor_byte, self.bytes.items.len - self.cursor_byte, "") catch unreachable;
+    }
+
+    pub fn deletePreviousWord(self: *EditBuffer) void {
+        const start = previousWordStart(self.bytes.items, self.cursor_byte);
+        if (start == self.cursor_byte) return;
+        self.bytes.replaceRange(self.allocator, start, self.cursor_byte - start, "") catch unreachable;
+        self.cursor_byte = start;
+    }
+
+    pub fn deleteNextWord(self: *EditBuffer) void {
+        const end = nextWordEnd(self.bytes.items, self.cursor_byte);
+        if (end == self.cursor_byte) return;
+        self.bytes.replaceRange(self.allocator, self.cursor_byte, end - self.cursor_byte, "") catch unreachable;
+    }
+
+    pub fn transposeChars(self: *EditBuffer) void {
+        if (self.bytes.items.len == 0) return;
+        if (self.cursor_byte == 0) self.moveRight();
+        const right_end = self.cursor_byte;
+        const right_start = previousGraphemeStart(self.bytes.items, right_end);
+        if (right_start == right_end) return;
+        const left_start = previousGraphemeStart(self.bytes.items, right_start);
+        if (left_start == right_start) return;
+
+        var swapped: std.ArrayList(u8) = .empty;
+        defer swapped.deinit(self.allocator);
+        swapped.appendSlice(self.allocator, self.bytes.items[right_start..right_end]) catch unreachable;
+        swapped.appendSlice(self.allocator, self.bytes.items[left_start..right_start]) catch unreachable;
+        self.bytes.replaceRange(self.allocator, left_start, right_end - left_start, swapped.items) catch unreachable;
+        self.cursor_byte = right_end;
     }
 
     pub fn cursorDisplayWidth(self: EditBuffer, method: vaxis.gwidth.Method) u16 {
@@ -136,9 +194,16 @@ pub const Editor = struct {
             .right => self.buffer.moveRight(),
             .home => self.buffer.moveHome(),
             .end => self.buffer.moveEnd(),
+            .word_left => self.buffer.moveWordLeft(),
+            .word_right => self.buffer.moveWordRight(),
             .backspace => self.buffer.deletePrevious(),
             .delete => self.buffer.deleteNext(),
-            .enter, .up, .down, .tab, .escape, .ctrl_c, .ctrl_d => {},
+            .delete_to_start => self.buffer.deleteToStart(),
+            .delete_to_end => self.buffer.deleteToEnd(),
+            .delete_previous_word => self.buffer.deletePreviousWord(),
+            .delete_next_word => self.buffer.deleteNextWord(),
+            .transpose_chars => self.buffer.transposeChars(),
+            .enter, .up, .down, .tab, .escape, .ctrl_c, .ctrl_d, .clear_screen, .yank => {},
         }
     }
 };
@@ -217,10 +282,12 @@ pub const LineSession = struct {
     history: HistoryView = .{},
     history_index: ?usize = null,
     saved_edit: std.ArrayList(u8) = .empty,
+    kill_ring: std.ArrayList(u8) = .empty,
     completion_menu: CompletionMenu = .{},
     state: State = .editing,
     submitted_line: ?[]const u8 = null,
     paste_depth: usize = 0,
+    clear_screen_requested: bool = false,
 
     pub const State = enum {
         editing,
@@ -248,6 +315,7 @@ pub const LineSession = struct {
     pub fn deinit(self: *LineSession) void {
         if (self.submitted_line) |line| self.allocator.free(line);
         self.completion_menu.deinit(self.allocator);
+        self.kill_ring.deinit(self.allocator);
         self.saved_edit.deinit(self.allocator);
         self.editor.deinit();
         self.allocator.free(self.prompt.bytes);
@@ -291,6 +359,26 @@ pub const LineSession = struct {
                     self.editor.buffer.deleteNext();
                 }
             },
+            .clear_screen => {
+                self.completion_menu.clear(self.allocator);
+                self.clear_screen_requested = true;
+            },
+            .delete_to_start => try self.killRange(0, self.editor.buffer.cursor_byte, 0),
+            .delete_to_end => try self.killRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte),
+            .delete_previous_word => {
+                const start = previousWordStart(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
+                try self.killRange(start, self.editor.buffer.cursor_byte, start);
+            },
+            .delete_next_word => {
+                const end = nextWordEnd(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
+                try self.killRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
+            },
+            .yank => {
+                if (self.kill_ring.items.len != 0) {
+                    try self.editor.buffer.insertText(self.kill_ring.items);
+                    self.completion_menu.clear(self.allocator);
+                }
+            },
             .up => if (self.completion_menu.isOpen()) self.completion_menu.selectPrevious() else try self.historyPrevious(),
             .down => if (self.completion_menu.isOpen()) self.completion_menu.selectNext() else try self.historyNext(),
             .tab => if (self.completion_menu.selectedCandidate()) |candidate| try self.applyCompletionCandidate(candidate),
@@ -299,6 +387,12 @@ pub const LineSession = struct {
                 self.completion_menu.clear(self.allocator);
             },
         }
+    }
+
+    pub fn takeClearScreenRequest(self: *LineSession) bool {
+        const requested = self.clear_screen_requested;
+        self.clear_screen_requested = false;
+        return requested;
     }
 
     pub fn applyCompletion(self: *LineSession, application: completion.Application) !void {
@@ -417,6 +511,15 @@ pub const LineSession = struct {
             .replacement = candidate.value,
             .append_space = candidate.append_space,
         });
+        self.completion_menu.clear(self.allocator);
+    }
+
+    fn killRange(self: *LineSession, start: usize, end: usize, cursor_byte: usize) !void {
+        if (start == end) return;
+        self.kill_ring.clearRetainingCapacity();
+        try self.kill_ring.appendSlice(self.allocator, self.editor.buffer.text()[start..end]);
+        try self.editor.buffer.replaceRange(start, end, "");
+        self.editor.buffer.cursor_byte = cursor_byte;
         self.completion_menu.clear(self.allocator);
     }
 };
@@ -783,13 +886,61 @@ pub fn keyEventFromVaxis(key: vaxis.Key) KeyEvent {
 }
 
 fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
-    if (modifiers.ctrl) {
+    if (modifiers.alt or modifiers.meta) {
         switch (codepoint) {
-            'c' => return .ctrl_c,
-            'd' => return .ctrl_d,
+            'b' => return .word_left,
+            'f' => return .word_right,
+            'd' => return .delete_next_word,
+            vaxis.Key.backspace => return .delete_previous_word,
+            vaxis.Key.left => return .word_left,
+            vaxis.Key.right => return .word_right,
             else => {},
         }
     }
+    if (modifiers.ctrl) {
+        switch (codepoint) {
+            'a' => return .home,
+            'b' => return .left,
+            'c' => return .ctrl_c,
+            'd' => return .ctrl_d,
+            'e' => return .end,
+            'f' => return .right,
+            'h' => return .backspace,
+            'i' => return .tab,
+            'j' => return .enter,
+            'k' => return .delete_to_end,
+            'l' => return .clear_screen,
+            'm' => return .enter,
+            'n' => return .down,
+            'p' => return .up,
+            't' => return .transpose_chars,
+            'u' => return .delete_to_start,
+            'w' => return .delete_previous_word,
+            'y' => return .yank,
+            vaxis.Key.left => return .word_left,
+            vaxis.Key.right => return .word_right,
+            else => {},
+        }
+    }
+    if (codepoint == 0x01) return .home;
+    if (codepoint == 0x02) return .left;
+    if (codepoint == 0x03) return .ctrl_c;
+    if (codepoint == 0x04) return .ctrl_d;
+    if (codepoint == 0x05) return .end;
+    if (codepoint == 0x06) return .right;
+    if (codepoint == 0x08) return .backspace;
+    if (codepoint == 0x09) return .tab;
+    if (codepoint == 0x0a) return .enter;
+    if (codepoint == 0x0b) return .delete_to_end;
+    if (codepoint == 0x0c) return .clear_screen;
+    if (codepoint == 0x0d) return .enter;
+    if (codepoint == 0x0e) return .down;
+    if (codepoint == 0x10) return .up;
+    if (codepoint == 0x14) return .transpose_chars;
+    if (codepoint == 0x15) return .delete_to_start;
+    if (codepoint == 0x17) return .delete_previous_word;
+    if (codepoint == 0x19) return .yank;
+    if (codepoint == 0x7f) return .backspace;
     return switch (codepoint) {
         vaxis.Key.enter => .enter,
         vaxis.Key.backspace => .backspace,
@@ -819,6 +970,95 @@ fn nextGraphemeEnd(bytes: []const u8, cursor_byte: usize) usize {
     var iter = vaxis.unicode.graphemeIterator(bytes[cursor_byte..]);
     const grapheme = iter.next() orelse return cursor_byte;
     return cursor_byte + grapheme.len;
+}
+
+fn previousWordStart(bytes: []const u8, cursor_byte: usize) usize {
+    var i = cursor_byte;
+    while (i != 0) {
+        const previous = previousCodepointStart(bytes, i);
+        if (!isAsciiWhitespace(bytes[previous])) break;
+        i = previous;
+    }
+    while (i != 0) {
+        const previous = previousCodepointStart(bytes, i);
+        if (isAsciiWhitespace(bytes[previous])) break;
+        i = previous;
+    }
+    return i;
+}
+
+fn nextWordEnd(bytes: []const u8, cursor_byte: usize) usize {
+    var i = cursor_byte;
+    while (i < bytes.len) {
+        if (!isAsciiWhitespace(bytes[i])) break;
+        i = nextCodepointEnd(bytes, i);
+    }
+    while (i < bytes.len) {
+        if (isAsciiWhitespace(bytes[i])) break;
+        i = nextCodepointEnd(bytes, i);
+    }
+    return i;
+}
+
+fn previousCodepointStart(bytes: []const u8, cursor_byte: usize) usize {
+    var i = cursor_byte - 1;
+    while (i != 0 and (bytes[i] & 0xc0) == 0x80) i -= 1;
+    return i;
+}
+
+fn nextCodepointEnd(bytes: []const u8, cursor_byte: usize) usize {
+    if (cursor_byte >= bytes.len) return bytes.len;
+    const len = std.unicode.utf8ByteSequenceLength(bytes[cursor_byte]) catch return bytes.len;
+    return cursor_byte + len;
+}
+
+fn isAsciiWhitespace(byte: u8) bool {
+    return switch (byte) {
+        ' ', '\t', '\n', '\r' => true,
+        else => false,
+    };
+}
+
+test "key mapping supports readline control keys" {
+    const ctrl: Modifiers = .{ .ctrl = true };
+
+    try std.testing.expectEqual(Key.home, keyFromVaxis('a', ctrl));
+    try std.testing.expectEqual(Key.left, keyFromVaxis('b', ctrl));
+    try std.testing.expectEqual(Key.end, keyFromVaxis('e', ctrl));
+    try std.testing.expectEqual(Key.right, keyFromVaxis('f', ctrl));
+    try std.testing.expectEqual(Key.backspace, keyFromVaxis('h', ctrl));
+    try std.testing.expectEqual(Key.delete_to_end, keyFromVaxis('k', ctrl));
+    try std.testing.expectEqual(Key.clear_screen, keyFromVaxis('l', ctrl));
+    try std.testing.expectEqual(Key.down, keyFromVaxis('n', ctrl));
+    try std.testing.expectEqual(Key.up, keyFromVaxis('p', ctrl));
+    try std.testing.expectEqual(Key.transpose_chars, keyFromVaxis('t', ctrl));
+    try std.testing.expectEqual(Key.delete_to_start, keyFromVaxis('u', ctrl));
+    try std.testing.expectEqual(Key.delete_previous_word, keyFromVaxis('w', ctrl));
+    try std.testing.expectEqual(Key.yank, keyFromVaxis('y', ctrl));
+    try std.testing.expectEqual(Key.word_left, keyFromVaxis(vaxis.Key.left, ctrl));
+    try std.testing.expectEqual(Key.word_right, keyFromVaxis(vaxis.Key.right, ctrl));
+}
+
+test "key mapping supports readline meta word keys" {
+    const alt: Modifiers = .{ .alt = true };
+
+    try std.testing.expectEqual(Key.word_left, keyFromVaxis('b', alt));
+    try std.testing.expectEqual(Key.word_right, keyFromVaxis('f', alt));
+    try std.testing.expectEqual(Key.delete_next_word, keyFromVaxis('d', alt));
+    try std.testing.expectEqual(Key.delete_previous_word, keyFromVaxis(vaxis.Key.backspace, alt));
+    try std.testing.expectEqual(Key.word_left, keyFromVaxis(vaxis.Key.left, alt));
+    try std.testing.expectEqual(Key.word_right, keyFromVaxis(vaxis.Key.right, alt));
+}
+
+test "key mapping supports legacy control bytes" {
+    try std.testing.expectEqual(Key.home, keyFromVaxis(0x01, .{}));
+    try std.testing.expectEqual(Key.tab, keyFromVaxis(0x09, .{}));
+    try std.testing.expectEqual(Key.enter, keyFromVaxis(0x0d, .{}));
+    try std.testing.expectEqual(Key.backspace, keyFromVaxis(0x7f, .{}));
+    try std.testing.expectEqual(Key.clear_screen, keyFromVaxis(0x0c, .{}));
+    try std.testing.expectEqual(Key.transpose_chars, keyFromVaxis(0x14, .{}));
+    try std.testing.expectEqual(Key.delete_previous_word, keyFromVaxis(0x17, .{}));
+    try std.testing.expectEqual(Key.yank, keyFromVaxis(0x19, .{}));
 }
 
 test "edit buffer inserts and deletes utf8 graphemes" {
@@ -862,6 +1102,102 @@ test "edit buffer reports cursor display width with vaxis" {
 
     try buffer.insertText("a界");
     try std.testing.expectEqual(@as(u16, 3), buffer.cursorDisplayWidth(.unicode));
+}
+
+test "edit buffer moves and deletes by shell words" {
+    var buffer = EditBuffer.init(std.testing.allocator);
+    defer buffer.deinit();
+
+    try buffer.insertText("git checkout main");
+    buffer.moveWordLeft();
+    try std.testing.expectEqual(@as(usize, "git checkout ".len), buffer.cursor_byte);
+    buffer.moveWordLeft();
+    try std.testing.expectEqual(@as(usize, "git ".len), buffer.cursor_byte);
+    buffer.moveWordRight();
+    try std.testing.expectEqual(@as(usize, "git checkout".len), buffer.cursor_byte);
+    buffer.deletePreviousWord();
+    try std.testing.expectEqualStrings("git  main", buffer.text());
+    try std.testing.expectEqual(@as(usize, "git ".len), buffer.cursor_byte);
+    buffer.deleteNextWord();
+    try std.testing.expectEqualStrings("git ", buffer.text());
+}
+
+test "edit buffer kills to start and end" {
+    var buffer = EditBuffer.init(std.testing.allocator);
+    defer buffer.deinit();
+
+    try buffer.insertText("abcdef");
+    buffer.moveLeft();
+    buffer.moveLeft();
+    buffer.deleteToStart();
+    try std.testing.expectEqualStrings("ef", buffer.text());
+    try std.testing.expectEqual(@as(usize, 0), buffer.cursor_byte);
+    try buffer.insertText("cd");
+    buffer.deleteToEnd();
+    try std.testing.expectEqualStrings("cd", buffer.text());
+}
+
+test "edit buffer transposes adjacent graphemes" {
+    var buffer = EditBuffer.init(std.testing.allocator);
+    defer buffer.deinit();
+
+    try buffer.insertText("ab👩‍🚀d");
+    buffer.moveLeft();
+    buffer.transposeChars();
+    try std.testing.expectEqualStrings("a👩‍🚀bd", buffer.text());
+    try std.testing.expectEqual(@as(usize, "a👩‍🚀b".len), buffer.cursor_byte);
+}
+
+test "line session yanks last killed text" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git checkout main" });
+    try session.handleKey(.{ .key = .word_left });
+    try session.handleKey(.{ .key = .delete_to_end });
+    try std.testing.expectEqualStrings("git checkout ", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .yank });
+    try std.testing.expectEqualStrings("git checkout main", session.editor.buffer.text());
+}
+
+test "line session yanks killed previous and next words" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git checkout main" });
+    try session.handleKey(.{ .key = .word_left });
+    try session.handleKey(.{ .key = .delete_previous_word });
+    try std.testing.expectEqualStrings("git main", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .yank });
+    try std.testing.expectEqualStrings("git checkout main", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .home });
+    try session.handleKey(.{ .key = .delete_next_word });
+    try std.testing.expectEqualStrings(" checkout main", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .yank });
+    try std.testing.expectEqualStrings("git checkout main", session.editor.buffer.text());
+}
+
+test "line session records clear screen requests" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .clear_screen });
+    try std.testing.expect(session.takeClearScreenRequest());
+    try std.testing.expect(!session.takeClearScreenRequest());
+}
+
+test "editor handles readline movement and deletion keys" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+
+    try editor.handleKey(.{ .key = .text, .text = "git checkout main" });
+    try editor.handleKey(.{ .key = .word_left });
+    try std.testing.expectEqual(@as(usize, "git checkout ".len), editor.buffer.cursor_byte);
+    try editor.handleKey(.{ .key = .delete_to_end });
+    try std.testing.expectEqualStrings("git checkout ", editor.buffer.text());
+    try editor.handleKey(.{ .key = .delete_previous_word });
+    try std.testing.expectEqualStrings("git ", editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, "git ".len), editor.buffer.cursor_byte);
 }
 
 test "line session applies completion edit" {
