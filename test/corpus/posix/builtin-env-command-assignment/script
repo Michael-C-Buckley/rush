@@ -1,0 +1,3 @@
+OUTER=keep
+env INNER=value env | grep ^INNER=
+echo ${INNER:-unset}/$OUTER

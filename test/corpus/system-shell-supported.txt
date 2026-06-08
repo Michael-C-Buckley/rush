@@ -120,3 +120,5 @@ trap 'echo int' INT; /bin/kill -INT $$; echo after
 alias if='echo bad'; if true; then echo ok; fi
 alias greet='echo alias'; greet() { echo function; }; unalias greet; greet
 echo one > one; echo two > two; echo stdin | cat one - two
+env -i ONLY=value env
+OUTER=keep; env INNER=value env | grep ^INNER=; echo ${INNER:-unset}/$OUTER

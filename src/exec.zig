@@ -391,6 +391,15 @@ pub const Executor = struct {
         }
     }
 
+    fn clearEnvironment(self: *Executor) void {
+        var iter = self.env.iterator();
+        while (iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.env.clearRetainingCapacity();
+    }
+
     pub fn setLastStatus(self: *Executor, status: ExitStatus) void {
         const text = std.fmt.bufPrint(&self.last_status_text, "{d}", .{status}) catch unreachable;
         self.last_status_text_len = text.len;
@@ -4787,31 +4796,68 @@ fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
 }
 
 fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    _ = stdin;
-    _ = options;
-    if (command.argv.len != 1) return errorResult(self.allocator, 125, "env", "arguments are not implemented yet");
+    var child = Executor.init(self.allocator);
+    defer child.deinit();
+    try child.copyStateFrom(self);
 
+    var index: usize = 1;
+    if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "-i")) {
+        child.clearEnvironment();
+        index += 1;
+    } else if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) {
+        index += 1;
+    }
+
+    while (index < command.argv.len) {
+        const assignment = envAssignment(command.argv[index].text) orelse break;
+        try child.setEnv(assignment.name, assignment.value);
+        index += 1;
+    }
+
+    if (index >= command.argv.len) return printEnvironment(self.allocator, child.env);
+
+    const nested: ir.SimpleCommand = .{
+        .span = command.span,
+        .assignments = &.{},
+        .argv = command.argv[index..],
+        .redirections = &.{},
+    };
+    return child.executeSimpleCommandWithInput(nested, stdin, options);
+}
+
+fn printEnvironment(allocator: std.mem.Allocator, env: std.StringHashMapUnmanaged([]const u8)) !CommandResult {
     var names: std.ArrayList([]const u8) = .empty;
-    defer names.deinit(self.allocator);
-    var iter = self.env.iterator();
-    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    defer names.deinit(allocator);
+    var iter = env.iterator();
+    while (iter.next()) |entry| try names.append(allocator, entry.key_ptr.*);
     std.mem.sort([]const u8, names.items, {}, lessThanString);
 
     var stdout: std.ArrayList(u8) = .empty;
-    errdefer stdout.deinit(self.allocator);
+    errdefer stdout.deinit(allocator);
     for (names.items) |name| {
-        try stdout.appendSlice(self.allocator, name);
-        try stdout.append(self.allocator, '=');
-        try stdout.appendSlice(self.allocator, self.env.get(name).?);
-        try stdout.append(self.allocator, '\n');
+        try stdout.appendSlice(allocator, name);
+        try stdout.append(allocator, '=');
+        try stdout.appendSlice(allocator, env.get(name).?);
+        try stdout.append(allocator, '\n');
     }
 
     return .{
-        .allocator = self.allocator,
+        .allocator = allocator,
         .status = 0,
-        .stdout = try stdout.toOwnedSlice(self.allocator),
-        .stderr = try self.allocator.alloc(u8, 0),
+        .stdout = try stdout.toOwnedSlice(allocator),
+        .stderr = try allocator.alloc(u8, 0),
     };
+}
+
+const EnvAssignment = struct {
+    name: []const u8,
+    value: []const u8,
+};
+
+fn envAssignment(text: []const u8) ?EnvAssignment {
+    const equals = std.mem.indexOfScalar(u8, text, '=') orelse return null;
+    if (equals == 0) return null;
+    return .{ .name = text[0..equals], .value = text[equals + 1 ..] };
 }
 
 fn builtinTest(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -5630,6 +5676,23 @@ test "executor implements unset and env builtins" {
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "A=one\n") == null);
     try std.testing.expect(executor.getEnv("A") == null);
     try std.testing.expectEqualStrings("two", executor.getEnv("B").?);
+
+    var clean = try parseAndLower(std.testing.allocator, "env -i ONLY=value env");
+    defer clean.parsed.deinit();
+    defer clean.program.deinit();
+    var clean_result = try executor.executeProgram(clean.program, .{});
+    defer clean_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), clean_result.status);
+    try std.testing.expectEqualStrings("ONLY=value\n", clean_result.stdout);
+
+    var command_env = try parseAndLower(std.testing.allocator, "OUTER=keep; env INNER=value env; echo ${INNER:-unset}/$OUTER");
+    defer command_env.parsed.deinit();
+    defer command_env.program.deinit();
+    var command_env_result = try executor.executeProgram(command_env.program, .{});
+    defer command_env_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), command_env_result.status);
+    try std.testing.expect(std.mem.indexOf(u8, command_env_result.stdout, "INNER=value\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, command_env_result.stdout, "unset/keep\n"));
 }
 
 test "executor implements global positional parameters via set --" {
