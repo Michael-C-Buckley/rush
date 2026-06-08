@@ -247,6 +247,13 @@ pub const Executor = struct {
         return self.env.get(name);
     }
 
+    fn logicalCwd(self: *Executor, io: std.Io) ![:0]u8 {
+        if (self.getEnv("PWD")) |pwd| {
+            if (pwd.len > 0 and pwd[0] == '/') return self.allocator.dupeZ(u8, pwd);
+        }
+        return std.process.currentPathAlloc(io, self.allocator);
+    }
+
     pub fn setArrayElement(self: *Executor, name: []const u8, index: usize, value: []const u8) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
@@ -2456,7 +2463,7 @@ fn builtinPromptPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u
     _ = command;
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
-    const cwd = try std.process.currentPathAlloc(io, self.allocator);
+    const cwd = try self.logicalCwd(io);
     defer self.allocator.free(cwd);
     const display = if (self.getEnv("HOME")) |home| homeRelativePath(cwd, home) else cwd;
     return stdoutLine(self.allocator, display, 0);
@@ -2467,6 +2474,35 @@ fn homeRelativePath(path: []const u8, home: []const u8) []const u8 {
     if (std.mem.eql(u8, path, home)) return "~";
     if (std.mem.startsWith(u8, path, home) and path.len > home.len and path[home.len] == '/') return path[home.len - 1 ..];
     return path;
+}
+
+fn normalizeLogicalPath(allocator: std.mem.Allocator, base: []const u8, target: []const u8) ![]const u8 {
+    const combined = if (target.len > 0 and target[0] == '/')
+        try allocator.dupe(u8, target)
+    else
+        try std.mem.concat(allocator, u8, &.{ base, "/", target });
+    defer allocator.free(combined);
+
+    var parts: std.ArrayList([]const u8) = .empty;
+    defer parts.deinit(allocator);
+    var iter = std.mem.splitScalar(u8, combined, '/');
+    while (iter.next()) |part| {
+        if (part.len == 0 or std.mem.eql(u8, part, ".")) continue;
+        if (std.mem.eql(u8, part, "..")) {
+            if (parts.items.len > 0) _ = parts.pop();
+            continue;
+        }
+        try parts.append(allocator, part);
+    }
+
+    if (parts.items.len == 0) return allocator.dupe(u8, "/");
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    for (parts.items) |part| {
+        try out.append(allocator, '/');
+        try out.appendSlice(allocator, part);
+    }
+    return out.toOwnedSlice(allocator);
 }
 
 fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -2665,11 +2701,18 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (command.argv.len > 2) return errorResult(self.allocator, 2, "cd", "too many arguments");
     const target = if (command.argv.len == 2) command.argv[1].text else self.getEnv("HOME") orelse return errorResult(self.allocator, 1, "cd", "HOME not set");
+    const old_pwd = try self.logicalCwd(io);
+    defer self.allocator.free(old_pwd);
+    const new_pwd = try normalizeLogicalPath(self.allocator, old_pwd, target);
+    errdefer self.allocator.free(new_pwd);
     std.process.setCurrentPath(io, target) catch |err| {
         const message = try std.fmt.allocPrint(self.allocator, "{s}: {t}", .{ target, err });
         defer self.allocator.free(message);
         return errorResult(self.allocator, 1, "cd", message);
     };
+    try self.setEnv("OLDPWD", old_pwd);
+    try self.setEnv("PWD", new_pwd);
+    self.allocator.free(new_pwd);
     return emptyResult(self.allocator, 0);
 }
 
@@ -2677,7 +2720,7 @@ fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     _ = command;
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
-    const cwd = try std.process.currentPathAlloc(io, self.allocator);
+    const cwd = try self.logicalCwd(io);
     defer self.allocator.free(cwd);
     const stdout = try std.fmt.allocPrint(self.allocator, "{s}\n", .{cwd});
     errdefer self.allocator.free(stdout);
@@ -3955,13 +3998,13 @@ test "executor implements pwd cd and export builtins" {
     try std.testing.expectEqual(@as(ExitStatus, 0), pwd_result.status);
     try std.testing.expect(std.mem.indexOf(u8, pwd_result.stdout, original_cwd) != null);
 
-    var cd_lowered = try parseAndLower(std.testing.allocator, "cd /tmp; pwd");
+    var cd_lowered = try parseAndLower(std.testing.allocator, "cd /tmp; pwd; echo $PWD");
     defer cd_lowered.parsed.deinit();
     defer cd_lowered.program.deinit();
     var cd_result = try executor.executeProgram(cd_lowered.program, .{ .io = std.testing.io });
     defer cd_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), cd_result.status);
-    try std.testing.expectEqualStrings("/tmp\n", cd_result.stdout);
+    try std.testing.expectEqualStrings("/tmp\n/tmp\n", cd_result.stdout);
 
     var export_lowered = try parseAndLower(std.testing.allocator, "export RUSH_TEST_EXPORT=ok; echo $RUSH_TEST_EXPORT");
     defer export_lowered.parsed.deinit();
