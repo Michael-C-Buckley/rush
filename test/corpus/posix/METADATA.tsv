@@ -235,3 +235,4 @@ builtin-umask-symbolic-operands	builtin	behavior	umask accepts symbolic mask ope
 builtin-unset-default-variable	builtin	behavior	unset without -f removes variables before same-name functions
 expansion-command-substitution-newline-trim	expansion	behavior	command substitution removes trailing newlines while preserving embedded newlines
 builtin-eval-arguments	builtin	behavior	eval concatenates arguments and empty eval succeeds
+expansion-tilde-home	expansion	behavior	tilde expansion uses HOME for ~ and ~/path

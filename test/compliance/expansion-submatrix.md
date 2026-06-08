@@ -21,12 +21,10 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 
 Manifest row: `expansion-tilde`
 
-Current Rush behavior supports `~` and `~/...` using `HOME`. There is no POSIX corpus case linked yet, so this row should remain `baseline` until coverage is added.
+Current Rush behavior supports `~` and `~/...` using `HOME`, with POSIX and differential corpus coverage in `expansion-tilde-home`.
 
 Recommended cases:
 
-- `HOME=/tmp; echo ~`
-- `HOME=/tmp; echo ~/x`
 - assignment contexts where tilde expansion is required or not required
 - unset/empty `HOME` behavior
 - explicit decision on whether to support `~user`
