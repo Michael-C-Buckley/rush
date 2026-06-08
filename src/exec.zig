@@ -3100,7 +3100,7 @@ fn parseCompletionKind(name: []const u8) ?completion.Kind {
     return null;
 }
 
-fn completionEvalContextForInput(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !CompletionEvalContext {
+pub fn completionEvalContextForInput(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !CompletionEvalContext {
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = cursor });
     defer parsed.deinit();
     const context = parser.completionContext(parsed, cursor);

@@ -13,6 +13,7 @@ pub const completion_model = @import("completion.zig");
 
 const usage =
     \\usage: rush -c SCRIPT
+    \\       rush complete --debug INPUT
     \\       rush --help
     \\
 ;
@@ -29,6 +30,11 @@ pub fn main(init: std.process.Init) !u8 {
 
     if (args.len == 2 and std.mem.eql(u8, args[1], "--help")) {
         try writeAll(init.io, .stdout, usage);
+        return 0;
+    }
+
+    if (args.len == 4 and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "--debug")) {
+        try debugCompletion(allocator, init.io, init.environ_map, args[3]);
         return 0;
     }
 
@@ -301,6 +307,83 @@ fn historyRecordContainsWord(command: []const u8, value: []const u8) bool {
         if (std.mem.eql(u8, word, value)) return true;
     }
     return false;
+}
+
+fn debugCompletion(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, source: []const u8) !void {
+    const output = try completionDebugOutput(allocator, io, environ_map, source);
+    defer allocator.free(output);
+    try writeAll(io, .stdout, output);
+}
+
+fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, source: []const u8) ![]const u8 {
+    var executor = exec.Executor.init(allocator);
+    defer executor.deinit();
+    try executor.importEnvironment(environ_map);
+    executor.arg_zero = "rush";
+    try loadInteractiveConfig(allocator, io, &executor);
+
+    var history = History.init(allocator);
+    defer history.deinit();
+    const history_path = try historyPath(allocator, environ_map);
+    defer if (history_path) |path| allocator.free(path);
+    if (history_path) |path| history.load(io, path) catch {};
+
+    var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
+    const cwd = cwd_buffer[0..cwd_len];
+
+    const context = try exec.completionEvalContextForInput(allocator, source, source.len);
+    const provider = executor.completionProvider(context.command);
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
+    defer executor.freeCompletions(candidates);
+    rankCompletionCandidates(candidates, history, cwd);
+    const application = try completion_model.applyCandidatesForInput(allocator, source, candidates);
+    defer application.deinit(allocator);
+
+    var out: std.Io.Writer.Allocating = .init(allocator);
+    defer out.deinit();
+    try out.writer.print(
+        \\input: {s}
+        \\context:
+        \\  command: {s}
+        \\  prefix: {s}
+        \\  previous: {s}
+        \\  argument-index: {d}
+        \\  position: {s}
+        \\  replace: {d}..{d}
+        \\provider: {s}
+        \\candidates:
+    , .{
+        source,
+        context.command,
+        context.prefix,
+        context.previous,
+        context.argument_index,
+        @tagName(context.position),
+        context.replace_start,
+        context.replace_end,
+        if (provider) |p| p.function else "<none>",
+    });
+    for (candidates) |candidate| {
+        const prefix = if (candidate.replace_end <= source.len and candidate.replace_start <= candidate.replace_end) source[candidate.replace_start..candidate.replace_end] else "";
+        const matches = std.mem.startsWith(u8, candidate.value, prefix);
+        try out.writer.print("  - value: {s}\n    kind: {s}\n    description: {s}\n    replace: {d}..{d}\n    matches-prefix: {}\n    rank-score: {d}\n", .{
+            candidate.value,
+            @tagName(candidate.kind),
+            candidate.description orelse "",
+            candidate.replace_start,
+            candidate.replace_end,
+            matches,
+            completionRankScore(history, cwd, candidate.value),
+        });
+    }
+    try out.writer.print("application:\n", .{});
+    switch (application) {
+        .none => try out.writer.print("  none\n", .{}),
+        .ambiguous => try out.writer.print("  ambiguous\n", .{}),
+        .edit => |edit| try out.writer.print("  edit:\n    replace: {d}..{d}\n    replacement: {s}\n    append-space: {}\n", .{ edit.replace_start, edit.replace_end, edit.replacement, edit.append_space }),
+    }
+    return out.toOwnedSlice();
 }
 
 pub fn renderHighlightedInput(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
@@ -745,6 +828,32 @@ test "completion ranking falls back to lexical order" {
 
     try std.testing.expectEqualStrings("checkout", candidates[0].value);
     try std.testing.expectEqualStrings("status", candidates[1].value);
+}
+
+test "completion debug output shows context provider candidates and application" {
+    const root = "rush-debug-config-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, "rush-debug-config-test/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = "rush-debug-config-test/rush/config.rush", .data =
+        \\__rush_complete_git() {
+        \\  completion candidate status --description 'show status' --kind subcommand
+        \\  completion candidate checkout --description 'switch branches' --kind subcommand
+        \\}
+        \\complete git --function __rush_complete_git
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    const output = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, "git st");
+    defer std.testing.allocator.free(output);
+
+    try std.testing.expect(std.mem.indexOf(u8, output, "command: git") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "prefix: st") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "provider: __rush_complete_git") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "value: status") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "replacement: status") != null);
 }
 
 test "interactive highlight renderer uses parser classifications" {
