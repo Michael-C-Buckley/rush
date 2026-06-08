@@ -12,6 +12,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `case-leading-paren-empty-arm` | `test/corpus/posix` | `grammar-case`, `grammar-case-empty-arms` | optional leading `(` and empty case body |
 | `case-final-arm-no-terminator` | `test/corpus/posix` | `grammar-case-pattern-list` | final case arm without `;;` terminator |
 | `case-nested-case-body` | `test/corpus/posix` | `grammar-case` | nested case command inside an outer case item body |
+| `case-subject-in-word` | `test/corpus/posix` | `grammar-case` | `in` may be the case subject word before the delimiter `in` |
 | `grammar-case-missing-pattern-end` | `test/corpus/posix-negative` | `grammar-case-empty-arms` | malformed case item diagnostic |
 | `grammar-case-missing-in` | `test/corpus/posix-negative` | `grammar-case` | missing `in` diagnostic for malformed case command |
 | `grammar-case-missing-esac` | `test/corpus/posix-negative` | `grammar-case` | missing `esac` diagnostic for incomplete case command |

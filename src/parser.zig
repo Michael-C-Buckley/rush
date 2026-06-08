@@ -2324,6 +2324,19 @@ test "parser keeps nested POSIX case statements inside case item bodies" {
     try std.testing.expectEqual(@as(usize, 1), item_count);
 }
 
+test "parser accepts in as POSIX case subject word" {
+    var result = try parse(std.testing.allocator, "case in in in) echo ok ;; *) echo bad ;; esac", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try std.testing.expect(!result.incomplete);
+    var item_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .case_item) item_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), item_count);
+}
+
 test "parser reports missing POSIX case item terminator" {
     var result = try parse(std.testing.allocator, "case foo in f* echo yes ;; esac", .{});
     defer result.deinit();

@@ -525,13 +525,15 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     var esac_token: ?usize = null;
 
     var depth: usize = 0;
+    var subject_seen = false;
     for (node.token_start + 1..node.token_end) |token_index| {
         const token = parsed.tokens[token_index];
         if (token.kind != .word) continue;
         const lexeme = token.lexeme(parsed.source);
-        if (word_token == null and !std.mem.eql(u8, lexeme, "in")) {
+        if (word_token == null) {
             word_token = token_index;
-        } else if (in_token == null and std.mem.eql(u8, lexeme, "in")) {
+            subject_seen = true;
+        } else if (subject_seen and in_token == null and std.mem.eql(u8, lexeme, "in")) {
             in_token = token_index;
         } else if (in_token != null and std.mem.eql(u8, lexeme, "case")) {
             depth += 1;

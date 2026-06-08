@@ -83,6 +83,7 @@ case-nested-case-body	grammar	behavior	nested case command inside a case item bo
 case-newline-pattern-list	grammar	behavior	case item pattern lists and bodies may span newlines
 case-no-match-status	grammar	behavior	case command with no matching arm exits successfully
 case-pattern	grammar	behavior	-
+case-subject-in-word	grammar	behavior	case subject word may be the reserved word in
 command-substitution	expansion	behavior	-
 comments-ignored	lexing	behavior	-
 dash-smoke-case-function-loop	grammar	external-suite-smoke	dash-compatible function case dispatch inside a for loop
