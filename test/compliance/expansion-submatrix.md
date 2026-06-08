@@ -14,7 +14,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | Command substitution | `expansion-command-substitution`, `lex-backquote` | baseline | trailing-newline trimming edge cases, nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
 | Field splitting | `expansion-field-splitting-*` | baseline | empty-field edge cases, generated-empty fields, interactions with special parameters |
-| Pathname expansion | `expansion-pathname-*` | baseline | bracket expressions, escaping, collation and deeper directory edge cases |
+| Pathname expansion | `expansion-pathname-*` | supported | bytewise matching model; locale-specific collation is intentionally out of scope for current evidence |
 | Quote removal | `expansion-quote-removal`, `lex-quotes` | baseline | recursive contexts, escaped newline interactions, here-doc delimiter contexts |
 
 ## Tilde expansion
@@ -128,12 +128,13 @@ Manifest rows:
 - `expansion-pathname-ordering`
 - `expansion-pathname-dotfiles`
 - `expansion-pathname-slash-components`
+- `expansion-pathname-bracket-expressions`
+- `expansion-pathname-escaped-metacharacters`
 
-Rush has baseline sorted pathname expansion with recursive slash-component matching. Leading-dot entries only match when the pattern component begins with `.`, and unmatched patterns remain literal.
+Rush has supported pathname expansion coverage for sorted bytewise results, recursive slash-component matching, leading-dot rules, unmatched literals, basic bracket range/negation expressions, and escaped metacharacters remaining literal.
 
 Remaining cases:
 
-- bracket expressions and escaping should be audited against POSIX pattern rules;
 - sort order is bytewise deterministic today; locale collation behavior should be documented if Rush later becomes locale-aware;
 - absolute-path patterns and permission-denied directories need portable policy decisions;
 - deeper directory edge cases should be added as spec-clause corpus cases.
