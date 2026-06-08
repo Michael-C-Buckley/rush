@@ -600,6 +600,7 @@ pub const Executor = struct {
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     completion_rules: std.ArrayList(completion.Rule) = .empty,
     completion_generation: u64 = 0,
+    loaded_completion_scripts: std.StringHashMapUnmanaged(void) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList([]const u8) = .empty,
     next_job_id: usize = 1,
@@ -751,6 +752,9 @@ pub const Executor = struct {
         self.traps.deinit(self.allocator);
         for (self.completion_rules.items) |rule| freeCompletionRule(self.allocator, rule);
         self.completion_rules.deinit(self.allocator);
+        var loaded_completion_iter = self.loaded_completion_scripts.iterator();
+        while (loaded_completion_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.loaded_completion_scripts.deinit(self.allocator);
         for (self.background_jobs.items) |job| self.allocator.free(job.command);
         self.background_jobs.deinit(self.allocator);
         for (self.pending_job_notifications.items) |notification| self.allocator.free(notification);
@@ -831,12 +835,66 @@ pub const Executor = struct {
         return false;
     }
 
+    fn loadCompletionScriptForRoot(self: *Executor, root: []const u8, options: ExecuteOptions) !void {
+        const io = options.io orelse return;
+        if (root.len == 0 or self.loaded_completion_scripts.contains(root)) return;
+        const owned_root = try self.allocator.dupe(u8, root);
+        errdefer self.allocator.free(owned_root);
+        try self.loaded_completion_scripts.put(self.allocator, owned_root, {});
+        const file_name = try rootCompletionFileName(self.allocator, root);
+        defer self.allocator.free(file_name);
+        if (file_name.len == 0) return;
+
+        if (self.getEnv("XDG_DATA_HOME")) |data_home| {
+            if (data_home.len != 0) {
+                const path = try std.fs.path.join(self.allocator, &.{ data_home, "rush", "completions", file_name });
+                defer self.allocator.free(path);
+                if (try self.sourceCompletionScript(io, path, options)) return;
+            }
+        } else if (self.getEnv("HOME")) |home| {
+            if (home.len != 0) {
+                const path = try std.fs.path.join(self.allocator, &.{ home, ".local", "share", "rush", "completions", file_name });
+                defer self.allocator.free(path);
+                if (try self.sourceCompletionScript(io, path, options)) return;
+            }
+        }
+
+        const data_dirs = self.getEnv("XDG_DATA_DIRS") orelse "/usr/local/share:/usr/share";
+        var dirs = std.mem.splitScalar(u8, data_dirs, ':');
+        while (dirs.next()) |dir| {
+            if (dir.len == 0) continue;
+            const path = try std.fs.path.join(self.allocator, &.{ dir, "rush", "completions", file_name });
+            defer self.allocator.free(path);
+            if (try self.sourceCompletionScript(io, path, options)) return;
+        }
+    }
+
+    fn rootCompletionFileName(allocator: std.mem.Allocator, root: []const u8) ![]const u8 {
+        if (std.mem.indexOfScalar(u8, root, '/') != null or std.mem.indexOfScalar(u8, root, 0) != null) return allocator.alloc(u8, 0);
+        return std.fmt.allocPrint(allocator, "{s}.rush", .{root});
+    }
+
+    fn sourceCompletionScript(self: *Executor, io: std.Io, path: []const u8, options: ExecuteOptions) !bool {
+        if (path.len == 0) return false;
+        const contents = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+            error.FileNotFound => return false,
+            else => return false,
+        };
+        defer self.allocator.free(contents);
+        var source_options = options;
+        source_options.allow_external = true;
+        var result = self.executeScriptSlice(contents, source_options) catch return true;
+        defer result.deinit();
+        return true;
+    }
+
     pub fn lastCompletionContext(self: Executor) ?CompletionEvalContext {
         return self.last_completion_context;
     }
 
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
         var context = try completionEvalContextForInput(self.allocator, source, cursor);
+        if (context.command.len != 0) try self.loadCompletionScriptForRoot(context.command, options);
         var semantic = try self.analyzeCompletionsForInput(source, cursor);
         defer semantic.deinit();
         const command_path = try completionCommandPath(self.allocator, semantic);
@@ -985,6 +1043,7 @@ pub const Executor = struct {
 
         const root_token = words.items[0];
         const root = root_token.lexeme(source);
+        try self.loadCompletionScriptForRoot(root, options);
         if (root_token.span.end < clamped_cursor and !try self.completionCommandKnown(root, options.io)) {
             try diagnostics.append(self.allocator, .{
                 .kind = .unknown_command,
@@ -9290,6 +9349,68 @@ test "context-scoped completion providers preserve executable and variable helpe
     const executable = findCandidate(candidates, "rush-context-helper-tool") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqual(@as(usize, "helper run ".len), executable.replace_start);
     try std.testing.expectEqual(@as(usize, source.len), executable.replace_end);
+}
+
+test "completion lazy-loads structured scripts from XDG data home" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_HOME", "test/fixtures/completion-data");
+    try executor.setEnv("XDG_DATA_DIRS", "");
+
+    try std.testing.expectEqual(@as(usize, 0), executor.completion_rules.items.len);
+    const static_candidates = try executor.collectCompletionsForInput("fixturetool st", "fixturetool st".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(static_candidates);
+    try expectCandidate(static_candidates, "static", .subcommand);
+    try std.testing.expect(executor.completion_rules.items.len != 0);
+    const loaded_rule_count = executor.completion_rules.items.len;
+
+    const option_candidates = try executor.collectCompletionsForInput("fixturetool --v", "fixturetool --v".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(option_candidates);
+    try expectCandidate(option_candidates, "--verbose", .option);
+    try std.testing.expectEqual(loaded_rule_count, executor.completion_rules.items.len);
+}
+
+test "completion lazy-loaded scripts can provide dynamic file arguments" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_HOME", "test/fixtures/completion-data");
+    try executor.setEnv("XDG_DATA_DIRS", "");
+
+    const path = "rush-lazy-fixture-file.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    const source = "fixturetool files rush-lazy-fixture";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    const candidate = findCandidate(candidates, path) orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion.Kind.file, candidate.kind);
+    try std.testing.expectEqual(@as(usize, "fixturetool files ".len), candidate.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), candidate.replace_end);
+}
+
+test "completion config rules merge after lazy-loaded data scripts" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_HOME", "test/fixtures/completion-data");
+    try executor.setEnv("XDG_DATA_DIRS", "");
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete fixturetool --subcommand user --description 'user config rule'
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const static_candidates = try executor.collectCompletionsForInput("fixturetool st", "fixturetool st".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(static_candidates);
+    try expectCandidate(static_candidates, "static", .subcommand);
+
+    const user_candidates = try executor.collectCompletionsForInput("fixturetool u", "fixturetool u".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(user_candidates);
+    try expectCandidate(user_candidates, "user", .subcommand);
 }
 
 fn expectCandidate(candidates: []const completion.Candidate, value: []const u8, kind: completion.Kind) !void {
