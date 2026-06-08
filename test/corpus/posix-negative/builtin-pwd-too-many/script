@@ -1,0 +1,2 @@
+pwd -L -P
+echo after

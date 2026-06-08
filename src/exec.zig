@@ -5544,10 +5544,28 @@ fn resolveCdTarget(self: *Executor, io: std.Io, target: []const u8) !CdTarget {
 }
 
 fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    _ = command;
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
-    const cwd = try self.logicalCwd(io);
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, "pwd", "too many arguments");
+
+    var physical = false;
+    if (command.argv.len == 2) {
+        const option = command.argv[1].text;
+        if (std.mem.eql(u8, option, "-L")) {
+            physical = false;
+        } else if (std.mem.eql(u8, option, "-P")) {
+            physical = true;
+        } else if (std.mem.startsWith(u8, option, "-")) {
+            return errorResult(self.allocator, 2, "pwd", "unsupported option");
+        } else {
+            return errorResult(self.allocator, 2, "pwd", "too many arguments");
+        }
+    }
+
+    const cwd = if (physical)
+        try std.process.currentPathAlloc(io, self.allocator)
+    else
+        try self.logicalCwd(io);
     defer self.allocator.free(cwd);
     const stdout = try std.fmt.allocPrint(self.allocator, "{s}\n", .{cwd});
     errdefer self.allocator.free(stdout);

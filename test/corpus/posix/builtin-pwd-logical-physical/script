@@ -1,0 +1,6 @@
+rm -rf real link
+mkdir real
+ln -s real link
+cd link
+case "$(pwd -L)" in */link) echo logical ;; *) echo bad-L ;; esac
+case "$(pwd -P)" in */real) echo physical ;; *) echo bad-P ;; esac

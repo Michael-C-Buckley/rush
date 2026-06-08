@@ -47,7 +47,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | --- | --- | --- | --- |
 | `alias`, `unalias` | `builtin-alias`, `builtin-alias-usage-errors`, alias lexing rows | list, remove, invalid-name/not-found diagnostics, reserved-word/function-name protection | recursive substitution timing, trailing-space rules |
 | `cat` | `builtin-cat-helper` | stdin, `-`, file operands | POSIX utility options are intentionally not a shell-conformance focus |
-| `cd`, `pwd` | `builtin-cd-pwd`, `vars-pwd` | logical PWD/OLDPWD unit coverage | `CDPATH`, physical mode, diagnostics, symlink normalization |
+| `cd`, `pwd` | `builtin-cd-pwd`, `builtin-pwd-logical-physical`, `builtin-pwd-usage-errors`, `vars-pwd` | logical PWD/OLDPWD, CDPATH, cd -, pwd -L/-P, and pwd usage diagnostics | cd physical mode, deeper symlink normalization, cd diagnostics |
 | `command` | `builtin-command`, `builtin-command-usage-errors` | `-p`, `-v`, `-V`, lookup suppression, option and lookup operand diagnostics | edge cases around special builtins, functions, utilities, PATH errors |
 | `env` | `builtin-env`, `builtin-env-usage-errors` | `-i`, assignments, command execution, printing, invalid option and command-not-found diagnostics | additional command propagation edge cases |
 | `getopts` | `builtin-getopts`, `builtin-getopts-usage-errors` | clusters, required args, silent missing arg, invalid optstring and variable-name diagnostics | OPTIND edge cases, explicit args edge cases |
