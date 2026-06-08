@@ -1087,6 +1087,13 @@ pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script
 
 fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
     _ = options.io;
+    return executor.executeScriptSlice(script, options) catch |err| {
+        if (err != error.ParseError) return err;
+        return scriptDiagnosticsResult(allocator, executor, script, options);
+    };
+}
+
+fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
     const aliased = try executor.expandAliasesForScript(script);
     defer allocator.free(aliased);
     var parsed = try parser.parse(allocator, aliased, .{ .features = options.features });
@@ -1095,19 +1102,7 @@ fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor,
     if (parsed.diagnostics.len != 0) {
         return diagnosticsResult(allocator, script, parsed.diagnostics);
     }
-
-    var program = try ir.lowerSimpleCommands(allocator, parsed);
-    defer program.deinit();
-
-    var result = try executor.executeProgram(program, options);
-    errdefer result.deinit();
-    if (executor.shell_options.verbose) {
-        const trimmed = std.mem.trim(u8, script, " \t\r\n;");
-        const stderr = try std.mem.concat(allocator, u8, &.{ trimmed, "\n", result.stderr });
-        allocator.free(result.stderr);
-        result.stderr = stderr;
-    }
-    return result;
+    return error.ParseError;
 }
 
 fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, options: InteractiveOptions) !void {
@@ -1725,6 +1720,49 @@ test "aliases recursively expand and trailing blanks keep command position" {
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok recursive-trailing-ok\n") != null);
     try std.testing.expectEqualStrings("self: command not found\n", result.stderr);
+}
+
+test "non-interactive aliases affect later complete commands" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias say='echo script-alias-ok'
+        \\say
+        \\if true; then echo compound-ok; fi
+        \\alias prefix='say '
+        \\alias word='trailing-ok'
+        \\prefix word
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("script-alias-ok\ncompound-ok\nscript-alias-ok trailing-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "chunked alias scripts run EXIT trap once" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\trap 'echo bye' EXIT
+        \\alias say='echo body'
+        \\say
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("body\nbye\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "multi-line here-doc scripts are not chunked for alias timing" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\read value <<EOF
+        \\hello
+        \\EOF
+        \\echo "$value"
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("hello\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "prompt DSL commands are scoped to prompt rendering" {

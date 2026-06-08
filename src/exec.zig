@@ -1280,9 +1280,12 @@ pub const Executor = struct {
         return text[index..];
     }
 
-    fn executeScriptSlice(self: *Executor, script: []const u8, options: ExecuteOptions) anyerror!CommandResult {
+    pub fn executeScriptSlice(self: *Executor, script: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         const trimmed = std.mem.trim(u8, script, " \t\r\n;");
         if (trimmed.len == 0) return emptyResult(self.allocator, 0);
+        if (shouldChunkForAliasTiming(trimmed)) {
+            if (topLevelCommandSeparator(trimmed)) |separator| return self.executeScriptChunks(trimmed, separator, options);
+        }
         const aliased = try self.expandAliasesForScript(trimmed);
         defer self.allocator.free(aliased);
         var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features });
@@ -1298,6 +1301,37 @@ pub const Executor = struct {
             result.stderr = stderr;
         }
         return result;
+    }
+
+    fn executeScriptChunks(self: *Executor, script: []const u8, first_separator: usize, options: ExecuteOptions) anyerror!CommandResult {
+        const root_execution = self.execution_depth == 0;
+        self.execution_depth += 1;
+        defer self.execution_depth -= 1;
+
+        var stdout: std.ArrayList(u8) = .empty;
+        errdefer stdout.deinit(self.allocator);
+        var stderr: std.ArrayList(u8) = .empty;
+        errdefer stderr.deinit(self.allocator);
+        var last_status: ExitStatus = 0;
+        var start: usize = 0;
+        var separator: ?usize = first_separator;
+        while (true) {
+            const end = separator orelse script.len;
+            var result = try self.executeScriptSlice(script[start..end], options);
+            defer result.deinit();
+            try self.appendOrWriteResult(options, &stdout, &stderr, result);
+            last_status = result.status;
+            if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
+            if (separator == null) break;
+            start = end + 1;
+            while (start < script.len and (script[start] == ' ' or script[start] == '\t' or script[start] == '\r' or script[start] == '\n' or script[start] == ';')) : (start += 1) {}
+            if (start >= script.len) break;
+            separator = topLevelCommandSeparator(script[start..]);
+            if (separator) |index| separator = start + index;
+        }
+        var result: CommandResult = .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+        errdefer result.deinit();
+        return self.finishExecuteProgram(root_execution, options, result);
     }
 
     fn executeStatementSync(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
@@ -3196,6 +3230,79 @@ fn argvForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![]co
 
 fn isShellSeparatorByte(byte: u8) bool {
     return byte == '\n' or byte == ';' or byte == '&' or byte == '|';
+}
+
+fn shouldChunkForAliasTiming(script: []const u8) bool {
+    if (std.mem.indexOf(u8, script, "<<") != null) return false;
+    if (std.mem.indexOf(u8, script, "\\\n") != null) return false;
+    var index: usize = 0;
+    while (index < script.len) {
+        const start = index;
+        while (index < script.len and !isAliasWordBoundary(script[index])) : (index += 1) {}
+        const word = script[start..index];
+        if (std.mem.eql(u8, word, "alias")) return true;
+        if (index < script.len) index += 1;
+    }
+    return false;
+}
+
+fn topLevelCommandSeparator(script: []const u8) ?usize {
+    var index: usize = 0;
+    var quote: ?u8 = null;
+    var paren_depth: usize = 0;
+    var brace_depth: usize = 0;
+    var compound_depth: usize = 0;
+    while (index < script.len) {
+        const byte = script[index];
+        if (quote) |delimiter| {
+            if (byte == '\\' and delimiter == '"' and index + 1 < script.len) {
+                index += 2;
+                continue;
+            }
+            if (byte == delimiter) quote = null;
+            index += 1;
+            continue;
+        }
+        if (byte == '\'' or byte == '"') {
+            quote = byte;
+            index += 1;
+            continue;
+        }
+        if (byte == '(') {
+            paren_depth += 1;
+            index += 1;
+            continue;
+        }
+        if (byte == ')') {
+            paren_depth -|= 1;
+            index += 1;
+            continue;
+        }
+        if (byte == '{') {
+            brace_depth += 1;
+            index += 1;
+            continue;
+        }
+        if (byte == '}') {
+            brace_depth -|= 1;
+            index += 1;
+            continue;
+        }
+        if (isAliasWordBoundary(byte)) {
+            if ((byte == ';' or byte == '\n') and paren_depth == 0 and brace_depth == 0 and compound_depth == 0) return index;
+            index += 1;
+            continue;
+        }
+        const start = index;
+        while (index < script.len and !isAliasWordBoundary(script[index])) : (index += 1) {}
+        const word = script[start..index];
+        if (std.mem.eql(u8, word, "if") or std.mem.eql(u8, word, "while") or std.mem.eql(u8, word, "until") or std.mem.eql(u8, word, "for") or std.mem.eql(u8, word, "case")) {
+            compound_depth += 1;
+        } else if (std.mem.eql(u8, word, "fi") or std.mem.eql(u8, word, "done") or std.mem.eql(u8, word, "esac")) {
+            compound_depth -|= 1;
+        }
+    }
+    return null;
 }
 
 fn isAliasWordBoundary(byte: u8) bool {
