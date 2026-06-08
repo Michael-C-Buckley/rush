@@ -960,6 +960,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer completion_cache.deinit();
 
     while (true) {
+        const notifications = try executor.drainJobNotifications();
+        try writeAll(io, .stderr, notifications);
+        allocator.free(notifications);
         const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = options.arg_zero }, "rush$ ") catch |err| switch (err) {
             error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
             else => |e| return e,
@@ -1041,6 +1044,9 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
+        const notifications = try executor.drainJobNotifications();
+        try stderr.appendSlice(allocator, notifications);
+        allocator.free(notifications);
         const prompt = try executor.renderPrompt(.{ .io = io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
         try stdout.appendSlice(allocator, prompt);
         allocator.free(prompt);

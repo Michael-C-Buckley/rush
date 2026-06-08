@@ -349,6 +349,8 @@ pub const BackgroundJob = struct {
     child: std.process.Child,
     state: JobState = .running,
     status: ExitStatus = 0,
+    saved_termios: ?std.posix.termios = null,
+    notified_state: ?JobState = null,
 };
 
 pub const JobState = enum {
@@ -377,6 +379,7 @@ pub const Executor = struct {
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     completion_providers: std.StringHashMapUnmanaged(CompletionProvider) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
+    pending_job_notifications: std.ArrayList([]const u8) = .empty,
     next_job_id: usize = 1,
     current_job_id: ?usize = null,
     previous_job_id: ?usize = null,
@@ -489,6 +492,8 @@ pub const Executor = struct {
         self.completion_providers.deinit(self.allocator);
         for (self.background_jobs.items) |job| self.allocator.free(job.command);
         self.background_jobs.deinit(self.allocator);
+        for (self.pending_job_notifications.items) |notification| self.allocator.free(notification);
+        self.pending_job_notifications.deinit(self.allocator);
         self.parameter_error.clear(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
@@ -1017,7 +1022,34 @@ pub const Executor = struct {
             const wait_status: u32 = @intCast(status);
             job.status = exitStatusFromWaitStatus(wait_status);
             job.state = if (std.posix.W.IFSTOPPED(wait_status)) .stopped else .done;
+            if (job.state == .stopped) saveJobTerminalModes(job);
+            self.queueJobNotification(job) catch {};
         }
+    }
+
+    fn queueJobNotification(self: *Executor, job: *BackgroundJob) !void {
+        if (job.notified_state == job.state) return;
+        const state = switch (job.state) {
+            .running => return,
+            .stopped => "Stopped",
+            .done => "Done",
+        };
+        const notification = try std.fmt.allocPrint(self.allocator, "[{d}] {s} {s}\n", .{ job.id, state, job.command });
+        errdefer self.allocator.free(notification);
+        try self.pending_job_notifications.append(self.allocator, notification);
+        job.notified_state = job.state;
+    }
+
+    pub fn drainJobNotifications(self: *Executor) ![]const u8 {
+        self.refreshBackgroundJobs();
+        var output: std.ArrayList(u8) = .empty;
+        errdefer output.deinit(self.allocator);
+        for (self.pending_job_notifications.items) |notification| {
+            try output.appendSlice(self.allocator, notification);
+            self.allocator.free(notification);
+        }
+        self.pending_job_notifications.clearRetainingCapacity();
+        return output.toOwnedSlice(self.allocator);
     }
 
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
@@ -4997,15 +5029,29 @@ fn waitBackgroundJob(io: std.Io, job: *BackgroundJob) !ExitStatus {
             .stopped => .stopped,
             else => .done,
         };
+        if (job.state == .stopped) saveJobTerminalModes(job);
     }
     return job.status;
 }
 
 fn continueStoppedJob(job: *BackgroundJob) !void {
     if (job.state != .stopped) return;
+    restoreJobTerminalModes(job);
     const pid: std.posix.pid_t = @intCast(job.pid);
     try std.posix.kill(pid, .CONT);
     job.state = .running;
+}
+
+fn saveJobTerminalModes(job: *BackgroundJob) void {
+    job.saved_termios = std.posix.tcgetattr(std.Io.File.stdin().handle) catch |err| switch (err) {
+        error.NotATerminal => null,
+        else => null,
+    };
+}
+
+fn restoreJobTerminalModes(job: *BackgroundJob) void {
+    const termios = job.saved_termios orelse return;
+    std.posix.tcsetattr(std.Io.File.stdin().handle, .FLUSH, termios) catch {};
 }
 
 fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
