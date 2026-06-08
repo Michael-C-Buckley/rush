@@ -851,17 +851,38 @@ const CompletionRankContext = struct {
 };
 
 fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.Candidate, b: completion_model.Candidate) bool {
+    const a_class = completionRankClass(a);
+    const b_class = completionRankClass(b);
+    if (a_class != b_class) return a_class < b_class;
     const a_score = completionRankScore(context.history, context.cwd, a.value);
     const b_score = completionRankScore(context.history, context.cwd, b.value);
     if (a_score != b_score) return a_score > b_score;
     return lessThanCompletionLabel(a, b);
 }
 
+fn completionRankClass(candidate: completion_model.Candidate) u8 {
+    if (candidate.kind != .option) return 0;
+    if (candidate.option) |option| {
+        if (option.long == null and option.short != null) return 1;
+    }
+    return 2;
+}
+
 fn lessThanCompletionLabel(a: completion_model.Candidate, b: completion_model.Candidate) bool {
-    const a_label = a.display orelse a.value;
-    const b_label = b.display orelse b.value;
+    const a_label = completionSortLabel(a);
+    const b_label = completionSortLabel(b);
     if (!std.mem.eql(u8, a_label, b_label)) return std.mem.lessThan(u8, a_label, b_label);
     return std.mem.lessThan(u8, a.value, b.value);
+}
+
+fn completionSortLabel(candidate: completion_model.Candidate) []const u8 {
+    if (candidate.kind == .option) {
+        if (candidate.option) |option| {
+            if (option.long) |long| return long;
+            if (option.short) |short| return short;
+        }
+    }
+    return candidate.display orelse candidate.value;
 }
 
 fn completionRankScore(history: History, cwd: []const u8, value: []const u8) i64 {

@@ -170,37 +170,12 @@ pub const CompletionBuilder = struct {
 
     pub fn finish(self: *CompletionBuilder, allocator: std.mem.Allocator) ![]completion.Candidate {
         const candidates = try self.candidates.toOwnedSlice(allocator);
-        std.mem.sort(completion.Candidate, candidates, {}, lessThanCompletionCandidate);
+        completion.sortCandidates(candidates);
         self.owned.deinit(allocator);
         self.* = undefined;
         return candidates;
     }
 };
-
-fn lessThanCompletionCandidate(_: void, a: completion.Candidate, b: completion.Candidate) bool {
-    const a_class = completionCandidateSortClass(a);
-    const b_class = completionCandidateSortClass(b);
-    if (a_class != b_class) return a_class < b_class;
-    return std.mem.lessThan(u8, completionCandidateSortKey(a), completionCandidateSortKey(b));
-}
-
-fn completionCandidateSortClass(candidate: completion.Candidate) u8 {
-    if (candidate.kind != .option) return 0;
-    if (candidate.option) |option| {
-        if (option.long == null and option.short != null) return 1;
-    }
-    return 2;
-}
-
-fn completionCandidateSortKey(candidate: completion.Candidate) []const u8 {
-    if (candidate.kind == .option) {
-        if (candidate.option) |option| {
-            if (option.long) |long| return long;
-            if (option.short) |short| return short;
-        }
-    }
-    return candidate.display orelse candidate.value;
-}
 
 pub const CompletionEvalContext = struct {
     prefix: []const u8 = "",
@@ -1312,13 +1287,16 @@ pub const Executor = struct {
                 },
                 .option => {
                     if (context.position != .option and !(context.position == .subcommand and context.prefix.len == 0)) continue;
-                    if (!completionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
+                    if (context.position == .subcommand and context.prefix.len == 0) {
+                        if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
+                    } else if (!completionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
                     if (rule.option.long) |long| {
                         var spelling_buffer: [256]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
                         try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
                     }
                     if (rule.option.short) |short| {
+                        if (rule.option.long != null and context.prefix.len == 0) continue;
                         var spelling_buffer: [32]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch continue;
                         try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);

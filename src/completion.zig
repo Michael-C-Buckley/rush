@@ -114,7 +114,38 @@ pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candida
         } };
     }
 
-    return .{ .ambiguous = try cloneCandidates(allocator, candidates) };
+    const cloned = try cloneCandidates(allocator, candidates);
+    sortCandidates(cloned);
+    return .{ .ambiguous = cloned };
+}
+
+pub fn sortCandidates(candidates: []Candidate) void {
+    std.mem.sort(Candidate, candidates, {}, lessThanCandidate);
+}
+
+fn lessThanCandidate(_: void, a: Candidate, b: Candidate) bool {
+    const a_class = candidateSortClass(a);
+    const b_class = candidateSortClass(b);
+    if (a_class != b_class) return a_class < b_class;
+    return std.mem.lessThan(u8, candidateSortKey(a), candidateSortKey(b));
+}
+
+fn candidateSortClass(candidate: Candidate) u8 {
+    if (candidate.kind != .option) return 0;
+    if (candidate.option) |option| {
+        if (option.long == null and option.short != null) return 1;
+    }
+    return 2;
+}
+
+fn candidateSortKey(candidate: Candidate) []const u8 {
+    if (candidate.kind == .option) {
+        if (candidate.option) |option| {
+            if (option.long) |long| return long;
+            if (option.short) |short| return short;
+        }
+    }
+    return candidate.display orelse candidate.value;
 }
 
 pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8, candidates: []const Candidate) !Application {
