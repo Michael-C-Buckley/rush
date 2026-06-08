@@ -6272,6 +6272,8 @@ fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         index += 1;
     } else if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) {
         index += 1;
+    } else if (index < command.argv.len and std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) {
+        return errorResult(self.allocator, 2, "env", "unsupported option");
     }
 
     while (index < command.argv.len) {
