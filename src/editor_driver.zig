@@ -319,7 +319,7 @@ pub const TerminalSession = struct {
                 switch (event) {
                     .key_press => |key| {
                         render_needed = true;
-                        if (isCompletionTab(key) and options.complete != null and options.completion_context != null) {
+                        if (isCompletionTab(key) and !session.hasCompletionMenu() and options.complete != null and options.completion_context != null) {
                             const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                             defer application.deinit(self.allocator);
                             try session.applyCompletion(application);

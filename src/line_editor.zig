@@ -154,6 +154,7 @@ pub const HistoryView = struct {
 
 pub const CompletionMenu = struct {
     candidates: []completion.Candidate = &.{},
+    selected: usize = 0,
 
     pub fn deinit(self: *CompletionMenu, allocator: std.mem.Allocator) void {
         if (self.candidates.len != 0) completion.freeCandidates(allocator, self.candidates);
@@ -163,10 +164,30 @@ pub const CompletionMenu = struct {
     pub fn replace(self: *CompletionMenu, allocator: std.mem.Allocator, candidates: []const completion.Candidate) !void {
         self.deinit(allocator);
         self.candidates = try completion.cloneCandidates(allocator, candidates);
+        self.selected = 0;
     }
 
     pub fn clear(self: *CompletionMenu, allocator: std.mem.Allocator) void {
         self.deinit(allocator);
+    }
+
+    pub fn isOpen(self: CompletionMenu) bool {
+        return self.candidates.len != 0;
+    }
+
+    pub fn selectPrevious(self: *CompletionMenu) void {
+        if (self.candidates.len == 0) return;
+        self.selected = if (self.selected == 0) self.candidates.len - 1 else self.selected - 1;
+    }
+
+    pub fn selectNext(self: *CompletionMenu) void {
+        if (self.candidates.len == 0) return;
+        self.selected = (self.selected + 1) % self.candidates.len;
+    }
+
+    pub fn selectedCandidate(self: CompletionMenu) ?completion.Candidate {
+        if (self.candidates.len == 0) return null;
+        return self.candidates[self.selected];
     }
 };
 
@@ -226,6 +247,10 @@ pub const LineSession = struct {
         }
         switch (event.key) {
             .enter => {
+                if (self.completion_menu.selectedCandidate()) |candidate| {
+                    try self.applyCompletionCandidate(candidate);
+                    return;
+                }
                 self.completion_menu.clear(self.allocator);
                 std.debug.assert(self.submitted_line == null);
                 self.submitted_line = try self.allocator.dupe(u8, self.editor.buffer.text());
@@ -247,9 +272,9 @@ pub const LineSession = struct {
                     self.editor.buffer.deleteNext();
                 }
             },
-            .up => try self.historyPrevious(),
-            .down => try self.historyNext(),
-            .tab => {},
+            .up => if (self.completion_menu.isOpen()) self.completion_menu.selectPrevious() else try self.historyPrevious(),
+            .down => if (self.completion_menu.isOpen()) self.completion_menu.selectNext() else try self.historyNext(),
+            .tab => if (self.completion_menu.selectedCandidate()) |candidate| try self.applyCompletionCandidate(candidate),
             else => {
                 try self.editor.handleKey(event);
                 self.completion_menu.clear(self.allocator);
@@ -268,6 +293,10 @@ pub const LineSession = struct {
         }
     }
 
+    pub fn hasCompletionMenu(self: LineSession) bool {
+        return self.completion_menu.isOpen();
+    }
+
     pub fn beginPaste(self: *LineSession) void {
         self.paste_depth += 1;
     }
@@ -280,6 +309,7 @@ pub const LineSession = struct {
         var render_options = options;
         render_options.prompt = self.prompt;
         render_options.completion_menu = self.completion_menu.candidates;
+        render_options.completion_selection = self.completion_menu.selected;
         return renderLine(allocator, self.editor, render_options);
     }
 
@@ -353,11 +383,22 @@ pub const LineSession = struct {
         }
         return true;
     }
+
+    fn applyCompletionCandidate(self: *LineSession, candidate: completion.Candidate) !void {
+        try self.editor.buffer.applyCompletionEdit(.{
+            .replace_start = candidate.replace_start,
+            .replace_end = candidate.replace_end,
+            .replacement = candidate.value,
+            .append_space = candidate.append_space,
+        });
+        self.completion_menu.clear(self.allocator);
+    }
 };
 
 pub const RenderOptions = struct {
     prompt: Prompt = .{ .bytes = "" },
     completion_menu: []const completion.Candidate = &.{},
+    completion_selection: usize = 0,
     width: u16 = 80,
     height: u16 = 24,
     width_method: vaxis.gwidth.Method = .unicode,
@@ -373,7 +414,7 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     try output.appendSlice(allocator, options.prompt.bytes);
     try output.appendSlice(allocator, editor.buffer.text());
 
-    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.height);
+    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.completion_selection, options.height);
 
     const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
     const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
@@ -388,14 +429,15 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     return output.toOwnedSlice(allocator);
 }
 
-fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, height: u16) !usize {
+fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, selected: usize, height: u16) !usize {
     if (candidates.len == 0) return 0;
     var rows: usize = 0;
     const max_rows = @max(@as(usize, @intCast(height)) -| 2, 1);
     const visible_count = @min(candidates.len, max_rows);
-    for (candidates[0..visible_count]) |candidate| {
+    for (candidates[0..visible_count], 0..) |candidate, index| {
         const label = candidate.display orelse candidate.value;
-        try output.appendSlice(allocator, "\r\n  ");
+        try output.appendSlice(allocator, "\r\n");
+        if (index == selected) try output.appendSlice(allocator, "\x1b[7m❯ ") else try output.appendSlice(allocator, "  ");
         const header = try std.fmt.allocPrint(allocator, "{s:<20} {s:<10}", .{ label, @tagName(candidate.kind) });
         defer allocator.free(header);
         try output.appendSlice(allocator, header);
@@ -405,6 +447,7 @@ fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8)
                 try output.appendSlice(allocator, description);
             }
         }
+        if (index == selected) try output.appendSlice(allocator, "\x1b[27m");
         rows += 1;
     }
     if (candidates.len > visible_count) {
@@ -588,7 +631,42 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "subcommand") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[7m❯ checkout") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
+}
+
+test "completion menu selection accepts selected candidate" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git che");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    try session.handleKey(.{ .key = .down });
+    try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
+    try session.handleKey(.{ .key = .enter });
+
+    try std.testing.expectEqualStrings("git cherry-pick ", session.editor.buffer.text());
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
+}
+
+test "completion menu selection wraps with arrow keys" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "one", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "two", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
+    try session.handleKey(.{ .key = .down });
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
 }
 
 test "completion edit clears rendered menu" {
