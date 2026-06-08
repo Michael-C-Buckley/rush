@@ -1718,11 +1718,18 @@ pub const Executor = struct {
     }
 
     fn findExecutableInPath(self: *Executor, io: std.Io, name: []const u8) !?[]const u8 {
+        return self.findExecutableInPathValue(io, name, self.getEnv("PATH") orelse return null);
+    }
+
+    fn findExecutableInDefaultPath(self: *Executor, io: std.Io, name: []const u8) !?[]const u8 {
+        return self.findExecutableInPathValue(io, name, "/bin:/usr/bin");
+    }
+
+    fn findExecutableInPathValue(self: *Executor, io: std.Io, name: []const u8, path_value: []const u8) !?[]const u8 {
         if (std.mem.indexOfScalar(u8, name, '/') != null) {
             std.Io.Dir.cwd().access(io, name, .{ .execute = true }) catch return null;
             return try self.allocator.dupe(u8, name);
         }
-        const path_value = self.getEnv("PATH") orelse return null;
         var parts = std.mem.splitScalar(u8, path_value, ':');
         while (parts.next()) |part| {
             const dir = if (part.len == 0) "." else part;
@@ -2771,6 +2778,12 @@ fn stdoutLine(allocator: std.mem.Allocator, text: []const u8, status: ExitStatus
     return .{ .allocator = allocator, .status = status, .stdout = stdout, .stderr = try allocator.alloc(u8, 0) };
 }
 
+fn stdoutLineFmt(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype, status: ExitStatus) !CommandResult {
+    const text = try std.fmt.allocPrint(allocator, fmt ++ "\n", args);
+    errdefer allocator.free(text);
+    return .{ .allocator = allocator, .status = status, .stdout = text, .stderr = try allocator.alloc(u8, 0) };
+}
+
 fn argvForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![]const []const u8 {
     const argv = try allocator.alloc([]const u8, command.argv.len);
     for (command.argv, 0..) |word, index| {
@@ -2879,24 +2892,68 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 
 fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     if (command.argv.len == 1) return emptyResult(self.allocator, 0);
-    if (std.mem.eql(u8, command.argv[1].text, "-v")) {
-        if (command.argv.len != 3) return errorResult(self.allocator, 2, "command", "unsupported arguments");
-        const name = command.argv[2].text;
-        if (builtinForName(self.*, name) != null) return stdoutLine(self.allocator, name, 0);
-        if (self.functions.get(name) != null) return stdoutLine(self.allocator, name, 0);
-        if (options.io) |io| {
-            if (try self.findExecutableInPath(io, name)) |path| {
-                defer self.allocator.free(path);
-                return stdoutLine(self.allocator, path, 0);
-            }
+    var use_default_path = false;
+    var lookup_mode: CommandLookupMode = .none;
+    var index: usize = 1;
+    while (index < command.argv.len and command.argv[index].text.len > 1 and command.argv[index].text[0] == '-') {
+        const option = command.argv[index].text;
+        index += 1;
+        if (std.mem.eql(u8, option, "--")) break;
+        if (std.mem.eql(u8, option, "-p")) {
+            use_default_path = true;
+        } else if (std.mem.eql(u8, option, "-v")) {
+            lookup_mode = .terse;
+        } else if (std.mem.eql(u8, option, "-V")) {
+            lookup_mode = .verbose;
+        } else {
+            return errorResult(self.allocator, 2, "command", "unsupported option");
         }
-        return emptyResult(self.allocator, 1);
     }
-    if (command.argv[1].text.len > 0 and command.argv[1].text[0] == '-') return errorResult(self.allocator, 2, "command", "unsupported option");
-    const nested = simpleCommandFromArgs(command, 1);
+    if (lookup_mode != .none) {
+        if (index >= command.argv.len) return errorResult(self.allocator, 2, "command", "missing command name");
+        if (index + 1 != command.argv.len) return errorResult(self.allocator, 2, "command", "unsupported arguments");
+        return commandLookup(self, options, command.argv[index].text, use_default_path, lookup_mode);
+    }
+    if (index >= command.argv.len) return emptyResult(self.allocator, 0);
+    const nested = simpleCommandFromArgs(command, index);
     var nested_options = options;
     nested_options.suppress_functions = true;
+    if (use_default_path) {
+        const old_path = if (self.getEnv("PATH")) |path| try self.allocator.dupe(u8, path) else null;
+        defer if (old_path) |path| self.allocator.free(path);
+        defer if (old_path) |path| self.setEnv("PATH", path) catch {} else self.unsetEnv("PATH");
+        try self.setEnv("PATH", "/bin:/usr/bin");
+        return self.executeSimpleCommandWithInput(nested, stdin, nested_options);
+    }
     return self.executeSimpleCommandWithInput(nested, stdin, nested_options);
+}
+
+const CommandLookupMode = enum { none, terse, verbose };
+
+fn commandLookup(self: *Executor, options: ExecuteOptions, name: []const u8, use_default_path: bool, mode: CommandLookupMode) !CommandResult {
+    if (builtinForName(self.*, name) != null) {
+        return if (mode == .terse)
+            stdoutLine(self.allocator, name, 0)
+        else
+            stdoutLineFmt(self.allocator, "{s} is a shell builtin", .{name}, 0);
+    }
+    if (self.functions.get(name) != null) {
+        return if (mode == .terse)
+            stdoutLine(self.allocator, name, 0)
+        else
+            stdoutLineFmt(self.allocator, "{s} is a function", .{name}, 0);
+    }
+    if (options.io) |io| {
+        const found = if (use_default_path) try self.findExecutableInDefaultPath(io, name) else try self.findExecutableInPath(io, name);
+        if (found) |path| {
+            defer self.allocator.free(path);
+            return if (mode == .terse)
+                stdoutLine(self.allocator, path, 0)
+            else
+                stdoutLineFmt(self.allocator, "{s} is {s}", .{ name, path }, 0);
+        }
+    }
+    return emptyResult(self.allocator, 1);
 }
 
 fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -5210,12 +5267,21 @@ test "executor implements command eval exec and exit builtins" {
     defer eval_result.deinit();
     try std.testing.expectEqualStrings("eval-ok\n", eval_result.stdout);
 
-    var command_lowered = try parseAndLower(std.testing.allocator, "f() { echo function; }; command echo builtin; command -v echo");
+    var command_executor = Executor.init(std.testing.allocator);
+    defer command_executor.deinit();
+    var command_lowered = try parseAndLower(std.testing.allocator, "echo() { printf 'function\\n'; }; command echo builtin; command -v echo; command -V echo");
     defer command_lowered.parsed.deinit();
     defer command_lowered.program.deinit();
-    var command_result = try executor.executeProgram(command_lowered.program, .{});
+    var command_result = try command_executor.executeProgram(command_lowered.program, .{});
     defer command_result.deinit();
-    try std.testing.expectEqualStrings("builtin\necho\n", command_result.stdout);
+    try std.testing.expectEqualStrings("builtin\necho\necho is a shell builtin\n", command_result.stdout);
+
+    var command_path = try parseAndLower(std.testing.allocator, "PATH=/nope; command -p sh -c 'echo path-ok'; printf '%s\n' \"$PATH\"");
+    defer command_path.parsed.deinit();
+    defer command_path.program.deinit();
+    var command_path_result = try command_executor.executeProgram(command_path.program, .{ .io = std.testing.io, .allow_external = true });
+    defer command_path_result.deinit();
+    try std.testing.expectEqualStrings("path-ok\n/nope\n", command_path_result.stdout);
 
     var exit_lowered = try parseAndLower(std.testing.allocator, "echo before; exit 7; echo after");
     defer exit_lowered.parsed.deinit();

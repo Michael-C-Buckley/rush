@@ -114,3 +114,5 @@ printf '[%5s][%-5s][%.3s][%04d]' a b abcdef 7
 printf '[%o][%x][%X]' 10 255 255
 printf x > file; test -s file; echo size=$?; test -r file; echo read=$?; test -x file; echo exec=$?
 test a \< b; echo lt=$?; test b \> a; echo gt=$?
+echo() { printf 'function\n'; }; command echo ok; command -v echo
+PATH=/nope; command -p sh -c 'echo path-ok'; printf '%s\n' "$PATH"

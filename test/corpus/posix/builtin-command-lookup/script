@@ -1,0 +1,5 @@
+echo() { printf 'function
+'; }
+command echo ok
+command -v echo
+command -V echo
