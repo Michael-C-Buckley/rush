@@ -537,6 +537,8 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
             in_token = token_index;
         } else if (in_token != null and std.mem.eql(u8, lexeme, "case")) {
             depth += 1;
+        } else if (in_token != null and std.mem.eql(u8, lexeme, "esac") and esacStartsCaseItemPattern(parsed, token_index)) {
+            continue;
         } else if (in_token != null and std.mem.eql(u8, lexeme, "esac") and depth > 0) {
             depth -= 1;
         } else if (in_token != null and std.mem.eql(u8, lexeme, "esac")) {
@@ -599,6 +601,14 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         .word = subject,
         .arms = try arms.toOwnedSlice(allocator),
     };
+}
+
+fn esacStartsCaseItemPattern(parsed: parser.ParseResult, token_index: usize) bool {
+    if (!std.mem.eql(u8, parsed.tokens[token_index].lexeme(parsed.source), "esac")) return false;
+    var index = token_index + 1;
+    while (index < parsed.tokens.len and parsed.tokens[index].kind.isTrivia()) : (index += 1) {}
+    if (index >= parsed.tokens.len) return false;
+    return parsed.tokens[index].kind == .right_paren or parsed.tokens[index].kind == .pipe;
 }
 
 fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !ForCommand {

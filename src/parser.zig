@@ -1264,17 +1264,23 @@ const SyntaxParser = struct {
         var saw_in = false;
         var closed = false;
 
+        if (!self.at(.eof)) try self.appendCurrentTokenChildTo(&case_children);
+        while (!self.at(.eof) and self.current().kind.isTrivia()) {
+            try self.appendCurrentTokenChildTo(&case_children);
+        }
+        if (!self.at(.eof)) try self.appendCurrentTokenChildTo(&case_children);
         while (!self.at(.eof) and !self.atWord("in") and !self.atWord("esac")) {
             try self.appendCurrentTokenChildTo(&case_children);
         }
         if (self.atWord("in")) {
             saw_in = true;
             try self.appendCurrentTokenChildTo(&case_children);
-            while (!self.at(.eof) and !self.atWord("esac")) {
+            while (!self.at(.eof)) {
                 if (self.current().kind.isTrivia()) {
                     try self.appendCurrentTokenChildTo(&case_children);
                     continue;
                 }
+                if (self.atWord("esac") and !self.esacStartsCaseItemPattern()) break;
                 const item = try self.parseCaseItem();
                 try case_children.append(self.allocator, .{ .node = item });
             }
@@ -1316,7 +1322,7 @@ const SyntaxParser = struct {
         var nested_case_depth: usize = 0;
 
         while (!self.at(.eof)) {
-            if (self.atWord("esac") and nested_case_depth == 0) break;
+            if (self.atWord("esac") and nested_case_depth == 0 and (saw_pattern_end or !self.esacStartsCaseItemPattern())) break;
             try self.appendCurrentTokenChildTo(&item_children);
             const previous = self.previousToken();
             if (previous.kind == .right_paren) {
@@ -1347,6 +1353,14 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, item_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.case_item, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn esacStartsCaseItemPattern(self: SyntaxParser) bool {
+        if (!self.atWord("esac")) return false;
+        var index = self.index + 1;
+        while (index < self.tokens.len and self.tokens[index].kind.isTrivia()) : (index += 1) {}
+        if (index >= self.tokens.len) return false;
+        return self.tokens[index].kind == .right_paren or self.tokens[index].kind == .pipe;
     }
 
     fn parseBashTestCommand(self: *SyntaxParser) !NodeId {
@@ -2326,6 +2340,19 @@ test "parser keeps nested POSIX case statements inside case item bodies" {
 
 test "parser accepts in as POSIX case subject word" {
     var result = try parse(std.testing.allocator, "case in in in) echo ok ;; *) echo bad ;; esac", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try std.testing.expect(!result.incomplete);
+    var item_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .case_item) item_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), item_count);
+}
+
+test "parser accepts esac as POSIX case subject word" {
+    var result = try parse(std.testing.allocator, "case esac in esac) echo ok ;; *) echo bad ;; esac", .{});
     defer result.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);

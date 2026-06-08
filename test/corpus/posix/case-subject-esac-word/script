@@ -1,0 +1,1 @@
+case esac in esac) echo ok ;; *) echo bad ;; esac
