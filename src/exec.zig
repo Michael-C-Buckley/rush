@@ -9,6 +9,8 @@ const ir = @import("ir.zig");
 const parser = @import("parser.zig");
 const vaxis = @import("vaxis");
 
+var pending_trap_signal: std.atomic.Value(u8) = .init(0);
+
 pub const ExitStatus = u8;
 
 pub const ExternalStdio = enum {
@@ -592,6 +594,7 @@ pub const Executor = struct {
                 };
                 defer result.deinit();
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
+                try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = result.status;
                 self.setLastStatus(last_status);
                 self.applyErrexit(last_status, options, statement.op_before);
@@ -609,6 +612,7 @@ pub const Executor = struct {
                     try self.executePipeline(program, pipeline, options);
                 defer result.deinit();
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
+                try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = result.status;
                 self.setLastStatus(last_status);
                 self.applyErrexit(last_status, options, pipeline.op_before);
@@ -621,12 +625,25 @@ pub const Executor = struct {
             var result = try self.executeSimpleCommand(command, options);
             defer result.deinit();
             try self.appendOrWriteResult(options, &stdout, &stderr, result);
+            try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
             last_status = result.status;
             self.setLastStatus(last_status);
             self.applyErrexit(last_status, options, .sequence);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
         return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
+    }
+
+    fn dispatchPendingSignalTrap(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)) !void {
+        const raw = pending_trap_signal.swap(0, .seq_cst);
+        if (raw == 0) return;
+        const name = signalNameFromNumber(raw) orelse return;
+        const action = self.traps.get(name) orelse return;
+        var trap_result = try self.executeScriptSlice(action, options);
+        defer trap_result.deinit();
+        try stdout.appendSlice(self.allocator, trap_result.stdout);
+        try stderr.appendSlice(self.allocator, trap_result.stderr);
+        self.setLastStatus(trap_result.status);
     }
 
     fn finishExecuteProgram(self: *Executor, root_execution: bool, options: ExecuteOptions, result: CommandResult) !CommandResult {
@@ -883,6 +900,7 @@ pub const Executor = struct {
     }
 
     fn setTrap(self: *Executor, name: []const u8, action: []const u8) !void {
+        if (signalFromTrapName(name)) |signal| installTrapSignal(signal);
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const owned_action = try self.allocator.dupe(u8, action);
@@ -898,6 +916,7 @@ pub const Executor = struct {
     }
 
     fn clearTrap(self: *Executor, name: []const u8) void {
+        if (signalFromTrapName(name)) |signal| restoreDefaultSignal(signal);
         if (self.traps.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
@@ -2672,6 +2691,46 @@ fn restoreForegroundTerminal(terminal: ?ForegroundTerminal) void {
     var sigttou = ignoreSignal(.TTOU);
     defer sigttou.restore();
     terminalSetPgrp(active.tty_fd, active.previous_pgrp) catch {};
+}
+
+fn trapSignalHandler(signal: std.posix.SIG) callconv(.c) void {
+    pending_trap_signal.store(@intCast(@intFromEnum(signal)), .seq_cst);
+}
+
+fn installTrapSignal(signal: std.posix.SIG) void {
+    const action: std.posix.Sigaction = .{
+        .handler = .{ .handler = trapSignalHandler },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    std.posix.sigaction(signal, &action, null);
+}
+
+fn restoreDefaultSignal(signal: std.posix.SIG) void {
+    const action: std.posix.Sigaction = .{
+        .handler = .{ .handler = std.posix.SIG.DFL },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    std.posix.sigaction(signal, &action, null);
+}
+
+fn signalFromTrapName(name: []const u8) ?std.posix.SIG {
+    if (std.mem.eql(u8, name, "HUP")) return .HUP;
+    if (std.mem.eql(u8, name, "INT")) return .INT;
+    if (std.mem.eql(u8, name, "QUIT")) return .QUIT;
+    if (std.mem.eql(u8, name, "TERM")) return .TERM;
+    if (std.mem.eql(u8, name, "USR1")) return .USR1;
+    if (std.mem.eql(u8, name, "USR2")) return .USR2;
+    return null;
+}
+
+fn signalNameFromNumber(raw: u8) ?[]const u8 {
+    inline for (.{ "HUP", "INT", "QUIT", "TERM", "USR1", "USR2" }) |name| {
+        const signal = signalFromTrapName(name).?;
+        if (raw == @intFromEnum(signal)) return name;
+    }
+    return null;
 }
 
 const SignalActionGuard = struct {
@@ -5225,6 +5284,16 @@ test "executor implements trap builtin baseline" {
     var cleared_result = try executor.executeProgram(cleared.program, .{});
     defer cleared_result.deinit();
     try std.testing.expectEqualStrings("trap -- 'echo int' INT\n", cleared_result.stdout);
+
+    var signal = try parseAndLower(std.testing.allocator, "trap 'echo int' INT; /bin/kill -INT $$; echo after");
+    defer signal.parsed.deinit();
+    defer signal.program.deinit();
+    var signal_executor = Executor.init(std.testing.allocator);
+    defer signal_executor.deinit();
+    var signal_result = try signal_executor.executeProgram(signal.program, .{ .io = std.testing.io, .allow_external = true });
+    defer signal_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), signal_result.status);
+    try std.testing.expectEqualStrings("int\nafter\n", signal_result.stdout);
 
     var zero = try parseAndLower(std.testing.allocator, "trap 'echo zero' 0; echo body");
     defer zero.parsed.deinit();

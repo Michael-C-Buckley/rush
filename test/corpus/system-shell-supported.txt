@@ -116,3 +116,4 @@ printf x > file; test -s file; echo size=$?; test -r file; echo read=$?; test -x
 test a \< b; echo lt=$?; test b \> a; echo gt=$?
 echo() { printf 'function\n'; }; command echo ok; command -v echo
 PATH=/nope; command -p sh -c 'echo path-ok'; printf '%s\n' "$PATH"
+trap 'echo int' INT; /bin/kill -INT $$; echo after

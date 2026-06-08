@@ -1,0 +1,3 @@
+trap 'echo int' INT
+/bin/kill -INT $$
+echo after
