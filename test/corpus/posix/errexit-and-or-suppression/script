@@ -1,0 +1,1 @@
+set -e; false && echo bad; false || echo ok; ! false; echo after

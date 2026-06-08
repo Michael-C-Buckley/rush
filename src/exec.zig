@@ -727,7 +727,7 @@ pub const Executor = struct {
         var last_status: ExitStatus = 0;
 
         if (program.statements.len > 0) {
-            for (program.statements) |statement| {
+            for (program.statements, 0..) |statement, statement_index| {
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
                 var result = if (statement.async_after)
                     try self.executeAsyncStatement(program, statement, options)
@@ -747,14 +747,14 @@ pub const Executor = struct {
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = result.status;
                 self.setLastStatus(last_status);
-                self.applyErrexit(last_status, options, statement.op_before);
+                self.applyErrexit(last_status, options, isFollowedByAndOrListOp(program.statements, statement_index));
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
             }
             return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
         }
 
         if (program.pipelines.len > 0) {
-            for (program.pipelines) |pipeline| {
+            for (program.pipelines, 0..) |pipeline, pipeline_index| {
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
                 var result = if (pipeline.async_after)
                     try self.executeAsyncPipeline(program, pipeline, options)
@@ -765,7 +765,7 @@ pub const Executor = struct {
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = result.status;
                 self.setLastStatus(last_status);
-                self.applyErrexit(last_status, options, pipeline.op_before);
+                self.applyErrexit(last_status, options, isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index));
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
             }
             return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
@@ -778,7 +778,7 @@ pub const Executor = struct {
             try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
             last_status = result.status;
             self.setLastStatus(last_status);
-            self.applyErrexit(last_status, options, .sequence);
+            self.applyErrexit(last_status, options, false);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
         return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
@@ -817,9 +817,9 @@ pub const Executor = struct {
         return final;
     }
 
-    fn applyErrexit(self: *Executor, status: ExitStatus, options: ExecuteOptions, op_before: ir.ListOp) void {
+    fn applyErrexit(self: *Executor, status: ExitStatus, options: ExecuteOptions, followed_by_and_or: bool) void {
         if (!self.shell_options.errexit or options.suppress_errexit or status == 0) return;
-        if (op_before == .or_if or op_before == .and_if) return;
+        if (followed_by_and_or) return;
         self.pending_exit = status;
     }
 
@@ -3216,6 +3216,18 @@ fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {
         .and_if => previous_status != 0,
         .or_if => previous_status == 0,
     };
+}
+
+fn isAndOrListOp(op: ir.ListOp) bool {
+    return op == .and_if or op == .or_if;
+}
+
+fn isFollowedByAndOrListOp(statements: []const ir.Statement, index: usize) bool {
+    return index + 1 < statements.len and isAndOrListOp(statements[index + 1].op_before);
+}
+
+fn isPipelineFollowedByAndOrListOp(pipelines: []const ir.Pipeline, index: usize) bool {
+    return index + 1 < pipelines.len and isAndOrListOp(pipelines[index + 1].op_before);
 }
 
 const BuiltinFn = *const fn (*Executor, ir.SimpleCommand, []const u8, ExecuteOptions) anyerror!CommandResult;
@@ -6679,6 +6691,26 @@ test "executor implements set shell option baseline" {
     defer condition.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), condition.status);
     try std.testing.expectEqualStrings("ok\nafter\n", condition.stdout);
+
+    var and_or_suppressed_executor = Executor.init(std.testing.allocator);
+    defer and_or_suppressed_executor.deinit();
+    var and_or_suppressed_lowered = try parseAndLower(std.testing.allocator, "set -e; false && echo bad; false || echo ok; ! false; echo after");
+    defer and_or_suppressed_lowered.parsed.deinit();
+    defer and_or_suppressed_lowered.program.deinit();
+    var and_or_suppressed = try and_or_suppressed_executor.executeProgram(and_or_suppressed_lowered.program, .{});
+    defer and_or_suppressed.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), and_or_suppressed.status);
+    try std.testing.expectEqualStrings("ok\nafter\n", and_or_suppressed.stdout);
+
+    var and_or_last_executor = Executor.init(std.testing.allocator);
+    defer and_or_last_executor.deinit();
+    var and_or_last_lowered = try parseAndLower(std.testing.allocator, "set -e; true && false; echo after");
+    defer and_or_last_lowered.parsed.deinit();
+    defer and_or_last_lowered.program.deinit();
+    var and_or_last = try and_or_last_executor.executeProgram(and_or_last_lowered.program, .{});
+    defer and_or_last.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), and_or_last.status);
+    try std.testing.expectEqualStrings("", and_or_last.stdout);
 
     var trace_executor = Executor.init(std.testing.allocator);
     defer trace_executor.deinit();

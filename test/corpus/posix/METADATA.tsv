@@ -80,6 +80,8 @@ comments-ignored	lexing	behavior	-
 dash-smoke-function-redirection	grammar	external-suite-smoke	dash-compatible function redirection smoke case
 dash-smoke-loop-case	grammar	external-suite-smoke	dash-compatible loop and case smoke case
 dash-smoke-subshell-env	grammar	external-suite-smoke	dash-compatible subshell environment isolation smoke case
+errexit-and-or-final-exits	options	option	final AND-OR list command failure triggers errexit
+errexit-and-or-suppression	options	option	errexit is suppressed before AND-OR list operators
 errexit-negation-suppression	options	option	errexit is suppressed for negated pipelines
 expansion-arithmetic-precedence	expansion	behavior	-
 expansion-command-substitution-splitting	expansion	behavior	-

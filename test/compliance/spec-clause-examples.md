@@ -14,10 +14,11 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `grammar-case-missing-pattern-end` | `test/corpus/posix-negative` | `grammar-case-empty-arms` | malformed case item diagnostic |
 | `errors-special-builtin-expansion` | `test/corpus/posix-negative` | `errors-special-builtin-expansion` | special builtin `${parameter:?word}` expansion failure exits non-interactive execution |
 | `errexit-negation-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for negated pipelines |
+| `errexit-and-or-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for commands before `&&` and `||` in AND-OR lists |
+| `errexit-and-or-final-exits` | `test/corpus/posix` | `option-errexit-conditions` | final failing AND-OR list commands still exit non-interactive execution |
 
 ## Known follow-up examples
 
-- `set -e; false && ...` and `set -e; false || ...` should be added once AND-OR list suppression is fixed.
 - Add more special-builtin expansion failure classes beyond `${parameter:?word}`.
 - Add redirection consequence examples for non-special utilities versus special builtins across more redirection operators.
 - Add alias token-recognition timing examples after parser alias handling is deepened.
