@@ -1,0 +1,23 @@
+# POSIX spec-clause examples
+
+This note records hand-curated examples added from current high-risk POSIX shell clauses. These are not imported from an external harness; they are small Rush corpus cases tied to manifest rows.
+
+## Added examples
+
+| case | corpus | manifest rows | purpose |
+| --- | --- | --- | --- |
+| `pathname-slash-components` | `test/corpus/posix` | `expansion-pathname`, `expansion-pathname-slash-components` | slash-separated pathname expansion components |
+| `pathname-dotfiles` | `test/corpus/posix` | `expansion-pathname`, `expansion-pathname-dotfiles` | leading-period matching rule |
+| `pathname-unmatched-slash` | `test/corpus/posix` | `expansion-pathname-slash-components` | unmatched slash-containing patterns remain literal |
+| `case-leading-paren-empty-arm` | `test/corpus/posix` | `grammar-case`, `grammar-case-empty-arms` | optional leading `(` and empty case body |
+| `case-final-arm-no-terminator` | `test/corpus/posix` | `grammar-case-pattern-list` | final case arm without `;;` terminator |
+| `grammar-case-missing-pattern-end` | `test/corpus/posix-negative` | `grammar-case-empty-arms` | malformed case item diagnostic |
+| `errors-special-builtin-expansion` | `test/corpus/posix-negative` | `errors-special-builtin-expansion` | special builtin `${parameter:?word}` expansion failure exits non-interactive execution |
+| `errexit-negation-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for negated pipelines |
+
+## Known follow-up examples
+
+- `set -e; false && ...` and `set -e; false || ...` should be added once AND-OR list suppression is fixed.
+- Add more special-builtin expansion failure classes beyond `${parameter:?word}`.
+- Add redirection consequence examples for non-special utilities versus special builtins across more redirection operators.
+- Add alias token-recognition timing examples after parser alias handling is deepened.

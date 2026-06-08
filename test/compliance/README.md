@@ -73,6 +73,10 @@ The compliance report uses this metadata to print POSIX corpus case counts by ar
 
 `external-test-suites.md` evaluates dash, BusyBox ash, Bash POSIX-mode, LTP/Open POSIX-style snippets, shellspec-style examples, and spec-clause examples for selective Rush corpus import. Use it before vendoring or translating any external suite.
 
+## Spec-clause examples
+
+`spec-clause-examples.md` records hand-curated POSIX examples added for high-risk manifest rows, including pathname, case grammar, special-builtin expansion consequences, and errexit contexts.
+
 ## Error consequence submatrix
 
 `error-consequences.md` tracks syntax, expansion, redirection, special-builtin, and builtin diagnostic consequences separately from normal behavior coverage. Use it when adding negative corpus cases or implementing stricter POSIX shell-error behavior.
