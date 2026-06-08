@@ -10,7 +10,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | --- | --- | --- | --- |
 | Tilde expansion | `expansion-tilde` | baseline | `~user`, assignment-word contexts, unset HOME edge cases |
 | Parameter expansion | `expansion-parameter-*` | baseline | unquoted braced-word parser edge cases, nested word edge cases, special-builtin consequences |
-| Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline/partial | unquoted `$@`/`$*`, empty positionals, custom IFS interactions |
+| Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | embedded `$@`/`$*`, empty positionals, deeper custom IFS interactions |
 | Command substitution | `expansion-command-substitution`, `lex-backquote` | baseline | trailing-newline trimming edge cases, nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
 | Field splitting | `expansion-field-splitting-*` | baseline | empty-field edge cases, generated-empty fields, interactions with special parameters |
@@ -63,17 +63,16 @@ Manifest rows:
 - `expansion-positionals-quoted-star`
 - `expansion-positionals-unquoted-at-star`
 
-Rush has strong baseline coverage for `$?`, `$$`, `$!`, `$0`, `set --`, quoted `$@`, and quoted `$*`.
+Rush has strong baseline coverage for `$?`, `$$`, `$!`, `$0`, `set --`, quoted `$@`, quoted `$*`, and unquoted `$@`/`$*` with custom IFS.
 
-High-risk gaps:
+Remaining high-risk gaps:
 
-- unquoted `$@` and `$*` edge cases;
+- embedded unquoted `$@`/`$*` with literal prefixes/suffixes;
 - zero positional parameters;
-- empty positional parameters;
-- custom IFS first-character behavior for `$*`;
-- interactions with field splitting and quote removal.
+- empty positional parameters in more command contexts;
+- deeper interactions with field splitting and quote removal.
 
-Follow-up task: `#160 Harden quoted and unquoted special parameter fields`.
+Follow-up work should add narrower spec-clause rows if these edge cases need separate scoring.
 
 ## Command substitution
 

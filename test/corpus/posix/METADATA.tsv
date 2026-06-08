@@ -148,5 +148,7 @@ special-pid	variables	behavior	-
 special-status	variables	behavior	-
 strict-misplaced-reserved-word	errors	negative	-
 subshell-isolates-env	grammar	behavior	-
+unquoted-at-custom-ifs	expansion	behavior	unquoted $@ splits each positional with custom IFS
+unquoted-star-custom-ifs	expansion	behavior	unquoted $* joins with custom IFS then splits
 until-true	grammar	behavior	-
 while-false	grammar	behavior	-

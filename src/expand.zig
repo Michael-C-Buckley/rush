@@ -152,6 +152,17 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
             continue;
         }
         const split = part.kind == .unquoted or part.kind == .parameter;
+        if (part.kind == .parameter) {
+            const parameter = part.value(parts.raw);
+            if (std.mem.eql(u8, parameter, "@")) {
+                try appendUnquotedAt(allocator, &fields, &current, options.positionals, ifs);
+                continue;
+            }
+            if (std.mem.eql(u8, parameter, "*")) {
+                try appendUnquotedStar(allocator, &fields, &current, options.positionals, ifs);
+                continue;
+            }
+        }
         const rendered = try renderPart(allocator, parts.raw, part, options);
         defer allocator.free(rendered);
         if (split) {
@@ -1011,6 +1022,32 @@ fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8)
     try current.appendSlice(allocator, rendered);
 }
 
+fn appendUnquotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), positionals: []const []const u8, ifs: []const u8) !void {
+    for (positionals, 0..) |param, index| {
+        try appendSplitText(allocator, fields, current, param, ifs);
+        if (index + 1 < positionals.len and current.items.len != 0) {
+            try fields.append(allocator, try current.toOwnedSlice(allocator));
+        }
+    }
+}
+
+fn appendUnquotedStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), positionals: []const []const u8, ifs: []const u8) !void {
+    const joined = try joinPositionalsWithIfs(allocator, positionals, ifs);
+    defer allocator.free(joined);
+    try appendSplitText(allocator, fields, current, joined, ifs);
+}
+
+fn joinPositionalsWithIfs(allocator: std.mem.Allocator, positionals: []const []const u8, ifs: []const u8) ![]const u8 {
+    const separator = if (ifs.len == 0) "" else ifs[0..1];
+    var joined: std.ArrayList(u8) = .empty;
+    errdefer joined.deinit(allocator);
+    for (positionals, 0..) |param, index| {
+        if (index > 0) try joined.appendSlice(allocator, separator);
+        try joined.appendSlice(allocator, param);
+    }
+    return joined.toOwnedSlice(allocator);
+}
+
 fn appendQuotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, positionals: []const []const u8) !void {
     if (positionals.len == 0) {
         force_current_field.* = false;
@@ -1382,6 +1419,13 @@ fn testEmptyIfsLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
 
 const test_empty_ifs_env: EnvLookup = .{ .lookupFn = testEmptyIfsLookup };
 
+fn testCommaIfsLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, name, "IFS")) return ",";
+    return testLookup(null, name);
+}
+
+const test_comma_ifs_env: EnvLookup = .{ .lookupFn = testCommaIfsLookup };
+
 test "word part parser records quoted escaped and parameter regions" {
     var parts = try parseWordParts(std.testing.allocator, "a'$USER'\"$USER\"\\ b${EMPTY}");
     defer parts.deinit();
@@ -1480,6 +1524,29 @@ test "field splitting honors custom and empty IFS" {
 
     try std.testing.expectEqual(@as(usize, 1), empty.fields.len);
     try std.testing.expectEqualStrings("a b c", empty.fields[0]);
+}
+
+test "unquoted positional parameters split field-aware values" {
+    const params = [_][]const u8{ "a,b", "c" };
+    var at = try expandWord(std.testing.allocator, "$@", .{ .positionals = &params, .env = test_comma_ifs_env });
+    defer at.deinit();
+    try std.testing.expectEqual(@as(usize, 3), at.fields.len);
+    try std.testing.expectEqualStrings("a", at.fields[0]);
+    try std.testing.expectEqualStrings("b", at.fields[1]);
+    try std.testing.expectEqualStrings("c", at.fields[2]);
+
+    const empty_params = [_][]const u8{ "", "x" };
+    var empty_at = try expandWord(std.testing.allocator, "$@", .{ .positionals = &empty_params });
+    defer empty_at.deinit();
+    try std.testing.expectEqual(@as(usize, 1), empty_at.fields.len);
+    try std.testing.expectEqualStrings("x", empty_at.fields[0]);
+
+    var star = try expandWord(std.testing.allocator, "$*", .{ .positionals = &params, .env = test_comma_ifs_env });
+    defer star.deinit();
+    try std.testing.expectEqual(@as(usize, 3), star.fields.len);
+    try std.testing.expectEqualStrings("a", star.fields[0]);
+    try std.testing.expectEqualStrings("b", star.fields[1]);
+    try std.testing.expectEqualStrings("c", star.fields[2]);
 }
 
 test "quoted positional parameters preserve fields" {

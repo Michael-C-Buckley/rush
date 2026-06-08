@@ -1,0 +1,3 @@
+set -- 'a,b' c
+IFS=,
+for arg in $*; do printf '<%s>\n' "$arg"; done
