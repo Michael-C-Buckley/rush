@@ -11,7 +11,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | Tilde expansion | `expansion-tilde` | baseline | `~user`, assignment-word contexts, unset HOME edge cases |
 | Parameter expansion | `expansion-parameter-*` | supported/baseline | nested word edge cases, special-builtin consequences, broad-operator audit |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
-| Command substitution | `expansion-command-substitution`, `lex-backquote` | baseline | trailing-newline trimming edge cases, nested legacy backquote behavior, parsing contexts |
+| Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | baseline | nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
 | Field splitting | `expansion-field-splitting-*` | baseline | empty-field edge cases, generated-empty fields, interactions with special parameters |
 | Pathname expansion | `expansion-pathname-*` | supported | bytewise matching model; locale-specific collation is intentionally out of scope for current evidence |
@@ -84,7 +84,6 @@ Current coverage includes `$()`, splitting of command substitution output, quote
 
 Remaining gaps:
 
-- exact trailing newline removal semantics for multiple newlines;
 - nested command substitutions in more grammar contexts;
 - legacy backquote nesting and escape behavior;
 - diagnostics for unterminated substitutions in strict versus recovery modes.
