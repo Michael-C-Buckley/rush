@@ -5665,6 +5665,7 @@ fn builtinUnalias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     _ = options;
     if (command.argv.len == 1) return errorResult(self.allocator, 2, "unalias", "missing operand");
     var index: usize = 1;
+    if (std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-a")) return errorResult(self.allocator, 2, "unalias", "unsupported option");
     if (std.mem.eql(u8, command.argv[index].text, "-a")) {
         var iter = self.aliases.iterator();
         while (iter.next()) |entry| {
@@ -5676,6 +5677,7 @@ fn builtinUnalias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
         if (index == command.argv.len) return emptyResult(self.allocator, 0);
     }
     for (command.argv[index..]) |arg| {
+        if (!isShellName(arg.text)) return errorResult(self.allocator, 2, "unalias", "invalid alias name");
         if (!self.unsetAlias(arg.text)) return errorResult(self.allocator, 1, "unalias", "not found");
     }
     return emptyResult(self.allocator, 0);

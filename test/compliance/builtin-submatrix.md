@@ -45,7 +45,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
-| `alias`, `unalias` | `builtin-alias`, alias lexing rows | list, remove, reserved-word/function-name protection | recursive substitution timing, trailing-space rules, invalid operands |
+| `alias`, `unalias` | `builtin-alias`, `builtin-alias-usage-errors`, alias lexing rows | list, remove, invalid-name/not-found diagnostics, reserved-word/function-name protection | recursive substitution timing, trailing-space rules |
 | `cat` | `builtin-cat-helper` | stdin, `-`, file operands | POSIX utility options are intentionally not a shell-conformance focus |
 | `cd`, `pwd` | `builtin-cd-pwd`, `vars-pwd` | logical PWD/OLDPWD unit coverage | `CDPATH`, physical mode, diagnostics, symlink normalization |
 | `command` | `builtin-command` | `-p`, `-v`, `-V`, lookup suppression | edge cases around special builtins, functions, utilities, PATH errors |
