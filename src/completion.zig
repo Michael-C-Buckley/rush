@@ -177,6 +177,25 @@ pub fn fuzzyMatchRank(text: []const u8, query: []const u8) ?MatchRank {
     return .fuzzy;
 }
 
+pub fn fuzzyMatchPositions(allocator: std.mem.Allocator, text: []const u8, query: []const u8) !?[]usize {
+    if (fuzzyMatchRank(text, query) == null) return null;
+    var positions: std.ArrayList(usize) = .empty;
+    errdefer positions.deinit(allocator);
+    if (query.len == 0) return try positions.toOwnedSlice(allocator);
+
+    var text_index: usize = 0;
+    for (query) |query_byte| {
+        while (text_index < text.len) : (text_index += 1) {
+            if (std.ascii.toLower(text[text_index]) == std.ascii.toLower(query_byte)) {
+                try positions.append(allocator, text_index);
+                text_index += 1;
+                break;
+            }
+        }
+    }
+    return try positions.toOwnedSlice(allocator);
+}
+
 pub fn cloneCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) ![]Candidate {
     const cloned = try allocator.alloc(Candidate, candidates.len);
     errdefer allocator.free(cloned);

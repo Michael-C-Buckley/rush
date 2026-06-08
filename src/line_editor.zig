@@ -307,6 +307,8 @@ pub const LineSession = struct {
     history_search_query: std.ArrayList(u8) = .empty,
     history_search_original: std.ArrayList(u8) = .empty,
     history_search_match: ?HistoryView.HistoryEntry = null,
+    history_search_matches: std.ArrayList(HistoryView.HistoryEntry) = .empty,
+    history_search_selected: usize = 0,
     kill_ring: std.ArrayList(u8) = .empty,
     completion_menu: CompletionMenu = .{},
     state: State = .editing,
@@ -341,6 +343,8 @@ pub const LineSession = struct {
     pub fn deinit(self: *LineSession) void {
         if (self.submitted_line) |line| self.allocator.free(line);
         if (self.history_search_match) |entry| entry.deinit(self.allocator);
+        self.clearHistorySearchMatches();
+        self.history_search_matches.deinit(self.allocator);
         self.history_search_original.deinit(self.allocator);
         self.history_search_query.deinit(self.allocator);
         self.completion_menu.deinit(self.allocator);
@@ -488,28 +492,40 @@ pub const LineSession = struct {
         render_options.completion_selection = self.completion_menu.selected;
         render_options.completion_window_start = self.completion_menu.visibleWindowStart(render_options.menuCandidateRows());
         if (self.state == .history_search) {
-            var history_candidate: [1]completion.Candidate = undefined;
-            if (self.history_search_match) |entry| {
-                history_candidate[0] = .{
-                    .value = entry.text,
-                    .description = "history",
-                    .kind = .plain,
-                    .replace_start = 0,
-                    .replace_end = self.editor.buffer.text().len,
-                };
+            var history_candidates: std.ArrayList(completion.Candidate) = .empty;
+            defer history_candidates.deinit(allocator);
+            var styled_labels: std.ArrayList([]const u8) = .empty;
+            defer {
+                for (styled_labels.items) |label| allocator.free(label);
+                styled_labels.deinit(allocator);
+            }
+            if (self.history_search_matches.items.len != 0) {
+                for (self.history_search_matches.items) |entry| {
+                    const label = try styledHistorySearchLabel(allocator, entry.text, self.history_search_query.items);
+                    try styled_labels.append(allocator, label);
+                    try history_candidates.append(allocator, .{
+                        .value = entry.text,
+                        .display = label,
+                        .description = "history",
+                        .kind = .plain,
+                        .replace_start = 0,
+                        .replace_end = self.editor.buffer.text().len,
+                    });
+                }
             } else {
-                history_candidate[0] = .{
+                try history_candidates.append(allocator, .{
                     .value = self.history_search_query.items,
                     .display = "No history matches",
                     .description = self.history_search_query.items,
                     .kind = .plain,
                     .replace_start = 0,
                     .replace_end = self.editor.buffer.text().len,
-                };
+                });
             }
-            render_options.completion_menu = &history_candidate;
-            render_options.completion_selection = 0;
+            render_options.completion_menu = history_candidates.items;
+            render_options.completion_selection = self.history_search_selected;
             render_options.completion_window_start = 0;
+            return frameFromLine(allocator, self.editor, render_options);
         } else if (try self.currentAutosuggestion(allocator)) |suggestion| {
             defer suggestion.deinit(allocator);
             const text = self.editor.buffer.text();
@@ -607,16 +623,16 @@ pub const LineSession = struct {
     fn handleHistorySearchKey(self: *LineSession, event: KeyEvent) !void {
         switch (event.key) {
             .enter => {
-                if (self.history_search_match) |entry| try self.editor.buffer.replace(entry.text);
+                if (self.selectedHistorySearchMatch()) |entry| try self.editor.buffer.replace(entry.text);
                 self.finishHistorySearch();
             },
-            .tab => if (event.modifiers.shift) try self.refreshHistorySearchNext(if (self.history_search_match) |entry| entry.id else null) else try self.refreshHistorySearch(if (self.history_search_match) |entry| entry.id else null),
+            .tab => if (event.modifiers.shift) self.selectPreviousHistorySearchMatch() else self.selectNextHistorySearchMatch(),
             .escape, .ctrl_c => {
                 try self.editor.buffer.replace(self.history_search_original.items);
                 self.finishHistorySearch();
             },
-            .ctrl_r, .down => try self.refreshHistorySearch(if (self.history_search_match) |entry| entry.id else null),
-            .up => try self.refreshHistorySearchNext(if (self.history_search_match) |entry| entry.id else null),
+            .ctrl_r, .down => self.selectNextHistorySearchMatch(),
+            .up => self.selectPreviousHistorySearchMatch(),
             .backspace => {
                 self.editor.buffer.deletePrevious();
                 try self.syncHistorySearchQueryFromBuffer();
@@ -664,28 +680,80 @@ pub const LineSession = struct {
 
     fn refreshHistorySearch(self: *LineSession, before: ?i64) !void {
         self.clearHistorySearchMatch();
+        self.clearHistorySearchMatches();
+        self.history_search_selected = 0;
         const context = self.history.context orelse return;
         const search = self.history.search orelse return;
-        if (try search(context, self.allocator, self.history_search_query.items, before)) |entry| {
-            self.history_search_match = entry;
-        } else if (before != null) {
-            self.history_search_match = try search(context, self.allocator, self.history_search_query.items, null);
+        var cursor = before;
+        while (self.history_search_matches.items.len < 20) {
+            const entry = try search(context, self.allocator, self.history_search_query.items, cursor) orelse break;
+            cursor = entry.id;
+            try self.history_search_matches.append(self.allocator, entry);
         }
+        if (self.history_search_matches.items.len == 0 and before != null) {
+            cursor = null;
+            while (self.history_search_matches.items.len < 20) {
+                const entry = try search(context, self.allocator, self.history_search_query.items, cursor) orelse break;
+                cursor = entry.id;
+                try self.history_search_matches.append(self.allocator, entry);
+            }
+        }
+        if (self.history_search_matches.items.len != 0) self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
     }
 
     fn refreshHistorySearchNext(self: *LineSession, after: ?i64) !void {
         self.clearHistorySearchMatch();
+        self.clearHistorySearchMatches();
+        self.history_search_selected = 0;
         const context = self.history.context orelse return;
         const search_next = self.history.search_next orelse return try self.refreshHistorySearch(null);
-        if (try search_next(context, self.allocator, self.history_search_query.items, after)) |entry| {
-            self.history_search_match = entry;
-        } else if (after != null) {
-            self.history_search_match = try search_next(context, self.allocator, self.history_search_query.items, null);
+        var cursor = after;
+        while (self.history_search_matches.items.len < 20) {
+            const entry = try search_next(context, self.allocator, self.history_search_query.items, cursor) orelse break;
+            cursor = entry.id;
+            try self.history_search_matches.append(self.allocator, entry);
         }
+        if (self.history_search_matches.items.len == 0 and after != null) {
+            cursor = null;
+            while (self.history_search_matches.items.len < 20) {
+                const entry = try search_next(context, self.allocator, self.history_search_query.items, cursor) orelse break;
+                cursor = entry.id;
+                try self.history_search_matches.append(self.allocator, entry);
+            }
+        }
+        if (self.history_search_matches.items.len != 0) self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
+    }
+
+    fn selectedHistorySearchMatch(self: LineSession) ?HistoryView.HistoryEntry {
+        if (self.history_search_matches.items.len == 0) return null;
+        return self.history_search_matches.items[@min(self.history_search_selected, self.history_search_matches.items.len - 1)];
+    }
+
+    fn selectNextHistorySearchMatch(self: *LineSession) void {
+        if (self.history_search_matches.items.len == 0) return;
+        self.history_search_selected = (self.history_search_selected + 1) % self.history_search_matches.items.len;
+        self.replaceHistorySearchMatchFromSelection() catch {};
+    }
+
+    fn selectPreviousHistorySearchMatch(self: *LineSession) void {
+        if (self.history_search_matches.items.len == 0) return;
+        self.history_search_selected = if (self.history_search_selected == 0) self.history_search_matches.items.len - 1 else self.history_search_selected - 1;
+        self.replaceHistorySearchMatchFromSelection() catch {};
+    }
+
+    fn replaceHistorySearchMatchFromSelection(self: *LineSession) !void {
+        self.clearHistorySearchMatch();
+        if (self.selectedHistorySearchMatch()) |entry| self.history_search_match = try cloneHistoryEntry(self.allocator, entry);
+    }
+
+    fn clearHistorySearchMatches(self: *LineSession) void {
+        for (self.history_search_matches.items) |entry| entry.deinit(self.allocator);
+        self.history_search_matches.clearRetainingCapacity();
     }
 
     fn finishHistorySearch(self: *LineSession) void {
         self.clearHistorySearchMatch();
+        self.clearHistorySearchMatches();
         self.history_search_query.clearRetainingCapacity();
         self.history_search_original.clearRetainingCapacity();
         self.state = .editing;
@@ -775,6 +843,31 @@ pub const LineSession = struct {
         self.completion_menu.clear(self.allocator);
     }
 };
+
+fn cloneHistoryEntry(allocator: std.mem.Allocator, entry: HistoryView.HistoryEntry) !HistoryView.HistoryEntry {
+    return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text) };
+}
+
+fn styledHistorySearchLabel(allocator: std.mem.Allocator, text: []const u8, query: []const u8) ![]const u8 {
+    const positions = (try completion.fuzzyMatchPositions(allocator, text, query)) orelse return try allocator.dupe(u8, text);
+    defer allocator.free(positions);
+    if (positions.len == 0) return try allocator.dupe(u8, text);
+
+    var label: std.ArrayList(u8) = .empty;
+    errdefer label.deinit(allocator);
+    var position_index: usize = 0;
+    for (text, 0..) |byte, index| {
+        if (position_index < positions.len and positions[position_index] == index) {
+            try label.appendSlice(allocator, "\x1b[38;5;220m");
+            try label.append(allocator, byte);
+            try label.appendSlice(allocator, "\x1b[39m");
+            position_index += 1;
+        } else {
+            try label.append(allocator, byte);
+        }
+    }
+    return label.toOwnedSlice(allocator);
+}
 
 pub const Frame = struct {
     lines: []const []const u8,
@@ -1184,13 +1277,13 @@ fn completionMenuWindow(count: usize, selected: usize, window_start: usize, max_
 fn appendPaddedCell(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8, width: usize) !void {
     const before = output.items.len;
     try appendTruncated(allocator, output, text, width);
-    const written = output.items.len - before;
+    const written = visibleWidth(output.items[before..], .unicode);
     if (written < width) try output.appendNTimes(allocator, ' ', width - written);
 }
 
 fn appendTruncated(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8, width: usize) !void {
     if (width == 0) return;
-    if (text.len <= width) {
+    if (visibleWidth(text, .unicode) <= width) {
         try output.appendSlice(allocator, text);
         return;
     }
@@ -1198,7 +1291,18 @@ fn appendTruncated(allocator: std.mem.Allocator, output: *std.ArrayList(u8), tex
         try output.appendSlice(allocator, "…");
         return;
     }
-    try output.appendSlice(allocator, text[0 .. width - 1]);
+    var written: usize = 0;
+    var i: usize = 0;
+    while (i < text.len and written < width - 1) {
+        if (escapeSequenceEnd(text, i)) |end| {
+            try output.appendSlice(allocator, text[i..end]);
+            i = end;
+            continue;
+        }
+        try output.append(allocator, text[i]);
+        i += 1;
+        written += 1;
+    }
     try output.appendSlice(allocator, "…");
 }
 
@@ -2057,7 +2161,9 @@ test "history search seeds query from current buffer and renders menu-style matc
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "git diff") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2mplain") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mhistory") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
@@ -2179,11 +2285,18 @@ test "history search uses fuzzy query matching" {
     try std.testing.expectEqualStrings("gco", session.history_search_query.items);
     try std.testing.expect(session.history_search_match != null);
     try std.testing.expectEqualStrings("git checkout", session.history_search_match.?.text);
+    try std.testing.expectEqual(@as(usize, 1), session.history_search_matches.items.len);
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mc\x1b[39m") != null);
 
     try session.handleKey(.{ .key = .delete_to_start });
     try session.handleKey(.{ .key = .text, .text = "zz" });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expect(session.history_search_match == null);
+    try std.testing.expectEqual(@as(usize, 0), session.history_search_matches.items.len);
 }
 
 test "history search tab cycles matches and enter accepts" {
@@ -2195,11 +2308,20 @@ test "history search tab cycles matches and enter accepts" {
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
     try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqual(@as(usize, 3), session.history_search_matches.items.len);
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "show") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
 
     try session.handleKey(.{ .key = .tab });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git", session.editor.buffer.text());
     try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+    try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
 
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
     try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
