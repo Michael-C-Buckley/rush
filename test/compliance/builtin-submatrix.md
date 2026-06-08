@@ -61,9 +61,9 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
-| `jobs` | `builtin-jobs` | visible table, `-l`, `-p`, numeric and `%` job operands | current job marker, stopped/running/done refresh, richer job specs |
-| `fg` | `job-fg-bg` | current and explicit tracked jobs wait and propagate status | stopped-job continuation, full terminal handoff, richer job specs |
-| `bg` | `job-fg-bg` | current and explicit tracked jobs report as backgrounded | stopped-job continuation, `SIGCONT`, richer job specs |
+| `jobs` | `builtin-jobs` | visible table, `-l`, `-p`, numeric, `%`, `%+`, `%%`, and `%-` job operands | current job marker in output, stopped/running/done refresh, richer job specs |
+| `fg` | `job-fg-bg` | current, previous, and explicit tracked jobs wait and propagate status; stopped jobs get `SIGCONT` | full terminal handoff, richer job specs |
+| `bg` | `job-fg-bg` | current, previous, and explicit tracked jobs report as backgrounded; stopped jobs get `SIGCONT` | richer job specs and notifications |
 
 Follow-up tasks:
 

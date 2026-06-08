@@ -167,3 +167,4 @@ unquoted-at-custom-ifs	expansion	behavior	unquoted $@ splits each positional wit
 unquoted-star-custom-ifs	expansion	behavior	unquoted $* joins with custom IFS then splits
 until-true	grammar	behavior	-
 while-false	grammar	behavior	-
+jobs-current-previous-operands	job_control	behavior	current and previous job operands for job-control builtins

@@ -347,8 +347,14 @@ pub const BackgroundJob = struct {
     pid: i64,
     command: []const u8,
     child: std.process.Child,
-    done: bool = false,
+    state: JobState = .running,
     status: ExitStatus = 0,
+};
+
+pub const JobState = enum {
+    running,
+    stopped,
+    done,
 };
 
 pub const ArrayValue = struct {
@@ -372,6 +378,8 @@ pub const Executor = struct {
     completion_providers: std.StringHashMapUnmanaged(CompletionProvider) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     next_job_id: usize = 1,
+    current_job_id: ?usize = null,
+    previous_job_id: ?usize = null,
     open_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, void) = .empty,
     shell_options: ShellOptions = .{},
     global_positionals: PositionalParams = .{},
@@ -963,7 +971,19 @@ pub const Executor = struct {
 
     fn findBackgroundJobBySpec(self: *Executor, spec: []const u8) ?*BackgroundJob {
         const text = if (std.mem.startsWith(u8, spec, "%")) spec[1..] else spec;
+        if (text.len == 0 or std.mem.eql(u8, text, "+") or std.mem.eql(u8, text, "%")) {
+            const id = self.current_job_id orelse return null;
+            return self.findBackgroundJobById(id);
+        }
+        if (std.mem.eql(u8, text, "-")) {
+            const id = self.previous_job_id orelse return null;
+            return self.findBackgroundJobById(id);
+        }
         const id = std.fmt.parseUnsigned(usize, text, 10) catch return null;
+        return self.findBackgroundJobById(id);
+    }
+
+    fn findBackgroundJobById(self: *Executor, id: usize) ?*BackgroundJob {
         for (self.background_jobs.items) |*job| {
             if (job.id == id) return job;
         }
@@ -971,8 +991,13 @@ pub const Executor = struct {
     }
 
     fn currentBackgroundJob(self: *Executor) ?*BackgroundJob {
-        if (self.background_jobs.items.len == 0) return null;
-        return &self.background_jobs.items[self.background_jobs.items.len - 1];
+        const id = self.current_job_id orelse return null;
+        return self.findBackgroundJobById(id);
+    }
+
+    fn selectCurrentJob(self: *Executor, id: usize) void {
+        if (self.current_job_id != null and self.current_job_id.? != id) self.previous_job_id = self.current_job_id;
+        self.current_job_id = id;
     }
 
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
@@ -1433,6 +1458,7 @@ pub const Executor = struct {
             .command = owned_command,
             .child = childFromPid(pid),
         });
+        self.selectCurrentJob(self.next_job_id);
         self.next_job_id += 1;
         return emptyResult(self.allocator, 0);
     }
@@ -2516,6 +2542,7 @@ pub const Executor = struct {
             const command_text = try joinParams(self.allocator, argv_text);
             errdefer self.allocator.free(command_text);
             try self.background_jobs.append(self.allocator, .{ .id = self.next_job_id, .pid = numeric_pid, .command = command_text, .child = child });
+            self.selectCurrentJob(self.next_job_id);
             self.next_job_id += 1;
         }
         return emptyResult(self.allocator, 0);
@@ -4872,17 +4899,17 @@ fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: 
     switch (mode) {
         .pids => try stdout.print(allocator, "{d}\n", .{job.pid}),
         .long => {
-            if (job.done) {
-                try stdout.print(allocator, "[{d}] {d} Done({d}) {s}\n", .{ job.id, job.pid, job.status, job.command });
-            } else {
-                try stdout.print(allocator, "[{d}] {d} Running {s}\n", .{ job.id, job.pid, job.command });
+            switch (job.state) {
+                .running => try stdout.print(allocator, "[{d}] {d} Running {s}\n", .{ job.id, job.pid, job.command }),
+                .stopped => try stdout.print(allocator, "[{d}] {d} Stopped {s}\n", .{ job.id, job.pid, job.command }),
+                .done => try stdout.print(allocator, "[{d}] {d} Done({d}) {s}\n", .{ job.id, job.pid, job.status, job.command }),
             }
         },
         .normal => {
-            if (job.done) {
-                try stdout.print(allocator, "[{d}] Done({d}) {s}\n", .{ job.id, job.status, job.command });
-            } else {
-                try stdout.print(allocator, "[{d}] Running {s}\n", .{ job.id, job.command });
+            switch (job.state) {
+                .running => try stdout.print(allocator, "[{d}] Running {s}\n", .{ job.id, job.command }),
+                .stopped => try stdout.print(allocator, "[{d}] Stopped {s}\n", .{ job.id, job.command }),
+                .done => try stdout.print(allocator, "[{d}] Done({d}) {s}\n", .{ job.id, job.status, job.command }),
             }
         },
     }
@@ -4896,6 +4923,8 @@ fn builtinBg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
         self.currentBackgroundJob() orelse return errorResult(self.allocator, 1, "bg", "no current job")
     else
         self.findBackgroundJobBySpec(command.argv[1].text) orelse return errorResult(self.allocator, 127, "bg", "unknown job");
+    try continueStoppedJob(job);
+    self.selectCurrentJob(job.id);
     const stdout = try std.fmt.allocPrint(self.allocator, "[{d}] {s} &\n", .{ job.id, job.command });
     errdefer self.allocator.free(stdout);
     return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
@@ -4911,6 +4940,8 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
         self.findBackgroundJobBySpec(command.argv[1].text) orelse return errorResult(self.allocator, 127, "fg", "unknown job");
     const stdout = try std.fmt.allocPrint(self.allocator, "{s}\n", .{job.command});
     errdefer self.allocator.free(stdout);
+    try continueStoppedJob(job);
+    self.selectCurrentJob(job.id);
     const status = try waitBackgroundJob(io, job);
     return .{ .allocator = self.allocator, .status = status, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
 }
@@ -4935,12 +4966,22 @@ fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 }
 
 fn waitBackgroundJob(io: std.Io, job: *BackgroundJob) !ExitStatus {
-    if (!job.done) {
+    if (job.state != .done) {
         const term = try job.child.wait(io);
         job.status = exitStatusFromTerm(term);
-        job.done = true;
+        job.state = switch (term) {
+            .stopped => .stopped,
+            else => .done,
+        };
     }
     return job.status;
+}
+
+fn continueStoppedJob(job: *BackgroundJob) !void {
+    if (job.state != .stopped) return;
+    const pid: std.posix.pid_t = @intCast(job.pid);
+    try std.posix.kill(pid, .CONT);
+    job.state = .running;
 }
 
 fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
