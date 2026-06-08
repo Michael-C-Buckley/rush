@@ -1,0 +1,8 @@
+mkdir -p real/a
+ln -s real link
+cd -L link/a
+case "$(pwd)" in */link/a) echo logical-a ;; *) echo bad-a ;; esac
+cd ..
+case "$(pwd)" in */link) echo logical-parent ;; *) echo bad-parent ;; esac
+cd -P ../link/a
+case "$(pwd)" in */real/a) echo physical-a ;; *) echo bad-physical ;; esac

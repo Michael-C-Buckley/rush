@@ -242,3 +242,4 @@ expansion-field-splitting-generated-empty	expansion	behavior	unquoted generated 
 lex-escaped-newline-continuation	lexing	behavior	backslash-newline joins physical lines before token interpretation
 builtin-getopts-optind-reset	builtin	behavior	getopts rescans operands after OPTIND reset to 1
 builtin-exec-redirection-only	builtin	behavior	exec without command operands applies redirections to the current shell
+builtin-cd-logical-dotdot	builtin	behavior	cd -L preserves logical symlink path through dotdot while cd -P resolves physically
