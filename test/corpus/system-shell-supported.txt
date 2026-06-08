@@ -168,3 +168,4 @@ env -i -- RUSH_ENV_TERM=ok
 printf "%s\n" ok >in; read -- x <in; echo "$x"
 echo() { printf "func:%s\n" "$1"; }; echo one; command echo two
 old=$(umask); umask u=rwx,g=rx,o=; umask; umask -S; umask a=rx; umask; umask "$old"
+f=var; f() { echo func; }; unset f; echo var=${f-unset}; if command -v f; then echo func-present; else echo func-gone; fi

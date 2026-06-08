@@ -1,0 +1,5 @@
+f=var
+f() { echo func; }
+unset f
+echo var=${f-unset}
+if command -v f; then echo func-present; else echo func-gone; fi

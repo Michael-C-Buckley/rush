@@ -232,3 +232,4 @@ builtin-env-option-terminator	builtin	behavior	env accepts -- after -i before as
 builtin-read-option-terminator	builtin	behavior	read accepts -- before variable names
 builtin-command-function-suppression	builtin	behavior	command suppresses shell function lookup
 builtin-umask-symbolic-operands	builtin	behavior	umask accepts symbolic mask operands for representative assignment modes
+builtin-unset-default-variable	builtin	behavior	unset without -f removes variables before same-name functions
