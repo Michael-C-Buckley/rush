@@ -778,12 +778,7 @@ fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     defer completion_context.executor.freeCompletionDiagnostics(diagnostics);
     if (diagnostics.len == 0) return null;
     const diagnostic = diagnostics[0];
-    const color = switch (diagnostic.severity) {
-        .warning => "\x1b[33m",
-        .err => "\x1b[31m",
-    };
     const spans = try allocator.alloc(line_editor.DiagnosticSpan, 1);
-    errdefer allocator.free(spans);
     spans[0] = .{
         .start = diagnostic.start,
         .end = diagnostic.end,
@@ -793,7 +788,6 @@ fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
         },
     };
     return .{
-        .line = try std.fmt.allocPrint(allocator, "{s}{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ color, @tagName(diagnostic.kind), diagnostic.message }),
         .spans = spans,
     };
 }
@@ -1575,6 +1569,31 @@ test "interactive completion uses semantic executor path for commands variables 
     const path_completions = try executor.collectCompletionsForInput("cat rush-complete", "cat rush-complete".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(path_completions);
     try std.testing.expect(hasCompletionCandidate(path_completions, path));
+}
+
+test "interactive semantic diagnostics render spans without message line" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var setup_result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\complete git --subcommand commit
+    , .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup_result.status);
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
+    var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &cache, .io = std.testing.io, .cwd = "." };
+
+    const diagnostic = try diagnoseInteractiveLine(&completion_context, std.testing.allocator, std.testing.io, "git comit ") orelse return error.MissingDiagnostic;
+    defer diagnostic.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("", diagnostic.line);
+    try std.testing.expectEqual(@as(usize, 1), diagnostic.spans.len);
+    try std.testing.expectEqual(@as(usize, 4), diagnostic.spans[0].start);
+    try std.testing.expectEqual(@as(usize, 9), diagnostic.spans[0].end);
+    try std.testing.expectEqual(line_editor.DiagnosticSeverity.err, diagnostic.spans[0].severity);
 }
 
 fn hasCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) bool {

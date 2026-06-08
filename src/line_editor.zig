@@ -769,11 +769,11 @@ pub const DiagnosticSpan = struct {
 };
 
 pub const DiagnosticRender = struct {
-    line: []const u8,
+    line: []const u8 = "",
     spans: []const DiagnosticSpan = &.{},
 
     pub fn deinit(self: DiagnosticRender, allocator: std.mem.Allocator) void {
-        allocator.free(self.line);
+        if (self.line.len != 0) allocator.free(self.line);
         allocator.free(self.spans);
     }
 };
