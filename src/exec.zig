@@ -148,6 +148,7 @@ pub const Executor = struct {
     readonly: std.StringHashMapUnmanaged(void) = .empty,
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
+    aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     open_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, void) = .empty,
@@ -219,6 +220,12 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.functions.deinit(self.allocator);
+        var alias_iter = self.aliases.iterator();
+        while (alias_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.aliases.deinit(self.allocator);
         var trap_iter = self.traps.iterator();
         while (trap_iter.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -528,6 +535,8 @@ pub const Executor = struct {
         while (open_fd_iter.next()) |entry| try self.open_fds.put(self.allocator, entry.key_ptr.*, {});
         var function_iter = other.functions.iterator();
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.*);
+        var alias_iter = other.aliases.iterator();
+        while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
         var trap_iter = other.traps.iterator();
         while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
         var array_iter = other.arrays.iterator();
@@ -564,6 +573,81 @@ pub const Executor = struct {
             if (job.pid == pid) return job;
         }
         return null;
+    }
+
+    pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
+        var output: std.ArrayList(u8) = .empty;
+        errdefer output.deinit(self.allocator);
+        var index: usize = 0;
+        var command_position = true;
+        while (index < script.len) {
+            const byte = script[index];
+            if (byte == '\'' or byte == '"') {
+                const start = index;
+                index += 1;
+                while (index < script.len and script[index] != byte) {
+                    if (script[index] == '\\' and index + 1 < script.len) index += 2 else index += 1;
+                }
+                if (index < script.len) index += 1;
+                try output.appendSlice(self.allocator, script[start..index]);
+                command_position = false;
+                continue;
+            }
+            if (isShellSeparatorByte(byte)) {
+                try output.append(self.allocator, byte);
+                command_position = true;
+                index += 1;
+                continue;
+            }
+            if (byte == ' ' or byte == '\t' or byte == '\r') {
+                try output.append(self.allocator, byte);
+                index += 1;
+                continue;
+            }
+            if (isAliasWordBoundary(byte)) {
+                try output.append(self.allocator, byte);
+                index += 1;
+                command_position = false;
+                continue;
+            }
+            const start = index;
+            while (index < script.len and !isAliasWordBoundary(script[index])) : (index += 1) {}
+            const word = script[start..index];
+            if (command_position) {
+                if (self.aliases.get(word)) |value| {
+                    try output.appendSlice(self.allocator, value);
+                    command_position = value.len > 0 and (value[value.len - 1] == ' ' or value[value.len - 1] == '\t');
+                    continue;
+                }
+            }
+            try output.appendSlice(self.allocator, word);
+            command_position = false;
+        }
+        return output.toOwnedSlice(self.allocator);
+    }
+
+    fn setAlias(self: *Executor, name: []const u8, value: []const u8) !void {
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+        const result = try self.aliases.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            self.allocator.free(result.value_ptr.*);
+            result.value_ptr.* = owned_value;
+        } else {
+            result.value_ptr.* = owned_value;
+        }
+    }
+
+    fn unsetAlias(self: *Executor, name: []const u8) bool {
+        if (self.aliases.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value);
+            return true;
+        }
+        return false;
     }
 
     fn setFunction(self: *Executor, name: []const u8, body: []const u8) !void {
@@ -775,7 +859,9 @@ pub const Executor = struct {
     fn executeScriptSlice(self: *Executor, script: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         const trimmed = std.mem.trim(u8, script, " \t\r\n;");
         if (trimmed.len == 0) return emptyResult(self.allocator, 0);
-        var parsed = try parser.parse(self.allocator, trimmed, .{ .features = options.features });
+        const aliased = try self.expandAliasesForScript(trimmed);
+        defer self.allocator.free(aliased);
+        var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features });
         defer parsed.deinit();
         if (parsed.diagnostics.len != 0) return error.ParseError;
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
@@ -2405,6 +2491,14 @@ fn argvForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![]co
     return argv;
 }
 
+fn isShellSeparatorByte(byte: u8) bool {
+    return byte == '\n' or byte == ';' or byte == '&' or byte == '|';
+}
+
+fn isAliasWordBoundary(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\r' or byte == '\n' or byte == ';' or byte == '&' or byte == '|' or byte == '(' or byte == ')' or byte == '<' or byte == '>';
+}
+
 fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {
     return switch (op) {
         .sequence => false,
@@ -2444,6 +2538,7 @@ fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
 fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, ".")) return builtinSource;
     if (std.mem.eql(u8, name, ":")) return builtinTrue;
+    if (std.mem.eql(u8, name, "alias")) return builtinAlias;
     if (std.mem.eql(u8, name, "break")) return builtinBreak;
     if (std.mem.eql(u8, name, "true")) return builtinTrue;
     if (std.mem.eql(u8, name, "false")) return builtinFalse;
@@ -2471,6 +2566,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "times")) return builtinTimes;
     if (std.mem.eql(u8, name, "trap")) return builtinTrap;
     if (std.mem.eql(u8, name, "umask")) return builtinUmask;
+    if (std.mem.eql(u8, name, "unalias")) return builtinUnalias;
     if (std.mem.eql(u8, name, "wait")) return builtinWait;
     if (std.mem.eql(u8, name, "[")) return builtinTest;
     return null;
@@ -2975,6 +3071,67 @@ fn singleQuote(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     }
     try out.append(allocator, '\'');
     return out.toOwnedSlice(allocator);
+}
+
+fn builtinAlias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len == 1) return listAliases(self, null);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (command.argv[1..]) |arg| {
+        if (std.mem.indexOfScalar(u8, arg.text, '=')) |equals| {
+            const name = arg.text[0..equals];
+            if (!isShellName(name)) return errorResult(self.allocator, 2, "alias", "invalid alias name");
+            try self.setAlias(name, arg.text[equals + 1 ..]);
+        } else {
+            const value = self.aliases.get(arg.text) orelse return errorResult(self.allocator, 1, "alias", "not found");
+            const quoted = try singleQuote(self.allocator, value);
+            defer self.allocator.free(quoted);
+            try stdout.print(self.allocator, "alias {s}={s}\n", .{ arg.text, quoted });
+        }
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn listAliases(self: *Executor, prefix: ?[]const u8) !CommandResult {
+    _ = prefix;
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(self.allocator);
+    var iter = self.aliases.iterator();
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (names.items) |name| {
+        const quoted = try singleQuote(self.allocator, self.aliases.get(name).?);
+        defer self.allocator.free(quoted);
+        try stdout.print(self.allocator, "alias {s}={s}\n", .{ name, quoted });
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn builtinUnalias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len == 1) return errorResult(self.allocator, 2, "unalias", "missing operand");
+    var index: usize = 1;
+    if (std.mem.eql(u8, command.argv[index].text, "-a")) {
+        var iter = self.aliases.iterator();
+        while (iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.aliases.clearRetainingCapacity();
+        index += 1;
+        if (index == command.argv.len) return emptyResult(self.allocator, 0);
+    }
+    for (command.argv[index..]) |arg| {
+        if (!self.unsetAlias(arg.text)) return errorResult(self.allocator, 1, "unalias", "not found");
+    }
+    return emptyResult(self.allocator, 0);
 }
 
 fn builtinGetopts(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {

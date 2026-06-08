@@ -301,7 +301,9 @@ pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script
 
 fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
     _ = options.io;
-    var parsed = try parser.parse(allocator, script, .{});
+    const aliased = try executor.expandAliasesForScript(script);
+    defer allocator.free(aliased);
+    var parsed = try parser.parse(allocator, aliased, .{});
     defer parsed.deinit();
 
     if (parsed.diagnostics.len != 0) {
@@ -584,6 +586,22 @@ test "executor smoke corpus returns expected statuses and output fragments" {
             try std.testing.expect(std.mem.indexOf(u8, result.stderr, case.stderr_contains) != null);
         }
     }
+}
+
+test "repl expands aliases defined on previous input lines" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io,
+        \\alias ll='echo alias-ok'
+        \\ll
+        \\alias ll
+        \\unalias ll
+        \\ll
+        \\exit
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
+    try std.testing.expectEqualStrings("rush$ rush$ alias-ok\nrush$ alias ll='echo alias-ok'\nrush$ rush$ rush$ ", result.stdout);
+    try std.testing.expectEqualStrings("ll: command not found\n", result.stderr);
 }
 
 test "prompt DSL commands are scoped to prompt rendering" {

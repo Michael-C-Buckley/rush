@@ -1,0 +1,3 @@
+alias foo='echo hi'
+unalias foo
+alias
