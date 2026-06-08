@@ -71,9 +71,7 @@ Follow-up tasks:
 
 ## Negative diagnostics coverage targets
 
-The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `read`, `wait`). Add cases for:
-
-- special builtin redirection and expansion failures.
+The POSIX negative corpus covers representative builtin diagnostics for `test`, `read`, `wait`, POSIX special builtin usage failures, `getopts`, `printf`, and `umask`. Remaining builtin rows should add focused negative cases when implementing their listed option and operand gaps.
 
 ## Promotion guidance
 
