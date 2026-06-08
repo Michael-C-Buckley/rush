@@ -271,7 +271,7 @@ pub const TerminalSession = struct {
             for (self.events.items) |event| {
                 switch (event) {
                     .key_press => |key| {
-                        if (key.key == .tab and options.complete != null and options.completion_context != null) {
+                        if (isCompletionTab(key) and options.complete != null and options.completion_context != null) {
                             const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                             defer application.deinit(self.allocator);
                             try session.applyCompletion(application);
@@ -308,6 +308,10 @@ pub const TerminalSession = struct {
         }
     }
 };
+
+fn isCompletionTab(key: line_editor.KeyEvent) bool {
+    return key.key == .tab or (key.key == .text and std.mem.eql(u8, key.text, "\t"));
+}
 
 fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: line_editor.LineSession, capabilities: TerminalCapabilities) !void {
     const rendered = try session.render(allocator, .{
@@ -671,6 +675,18 @@ test "terminal parser emits enter and backspace" {
     try std.testing.expectEqual(@as(usize, 2), events.items.len);
     try std.testing.expectEqual(line_editor.Key.enter, events.items[0].key_press.key);
     try std.testing.expectEqual(line_editor.Key.backspace, events.items[1].key_press.key);
+}
+
+test "terminal parser emits tab key" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\t", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expect(isCompletionTab(events.items[0].key_press));
 }
 
 test "one-shot reader reads only after it is armed" {
