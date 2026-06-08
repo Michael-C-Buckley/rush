@@ -1,0 +1,4 @@
+printf '%s\n' 'a b c' >in
+IFS=
+read x y <in
+echo "<$x><${y-unset}>"
