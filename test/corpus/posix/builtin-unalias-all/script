@@ -1,0 +1,5 @@
+alias a='echo A'
+alias b='echo B'
+unalias -a
+alias
+echo done
