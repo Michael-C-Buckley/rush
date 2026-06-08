@@ -1,0 +1,9 @@
+n=0
+while :; do
+  n=$((n + 1))
+  case "$n" in
+    1) echo one; continue ;;
+    2) echo two; break ;;
+  esac
+done
+echo done:$n

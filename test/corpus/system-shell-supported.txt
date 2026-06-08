@@ -140,3 +140,6 @@ printf "alpha\nbeta\n" > bb-in; read line < bb-in; printf "[%s]\n" "$line"
 printf '%s\n' "x y" > bb-in; IFS=' ' read a b < bb-in; test "$a" = x && test "$b" = y; echo status=$?
 printf 'one,two,three\n' > read-in; IFS=, read first rest < read-in; printf '<%s><%s>\n' "$first" "$rest"
 printf 'a\nb\n' > in; n=0; while read line; do n=$((n + 1)); echo "$n:$line"; done < in; echo done=$n
+n=0; while :; do n=$((n + 1)); case "$n" in 1) echo one; continue ;; 2) echo two; break ;; esac; done; echo done:$n
+f() { echo before; return 7; echo after; }; f; echo status=$?
+: > bb-log; printf '%s\n' one >> bb-log; printf '%s\n' two >> bb-log; cat bb-log

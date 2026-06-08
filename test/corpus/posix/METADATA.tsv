@@ -202,3 +202,6 @@ until-true	grammar	behavior	-
 while-false	grammar	behavior	-
 while-read-redirection	grammar	behavior	while loop condition reads from loop input redirection
 jobs-current-previous-operands	job_control	behavior	current and previous job operands for job-control builtins
+dash-smoke-loop-control	grammar	behavior	dash-style loop control with case continue and break
+dash-smoke-function-return	grammar	behavior	dash-style function return status smoke case
+busybox-ash-smoke-append-order	redirection	behavior	BusyBox ash-style append redirection order smoke case

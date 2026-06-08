@@ -57,6 +57,8 @@ Imported starter slice:
 - `dash-smoke-case-function-loop`
 - `dash-smoke-shift-operands`
 - `dash-smoke-subshell-status`
+- `dash-smoke-loop-control`
+- `dash-smoke-function-return`
 
 These are hand-translated POSIX language smoke cases, not vendored dash harness files. They are also present in the differential corpus after comparison across the available shells.
 
@@ -82,6 +84,7 @@ Imported starter slice:
 - `busybox-ash-smoke-test-redirection`
 - `busybox-ash-smoke-read-redirection`
 - `busybox-ash-smoke-read-ifs-redirection`
+- `busybox-ash-smoke-append-order`
 
 These are hand-translated BusyBox ash-style smoke cases, not vendored BusyBox harness files. They are also present in the differential corpus after comparison across the available shells.
 
