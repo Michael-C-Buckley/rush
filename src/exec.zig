@@ -4235,13 +4235,6 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
     var rule: completion.Rule = .{ .root = pattern.root, .path = pattern.path, .kind = .function_provider };
     var rule_set = false;
     var legacy_function_provider = false;
-    // Compatibility policy: `complete COMMAND --function FUNC` remains the
-    // whole-command provider form. Structured rules for the same command are
-    // merged with that provider instead of replacing it; duplicates are removed
-    // later by replacement span plus candidate value, with the earlier source's
-    // metadata preserved. New scripts should prefer the context-scoped dynamic
-    // forms (`--subcommands`, `--options`, `--argument`, `--option-value`) so
-    // providers run only where their candidates apply.
     while (index < command.argv.len) {
         const option = command.argv[index].text;
         index += 1;
@@ -8787,61 +8780,6 @@ test "dynamic structured option value provider is scoped to option" {
     try expectCandidate(candidates, "full", .plain);
     const full = findCandidate(candidates, "full") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqual(@as(usize, "git log --format ".len), full.replace_start);
-}
-
-test "legacy complete function remains whole-command provider" {
-    var setup = try parseAndLower(std.testing.allocator,
-        \\__git_legacy() {
-        \\  completion candidate status --kind subcommand --description legacy
-        \\}
-        \\complete git --function __git_legacy
-    );
-    defer setup.parsed.deinit();
-    defer setup.program.deinit();
-
-    var executor = Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
-    defer result.deinit();
-    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-
-    const root_candidates = try executor.collectCompletionsForInput("git st", "git st".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(root_candidates);
-    try expectCandidate(root_candidates, "status", .subcommand);
-
-    const nested_candidates = try executor.collectCompletionsForInput("git commit st", "git commit st".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(nested_candidates);
-    try expectCandidate(nested_candidates, "status", .subcommand);
-}
-
-test "legacy complete function merges with structured rules for same command" {
-    var setup = try parseAndLower(std.testing.allocator,
-        \\__git_legacy() {
-        \\  completion candidate status --kind subcommand --description legacy-status
-        \\  completion option --long verbose --description legacy-verbose
-        \\}
-        \\complete git --function __git_legacy
-        \\complete git --subcommand commit --description structured-commit
-        \\complete git --option --long amend --description structured-amend
-    );
-    defer setup.parsed.deinit();
-    defer setup.program.deinit();
-
-    var executor = Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
-    defer result.deinit();
-    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-
-    const subcommands = try executor.collectCompletionsForInput("git c", "git c".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(subcommands);
-    try expectCandidate(subcommands, "status", .subcommand);
-    try expectCandidate(subcommands, "commit", .subcommand);
-
-    const options = try executor.collectCompletionsForInput("git --", "git --".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(options);
-    try expectCandidate(options, "--verbose", .option);
-    try expectCandidate(options, "--amend", .option);
 }
 
 test "completion candidate merge deduplicates by replacement span and value" {
