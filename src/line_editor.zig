@@ -2368,6 +2368,7 @@ test "history search first tab cycles the already-open menu" {
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git", session.editor.buffer.text());
     try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
     try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
 
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
