@@ -745,6 +745,7 @@ pub const RenderOptions = struct {
     suggestion: []const u8 = "",
     status_line: []const u8 = "",
     diagnostic_line: []const u8 = "",
+    semantic_prompt_marks: bool = false,
     width: u16 = 80,
     height: u16 = 24,
     width_method: vaxis.gwidth.Method = .unicode,
@@ -754,6 +755,8 @@ pub const RenderOptions = struct {
         return @max(@as(usize, @intCast(self.height)) -| 2, 1);
     }
 };
+
+pub const semanticPromptEnd = "\x1b]133;B\x07";
 
 pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderOptions) ![]const u8 {
     var frame = try frameFromLine(allocator, editor, options);
@@ -771,6 +774,7 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     var input_line: std.ArrayList(u8) = .empty;
     errdefer input_line.deinit(allocator);
     try input_line.appendSlice(allocator, options.prompt.bytes);
+    if (options.semantic_prompt_marks) try input_line.appendSlice(allocator, semanticPromptEnd);
     try input_line.appendSlice(allocator, editor.buffer.text());
     if (options.suggestion.len != 0 and renderableInlineText(options.suggestion)) {
         try input_line.appendSlice(allocator, "\x1b[90m");

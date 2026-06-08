@@ -12,6 +12,9 @@ const completion = @import("completion.zig");
 
 const read_chunk_size = 4096;
 const invalid_fd: std.posix.fd_t = -1;
+const semanticCommandStart = "\x1b]133;A;cl=w\x07";
+const semanticInputEnd = "\x1b]133;C\x07";
+const semanticInputCancel = "\x1b]133;D;err=CANCEL\x07";
 
 const ResizeSignalFd = struct {
     var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
@@ -298,6 +301,12 @@ pub const TerminalSession = struct {
         try self.capabilities.sendQueries(&self.tty);
     }
 
+    pub fn finishSemanticCommand(self: *TerminalSession, status: u8) !void {
+        const sequence = try std.fmt.allocPrint(self.allocator, "\x1b]133;D;{d}\x07", .{status});
+        defer self.allocator.free(sequence);
+        try writeTtyAll(&self.tty, sequence);
+    }
+
     pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !ReadLineResult {
         if (self.reader.thread == null) try self.reader.start();
 
@@ -307,6 +316,7 @@ pub const TerminalSession = struct {
         }, options.history);
         defer session.deinit();
 
+        try writeTtyAll(&self.tty, semanticCommandStart);
         try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
         try self.reader.arm();
         while (session.state == .editing or session.state == .history_search) {
@@ -369,12 +379,12 @@ pub const TerminalSession = struct {
             .history_search => unreachable,
             .submitted => {
                 self.renderer.reset(self.allocator);
-                try writeTtyAll(&self.tty, "\r\n");
+                try writeTtyAll(&self.tty, semanticInputEnd ++ "\r\n");
                 return .{ .submitted = session.takeSubmittedLine().? };
             },
             .canceled => {
                 self.renderer.reset(self.allocator);
-                try writeTtyAll(&self.tty, "^C\r\n");
+                try writeTtyAll(&self.tty, semanticInputCancel ++ "^C\r\n");
                 return .canceled;
             },
             .eof => {
@@ -431,6 +441,7 @@ fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, rendere
         .height = winsize.rows,
         .width_method = capabilities.widthMethod(),
         .diagnostic_line = diagnostic_line orelse "",
+        .semantic_prompt_marks = true,
     });
     defer frame.deinit(allocator);
     const rendered = try renderer.render(allocator, frame, .{ .synchronized_output = capabilities.synchronized_output });

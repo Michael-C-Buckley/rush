@@ -971,8 +971,14 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .eof => break,
         };
         defer allocator.free(line);
-        if (std.mem.eql(u8, line, "exit")) break;
-        if (line.len == 0) continue;
+        if (std.mem.eql(u8, line, "exit")) {
+            try terminal.finishSemanticCommand(0);
+            break;
+        }
+        if (line.len == 0) {
+            try terminal.finishSemanticCommand(0);
+            continue;
+        }
 
         {
             try terminal.leaveEditorMode();
@@ -989,6 +995,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             last_status = result.status;
             executor.setLastCommandDuration(command_duration_ms);
             try history.addCommand(io, line, result.status, command_started_at, command_duration_ms);
+            try terminal.finishSemanticCommand(result.status);
             completion_cache.clear();
             if (executor.pending_exit) |status| {
                 last_status = status;
