@@ -180,3 +180,4 @@ mkdir -p real/a; ln -s real link; cd -L link/a; case "$(pwd)" in */link/a) echo 
 rm -rf t; mkdir t; cd t; touch a; set -fu; echo *; set +fu; echo $RUSH_UNSET_FOR_TEST; echo after
 HOME=/tmp/rush-home VALUE=~ LIST=~/bin:~ command -p env | grep -E '^(VALUE|LIST)=' | sort; A=one B=$A command -p env | grep -E '^(A|B)=' | sort
 u=~root; case "$u" in /*) echo user-abs ;; "~root") echo user-literal ;; *) echo user-other ;; esac; OWNER=~root command -p env | grep ^OWNER= | sed "s|=.*|=ABS|"
+PATH=/nope command -p env | grep ^PATH=

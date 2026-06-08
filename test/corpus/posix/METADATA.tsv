@@ -246,3 +246,4 @@ builtin-cd-logical-dotdot	builtin	behavior	cd -L preserves logical symlink path 
 option-set-short-clusters	options	behavior	set accepts clustered short option flags
 expansion-assignment-prefix-context	expansion	behavior	assignment prefix expansion sees earlier assignments and tilde-prefix contexts
 expansion-tilde-named-user	expansion	behavior	tilde expansion resolves a named user through the user database
+builtin-command-default-path-env	builtin	behavior	command -p uses default lookup path without replacing child PATH

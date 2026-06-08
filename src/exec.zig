@@ -34,6 +34,7 @@ pub const ExecuteOptions = struct {
     source_path: ?[]const u8 = null,
     suppress_functions: bool = false,
     suppress_errexit: bool = false,
+    default_path_lookup: bool = false,
 };
 
 pub const ShellOptions = struct {
@@ -3375,8 +3376,11 @@ pub const Executor = struct {
         }
     }
 
-    fn replaceWithExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io) !CommandResult {
-        const executable = try self.findExecutableInPath(io, command.argv[0].text) orelse return errorResult(self.allocator, 127, command.argv[0].text, "command not found");
+    fn replaceWithExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
+        const executable = if (options.default_path_lookup)
+            try self.findExecutableInDefaultPath(io, command.argv[0].text) orelse return errorResult(self.allocator, 127, command.argv[0].text, "command not found")
+        else
+            try self.findExecutableInPath(io, command.argv[0].text) orelse return errorResult(self.allocator, 127, command.argv[0].text, "command not found");
         defer self.allocator.free(executable);
 
         var child_env = try self.buildProcessEnv(command.assignments);
@@ -3433,6 +3437,12 @@ pub const Executor = struct {
     fn executeExternalAsync(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
+        const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
+            error.CommandNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            else => return err,
+        };
+        defer if (resolved_executable) |executable| self.allocator.free(executable);
+        if (resolved_executable) |executable| argv[0] = executable;
 
         var stdin_file: ?std.Io.File = null;
         defer if (stdin_file) |file| file.close(io);
@@ -3501,6 +3511,12 @@ pub const Executor = struct {
     fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
+        const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
+            error.CommandNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            else => return err,
+        };
+        defer if (resolved_executable) |executable| self.allocator.free(executable);
+        if (resolved_executable) |executable| argv[0] = executable;
 
         var stdin_file: ?std.Io.File = null;
         defer if (stdin_file) |file| file.close(io);
@@ -3597,6 +3613,12 @@ pub const Executor = struct {
             .stdout = stdout,
             .stderr = stderr,
         };
+    }
+
+    fn resolveExternalArgv0(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !?[]const u8 {
+        if (!options.default_path_lookup) return null;
+        if (std.mem.indexOfScalar(u8, command.argv[0].text, '/') != null) return null;
+        return try self.findExecutableInDefaultPath(io, command.argv[0].text) orelse return error.CommandNotFound;
     }
 };
 
@@ -4224,7 +4246,7 @@ fn stdoutLineFmt(allocator: std.mem.Allocator, comptime fmt: []const u8, args: a
     return .{ .allocator = allocator, .status = status, .stdout = text, .stderr = try allocator.alloc(u8, 0) };
 }
 
-fn argvForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![]const []const u8 {
+fn argvForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![][]const u8 {
     const argv = try allocator.alloc([]const u8, command.argv.len);
     for (command.argv, 0..) |word, index| {
         argv[index] = word.text;
@@ -4443,13 +4465,7 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     const nested = simpleCommandFromArgs(command, index);
     var nested_options = options;
     nested_options.suppress_functions = true;
-    if (use_default_path) {
-        const old_path = if (self.getEnv("PATH")) |path| try self.allocator.dupe(u8, path) else null;
-        defer if (old_path) |path| self.allocator.free(path);
-        defer if (old_path) |path| self.setEnv("PATH", path) catch {} else self.unsetEnv("PATH");
-        try self.setEnv("PATH", "/bin:/usr/bin");
-        return self.executeSimpleCommandWithInput(nested, stdin, nested_options);
-    }
+    if (use_default_path) nested_options.default_path_lookup = true;
     return self.executeSimpleCommandWithInput(nested, stdin, nested_options);
 }
 
@@ -4948,7 +4964,7 @@ fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     if (command.argv.len == 1) return emptyResult(self.allocator, 0);
     const nested = simpleCommandFromArgs(command, 1);
     if (options.allow_external and options.external_stdio == .inherit and options.io != null and builtinForName(self.*, nested.argv[0].text) == null and self.functions.get(nested.argv[0].text) == null) {
-        return self.replaceWithExternal(nested, options.io.?);
+        return self.replaceWithExternal(nested, options.io.?, options);
     }
     var result = try self.executeSimpleCommandWithInput(nested, stdin, options);
     errdefer result.deinit();
