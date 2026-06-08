@@ -142,6 +142,26 @@ printf '\nCorpus inventory\n'
 printf 'posix_expected_cases: %s\n' "$posix_cases"
 printf 'differential_cases:  %s\n' "$diff_cases"
 
+metadata=$POSIX_CORPUS_DIR/METADATA.tsv
+if [ -f "$metadata" ]; then
+  printf '\nPOSIX corpus by area\n'
+  printf 'area\tcases\n'
+  awk -F '\t' '
+  NR > 1 { counts[$2]++ }
+  END {
+    for (area in counts) areas[++n] = area
+    for (i = 1; i <= n; i++) {
+      for (j = i + 1; j <= n; j++) {
+        if (areas[j] < areas[i]) {
+          tmp = areas[i]; areas[i] = areas[j]; areas[j] = tmp
+        }
+      }
+    }
+    for (i = 1; i <= n; i++) printf "%s\t%d\n", areas[i], counts[areas[i]]
+  }
+  ' "$metadata"
+fi
+
 if [ "$RUN_CORPORA" -eq 1 ]; then
   printf '\nCorpus validation\n'
   "$ROOT/scripts/check-posix-corpus.sh" "$POSIX_CORPUS_DIR"

@@ -48,6 +48,19 @@ The report includes confidence-oriented sections:
 - `High-risk open items` lists non-supported high-risk rows that should generally receive implementation or submatrix work first.
 - `Coarse open items` lists broad rows that should be split before their status is treated as strong conformance evidence.
 
+## POSIX corpus metadata
+
+`test/corpus/posix/METADATA.tsv` tags each expected-output corpus case with an area and tags. The POSIX corpus runner validates that every case directory has exactly one metadata row and that metadata rows point at existing case directories.
+
+Metadata columns:
+
+1. `case` — case directory name under `test/corpus/posix`.
+2. `area` — same broad area vocabulary used by the compliance manifest.
+3. `tags` — semicolon-separated tags such as `behavior`, `negative`, `builtin`, `option`, `here-doc`, or `job`.
+4. `notes` — concise notes, or `-`.
+
+The compliance report uses this metadata to print POSIX corpus case counts by area.
+
 ## Status promotion criteria
 
 Manifest status changes should be evidence-based. When in doubt, use the lower status and record the remaining gap in `notes`.

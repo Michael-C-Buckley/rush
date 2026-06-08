@@ -12,6 +12,45 @@ if [ ! -d "$CORPUS_DIR" ]; then
   exit 1
 fi
 
+metadata=$CORPUS_DIR/METADATA.tsv
+metadata_seen=
+if [ -f "$metadata" ]; then
+  expected_header='case	area	tags	notes'
+  actual_header=$(sed -n '1p' "$metadata")
+  if [ "$actual_header" != "$(printf '%b' "$expected_header")" ]; then
+    echo "invalid POSIX corpus metadata header" >&2
+    exit 1
+  fi
+  metadata_seen=$(mktemp)
+  line_no=0
+  tab=$(printf '\t')
+  while IFS="$tab" read -r case_name area tags notes extra; do
+    line_no=$((line_no + 1))
+    [ "$line_no" -eq 1 ] && continue
+    if [ -n "${extra:-}" ]; then
+      echo "metadata line $line_no: too many columns" >&2
+      exit 1
+    fi
+    if [ -z "${case_name:-}" ] || [ -z "${area:-}" ] || [ -z "${tags:-}" ] || [ -z "${notes:-}" ]; then
+      echo "metadata line $line_no: empty required column" >&2
+      exit 1
+    fi
+    case "$area" in
+      lexing|grammar|expansion|redirection|builtin|job_control|signals|options|errors|variables|portability|extensions) ;;
+      *) echo "metadata line $line_no: invalid area: $area" >&2; exit 1 ;;
+    esac
+    if grep -Fx -- "$case_name" "$metadata_seen" >/dev/null; then
+      echo "metadata line $line_no: duplicate case: $case_name" >&2
+      exit 1
+    fi
+    if [ ! -d "$CORPUS_DIR/$case_name" ]; then
+      echo "metadata line $line_no: missing case directory: $case_name" >&2
+      exit 1
+    fi
+    printf '%s\n' "$case_name" >>"$metadata_seen"
+  done <"$metadata"
+fi
+
 failures=0
 cases=0
 for case_dir in "$CORPUS_DIR"/*; do
@@ -29,6 +68,12 @@ for case_dir in "$CORPUS_DIR"/*; do
       continue 2
     fi
   done
+
+  if [ -n "$metadata_seen" ] && ! grep -Fx -- "$name" "$metadata_seen" >/dev/null; then
+    echo "FAIL [$name]: missing metadata row" >&2
+    failures=$((failures + 1))
+    continue
+  fi
 
   cases=$((cases + 1))
   tmp=$(mktemp -d)
@@ -62,5 +107,7 @@ if [ "$failures" -ne 0 ]; then
   echo "$failures POSIX corpus failure(s)" >&2
   exit 1
 fi
+
+if [ -n "$metadata_seen" ]; then rm -f "$metadata_seen"; fi
 
 echo "POSIX corpus passed ($cases cases)"
