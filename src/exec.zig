@@ -6393,6 +6393,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         try setGlobalPositionals(self, command.argv[2..]);
         return emptyResult(self.allocator, 0);
     }
+    if (command.argv.len == 2 and isSetShortOptionCluster(command.argv[1].text)) {
+        try applySetShortOptionCluster(self, command.argv[1].text);
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-f") or std.mem.eql(u8, command.argv[1].text, "+f"))) {
         self.shell_options.noglob = command.argv[1].text[0] == '-';
         return emptyResult(self.allocator, 0);
@@ -6452,6 +6456,29 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         return setUsageError(self, "unknown option name");
     }
     return setUsageError(self, "unsupported arguments");
+}
+
+fn isSetShortOptionCluster(text: []const u8) bool {
+    if (text.len <= 2) return false;
+    if (text[0] != '-' and text[0] != '+') return false;
+    for (text[1..]) |option| switch (option) {
+        'e', 'f', 'u', 'x', 'v', 'C' => {},
+        else => return false,
+    };
+    return true;
+}
+
+fn applySetShortOptionCluster(self: *Executor, text: []const u8) !void {
+    const enabled = text[0] == '-';
+    for (text[1..]) |option| switch (option) {
+        'e' => self.shell_options.errexit = enabled,
+        'f' => self.shell_options.noglob = enabled,
+        'u' => self.shell_options.nounset = enabled,
+        'x' => self.shell_options.xtrace = enabled,
+        'v' => self.shell_options.verbose = enabled,
+        'C' => self.shell_options.noclobber = enabled,
+        else => unreachable,
+    };
 }
 
 fn setUsageError(self: *Executor, message: []const u8) !CommandResult {

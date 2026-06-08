@@ -177,3 +177,4 @@ IFS=" "; v="  a  b  "; for x in $v; do echo "<$x>"; done
 empty=; set -- $empty ${unset-}; echo count:$#; set -- "$empty" "${unset-}"; echo "quoted:$#:<$1>:<$2>"
 exec 3>&1; exec >out; echo hi; exec 1>&3; cat out
 mkdir -p real/a; ln -s real link; cd -L link/a; case "$(pwd)" in */link/a) echo logical-a ;; *) echo bad-a ;; esac; cd ..; case "$(pwd)" in */link) echo logical-parent ;; *) echo bad-parent ;; esac; cd -P ../link/a; case "$(pwd)" in */real/a) echo physical-a ;; *) echo bad-physical ;; esac
+rm -rf t; mkdir t; cd t; touch a; set -fu; echo *; set +fu; echo $RUSH_UNSET_FOR_TEST; echo after
