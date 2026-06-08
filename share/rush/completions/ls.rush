@@ -1,0 +1,27 @@
+# First-party ls completion slice using Rush's structured DSL.
+
+complete ls --option --short a --description 'include entries starting with dot'
+complete ls --option --long all --description 'include entries starting with dot'
+complete ls --option --short A --description 'include almost all dot entries'
+complete ls --option --long almost-all --description 'include almost all dot entries'
+complete ls --option --short l --description 'use long listing format'
+complete ls --option --short h --description 'show human-readable sizes'
+complete ls --option --long human-readable --description 'show human-readable sizes'
+complete ls --option --short R --description 'list subdirectories recursively'
+complete ls --option --long recursive --description 'list subdirectories recursively'
+complete ls --option --short d --description 'list directories themselves'
+complete ls --option --long directory --description 'list directories themselves'
+complete ls --option --short S --description 'sort by file size'
+complete ls --option --short t --description 'sort by modification time'
+complete ls --option --short r --description 'reverse sort order'
+complete ls --option --long reverse --description 'reverse sort order'
+complete ls --option --short 1 --description 'list one file per line'
+complete ls --option --short F --description 'append file type indicators'
+complete ls --option --long classify --description 'append file type indicators'
+complete ls --option --long color --value-name when --description 'colorize output'
+complete ls --option --long group-directories-first --description 'group directories before files'
+complete ls --argument --function __rush_complete_ls_paths
+
+__rush_complete_ls_paths() {
+  completion files
+}
