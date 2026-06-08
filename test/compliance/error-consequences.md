@@ -19,9 +19,11 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `expansion-parameter-error-word-spaces` | expansion | covered baseline | unquoted multi-word diagnostic, status 1, non-interactive execution stops |
 | `expansion-parameter-error-null-spaces` | expansion | covered baseline | null parameter with unquoted multi-word diagnostic, status 1, non-interactive execution stops |
 | `redirection-bad-fd-duplication` | redirection | covered gap | diagnostic, command fails, following command still runs |
+| `redirection-bad-input-fd-duplication` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `redirection-noclobber-overwrite` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `errors-special-builtin-redirection` | special builtin | covered baseline | diagnostic, status 1, non-interactive execution stops |
 | `errors-special-builtin-redirection-{eval,export,readonly,set,unset,trap}` | special builtin | covered baseline | noclobber diagnostic, status 1, non-interactive execution stops |
+| `errors-special-builtin-redirection-bad-input-fd{-eval,-export,-readonly,-set,-unset,-trap}` | special builtin | covered baseline | bad input fd diagnostic, status 1, non-interactive execution stops |
 | `errors-special-builtin-expansion` | special builtin | covered baseline | diagnostic, status 1, non-interactive execution stops |
 | `errors-special-builtin-expansion-{eval,export,readonly,set,unset,trap}` | special builtin | covered baseline | `${parameter:?word}` diagnostic, status 1, non-interactive execution stops |
 | `builtin-test-invalid-expression` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
@@ -37,8 +39,8 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `errors-expansion` | partial | high | nounset and `${parameter:?word}` coverage | special-builtin expansion consequences remain incomplete |
 | `errors-special-builtin` | partial | high | assignment persistence and redirection negative coverage | expansion and utility-specific shell-exit consequences need more detail |
 | `errors-nounset` | baseline | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution in current baseline |
-| `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | bad fd, noclobber, and missing input diagnostics exist; more redirection classes need stricter modeling |
-| `errors-special-builtin-redirection` | baseline | high | negative corpus | noclobber, missing input, and bad fd special-builtin redirection failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap`; more redirection classes need cases |
+| `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | bad input/output fd, noclobber, and missing input diagnostics exist; more redirection classes need stricter modeling |
+| `errors-special-builtin-redirection` | baseline | high | negative corpus | noclobber, missing input, and bad input/output fd special-builtin redirection failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap`; more redirection classes need cases |
 | `errors-special-builtin-expansion` | baseline | high | negative corpus | ${parameter:?word} special-builtin expansion failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap`; more expansion classes need cases |
 
 ## POSIX consequence areas to expand
@@ -53,11 +55,11 @@ Current coverage includes nounset and `${parameter:?word}` with diagnostic word 
 
 ### Redirection errors
 
-Current coverage includes bad fd duplication, noclobber, and missing input redirection targets. Add cases for permission failures where portable, directory output failures where portable, here-doc delimiter diagnostics, and more redirection failures attached to special builtins.
+Current coverage includes bad input/output fd duplication, noclobber, and missing input redirection targets. Add cases for permission failures where portable, directory output failures where portable, here-doc delimiter diagnostics, and more redirection failures attached to special builtins.
 
 ### Special builtin failures
 
-High-risk and under-covered. `:` plus `eval`, `export`, `readonly`, `set`, `unset`, and `trap` now cover baseline non-interactive exit consequences for noclobber, missing input, bad fd, and `${parameter:?word}` failures. Add cases for other POSIX special builtins and for other expansion or redirection classes. Track whether non-interactive execution should stop and whether assignment side effects persist.
+High-risk and under-covered. `:` plus `eval`, `export`, `readonly`, `set`, `unset`, and `trap` now cover baseline non-interactive exit consequences for noclobber, missing input, bad input/output fd, and `${parameter:?word}` failures. Add cases for other POSIX special builtins and for other expansion or redirection classes. Track whether non-interactive execution should stop and whether assignment side effects persist.
 
 ### Regular builtin failures
 

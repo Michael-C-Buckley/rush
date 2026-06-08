@@ -1,0 +1,1 @@
+trap <&9; echo after
