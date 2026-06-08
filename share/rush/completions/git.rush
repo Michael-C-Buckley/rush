@@ -1,0 +1,38 @@
+# Small first-party Git completion slice.
+
+complete git --option --short C --value-name path --description 'run as if git started in path'
+complete git --option --long git-dir --value-name path --description 'path to the repository'
+complete git --option --long help --description 'show help'
+
+complete git --subcommand status --description 'show the working tree status'
+complete git --subcommand add --description 'add file contents to the index'
+complete git --subcommand commit --description 'record changes to the repository'
+complete git --subcommand checkout --description 'switch branches or restore paths'
+complete git --subcommand switch --description 'switch branches'
+complete git --subcommand branch --description 'list, create, or delete branches'
+complete git --subcommand log --description 'show commit logs'
+complete git --subcommand diff --description 'show changes'
+
+complete 'git add' --option --long patch --description 'interactively choose hunks'
+complete 'git add' --option --long all --description 'add changes from the whole tree'
+complete 'git add' --argument --function __rush_complete_git_paths
+
+complete 'git commit' --option --long amend --description 'amend the previous commit'
+complete 'git commit' --option --short m --value-name message --description 'use the given commit message'
+complete 'git commit' --option --long message --value-name message --description 'use the given commit message'
+complete 'git commit' --option --long all --description 'stage tracked files before committing'
+
+complete 'git checkout' --option --long branch --description 'create and checkout a new branch'
+complete 'git checkout' --argument --function __rush_complete_git_refs
+complete 'git switch' --option --long create --value-name branch --description 'create a new branch'
+complete 'git switch' --argument --function __rush_complete_git_refs
+
+__rush_complete_git_paths() {
+  completion files
+}
+
+__rush_complete_git_refs() {
+  git branch --format='%(refname:short)' 2>/dev/null | while read ref; do
+    completion candidate "$ref" --kind plain --description branch
+  done
+}

@@ -22,6 +22,8 @@ $XDG_CONFIG_HOME/rush/config.rush
 ```
 
 If `XDG_CONFIG_HOME` is unset, Rush uses `$HOME/.config/rush/config.rush`.
+First-party example completions are installed under
+`$prefix/share/rush/completions/`; source the ones you want from `config.rush`.
 
 ### Command patterns
 

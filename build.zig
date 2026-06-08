@@ -24,6 +24,14 @@ pub fn build(b: *std.Build) void {
     linkSqlite(b, exe.root_module, use_system_sqlite);
 
     b.installArtifact(exe);
+    b.installDirectory(.{
+        .source_dir = b.path("share/rush/completions"),
+        .install_dir = .{ .custom = "share/rush/completions" },
+        .install_subdir = "",
+        .include_extensions = &.{".rush"},
+        .exclude_extensions = &.{},
+        .blank_extensions = &.{},
+    });
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());

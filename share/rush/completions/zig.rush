@@ -1,0 +1,27 @@
+# Small first-party Zig completion slice.
+
+complete zig --subcommand build --description 'build project from build.zig'
+complete zig --subcommand test --description 'create and run a test build'
+complete zig --subcommand run --description 'create and run an executable build'
+complete zig --subcommand fmt --description 'format Zig source files'
+complete zig --subcommand version --description 'print Zig version'
+complete zig --subcommand env --description 'print Zig environment'
+
+complete 'zig build' --option --long summary --value-name mode --description 'control build summary output'
+complete 'zig build' --option --long prefix --value-name path --description 'install prefix'
+complete 'zig build' --option --long help --description 'show build help'
+complete 'zig build' --option --short D --value-name option --description 'set a project build option'
+complete 'zig build' --argument --function __rush_complete_zig_build_steps
+
+complete 'zig fmt' --option --long check --description 'check formatting without writing files'
+complete 'zig fmt' --argument --function __rush_complete_zig_files
+
+__rush_complete_zig_build_steps() {
+  completion candidate install --kind plain --description 'copy build artifacts to prefix path'
+  completion candidate uninstall --kind plain --description 'remove build artifacts from prefix path'
+  completion candidate test --kind plain --description 'run project tests'
+}
+
+__rush_complete_zig_files() {
+  completion files
+}

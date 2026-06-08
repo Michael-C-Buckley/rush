@@ -1,0 +1,11 @@
+# Rush completions using the structured completion DSL.
+
+complete rush --option --long help --description 'show usage information'
+complete rush --option --long login --description 'start as a login shell'
+complete rush --option --long posix-strict --description 'enable strict POSIX behavior for -c scripts'
+complete rush --option --short c --value-name script --description 'run script text'
+
+__rush_complete_rush_script() {
+  completion files
+}
+complete rush --option-value --short c --function __rush_complete_rush_script
