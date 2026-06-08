@@ -52,7 +52,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `env` | `builtin-env` | `-i`, assignments, command execution, printing | invalid options, command-not-found propagation edge cases |
 | `getopts` | `builtin-getopts` | clusters, required args, silent missing arg | invalid optstrings, OPTIND edge cases, explicit args edge cases |
 | `printf` | `builtin-printf`, printf subrows | escapes, octal/hex, width/precision | full format grammar, invalid formats, diagnostic corpus |
-| `read` | `builtin-read`, read subrows | backslash, `-r`, custom IFS, unsupported option diagnostic | EOF status, multiple variables, IFS edge cases, prompts if ever added |
+| `read` | `builtin-read`, read subrows | backslash, `-r`, custom IFS, last-variable remainder assignment, unsupported option diagnostic | EOF status, additional IFS edge cases, prompts if ever added |
 | `test`, `[` | `builtin-test`, test subrows | file predicates, strings, ordering, invalid expression | complete POSIX expression grammar, numeric operators, precedence edge cases |
 | `umask` | `builtin-umask` | basic get/set | symbolic modes, invalid operands, exact output format |
 | `wait` | `builtin-wait` | tracked pid wait, unknown pid diagnostic | job specs, all-job semantics, stopped/interrupted jobs |

@@ -1,0 +1,4 @@
+IFS=, read first rest <<'EOF2'
+one,two,three
+EOF2
+printf '<%s><%s>\n' "$first" "$rest"

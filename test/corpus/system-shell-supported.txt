@@ -135,4 +135,5 @@ printf "%s:%d\n" bb 7 > bb-out; cat bb-out
 : > bb-empty; test -s bb-empty; echo empty=$?; printf x > bb-empty; test -s bb-empty; echo full=$?
 printf "alpha\nbeta\n" > bb-in; read line < bb-in; printf "[%s]\n" "$line"
 printf '%s\n' "x y" > bb-in; IFS=' ' read a b < bb-in; test "$a" = x && test "$b" = y; echo status=$?
+printf 'one,two,three\n' > read-in; IFS=, read first rest < read-in; printf '<%s><%s>\n' "$first" "$rest"
 printf 'a\nb\n' > in; n=0; while read line; do n=$((n + 1)); echo "$n:$line"; done < in; echo done=$n

@@ -56,6 +56,7 @@ builtin-read-unsupported-option	builtin	negative;builtin	-
 builtin-readonly	builtin	builtin	-
 builtin-real-fd-redirection	builtin	builtin	-
 builtin-real-fd-stderr-redirection	builtin	builtin	-
+builtin-read-last-variable	builtin	builtin	read assigns remaining fields and delimiters to the last variable operand
 builtin-return-status	builtin	builtin	-
 builtin-shift	builtin	builtin	-
 builtin-status-parameter	builtin	builtin	-
