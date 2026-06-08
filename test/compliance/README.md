@@ -40,6 +40,14 @@ Run `scripts/report-compliance.sh` or `zig build compliance` to summarize confor
 
 The `granularity` and `risk` fields are intended to prevent false confidence. A 100% score over mostly `coarse` rows is weaker than a 100% score over `detailed` or `spec_clause` rows, and high-risk baseline rows should usually be expanded before being promoted to `supported`.
 
+The report includes confidence-oriented sections:
+
+- `Compliance by granularity` shows how much of the checklist is still broad versus detailed/spec-clause level.
+- `Compliance by risk` separates high-risk semantic areas from low-risk helper behavior.
+- `Confidence matrix by granularity and risk` shows whether progress is concentrated in detailed low-risk rows or coarse/high-risk rows.
+- `High-risk open items` lists non-supported high-risk rows that should generally receive implementation or submatrix work first.
+- `Coarse open items` lists broad rows that should be split before their status is treated as strong conformance evidence.
+
 ## Status promotion criteria
 
 Manifest status changes should be evidence-based. When in doubt, use the lower status and record the remaining gap in `notes`.

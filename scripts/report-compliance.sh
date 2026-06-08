@@ -87,6 +87,47 @@ print_status_table 'Compliance by area' 2
 print_status_table 'Compliance by granularity' 8
 print_status_table 'Compliance by risk' 9
 
+printf '\nConfidence matrix by granularity and risk\n'
+printf 'granularity\trisk\ttotal\tsupported\tbaseline\tpartial\tmissing\tout_of_scope\n'
+awk -F '\t' '
+NR > 1 {
+  group = $8 SUBSEP $9
+  totals[group]++
+  counts[group SUBSEP $5]++
+}
+END {
+  for (group in totals) groups[++n] = group
+  for (i = 1; i <= n; i++) {
+    for (j = i + 1; j <= n; j++) {
+      if (groups[j] < groups[i]) {
+        tmp = groups[i]; groups[i] = groups[j]; groups[j] = tmp
+      }
+    }
+  }
+  for (i = 1; i <= n; i++) {
+    split(groups[i], parts, SUBSEP)
+    group = groups[i]
+    printf "%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n", parts[1], parts[2], totals[group], counts[group SUBSEP "supported"] + 0, counts[group SUBSEP "baseline"] + 0, counts[group SUBSEP "partial"] + 0, counts[group SUBSEP "missing"] + 0, counts[group SUBSEP "out_of_scope"] + 0
+  }
+}
+' "$MANIFEST"
+
+printf '\nHigh-risk open items\n'
+printf 'id\tarea\tstatus\tgranularity\tfeature\n'
+awk -F '\t' '
+NR > 1 && $9 == "high" && $5 != "supported" && $5 != "out_of_scope" {
+  printf "%s\t%s\t%s\t%s\t%s\n", $1, $2, $5, $8, $4
+}
+' "$MANIFEST"
+
+printf '\nCoarse open items\n'
+printf 'id\tarea\tstatus\trisk\tfeature\n'
+awk -F '\t' '
+NR > 1 && $8 == "coarse" && $5 != "supported" && $5 != "out_of_scope" {
+  printf "%s\t%s\t%s\t%s\t%s\n", $1, $2, $5, $9, $4
+}
+' "$MANIFEST"
+
 posix_cases=0
 if [ -d "$POSIX_CORPUS_DIR" ]; then
   posix_cases=$(find "$POSIX_CORPUS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
