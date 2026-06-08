@@ -241,3 +241,4 @@ expansion-field-splitting-ifs-whitespace-trim	expansion	behavior	IFS whitespace 
 expansion-field-splitting-generated-empty	expansion	behavior	unquoted generated empty fields are removed while quoted empty fields remain
 lex-escaped-newline-continuation	lexing	behavior	backslash-newline joins physical lines before token interpretation
 builtin-getopts-optind-reset	builtin	behavior	getopts rescans operands after OPTIND reset to 1
+builtin-exec-redirection-only	builtin	behavior	exec without command operands applies redirections to the current shell

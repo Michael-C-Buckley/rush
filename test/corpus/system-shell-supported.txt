@@ -175,3 +175,4 @@ HOME=/tmp/rush-home; echo ~; echo ~/x
 IFS=,; v=a,,b,; for x in $v; do echo "<$x>"; done
 IFS=" "; v="  a  b  "; for x in $v; do echo "<$x>"; done
 empty=; set -- $empty ${unset-}; echo count:$#; set -- "$empty" "${unset-}"; echo "quoted:$#:<$1>:<$2>"
+exec 3>&1; exec >out; echo hi; exec 1>&3; cat out

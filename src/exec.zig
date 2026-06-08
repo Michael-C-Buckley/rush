@@ -2734,6 +2734,13 @@ pub const Executor = struct {
         };
         defer self.freeExpandedCommand(expanded);
 
+        if (isRedirectionOnlyExec(expanded)) {
+            try self.applyAssignments(expanded.assignments);
+            if (self.applyPermanentRealFdRedirections(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, true)) {
+                return emptyResult(self.allocator, 0);
+            }
+        }
+
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
         const input_special_builtin = expanded.argv.len > 0 and isSpecialBuiltin(expanded.argv[0].text);
@@ -3180,6 +3187,16 @@ pub const Executor = struct {
             try guard.apply(self, io, redirection);
         }
         return guard;
+    }
+
+    fn applyPermanentRealFdRedirections(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !bool {
+        if (options.external_stdio != .inherit or command.redirections.len == 0) return false;
+        const io = options.io orelse return false;
+        var guard = try FdRedirectionGuard.init(self.allocator, io);
+        errdefer guard.restore(self, io);
+        for (command.redirections) |redirection| try guard.apply(self, io, redirection);
+        guard.commit(io);
+        return true;
     }
 
     fn applyInputRedirections(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, owned_stdin: *?[]u8) ![]const u8 {
@@ -3637,6 +3654,15 @@ const FdRedirectionGuard = struct {
             try executor.markShellFdOpen(from_fd);
             return;
         }
+    }
+
+    fn commit(self: *FdRedirectionGuard, io: std.Io) void {
+        if (!self.active) return;
+        for (self.saved.items) |entry| {
+            if (entry.saved) |saved_fd| closeRawFd(io, saved_fd);
+        }
+        self.saved.deinit(self.allocator);
+        self.active = false;
     }
 
     fn restore(self: *FdRedirectionGuard, executor: *Executor, io: std.Io) void {
@@ -6753,6 +6779,10 @@ fn joinParams(allocator: std.mem.Allocator, params: []const []const u8) ![]const
 
 fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
+}
+
+fn isRedirectionOnlyExec(command: ir.SimpleCommand) bool {
+    return command.argv.len == 1 and std.mem.eql(u8, command.argv[0].text, "exec") and command.redirections.len != 0;
 }
 
 fn targetName(redirection: ir.Redirection) []const u8 {
