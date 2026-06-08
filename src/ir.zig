@@ -115,6 +115,7 @@ pub const StatementKind = enum {
 pub const Statement = struct {
     kind: StatementKind,
     index: usize,
+    span: parser.Span,
     op_before: ListOp = .sequence,
     async_after: bool = false,
 };
@@ -294,7 +295,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     errdefer statements.deinit(allocator);
     var previous_statement_end: ?usize = null;
     for (statement_refs.items) |statement_ref| {
-        var statement: Statement = .{ .kind = statement_ref.kind, .index = statement_ref.index };
+        var statement: Statement = .{ .kind = statement_ref.kind, .index = statement_ref.index, .span = statementSpan(parsed, statement_ref) };
         if (previous_statement_end) |previous_end| {
             statement.op_before = listOpBetween(parsed.tokens, previous_end, statement_ref.token_start);
         }
@@ -391,6 +392,11 @@ const LoweredStatementRef = struct {
     token_start: usize,
     token_end: usize,
 };
+
+fn statementSpan(parsed: parser.ParseResult, statement_ref: LoweredStatementRef) parser.Span {
+    if (statement_ref.token_start >= statement_ref.token_end) return .empty(parsed.source.len);
+    return .init(parsed.tokens[statement_ref.token_start].span.start, parsed.tokens[statement_ref.token_end - 1].span.end);
+}
 
 fn lessThanStatementRef(_: void, a: LoweredStatementRef, b: LoweredStatementRef) bool {
     return a.token_start < b.token_start;

@@ -1751,17 +1751,19 @@ test "chunked alias scripts run EXIT trap once" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
-test "multi-line here-doc scripts are not chunked for alias timing" {
+test "alias timing chunks keep multi-line here-doc bodies intact" {
     var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias say='echo alias-ok'
         \\read value <<EOF
         \\hello
         \\EOF
+        \\say
         \\echo "$value"
     );
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("hello\n", result.stdout);
+    try std.testing.expectEqualStrings("alias-ok\nhello\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
