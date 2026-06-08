@@ -18,7 +18,15 @@ The file is tab-separated UTF-8 with one header row and these columns:
    - `out_of_scope`: POSIX-adjacent or intentionally deferred.
 6. `posix_corpus` — semicolon-separated `test/corpus/posix` case directory names, or `-`.
 7. `differential_corpus` — semicolon-separated differential corpus references, currently usually `system-shell-supported` or `-`.
-8. `notes` — concise notes without tabs or newlines.
+8. `granularity` — one of:
+   - `coarse`: broad feature bucket that should eventually be split into smaller rows.
+   - `detailed`: focused subfeature row with meaningful implementation and coverage boundaries.
+   - `spec_clause`: row mapped closely to a specific POSIX clause or requirement.
+9. `risk` — one of:
+   - `low`: unlikely to hide major POSIX-incompatible behavior.
+   - `medium`: useful behavior exists but edge cases are likely.
+   - `high`: correctness-sensitive, broad, partial, or missing behavior that can materially affect conformance.
+10. `notes` — concise notes without tabs or newlines.
 
 Run `scripts/check-compliance-manifest.sh` to validate the TSV shape and referenced POSIX corpus directories.
 
@@ -29,3 +37,5 @@ Run `scripts/report-compliance.sh` or `zig build compliance` to summarize confor
 - `weighted_progress`: `supported=1.0`, `baseline=0.7`, `partial=0.3`, and `missing=0.0`.
 
 `out_of_scope` rows are excluded from score denominators. Corpus pass counts report the current test inventory only; they do not imply complete POSIX coverage.
+
+The `granularity` and `risk` fields are intended to prevent false confidence. A 100% score over mostly `coarse` rows is weaker than a 100% score over `detailed` or `spec_clause` rows, and high-risk baseline rows should usually be expanded before being promoted to `supported`.

@@ -54,29 +54,38 @@ END {
 }
 ' "$MANIFEST"
 
-printf '\nCompliance by area\n'
-printf 'area\ttotal\tsupported\tbaseline\tpartial\tmissing\tout_of_scope\n'
-awk -F '\t' '
-NR > 1 {
-  area[$2]++
-  key = $2 SUBSEP $5
-  counts[key]++
-}
-END {
-  for (name in area) names[++n] = name
-  for (i = 1; i <= n; i++) {
-    for (j = i + 1; j <= n; j++) {
-      if (names[j] < names[i]) {
-        tmp = names[i]; names[i] = names[j]; names[j] = tmp
+print_status_table() {
+  title=$1
+  key_column=$2
+  printf '\n%s\n' "$title"
+  printf 'group\ttotal\tsupported\tbaseline\tpartial\tmissing\tout_of_scope\n'
+  awk -F '\t' -v key_column="$key_column" '
+  NR > 1 {
+    group = $key_column
+    totals[group]++
+    key = group SUBSEP $5
+    counts[key]++
+  }
+  END {
+    for (name in totals) names[++n] = name
+    for (i = 1; i <= n; i++) {
+      for (j = i + 1; j <= n; j++) {
+        if (names[j] < names[i]) {
+          tmp = names[i]; names[i] = names[j]; names[j] = tmp
+        }
       }
     }
+    for (i = 1; i <= n; i++) {
+      name = names[i]
+      printf "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", name, totals[name], counts[name SUBSEP "supported"] + 0, counts[name SUBSEP "baseline"] + 0, counts[name SUBSEP "partial"] + 0, counts[name SUBSEP "missing"] + 0, counts[name SUBSEP "out_of_scope"] + 0
+    }
   }
-  for (i = 1; i <= n; i++) {
-    name = names[i]
-    printf "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", name, area[name], counts[name SUBSEP "supported"] + 0, counts[name SUBSEP "baseline"] + 0, counts[name SUBSEP "partial"] + 0, counts[name SUBSEP "missing"] + 0, counts[name SUBSEP "out_of_scope"] + 0
-  }
+  ' "$MANIFEST"
 }
-' "$MANIFEST"
+
+print_status_table 'Compliance by area' 2
+print_status_table 'Compliance by granularity' 8
+print_status_table 'Compliance by risk' 9
 
 posix_cases=0
 if [ -d "$POSIX_CORPUS_DIR" ]; then

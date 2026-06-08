@@ -10,7 +10,7 @@ if [ ! -f "$MANIFEST" ]; then
   exit 1
 fi
 
-expected_header='id	area	posix_ref	feature	status	posix_corpus	differential_corpus	notes'
+expected_header='id	area	posix_ref	feature	status	posix_corpus	differential_corpus	granularity	risk	notes'
 actual_header=$(sed -n '1p' "$MANIFEST")
 if [ "$actual_header" != "$(printf '%b' "$expected_header")" ]; then
   echo "invalid compliance manifest header" >&2
@@ -24,7 +24,7 @@ seen_ids=$(mktemp)
 trap 'rm -f "$seen_ids"' EXIT
 line_no=0
 tab=$(printf '\t')
-while IFS="$tab" read -r id area posix_ref feature status posix_corpus differential_corpus notes extra; do
+while IFS="$tab" read -r id area posix_ref feature status posix_corpus differential_corpus granularity risk notes extra; do
   line_no=$((line_no + 1))
   [ "$line_no" -eq 1 ] && continue
 
@@ -33,7 +33,7 @@ while IFS="$tab" read -r id area posix_ref feature status posix_corpus different
     failures=$((failures + 1))
     continue
   fi
-  if [ -z "${id:-}" ] || [ -z "${area:-}" ] || [ -z "${posix_ref:-}" ] || [ -z "${feature:-}" ] || [ -z "${status:-}" ] || [ -z "${posix_corpus:-}" ] || [ -z "${differential_corpus:-}" ] || [ -z "${notes:-}" ]; then
+  if [ -z "${id:-}" ] || [ -z "${area:-}" ] || [ -z "${posix_ref:-}" ] || [ -z "${feature:-}" ] || [ -z "${status:-}" ] || [ -z "${posix_corpus:-}" ] || [ -z "${differential_corpus:-}" ] || [ -z "${granularity:-}" ] || [ -z "${risk:-}" ] || [ -z "${notes:-}" ]; then
     echo "line $line_no: empty required column" >&2
     failures=$((failures + 1))
     continue
@@ -49,6 +49,22 @@ while IFS="$tab" read -r id area posix_ref feature status posix_corpus different
     supported|baseline|partial|missing|out_of_scope) ;;
     *)
       echo "line $line_no: invalid status: $status" >&2
+      failures=$((failures + 1))
+      ;;
+  esac
+
+  case "$granularity" in
+    coarse|detailed|spec_clause) ;;
+    *)
+      echo "line $line_no: invalid granularity: $granularity" >&2
+      failures=$((failures + 1))
+      ;;
+  esac
+
+  case "$risk" in
+    low|medium|high) ;;
+    *)
+      echo "line $line_no: invalid risk: $risk" >&2
       failures=$((failures + 1))
       ;;
   esac
