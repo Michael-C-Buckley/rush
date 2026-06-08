@@ -1,0 +1,1 @@
+echo old > out; set -C; trap > out; echo after

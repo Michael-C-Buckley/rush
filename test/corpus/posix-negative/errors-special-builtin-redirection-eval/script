@@ -1,0 +1,1 @@
+echo old > out; set -C; eval > out; echo after

@@ -1,0 +1,1 @@
+echo old > out; set -C; set -- ok > out; echo after
