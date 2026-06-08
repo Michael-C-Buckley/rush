@@ -4336,11 +4336,13 @@ fn builtinCompletionFiles(self: *Executor, builder: *CompletionBuilder, command:
         }
     }
     const effective_prefix = prefix orelse if (self.completion_context) |context| context.prefix else "";
-    try appendPathCandidates(self, builder, io, effective_prefix, extension, directories_only, append_slash);
+    const replace_start: usize = if (prefix == null) if (self.completion_context) |context| context.replace_start else 0 else 0;
+    const replace_end: usize = if (prefix == null) if (self.completion_context) |context| context.replace_end else effective_prefix.len else effective_prefix.len;
+    try appendPathCandidates(self, builder, io, effective_prefix, replace_start, replace_end, extension, directories_only, append_slash);
     return emptyResult(self.allocator, 0);
 }
 
-fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io, prefix: []const u8, extension: ?[]const u8, directories_only: bool, append_slash: bool) !void {
+fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io, prefix: []const u8, replace_start: usize, replace_end: usize, extension: ?[]const u8, directories_only: bool, append_slash: bool) !void {
     if (std.mem.indexOfScalar(u8, prefix, '/') != null) return;
     var dir = try std.Io.Dir.cwd().openDir(io, ".", .{ .iterate = true });
     defer dir.close(io);
@@ -4359,8 +4361,8 @@ fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io
         try builder.appendCandidate(self.allocator, .{
             .value = value,
             .kind = if (is_directory) .directory else .file,
-            .replace_start = 0,
-            .replace_end = prefix.len,
+            .replace_start = replace_start,
+            .replace_end = replace_end,
             .append_space = !is_directory,
         });
     }
@@ -4375,7 +4377,7 @@ fn builtinCompletionVariables(self: *Executor, builder: *CompletionBuilder, comm
     var iter = self.env.iterator();
     while (iter.next()) |entry| {
         if (std.mem.startsWith(u8, entry.key_ptr.*, prefix)) {
-            try builder.appendCandidate(self.allocator, .{ .value = entry.key_ptr.*, .kind = .variable, .replace_start = 0, .replace_end = prefix.len });
+            try builder.appendCandidate(self.allocator, .{ .value = entry.key_ptr.*, .kind = .variable, .replace_start = completionHelperReplaceStart(self.*, prefix), .replace_end = completionHelperReplaceEnd(self.*, prefix) });
         }
     }
     return emptyResult(self.allocator, 0);
@@ -4397,11 +4399,23 @@ fn builtinCompletionExecutables(self: *Executor, builder: *CompletionBuilder, co
         var iterator = dir.iterate();
         while (iterator.next(io) catch null) |entry| {
             if (std.mem.startsWith(u8, entry.name, prefix)) {
-                try builder.appendCandidate(self.allocator, .{ .value = entry.name, .kind = .command, .replace_start = 0, .replace_end = prefix.len });
+                try builder.appendCandidate(self.allocator, .{ .value = entry.name, .kind = .command, .replace_start = completionHelperReplaceStart(self.*, prefix), .replace_end = completionHelperReplaceEnd(self.*, prefix) });
             }
         }
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn completionHelperReplaceStart(self: Executor, prefix: []const u8) usize {
+    const context = self.completion_context orelse return 0;
+    if (!std.mem.eql(u8, context.prefix, prefix)) return 0;
+    return context.replace_start;
+}
+
+fn completionHelperReplaceEnd(self: Executor, prefix: []const u8) usize {
+    const context = self.completion_context orelse return prefix.len;
+    if (!std.mem.eql(u8, context.prefix, prefix)) return prefix.len;
+    return context.replace_end;
 }
 
 fn parseCompletionKind(name: []const u8) ?completion.Kind {
@@ -8768,6 +8782,84 @@ test "completion helper builtins append structured candidates" {
     try expectNoCandidate(candidates, txt_path);
     try expectCandidate(candidates, "rush-complete-helper-dir/", .directory);
     try expectCandidate(candidates, "RUSH_COMPLETION_HELPER_VARIABLE", .variable);
+}
+
+test "context-scoped completion providers preserve file and directory helpers" {
+    const zig_path = "rush-context-helper-test.zig";
+    const txt_path = "rush-context-helper-test.txt";
+    const dir_path = "rush-context-helper-dir";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, zig_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, txt_path) catch {};
+    defer std.Io.Dir.cwd().deleteDir(std.testing.io, dir_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = zig_path, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = txt_path, .data = "" });
+    try std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir);
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_paths() {
+        \\  completion files --extension .zig
+        \\  completion directories --append-slash
+        \\}
+        \\complete helper --subcommand open
+        \\complete 'helper open' --argument --function __rush_complete_paths
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "helper open rush-context-helper";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, zig_path, .file);
+    try expectNoCandidate(candidates, txt_path);
+    try expectCandidate(candidates, "rush-context-helper-dir/", .directory);
+
+    const directory = findCandidate(candidates, "rush-context-helper-dir/") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "helper open ".len), directory.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), directory.replace_end);
+    try std.testing.expect(!directory.append_space);
+}
+
+test "context-scoped completion providers preserve executable and variable helpers" {
+    const dir_path = "rush-context-helper-bin";
+    const exe_path = "rush-context-helper-bin/rush-context-helper-tool";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = exe_path, .data = "" });
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_external() {
+        \\  completion executables
+        \\  completion variables
+        \\}
+        \\complete helper --subcommand run
+        \\complete 'helper run' --argument --function __rush_complete_external
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", dir_path);
+    try executor.setEnv("rush-context-helper-variable", "1");
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "helper run rush-context-helper";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "rush-context-helper-tool", .command);
+    try expectCandidate(candidates, "rush-context-helper-variable", .variable);
+
+    const executable = findCandidate(candidates, "rush-context-helper-tool") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "helper run ".len), executable.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), executable.replace_end);
 }
 
 fn expectCandidate(candidates: []const completion.Candidate, value: []const u8, kind: completion.Kind) !void {
