@@ -234,8 +234,10 @@ pub const HistoryView = struct {
 
 pub const CompletionMenu = struct {
     candidates: []completion.Candidate = &.{},
-    selected: usize = 0,
+    selected: usize = no_selection,
     window_start: usize = 0,
+
+    const no_selection = std.math.maxInt(usize);
 
     pub fn deinit(self: *CompletionMenu, allocator: std.mem.Allocator) void {
         if (self.candidates.len != 0) completion.freeCandidates(allocator, self.candidates);
@@ -245,7 +247,7 @@ pub const CompletionMenu = struct {
     pub fn replace(self: *CompletionMenu, allocator: std.mem.Allocator, candidates: []const completion.Candidate) !void {
         self.deinit(allocator);
         self.candidates = try completion.cloneCandidates(allocator, candidates);
-        self.selected = 0;
+        self.selected = no_selection;
         self.window_start = 0;
     }
 
@@ -259,21 +261,25 @@ pub const CompletionMenu = struct {
 
     pub fn selectPrevious(self: *CompletionMenu) void {
         if (self.candidates.len == 0) return;
-        self.selected = if (self.selected == 0) self.candidates.len - 1 else self.selected - 1;
+        self.selected = if (self.selected == no_selection or self.selected == 0) self.candidates.len - 1 else self.selected - 1;
     }
 
     pub fn selectNext(self: *CompletionMenu) void {
         if (self.candidates.len == 0) return;
-        self.selected = (self.selected + 1) % self.candidates.len;
+        self.selected = if (self.selected == no_selection) 0 else (self.selected + 1) % self.candidates.len;
     }
 
     pub fn selectedCandidate(self: CompletionMenu) ?completion.Candidate {
-        if (self.candidates.len == 0) return null;
+        if (self.candidates.len == 0 or self.selected == no_selection) return null;
         return self.candidates[self.selected];
     }
 
     pub fn visibleWindowStart(self: *CompletionMenu, max_rows: usize) usize {
         if (self.candidates.len == 0) return 0;
+        if (self.selected == no_selection) {
+            self.window_start = 0;
+            return 0;
+        }
         const visible_rows = @max(max_rows, 1);
         if (self.candidates.len <= visible_rows) {
             self.window_start = 0;
@@ -410,7 +416,9 @@ pub const LineSession = struct {
             },
             .up => if (self.completion_menu.isOpen()) self.completion_menu.selectPrevious() else try self.historyPrevious(),
             .down => if (self.completion_menu.isOpen()) self.completion_menu.selectNext() else try self.historyNext(),
-            .tab => if (self.completion_menu.selectedCandidate()) |candidate| try self.applyCompletionCandidate(candidate),
+            .tab => if (self.completion_menu.isOpen()) {
+                if (event.modifiers.shift) self.completion_menu.selectPrevious() else self.completion_menu.selectNext();
+            },
             else => {
                 try self.editor.handleKey(event);
                 self.completion_menu.clear(self.allocator);
@@ -1077,6 +1085,7 @@ const CompletionMenuWindow = struct {
 
 fn completionMenuWindow(count: usize, selected: usize, window_start: usize, max_rows: usize) CompletionMenuWindow {
     if (count <= max_rows) return .{ .start = 0, .end = count };
+    if (selected == std.math.maxInt(usize)) return .{ .start = @min(window_start, count - max_rows), .end = @min(@min(window_start, count - max_rows) + max_rows, count) };
     const selected_row = @min(selected, count - 1);
     var start = @min(window_start, count - max_rows);
     if (selected_row < start) {
@@ -1516,7 +1525,7 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "subcommand") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯\x1b[22;39m \x1b[1mcheckout") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2msubcommand") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mswitch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "git che\x1b[J") != null);
@@ -1551,6 +1560,8 @@ test "completion menu selection accepts selected candidate" {
     try session.applyCompletion(.{ .ambiguous = &candidates });
 
     try session.handleKey(.{ .key = .down });
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
+    try session.handleKey(.{ .key = .down });
     try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
     try session.handleKey(.{ .key = .enter });
 
@@ -1573,6 +1584,7 @@ test "accepting completion clears previously rendered menu rows" {
     defer std.testing.allocator.free(menu_frame);
     try std.testing.expect(std.mem.indexOf(u8, menu_frame, "checkout") != null);
 
+    try session.handleKey(.{ .key = .tab });
     try session.handleKey(.{ .key = .enter });
     const accepted_frame = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(accepted_frame);
@@ -1593,6 +1605,36 @@ test "completion menu selection wraps with arrow keys" {
     try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
     try session.handleKey(.{ .key = .down });
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
+}
+
+test "completion menu cycles selection with tab and shift tab" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git ");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "status", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+        .{ .value = "switch", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+        .{ .value = "stash", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+    };
+
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    try std.testing.expect(session.hasCompletionMenu());
+    try std.testing.expect(session.completion_menu.selectedCandidate() == null);
+
+    try session.handleKey(.{ .key = .tab });
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
+    try session.handleKey(.{ .key = .tab });
+    try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
+    try session.handleKey(.{ .key = .tab, .modifiers = .{ .shift = true } });
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
+    try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
+    try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
+    try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
+
+    try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .enter });
+    try std.testing.expectEqualStrings("git status ", session.editor.buffer.text());
 }
 
 test "completion edit clears rendered menu" {
@@ -1639,6 +1681,7 @@ test "completion menu visible window follows selection" {
     try session.applyCompletion(.{ .ambiguous = &candidates });
     try session.handleKey(.{ .key = .down });
     try session.handleKey(.{ .key = .down });
+    try session.handleKey(.{ .key = .down });
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 3 });
     defer std.testing.allocator.free(rendered);
@@ -1658,6 +1701,7 @@ test "completion menu only pins selection to bottom while scrolling down" {
         .{ .value = "four", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
     };
     try session.applyCompletion(.{ .ambiguous = &candidates });
+    try session.handleKey(.{ .key = .down });
     try session.handleKey(.{ .key = .down });
     try session.handleKey(.{ .key = .down });
 
@@ -2013,6 +2057,7 @@ test "frame renderer diffs when frame removes lines" {
     const menu_output = try renderer.render(std.testing.allocator, menu_frame, .{ .synchronized_output = false });
     defer std.testing.allocator.free(menu_output);
 
+    try session.handleKey(.{ .key = .tab });
     try session.handleKey(.{ .key = .enter });
     var accepted_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
     defer accepted_frame.deinit(std.testing.allocator);
