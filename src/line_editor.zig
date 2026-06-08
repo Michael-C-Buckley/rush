@@ -393,15 +393,31 @@ pub const LineSession = struct {
                 self.completion_menu.clear(self.allocator);
                 self.clear_screen_requested = true;
             },
-            .delete_to_start => try self.killRange(0, self.editor.buffer.cursor_byte, 0),
-            .delete_to_end => try self.killRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte),
+            .backspace => {
+                self.editor.buffer.deletePrevious();
+                self.completion_menu.clear(self.allocator);
+            },
+            .delete => {
+                self.editor.buffer.deleteNext();
+                self.completion_menu.clear(self.allocator);
+            },
+            .delete_to_start => {
+                try self.killRange(0, self.editor.buffer.cursor_byte, 0);
+                self.completion_menu.clear(self.allocator);
+            },
+            .delete_to_end => {
+                try self.killRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte);
+                self.completion_menu.clear(self.allocator);
+            },
             .delete_previous_word => {
                 const start = previousWordStart(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
                 try self.killRange(start, self.editor.buffer.cursor_byte, start);
+                self.completion_menu.clear(self.allocator);
             },
             .delete_next_word => {
                 const end = nextWordEnd(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
                 try self.killRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
+                self.completion_menu.clear(self.allocator);
             },
             .yank => {
                 if (self.kill_ring.items.len != 0) {
@@ -1655,6 +1671,26 @@ test "completion menu remains open across text edits and modifier-only events" {
     try std.testing.expect(session.hasCompletionMenu());
 
     try session.handleKey(.{ .key = .escape });
+    try std.testing.expect(!session.hasCompletionMenu());
+}
+
+test "completion menu closes on deletion edits" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git st");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "status", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+        .{ .value = "stash", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    try session.handleKey(.{ .key = .backspace });
+    try std.testing.expectEqualStrings("git s", session.editor.buffer.text());
+    try std.testing.expect(!session.hasCompletionMenu());
+
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    try session.handleKey(.{ .key = .delete_previous_word });
+    try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
     try std.testing.expect(!session.hasCompletionMenu());
 }
 

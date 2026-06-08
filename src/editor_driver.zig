@@ -447,16 +447,10 @@ fn isCompletionTab(key: line_editor.KeyEvent) bool {
 fn shouldRefreshCompletionMenu(key: line_editor.KeyEvent) bool {
     return switch (key.key) {
         .text => key.text.len != 0,
-        .backspace,
-        .delete,
         .left,
         .right,
         .home,
         .end,
-        .delete_to_start,
-        .delete_to_end,
-        .delete_previous_word,
-        .delete_next_word,
         .word_left,
         .word_right,
         .transpose_chars,
@@ -942,7 +936,10 @@ test "terminal parser emits tab key" {
 test "completion refresh key classification tracks editing keys" {
     try std.testing.expect(shouldRefreshCompletionMenu(.{ .key = .text, .text = "s" }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .text, .text = "" }));
-    try std.testing.expect(shouldRefreshCompletionMenu(.{ .key = .backspace }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .backspace }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .delete }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .delete_previous_word }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .delete_to_start }));
     try std.testing.expect(shouldRefreshCompletionMenu(.{ .key = .left }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .tab }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .escape }));
