@@ -250,13 +250,57 @@ pub fn freeCompletions(allocator: std.mem.Allocator, completions: []Completion) 
 
 const InteractiveCompletionContext = struct {
     executor: *exec.Executor,
+    history: *const History,
+    cwd: []const u8 = "",
 };
 
 fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8, cursor: usize) !completion_model.Application {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
     const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true });
     defer completion_context.executor.freeCompletions(candidates);
+    rankCompletionCandidates(candidates, completion_context.history.*, completion_context.cwd);
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
+}
+
+fn rankCompletionCandidates(candidates: []completion_model.Candidate, history: History, cwd: []const u8) void {
+    std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = history, .cwd = cwd }, lessThanRankedCompletion);
+}
+
+const CompletionRankContext = struct {
+    history: History,
+    cwd: []const u8,
+};
+
+fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.Candidate, b: completion_model.Candidate) bool {
+    const a_score = completionRankScore(context.history, context.cwd, a.value);
+    const b_score = completionRankScore(context.history, context.cwd, b.value);
+    if (a_score != b_score) return a_score > b_score;
+    return std.mem.lessThan(u8, a.value, b.value);
+}
+
+fn completionRankScore(history: History, cwd: []const u8, value: []const u8) i64 {
+    var score: i64 = 0;
+    var recency: i64 = @intCast(history.records.items.len);
+    var index = history.records.items.len;
+    while (index > 0) {
+        index -= 1;
+        const record = history.records.items[index];
+        if (historyRecordContainsWord(record.cmd, value)) {
+            score += recency;
+            if (record.status == 0) score += 25;
+            if (cwd.len != 0 and std.mem.eql(u8, record.cwd, cwd)) score += 50;
+        }
+        recency -= 1;
+    }
+    return score;
+}
+
+fn historyRecordContainsWord(command: []const u8, value: []const u8) bool {
+    var iter = std.mem.tokenizeAny(u8, command, " \t\n");
+    while (iter.next()) |word| {
+        if (std.mem.eql(u8, word, value)) return true;
+    }
+    return false;
 }
 
 pub fn renderHighlightedInput(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
@@ -314,7 +358,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
             else => |e| return e,
         };
-        var completion_context: InteractiveCompletionContext = .{ .executor = &executor };
+        var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
+        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cwd = cwd_buffer[0..cwd_len] };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
             .history = .{ .entries = history.entries.items },
@@ -668,6 +714,37 @@ test "completion application reports ambiguous candidates" {
     defer application.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(CompletionApplication.ambiguous, application);
+}
+
+test "completion ranking prefers recent successful same-cwd history" {
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.addRecord(.{ .cmd = "git checkout old", .status = 0, .cwd = "/other" });
+    try history.addRecord(.{ .cmd = "git checkout cherry-pick", .status = 1, .cwd = "/repo" });
+    try history.addRecord(.{ .cmd = "git checkout checkout", .status = 0, .cwd = "/repo" });
+
+    var candidates = [_]CompletionCandidate{
+        .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
+        .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
+    };
+    rankCompletionCandidates(&candidates, history, "/repo");
+
+    try std.testing.expectEqualStrings("checkout", candidates[0].value);
+    try std.testing.expectEqualStrings("cherry-pick", candidates[1].value);
+}
+
+test "completion ranking falls back to lexical order" {
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+
+    var candidates = [_]CompletionCandidate{
+        .{ .value = "status", .replace_start = 4, .replace_end = 4 },
+        .{ .value = "checkout", .replace_start = 4, .replace_end = 4 },
+    };
+    rankCompletionCandidates(&candidates, history, "/repo");
+
+    try std.testing.expectEqualStrings("checkout", candidates[0].value);
+    try std.testing.expectEqualStrings("status", candidates[1].value);
 }
 
 test "interactive highlight renderer uses parser classifications" {
