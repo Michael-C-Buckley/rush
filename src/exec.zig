@@ -571,6 +571,11 @@ pub const Executor = struct {
         try self.setEnv("PWD", cwd);
     }
 
+    pub fn initializeInteractiveVariables(self: *Executor) !void {
+        if (self.getEnv("PS1") == null) try self.setEnv("PS1", "$ ");
+        if (self.getEnv("PS2") == null) try self.setEnv("PS2", "> ");
+    }
+
     fn validLogicalPwd(self: *Executor, io: std.Io, pwd: []const u8) !bool {
         if (pwd.len == 0 or pwd[0] != '/') return false;
         const cwd = try std.process.currentPathAlloc(io, self.allocator);

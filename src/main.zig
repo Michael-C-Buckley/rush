@@ -1051,6 +1051,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer executor.deinit();
     try executor.importEnvironment(environ_map);
     try executor.initializeShellVariables(io);
+    try executor.initializeInteractiveVariables();
     executor.arg_zero = options.arg_zero;
     try loadInteractiveConfig(allocator, io, &executor, options);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
@@ -1065,8 +1066,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const notifications = try executor.drainJobNotifications();
         try writeAll(io, .stderr, notifications);
         allocator.free(notifications);
-        const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = options.arg_zero }, "rush$ ") catch |err| switch (err) {
-            error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
+        const fallback_prompt = executor.getEnv("PS1") orelse "$ ";
+        const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = options.arg_zero }, fallback_prompt) catch |err| switch (err) {
+            error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
             else => |e| return e,
         };
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -1151,13 +1153,14 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     var last_status: exec.ExitStatus = 0;
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
+    try executor.initializeInteractiveVariables();
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
         const notifications = try executor.drainJobNotifications();
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
-        const prompt = try executor.renderPrompt(.{ .io = io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+        const prompt = try executor.renderPrompt(.{ .io = io, .allow_external = true, .arg_zero = "rush" }, executor.getEnv("PS1") orelse "$ ");
         try stdout.appendSlice(allocator, prompt);
         allocator.free(prompt);
         if (std.mem.eql(u8, line, "exit")) break;
@@ -1222,6 +1225,10 @@ fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executo
 }
 
 fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, options: InteractiveOptions) !void {
+    if (executor.getEnv("ENV")) |env_path| {
+        if (env_path.len != 0) try sourceOptionalConfig(allocator, io, executor, env_path, options.arg_zero);
+    }
+
     if (options.login) {
         try sourceOptionalConfig(allocator, io, executor, system_profile_path, options.arg_zero);
         const user_profile_path = try userStartupPath(allocator, executor.*, "profile.rush");
@@ -1695,7 +1702,7 @@ test "runReplInput executes lines and tracks status" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
-    try std.testing.expectEqualStrings("rush$ hi\nrush$ rush$ ", result.stdout);
+    try std.testing.expectEqualStrings("$ hi\n$ $ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
@@ -1704,7 +1711,7 @@ test "runReplInput stops when exit builtin requests shell exit" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 7), result.status);
-    try std.testing.expectEqualStrings("rush$ before\nrush$ ", result.stdout);
+    try std.testing.expectEqualStrings("$ before\n$ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
@@ -1871,7 +1878,7 @@ test "repl expands aliases defined on previous input lines" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
-    try std.testing.expectEqualStrings("rush$ rush$ alias-ok\nrush$ alias ll='echo alias-ok'\nrush$ rush$ rush$ ", result.stdout);
+    try std.testing.expectEqualStrings("$ $ alias-ok\n$ alias ll='echo alias-ok'\n$ $ $ ", result.stdout);
     try std.testing.expectEqualStrings("ll: command not found\n", result.stderr);
 }
 
@@ -1961,7 +1968,36 @@ test "repl uses rush_prompt function to build prompt text" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("rush$ \x1b[38;5;4mcustom\x1b[0m > ok\n\x1b[38;5;4mcustom\x1b[0m > ", result.stdout);
+    try std.testing.expectEqualStrings("$ \x1b[38;5;4mcustom\x1b[0m > ok\n\x1b[38;5;4mcustom\x1b[0m > ", result.stdout);
+}
+
+test "repl uses literal PS1 fallback prompt" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io,
+        \\PS1='custom> '
+        \\echo ok
+        \\exit
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("$ custom> ok\ncustom> ", result.stdout);
+}
+
+test "interactive startup initializes prompt variables and sources ENV" {
+    const env_path = "rush-test-env-startup.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "ENV_LOADED=ok\nPS1='env> '\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("ENV", env_path);
+    try executor.initializeInteractiveVariables();
+    try std.testing.expectEqualStrings("$ ", executor.getEnv("PS1").?);
+    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
+
+    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("ok", executor.getEnv("ENV_LOADED").?);
+    try std.testing.expectEqualStrings("env> ", executor.getEnv("PS1").?);
 }
 
 test "prompt segment supports foreground and background colors" {
