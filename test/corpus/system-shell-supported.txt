@@ -131,6 +131,7 @@ for x in a b; do case "$x" in a) echo A ;; b) echo B ;; esac; done
 classify() { case "$1" in a|b) echo small ;; *) echo other ;; esac; }; for x in a c; do classify "$x"; done
 set -- one two three; shift 2; echo "$1/$#"
 foo=outer; ( foo=inner; echo "$foo"; exit 3 ); echo status=$?/foo=$foo
+printf '<%s:%d>\n' a 1 b 2 c 3
 printf "%s:%d\n" bb 7 > bb-out; cat bb-out
 : > bb-empty; test -s bb-empty; echo empty=$?; printf x > bb-empty; test -s bb-empty; echo full=$?
 printf "alpha\nbeta\n" > bb-in; read line < bb-in; printf "[%s]\n" "$line"
