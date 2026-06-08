@@ -44,6 +44,9 @@ pub fn build(b: *std.Build) void {
     });
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 
+    const compile_test_step = b.step("compile-test", "Compile unit tests without running them");
+    compile_test_step.dependOn(&exe_tests.step);
+
     const fmt_step = b.step("fmt", "Check code formatting");
     const fmt_check = b.addFmt(.{ .paths = &.{ "src", "build.zig", "build.zig.zon" }, .check = true });
     fmt_step.dependOn(&fmt_check.step);

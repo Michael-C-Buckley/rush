@@ -18,5 +18,5 @@ for target in \
   x86_64-netbsd
  do
   echo "compile-check $target"
-  $ZIG test -fno-emit-bin -target "$target" src/main.zig
+  $ZIG build compile-test -Dtarget="$target" --summary none
  done
