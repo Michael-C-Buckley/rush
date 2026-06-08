@@ -1000,6 +1000,26 @@ pub const Executor = struct {
         self.current_job_id = id;
     }
 
+    fn jobMarker(self: Executor, job: BackgroundJob) u8 {
+        if (self.current_job_id == job.id) return '+';
+        if (self.previous_job_id == job.id) return '-';
+        return ' ';
+    }
+
+    fn refreshBackgroundJobs(self: *Executor) void {
+        const flags: c_int = @intCast(std.posix.W.NOHANG | std.posix.W.UNTRACED);
+        for (self.background_jobs.items) |*job| {
+            if (job.state == .done) continue;
+            var status: c_int = 0;
+            const pid: std.c.pid_t = @intCast(job.pid);
+            const result = std.c.waitpid(pid, &status, flags);
+            if (result <= 0 or result != pid) continue;
+            const wait_status: u32 = @intCast(status);
+            job.status = exitStatusFromWaitStatus(wait_status);
+            job.state = if (std.posix.W.IFSTOPPED(wait_status)) .stopped else .done;
+        }
+    }
+
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
         var output: std.ArrayList(u8) = .empty;
         errdefer output.deinit(self.allocator);
@@ -4864,6 +4884,7 @@ const JobPrintMode = enum { normal, long, pids };
 fn builtinJobs(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
+    self.refreshBackgroundJobs();
     var mode: JobPrintMode = .normal;
     var index: usize = 1;
     while (index < command.argv.len) : (index += 1) {
@@ -4885,31 +4906,31 @@ fn builtinJobs(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(self.allocator);
     if (index >= command.argv.len) {
-        for (self.background_jobs.items) |job| try appendJobLine(self.allocator, &stdout, job, mode);
+        for (self.background_jobs.items) |job| try appendJobLine(self.allocator, &stdout, job, self.jobMarker(job), mode);
     } else {
         for (command.argv[index..]) |arg| {
             const job = self.findBackgroundJobBySpec(arg.text) orelse return errorResult(self.allocator, 127, "jobs", "unknown job");
-            try appendJobLine(self.allocator, &stdout, job.*, mode);
+            try appendJobLine(self.allocator, &stdout, job.*, self.jobMarker(job.*), mode);
         }
     }
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
 
-fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: BackgroundJob, mode: JobPrintMode) !void {
+fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: BackgroundJob, marker: u8, mode: JobPrintMode) !void {
     switch (mode) {
         .pids => try stdout.print(allocator, "{d}\n", .{job.pid}),
         .long => {
             switch (job.state) {
-                .running => try stdout.print(allocator, "[{d}] {d} Running {s}\n", .{ job.id, job.pid, job.command }),
-                .stopped => try stdout.print(allocator, "[{d}] {d} Stopped {s}\n", .{ job.id, job.pid, job.command }),
-                .done => try stdout.print(allocator, "[{d}] {d} Done({d}) {s}\n", .{ job.id, job.pid, job.status, job.command }),
+                .running => try stdout.print(allocator, "[{d}]{c} {d} Running {s}\n", .{ job.id, marker, job.pid, job.command }),
+                .stopped => try stdout.print(allocator, "[{d}]{c} {d} Stopped {s}\n", .{ job.id, marker, job.pid, job.command }),
+                .done => try stdout.print(allocator, "[{d}]{c} {d} Done({d}) {s}\n", .{ job.id, marker, job.pid, job.status, job.command }),
             }
         },
         .normal => {
             switch (job.state) {
-                .running => try stdout.print(allocator, "[{d}] Running {s}\n", .{ job.id, job.command }),
-                .stopped => try stdout.print(allocator, "[{d}] Stopped {s}\n", .{ job.id, job.command }),
-                .done => try stdout.print(allocator, "[{d}] Done({d}) {s}\n", .{ job.id, job.status, job.command }),
+                .running => try stdout.print(allocator, "[{d}]{c} Running {s}\n", .{ job.id, marker, job.command }),
+                .stopped => try stdout.print(allocator, "[{d}]{c} Stopped {s}\n", .{ job.id, marker, job.command }),
+                .done => try stdout.print(allocator, "[{d}]{c} Done({d}) {s}\n", .{ job.id, marker, job.status, job.command }),
             }
         },
     }
@@ -4919,6 +4940,7 @@ fn builtinBg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     _ = stdin;
     _ = options;
     if (command.argv.len > 2) return errorResult(self.allocator, 2, "bg", "too many arguments");
+    self.refreshBackgroundJobs();
     const job = if (command.argv.len == 1)
         self.currentBackgroundJob() orelse return errorResult(self.allocator, 1, "bg", "no current job")
     else
@@ -4934,6 +4956,7 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (command.argv.len > 2) return errorResult(self.allocator, 2, "fg", "too many arguments");
+    self.refreshBackgroundJobs();
     const job = if (command.argv.len == 1)
         self.currentBackgroundJob() orelse return errorResult(self.allocator, 1, "fg", "no current job")
     else
@@ -4948,6 +4971,7 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
 
 fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
+    self.refreshBackgroundJobs();
     if (command.argv.len == 1 and self.background_jobs.items.len == 0) return emptyResult(self.allocator, 0);
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (command.argv.len == 1) {
@@ -5408,6 +5432,20 @@ fn exitStatusFromTerm(term: std.process.Child.Term) ExitStatus {
         .signal => |sig| 128 + @as(u8, @intCast(@intFromEnum(sig))),
         .stopped => |sig| 128 + @as(u8, @intCast(@intFromEnum(sig))),
         .unknown => 1,
+    };
+}
+
+fn exitStatusFromWaitStatus(status: u32) ExitStatus {
+    if (std.posix.W.IFEXITED(status)) return std.posix.W.EXITSTATUS(status);
+    if (std.posix.W.IFSIGNALED(status)) return 128 + signalStatusNumber(std.posix.W.TERMSIG(status));
+    if (std.posix.W.IFSTOPPED(status)) return 128 + signalStatusNumber(std.posix.W.STOPSIG(status));
+    return 1;
+}
+
+fn signalStatusNumber(signal: anytype) u8 {
+    return switch (@typeInfo(@TypeOf(signal))) {
+        .@"enum" => @intCast(@intFromEnum(signal)),
+        else => @intCast(signal),
     };
 }
 
@@ -6964,7 +7002,7 @@ test "executor foregrounds current and selected background jobs" {
 }
 
 test "executor filters and formats jobs builtin output" {
-    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & jobs -p %1; jobs -l 1; wait $!; jobs %1");
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 1 & jobs -p %1; jobs -l 1; wait $!; jobs %1");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -6977,13 +7015,13 @@ test "executor filters and formats jobs builtin output" {
     const first_newline = std.mem.indexOfScalar(u8, result.stdout, '\n') orelse return error.TestUnexpectedResult;
     try std.testing.expect(first_newline > 0);
     for (result.stdout[0..first_newline]) |byte| try std.testing.expect(std.ascii.isDigit(byte));
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] ") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, " Running /bin/sleep 0\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] Done(0) /bin/sleep 0\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, " Running /bin/sleep 1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ Done(0) /bin/sleep 1\n") != null);
 }
 
 test "executor reports tracked background jobs" {
-    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & jobs; wait $!; jobs");
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 1 & jobs; wait $!; jobs");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -6993,8 +7031,8 @@ test "executor reports tracked background jobs" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] Running /bin/sleep 0\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] Done(0) /bin/sleep 0\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ Running /bin/sleep 1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ Done(0) /bin/sleep 1\n") != null);
 }
 
 test "executor waits for background pid operands" {
