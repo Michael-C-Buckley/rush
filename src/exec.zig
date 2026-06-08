@@ -1112,9 +1112,9 @@ pub const Executor = struct {
         return result;
     }
 
-    fn executeAsyncStatement(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
-        var result = switch (statement.kind) {
-            .pipeline => return self.executeAsyncPipeline(program, program.pipelines[statement.index], options),
+    fn executeStatementSync(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
+        return switch (statement.kind) {
+            .pipeline => try self.executePipeline(program, program.pipelines[statement.index], options),
             .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
             .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
             .for_command => try self.executeForCommand(program.for_commands[statement.index], options),
@@ -1124,6 +1124,21 @@ pub const Executor = struct {
             .brace_group => try self.executeBraceGroup(program.brace_groups[statement.index], options),
             .subshell => try self.executeSubshell(program.subshells[statement.index], options),
         };
+    }
+
+    fn executeAsyncStatement(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
+        if (statement.kind == .pipeline) return self.executeAsyncPipeline(program, program.pipelines[statement.index], options);
+        if (options.io == null) return self.executeAsyncStatementFallback(program, statement, options);
+        const command_text = statementText(program, statement);
+        const forked = self.forkAsyncJob(command_text, options, .{ .statement = statement }, program) catch |err| switch (err) {
+            error.Unsupported => return self.executeAsyncStatementFallback(program, statement, options),
+            else => return err,
+        };
+        return forked;
+    }
+
+    fn executeAsyncStatementFallback(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
+        var result = try self.executeStatementSync(program, statement, options);
         result.status = 0;
         return result;
     }
@@ -1139,9 +1154,55 @@ pub const Executor = struct {
     }
 
     fn executeAsyncPipelineFallback(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) !CommandResult {
-        var result = try self.executePipeline(program, pipeline, options);
-        result.status = 0;
-        return result;
+        if (options.io == null) {
+            var result = try self.executePipeline(program, pipeline, options);
+            result.status = 0;
+            return result;
+        }
+        return self.forkAsyncJob(pipelineText(program, pipeline), options, .{ .pipeline = pipeline }, program) catch |err| switch (err) {
+            error.Unsupported => {
+                var result = try self.executePipeline(program, pipeline, options);
+                result.status = 0;
+                return result;
+            },
+            else => return err,
+        };
+    }
+
+    const AsyncJobKind = union(enum) {
+        statement: ir.Statement,
+        pipeline: ir.Pipeline,
+    };
+
+    fn forkAsyncJob(self: *Executor, command_text: []const u8, options: ExecuteOptions, kind: AsyncJobKind, program: ir.Program) !CommandResult {
+        const io = options.io orelse return error.Unsupported;
+        const pid = try forkProcess();
+        if (pid == 0) {
+            var status: ExitStatus = 2;
+            var child_result = switch (kind) {
+                .statement => |statement| self.executeStatementSync(program, statement, options),
+                .pipeline => |pipeline| self.executePipeline(program, pipeline, options),
+            } catch null;
+            if (child_result) |*result| {
+                status = result.status;
+                if (options.external_stdio == .inherit) writeInheritedResult(io, result.*) catch {};
+                result.deinit();
+            }
+            exitForkedChild(status);
+        }
+
+        const numeric_pid: i64 = @intCast(pid);
+        self.setLastBackgroundPid(numeric_pid);
+        const owned_command = try self.allocator.dupe(u8, std.mem.trim(u8, command_text, " \t\r\n;&"));
+        errdefer self.allocator.free(owned_command);
+        try self.background_jobs.append(self.allocator, .{
+            .id = self.next_job_id,
+            .pid = numeric_pid,
+            .command = owned_command,
+            .child = childFromPid(pid),
+        });
+        self.next_job_id += 1;
+        return emptyResult(self.allocator, 0);
     }
 
     fn executePipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) anyerror!CommandResult {
@@ -2601,6 +2662,68 @@ fn rawClose(fd: std.posix.fd_t) !void {
             else => return error.Unexpected,
         }
     }
+}
+
+fn forkProcess() !std.posix.pid_t {
+    if (comptime zig_builtin.link_libc) {
+        while (true) {
+            const rc = std.c.fork();
+            switch (std.c.errno(rc)) {
+                .SUCCESS => return @intCast(rc),
+                .INTR => continue,
+                .AGAIN, .NOMEM => return error.SystemResources,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    if (comptime zig_builtin.os.tag == .linux) {
+        const rc = std.os.linux.fork();
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .AGAIN, .NOMEM => return error.SystemResources,
+            else => return error.Unexpected,
+        }
+    }
+    return error.Unsupported;
+}
+
+fn exitForkedChild(status: ExitStatus) noreturn {
+    if (comptime zig_builtin.link_libc) std.c._exit(status);
+    if (comptime zig_builtin.os.tag == .linux) std.os.linux.exit(status);
+    unreachable;
+}
+
+fn childFromPid(pid: std.posix.pid_t) std.process.Child {
+    return .{
+        .id = pid,
+        .thread_handle = {},
+        .stdin = null,
+        .stdout = null,
+        .stderr = null,
+        .request_resource_usage_statistics = false,
+    };
+}
+
+fn statementText(program: ir.Program, statement: ir.Statement) []const u8 {
+    return switch (statement.kind) {
+        .pipeline => pipelineText(program, program.pipelines[statement.index]),
+        .if_command => spanText(program.source, program.if_commands[statement.index].span),
+        .loop_command => spanText(program.source, program.loop_commands[statement.index].span),
+        .for_command => spanText(program.source, program.for_commands[statement.index].span),
+        .case_command => spanText(program.source, program.case_commands[statement.index].span),
+        .function_definition => spanText(program.source, program.function_definitions[statement.index].span),
+        .bash_test_command => spanText(program.source, program.bash_test_commands[statement.index].span),
+        .brace_group => spanText(program.source, program.brace_groups[statement.index].span),
+        .subshell => spanText(program.source, program.subshells[statement.index].span),
+    };
+}
+
+fn pipelineText(program: ir.Program, pipeline: ir.Pipeline) []const u8 {
+    return spanText(program.source, pipeline.span);
+}
+
+fn spanText(source: []const u8, span: parser.Span) []const u8 {
+    return source[@min(span.start, source.len)..@min(span.end, source.len)];
 }
 
 fn setCloseOnExec(fd: std.posix.fd_t) !void {
@@ -6170,18 +6293,36 @@ test "executor implements set shell option baseline" {
     try std.testing.expect(std.mem.indexOf(u8, verbose.stderr, "echo verbose") != null);
 }
 
-test "executor handles builtin async fallback" {
-    var lowered = try parseAndLower(std.testing.allocator, "echo bg & echo fg");
+test "executor runs builtin async jobs as waitable children" {
+    const path = "rush-builtin-async-job.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    var lowered = try parseAndLower(std.testing.allocator, "echo bg > rush-builtin-async-job.tmp & wait $!; cat < rush-builtin-async-job.tmp");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
-    var result = try executor.executeProgram(lowered.program, .{});
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("bg\nfg\n", result.stdout);
+    try std.testing.expectEqualStrings("bg\n", result.stdout);
+}
+
+test "executor runs compound async jobs as waitable children" {
+    const path = "rush-compound-async-job.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    var lowered = try parseAndLower(std.testing.allocator, "{ echo compound > rush-compound-async-job.tmp; } & wait $!; cat < rush-compound-async-job.tmp");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("compound\n", result.stdout);
 }
 
 test "executor reports tracked background jobs" {

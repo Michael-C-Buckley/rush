@@ -121,6 +121,7 @@ pub const Statement = struct {
 
 pub const Program = struct {
     allocator: std.mem.Allocator,
+    source: []const u8,
     commands: []SimpleCommand,
     pipelines: []Pipeline,
     if_commands: []IfCommand = &.{},
@@ -305,6 +306,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
 
     return .{
         .allocator = allocator,
+        .source = parsed.source,
         .commands = try commands.toOwnedSlice(allocator),
         .pipelines = try pipelines.toOwnedSlice(allocator),
         .if_commands = try if_commands.toOwnedSlice(allocator),
