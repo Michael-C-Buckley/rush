@@ -650,6 +650,11 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
 
     if (previous_token.kind == .word) {
         if (nodeKindForToken(result, previous)) |node_kind| {
+            if (previous_token.span.end < clamped_cursor) {
+                if (node_kind == .command_word or node_kind == .word or node_kind == .assignment_word) {
+                    return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+                }
+            }
             if (node_kind == .command_word) {
                 return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
             }
@@ -2084,6 +2089,20 @@ test "completion context finds command and argument positions" {
     var argument = try parse(std.testing.allocator, "echo hi", .{});
     defer argument.deinit();
     try std.testing.expectEqual(CompletionKind.argument, completionContext(argument, 7).kind);
+}
+
+test "completion context after trailing whitespace starts an empty argument" {
+    var command = try parse(std.testing.allocator, "git ", .{});
+    defer command.deinit();
+    const command_context = completionContext(command, 4);
+    try std.testing.expectEqual(CompletionKind.argument, command_context.kind);
+    try expectSpan(.init(4, 4), command_context.span);
+
+    var subcommand = try parse(std.testing.allocator, "git commit ", .{});
+    defer subcommand.deinit();
+    const subcommand_context = completionContext(subcommand, 11);
+    try std.testing.expectEqual(CompletionKind.argument, subcommand_context.kind);
+    try expectSpan(.init(11, 11), subcommand_context.span);
 }
 
 test "completion context finds redirect targets and pipeline commands" {

@@ -8779,8 +8779,12 @@ test "completion diagnostics report missing option value" {
 
 test "structured completion rules emit subcommand and option candidates" {
     var setup = try parseAndLower(std.testing.allocator,
+        \\__git_commit_args() {
+        \\  completion candidate HEAD --kind plain
+        \\}
         \\complete git --subcommand commit --description commit
         \\complete 'git commit' --option --long amend --description amend
+        \\complete 'git commit' --argument --function __git_commit_args
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -8798,6 +8802,21 @@ test "structured completion rules emit subcommand and option candidates" {
     try std.testing.expectEqualStrings("commit", commit.description.?);
     try std.testing.expectEqual(@as(usize, "git ".len), commit.replace_start);
 
+    var root_trailing = try executor.analyzeCompletionsForInput("git ", "git ".len);
+    defer root_trailing.deinit();
+    try std.testing.expectEqualStrings("git", root_trailing.root);
+    try std.testing.expectEqual(CompletionSemanticPosition.subcommand, root_trailing.position);
+    try std.testing.expectEqualStrings("", root_trailing.prefix);
+    try std.testing.expectEqual(@as(usize, "git ".len), root_trailing.replace_start);
+    try std.testing.expectEqual(@as(usize, "git ".len), root_trailing.replace_end);
+
+    const trailing_subcommands = try executor.collectCompletionsForInput("git ", "git ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(trailing_subcommands);
+    try expectCandidate(trailing_subcommands, "commit", .subcommand);
+    const trailing_commit = findCandidate(trailing_subcommands, "commit") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "git ".len), trailing_commit.replace_start);
+    try std.testing.expectEqual(@as(usize, "git ".len), trailing_commit.replace_end);
+
     const options = try executor.collectCompletionsForInput("git commit --a", "git commit --a".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(options);
     try expectCandidate(options, "--amend", .option);
@@ -8805,6 +8824,20 @@ test "structured completion rules emit subcommand and option candidates" {
     try std.testing.expectEqualStrings("amend", amend.option.?.long.?);
     try std.testing.expectEqualStrings("amend", amend.description.?);
     try std.testing.expectEqual(@as(usize, "git commit ".len), amend.replace_start);
+
+    var nested_trailing = try executor.analyzeCompletionsForInput("git commit ", "git commit ".len);
+    defer nested_trailing.deinit();
+    try std.testing.expectEqualStrings("git", nested_trailing.root);
+    try std.testing.expectEqual(@as(usize, 1), nested_trailing.path.len);
+    try std.testing.expectEqualStrings("commit", nested_trailing.path[0]);
+    try std.testing.expectEqual(CompletionSemanticPosition.subcommand, nested_trailing.position);
+    try std.testing.expectEqualStrings("", nested_trailing.prefix);
+    try std.testing.expectEqual(@as(usize, "git commit ".len), nested_trailing.replace_start);
+    try std.testing.expectEqual(@as(usize, "git commit ".len), nested_trailing.replace_end);
+
+    const nested_options = try executor.collectCompletionsForInput("git commit ", "git commit ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(nested_options);
+    try expectCandidate(nested_options, "HEAD", .plain);
 }
 
 test "structured completion keeps parent options available in subcommand contexts" {
