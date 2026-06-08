@@ -54,7 +54,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `printf` | `builtin-printf`, `builtin-printf-usage-errors`, printf subrows | escapes, `%b`/`%c`, format reuse, octal/hex, width/precision, missing format, invalid format/conversion, invalid numeric operand diagnostics | full format grammar |
 | `read` | `builtin-read`, read subrows | backslash, `-r`, `--`, custom/empty IFS, last-variable remainder assignment, EOF status, unsupported option diagnostic | additional IFS edge cases, prompts if ever added |
 | `test`, `[` | `builtin-test`, test subrows | file predicates including symlinks, terminal fds, mode bits, and special file types, string comparisons, integer comparisons, ordering, `!`/`-a`/`-o`/grouping grammar, invalid expression | remaining POSIX precedence and ambiguity edge cases |
-| `umask` | `builtin-umask`, `builtin-umask-symbolic-output`, `builtin-umask-usage-errors` | basic get/set, `-S` symbolic output, invalid numeric/symbolic masks, unsupported options, excess operands | symbolic mask operands |
+| `umask` | `builtin-umask`, `builtin-umask-symbolic-output`, `builtin-umask-symbolic-operands`, `builtin-umask-usage-errors` | basic get/set, `-S` symbolic output, representative symbolic mask operands, invalid numeric/symbolic masks, unsupported options, excess operands | broader symbolic-mode edge cases |
 | `wait` | `builtin-wait`, `builtin-wait-usage-errors` | tracked pid wait, invalid/unknown pid diagnostics | job specs, all-job semantics, stopped/interrupted jobs |
 
 ## Job-control builtins

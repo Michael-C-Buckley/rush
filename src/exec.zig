@@ -6091,9 +6091,60 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     const operand = command.argv[1].text;
     if (std.mem.eql(u8, operand, "-S")) return symbolicUmaskResult(self.allocator, old);
     if (std.mem.startsWith(u8, operand, "-")) return errorResult(self.allocator, 2, "umask", "unsupported option");
-    const new_mask = std.fmt.parseInt(u16, operand, 8) catch return errorResult(self.allocator, 2, "umask", "invalid mask");
+    const new_mask = std.fmt.parseInt(u16, operand, 8) catch blk: {
+        break :blk parseSymbolicUmask(operand, old) orelse return errorResult(self.allocator, 2, "umask", "invalid mask");
+    };
     _ = shellUmask(new_mask);
     return emptyResult(self.allocator, 0);
+}
+
+fn parseSymbolicUmask(operand: []const u8, current_mask: u32) ?u16 {
+    if (operand.len == 0 or std.ascii.isDigit(operand[0])) return null;
+    var mask: u16 = @intCast(current_mask & 0o777);
+    var index: usize = 0;
+    while (index < operand.len) {
+        var who_bits: u16 = 0;
+        while (index < operand.len) : (index += 1) {
+            switch (operand[index]) {
+                'u' => who_bits |= 0o700,
+                'g' => who_bits |= 0o070,
+                'o' => who_bits |= 0o007,
+                'a' => who_bits |= 0o777,
+                else => break,
+            }
+        }
+        if (who_bits == 0) who_bits = 0o777;
+        if (index >= operand.len) return null;
+        const op = operand[index];
+        if (op != '+' and op != '-' and op != '=') return null;
+        index += 1;
+
+        var permissions: u16 = 0;
+        while (index < operand.len and operand[index] != ',') : (index += 1) {
+            switch (operand[index]) {
+                'r' => permissions |= 0o444,
+                'w' => permissions |= 0o222,
+                'x' => permissions |= 0o111,
+                else => return null,
+            }
+        }
+        const affected_permissions = permissions & who_bits;
+        switch (op) {
+            '+' => mask &= ~affected_permissions,
+            '-' => mask |= affected_permissions,
+            '=' => {
+                mask |= who_bits;
+                mask &= ~affected_permissions;
+            },
+            else => unreachable,
+        }
+        if (index < operand.len) {
+            if (operand[index] != ',') return null;
+            index += 1;
+            if (index == operand.len) return null;
+        }
+    }
+    return mask;
 }
 
 fn symbolicUmaskResult(allocator: std.mem.Allocator, mask: u32) !CommandResult {
