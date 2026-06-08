@@ -125,6 +125,13 @@ pub const CallFrame = struct {
     }
 };
 
+pub const BackgroundJob = struct {
+    pid: i64,
+    child: std.process.Child,
+    done: bool = false,
+    status: ExitStatus = 0,
+};
+
 pub const ArrayValue = struct {
     values: std.ArrayList([]const u8) = .empty,
 
@@ -142,6 +149,7 @@ pub const Executor = struct {
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
+    background_jobs: std.ArrayList(BackgroundJob) = .empty,
     open_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, void) = .empty,
     shell_options: ShellOptions = .{},
     global_positionals: PositionalParams = .{},
@@ -217,6 +225,7 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.traps.deinit(self.allocator);
+        self.background_jobs.deinit(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
         self.global_positionals.deinit(self.allocator);
@@ -548,6 +557,13 @@ pub const Executor = struct {
     fn markShellFdClosed(self: *Executor, fd: std.posix.fd_t) void {
         if (fd <= 2) return;
         _ = self.open_fds.remove(fd);
+    }
+
+    fn findBackgroundJob(self: *Executor, pid: i64) ?*BackgroundJob {
+        for (self.background_jobs.items) |*job| {
+            if (job.pid == pid) return job;
+        }
+        return null;
     }
 
     fn setFunction(self: *Executor, name: []const u8, body: []const u8) !void {
@@ -1742,7 +1758,7 @@ pub const Executor = struct {
         }
     }
 
-    fn setLastBackgroundPid(self: *Executor, pid: std.process.Child.Id) void {
+    fn setLastBackgroundPid(self: *Executor, pid: i64) void {
         const text = std.fmt.bufPrint(&self.last_background_pid_text, "{d}", .{pid}) catch return;
         self.last_background_pid_text_len = text.len;
     }
@@ -1801,9 +1817,11 @@ pub const Executor = struct {
             else => return err,
         };
         errdefer child.kill(io);
-        if (child.id) |pid| self.setLastBackgroundPid(pid);
-        const thread = try std.Thread.spawn(.{}, reapBackgroundChild, .{ io, child });
-        thread.detach();
+        if (child.id) |pid| {
+            const numeric_pid: i64 = @intCast(pid);
+            self.setLastBackgroundPid(numeric_pid);
+            try self.background_jobs.append(self.allocator, .{ .pid = numeric_pid, .child = child });
+        }
         return emptyResult(self.allocator, 0);
     }
 
@@ -1908,11 +1926,6 @@ pub const Executor = struct {
         };
     }
 };
-
-fn reapBackgroundChild(io: std.Io, child: std.process.Child) void {
-    var owned_child = child;
-    _ = owned_child.wait(io) catch {};
-}
 
 fn shellPid() i64 {
     if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) return @intCast(std.os.linux.getpid());
@@ -3202,9 +3215,30 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
 
 fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
-    _ = options;
-    if (command.argv.len > 1) return errorResult(self.allocator, 127, "wait", "job ids are not implemented yet");
-    return emptyResult(self.allocator, 0);
+    if (command.argv.len == 1 and self.background_jobs.items.len == 0) return emptyResult(self.allocator, 0);
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    if (command.argv.len == 1) {
+        var status: ExitStatus = 0;
+        for (self.background_jobs.items) |*job| status = try waitBackgroundJob(io, job);
+        return emptyResult(self.allocator, status);
+    }
+
+    var status: ExitStatus = 0;
+    for (command.argv[1..]) |arg| {
+        const pid = std.fmt.parseInt(i64, arg.text, 10) catch return errorResult(self.allocator, 127, "wait", "invalid pid");
+        const job = self.findBackgroundJob(pid) orelse return errorResult(self.allocator, 127, "wait", "unknown pid");
+        status = try waitBackgroundJob(io, job);
+    }
+    return emptyResult(self.allocator, status);
+}
+
+fn waitBackgroundJob(io: std.Io, job: *BackgroundJob) !ExitStatus {
+    if (!job.done) {
+        const term = try job.child.wait(io);
+        job.status = exitStatusFromTerm(term);
+        job.done = true;
+    }
+    return job.status;
 }
 
 fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -4835,6 +4869,20 @@ test "executor handles builtin async fallback" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("bg\nfg\n", result.stdout);
+}
+
+test "executor waits for background pid operands" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'exit 7' & wait $!; echo status=$?");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status=7\n", result.stdout);
 }
 
 test "executor starts external commands asynchronously" {
