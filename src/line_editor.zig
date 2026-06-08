@@ -783,22 +783,46 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
         var line: std.ArrayList(u8) = .empty;
         errdefer line.deinit(allocator);
         const label = candidate.display orelse candidate.value;
-        if (index == selected) try line.appendSlice(allocator, "\x1b[7m❯ ") else try line.appendSlice(allocator, "  ");
+        if (index == selected) try line.appendSlice(allocator, "\x1b[1;38;5;81m❯\x1b[22;39m ") else try line.appendSlice(allocator, "  ");
+        if (index == selected) try line.appendSlice(allocator, "\x1b[1m");
+        try appendCompletionKindStyle(allocator, &line, candidate.kind);
         try appendPaddedCell(allocator, &line, label, label_width);
+        try line.appendSlice(allocator, "\x1b[22;39m");
         try line.append(allocator, ' ');
+        try line.appendSlice(allocator, "\x1b[2m");
         try appendPaddedCell(allocator, &line, @tagName(candidate.kind), kind_width);
+        try line.appendSlice(allocator, "\x1b[22m");
         if (candidate.description) |description| {
             if (description.len != 0 and description_width != 0) {
                 try line.append(allocator, ' ');
+                try line.appendSlice(allocator, "\x1b[90m");
                 try appendTruncated(allocator, &line, description, description_width);
+                try line.appendSlice(allocator, "\x1b[39m");
             }
         }
-        if (index == selected) try line.appendSlice(allocator, "\x1b[27m");
         try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
     if (window.start != 0 or window.end != candidates.len) {
-        try lines.append(allocator, try std.fmt.allocPrint(allocator, "  showing {d}-{d} of {d}", .{ window.start + 1, window.end, candidates.len }));
+        try lines.append(allocator, try std.fmt.allocPrint(allocator, "  \x1b[2mshowing {d}-{d} of {d}\x1b[22m", .{ window.start + 1, window.end, candidates.len }));
     }
+}
+
+fn appendCompletionKindStyle(allocator: std.mem.Allocator, line: *std.ArrayList(u8), kind: completion.Kind) !void {
+    const color: u8 = switch (kind) {
+        .command => 39,
+        .builtin => 39,
+        .function => 35,
+        .file => 250,
+        .directory => 33,
+        .variable => 45,
+        .option => 81,
+        .subcommand => 39,
+        .plain => 39,
+    };
+    if (color == 39) return;
+    const sequence = try std.fmt.allocPrint(allocator, "\x1b[38;5;{d}m", .{color});
+    defer allocator.free(sequence);
+    try line.appendSlice(allocator, sequence);
 }
 
 const CompletionMenuWindow = struct {
@@ -1245,9 +1269,28 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "subcommand") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[7m❯ checkout") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯\x1b[22;39m \x1b[1mcheckout") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2msubcommand") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mswitch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "git che\x1b[J") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
+}
+
+test "completion menu styles candidates by kind" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "--help", .description = "show help", .kind = .option, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "$HOME", .description = "home directory", .kind = .variable, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "src", .description = "source directory", .kind = .directory, .replace_start = 0, .replace_end = 0 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;81m--help") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;45m$HOME") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;33msrc") != null);
 }
 
 test "completion menu selection accepts selected candidate" {
@@ -1354,7 +1397,7 @@ test "completion menu visible window follows selection" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "three") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[7m❯ three") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯\x1b[22;39m \x1b[1mthree") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 3-3 of 3") != null);
 }
 
@@ -1375,14 +1418,14 @@ test "completion menu only pins selection to bottom while scrolling down" {
     defer std.testing.allocator.free(scrolled_down);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "two") != null);
-    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[7m❯ three") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1;38;5;81m❯\x1b[22;39m \x1b[1mthree") != null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "showing 2-3 of 4") != null);
 
     try session.handleKey(.{ .key = .up });
     const moved_up = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 4 });
     defer std.testing.allocator.free(moved_up);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "one") == null);
-    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[7m❯ two") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1;38;5;81m❯\x1b[22;39m \x1b[1mtwo") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "three") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "showing 2-3 of 4") != null);
 }
