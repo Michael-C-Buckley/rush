@@ -766,7 +766,7 @@ pub const Executor = struct {
         var has_builtin = false;
         for (pipeline.command_indexes) |command_index| {
             const command = program.commands[command_index];
-            if (builtinFor(command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
+            if (builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
                 has_builtin = true;
                 break;
             }
@@ -840,7 +840,7 @@ pub const Executor = struct {
                 .redirections = &.{},
             };
 
-            if (builtinFor(command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
+            if (builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
                 const context = try self.allocator.create(BuiltinPipelineContext);
                 errdefer self.allocator.destroy(context);
                 context.* = .{
@@ -1160,7 +1160,7 @@ pub const Executor = struct {
             return try self.applyOutputRedirections(expanded, result, options);
         }
 
-        if (builtinFor(expanded.argv[0].text)) |builtin| {
+        if (builtinForName(self.*, expanded.argv[0].text)) |builtin| {
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
                 error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
                 error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(expanded), "bad file descriptor"),
@@ -2248,6 +2248,14 @@ fn isSpecialBuiltin(name: []const u8) bool {
         std.mem.eql(u8, name, "unset");
 }
 
+fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
+    if (self.prompt_builder != null) {
+        if (std.mem.eql(u8, name, "prompt")) return builtinPrompt;
+        if (std.mem.eql(u8, name, "prompt_pwd")) return builtinPromptPwd;
+    }
+    return builtinFor(name);
+}
+
 fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, ".")) return builtinSource;
     if (std.mem.eql(u8, name, ":")) return builtinTrue;
@@ -2260,8 +2268,6 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "continue")) return builtinContinue;
     if (std.mem.eql(u8, name, "cd")) return builtinCd;
     if (std.mem.eql(u8, name, "printf")) return builtinPrintf;
-    if (std.mem.eql(u8, name, "prompt")) return builtinPrompt;
-    if (std.mem.eql(u8, name, "prompt_pwd")) return builtinPromptPwd;
     if (std.mem.eql(u8, name, "pwd")) return builtinPwd;
     if (std.mem.eql(u8, name, "read")) return builtinRead;
     if (std.mem.eql(u8, name, "readonly")) return builtinReadonly;
@@ -2302,7 +2308,7 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     if (std.mem.eql(u8, command.argv[1].text, "-v")) {
         if (command.argv.len != 3) return errorResult(self.allocator, 2, "command", "unsupported arguments");
         const name = command.argv[2].text;
-        if (builtinFor(name) != null) return stdoutLine(self.allocator, name, 0);
+        if (builtinForName(self.*, name) != null) return stdoutLine(self.allocator, name, 0);
         if (self.functions.get(name) != null) return stdoutLine(self.allocator, name, 0);
         if (options.io) |io| {
             if (try self.findExecutableInPath(io, name)) |path| {

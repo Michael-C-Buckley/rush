@@ -586,6 +586,18 @@ test "executor smoke corpus returns expected statuses and output fragments" {
     }
 }
 
+test "prompt DSL commands are scoped to prompt rendering" {
+    var prompt_result = try runScript(std.testing.allocator, std.testing.io, "prompt text hi");
+    defer prompt_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 127), prompt_result.status);
+    try std.testing.expectEqualStrings("prompt: command not found\n", prompt_result.stderr);
+
+    var command_result = try runScript(std.testing.allocator, std.testing.io, "command -v prompt");
+    defer command_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 1), command_result.status);
+    try std.testing.expectEqualStrings("", command_result.stdout);
+}
+
 test "repl uses rush_prompt function to build prompt text" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\rush_prompt() { prompt segment --fg blue custom; prompt text ' > '; }
