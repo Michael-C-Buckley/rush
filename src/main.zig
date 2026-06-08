@@ -996,6 +996,24 @@ test "executor smoke corpus returns expected statuses and output fragments" {
     }
 }
 
+test "aliases do not replace reserved words or function definition names" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io,
+        \\alias if='echo bad'
+        \\if true; then echo ok; fi
+        \\alias greet='echo alias'
+        \\greet() { echo function; }
+        \\unalias greet
+        \\greet
+        \\exit
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "ok\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "function\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "bad\n") == null);
+}
+
 test "repl expands aliases defined on previous input lines" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\alias ll='echo alias-ok'

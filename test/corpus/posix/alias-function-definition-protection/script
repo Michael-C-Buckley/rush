@@ -1,0 +1,4 @@
+alias greet='echo alias'
+greet() { echo function; }
+unalias greet
+greet

@@ -847,7 +847,7 @@ pub const Executor = struct {
             const start = index;
             while (index < script.len and !isAliasWordBoundary(script[index])) : (index += 1) {}
             const word = script[start..index];
-            if (command_position) {
+            if (command_position and !isReservedAliasWord(word) and !looksLikeFunctionDefinitionName(script, index)) {
                 if (self.aliases.get(word)) |value| {
                     try output.appendSlice(self.allocator, value);
                     command_position = value.len > 0 and (value[value.len - 1] == ' ' or value[value.len - 1] == '\t');
@@ -2877,6 +2877,34 @@ fn isShellSeparatorByte(byte: u8) bool {
 
 fn isAliasWordBoundary(byte: u8) bool {
     return byte == ' ' or byte == '\t' or byte == '\r' or byte == '\n' or byte == ';' or byte == '&' or byte == '|' or byte == '(' or byte == ')' or byte == '<' or byte == '>';
+}
+
+fn isReservedAliasWord(word: []const u8) bool {
+    return std.mem.eql(u8, word, "if") or
+        std.mem.eql(u8, word, "then") or
+        std.mem.eql(u8, word, "else") or
+        std.mem.eql(u8, word, "elif") or
+        std.mem.eql(u8, word, "fi") or
+        std.mem.eql(u8, word, "do") or
+        std.mem.eql(u8, word, "done") or
+        std.mem.eql(u8, word, "case") or
+        std.mem.eql(u8, word, "esac") or
+        std.mem.eql(u8, word, "for") or
+        std.mem.eql(u8, word, "while") or
+        std.mem.eql(u8, word, "until") or
+        std.mem.eql(u8, word, "in") or
+        std.mem.eql(u8, word, "{") or
+        std.mem.eql(u8, word, "}") or
+        std.mem.eql(u8, word, "!");
+}
+
+fn looksLikeFunctionDefinitionName(script: []const u8, after_word: usize) bool {
+    var index = after_word;
+    while (index < script.len and (script[index] == ' ' or script[index] == '\t' or script[index] == '\r')) : (index += 1) {}
+    if (index >= script.len or script[index] != '(') return false;
+    index += 1;
+    while (index < script.len and (script[index] == ' ' or script[index] == '\t' or script[index] == '\r')) : (index += 1) {}
+    return index < script.len and script[index] == ')';
 }
 
 fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {

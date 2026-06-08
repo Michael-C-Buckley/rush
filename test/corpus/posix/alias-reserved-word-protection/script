@@ -1,0 +1,2 @@
+alias if='echo bad'
+if true; then echo ok; fi
