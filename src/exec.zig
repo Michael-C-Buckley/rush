@@ -4287,16 +4287,21 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
 fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
-    if (command.argv.len < 2) return errorResult(self.allocator, 2, command.argv[0].text, "missing file operand");
-    if (command.argv.len > 2) return errorResult(self.allocator, 2, command.argv[0].text, "arguments are not implemented yet");
+    if (command.argv.len < 2) return sourceUsageError(self, command.argv[0].text, 2, "missing file operand");
+    if (command.argv.len > 2) return sourceUsageError(self, command.argv[0].text, 2, "arguments are not implemented yet");
     const contents = self.readSourceFile(io, command.argv[1].text) catch |err| switch (err) {
-        error.FileNotFound => return errorResult(self.allocator, 1, command.argv[0].text, "file not found"),
+        error.FileNotFound => return sourceUsageError(self, command.argv[0].text, 1, "file not found"),
         else => |e| return e,
     };
     defer self.allocator.free(contents);
     var source_options = options;
     source_options.source_path = command.argv[1].text;
     return self.executeScriptSlice(contents, source_options);
+}
+
+fn sourceUsageError(self: *Executor, name: []const u8, status: ExitStatus, message: []const u8) !CommandResult {
+    if (std.mem.eql(u8, name, ".")) self.pending_exit = status;
+    return errorResult(self.allocator, status, name, message);
 }
 
 fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
