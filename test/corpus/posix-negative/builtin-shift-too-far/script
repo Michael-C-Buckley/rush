@@ -1,0 +1,3 @@
+set -- one
+shift 2
+echo after

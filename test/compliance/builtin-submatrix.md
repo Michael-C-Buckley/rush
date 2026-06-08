@@ -27,7 +27,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `readonly` | `vars-readonly` | `builtin-readonly` | option forms, invalid names, assignment diagnostics |
 | `return` | covered by function tests | `builtin-return-status`, unit coverage | negative corpus for return outside function and invalid operands |
 | `set` | `option-set`, option rows | shell option and positional parameter corpus | many POSIX flags, `--`, invalid options, exact diagnostics |
-| `shift` | builtin row through tests | `builtin-shift` | shifting too far, invalid operands, status/diagnostic corpus |
+| `shift` | `builtin-shift-too-far`, builtin row through tests | `builtin-shift`, `builtin-shift-too-far` | invalid operands and additional status/diagnostic corpus |
 | `times` | `builtin-times` | `builtin-times` | portability/runtime precision is baseline only |
 | `trap` | `builtin-trap`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus | signal semantics, ignored signals, invalid names, inheritance |
 | `unset` | `builtin-export-unset` | unit-level unset coverage | `-v`/`-f`, readonly failure, invalid names |
@@ -75,7 +75,7 @@ The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `r
 
 - `return` outside a function;
 - `break`/`continue` outside loops and invalid levels;
-- `shift` too far;
+- `shift` invalid operands;
 - `exit` invalid numeric operand;
 - `export`, `readonly`, and `unset` invalid or readonly names;
 - `printf` invalid format and missing numeric conversions;

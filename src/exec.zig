@@ -5858,7 +5858,10 @@ fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         if (command.argv.len > 2) return errorResult(self.allocator, 2, "shift", "too many arguments");
         break :blk std.fmt.parseInt(usize, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, "shift", "numeric argument required");
     };
-    if (amount > positionals.params.len) return emptyResult(self.allocator, 1);
+    if (amount > positionals.params.len) {
+        self.pending_exit = 1;
+        return errorResult(self.allocator, 1, "shift", "shift count out of range");
+    }
     if (positionals.owned) {
         for (positionals.params[0..amount]) |param| self.allocator.free(param);
         std.mem.copyForwards([]const u8, positionals.params[0 .. positionals.params.len - amount], positionals.params[amount..]);
