@@ -1,0 +1,9 @@
+echo start:$LINENO
+
+echo after-blank:$LINENO
+f() {
+  echo function:$LINENO
+}
+f
+echo command-sub:$(echo $LINENO)
+echo parent:$LINENO

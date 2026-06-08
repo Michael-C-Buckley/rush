@@ -525,6 +525,8 @@ pub const Executor = struct {
     arg_zero: []const u8 = "rush",
     last_status_text: [3]u8 = .{ '0', 0, 0 },
     last_status_text_len: usize = 1,
+    lineno_text: [32]u8 = .{ '1', 0 } ++ .{0} ** 30,
+    lineno_text_len: usize = 1,
     last_command_duration_text: [32]u8 = .{ '0', 0 } ++ .{0} ** 30,
     last_command_duration_text_len: usize = 1,
     pid_text: [32]u8 = undefined,
@@ -595,6 +597,17 @@ pub const Executor = struct {
     pub fn setLastStatus(self: *Executor, status: ExitStatus) void {
         const text = std.fmt.bufPrint(&self.last_status_text, "{d}", .{status}) catch unreachable;
         self.last_status_text_len = text.len;
+    }
+
+    fn setCurrentLineNumber(self: *Executor, source: []const u8, offset: usize) void {
+        var line: usize = 1;
+        var index: usize = 0;
+        const end = @min(offset, source.len);
+        while (index < end) : (index += 1) {
+            if (source[index] == '\n') line += 1;
+        }
+        const text = std.fmt.bufPrint(&self.lineno_text, "{d}", .{line}) catch unreachable;
+        self.lineno_text_len = text.len;
     }
 
     pub fn setLastCommandDuration(self: *Executor, duration_ms: i64) void {
@@ -1118,6 +1131,7 @@ pub const Executor = struct {
         if (program.statements.len > 0) {
             for (program.statements, 0..) |statement, statement_index| {
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
+                self.setCurrentLineNumber(program.source, statement.span.start);
                 var result = if (statement.async_after)
                     try self.executeAsyncStatement(program, statement, options)
                 else switch (statement.kind) {
@@ -1145,6 +1159,7 @@ pub const Executor = struct {
         if (program.pipelines.len > 0) {
             for (program.pipelines, 0..) |pipeline, pipeline_index| {
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
+                self.setCurrentLineNumber(program.source, pipeline.span.start);
                 var result = if (pipeline.async_after)
                     try self.executeAsyncPipeline(program, pipeline, options)
                 else
@@ -1161,6 +1176,7 @@ pub const Executor = struct {
         }
 
         for (program.commands) |command| {
+            self.setCurrentLineNumber(program.source, command.span.start);
             var result = try self.executeSimpleCommand(command, options);
             defer result.deinit();
             try self.appendOrWriteResult(options, &stdout, &stderr, result);
@@ -2647,8 +2663,14 @@ pub const Executor = struct {
         var sub_options = substitution_context.options;
         sub_options.external_stdio = .capture;
         const saved_pending_exit = substitution_context.executor.pending_exit;
+        const saved_lineno_text = substitution_context.executor.lineno_text;
+        const saved_lineno_text_len = substitution_context.executor.lineno_text_len;
         substitution_context.executor.pending_exit = null;
-        defer substitution_context.executor.pending_exit = saved_pending_exit;
+        defer {
+            substitution_context.executor.pending_exit = saved_pending_exit;
+            substitution_context.executor.lineno_text = saved_lineno_text;
+            substitution_context.executor.lineno_text_len = saved_lineno_text_len;
+        }
         var result = try substitution_context.executor.executeProgram(program, sub_options);
         defer result.deinit();
         substitution_context.executor.command_substitution_status = result.status;
@@ -2673,6 +2695,7 @@ pub const Executor = struct {
         if (std.mem.eql(u8, name, "?")) return self.last_status_text[0..self.last_status_text_len];
         if (std.mem.eql(u8, name, "$")) return self.pid_text[0..self.pid_text_len];
         if (std.mem.eql(u8, name, "!")) return self.last_background_pid_text[0..self.last_background_pid_text_len];
+        if (std.mem.eql(u8, name, "LINENO")) return self.lineno_text[0..self.lineno_text_len];
         if (std.mem.eql(u8, name, "0")) return self.arg_zero;
         const positionals = self.currentPositionals();
         if (std.mem.eql(u8, name, "#")) return positionals.count;

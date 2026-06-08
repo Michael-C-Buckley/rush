@@ -124,6 +124,7 @@ ifs-custom-comma	expansion	behavior	-
 ifs-empty-no-splitting	expansion	behavior	-
 jobs-background-table	job_control	job	-
 jobs-operand-filter	job_control	job	jobs operand filters by job id
+lineno-basic	variables	behavior	LINENO follows executing script lines and resets inside functions and command substitutions
 multiple-here-docs	redirection	here-doc	-
 nested-if	grammar	behavior	-
 newline-list	grammar	behavior	-
