@@ -106,3 +106,5 @@ x=2; y=5; echo $((x + y * 2)); echo $((unset_name + x))
 echo $((x = 3)); echo $x; echo $((x += 4)); echo $x
 x=8; echo $((x /= 2)); echo $x; echo $((x %= 3)); echo $x
 echo $((3 > 2)); echo $((3 == 2)); echo $((1 || 0)); echo $((1 && 0)); echo $(((5 & 3) | 4)); echo $((1 << 4)); echo $((0 ? 1 : 7))
+exec /bin/sh -c 'printf exec-ok'; echo nope
+VAR=ok exec /bin/sh -c 'printf "$VAR"'

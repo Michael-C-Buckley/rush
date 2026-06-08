@@ -1844,6 +1844,56 @@ pub const Executor = struct {
         }
     }
 
+    fn replaceWithExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io) !CommandResult {
+        const executable = try self.findExecutableInPath(io, command.argv[0].text) orelse return errorResult(self.allocator, 127, command.argv[0].text, "command not found");
+        defer self.allocator.free(executable);
+
+        var child_env = try self.buildProcessEnv(command.assignments);
+        defer child_env.deinit();
+        var argv_storage: std.ArrayList([:0]u8) = .empty;
+        defer {
+            for (argv_storage.items) |arg| self.allocator.free(arg);
+            argv_storage.deinit(self.allocator);
+        }
+        const argv_ptrs = try self.allocator.alloc(?[*:0]const u8, command.argv.len + 1);
+        defer self.allocator.free(argv_ptrs);
+        for (command.argv, 0..) |word, index| {
+            const arg = try self.allocator.dupeZ(u8, word.text);
+            errdefer self.allocator.free(arg);
+            try argv_storage.append(self.allocator, arg);
+            argv_ptrs[index] = arg.ptr;
+        }
+        argv_ptrs[command.argv.len] = null;
+
+        var env_storage: std.ArrayList([:0]u8) = .empty;
+        defer {
+            for (env_storage.items) |entry| self.allocator.free(entry);
+            env_storage.deinit(self.allocator);
+        }
+        const keys = child_env.keys();
+        const values = child_env.values();
+        const env_ptrs = try self.allocator.alloc(?[*:0]const u8, keys.len + 1);
+        defer self.allocator.free(env_ptrs);
+        for (keys, values, 0..) |key, value, index| {
+            const printed = try std.fmt.allocPrint(self.allocator, "{s}={s}", .{ key, value });
+            defer self.allocator.free(printed);
+            const entry = try self.allocator.dupeZ(u8, printed);
+            errdefer self.allocator.free(entry);
+            try env_storage.append(self.allocator, entry);
+            env_ptrs[index] = entry.ptr;
+        }
+        env_ptrs[keys.len] = null;
+
+        const path = try self.allocator.dupeZ(u8, executable);
+        defer self.allocator.free(path);
+        execve(path.ptr, @ptrCast(argv_ptrs.ptr), @ptrCast(env_ptrs.ptr)) catch |err| switch (err) {
+            error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
+            error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            else => return err,
+        };
+        unreachable;
+    }
+
     fn setLastBackgroundPid(self: *Executor, pid: i64) void {
         const text = std.fmt.bufPrint(&self.last_background_pid_text, "{d}", .{pid}) catch return;
         self.last_background_pid_text_len = text.len;
@@ -2012,6 +2062,31 @@ pub const Executor = struct {
         };
     }
 };
+
+const ExecveError = error{ FileNotFound, AccessDenied, PermissionDenied, ExecFailed, Unsupported };
+
+fn execve(path: [*:0]const u8, argv: [*:null]const ?[*:0]const u8, envp: [*:null]const ?[*:0]const u8) ExecveError!void {
+    if (zig_builtin.os.tag == .windows or zig_builtin.os.tag == .wasi) return error.Unsupported;
+    if (zig_builtin.link_libc) {
+        const rc = std.c.execve(path, argv, envp);
+        return switch (std.c.errno(rc)) {
+            .SUCCESS => unreachable,
+            .NOENT, .NOTDIR => error.FileNotFound,
+            .ACCES, .PERM => error.AccessDenied,
+            else => error.ExecFailed,
+        };
+    }
+    if (zig_builtin.os.tag == .linux) {
+        const rc = std.os.linux.execve(path, argv, envp);
+        return switch (std.os.linux.errno(rc)) {
+            .SUCCESS => unreachable,
+            .NOENT, .NOTDIR => error.FileNotFound,
+            .ACCES, .PERM => error.AccessDenied,
+            else => error.ExecFailed,
+        };
+    }
+    return error.Unsupported;
+}
 
 fn shellPid() i64 {
     if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) return @intCast(std.os.linux.getpid());
@@ -2621,6 +2696,9 @@ fn builtinEval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     if (command.argv.len == 1) return emptyResult(self.allocator, 0);
     const nested = simpleCommandFromArgs(command, 1);
+    if (options.allow_external and options.external_stdio == .inherit and options.io != null and builtinForName(self.*, nested.argv[0].text) == null and self.functions.get(nested.argv[0].text) == null) {
+        return self.replaceWithExternal(nested, options.io.?);
+    }
     var result = try self.executeSimpleCommandWithInput(nested, stdin, options);
     errdefer result.deinit();
     self.pending_exit = result.status;
