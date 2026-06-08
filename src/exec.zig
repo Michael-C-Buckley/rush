@@ -6068,9 +6068,32 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         errdefer self.allocator.free(stdout);
         return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
     }
-    const new_mask = std.fmt.parseInt(u16, command.argv[1].text, 8) catch return errorResult(self.allocator, 2, "umask", "invalid mask");
+    const operand = command.argv[1].text;
+    if (std.mem.eql(u8, operand, "-S")) return symbolicUmaskResult(self.allocator, old);
+    if (std.mem.startsWith(u8, operand, "-")) return errorResult(self.allocator, 2, "umask", "unsupported option");
+    const new_mask = std.fmt.parseInt(u16, operand, 8) catch return errorResult(self.allocator, 2, "umask", "invalid mask");
     _ = shellUmask(new_mask);
     return emptyResult(self.allocator, 0);
+}
+
+fn symbolicUmaskResult(allocator: std.mem.Allocator, mask: u32) !CommandResult {
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(allocator);
+    const permissions: u32 = (~mask) & 0o777;
+    try stdout.appendSlice(allocator, "u=");
+    try appendSymbolicPermissions(allocator, &stdout, @intCast((permissions >> 6) & 0o7));
+    try stdout.appendSlice(allocator, ",g=");
+    try appendSymbolicPermissions(allocator, &stdout, @intCast((permissions >> 3) & 0o7));
+    try stdout.appendSlice(allocator, ",o=");
+    try appendSymbolicPermissions(allocator, &stdout, @intCast(permissions & 0o7));
+    try stdout.append(allocator, '\n');
+    return .{ .allocator = allocator, .status = 0, .stdout = try stdout.toOwnedSlice(allocator), .stderr = try allocator.alloc(u8, 0) };
+}
+
+fn appendSymbolicPermissions(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), bits: u3) !void {
+    if (bits & 0o4 != 0) try stdout.append(allocator, 'r');
+    if (bits & 0o2 != 0) try stdout.append(allocator, 'w');
+    if (bits & 0o1 != 0) try stdout.append(allocator, 'x');
 }
 
 const JobPrintMode = enum { normal, long, pids };

@@ -209,3 +209,4 @@ builtin-pwd-logical-physical	builtin	behavior	pwd -L preserves logical PWD while
 builtin-cd-logical-physical	builtin	behavior	cd -L sets logical PWD while cd -P sets physical PWD through a symlink
 builtin-export-readonly-p	builtin	behavior	export -p and readonly -p list marked variables
 builtin-unset-variable-function	builtin	behavior	unset -v removes variables and unset -f removes functions
+builtin-umask-symbolic-output	builtin	behavior	umask -S prints symbolic permissions for the current mask
