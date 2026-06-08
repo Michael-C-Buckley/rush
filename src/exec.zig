@@ -4259,10 +4259,55 @@ fn waitBackgroundJob(io: std.Io, job: *BackgroundJob) !ExitStatus {
 }
 
 fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    _ = command;
     _ = stdin;
     _ = options;
-    return .{ .allocator = self.allocator, .status = 0, .stdout = try self.allocator.dupe(u8, "0m0.00s 0m0.00s\n0m0.00s 0m0.00s\n"), .stderr = try self.allocator.alloc(u8, 0) };
+    if (command.argv.len != 1) return errorResult(self.allocator, 2, "times", "too many arguments");
+    const usage = readResourceUsage();
+    const self_user = try formatCpuTime(self.allocator, usage.self_user);
+    defer self.allocator.free(self_user);
+    const self_system = try formatCpuTime(self.allocator, usage.self_system);
+    defer self.allocator.free(self_system);
+    const children_user = try formatCpuTime(self.allocator, usage.children_user);
+    defer self.allocator.free(children_user);
+    const children_system = try formatCpuTime(self.allocator, usage.children_system);
+    defer self.allocator.free(children_system);
+    const stdout = try std.fmt.allocPrint(self.allocator, "{s} {s}\n{s} {s}\n", .{ self_user, self_system, children_user, children_system });
+    errdefer self.allocator.free(stdout);
+    return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+const CpuUsage = struct {
+    self_user: u64 = 0,
+    self_system: u64 = 0,
+    children_user: u64 = 0,
+    children_system: u64 = 0,
+};
+
+fn readResourceUsage() CpuUsage {
+    if (!zig_builtin.link_libc) return .{};
+    var self_usage: std.c.rusage = undefined;
+    var child_usage: std.c.rusage = undefined;
+    const self_ok = std.c.getrusage(0, &self_usage) == 0;
+    const child_ok = std.c.getrusage(-1, &child_usage) == 0;
+    return .{
+        .self_user = if (self_ok) timevalCentiseconds(self_usage.utime) else 0,
+        .self_system = if (self_ok) timevalCentiseconds(self_usage.stime) else 0,
+        .children_user = if (child_ok) timevalCentiseconds(child_usage.utime) else 0,
+        .children_system = if (child_ok) timevalCentiseconds(child_usage.stime) else 0,
+    };
+}
+
+fn timevalCentiseconds(value: std.c.timeval) u64 {
+    const seconds: u64 = @intCast(if (value.sec < 0) 0 else value.sec);
+    const micros: u64 = @intCast(if (value.usec < 0) 0 else value.usec);
+    return seconds * 100 + micros / 10_000;
+}
+
+fn formatCpuTime(allocator: std.mem.Allocator, centiseconds: u64) ![]u8 {
+    const minutes = centiseconds / 6000;
+    const seconds = (centiseconds / 100) % 60;
+    const hundredths = centiseconds % 100;
+    return std.fmt.allocPrint(allocator, "{d}m{d}.{d:0>2}s", .{ minutes, seconds, hundredths });
 }
 
 fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -4604,6 +4649,20 @@ fn exitStatusFromTerm(term: std.process.Child.Term) ExitStatus {
 }
 
 const LoweredForTest = struct { parsed: parser.ParseResult, program: ir.Program };
+
+fn expectTimesOutputShape(output: []const u8) !void {
+    var lines = std.mem.splitScalar(u8, output, '\n');
+    const first = lines.next() orelse return error.MissingTimesLine;
+    const second = lines.next() orelse return error.MissingTimesLine;
+    const third = lines.next() orelse return error.MissingTimesLine;
+    try std.testing.expect(first.len != 0);
+    try std.testing.expect(second.len != 0);
+    try std.testing.expectEqualStrings("", third);
+    try std.testing.expect(std.mem.indexOf(u8, first, "m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, first, "s ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, second, "m") != null);
+    try std.testing.expect(std.mem.endsWith(u8, second, "s"));
+}
 
 fn parseAndLower(allocator: std.mem.Allocator, source: []const u8) !LoweredForTest {
     return parseAndLowerWithOptions(allocator, source, .{});
@@ -5247,7 +5306,7 @@ test "executor implements readonly shift umask wait and times builtins" {
     var wait_times_result = try executor.executeProgram(wait_times_lowered.program, .{});
     defer wait_times_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), wait_times_result.status);
-    try std.testing.expectEqualStrings("0m0.00s 0m0.00s\n0m0.00s 0m0.00s\n", wait_times_result.stdout);
+    try expectTimesOutputShape(wait_times_result.stdout);
 
     var umask_lowered = try parseAndLower(std.testing.allocator, "umask 022; umask");
     defer umask_lowered.parsed.deinit();
