@@ -1,0 +1,4 @@
+cat <<EOF
+if then bad
+EOF
+echo after

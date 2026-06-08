@@ -166,6 +166,7 @@ pub const NodeKind = enum {
     command_word,
     word,
     command_substitution,
+    here_doc_body,
     if_command,
     loop_command,
     for_command,
@@ -800,6 +801,9 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
     lex_result.diagnostics = &.{};
 
     try parser.run();
+    parser.freePendingHereDocs();
+    parser.pending_here_docs.deinit(allocator);
+    parser.pending_here_docs = .empty;
 
     return .{
         .allocator = allocator,
@@ -812,6 +816,66 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
     };
 }
 
+const PendingHereDoc = struct {
+    delimiter: []const u8,
+    strip_tabs: bool,
+};
+
+fn hereDocDelimiterFromRaw(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    var quote: ?u8 = null;
+    var index: usize = 0;
+    while (index < raw.len) : (index += 1) {
+        const byte = raw[index];
+        if (quote) |active| {
+            if (byte == active) {
+                quote = null;
+            } else if (active == '"' and byte == '\\' and index + 1 < raw.len) {
+                index += 1;
+                try out.append(allocator, raw[index]);
+            } else {
+                try out.append(allocator, byte);
+            }
+        } else if (byte == '\'' or byte == '"') {
+            quote = byte;
+        } else if (byte == '\\' and index + 1 < raw.len) {
+            index += 1;
+            try out.append(allocator, raw[index]);
+        } else {
+            try out.append(allocator, byte);
+        }
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+const HereDocBodyParse = struct {
+    span: Span,
+    found_delimiter: bool,
+};
+
+fn parseHereDocBodySpan(source: []const u8, start: usize, delimiter: []const u8, strip_tabs: bool) HereDocBodyParse {
+    var index = @min(start, source.len);
+    while (index <= source.len) {
+        const raw_line_start = index;
+        while (index < source.len and source[index] != '\n') : (index += 1) {}
+        const raw_line_end = index;
+        const line_start_no_tabs = if (strip_tabs) blk: {
+            var line_start = raw_line_start;
+            while (line_start < raw_line_end and source[line_start] == '\t') : (line_start += 1) {}
+            break :blk line_start;
+        } else raw_line_start;
+        if (std.mem.eql(u8, source[line_start_no_tabs..raw_line_end], delimiter)) {
+            const end = if (index < source.len and source[index] == '\n') index + 1 else index;
+            return .{ .span = .init(start, end), .found_delimiter = true };
+        }
+        if (index < source.len and source[index] == '\n') {
+            index += 1;
+        } else break;
+    }
+    return .{ .span = .init(start, source.len), .found_delimiter = false };
+}
+
 const SyntaxParser = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
@@ -821,12 +885,15 @@ const SyntaxParser = struct {
     nodes: std.ArrayList(Node) = .empty,
     children: std.ArrayList(SyntaxChild) = .empty,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
+    pending_here_docs: std.ArrayList(PendingHereDoc) = .empty,
     incomplete: bool = false,
 
     fn deinit(self: *SyntaxParser) void {
         self.nodes.deinit(self.allocator);
         self.children.deinit(self.allocator);
         self.diagnostics.deinit(self.allocator);
+        self.freePendingHereDocs();
+        self.pending_here_docs.deinit(self.allocator);
     }
 
     fn run(self: *SyntaxParser) !void {
@@ -938,12 +1005,16 @@ const SyntaxParser = struct {
             }
 
             if (self.current().kind.isTrivia() or isListSeparator(self.current().kind)) {
+                const was_newline = self.at(.newline);
                 try self.appendCurrentTokenChildTo(&list_children);
+                if (was_newline) try self.drainHereDocBodies(&list_children);
                 continue;
             }
 
             break;
         }
+
+        if (self.at(.eof)) try self.drainHereDocBodies(&list_children);
 
         const token_end = self.index;
         const child_start = self.children.items.len;
@@ -1458,6 +1529,7 @@ const SyntaxParser = struct {
         }
 
         std.debug.assert(self.current().kind.isRedirectOperator());
+        const operator = self.current().kind;
         const operator_span = self.current().span;
         try self.appendCurrentTokenChildTo(&redirection_children);
 
@@ -1466,9 +1538,16 @@ const SyntaxParser = struct {
         }
 
         if (self.at(.word)) {
+            const raw_target = self.current().lexeme(self.source);
             const target = try self.addWordNode(.word, self.index);
             try redirection_children.append(self.allocator, .{ .node = target });
             self.index += 1;
+            if (operator == .dless or operator == .dless_dash) {
+                try self.pending_here_docs.append(self.allocator, .{
+                    .delimiter = try hereDocDelimiterFromRaw(self.allocator, raw_target),
+                    .strip_tabs = operator == .dless_dash,
+                });
+            }
         } else {
             self.incomplete = true;
             try self.diagnostics.append(self.allocator, .{
@@ -1483,6 +1562,34 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, redirection_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.redirection, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn drainHereDocBodies(self: *SyntaxParser, children_out: *std.ArrayList(SyntaxChild)) !void {
+        while (self.pending_here_docs.items.len != 0) {
+            const doc = self.pending_here_docs.orderedRemove(0);
+            defer self.allocator.free(doc.delimiter);
+            const body_start = if (self.index < self.tokens.len) self.tokens[self.index].span.start else self.source.len;
+            const body = parseHereDocBodySpan(self.source, body_start, doc.delimiter, doc.strip_tabs);
+            const token_start = self.index;
+            while (!self.at(.eof) and self.current().span.start < body.span.end) : (self.index += 1) {}
+            const token_end = self.index;
+            const child_start = self.children.items.len;
+            const body_node = try self.addNode(.here_doc_body, body.span, token_start, token_end, child_start, child_start);
+            try children_out.append(self.allocator, .{ .node = body_node });
+            if (!body.found_delimiter) {
+                self.incomplete = true;
+                try self.diagnostics.append(self.allocator, .{
+                    .kind = .incomplete_input,
+                    .span = body.span,
+                    .message = "missing here-doc delimiter",
+                });
+            }
+        }
+    }
+
+    fn freePendingHereDocs(self: *SyntaxParser) void {
+        for (self.pending_here_docs.items) |doc| self.allocator.free(doc.delimiter);
+        self.pending_here_docs.clearRetainingCapacity();
     }
 
     fn addLeafNode(self: *SyntaxParser, kind: NodeKind, token_index: usize) !NodeId {
@@ -2417,7 +2524,45 @@ test "lexer tokenizes operators and redirections with max munch" {
             .{ .kind = .eof, .span = .empty(38) },
         },
         .nodes = &.{.{ .kind = .root, .span = .init(0, 38) }},
+        .diagnostics = &.{.{ .kind = .incomplete_input, .span = .empty(38), .message = "missing here-doc delimiter" }},
+        .incomplete = true,
     });
+}
+
+test "parser represents here-doc bodies as CST nodes" {
+    const source = "cat <<EOF\nhello\nEOF\necho after";
+    var result = try parse(std.testing.allocator, source, .{});
+    defer result.deinit();
+
+    var found_body = false;
+    for (result.nodes) |node| {
+        if (node.kind != .here_doc_body) continue;
+        found_body = true;
+        try expectSpan(.init(10, 20), node.span);
+    }
+    try std.testing.expect(found_body);
+    var command_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .simple_command) command_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), command_count);
+}
+
+test "parser orders multiple here-doc bodies on a command line" {
+    const source = "cat <<A <<B\na\nA\nb\nB\n";
+    var result = try parse(std.testing.allocator, source, .{});
+    defer result.deinit();
+
+    var spans: [2]Span = undefined;
+    var count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind != .here_doc_body) continue;
+        spans[count] = node.span;
+        count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), count);
+    try expectSpan(.init(12, 16), spans[0]);
+    try expectSpan(.init(16, 20), spans[1]);
 }
 
 test "parser represents command substitutions as nested word syntax" {
