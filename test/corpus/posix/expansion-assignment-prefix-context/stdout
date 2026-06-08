@@ -1,0 +1,4 @@
+LIST=/tmp/rush-home/bin:/tmp/rush-home
+VALUE=/tmp/rush-home
+A=one
+B=one

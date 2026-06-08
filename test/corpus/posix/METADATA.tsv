@@ -244,3 +244,4 @@ builtin-getopts-optind-reset	builtin	behavior	getopts rescans operands after OPT
 builtin-exec-redirection-only	builtin	behavior	exec without command operands applies redirections to the current shell
 builtin-cd-logical-dotdot	builtin	behavior	cd -L preserves logical symlink path through dotdot while cd -P resolves physically
 option-set-short-clusters	options	behavior	set accepts clustered short option flags
+expansion-assignment-prefix-context	expansion	behavior	assignment prefix expansion sees earlier assignments and tilde-prefix contexts

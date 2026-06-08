@@ -1,0 +1,2 @@
+HOME=/tmp/rush-home VALUE=~ LIST=~/bin:~ command -p env | grep -E '^(VALUE|LIST)=' | sort
+A=one B=$A command -p env | grep -E '^(A|B)=' | sort

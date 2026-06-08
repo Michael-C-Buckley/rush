@@ -8,7 +8,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 
 | POSIX area | manifest rows | current status | primary gaps |
 | --- | --- | --- | --- |
-| Tilde expansion | `expansion-tilde` | baseline | `~user`, assignment-word contexts, unset HOME edge cases |
+| Tilde expansion | `expansion-tilde`, `expansion-assignment-prefix-context` | baseline | `~user`, unset HOME edge cases |
 | Parameter expansion | `expansion-parameter-*` | supported/baseline | nested word edge cases, special-builtin consequences, broad-operator audit |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
 | Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | baseline | nested legacy backquote behavior, parsing contexts |

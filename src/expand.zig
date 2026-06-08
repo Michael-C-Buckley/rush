@@ -203,6 +203,17 @@ pub fn expandWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: 
     return renderWordParts(allocator, parts, options);
 }
 
+pub fn expandAssignmentWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {
+    _ = options.features;
+    const tilde_expanded = try expandAssignmentTilde(allocator, raw, options.env);
+    defer allocator.free(tilde_expanded);
+
+    var parts = try parseWordParts(allocator, tilde_expanded);
+    defer parts.deinit();
+
+    return renderWordParts(allocator, parts, options);
+}
+
 pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts {
     var parts: std.ArrayList(WordPart) = .empty;
     errdefer parts.deinit(allocator);
@@ -1293,6 +1304,78 @@ pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup
     if (raw.len > 1 and raw[1] != '/') return allocator.dupe(u8, raw);
     const home = env.get("HOME") orelse return allocator.dupe(u8, raw);
     return std.mem.concat(allocator, u8, &.{ home, raw[1..] });
+}
+
+pub fn expandAssignmentTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
+    const equals = std.mem.indexOfScalar(u8, raw, '=') orelse return allocator.dupe(u8, raw);
+    const home = env.get("HOME") orelse return allocator.dupe(u8, raw);
+
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    try output.appendSlice(allocator, raw[0 .. equals + 1]);
+
+    var index = equals + 1;
+    var at_tilde_prefix = true;
+    while (index < raw.len) {
+        switch (raw[index]) {
+            '\'' => {
+                const start = index;
+                index += 1;
+                while (index < raw.len and raw[index] != '\'') : (index += 1) {}
+                if (index < raw.len) index += 1;
+                try output.appendSlice(allocator, raw[start..index]);
+                at_tilde_prefix = false;
+            },
+            '"' => {
+                const start = index;
+                index += 1;
+                while (index < raw.len and raw[index] != '"') {
+                    if (raw[index] == '\\' and index + 1 < raw.len) {
+                        index += 2;
+                    } else {
+                        index += 1;
+                    }
+                }
+                if (index < raw.len) index += 1;
+                try output.appendSlice(allocator, raw[start..index]);
+                at_tilde_prefix = false;
+            },
+            '\\' => {
+                const start = index;
+                index += 1;
+                if (index < raw.len) index += 1;
+                try output.appendSlice(allocator, raw[start..index]);
+                at_tilde_prefix = false;
+            },
+            '~' => {
+                if (at_tilde_prefix and isCurrentUserTildePrefix(raw, index)) {
+                    try output.appendSlice(allocator, home);
+                    index += 1;
+                } else {
+                    try output.append(allocator, raw[index]);
+                    index += 1;
+                }
+                at_tilde_prefix = false;
+            },
+            ':' => {
+                try output.append(allocator, ':');
+                index += 1;
+                at_tilde_prefix = true;
+            },
+            else => |c| {
+                try output.append(allocator, c);
+                index += 1;
+                at_tilde_prefix = false;
+            },
+        }
+    }
+
+    return output.toOwnedSlice(allocator);
+}
+
+fn isCurrentUserTildePrefix(raw: []const u8, index: usize) bool {
+    std.debug.assert(raw[index] == '~');
+    return index + 1 == raw.len or raw[index + 1] == '/' or raw[index + 1] == ':';
 }
 
 pub fn expandParameters(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {

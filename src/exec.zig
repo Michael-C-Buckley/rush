@@ -2850,7 +2850,7 @@ pub const Executor = struct {
 
     fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !ir.SimpleCommand {
         self.command_substitution_status = null;
-        const assignments = try self.expandWords(command.assignments, options);
+        const assignments = try self.expandAssignmentWords(command.assignments, options);
         errdefer self.freeWords(assignments);
         const argv = try self.expandArgv(command.argv, options);
         errdefer self.freeWords(argv);
@@ -2902,6 +2902,23 @@ pub const Executor = struct {
         return expanded;
     }
 
+    fn expandAssignmentWords(self: *Executor, words: []const ir.WordRef, options: ExecuteOptions) ![]ir.WordRef {
+        const expanded = try self.allocator.alloc(ir.WordRef, words.len);
+        errdefer self.allocator.free(expanded);
+        var initialized: usize = 0;
+        errdefer for (expanded[0..initialized]) |word| self.freeWord(word);
+
+        var scope = AssignmentExpansionScope.init(self);
+        defer scope.restore();
+
+        for (words, 0..) |word, index| {
+            expanded[index] = try self.expandAssignmentWord(word, options);
+            initialized += 1;
+            try scope.apply(expanded[index]);
+        }
+        return expanded;
+    }
+
     fn expandRedirections(self: *Executor, redirections: []const ir.Redirection, options: ExecuteOptions) ![]ir.Redirection {
         const expanded = try self.allocator.alloc(ir.Redirection, redirections.len);
         errdefer self.allocator.free(expanded);
@@ -2933,6 +2950,14 @@ pub const Executor = struct {
         errdefer self.allocator.free(raw);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
+        return .{ .span = word.span, .raw = raw, .text = text };
+    }
+
+    fn expandAssignmentWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
+        const raw = try self.allocator.dupe(u8, word.raw);
+        errdefer self.allocator.free(raw);
+        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
+        const text = try expand.expandAssignmentWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -3117,12 +3142,50 @@ pub const Executor = struct {
         old_value: ?[]const u8,
     };
 
+    const AssignmentExpansionScope = struct {
+        executor: *Executor,
+        saved: std.ArrayList(SavedAssignment) = .empty,
+
+        fn init(executor: *Executor) AssignmentExpansionScope {
+            return .{ .executor = executor };
+        }
+
+        fn apply(self: *AssignmentExpansionScope, assignment: ir.WordRef) !void {
+            const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse return;
+            const name = assignment.text[0..equals];
+            const old_value = if (self.executor.getEnv(name)) |value| try self.executor.allocator.dupe(u8, value) else null;
+            errdefer if (old_value) |value| self.executor.allocator.free(value);
+            try self.saved.append(self.executor.allocator, .{ .name = try self.executor.allocator.dupe(u8, name), .old_value = old_value });
+            try self.executor.setEnv(name, assignment.text[equals + 1 ..]);
+        }
+
+        fn restore(self: *AssignmentExpansionScope) void {
+            var index = self.saved.items.len;
+            while (index > 0) {
+                index -= 1;
+                const entry = self.saved.items[index];
+                if (entry.old_value) |value| {
+                    self.executor.setEnv(entry.name, value) catch {};
+                    self.executor.allocator.free(value);
+                } else {
+                    self.executor.unsetEnv(entry.name);
+                }
+                self.executor.allocator.free(entry.name);
+            }
+            self.saved.deinit(self.executor.allocator);
+            self.* = undefined;
+        }
+    };
+
     const AssignmentScope = struct {
         executor: *Executor,
         saved: []SavedAssignment,
 
         fn restore(self: *AssignmentScope) void {
-            for (self.saved) |entry| {
+            var index = self.saved.len;
+            while (index > 0) {
+                index -= 1;
+                const entry = self.saved[index];
                 if (entry.old_value) |value| {
                     self.executor.setEnv(entry.name, value) catch {};
                     self.executor.allocator.free(value);
@@ -8010,6 +8073,25 @@ test "executor applies command-prefix assignments temporarily" {
     defer result.deinit();
     try std.testing.expectEqualStrings("outer\nouter\n", result.stdout);
     try std.testing.expectEqualStrings("outer", executor.getEnv("FOO").?);
+}
+
+test "executor expands assignment prefixes sequentially" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\HOME=/tmp/rush-home VALUE=~ LIST=~/bin:~ :
+        \\echo "$VALUE"
+        \\echo "$LIST"
+        \\A=one B=$A :
+        \\echo "$A/$B"
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqualStrings("/tmp/rush-home\n/tmp/rush-home/bin:/tmp/rush-home\none/one\n", result.stdout);
 }
 
 test "executor passes shell environment and command assignments to external commands" {
