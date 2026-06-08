@@ -487,6 +487,11 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             try writeAll(io, .stderr, result.stderr);
             last_status = result.status;
             try history.addCommand(io, line, result.status);
+            if (executor.pending_exit) |status| {
+                last_status = status;
+                editor_mode_left = false;
+                break;
+            }
 
             try terminal.enterEditorMode();
             editor_mode_left = false;
@@ -521,6 +526,10 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
         last_status = result.status;
+        if (executor.pending_exit) |status| {
+            last_status = status;
+            break;
+        }
     }
 
     return .{
@@ -887,6 +896,15 @@ test "runReplInput executes lines and tracks status" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
     try std.testing.expectEqualStrings("rush$ hi\nrush$ rush$ ", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "runReplInput stops when exit builtin requests shell exit" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io, "echo before\nexit 7\necho after\n");
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 7), result.status);
+    try std.testing.expectEqualStrings("rush$ before\nrush$ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
