@@ -1,0 +1,4 @@
+echo $((x = 3))
+echo $x
+echo $((x += 4))
+echo $x

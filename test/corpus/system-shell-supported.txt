@@ -103,3 +103,5 @@ trap 'echo bye' 0; echo body
 /bin/sleep 0 & pid=$!; test -n "$pid"; echo status=$?
 /bin/sh -c 'exit 7' & wait $!; echo status=$?
 x=2; y=5; echo $((x + y * 2)); echo $((unset_name + x))
+echo $((x = 3)); echo $x; echo $((x += 4)); echo $x
+x=8; echo $((x /= 2)); echo $x; echo $((x %= 3)); echo $x

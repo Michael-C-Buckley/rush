@@ -4491,6 +4491,16 @@ test "executor implements pwd cd and export builtins" {
 }
 
 test "executor expands arithmetic expressions in argv" {
+    var assign = try parseAndLower(std.testing.allocator, "echo $((x = 3)); echo $x; echo $((x += 4)); echo $x; echo $((x *= 2)); echo $x");
+    defer assign.parsed.deinit();
+    defer assign.program.deinit();
+
+    var assign_executor = Executor.init(std.testing.allocator);
+    defer assign_executor.deinit();
+    var assign_result = try assign_executor.executeProgram(assign.program, .{});
+    defer assign_result.deinit();
+    try std.testing.expectEqualStrings("3\n3\n7\n7\n14\n14\n", assign_result.stdout);
+
     var vars = try parseAndLower(std.testing.allocator, "x=2; y=5; echo $((x + y * 2)); echo $((unset_name + x))");
     defer vars.parsed.deinit();
     defer vars.program.deinit();

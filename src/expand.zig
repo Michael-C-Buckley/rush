@@ -398,7 +398,7 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
         .double_quoted => renderDoubleQuotedContent(allocator, part.value(raw), options),
         .parameter => renderParameter(allocator, part.value(raw), options),
         .arithmetic => blk: {
-            const value = try evalArithmetic(part.value(raw), options.env);
+            const value = try evalArithmetic(part.value(raw), options.env, options.env_set);
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
         },
         .command_substitution => blk: {
@@ -563,13 +563,68 @@ fn parseParameterExpression(expression: []const u8) ParameterExpression {
 const ArithmeticParser = struct {
     input: []const u8,
     env: EnvLookup = .{},
+    env_set: EnvSet = .{},
     index: usize = 0,
 
     fn parse(self: *ArithmeticParser) anyerror!i64 {
-        const value = try self.parseExpr();
+        const value = try self.parseAssignment();
         self.skipSpace();
         if (self.index != self.input.len) return error.InvalidArithmetic;
         return value;
+    }
+
+    fn parseAssignment(self: *ArithmeticParser) anyerror!i64 {
+        self.skipSpace();
+        const saved = self.index;
+        if (self.index < self.input.len and isNameStart(self.input[self.index])) {
+            const name_start = self.index;
+            self.index += 1;
+            while (self.index < self.input.len and isNameContinue(self.input[self.index])) : (self.index += 1) {}
+            const name = self.input[name_start..self.index];
+            self.skipSpace();
+            if (self.assignmentOperator()) |op| {
+                const rhs = try self.parseAssignment();
+                const value = switch (op) {
+                    .assign => rhs,
+                    .add_assign => self.lookupNumber(name) + rhs,
+                    .sub_assign => self.lookupNumber(name) - rhs,
+                    .mul_assign => self.lookupNumber(name) * rhs,
+                    .div_assign => blk: {
+                        if (rhs == 0) return error.DivisionByZero;
+                        break :blk @divTrunc(self.lookupNumber(name), rhs);
+                    },
+                    .mod_assign => blk: {
+                        if (rhs == 0) return error.DivisionByZero;
+                        break :blk @rem(self.lookupNumber(name), rhs);
+                    },
+                };
+                try self.setNumber(name, value);
+                return value;
+            }
+        }
+        self.index = saved;
+        return self.parseExpr();
+    }
+
+    const AssignmentOperator = enum { assign, add_assign, sub_assign, mul_assign, div_assign, mod_assign };
+
+    fn assignmentOperator(self: *ArithmeticParser) ?AssignmentOperator {
+        if (self.index >= self.input.len) return null;
+        if (self.input[self.index] == '=') {
+            self.index += 1;
+            return .assign;
+        }
+        if (self.index + 1 >= self.input.len or self.input[self.index + 1] != '=') return null;
+        const op: AssignmentOperator = switch (self.input[self.index]) {
+            '+' => .add_assign,
+            '-' => .sub_assign,
+            '*' => .mul_assign,
+            '/' => .div_assign,
+            '%' => .mod_assign,
+            else => return null,
+        };
+        self.index += 2;
+        return op;
     }
 
     fn parseExpr(self: *ArithmeticParser) anyerror!i64 {
@@ -607,7 +662,7 @@ const ArithmeticParser = struct {
         if (self.eat('+')) return self.parseFactor();
         if (self.eat('-')) return -(try self.parseFactor());
         if (self.eat('(')) {
-            const value = try self.parseExpr();
+            const value = try self.parseAssignment();
             self.skipSpace();
             if (!self.eat(')')) return error.InvalidArithmetic;
             return value;
@@ -620,10 +675,19 @@ const ArithmeticParser = struct {
         const start = self.index;
         self.index += 1;
         while (self.index < self.input.len and isNameContinue(self.input[self.index])) : (self.index += 1) {}
-        const name = self.input[start..self.index];
+        return self.lookupNumber(self.input[start..self.index]);
+    }
+
+    fn lookupNumber(self: ArithmeticParser, name: []const u8) i64 {
         const value = self.env.get(name) orelse return 0;
         if (value.len == 0) return 0;
         return std.fmt.parseInt(i64, value, 10) catch 0;
+    }
+
+    fn setNumber(self: ArithmeticParser, name: []const u8, value: i64) !void {
+        var buffer: [64]u8 = undefined;
+        const text = try std.fmt.bufPrint(&buffer, "{d}", .{value});
+        try self.env_set.set(name, text);
     }
 
     fn parseNumber(self: *ArithmeticParser) anyerror!i64 {
@@ -647,8 +711,8 @@ const ArithmeticParser = struct {
     }
 };
 
-pub fn evalArithmetic(input: []const u8, env: EnvLookup) anyerror!i64 {
-    var arithmetic_parser: ArithmeticParser = .{ .input = input, .env = env };
+pub fn evalArithmetic(input: []const u8, env: EnvLookup, env_set: EnvSet) anyerror!i64 {
+    var arithmetic_parser: ArithmeticParser = .{ .input = input, .env = env, .env_set = env_set };
     return arithmetic_parser.parse();
 }
 
@@ -722,7 +786,7 @@ fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, pa
     return switch (part.kind) {
         .parameter => renderParameter(allocator, part.value(raw), options),
         .arithmetic => blk: {
-            const value = try evalArithmetic(part.value(raw), options.env);
+            const value = try evalArithmetic(part.value(raw), options.env, options.env_set);
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
         },
         .command_substitution => blk: {
@@ -1341,11 +1405,11 @@ test "command substitution parses and trims callback output" {
 }
 
 test "arithmetic expansion evaluates integer expressions" {
-    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 + 2 * 3", .{}));
-    try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("(1 + 2) * 3", .{}));
-    try std.testing.expectEqual(@as(i64, -4), try evalArithmetic("-8 / 2", .{}));
-    try std.testing.expectEqual(@as(i64, 5), try evalArithmetic("USER_NUM + 2", test_env));
-    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("UNKNOWN + USER", test_env));
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 + 2 * 3", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("(1 + 2) * 3", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, -4), try evalArithmetic("-8 / 2", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 5), try evalArithmetic("USER_NUM + 2", test_env, .{}));
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("UNKNOWN + USER", test_env, .{}));
 
     var variable = try expandWord(std.testing.allocator, "value=$((USER_NUM + 4))", .{ .env = test_env });
     defer variable.deinit();
