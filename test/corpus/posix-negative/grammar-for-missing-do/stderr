@@ -1,0 +1,3 @@
+rush: parse_error: missing do in for command
+  for x in a; echo bad; done
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^

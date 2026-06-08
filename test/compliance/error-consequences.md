@@ -50,7 +50,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 
 ### Syntax errors
 
-Current coverage starts with a missing pipeline command. Additional cases should cover malformed compound commands, malformed case items, missing redirection targets, unmatched grouping tokens, and strict-mode reserved-word placement. Some parser diagnostics are intentionally recovery-oriented outside strict mode.
+Current coverage includes a missing pipeline command, malformed case items, malformed if/for/while/until/function constructs, missing grouping terminators, missing redirection targets, here-doc delimiter diagnostics, and strict-mode reserved-word placement. Some parser diagnostics are intentionally recovery-oriented outside strict mode.
 
 ### Expansion errors
 
@@ -58,7 +58,7 @@ Current coverage includes nounset and `${parameter:?word}` with diagnostic word 
 
 ### Redirection errors
 
-Current coverage includes bad input/output fd duplication, noclobber, missing input redirection targets, and directory output failures. Add cases for permission failures where portable, here-doc delimiter diagnostics, and more redirection failures attached to special builtins.
+Current coverage includes bad input/output fd duplication, noclobber, missing input redirection targets, directory output failures, missing redirection operands, and here-doc delimiter diagnostics. Add cases for permission failures where portable and more redirection failures attached to special builtins.
 
 ### Special builtin failures
 
