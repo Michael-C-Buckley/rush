@@ -174,3 +174,4 @@ eval echo one two; eval; echo after-empty:$?
 HOME=/tmp/rush-home; echo ~; echo ~/x
 IFS=,; v=a,,b,; for x in $v; do echo "<$x>"; done
 IFS=" "; v="  a  b  "; for x in $v; do echo "<$x>"; done
+empty=; set -- $empty ${unset-}; echo count:$#; set -- "$empty" "${unset-}"; echo "quoted:$#:<$1>:<$2>"
