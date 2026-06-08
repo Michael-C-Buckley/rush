@@ -128,6 +128,13 @@ pub const CompletionBuilder = struct {
         owned_candidate.value = try self.dupeField(allocator, candidate.value);
         if (candidate.display) |display| owned_candidate.display = try self.dupeField(allocator, display);
         if (candidate.description) |description| owned_candidate.description = try self.dupeField(allocator, description);
+        if (candidate.option) |option| {
+            owned_candidate.option = .{
+                .long = if (option.long) |long| try self.dupeField(allocator, long) else null,
+                .short = if (option.short) |short| try self.dupeField(allocator, short) else null,
+                .argument = if (option.argument) |argument| try self.dupeField(allocator, argument) else null,
+            };
+        }
         try self.candidates.append(allocator, owned_candidate);
     }
 
@@ -442,6 +449,11 @@ pub const Executor = struct {
             self.allocator.free(candidate.value);
             if (candidate.display) |display| self.allocator.free(display);
             if (candidate.description) |description| self.allocator.free(description);
+            if (candidate.option) |option| {
+                if (option.long) |long| self.allocator.free(long);
+                if (option.short) |short| self.allocator.free(short);
+                if (option.argument) |argument| self.allocator.free(argument);
+            }
         }
         self.allocator.free(candidates);
     }
@@ -2930,6 +2942,7 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     if (std.mem.eql(u8, subcommand, "directories")) return builtinCompletionFiles(self, builder, command, options, true);
     if (std.mem.eql(u8, subcommand, "executables")) return builtinCompletionExecutables(self, builder, command, options);
     if (std.mem.eql(u8, subcommand, "variables")) return builtinCompletionVariables(self, builder, command);
+    if (std.mem.eql(u8, subcommand, "option")) return builtinCompletionOption(self, builder, command);
     if (!std.mem.eql(u8, subcommand, "candidate")) return errorResult(self.allocator, 2, "completion", "unsupported subcommand");
 
     var candidate: completion.Candidate = .{ .value = "", .replace_start = 0, .replace_end = 0 };
@@ -2963,6 +2976,48 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     }
     if (!value_set) return errorResult(self.allocator, 2, "completion", "missing candidate value");
     try builder.appendCandidate(self.allocator, candidate);
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinCompletionOption(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand) !CommandResult {
+    var option: completion.Option = .{};
+    var description: ?[]const u8 = null;
+    var index: usize = 2;
+    while (index < command.argv.len) {
+        const arg = command.argv[index].text;
+        index += 1;
+        if (std.mem.eql(u8, arg, "--long")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing long option name");
+            option.long = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--short")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing short option name");
+            option.short = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--argument")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing argument name");
+            option.argument = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--description")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing description text");
+            description = command.argv[index].text;
+            index += 1;
+        } else {
+            return errorResult(self.allocator, 2, "completion", "unsupported option declaration flag");
+        }
+    }
+
+    if (option.long == null and option.short == null) return errorResult(self.allocator, 2, "completion", "missing option spelling");
+    if (option.long) |long| {
+        const value = try std.mem.concat(self.allocator, u8, &.{ "--", long });
+        defer self.allocator.free(value);
+        try builder.appendCandidate(self.allocator, .{ .value = value, .description = description, .kind = .option, .option = option, .replace_start = 0, .replace_end = 0 });
+    }
+    if (option.short) |short| {
+        const value = try std.mem.concat(self.allocator, u8, &.{ "-", short });
+        defer self.allocator.free(value);
+        try builder.appendCandidate(self.allocator, .{ .value = value, .description = description, .kind = .option, .option = option, .replace_start = 0, .replace_end = 0 });
+    }
     return emptyResult(self.allocator, 0);
 }
 
@@ -6157,6 +6212,66 @@ test "completion functions can read semantic context" {
     try std.testing.expectEqualStrings("argument", candidates[1].display.?);
 }
 
+test "completion option emits structured option candidates" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_git() {
+        \\  completion option --long amend --description 'amend previous commit'
+        \\  completion option --short m --long message --argument message --description 'use message'
+        \\}
+        \\complete git --function __rush_complete_git
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git --am", "git --am".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "--amend", .option);
+    try expectCandidate(candidates, "--message", .option);
+    try expectCandidate(candidates, "-m", .option);
+
+    const message = findCandidate(candidates, "--message") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("message", message.option.?.long.?);
+    try std.testing.expectEqualStrings("m", message.option.?.short.?);
+    try std.testing.expectEqualStrings("message", message.option.?.argument.?);
+    try std.testing.expectEqualStrings("use message", message.description.?);
+}
+
+test "completion option works with engine-owned prefix filtering" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_git() {
+        \\  completion option --long amend --description amend
+        \\  completion option --long author --argument user --description author
+        \\}
+        \\complete git --function __rush_complete_git
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "git --au";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    const application = try completion.applyCandidatesForInput(std.testing.allocator, source, candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("--author", edit.replacement);
+    try std.testing.expect(edit.append_space);
+}
+
 test "completion helper builtins append structured candidates" {
     const zig_path = "rush-complete-helper-test.zig";
     const txt_path = "rush-complete-helper-test.txt";
@@ -6203,6 +6318,13 @@ fn expectCandidate(candidates: []const completion.Candidate, value: []const u8, 
         }
     }
     return error.MissingCompletionCandidate;
+}
+
+fn findCandidate(candidates: []const completion.Candidate, value: []const u8) ?completion.Candidate {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) return candidate;
+    }
+    return null;
 }
 
 fn expectNoCandidate(candidates: []const completion.Candidate, value: []const u8) !void {

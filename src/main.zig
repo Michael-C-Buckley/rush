@@ -376,6 +376,13 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
             matches,
             completionRankScore(history, cwd, candidate.value),
         });
+        if (candidate.option) |option| {
+            try out.writer.print("    option:\n      long: {s}\n      short: {s}\n      argument: {s}\n", .{
+                option.long orelse "",
+                option.short orelse "",
+                option.argument orelse "",
+            });
+        }
     }
     try out.writer.print("application:\n", .{});
     switch (application) {

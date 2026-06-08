@@ -19,9 +19,16 @@ pub const Candidate = struct {
     display: ?[]const u8 = null,
     description: ?[]const u8 = null,
     kind: Kind = .plain,
+    option: ?Option = null,
     replace_start: usize,
     replace_end: usize,
     append_space: bool = true,
+};
+
+pub const Option = struct {
+    long: ?[]const u8 = null,
+    short: ?[]const u8 = null,
+    argument: ?[]const u8 = null,
 };
 
 pub const Edit = struct {
