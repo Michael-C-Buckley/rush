@@ -429,7 +429,8 @@ pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: O
 
 fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) anyerror![]const u8 {
     return switch (part.kind) {
-        .unquoted, .escaped, .single_quoted => allocator.dupe(u8, part.value(raw)),
+        .unquoted, .single_quoted => allocator.dupe(u8, part.value(raw)),
+        .escaped => if (std.mem.eql(u8, part.value(raw), "\n")) allocator.dupe(u8, "") else allocator.dupe(u8, part.value(raw)),
         .double_quoted => renderDoubleQuotedContent(allocator, part.value(raw), options),
         .parameter => renderParameter(allocator, part.value(raw), options),
         .arithmetic => blk: {
@@ -1376,6 +1377,10 @@ fn quoteRemoveDoubleQuotedContent(allocator: std.mem.Allocator, raw: []const u8)
     var index: usize = 0;
     while (index < raw.len) {
         if (raw[index] == '\\' and index + 1 < raw.len and isDoubleQuoteBackslashEscaped(raw[index + 1])) {
+            if (raw[index + 1] == '\n') {
+                index += 2;
+                continue;
+            }
             index += 1;
         }
         try output.append(allocator, raw[index]);
@@ -1412,6 +1417,10 @@ pub fn quoteRemove(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
             '\\' => {
                 index += 1;
                 if (index < raw.len) {
+                    if (raw[index] == '\n') {
+                        index += 1;
+                        continue;
+                    }
                     try output.append(allocator, raw[index]);
                     index += 1;
                 }

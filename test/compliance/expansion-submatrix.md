@@ -140,12 +140,11 @@ Manifest rows:
 - `expansion-quote-removal`
 - `lex-quotes`
 
-Current coverage includes single quotes, double quotes, escaped spaces, and common quoted expansion cases.
+Current coverage includes single quotes, double quotes, escaped spaces, escaped-newline continuation, and common quoted expansion cases.
 
 Remaining gaps:
 
 - quote removal around nested expansion `word` operands;
-- escaped-newline behavior across lexing and expansion;
 - here-doc delimiter quote removal versus body expansion;
 - recursive parser contexts such as command substitutions and function bodies.
 
