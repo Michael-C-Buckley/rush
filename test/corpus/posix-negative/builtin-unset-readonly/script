@@ -1,0 +1,3 @@
+readonly RO=old
+unset RO
+echo after

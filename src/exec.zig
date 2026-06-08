@@ -5818,8 +5818,13 @@ fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     }
 
     for (command.argv[1..]) |arg| {
-        const equals = std.mem.indexOfScalar(u8, arg.text, '=') orelse continue;
-        try self.setEnv(arg.text[0..equals], arg.text[equals + 1 ..]);
+        const assignment = std.mem.indexOfScalar(u8, arg.text, '=');
+        const name = if (assignment) |equals| arg.text[0..equals] else arg.text;
+        if (!isShellName(name)) return variableBuiltinUsageError(self, "export", "invalid variable name");
+        if (assignment) |equals| {
+            if (self.isReadonly(name)) return variableBuiltinUsageError(self, "export", "readonly variable");
+            try self.setEnv(name, arg.text[equals + 1 ..]);
+        }
     }
     return emptyResult(self.allocator, 0);
 }
@@ -5828,6 +5833,8 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     _ = stdin;
     _ = options;
     for (command.argv[1..]) |arg| {
+        if (!isShellName(arg.text)) return variableBuiltinUsageError(self, "unset", "invalid variable name");
+        if (self.isReadonly(arg.text)) return variableBuiltinUsageError(self, "unset", "readonly variable");
         self.unsetEnv(arg.text);
     }
     return emptyResult(self.allocator, 0);
@@ -5853,13 +5860,22 @@ fn builtinReadonly(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
     }
     for (command.argv[1..]) |arg| {
         if (std.mem.indexOfScalar(u8, arg.text, '=')) |equals| {
-            try self.setEnv(arg.text[0..equals], arg.text[equals + 1 ..]);
-            try self.setReadonly(arg.text[0..equals]);
+            const name = arg.text[0..equals];
+            if (!isShellName(name)) return variableBuiltinUsageError(self, "readonly", "invalid variable name");
+            if (self.isReadonly(name)) return variableBuiltinUsageError(self, "readonly", "readonly variable");
+            try self.setEnv(name, arg.text[equals + 1 ..]);
+            try self.setReadonly(name);
         } else {
+            if (!isShellName(arg.text)) return variableBuiltinUsageError(self, "readonly", "invalid variable name");
             try self.setReadonly(arg.text);
         }
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn variableBuiltinUsageError(self: *Executor, name: []const u8, message: []const u8) !CommandResult {
+    self.pending_exit = 2;
+    return errorResult(self.allocator, 2, name, message);
 }
 
 fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -7215,12 +7231,17 @@ test "executor implements readonly shift umask wait and times builtins" {
     var readonly_lowered = try parseAndLower(std.testing.allocator, "readonly RO=value; unset RO; echo $RO; readonly");
     defer readonly_lowered.parsed.deinit();
     defer readonly_lowered.program.deinit();
+    var readonly_executor = Executor.init(std.testing.allocator);
+    defer readonly_executor.deinit();
+    var readonly_result = try readonly_executor.executeProgram(readonly_lowered.program, .{});
+    defer readonly_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), readonly_result.status);
+    try std.testing.expectEqualStrings("", readonly_result.stdout);
+    try std.testing.expectEqualStrings("unset: readonly variable\n", readonly_result.stderr);
+    try std.testing.expectEqualStrings("value", readonly_executor.getEnv("RO").?);
+
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
-    var readonly_result = try executor.executeProgram(readonly_lowered.program, .{});
-    defer readonly_result.deinit();
-    try std.testing.expectEqual(@as(ExitStatus, 0), readonly_result.status);
-    try std.testing.expectEqualStrings("value\nreadonly RO\n", readonly_result.stdout);
 
     var shift_lowered = try parseAndLower(std.testing.allocator, "f() { shift; echo $1/$#; }; f a b c");
     defer shift_lowered.parsed.deinit();

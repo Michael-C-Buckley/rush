@@ -23,14 +23,14 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `eval` | `builtin-eval` | `builtin-eval`, `builtin-eval-special-assignment` | parse/expansion failure consequences |
 | `exec` | `builtin-exec` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-replaces-process` | redirection-only exec, failure status details, no-return contexts |
 | `exit` | `builtin-exit`, `builtin-exit-usage-errors` | `builtin-exit`, `builtin-exit-invalid-operand`, `builtin-exit-too-many` | additional status/diagnostic corpus |
-| `export` | `builtin-export-unset` | `builtin-export-env` | option forms, invalid names, readonly interactions |
-| `readonly` | `vars-readonly` | `builtin-readonly` | option forms, invalid names, assignment diagnostics |
+| `export` | `builtin-export-unset`, `builtin-variable-usage-errors` | `builtin-export-env`, invalid-name and readonly-assignment negative corpus | option forms |
+| `readonly` | `vars-readonly`, `builtin-variable-usage-errors` | `builtin-readonly`, invalid-name and readonly-assignment negative corpus | option forms, additional assignment diagnostics |
 | `return` | `builtin-return-usage-errors` plus function tests | `builtin-return-status`, `builtin-return-outside-function`, `builtin-return-invalid-operand`, `builtin-return-too-many`, unit coverage | additional status/diagnostic corpus |
 | `set` | `option-set`, option rows | shell option and positional parameter corpus | many POSIX flags, `--`, invalid options, exact diagnostics |
 | `shift` | `builtin-shift-too-far`, `builtin-shift-usage-errors`, builtin row through tests | `builtin-shift`, `builtin-shift-too-far`, `builtin-shift-invalid-operand`, `builtin-shift-too-many` | additional status/diagnostic corpus |
 | `times` | `builtin-times` | `builtin-times` | portability/runtime precision is baseline only |
 | `trap` | `builtin-trap`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus | signal semantics, ignored signals, invalid names, inheritance |
-| `unset` | `builtin-export-unset` | unit-level unset coverage | `-v`/`-f`, readonly failure, invalid names |
+| `unset` | `builtin-export-unset`, `builtin-variable-usage-errors` | invalid-name and readonly-variable negative corpus plus unit coverage | `-v`/`-f` |
 
 High-risk rows:
 
@@ -73,7 +73,6 @@ Follow-up tasks:
 
 The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `read`, `wait`). Add cases for:
 
-- `export`, `readonly`, and `unset` invalid or readonly names;
 - `printf` invalid format and missing numeric conversions;
 - `getopts` invalid optstring and bad variable name;
 - `umask` invalid symbolic/numeric modes;
