@@ -175,10 +175,6 @@ pub const CompletionBuilder = struct {
     }
 };
 
-pub const CompletionProvider = struct {
-    function: []const u8,
-};
-
 pub const CompletionEvalContext = struct {
     prefix: []const u8 = "",
     command: []const u8 = "",
@@ -440,7 +436,7 @@ fn completionOptionValueMatches(rule: completion.Rule, option_value: ?Completion
 
 // Completion candidates are deduplicated by the edit they would apply:
 // replacement span plus inserted value. The first source wins so metadata stays
-// deterministic across legacy providers, static rules, and dynamic rules.
+// deterministic across static and dynamic structured rules.
 fn completionCandidateIdentityMatches(a: completion.Candidate, b: completion.Candidate) bool {
     return a.replace_start == b.replace_start and
         a.replace_end == b.replace_end and
@@ -602,7 +598,6 @@ pub const Executor = struct {
     functions: std.StringHashMapUnmanaged(FunctionValue) = .empty,
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
-    completion_providers: std.StringHashMapUnmanaged(CompletionProvider) = .empty,
     completion_rules: std.ArrayList(completion.Rule) = .empty,
     completion_generation: u64 = 0,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
@@ -754,12 +749,6 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.traps.deinit(self.allocator);
-        var completion_iter = self.completion_providers.iterator();
-        while (completion_iter.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.function);
-        }
-        self.completion_providers.deinit(self.allocator);
         for (self.completion_rules.items) |rule| freeCompletionRule(self.allocator, rule);
         self.completion_rules.deinit(self.allocator);
         for (self.background_jobs.items) |job| self.allocator.free(job.command);
@@ -778,20 +767,6 @@ pub const Executor = struct {
 
     pub fn hasFunction(self: Executor, name: []const u8) bool {
         return self.functions.contains(name);
-    }
-
-    pub fn registerCompletionProvider(self: *Executor, command: []const u8, function: []const u8) !void {
-        const owned_command = try self.allocator.dupe(u8, command);
-        errdefer self.allocator.free(owned_command);
-        const owned_function = try self.allocator.dupe(u8, function);
-        errdefer self.allocator.free(owned_function);
-        const result = try self.completion_providers.getOrPut(self.allocator, owned_command);
-        if (result.found_existing) {
-            self.allocator.free(owned_command);
-            self.allocator.free(result.value_ptr.function);
-        }
-        result.value_ptr.* = .{ .function = owned_function };
-        self.completion_generation +%= 1;
     }
 
     pub fn registerCompletionRule(self: *Executor, rule: completion.Rule) !void {
@@ -819,10 +794,6 @@ pub const Executor = struct {
         self.completion_generation +%= 1;
     }
 
-    pub fn completionProvider(self: Executor, command: []const u8) ?CompletionProvider {
-        return self.completion_providers.get(command);
-    }
-
     pub fn completionGeneration(self: Executor) u64 {
         return self.completion_generation;
     }
@@ -835,7 +806,6 @@ pub const Executor = struct {
         if (builtinFor(command) != null) return true;
         if (self.functions.get(command) != null) return true;
         if (self.aliases.get(command) != null) return true;
-        if (self.completionProvider(command) != null) return true;
         for (self.completion_rules.items) |rule| {
             if (std.mem.eql(u8, rule.root, command)) return true;
         }
@@ -844,10 +814,6 @@ pub const Executor = struct {
 
     pub fn lastCompletionContext(self: Executor) ?CompletionEvalContext {
         return self.last_completion_context;
-    }
-
-    pub fn collectCompletions(self: *Executor, command: []const u8, options: ExecuteOptions) ![]completion.Candidate {
-        return self.collectCompletionsWithContext(command, .{ .command = command, .position = .argument }, options);
     }
 
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
@@ -1062,8 +1028,8 @@ pub const Executor = struct {
 
     pub fn collectCompletionsWithContext(self: *Executor, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
         if (context.position == .command) return self.collectRootCommandCompletions(context, options);
-        const provider = self.completionProvider(command) orelse return self.allocator.alloc(completion.Candidate, 0);
-        return self.collectCompletionsFromFunction(provider.function, command, context, options);
+        _ = command;
+        return self.allocator.alloc(completion.Candidate, 0);
     }
 
     fn collectCompletionsFromFunction(self: *Executor, function: []const u8, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
@@ -1148,7 +1114,7 @@ pub const Executor = struct {
     fn appendStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
         for (self.completion_rules.items) |rule| {
             switch (rule.kind) {
-                .function_provider, .dynamic_subcommands, .dynamic_options, .dynamic_argument, .dynamic_option_value => {},
+                .dynamic_subcommands, .dynamic_options, .dynamic_argument, .dynamic_option_value => {},
                 .subcommand => {
                     if (context.position != .subcommand) continue;
                     if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
@@ -1543,8 +1509,6 @@ pub const Executor = struct {
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body);
         var alias_iter = other.aliases.iterator();
         while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
-        var completion_iter = other.completion_providers.iterator();
-        while (completion_iter.next()) |entry| try self.registerCompletionProvider(entry.key_ptr.*, entry.value_ptr.function);
         for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
         var trap_iter = other.traps.iterator();
         while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
@@ -4232,48 +4196,36 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
     defer pattern.deinit(self.allocator);
     var index: usize = 2;
     var function_name: ?[]const u8 = null;
-    var rule: completion.Rule = .{ .root = pattern.root, .path = pattern.path, .kind = .function_provider };
+    var rule: completion.Rule = .{ .root = pattern.root, .path = pattern.path, .kind = .subcommand };
     var rule_set = false;
-    var legacy_function_provider = false;
     while (index < command.argv.len) {
         const option = command.argv[index].text;
         index += 1;
         if (std.mem.eql(u8, option, "--function")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing function name");
             function_name = command.argv[index].text;
-            rule.value = command.argv[index].text;
-            if (!rule_set) {
-                rule.kind = .function_provider;
-                legacy_function_provider = true;
-            }
-            rule_set = true;
+            if (rule_set) rule.value = command.argv[index].text;
             index += 1;
         } else if (std.mem.eql(u8, option, "--subcommands")) {
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_subcommands, .value = function_name };
             rule_set = true;
-            legacy_function_provider = false;
         } else if (std.mem.eql(u8, option, "--options")) {
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_options, .value = function_name };
             rule_set = true;
-            legacy_function_provider = false;
         } else if (std.mem.eql(u8, option, "--argument")) {
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_argument, .value = function_name };
             rule_set = true;
-            legacy_function_provider = false;
         } else if (std.mem.eql(u8, option, "--option-value")) {
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_option_value, .value = function_name };
             rule_set = true;
-            legacy_function_provider = false;
         } else if (std.mem.eql(u8, option, "--subcommand")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing subcommand name");
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .subcommand, .value = command.argv[index].text };
             rule_set = true;
-            legacy_function_provider = false;
             index += 1;
         } else if (std.mem.eql(u8, option, "--option")) {
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .option };
             rule_set = true;
-            legacy_function_provider = false;
         } else if (std.mem.eql(u8, option, "--long")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing long option name");
             rule.option.long = command.argv[index].text;
@@ -4296,11 +4248,10 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
             return errorResult(self.allocator, 2, "complete", "unsupported option");
         }
     }
-    if (legacy_function_provider) if (function_name) |name| try self.registerCompletionProvider(pattern.root, name);
     if (rule_set) {
         if (rule.kind == .option and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
         if (rule.kind == .dynamic_option_value and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
-        if (rule.kind == .function_provider or rule.kind == .dynamic_subcommands or rule.kind == .dynamic_options or rule.kind == .dynamic_argument or rule.kind == .dynamic_option_value) {
+        if (rule.kind == .dynamic_subcommands or rule.kind == .dynamic_options or rule.kind == .dynamic_argument or rule.kind == .dynamic_option_value) {
             if (rule.value == null) return errorResult(self.allocator, 2, "complete", "missing function name");
         }
         try self.registerCompletionRule(rule);
@@ -8389,7 +8340,7 @@ test "executor can run an external command when allowed" {
     try std.testing.expectEqualStrings("ok", result.stdout);
 }
 
-test "complete registers a function provider" {
+test "complete requires function providers to declare a structured context" {
     var lowered = try parseAndLower(std.testing.allocator, "complete git --function __rush_complete_git");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
@@ -8400,13 +8351,8 @@ test "complete registers a function provider" {
     var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    const provider = executor.completionProvider("git") orelse return error.MissingCompletionProvider;
-    try std.testing.expectEqualStrings("__rush_complete_git", provider.function);
-    try std.testing.expectEqual(@as(usize, 1), executor.completion_rules.items.len);
-    try std.testing.expectEqual(completion.RuleKind.function_provider, executor.completion_rules.items[0].kind);
-    try std.testing.expectEqualStrings("git", executor.completion_rules.items[0].root);
-    try std.testing.expectEqualStrings("__rush_complete_git", executor.completion_rules.items[0].value.?);
+    try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
+    try std.testing.expectEqual(@as(usize, 0), executor.completion_rules.items.len);
 }
 
 test "complete registers static subcommand rules" {
@@ -8806,12 +8752,12 @@ test "completion candidate merge deduplicates by replacement span and value" {
     try std.testing.expectEqualStrings("static", commit.description.?);
 }
 
-test "completion candidate merge keeps first metadata for legacy and static overlap" {
+test "completion candidate merge keeps static metadata before dynamic overlap" {
     var setup = try parseAndLower(std.testing.allocator,
-        \\__git_legacy_options() {
-        \\  completion option --long amend --description legacy
+        \\__git_dynamic_options() {
+        \\  completion option --long amend --description dynamic
         \\}
-        \\complete git --function __git_legacy_options
+        \\complete git --options --function __git_dynamic_options
         \\complete git --option --long amend --description static
     );
     defer setup.parsed.deinit();
@@ -8827,7 +8773,7 @@ test "completion candidate merge keeps first metadata for legacy and static over
     defer executor.freeCompletions(candidates);
     try std.testing.expectEqual(@as(usize, 1), countCandidates(candidates, "--amend"));
     const amend = findCandidate(candidates, "--amend") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqualStrings("legacy", amend.description.?);
+    try std.testing.expectEqualStrings("static", amend.description.?);
 }
 
 test "completion candidate merge deduplicates provider helper fallback overlap" {
@@ -8940,7 +8886,7 @@ test "completion candidate is scoped to completion evaluation" {
         \\__rush_complete_git() {
         \\  completion candidate status --display st --description 'show status' --kind subcommand --no-space
         \\}
-        \\complete git --function __rush_complete_git
+        \\complete git --argument --function __rush_complete_git
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -8949,7 +8895,7 @@ test "completion candidate is scoped to completion evaluation" {
     defer setup_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
 
-    const candidates = try executor.collectCompletions("git", .{ .io = std.testing.io });
+    const candidates = try executor.collectCompletionsForInput("git s", "git s".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(candidates);
     try std.testing.expectEqual(@as(usize, 1), candidates.len);
     try std.testing.expectEqualStrings("status", candidates[0].value);
@@ -8965,7 +8911,7 @@ test "completion functions can read semantic context" {
         \\  completion candidate $(completion prefix) --display $(completion command) --description $(completion previous) --kind option
         \\  completion candidate $(completion argument-index) --display $(completion position)
         \\}
-        \\complete git --function __rush_complete_git
+        \\complete git --argument --function __rush_complete_git
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -8995,7 +8941,7 @@ test "completion option emits structured option candidates" {
         \\  completion option --long amend --description 'amend previous commit'
         \\  completion option --short m --long message --argument message --description 'use message'
         \\}
-        \\complete git --function __rush_complete_git
+        \\complete git --options --function __rush_complete_git
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -9026,7 +8972,7 @@ test "completion option works with engine-owned prefix filtering" {
         \\  completion option --long amend --description amend
         \\  completion option --long author --argument user --description author
         \\}
-        \\complete git --function __rush_complete_git
+        \\complete git --options --function __rush_complete_git
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -9052,12 +8998,10 @@ test "completion option works with engine-owned prefix filtering" {
 test "completion detects detached long option value slots" {
     var setup = try parseAndLower(std.testing.allocator,
         \\__rush_complete_git() {
-        \\  completion option --long author --argument user --description author
-        \\  if test "$(completion position)" = option_value; then
-        \\    completion candidate tim --display "$(completion option-name)" --description "$(completion option-spelling)"
-        \\  fi
+        \\  completion candidate tim --display "$(completion option-name)" --description "$(completion option-spelling)"
         \\}
-        \\complete git --function __rush_complete_git
+        \\complete git --option --long author --value-name user --description author
+        \\complete git --option-value --long author --function __rush_complete_git
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -9088,12 +9032,10 @@ test "completion detects detached long option value slots" {
 test "completion detects attached long option value slots" {
     var setup = try parseAndLower(std.testing.allocator,
         \\__rush_complete_git() {
-        \\  completion option --long author --argument user --description author
-        \\  if test "$(completion position)" = option_value; then
-        \\    completion candidate tim --description "$(completion prefix)"
-        \\  fi
+        \\  completion candidate tim --description "$(completion prefix)"
         \\}
-        \\complete git --function __rush_complete_git
+        \\complete git --option --long author --value-name user --description author
+        \\complete git --option-value --long author --function __rush_complete_git
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -9122,12 +9064,10 @@ test "completion detects attached long option value slots" {
 test "completion detects short option value slots" {
     var setup = try parseAndLower(std.testing.allocator,
         \\__rush_complete_git() {
-        \\  completion option --short m --long message --argument text --description message
-        \\  if test "$(completion position)" = option_value; then
-        \\    completion candidate fix --display "$(completion option-spelling)"
-        \\  fi
+        \\  completion candidate fix --display "$(completion option-spelling)"
         \\}
-        \\complete git --function __rush_complete_git
+        \\complete git --option --short m --long message --value-name text --description message
+        \\complete git --option-value --short m --function __rush_complete_git
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -9210,7 +9150,7 @@ test "completion helper builtins append structured candidates" {
         \\  completion directories --prefix rush-complete-helper --append-slash
         \\  completion variables --prefix RUSH_COMPLETION_HELPER_
         \\}
-        \\complete helper --function __rush_complete_files
+        \\complete helper --argument --function __rush_complete_files
     );
     defer setup.parsed.deinit();
     defer setup.program.deinit();
@@ -9223,7 +9163,7 @@ test "completion helper builtins append structured candidates" {
     defer setup_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
 
-    const candidates = try executor.collectCompletions("helper", .{ .io = std.testing.io });
+    const candidates = try executor.collectCompletionsForInput("helper rush-complete-helper", "helper rush-complete-helper".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(candidates);
     try expectCandidate(candidates, zig_path, .file);
     try expectNoCandidate(candidates, txt_path);

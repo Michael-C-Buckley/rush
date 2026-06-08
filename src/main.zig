@@ -875,7 +875,6 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     const cwd = cwd_buffer[0..cwd_len];
 
     const context = try exec.completionEvalContextForInput(allocator, source, source.len);
-    const provider = executor.completionProvider(context.command);
     var semantic = try executor.analyzeCompletionsForInput(source, source.len);
     defer semantic.deinit();
     const semantic_path = try semanticCompletionPath(allocator, semantic);
@@ -906,7 +905,6 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  position: {s}
         \\  prefix: {s}
         \\  replace: {d}..{d}
-        \\provider: {s}
         \\rules:
         \\candidates:
     , .{
@@ -926,7 +924,6 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         semantic.prefix,
         semantic.replace_start,
         semantic.replace_end,
-        if (provider) |p| p.function else "<none>",
     });
     for (executor.completionRules()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
@@ -1512,7 +1509,7 @@ test "completion cache refresh updates entries in background" {
     defer executor.deinit();
     var setup_result = try runScriptWithExecutor(std.testing.allocator, &executor,
         \\__rush_complete_git() { completion candidate fresh --kind subcommand; }
-        \\complete git --function __rush_complete_git
+        \\complete git --subcommands --function __rush_complete_git
     , .{ .io = std.testing.io });
     defer setup_result.deinit();
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup_result.status);
@@ -1662,7 +1659,7 @@ test "completion debug output shows context provider candidates and application"
         \\  completion candidate status --description 'show status' --kind subcommand
         \\  completion candidate checkout --description 'switch branches' --kind subcommand
         \\}
-        \\complete git --function __rush_complete_git
+        \\complete git --subcommands --function __rush_complete_git
     });
 
     var env = std.process.Environ.Map.init(std.testing.allocator);
@@ -1674,7 +1671,6 @@ test "completion debug output shows context provider candidates and application"
 
     try std.testing.expect(std.mem.indexOf(u8, output, "command: git") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "prefix: st") != null);
-    try std.testing.expect(std.mem.indexOf(u8, output, "provider: __rush_complete_git") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "value: status") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "replacement: status") != null);
 }
