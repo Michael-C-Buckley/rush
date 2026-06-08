@@ -328,6 +328,14 @@ fn completionRuleContextMatches(rule: completion.Rule, root: []const u8, path: [
     return true;
 }
 
+fn completionRuleContextAppliesToPath(rule: completion.Rule, root: []const u8, path: []const []const u8) bool {
+    if (!std.mem.eql(u8, rule.root, root) or rule.path.len > path.len) return false;
+    for (rule.path, path[0..rule.path.len]) |expected, actual| {
+        if (!std.mem.eql(u8, expected, actual)) return false;
+    }
+    return true;
+}
+
 fn isOptionLike(word: []const u8) bool {
     return word.len > 1 and word[0] == '-';
 }
@@ -657,8 +665,33 @@ pub const Executor = struct {
     }
 
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
-        const context = try completionEvalContextForInput(self.allocator, source, cursor);
-        return self.collectCompletionsWithContext(context.command, context, options);
+        var context = try completionEvalContextForInput(self.allocator, source, cursor);
+        var semantic = try self.analyzeCompletionsForInput(source, cursor);
+        defer semantic.deinit();
+
+        if (semantic.root.len != 0 and semantic.option_value != null) {
+            context.command = semantic.root;
+            context.prefix = semantic.prefix;
+            context.previous = semantic.previous;
+            context.option_value = semantic.option_value;
+            context.replace_start = semantic.replace_start;
+            context.replace_end = semantic.replace_end;
+            context.position = switch (semantic.position) {
+                .command => .command,
+                .option, .option_value, .subcommand, .argument => .argument,
+            };
+        }
+
+        const candidates = try self.collectCompletionsWithContext(context.command, context, options);
+        if (semantic.root.len == 0 or semantic.position == .command or semantic.position == .option_value) return candidates;
+
+        var builder: CompletionBuilder = .{};
+        errdefer builder.deinit(self.allocator);
+        for (candidates) |candidate| try builder.appendCandidate(self.allocator, candidate);
+        try self.appendStructuredCompletionCandidates(&builder, semantic);
+        self.freeCompletions(candidates);
+        const merged = try builder.finish(self.allocator);
+        return merged;
     }
 
     pub fn analyzeCompletionsForInput(self: *Executor, source: []const u8, cursor: usize) !CompletionSemanticContext {
@@ -820,6 +853,69 @@ pub const Executor = struct {
         }
 
         return builder.finish(self.allocator);
+    }
+
+    fn appendStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        var seen: std.StringHashMapUnmanaged(void) = .empty;
+        defer deinitSeenCompletionNames(self.allocator, &seen);
+        for (builder.candidates.items) |candidate| {
+            const seen_name = try self.allocator.dupe(u8, candidate.value);
+            errdefer self.allocator.free(seen_name);
+            try seen.put(self.allocator, seen_name, {});
+        }
+
+        for (self.completion_rules.items) |rule| {
+            switch (rule.kind) {
+                .function_provider => {},
+                .subcommand => {
+                    if (context.position != .subcommand) continue;
+                    if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
+                    const value = rule.value orelse continue;
+                    try self.appendStructuredCompletionCandidate(builder, &seen, value, rule.description, .subcommand, null, context, true);
+                },
+                .option => {
+                    if (context.position != .option) continue;
+                    if (!completionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
+                    if (rule.option.long) |long| {
+                        var spelling_buffer: [256]u8 = undefined;
+                        const value = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
+                        try self.appendStructuredCompletionCandidate(builder, &seen, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
+                    }
+                    if (rule.option.short) |short| {
+                        var spelling_buffer: [32]u8 = undefined;
+                        const value = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch continue;
+                        try self.appendStructuredCompletionCandidate(builder, &seen, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
+                    }
+                },
+            }
+        }
+    }
+
+    fn appendStructuredCompletionCandidate(
+        self: *Executor,
+        builder: *CompletionBuilder,
+        seen: *std.StringHashMapUnmanaged(void),
+        value: []const u8,
+        description: ?[]const u8,
+        kind: completion.Kind,
+        option: ?completion.Option,
+        context: CompletionSemanticContext,
+        append_space: bool,
+    ) !void {
+        if (!std.mem.startsWith(u8, value, context.prefix)) return;
+        if (seen.contains(value)) return;
+        const seen_name = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(seen_name);
+        try seen.put(self.allocator, seen_name, {});
+        try builder.appendCandidate(self.allocator, .{
+            .value = value,
+            .description = description,
+            .kind = kind,
+            .option = option,
+            .replace_start = context.replace_start,
+            .replace_end = context.replace_end,
+            .append_space = append_space,
+        });
     }
 
     pub fn freeCompletions(self: *Executor, candidates: []completion.Candidate) void {
@@ -8047,6 +8143,57 @@ test "completion analysis handles nested subcommands and unknown options conserv
     try std.testing.expectEqual(@as(usize, 0), unknown_analysis.path.len);
     try std.testing.expect(unknown_analysis.suspicious_start != null);
     try std.testing.expectEqualStrings("prod", unknown_analysis.previous);
+}
+
+test "structured completion rules emit subcommand and option candidates" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --subcommand commit --description commit
+        \\complete 'git commit' --option --long amend --description amend
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const subcommands = try executor.collectCompletionsForInput("git c", "git c".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(subcommands);
+    try expectCandidate(subcommands, "commit", .subcommand);
+    const commit = findCandidate(subcommands, "commit") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("commit", commit.description.?);
+    try std.testing.expectEqual(@as(usize, "git ".len), commit.replace_start);
+
+    const options = try executor.collectCompletionsForInput("git commit --a", "git commit --a".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--amend", .option);
+    const amend = findCandidate(options, "--amend") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("amend", amend.option.?.long.?);
+    try std.testing.expectEqualStrings("amend", amend.description.?);
+    try std.testing.expectEqual(@as(usize, "git commit ".len), amend.replace_start);
+}
+
+test "structured completion keeps parent options available in subcommand contexts" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --option --long verbose --description verbose
+        \\complete git --subcommand commit
+        \\complete 'git commit' --option --long amend
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git commit --", "git commit --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "--verbose", .option);
+    try expectCandidate(candidates, "--amend", .option);
 }
 
 test "completion candidate is scoped to completion evaluation" {
