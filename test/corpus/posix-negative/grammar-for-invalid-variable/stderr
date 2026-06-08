@@ -1,0 +1,3 @@
+rush: parse_error: missing loop variable in for command
+  for 1 in a; do echo bad; done
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

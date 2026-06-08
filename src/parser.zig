@@ -1408,8 +1408,14 @@ const SyntaxParser = struct {
         var closed = false;
 
         try self.appendCurrentTokenChildTo(&for_children);
+        while (self.current().kind.isTrivia()) {
+            try self.appendCurrentTokenChildTo(&for_children);
+        }
+        if (self.at(.word) and !self.atWord("in") and isName(self.current().lexeme(self.source))) {
+            saw_name = true;
+            try self.appendCurrentTokenChildTo(&for_children);
+        }
         while (!self.at(.eof) and !self.atWord("do") and !self.atWord("done")) {
-            if (!saw_name and self.at(.word) and !self.atWord("in")) saw_name = true;
             try self.appendCurrentTokenChildTo(&for_children);
         }
         if (self.atWord("do")) {
@@ -2458,6 +2464,26 @@ test "parser reports incomplete POSIX for commands" {
     try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
     try expectSpan(.init(0, 24), result.diagnostics[0].span);
     try std.testing.expectEqualStrings("missing done to close for command", result.diagnostics[0].message);
+}
+
+test "parser reports missing POSIX for loop variables" {
+    var missing_result = try parse(std.testing.allocator, "for in a; do echo $a; done", .{});
+    defer missing_result.deinit();
+
+    try std.testing.expect(missing_result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), missing_result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, missing_result.diagnostics[0].kind);
+    try expectSpan(.init(0, 26), missing_result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing loop variable in for command", missing_result.diagnostics[0].message);
+
+    var invalid_result = try parse(std.testing.allocator, "for 1 in a; do echo bad; done", .{});
+    defer invalid_result.deinit();
+
+    try std.testing.expect(invalid_result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), invalid_result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, invalid_result.diagnostics[0].kind);
+    try expectSpan(.init(0, 29), invalid_result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing loop variable in for command", invalid_result.diagnostics[0].message);
 }
 
 test "parser builds POSIX while and until command nodes" {
