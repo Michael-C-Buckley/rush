@@ -110,6 +110,31 @@ pub const Editor = struct {
     }
 };
 
+pub const RenderOptions = struct {
+    prompt: []const u8,
+    width_method: vaxis.gwidth.Method = .unicode,
+    synchronized_output: bool = true,
+};
+
+pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderOptions) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026h");
+    try output.appendSlice(allocator, "\r\x1b[2K");
+    try output.appendSlice(allocator, options.prompt);
+    try output.appendSlice(allocator, editor.buffer.text());
+
+    const prompt_width = vaxis.gwidth.gwidth(options.prompt, options.width_method);
+    const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
+    const cursor_sequence = try std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{cursor_width});
+    defer allocator.free(cursor_sequence);
+    try output.appendSlice(allocator, cursor_sequence);
+    if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026l");
+
+    return output.toOwnedSlice(allocator);
+}
+
 pub fn keyEventFromVaxis(key: vaxis.Key) KeyEvent {
     return .{
         .key = keyFromVaxisCodepoint(key.codepoint),
@@ -169,4 +194,27 @@ test "edit buffer reports cursor display width with vaxis" {
 
     try buffer.insertText("a界");
     try std.testing.expectEqual(@as(u16, 3), buffer.cursorDisplayWidth(.unicode));
+}
+
+test "render line redraws prompt and buffer inside synchronized output" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.handleKey(.{ .key = .text, .text = "abc" });
+    editor.buffer.moveLeft();
+
+    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = "$ " });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("\x1b[?2026h\r\x1b[2K$ abc\r\x1b[4C\x1b[?2026l", rendered);
+}
+
+test "render line can omit synchronized output" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.handleKey(.{ .key = .text, .text = "界" });
+
+    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = "> ", .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("\r\x1b[2K> 界\r\x1b[4C", rendered);
 }
