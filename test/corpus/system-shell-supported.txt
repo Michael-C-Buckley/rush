@@ -164,3 +164,4 @@ command -- echo ok; command -v -- echo
 set -- -a -b -- c; while getopts ab opt; do echo "$opt:$OPTIND"; done; echo end:$OPTIND:$opt
 if test ! ""; then echo not-empty; fi; if test "x" = x -a "y" = y; then echo and-ok; fi; if test "" -o "z"; then echo or-ok; fi; if test \( "x" = x \); then echo group-ok; fi; if [ \( "x" = x -a "" \) -o z ]; then echo bracket-ok; fi
 printf "%s\n" "a b c" >in; IFS=; read x y <in; echo "<$x><${y-unset}>"
+env -i -- RUSH_ENV_TERM=ok

@@ -1,0 +1,1 @@
+env -i -- RUSH_ENV_TERM=ok

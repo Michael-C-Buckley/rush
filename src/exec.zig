@@ -6431,13 +6431,19 @@ fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     try child.copyStateFrom(self);
 
     var index: usize = 1;
-    if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "-i")) {
-        child.clearEnvironment();
-        index += 1;
-    } else if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) {
-        index += 1;
-    } else if (index < command.argv.len and std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) {
-        return errorResult(self.allocator, 2, "env", "unsupported option");
+    while (index < command.argv.len) {
+        const option = command.argv[index].text;
+        if (std.mem.eql(u8, option, "-i")) {
+            child.clearEnvironment();
+            index += 1;
+            continue;
+        }
+        if (std.mem.eql(u8, option, "--")) {
+            index += 1;
+            break;
+        }
+        if (std.mem.startsWith(u8, option, "-") and !std.mem.eql(u8, option, "-")) return errorResult(self.allocator, 2, "env", "unsupported option");
+        break;
     }
 
     while (index < command.argv.len) {
