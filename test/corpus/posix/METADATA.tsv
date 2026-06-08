@@ -208,3 +208,4 @@ busybox-ash-smoke-append-order	redirection	behavior	BusyBox ash-style append red
 builtin-pwd-logical-physical	builtin	behavior	pwd -L preserves logical PWD while pwd -P reports physical cwd through a symlink
 builtin-cd-logical-physical	builtin	behavior	cd -L sets logical PWD while cd -P sets physical PWD through a symlink
 builtin-export-readonly-p	builtin	behavior	export -p and readonly -p list marked variables
+builtin-unset-variable-function	builtin	behavior	unset -v removes variables and unset -f removes functions

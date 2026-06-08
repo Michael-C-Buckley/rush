@@ -1457,6 +1457,14 @@ pub const Executor = struct {
         }
     }
 
+    fn unsetFunction(self: *Executor, name: []const u8) void {
+        if (self.functions.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            var value = entry.value;
+            value.deinit(self.allocator);
+        }
+    }
+
     pub fn isReadonly(self: Executor, name: []const u8) bool {
         return self.readonly.contains(name);
     }
@@ -5949,10 +5957,29 @@ fn listExported(self: *Executor) !CommandResult {
 fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    for (command.argv[1..]) |arg| {
+    var mode: enum { variable, function } = .variable;
+    var index: usize = 1;
+    if (index < command.argv.len) {
+        const option = command.argv[index].text;
+        if (std.mem.eql(u8, option, "-v")) {
+            mode = .variable;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "-f")) {
+            mode = .function;
+            index += 1;
+        } else if (std.mem.startsWith(u8, option, "-") and !std.mem.eql(u8, option, "-")) {
+            return variableBuiltinUsageError(self, "unset", "unsupported option");
+        }
+    }
+    for (command.argv[index..]) |arg| {
         if (!isShellName(arg.text)) return variableBuiltinUsageError(self, "unset", "invalid variable name");
-        if (self.isReadonly(arg.text)) return variableBuiltinUsageError(self, "unset", "readonly variable");
-        self.unsetEnv(arg.text);
+        switch (mode) {
+            .variable => {
+                if (self.isReadonly(arg.text)) return variableBuiltinUsageError(self, "unset", "readonly variable");
+                self.unsetEnv(arg.text);
+            },
+            .function => self.unsetFunction(arg.text),
+        }
     }
     return emptyResult(self.allocator, 0);
 }

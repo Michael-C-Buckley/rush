@@ -30,7 +30,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `shift` | `builtin-shift-too-far`, `builtin-shift-usage-errors`, builtin row through tests | `builtin-shift`, `builtin-shift-too-far`, `builtin-shift-invalid-operand`, `builtin-shift-too-many` | additional status/diagnostic corpus |
 | `times` | `builtin-times` | `builtin-times` | portability/runtime precision is baseline only |
 | `trap` | `builtin-trap`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus | signal semantics, ignored signals, invalid names, inheritance |
-| `unset` | `builtin-export-unset`, `builtin-variable-usage-errors` | invalid-name and readonly-variable negative corpus plus unit coverage | `-v`/`-f` |
+| `unset` | `builtin-export-unset`, `builtin-unset-variable-function`, `builtin-variable-usage-errors` | unset -v, unset -f, invalid-name, readonly-variable, and unsupported-option coverage | remaining function/variable edge cases |
 
 High-risk rows:
 

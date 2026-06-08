@@ -1,0 +1,7 @@
+V=ok
+unset -v V
+echo ${V-unset}
+f() { echo f; }
+command -v f
+unset -f f
+if command -v f; then echo bad; else echo unset-f; fi

@@ -1,0 +1,2 @@
+unset -Z
+echo after
