@@ -61,6 +61,10 @@ Metadata columns:
 
 The compliance report uses this metadata to print POSIX corpus case counts by area.
 
+## Error consequence submatrix
+
+`error-consequences.md` tracks syntax, expansion, redirection, special-builtin, and builtin diagnostic consequences separately from normal behavior coverage. Use it when adding negative corpus cases or implementing stricter POSIX shell-error behavior.
+
 ## Status promotion criteria
 
 Manifest status changes should be evidence-based. When in doubt, use the lower status and record the remaining gap in `notes`.
