@@ -55,7 +55,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `read` | `builtin-read`, read subrows | backslash, `-r`, custom IFS, last-variable remainder assignment, unsupported option diagnostic | EOF status, additional IFS edge cases, prompts if ever added |
 | `test`, `[` | `builtin-test`, test subrows | file predicates, string comparisons, integer comparisons, ordering, invalid expression | complete POSIX expression grammar, precedence edge cases |
 | `umask` | `builtin-umask`, `builtin-umask-usage-errors` | basic get/set, invalid numeric/symbolic masks, excess operands | symbolic mode support, exact output format |
-| `wait` | `builtin-wait` | tracked pid wait, unknown pid diagnostic | job specs, all-job semantics, stopped/interrupted jobs |
+| `wait` | `builtin-wait`, `builtin-wait-usage-errors` | tracked pid wait, invalid/unknown pid diagnostics | job specs, all-job semantics, stopped/interrupted jobs |
 
 ## Job-control builtins
 
