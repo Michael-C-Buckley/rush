@@ -173,3 +173,4 @@ x=$(printf a; echo; echo); printf "<%s>\n" "$x"; y=$(printf a; echo; echo; print
 eval echo one two; eval; echo after-empty:$?
 HOME=/tmp/rush-home; echo ~; echo ~/x
 IFS=,; v=a,,b,; for x in $v; do echo "<$x>"; done
+IFS=" "; v="  a  b  "; for x in $v; do echo "<$x>"; done
