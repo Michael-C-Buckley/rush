@@ -8,7 +8,7 @@ The file is tab-separated UTF-8 with one header row and these columns:
 
 1. `id` — stable lowercase identifier for the checklist item.
 2. `area` — broad compliance area, such as `lexing`, `grammar`, `expansion`, `redirection`, `builtin`, `job_control`, `signals`, or `errors`.
-3. `posix_ref` — short POSIX Shell Command Language reference.
+3. `posix_ref` — concrete POSIX.1 XCU Shell Command Language or utility reference where practical; POSIX-adjacent and non-POSIX rows should say so explicitly.
 4. `feature` — human-readable feature description.
 5. `status` — one of:
    - `supported`: implemented with meaningful tests or corpus coverage.
