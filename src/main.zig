@@ -357,44 +357,73 @@ fn appendSqlLikePrefix(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8)
 }
 
 fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, query: []const u8, cursor: ?i64, direction: HistoryDirection) !?line_editor.HistoryView.HistoryEntry {
+    var fts_query: std.ArrayList(u8) = .empty;
+    defer fts_query.deinit(allocator);
+    try appendHistoryFtsQuery(allocator, &fts_query, query);
+    if (fts_query.items.len == 0) return queryHistoryEntry(db, allocator, "", cursor, direction);
+
     var stmt: ?*sqlite.sqlite3_stmt = null;
+    const offset = if (cursor) |value| @max(value, 0) else 0;
     const sql = switch (direction) {
         .previous =>
-        \\select id, command from history h
-        \\where (?1 is null or id < ?1)
+        \\select h.id, h.command
+        \\from history_fts f
+        \\join history h on h.id = f.rowid
+        \\where history_fts match ?1
         \\  and not exists (
         \\    select 1 from history newer
         \\    where newer.id > h.id and newer.command = h.command
         \\  )
-        \\order by id desc limit 500
+        \\order by bm25(history_fts), h.id desc
+        \\limit 1 offset ?2
         ,
         .next =>
-        \\select id, command from history h
-        \\where (?1 is null or id > ?1)
+        \\select h.id, h.command
+        \\from history_fts f
+        \\join history h on h.id = f.rowid
+        \\where history_fts match ?1
         \\  and not exists (
         \\    select 1 from history newer
         \\    where newer.id > h.id and newer.command = h.command
         \\  )
-        \\order by id asc limit 500
+        \\order by bm25(history_fts) desc, h.id asc
+        \\limit 1 offset ?2
         ,
     };
     try sqliteCheck(sqlite.sqlite3_prepare_v2(db, sql, -1, &stmt, null), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
-    if (cursor) |id| {
-        try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, id), db);
-    } else {
-        try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 1), db);
-    }
-    while (true) {
-        const rc = sqlite.sqlite3_step(stmt);
-        if (rc == sqlite.SQLITE_DONE) return null;
-        if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
-        const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse continue;
-        const command = std.mem.span(command_text);
-        if (completion_model.fuzzyMatchRank(command, query) != null) {
-            return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, command) };
+    try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 1, fts_query.items.ptr, @intCast(fts_query.items.len), null), db);
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 2, offset), db);
+    const rc = sqlite.sqlite3_step(stmt);
+    if (rc == sqlite.SQLITE_DONE) return null;
+    if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+    const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse return null;
+    return .{ .id = offset + 1, .text = try allocator.dupe(u8, std.mem.span(command_text)) };
+}
+
+fn appendHistoryFtsQuery(allocator: std.mem.Allocator, output: *std.ArrayList(u8), query: []const u8) !void {
+    var token_start: ?usize = null;
+    for (query, 0..) |byte, index| {
+        if (historyFtsTokenByte(byte)) {
+            if (token_start == null) token_start = index;
+        } else if (token_start) |start| {
+            try appendHistoryFtsQueryToken(allocator, output, query[start..index]);
+            token_start = null;
         }
     }
+    if (token_start) |start| try appendHistoryFtsQueryToken(allocator, output, query[start..]);
+}
+
+fn historyFtsTokenByte(byte: u8) bool {
+    return std.ascii.isAlphanumeric(byte) or byte == '_';
+}
+
+fn appendHistoryFtsQueryToken(allocator: std.mem.Allocator, output: *std.ArrayList(u8), token: []const u8) !void {
+    if (token.len == 0) return;
+    if (output.items.len != 0) try output.append(allocator, ' ');
+    try output.append(allocator, '"');
+    try output.appendSlice(allocator, token);
+    try output.appendSlice(allocator, "\"*");
 }
 
 fn configureHistoryDb(db: *sqlite.sqlite3) !void {
@@ -438,6 +467,7 @@ fn initHistorySchema(db: *sqlite.sqlite3) !void {
         \\create index if not exists history_started_idx on history(started_at);
         \\create index if not exists history_command_started_idx on history(command, started_at);
     );
+    try sqliteExec(db, "insert into history_fts(history_fts) values('rebuild');");
     addHistoryColumn(db, "exit_signal", "integer") catch {};
     addHistoryColumn(db, "duration_ms", "integer") catch {};
     addHistoryColumn(db, "hostname", "text not null default ''") catch {};
@@ -1416,6 +1446,71 @@ test "history writes commands through to sqlite fts" {
 
     const count = try historyFtsMatchCount(reloaded.db.?, "checkout");
     try std.testing.expectEqual(@as(c_int, 1), count);
+}
+
+test "history search uses fts ranking and hides older duplicates" {
+    const path = "rush-history-fts-search-test.sqlite";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try history.addCommand(std.testing.io, "git status", 0, 10, 1);
+    try history.addCommand(std.testing.io, "git switch feature", 0, 20, 1);
+    try history.addCommand(std.testing.io, "git status", 0, 30, 1);
+    try history.addCommand(std.testing.io, "echo git status", 0, 40, 1);
+
+    const first = (try history.searchEntry(std.testing.allocator, "git sta", null)).?;
+    defer first.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("git status", first.text);
+
+    const second = (try history.searchEntry(std.testing.allocator, "git sta", first.id)).?;
+    defer second.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo git status", second.text);
+
+    try std.testing.expect(try history.searchEntry(std.testing.allocator, "gco", null) == null);
+}
+
+test "history load rebuilds fts for existing history rows" {
+    const path = "rush-history-fts-migration-test.sqlite";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    const path_z = try std.testing.allocator.dupeZ(u8, path);
+    defer std.testing.allocator.free(path_z);
+    var db: ?*sqlite.sqlite3 = null;
+    try sqliteCheck(sqlite.sqlite3_open_v2(path_z.ptr, &db, sqlite.SQLITE_OPEN_READWRITE | sqlite.SQLITE_OPEN_CREATE | sqlite.SQLITE_OPEN_NOMUTEX, null), db);
+    defer if (db) |handle| {
+        _ = sqlite.sqlite3_close(handle);
+    };
+    try sqliteExec(db.?,
+        \\create table history (
+        \\  id integer primary key,
+        \\  command text not null,
+        \\  cwd text not null,
+        \\  status integer not null,
+        \\  started_at integer not null
+        \\);
+        \\insert into history(command, cwd, status, started_at) values ('git checkout main', '', 0, 1);
+    );
+    _ = sqlite.sqlite3_close(db.?);
+    db = null;
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    const entry = (try history.searchEntry(std.testing.allocator, "checkout", null)).?;
+    defer entry.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("git checkout main", entry.text);
 }
 
 test "history path follows XDG state home then HOME fallback" {
