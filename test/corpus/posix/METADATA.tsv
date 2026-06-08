@@ -79,6 +79,7 @@ case-default	grammar	behavior	-
 case-final-arm-no-terminator	grammar	behavior	final case arm may omit double-semicolon terminator
 case-leading-paren-empty-arm	grammar	behavior	case arm with optional leading parenthesis and empty body
 case-multiple-patterns	grammar	behavior	case arm with multiple pattern alternatives
+case-nested-case-body	grammar	behavior	nested case command inside a case item body
 case-newline-pattern-list	grammar	behavior	case item pattern lists and bodies may span newlines
 case-no-match-status	grammar	behavior	case command with no matching arm exits successfully
 case-pattern	grammar	behavior	-

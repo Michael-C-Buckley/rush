@@ -1313,11 +1313,25 @@ const SyntaxParser = struct {
         var item_children: std.ArrayList(SyntaxChild) = .empty;
         defer item_children.deinit(self.allocator);
         var saw_pattern_end = false;
+        var nested_case_depth: usize = 0;
 
-        while (!self.at(.eof) and !self.atWord("esac")) {
+        while (!self.at(.eof)) {
+            if (self.atWord("esac") and nested_case_depth == 0) break;
             try self.appendCurrentTokenChildTo(&item_children);
-            if (self.previousToken().kind == .right_paren) saw_pattern_end = true;
-            if (self.previousToken().kind == .dsemicolon) break;
+            const previous = self.previousToken();
+            if (previous.kind == .right_paren) {
+                saw_pattern_end = true;
+                continue;
+            }
+            if (saw_pattern_end and previous.kind == .word) {
+                const lexeme = previous.lexeme(self.source);
+                if (std.mem.eql(u8, lexeme, "case")) {
+                    nested_case_depth += 1;
+                } else if (std.mem.eql(u8, lexeme, "esac") and nested_case_depth > 0) {
+                    nested_case_depth -= 1;
+                }
+            }
+            if (saw_pattern_end and nested_case_depth == 0 and previous.kind == .dsemicolon) break;
         }
 
         if (!saw_pattern_end) {
@@ -2292,6 +2306,22 @@ test "parser accepts POSIX case edge items" {
     }
     try std.testing.expect(saw_case);
     try std.testing.expectEqual(@as(usize, 2), item_count);
+}
+
+test "parser keeps nested POSIX case statements inside case item bodies" {
+    var result = try parse(std.testing.allocator, "case x in x) case y in y) echo nested ;; esac ;; esac", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try std.testing.expect(!result.incomplete);
+    var item_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .case_item) {
+            item_count += 1;
+            try expectSpan(.init(10, 48), node.span);
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 1), item_count);
 }
 
 test "parser reports missing POSIX case item terminator" {

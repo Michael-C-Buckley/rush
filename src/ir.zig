@@ -524,15 +524,20 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     var in_token: ?usize = null;
     var esac_token: ?usize = null;
 
+    var depth: usize = 0;
     for (node.token_start + 1..node.token_end) |token_index| {
         const token = parsed.tokens[token_index];
         if (token.kind != .word) continue;
         const lexeme = token.lexeme(parsed.source);
         if (word_token == null and !std.mem.eql(u8, lexeme, "in")) {
             word_token = token_index;
-        } else if (std.mem.eql(u8, lexeme, "in")) {
+        } else if (in_token == null and std.mem.eql(u8, lexeme, "in")) {
             in_token = token_index;
-        } else if (std.mem.eql(u8, lexeme, "esac")) {
+        } else if (in_token != null and std.mem.eql(u8, lexeme, "case")) {
+            depth += 1;
+        } else if (in_token != null and std.mem.eql(u8, lexeme, "esac") and depth > 0) {
+            depth -= 1;
+        } else if (in_token != null and std.mem.eql(u8, lexeme, "esac")) {
             esac_token = token_index;
             break;
         }
@@ -565,7 +570,19 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         }
         if (index < limit and parsed.tokens[index].kind == .right_paren) index += 1;
         const body_start = index;
-        while (index < limit and parsed.tokens[index].kind != .dsemicolon) : (index += 1) {}
+        var nested_case_depth: usize = 0;
+        while (index < limit) : (index += 1) {
+            const token = parsed.tokens[index];
+            if (token.kind == .word) {
+                const lexeme = token.lexeme(parsed.source);
+                if (std.mem.eql(u8, lexeme, "case")) {
+                    nested_case_depth += 1;
+                } else if (std.mem.eql(u8, lexeme, "esac") and nested_case_depth > 0) {
+                    nested_case_depth -= 1;
+                }
+            }
+            if (nested_case_depth == 0 and token.kind == .dsemicolon) break;
+        }
         const body_end = index;
         if (index < limit and parsed.tokens[index].kind == .dsemicolon) index += 1;
 
