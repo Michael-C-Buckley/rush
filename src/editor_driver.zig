@@ -204,7 +204,6 @@ pub const TerminalSession = struct {
         const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
         var reader = try OneShotReader.init(allocator, io, read_file, wake.write);
         errdefer reader.deinit();
-        try reader.start();
 
         var self: TerminalSession = .{
             .allocator = allocator,
@@ -231,6 +230,8 @@ pub const TerminalSession = struct {
     }
 
     pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !?[]const u8 {
+        if (self.reader.thread == null) try self.reader.start();
+
         var session = try line_editor.LineSession.initWithOptions(self.allocator, .{
             .bytes = options.prompt,
             .visible_width = line_editor.visibleWidth(options.prompt, self.capabilities.widthMethod()),
