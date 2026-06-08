@@ -843,7 +843,7 @@ pub const Executor = struct {
         }
         var result = try child.executeScriptSlice(subshell.body, options);
         errdefer result.deinit();
-        return self.applyOutputRedirections(wrapper, result, options);
+        return self.applyOutputRedirections(wrapper, result, options, false);
     }
 
     fn executeBraceGroup(self: *Executor, group: ir.BraceGroup, options: ExecuteOptions) !CommandResult {
@@ -872,7 +872,7 @@ pub const Executor = struct {
         }
         var result = try self.executeScriptSlice(group.body, options);
         errdefer result.deinit();
-        return self.applyOutputRedirections(wrapper, result, options);
+        return self.applyOutputRedirections(wrapper, result, options, false);
     }
 
     fn executeBashTestCommand(self: *Executor, command: ir.BashTestCommand, options: ExecuteOptions) !CommandResult {
@@ -1775,25 +1775,17 @@ pub const Executor = struct {
 
         if (expanded.argv.len == 0) {
             try self.applyAssignments(expanded.assignments);
-            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
-                error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
-                error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(expanded), "bad file descriptor"),
-                else => return err,
-            }) |guard_value| {
+            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, false)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
                 return emptyResult(self.allocator, 0);
             }
-            return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, 0), options);
+            return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, 0), options, false);
         }
 
         if (!options.suppress_functions and self.functions.get(expanded.argv[0].text) != null) {
             const body = self.functions.get(expanded.argv[0].text).?;
-            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
-                error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
-                error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(expanded), "bad file descriptor"),
-                else => return err,
-            }) |guard_value| {
+            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, false)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
                 var result = try self.executeFunctionBody(expanded, body, options);
@@ -1806,15 +1798,12 @@ pub const Executor = struct {
             }
             var result = try self.executeFunctionBody(expanded, body, options);
             errdefer result.deinit();
-            return try self.applyOutputRedirections(expanded, result, options);
+            return try self.applyOutputRedirections(expanded, result, options, false);
         }
 
         if (builtinForName(self.*, expanded.argv[0].text)) |builtin| {
-            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| switch (err) {
-                error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(expanded), "cannot overwrite existing file"),
-                error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(expanded), "bad file descriptor"),
-                else => return err,
-            }) |guard_value| {
+            const special_builtin = isSpecialBuiltin(expanded.argv[0].text);
+            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, special_builtin)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
                 var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
@@ -1825,15 +1814,25 @@ pub const Executor = struct {
                 };
                 return emptyResult(self.allocator, result.status);
             }
-            return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options), options);
+            return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options), options, special_builtin);
         }
 
         if (!options.allow_external) {
-            return try self.applyOutputRedirections(expanded, try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found"), options);
+            return try self.applyOutputRedirections(expanded, try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found"), options, false);
         }
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
         return try self.applyExternalPostRedirections(expanded, try self.executeExternal(expanded, io, options), options);
+    }
+
+    fn redirectionErrorResult(self: *Executor, command: ir.SimpleCommand, err: anyerror, special_builtin: bool) !CommandResult {
+        const result = switch (err) {
+            error.PathAlreadyExists => try errorResult(self.allocator, 1, noclobberTargetName(command), "cannot overwrite existing file"),
+            error.BadFileDescriptor => try errorResult(self.allocator, 1, badFdTargetName(command), "bad file descriptor"),
+            else => return err,
+        };
+        if (special_builtin) self.pending_exit = result.status;
+        return result;
     }
 
     fn parameterExpansionErrorResult(self: *Executor) !CommandResult {
@@ -2225,7 +2224,7 @@ pub const Executor = struct {
         return current;
     }
 
-    fn applyOutputRedirections(self: *Executor, command: ir.SimpleCommand, result: CommandResult, options: ExecuteOptions) !CommandResult {
+    fn applyOutputRedirections(self: *Executor, command: ir.SimpleCommand, result: CommandResult, options: ExecuteOptions, special_exit: bool) !CommandResult {
         var redirected = result;
         errdefer redirected.deinit();
 
@@ -2240,7 +2239,9 @@ pub const Executor = struct {
                 self.writeRedirectedStream(stream, redirection, options) catch |err| switch (err) {
                     error.PathAlreadyExists => {
                         redirected.deinit();
-                        return errorResult(self.allocator, 1, targetName(redirection), "cannot overwrite existing file");
+                        const failure = try errorResult(self.allocator, 1, targetName(redirection), "cannot overwrite existing file");
+                        if (special_exit) self.pending_exit = failure.status;
+                        return failure;
                     },
                     else => return err,
                 };
@@ -6630,6 +6631,24 @@ test "executor implements set shell option baseline" {
     defer verbose.deinit();
     try std.testing.expectEqualStrings("verbose\n", verbose.stdout);
     try std.testing.expect(std.mem.indexOf(u8, verbose.stderr, "echo verbose") != null);
+}
+
+test "executor exits on special builtin redirection errors" {
+    const path = "rush-special-redirection-error.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator, "echo old > rush-special-redirection-error.tmp; set -C; : > rush-special-redirection-error.tmp; echo after");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "cannot overwrite existing file") != null);
 }
 
 test "executor reports parameter error expansion diagnostics" {

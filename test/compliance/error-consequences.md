@@ -17,6 +17,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `expansion-parameter-error-word` | expansion | covered baseline | diagnostic word expansion, status 1, non-interactive execution stops |
 | `redirection-bad-fd-duplication` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `redirection-noclobber-overwrite` | redirection | covered gap | diagnostic, command fails, following command still runs |
+| `errors-special-builtin-redirection` | special builtin | covered baseline | diagnostic, status 1, non-interactive execution stops |
 | `builtin-test-invalid-expression` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
 | `builtin-read-unsupported-option` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
 | `builtin-wait-unknown-pid` | builtin diagnostics | covered baseline | diagnostic, builtin status 127, following command runs |
@@ -28,10 +29,10 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `errors-command-not-found` | supported | medium | POSIX and differential corpus | simple not-found and unknown wait pid behavior are covered |
 | `errors-syntax` | baseline | high | POSIX corpus and negative corpus | strict mode has initial diagnostics; recovery parser remains intentionally permissive for tooling |
 | `errors-expansion` | partial | high | nounset and `${parameter:?word}` coverage | special-builtin expansion consequences remain incomplete |
-| `errors-special-builtin` | partial | high | assignment persistence coverage only | shell-exit consequences for failures are not modeled in detail |
+| `errors-special-builtin` | partial | high | assignment persistence and redirection negative coverage | expansion and utility-specific shell-exit consequences need more detail |
 | `errors-nounset` | baseline | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution in current baseline |
 | `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | diagnostics exist; shell-exit and special-builtin consequences need stricter modeling |
-| `errors-special-builtin-redirection` | partial | high | no dedicated negative corpus | needs cases for special builtin redirection failures |
+| `errors-special-builtin-redirection` | baseline | high | negative corpus | noclobber special-builtin redirection failure exits non-interactive execution; more redirection classes need cases |
 | `errors-special-builtin-expansion` | partial | high | no dedicated negative corpus | needs cases for special builtin expansion failures |
 
 ## POSIX consequence areas to expand
@@ -50,7 +51,7 @@ Current coverage includes bad fd duplication and noclobber. Add cases for missin
 
 ### Special builtin failures
 
-High-risk and under-covered. Add cases for `: >bad`, `eval`, `export`, `readonly`, `set`, `unset`, `trap`, and other POSIX special builtins where expansion or redirection fails. Track whether non-interactive execution should stop and whether assignment side effects persist.
+High-risk and under-covered. `:` with noclobber redirection now covers the baseline non-interactive exit consequence. Add cases for `eval`, `export`, `readonly`, `set`, `unset`, `trap`, and other POSIX special builtins where expansion or other redirection classes fail. Track whether non-interactive execution should stop and whether assignment side effects persist.
 
 ### Regular builtin failures
 
