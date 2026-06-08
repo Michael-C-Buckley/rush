@@ -939,6 +939,15 @@ pub const Executor = struct {
         return null;
     }
 
+    fn findBackgroundJobBySpec(self: *Executor, spec: []const u8) ?*BackgroundJob {
+        const text = if (std.mem.startsWith(u8, spec, "%")) spec[1..] else spec;
+        const id = std.fmt.parseUnsigned(usize, text, 10) catch return null;
+        for (self.background_jobs.items) |*job| {
+            if (job.id == id) return job;
+        }
+        return null;
+    }
+
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
         var output: std.ArrayList(u8) = .empty;
         errdefer output.deinit(self.allocator);
@@ -4662,20 +4671,60 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     return emptyResult(self.allocator, 0);
 }
 
+const JobPrintMode = enum { normal, long, pids };
+
 fn builtinJobs(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len != 1) return errorResult(self.allocator, 2, "jobs", "arguments are not implemented yet");
+    var mode: JobPrintMode = .normal;
+    var index: usize = 1;
+    while (index < command.argv.len) : (index += 1) {
+        const arg = command.argv[index].text;
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len == 0 or arg[0] != '-' or std.mem.eql(u8, arg, "-")) break;
+        if (std.mem.eql(u8, arg, "-l")) {
+            mode = .long;
+        } else if (std.mem.eql(u8, arg, "-p")) {
+            mode = .pids;
+        } else {
+            return errorResult(self.allocator, 2, "jobs", "unsupported option");
+        }
+    }
+
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(self.allocator);
-    for (self.background_jobs.items) |job| {
-        if (job.done) {
-            try stdout.print(self.allocator, "[{d}] Done({d}) {s}\n", .{ job.id, job.status, job.command });
-        } else {
-            try stdout.print(self.allocator, "[{d}] Running {s}\n", .{ job.id, job.command });
+    if (index >= command.argv.len) {
+        for (self.background_jobs.items) |job| try appendJobLine(self.allocator, &stdout, job, mode);
+    } else {
+        for (command.argv[index..]) |arg| {
+            const job = self.findBackgroundJobBySpec(arg.text) orelse return errorResult(self.allocator, 127, "jobs", "unknown job");
+            try appendJobLine(self.allocator, &stdout, job.*, mode);
         }
     }
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: BackgroundJob, mode: JobPrintMode) !void {
+    switch (mode) {
+        .pids => try stdout.print(allocator, "{d}\n", .{job.pid}),
+        .long => {
+            if (job.done) {
+                try stdout.print(allocator, "[{d}] {d} Done({d}) {s}\n", .{ job.id, job.pid, job.status, job.command });
+            } else {
+                try stdout.print(allocator, "[{d}] {d} Running {s}\n", .{ job.id, job.pid, job.command });
+            }
+        },
+        .normal => {
+            if (job.done) {
+                try stdout.print(allocator, "[{d}] Done({d}) {s}\n", .{ job.id, job.status, job.command });
+            } else {
+                try stdout.print(allocator, "[{d}] Running {s}\n", .{ job.id, job.command });
+            }
+        },
+    }
 }
 
 fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -6600,6 +6649,25 @@ test "executor runs compound async jobs as waitable children" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("compound\n", result.stdout);
+}
+
+test "executor filters and formats jobs builtin output" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & jobs -p %1; jobs -l 1; wait $!; jobs %1");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    const first_newline = std.mem.indexOfScalar(u8, result.stdout, '\n') orelse return error.TestUnexpectedResult;
+    try std.testing.expect(first_newline > 0);
+    for (result.stdout[0..first_newline]) |byte| try std.testing.expect(std.ascii.isDigit(byte));
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, " Running /bin/sleep 0\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] Done(0) /bin/sleep 0\n") != null);
 }
 
 test "executor reports tracked background jobs" {

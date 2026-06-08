@@ -93,6 +93,7 @@ ifs-colon-splitting	expansion	behavior	-
 ifs-custom-comma	expansion	behavior	-
 ifs-empty-no-splitting	expansion	behavior	-
 jobs-background-table	job_control	job	-
+jobs-operand-filter	job_control	job	jobs operand filters by job id
 multiple-here-docs	redirection	here-doc	-
 nested-if	grammar	behavior	-
 newline-list	grammar	behavior	-
