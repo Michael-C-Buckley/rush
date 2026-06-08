@@ -81,6 +81,10 @@ The compliance report uses this metadata to print POSIX corpus case counts by ar
 
 `error-consequences.md` tracks syntax, expansion, redirection, special-builtin, and builtin diagnostic consequences separately from normal behavior coverage. Use it when adding negative corpus cases or implementing stricter POSIX shell-error behavior.
 
+## Dash variable audit
+
+`dash-variable-audit.md` records permissively licensed dash source findings for shell-maintained variables such as `IFS`, `PWD`, `PPID`, `LINENO`, prompts, `OPTIND`, and interactive-only variables. Use it before changing shell startup environment behavior or creating variable-related POSIX follow-up tasks.
+
 ## Status promotion criteria
 
 Manifest status changes should be evidence-based. When in doubt, use the lower status and record the remaining gap in `notes`.
