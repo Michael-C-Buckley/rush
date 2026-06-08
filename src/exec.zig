@@ -5060,20 +5060,63 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (command.argv.len > 2) return errorResult(self.allocator, 2, "cd", "too many arguments");
-    const target = if (command.argv.len == 2) command.argv[1].text else self.getEnv("HOME") orelse return errorResult(self.allocator, 1, "cd", "HOME not set");
+    const operand = if (command.argv.len == 2) command.argv[1].text else self.getEnv("HOME") orelse return errorResult(self.allocator, 1, "cd", "HOME not set");
+    const oldpwd_target = std.mem.eql(u8, operand, "-");
+    const target = if (oldpwd_target) self.getEnv("OLDPWD") orelse return errorResult(self.allocator, 1, "cd", "OLDPWD not set") else operand;
     const old_pwd = try self.logicalCwd(io);
     defer self.allocator.free(old_pwd);
-    const new_pwd = try normalizeLogicalPath(self.allocator, old_pwd, target);
+
+    const cd_target = try resolveCdTarget(self, io, target);
+    defer cd_target.deinit(self.allocator);
+
+    const new_pwd = try normalizeLogicalPath(self.allocator, old_pwd, cd_target.path);
     errdefer self.allocator.free(new_pwd);
-    std.process.setCurrentPath(io, target) catch |err| {
-        const message = try std.fmt.allocPrint(self.allocator, "{s}: {t}", .{ target, err });
+    std.process.setCurrentPath(io, cd_target.path) catch |err| {
+        const message = try std.fmt.allocPrint(self.allocator, "{s}: {t}", .{ cd_target.path, err });
         defer self.allocator.free(message);
         return errorResult(self.allocator, 1, "cd", message);
     };
     try self.setEnv("OLDPWD", old_pwd);
     try self.setEnv("PWD", new_pwd);
+    const stdout = if (oldpwd_target or cd_target.print_path) try std.fmt.allocPrint(self.allocator, "{s}\n", .{new_pwd}) else try self.allocator.alloc(u8, 0);
+    errdefer self.allocator.free(stdout);
     self.allocator.free(new_pwd);
-    return emptyResult(self.allocator, 0);
+    return .{
+        .allocator = self.allocator,
+        .status = 0,
+        .stdout = stdout,
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
+}
+
+const CdTarget = struct {
+    path: []const u8,
+    print_path: bool = false,
+    owned: bool = false,
+
+    fn deinit(self: CdTarget, allocator: std.mem.Allocator) void {
+        if (self.owned) allocator.free(self.path);
+    }
+};
+
+fn resolveCdTarget(self: *Executor, io: std.Io, target: []const u8) !CdTarget {
+    if (target.len == 0 or target[0] == '/' or std.mem.indexOfScalar(u8, target, '/') != null) return .{ .path = target };
+    const cdpath = self.getEnv("CDPATH") orelse return .{ .path = target };
+    var iter = std.mem.splitScalar(u8, cdpath, ':');
+    while (iter.next()) |entry| {
+        const candidate = if (entry.len == 0 or std.mem.eql(u8, entry, "."))
+            try self.allocator.dupe(u8, target)
+        else
+            try std.mem.concat(self.allocator, u8, &.{ entry, "/", target });
+        errdefer self.allocator.free(candidate);
+        var dir = std.Io.Dir.cwd().openDir(io, candidate, .{}) catch {
+            self.allocator.free(candidate);
+            continue;
+        };
+        dir.close(io);
+        return .{ .path = candidate, .print_path = entry.len != 0 and !std.mem.eql(u8, entry, "."), .owned = true };
+    }
+    return .{ .path = target };
 }
 
 fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {

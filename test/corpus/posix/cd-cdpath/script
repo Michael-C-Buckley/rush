@@ -1,0 +1,9 @@
+start=$PWD
+out=$PWD/rush-cdpath.out
+mkdir -p rush-cdpath-parent/target
+CDPATH=rush-cdpath-parent
+cd target > "$out"
+case $(cat "$out") in */rush-cdpath-parent/target) echo cdpath-output-ok ;; *) echo cdpath-output-bad ;; esac
+case $PWD in */rush-cdpath-parent/target) echo pwd-ok ;; *) echo bad-pwd:$PWD ;; esac
+case $OLDPWD in "$start") echo old-ok ;; *) echo old-bad ;; esac
+cd "$start"
