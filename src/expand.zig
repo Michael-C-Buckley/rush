@@ -395,11 +395,7 @@ pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: O
 fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) anyerror![]const u8 {
     return switch (part.kind) {
         .unquoted, .escaped, .single_quoted => allocator.dupe(u8, part.value(raw)),
-        .double_quoted => blk: {
-            const expanded = try expandParameters(allocator, part.value(raw), options);
-            defer allocator.free(expanded);
-            break :blk quoteRemoveDoubleQuotedContent(allocator, expanded);
-        },
+        .double_quoted => renderDoubleQuotedContent(allocator, part.value(raw), options),
         .parameter => renderParameter(allocator, part.value(raw), options),
         .arithmetic => blk: {
             const value = try evalArithmetic(part.value(raw));
@@ -673,6 +669,62 @@ fn trimTrailingNewlines(output: []const u8) []const u8 {
     return output[0..end];
 }
 
+fn renderDoubleQuotedContent(allocator: std.mem.Allocator, text: []const u8, options: Options) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    var index: usize = 0;
+    var literal_start: usize = 0;
+    while (index < text.len) {
+        if (text[index] == '\\' and index + 1 < text.len) {
+            index += 2;
+            continue;
+        }
+
+        const part = switch (text[index]) {
+            '$' => arithmeticPart(text, index) orelse commandSubstitutionPart(text, index) orelse parameterPart(text, index),
+            '`' => backquoteCommandSubstitutionPart(text, index),
+            else => null,
+        } orelse {
+            index += 1;
+            continue;
+        };
+
+        try appendDoubleQuotedLiteral(allocator, &output, text[literal_start..index]);
+        const rendered = try renderDoubleQuotedExpansion(allocator, text, part, options);
+        defer allocator.free(rendered);
+        try output.appendSlice(allocator, rendered);
+        index = part.span.end;
+        literal_start = index;
+    }
+    try appendDoubleQuotedLiteral(allocator, &output, text[literal_start..]);
+    return output.toOwnedSlice(allocator);
+}
+
+fn appendDoubleQuotedLiteral(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8) !void {
+    const removed = try quoteRemoveDoubleQuotedContent(allocator, text);
+    defer allocator.free(removed);
+    try output.appendSlice(allocator, removed);
+}
+
+fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) ![]const u8 {
+    return switch (part.kind) {
+        .parameter => renderParameter(allocator, part.value(raw), options),
+        .arithmetic => blk: {
+            const value = try evalArithmetic(part.value(raw));
+            break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
+        },
+        .command_substitution => blk: {
+            const script = try commandSubstitutionScript(allocator, raw, part);
+            defer allocator.free(script);
+            const output = (try options.command_substitution.run(allocator, script)) orelse try allocator.alloc(u8, 0);
+            defer allocator.free(output);
+            const trimmed = trimTrailingNewlines(output);
+            break :blk allocator.dupe(u8, trimmed);
+        },
+        else => unreachable,
+    };
+}
+
 fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, text: []const u8, options: Options, ifs: []const u8) !void {
     force_current_field.* = true;
     var index: usize = 0;
@@ -716,11 +768,9 @@ fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
 }
 
 fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8), text: []const u8, options: Options) !void {
-    const expanded = try expandParameters(allocator, text, options);
-    defer allocator.free(expanded);
-    const removed = try quoteRemoveDoubleQuotedContent(allocator, expanded);
-    defer allocator.free(removed);
-    try current.appendSlice(allocator, removed);
+    const rendered = try renderDoubleQuotedContent(allocator, text, options);
+    defer allocator.free(rendered);
+    try current.appendSlice(allocator, rendered);
 }
 
 fn appendQuotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, positionals: []const []const u8) !void {
@@ -1233,6 +1283,23 @@ test "quote removal preserves non-special backslashes in double quotes" {
     const content = try quoteRemoveDoubleQuotedContent(std.testing.allocator, "a\\ b\\$c\\\\d");
     defer std.testing.allocator.free(content);
     try std.testing.expectEqualStrings("a\\ b$c\\d", content);
+}
+
+test "command substitution expands inside double quotes" {
+    var result = try expandWord(std.testing.allocator, "\"before-$(echo hi)-after\"", .{ .command_substitution = test_command_substitution });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), result.fields.len);
+    try std.testing.expectEqualStrings("before-hi-after", result.fields[0]);
+
+    var spaced = try expandWord(std.testing.allocator, "\"$(echo hi)\"", .{ .command_substitution = test_command_substitution });
+    defer spaced.deinit();
+    try std.testing.expectEqual(@as(usize, 1), spaced.fields.len);
+    try std.testing.expectEqualStrings("hi", spaced.fields[0]);
+
+    var backquote = try expandWord(std.testing.allocator, "\"before-`echo hi`-after\"", .{ .command_substitution = test_command_substitution });
+    defer backquote.deinit();
+    try std.testing.expectEqual(@as(usize, 1), backquote.fields.len);
+    try std.testing.expectEqualStrings("before-hi-after", backquote.fields[0]);
 }
 
 test "command substitution parses and trims callback output" {

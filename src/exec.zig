@@ -3721,6 +3721,20 @@ test "executor expands nested command substitutions and arithmetic inside them" 
     try std.testing.expectEqualStrings("3\n", arithmetic_result.stdout);
 }
 
+test "executor expands command substitutions inside double quotes" {
+    var lowered = try parseAndLower(std.testing.allocator, "set -- \"$(printf 'a b')\" c; echo $#:$1:$2");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("2:a b:c\n", result.stdout);
+}
+
 test "executor expands command substitutions recursively" {
     var lowered = try parseAndLower(std.testing.allocator, "echo before-$(echo hi)-after");
     defer lowered.parsed.deinit();

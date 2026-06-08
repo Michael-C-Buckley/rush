@@ -1,0 +1,2 @@
+set -- "$(printf 'a b')" c
+echo "$#:$1:$2"
