@@ -6102,14 +6102,19 @@ fn formatCpuTime(allocator: std.mem.Allocator, centiseconds: u64) ![]u8 {
 fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (self.function_depth == 0) return errorResult(self.allocator, 2, "return", "not in a function");
-    if (command.argv.len > 2) return errorResult(self.allocator, 2, "return", "too many arguments");
+    if (self.function_depth == 0) return returnUsageError(self, "not in a function");
+    if (command.argv.len > 2) return returnUsageError(self, "too many arguments");
     const status: ExitStatus = if (command.argv.len == 2) blk: {
-        const parsed = std.fmt.parseInt(u8, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, "return", "numeric argument required");
+        const parsed = std.fmt.parseInt(u8, command.argv[1].text, 10) catch return returnUsageError(self, "numeric argument required");
         break :blk parsed;
     } else 0;
     self.pending_return = status;
     return emptyResult(self.allocator, status);
+}
+
+fn returnUsageError(self: *Executor, message: []const u8) !CommandResult {
+    self.pending_exit = 2;
+    return errorResult(self.allocator, 2, "return", message);
 }
 
 fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {

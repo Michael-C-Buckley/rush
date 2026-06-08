@@ -25,7 +25,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `exit` | `builtin-exit`, `builtin-exit-usage-errors` | `builtin-exit`, `builtin-exit-invalid-operand`, `builtin-exit-too-many` | additional status/diagnostic corpus |
 | `export` | `builtin-export-unset` | `builtin-export-env` | option forms, invalid names, readonly interactions |
 | `readonly` | `vars-readonly` | `builtin-readonly` | option forms, invalid names, assignment diagnostics |
-| `return` | covered by function tests | `builtin-return-status`, unit coverage | negative corpus for return outside function and invalid operands |
+| `return` | `builtin-return-usage-errors` plus function tests | `builtin-return-status`, `builtin-return-outside-function`, `builtin-return-invalid-operand`, `builtin-return-too-many`, unit coverage | additional status/diagnostic corpus |
 | `set` | `option-set`, option rows | shell option and positional parameter corpus | many POSIX flags, `--`, invalid options, exact diagnostics |
 | `shift` | `builtin-shift-too-far`, `builtin-shift-usage-errors`, builtin row through tests | `builtin-shift`, `builtin-shift-too-far`, `builtin-shift-invalid-operand`, `builtin-shift-too-many` | additional status/diagnostic corpus |
 | `times` | `builtin-times` | `builtin-times` | portability/runtime precision is baseline only |
@@ -73,7 +73,6 @@ Follow-up tasks:
 
 The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `read`, `wait`). Add cases for:
 
-- `return` outside a function;
 - `break`/`continue` invalid levels;
 - `export`, `readonly`, and `unset` invalid or readonly names;
 - `printf` invalid format and missing numeric conversions;
