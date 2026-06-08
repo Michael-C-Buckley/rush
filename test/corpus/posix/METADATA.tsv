@@ -79,6 +79,7 @@ expansion-null-colon-operators	expansion	behavior	-
 expansion-pathname-sorted	expansion	behavior	-
 expansion-quoted-backquote-substitution	expansion	behavior	-
 expansion-quoted-command-substitution	expansion	behavior	-
+fg-current-job	job_control	job	fg waits for the current background job
 for-loop	grammar	behavior	-
 for-nested-if	grammar	behavior	-
 function-local-positionals	grammar	behavior	-

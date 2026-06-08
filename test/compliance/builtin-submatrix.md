@@ -8,7 +8,7 @@ This submatrix expands builtin-related rows in `posix-shell.tsv`. It separates P
 | --- | --- | --- |
 | POSIX special builtins | classification and assignment persistence baseline | failure consequences, redirection/expansion errors, utility-specific diagnostics |
 | Core regular builtins | broad baseline for common scripts | option/operand completeness and negative diagnostics |
-| Job-control builtins | background job table and wait baseline | jobs operands/options, fg/bg, stopped jobs |
+| Job-control builtins | background job table, wait baseline, jobs operands/options, fg baseline | bg, stopped jobs, terminal mode restoration |
 | Rush helper builtins | useful implementation helpers | keep out of POSIX score unless they affect shell semantics |
 
 ## POSIX special builtins
@@ -62,13 +62,12 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
 | `jobs` | `builtin-jobs` | visible table, `-l`, `-p`, numeric and `%` job operands | current job marker, stopped/running/done refresh, richer job specs |
-| `fg` | `job-fg-bg` | missing | foreground selected jobs, terminal handoff, status propagation |
+| `fg` | `job-fg-bg` | current and explicit tracked jobs wait and propagate status | stopped-job continuation, full terminal handoff, richer job specs |
 | `bg` | `job-fg-bg` | missing | continue stopped jobs, diagnostics until stopped-job tracking exists |
 
 Follow-up tasks:
 
 - `#152 Deepen jobs builtin options and operands`
-- `#153 Add fg builtin baseline`
 - `#154 Add bg builtin baseline`
 
 ## Negative diagnostics coverage targets

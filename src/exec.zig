@@ -196,6 +196,7 @@ const builtin_names = [_][]const u8{
     "shift",
     "export",
     "getopts",
+    "fg",
     "jobs",
     "unset",
     "env",
@@ -948,6 +949,11 @@ pub const Executor = struct {
             if (job.id == id) return job;
         }
         return null;
+    }
+
+    fn currentBackgroundJob(self: *Executor) ?*BackgroundJob {
+        if (self.background_jobs.items.len == 0) return null;
+        return &self.background_jobs.items[self.background_jobs.items.len - 1];
     }
 
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
@@ -3243,6 +3249,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "shift")) return builtinShift;
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "getopts")) return builtinGetopts;
+    if (std.mem.eql(u8, name, "fg")) return builtinFg;
     if (std.mem.eql(u8, name, "jobs")) return builtinJobs;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
@@ -4739,6 +4746,20 @@ fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: 
             }
         },
     }
+}
+
+fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    if (command.argv.len > 2) return errorResult(self.allocator, 2, "fg", "too many arguments");
+    const job = if (command.argv.len == 1)
+        self.currentBackgroundJob() orelse return errorResult(self.allocator, 1, "fg", "no current job")
+    else
+        self.findBackgroundJobBySpec(command.argv[1].text) orelse return errorResult(self.allocator, 127, "fg", "unknown job");
+    const stdout = try std.fmt.allocPrint(self.allocator, "{s}\n", .{job.command});
+    errdefer self.allocator.free(stdout);
+    const status = try waitBackgroundJob(io, job);
+    return .{ .allocator = self.allocator, .status = status, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -6696,6 +6717,20 @@ test "executor runs compound async jobs as waitable children" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("compound\n", result.stdout);
+}
+
+test "executor foregrounds current and selected background jobs" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & fg; /bin/sleep 0 & fg %2");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("/bin/sleep 0\n/bin/sleep 0\n", result.stdout);
 }
 
 test "executor filters and formats jobs builtin output" {
