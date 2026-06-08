@@ -17,18 +17,21 @@ pub const completion_model = @import("completion.zig");
 pub const event_loop = @import("event_loop.zig");
 
 const usage =
-    \\usage: rush -c SCRIPT
+    \\usage: rush [--login]
+    \\       rush -c SCRIPT
     \\       rush --posix-strict -c SCRIPT
     \\       rush complete --debug INPUT
     \\       rush --help
     \\
 ;
 
+const system_profile_path = "/etc/rush/profile.rush";
 const system_config_path = "/etc/rush/config.rush";
 
 pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const login_shell = isLoginArgZero(args[0]);
 
     if (args.len == 1) {
         var completion_debug_allocator: if (build_options.mode == .Debug) std.heap.DebugAllocator(.{}) else void = if (build_options.mode == .Debug) .init else {};
@@ -36,7 +39,16 @@ pub fn main(init: std.process.Init) !u8 {
             _ = completion_debug_allocator.deinit();
         };
         const completion_allocator = if (build_options.mode == .Debug) completion_debug_allocator.allocator() else std.heap.smp_allocator;
-        return runInteractive(allocator, completion_allocator, init.io, init.environ_map);
+        return runInteractive(allocator, completion_allocator, init.io, init.environ_map, .{ .arg_zero = args[0], .login = login_shell });
+    }
+
+    if (args.len == 2 and std.mem.eql(u8, args[1], "--login")) {
+        var completion_debug_allocator: if (build_options.mode == .Debug) std.heap.DebugAllocator(.{}) else void = if (build_options.mode == .Debug) .init else {};
+        defer if (build_options.mode == .Debug) {
+            _ = completion_debug_allocator.deinit();
+        };
+        const completion_allocator = if (build_options.mode == .Debug) completion_debug_allocator.allocator() else std.heap.smp_allocator;
+        return runInteractive(allocator, completion_allocator, init.io, init.environ_map, .{ .arg_zero = args[0], .login = true });
     }
 
     if (args.len == 2 and std.mem.eql(u8, args[1], "--help")) {
@@ -811,7 +823,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     defer executor.deinit();
     try executor.importEnvironment(environ_map);
     executor.arg_zero = "rush";
-    try loadInteractiveConfig(allocator, io, &executor);
+    try loadInteractiveConfig(allocator, io, &executor, .{});
 
     var history = History.init(allocator);
     defer history.deinit();
@@ -920,7 +932,12 @@ fn ansiForHighlight(kind: parser.HighlightKind) []const u8 {
     };
 }
 
-pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map) !u8 {
+const InteractiveOptions = struct {
+    arg_zero: []const u8 = "rush",
+    login: bool = false,
+};
+
+pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !u8 {
     installInteractiveSignalHandlers();
 
     var history = History.init(allocator);
@@ -934,8 +951,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     try executor.importEnvironment(environ_map);
-    executor.arg_zero = "rush";
-    try loadInteractiveConfig(allocator, io, &executor);
+    executor.arg_zero = options.arg_zero;
+    try loadInteractiveConfig(allocator, io, &executor, options);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
 
@@ -943,7 +960,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer completion_cache.deinit();
 
     while (true) {
-        const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" }, "rush$ ") catch |err| switch (err) {
+        const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = options.arg_zero }, "rush$ ") catch |err| switch (err) {
             error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
             else => |e| return e,
         };
@@ -987,7 +1004,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
-            var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" });
+            var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = options.arg_zero });
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
             defer result.deinit();
             try writeAll(io, .stdout, result.stdout);
@@ -1093,34 +1110,54 @@ fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor,
     return result;
 }
 
-fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor) !void {
-    try sourceOptionalConfig(allocator, io, executor, system_config_path);
-    const user_path = try userConfigPath(allocator, executor.*);
+fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, options: InteractiveOptions) !void {
+    if (options.login) {
+        try sourceOptionalConfig(allocator, io, executor, system_profile_path, options.arg_zero);
+        const user_profile_path = try userStartupPath(allocator, executor.*, "profile.rush");
+        defer if (user_profile_path) |path| allocator.free(path);
+        if (user_profile_path) |path| try sourceOptionalConfig(allocator, io, executor, path, options.arg_zero);
+    }
+
+    try sourceOptionalConfig(allocator, io, executor, system_config_path, options.arg_zero);
+    const user_path = try userStartupPath(allocator, executor.*, "config.rush");
     defer if (user_path) |path| allocator.free(path);
-    if (user_path) |path| try sourceOptionalConfig(allocator, io, executor, path);
+    if (user_path) |path| try sourceOptionalConfig(allocator, io, executor, path, options.arg_zero);
 }
 
-fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8) !void {
+fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8, arg_zero: []const u8) !void {
     const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
         error.FileNotFound => return,
         else => return err,
     };
     defer allocator.free(contents);
 
-    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = "rush" });
+    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = arg_zero });
     defer result.deinit();
     if (result.stdout.len != 0) try writeAll(io, .stdout, result.stdout);
     if (result.stderr.len != 0) try writeAll(io, .stderr, result.stderr);
 }
 
 fn userConfigPath(allocator: std.mem.Allocator, executor: exec.Executor) !?[]const u8 {
+    return userStartupPath(allocator, executor, "config.rush");
+}
+
+fn userProfilePath(allocator: std.mem.Allocator, executor: exec.Executor) !?[]const u8 {
+    return userStartupPath(allocator, executor, "profile.rush");
+}
+
+fn userStartupPath(allocator: std.mem.Allocator, executor: exec.Executor, file_name: []const u8) !?[]const u8 {
     if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
-        if (xdg_config_home.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home, "rush", "config.rush" });
+        if (xdg_config_home.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home, "rush", file_name });
     }
     if (executor.getEnv("HOME")) |home| {
-        if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".config", "rush", "config.rush" });
+        if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".config", "rush", file_name });
     }
     return null;
+}
+
+fn isLoginArgZero(arg_zero: []const u8) bool {
+    const base = std.fs.path.basename(arg_zero);
+    return base.len != 0 and base[0] == '-';
 }
 
 fn historyPath(allocator: std.mem.Allocator, environ_map: *const std.process.Environ.Map) !?[]const u8 {
@@ -1774,6 +1811,24 @@ test "user config path falls back to HOME config.rush" {
     const path = (try userConfigPath(std.testing.allocator, executor)).?;
     defer std.testing.allocator.free(path);
     try std.testing.expectEqualStrings("/home/example/.config/rush/config.rush", path);
+}
+
+test "user profile path prefers XDG_CONFIG_HOME" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("HOME", "/home/example");
+    try executor.setEnv("XDG_CONFIG_HOME", "/tmp/xdg");
+
+    const path = (try userProfilePath(std.testing.allocator, executor)).?;
+    defer std.testing.allocator.free(path);
+    try std.testing.expectEqualStrings("/tmp/xdg/rush/profile.rush", path);
+}
+
+test "login shell detection follows argv0 dash convention" {
+    try std.testing.expect(isLoginArgZero("-rush"));
+    try std.testing.expect(isLoginArgZero("/bin/-rush"));
+    try std.testing.expect(!isLoginArgZero("rush"));
+    try std.testing.expect(!isLoginArgZero("/bin/rush"));
 }
 
 test "integration harness compares selected scripts with /bin/sh" {
