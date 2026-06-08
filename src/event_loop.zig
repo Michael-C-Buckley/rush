@@ -96,7 +96,7 @@ const EpollEventLoop = struct {
 
     pub fn removeFd(self: *EpollEventLoop, fd: std.posix.fd_t) !void {
         const rc = std.os.linux.epoll_ctl(self.fd, std.os.linux.EPOLL.CTL_DEL, fd, null);
-        switch (std.os.linux.E.init(rc)) {
+        switch (std.os.linux.errno(rc)) {
             .SUCCESS => {},
             else => return error.Unexpected,
         }
