@@ -218,3 +218,4 @@ builtin-getopts-explicit-args	builtin	behavior	getopts parses explicit arg opera
 builtin-set-positionals	builtin	behavior	set -- sets and clears positional parameters
 builtin-read-eof-status	builtin	behavior	read returns non-zero at EOF while assigning an empty value
 builtin-dot-path-search	builtin	behavior	dot searches PATH for scripts without slash operands
+builtin-printf-b-c-conversions	builtin	behavior	printf %b expands escapes and %c uses the first character

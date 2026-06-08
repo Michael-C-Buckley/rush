@@ -156,3 +156,4 @@ while getopts ab: opt -a -b bee; do printf '%s/%s/%s\n' "$opt" "${OPTARG-}" "$OP
 set -- alpha beta; echo "$1/$2/$#"; set --; echo "count=$# first=${1-unset}"
 : > empty; read line < empty; echo status=$? value=${line-unset}
 rm -rf dot-scripts; mkdir dot-scripts; printf '%s\n' 'DOTPATH_VALUE=ok' > dot-scripts/dotfile; PATH=dot-scripts; . dotfile; echo $DOTPATH_VALUE
+printf '%b' 'a\nb'; echo; printf '%c:%c\n' abc Z
