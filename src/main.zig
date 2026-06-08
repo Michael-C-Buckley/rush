@@ -9,6 +9,7 @@ pub const ir = @import("ir.zig");
 pub const exec = @import("exec.zig");
 pub const line_editor = @import("line_editor.zig");
 pub const editor_driver = @import("editor_driver.zig");
+pub const completion_model = @import("completion.zig");
 
 const usage =
     \\usage: rush -c SCRIPT
@@ -159,91 +160,11 @@ pub const Completion = struct {
     text: []const u8,
 };
 
-pub const CompletionKind = enum {
-    command,
-    builtin,
-    function,
-    file,
-    directory,
-    variable,
-    option,
-    subcommand,
-    plain,
-};
-
-pub const CompletionCandidate = struct {
-    value: []const u8,
-    display: ?[]const u8 = null,
-    description: ?[]const u8 = null,
-    kind: CompletionKind = .plain,
-    replace_start: usize,
-    replace_end: usize,
-    append_space: bool = true,
-};
-
-pub const CompletionEdit = struct {
-    replace_start: usize,
-    replace_end: usize,
-    replacement: []const u8,
-    append_space: bool = false,
-};
-
-pub const CompletionApplication = union(enum) {
-    none,
-    edit: CompletionEdit,
-    ambiguous,
-
-    pub fn deinit(self: CompletionApplication, allocator: std.mem.Allocator) void {
-        switch (self) {
-            .edit => |edit| allocator.free(edit.replacement),
-            .none, .ambiguous => {},
-        }
-    }
-};
-
-pub fn applyCompletionCandidates(allocator: std.mem.Allocator, candidates: []const CompletionCandidate) !CompletionApplication {
-    if (candidates.len == 0) return .none;
-    const replace_start = candidates[0].replace_start;
-    const replace_end = candidates[0].replace_end;
-
-    for (candidates[1..]) |candidate| {
-        std.debug.assert(candidate.replace_start == replace_start);
-        std.debug.assert(candidate.replace_end == replace_end);
-    }
-
-    if (candidates.len == 1) {
-        return .{ .edit = .{
-            .replace_start = replace_start,
-            .replace_end = replace_end,
-            .replacement = try allocator.dupe(u8, candidates[0].value),
-            .append_space = candidates[0].append_space,
-        } };
-    }
-
-    const common = commonCandidatePrefix(candidates);
-    const current_len = replace_end - replace_start;
-    if (common.len > current_len) {
-        return .{ .edit = .{
-            .replace_start = replace_start,
-            .replace_end = replace_end,
-            .replacement = try allocator.dupe(u8, common),
-            .append_space = false,
-        } };
-    }
-
-    return .ambiguous;
-}
-
-fn commonCandidatePrefix(candidates: []const CompletionCandidate) []const u8 {
-    std.debug.assert(candidates.len != 0);
-    var prefix = candidates[0].value;
-    for (candidates[1..]) |candidate| {
-        var index: usize = 0;
-        while (index < prefix.len and index < candidate.value.len and prefix[index] == candidate.value[index]) index += 1;
-        prefix = prefix[0..index];
-    }
-    return prefix;
-}
+pub const CompletionKind = completion_model.Kind;
+pub const CompletionCandidate = completion_model.Candidate;
+pub const CompletionEdit = completion_model.Edit;
+pub const CompletionApplication = completion_model.Application;
+pub const applyCompletionCandidates = completion_model.applyCandidates;
 
 pub fn completeInput(allocator: std.mem.Allocator, io: std.Io, executor: exec.Executor, source: []const u8, cursor: usize) ![]Completion {
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = cursor });

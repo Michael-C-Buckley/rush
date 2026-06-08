@@ -3,6 +3,7 @@
 const std = @import("std");
 const zig_builtin = @import("builtin");
 const compat = @import("compat.zig");
+const completion = @import("completion.zig");
 const expand = @import("expand.zig");
 const ir = @import("ir.zig");
 const parser = @import("parser.zig");
@@ -109,6 +110,44 @@ pub const PromptBuilder = struct {
             },
         }
     }
+};
+
+pub const CompletionBuilder = struct {
+    candidates: std.ArrayList(completion.Candidate) = .empty,
+    owned: std.ArrayList([]const u8) = .empty,
+
+    pub fn deinit(self: *CompletionBuilder, allocator: std.mem.Allocator) void {
+        for (self.owned.items) |value| allocator.free(value);
+        self.owned.deinit(allocator);
+        self.candidates.deinit(allocator);
+        self.* = undefined;
+    }
+
+    pub fn appendCandidate(self: *CompletionBuilder, allocator: std.mem.Allocator, candidate: completion.Candidate) !void {
+        var owned_candidate = candidate;
+        owned_candidate.value = try self.dupeField(allocator, candidate.value);
+        if (candidate.display) |display| owned_candidate.display = try self.dupeField(allocator, display);
+        if (candidate.description) |description| owned_candidate.description = try self.dupeField(allocator, description);
+        try self.candidates.append(allocator, owned_candidate);
+    }
+
+    fn dupeField(self: *CompletionBuilder, allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
+        const owned = try allocator.dupe(u8, value);
+        errdefer allocator.free(owned);
+        try self.owned.append(allocator, owned);
+        return owned;
+    }
+
+    pub fn finish(self: *CompletionBuilder, allocator: std.mem.Allocator) ![]completion.Candidate {
+        const candidates = try self.candidates.toOwnedSlice(allocator);
+        self.owned.deinit(allocator);
+        self.* = undefined;
+        return candidates;
+    }
+};
+
+pub const CompletionProvider = struct {
+    function: []const u8,
 };
 
 const PromptStyle = struct {
@@ -223,6 +262,7 @@ pub const Executor = struct {
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
+    completion_providers: std.StringHashMapUnmanaged(CompletionProvider) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     open_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, void) = .empty,
     shell_options: ShellOptions = .{},
@@ -243,6 +283,7 @@ pub const Executor = struct {
     last_background_pid_text: [32]u8 = undefined,
     last_background_pid_text_len: usize = 0,
     prompt_builder: ?PromptBuilder = null,
+    completion_builder: ?CompletionBuilder = null,
     getopts_offset: usize = 1,
     getopts_last_optind: usize = 1,
 
@@ -305,9 +346,16 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.traps.deinit(self.allocator);
+        var completion_iter = self.completion_providers.iterator();
+        while (completion_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.function);
+        }
+        self.completion_providers.deinit(self.allocator);
         self.background_jobs.deinit(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
+        if (self.completion_builder) |*builder| builder.deinit(self.allocator);
         self.global_positionals.deinit(self.allocator);
         for (self.call_frames.items) |*frame| frame.deinit(self.allocator);
         self.call_frames.deinit(self.allocator);
@@ -316,6 +364,57 @@ pub const Executor = struct {
 
     pub fn hasFunction(self: Executor, name: []const u8) bool {
         return self.functions.contains(name);
+    }
+
+    pub fn registerCompletionProvider(self: *Executor, command: []const u8, function: []const u8) !void {
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const owned_function = try self.allocator.dupe(u8, function);
+        errdefer self.allocator.free(owned_function);
+        const result = try self.completion_providers.getOrPut(self.allocator, owned_command);
+        if (result.found_existing) {
+            self.allocator.free(owned_command);
+            self.allocator.free(result.value_ptr.function);
+        }
+        result.value_ptr.* = .{ .function = owned_function };
+    }
+
+    pub fn completionProvider(self: Executor, command: []const u8) ?CompletionProvider {
+        return self.completion_providers.get(command);
+    }
+
+    pub fn collectCompletions(self: *Executor, command: []const u8, options: ExecuteOptions) ![]completion.Candidate {
+        const provider = self.completionProvider(command) orelse return self.allocator.alloc(completion.Candidate, 0);
+        const body = self.functions.get(provider.function) orelse return self.allocator.alloc(completion.Candidate, 0);
+        if (self.completion_builder != null) return error.RecursiveCompletion;
+        self.completion_builder = .{};
+        errdefer {
+            self.completion_builder.?.deinit(self.allocator);
+            self.completion_builder = null;
+        }
+
+        var argv = [_]ir.WordRef{
+            .{ .raw = provider.function, .text = provider.function, .span = .{ .start = 0, .end = 0 } },
+            .{ .raw = command, .text = command, .span = .{ .start = 0, .end = 0 } },
+        };
+        const call: ir.SimpleCommand = .{ .span = .{ .start = 0, .end = 0 }, .assignments = &.{}, .argv = &argv, .redirections = &.{} };
+        var completion_options = options;
+        completion_options.external_stdio = .capture;
+        var result = try self.executeFunctionBody(call, body, completion_options);
+        defer result.deinit();
+
+        var builder = self.completion_builder.?;
+        self.completion_builder = null;
+        return builder.finish(self.allocator);
+    }
+
+    pub fn freeCompletions(self: *Executor, candidates: []completion.Candidate) void {
+        for (candidates) |candidate| {
+            self.allocator.free(candidate.value);
+            if (candidate.display) |display| self.allocator.free(display);
+            if (candidate.description) |description| self.allocator.free(description);
+        }
+        self.allocator.free(candidates);
     }
 
     pub fn renderPrompt(self: *Executor, options: ExecuteOptions, fallback: []const u8) ![]const u8 {
@@ -2680,6 +2779,9 @@ fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
         if (std.mem.eql(u8, name, "prompt")) return builtinPrompt;
         if (std.mem.eql(u8, name, "prompt_pwd")) return builtinPromptPwd;
     }
+    if (self.completion_builder != null) {
+        if (std.mem.eql(u8, name, "completion")) return builtinCompletion;
+    }
     return builtinFor(name);
 }
 
@@ -2693,6 +2795,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "echo")) return builtinEcho;
     if (std.mem.eql(u8, name, "cat")) return builtinCat;
     if (std.mem.eql(u8, name, "command")) return builtinCommand;
+    if (std.mem.eql(u8, name, "complete")) return builtinComplete;
     if (std.mem.eql(u8, name, "continue")) return builtinContinue;
     if (std.mem.eql(u8, name, "cd")) return builtinCd;
     if (std.mem.eql(u8, name, "printf")) return builtinPrintf;
@@ -2753,6 +2856,77 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     var nested_options = options;
     nested_options.suppress_functions = true;
     return self.executeSimpleCommandWithInput(nested, stdin, nested_options);
+}
+
+fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len < 2) return errorResult(self.allocator, 2, "complete", "missing command name");
+    const command_name = command.argv[1].text;
+    var index: usize = 2;
+    var function_name: ?[]const u8 = null;
+    while (index < command.argv.len) {
+        const option = command.argv[index].text;
+        index += 1;
+        if (std.mem.eql(u8, option, "--function")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing function name");
+            function_name = command.argv[index].text;
+            index += 1;
+        } else {
+            return errorResult(self.allocator, 2, "complete", "unsupported option");
+        }
+    }
+    try self.registerCompletionProvider(command_name, function_name orelse return errorResult(self.allocator, 2, "complete", "missing --function"));
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    const builder = if (self.completion_builder) |*builder| builder else return errorResult(self.allocator, 2, "completion", "not completing a command");
+    if (command.argv.len < 2) return errorResult(self.allocator, 2, "completion", "missing subcommand");
+    const subcommand = command.argv[1].text;
+    if (!std.mem.eql(u8, subcommand, "candidate")) return errorResult(self.allocator, 2, "completion", "unsupported subcommand");
+
+    var candidate: completion.Candidate = .{ .value = "", .replace_start = 0, .replace_end = 0 };
+    var value_set = false;
+    var index: usize = 2;
+    while (index < command.argv.len) {
+        const arg = command.argv[index].text;
+        index += 1;
+        if (std.mem.eql(u8, arg, "--display")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing display text");
+            candidate.display = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--description")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing description text");
+            candidate.description = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--kind")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing kind");
+            candidate.kind = parseCompletionKind(command.argv[index].text) orelse return errorResult(self.allocator, 2, "completion", "unsupported kind");
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--no-space")) {
+            candidate.append_space = false;
+        } else if (std.mem.startsWith(u8, arg, "--")) {
+            return errorResult(self.allocator, 2, "completion", "unsupported candidate option");
+        } else if (!value_set) {
+            candidate.value = arg;
+            value_set = true;
+        } else {
+            return errorResult(self.allocator, 2, "completion", "too many arguments");
+        }
+    }
+    if (!value_set) return errorResult(self.allocator, 2, "completion", "missing candidate value");
+    try builder.appendCandidate(self.allocator, candidate);
+    return emptyResult(self.allocator, 0);
+}
+
+fn parseCompletionKind(name: []const u8) ?completion.Kind {
+    inline for (@typeInfo(completion.Kind).@"enum".fields) |field| {
+        if (std.mem.eql(u8, name, field.name)) return @enumFromInt(field.value);
+    }
+    return null;
 }
 
 fn builtinEval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -5607,4 +5781,55 @@ test "executor can run an external command when allowed" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ok", result.stdout);
+}
+
+test "complete registers a function provider" {
+    var lowered = try parseAndLower(std.testing.allocator, "complete git --function __rush_complete_git");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    const provider = executor.completionProvider("git") orelse return error.MissingCompletionProvider;
+    try std.testing.expectEqualStrings("__rush_complete_git", provider.function);
+}
+
+test "completion candidate is scoped to completion evaluation" {
+    var outside = try parseAndLower(std.testing.allocator, "completion candidate status");
+    defer outside.parsed.deinit();
+    defer outside.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var outside_result = try executor.executeProgram(outside.program, .{ .io = std.testing.io });
+    defer outside_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 127), outside_result.status);
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_git() {
+        \\  completion candidate status --display st --description 'show status' --kind subcommand --no-space
+        \\}
+        \\complete git --function __rush_complete_git
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const candidates = try executor.collectCompletions("git", .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try std.testing.expectEqual(@as(usize, 1), candidates.len);
+    try std.testing.expectEqualStrings("status", candidates[0].value);
+    try std.testing.expectEqualStrings("st", candidates[0].display.?);
+    try std.testing.expectEqualStrings("show status", candidates[0].description.?);
+    try std.testing.expectEqual(completion.Kind.subcommand, candidates[0].kind);
+    try std.testing.expect(!candidates[0].append_space);
 }
