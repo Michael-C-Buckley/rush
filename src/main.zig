@@ -1221,7 +1221,7 @@ fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exe
     };
     defer allocator.free(contents);
 
-    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = arg_zero });
+    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = arg_zero, .source_path = path });
     defer result.deinit();
     if (result.stdout.len != 0) try writeAll(io, .stdout, result.stdout);
     if (result.stderr.len != 0) try writeAll(io, .stderr, result.stderr);
@@ -1482,7 +1482,7 @@ test "completion scripts lazy-load from XDG data home" {
     try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data =
         \\__rush_complete_tool() { completion candidate loaded --kind subcommand; }
-        \\complete tool --function __rush_complete_tool
+        \\complete tool --subcommands --function __rush_complete_tool
     });
 
     var executor = exec.Executor.init(std.testing.allocator);
@@ -1495,8 +1495,11 @@ test "completion scripts lazy-load from XDG data home" {
 
     try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
 
-    const provider = executor.completionProvider("tool") orelse return error.MissingCompletionProvider;
-    try std.testing.expectEqualStrings("__rush_complete_tool", provider.function);
+    const rules = executor.completionRules();
+    try std.testing.expectEqual(@as(usize, 1), rules.len);
+    try std.testing.expectEqualStrings("tool", rules[0].root);
+    try std.testing.expectEqual(completion_model.RuleKind.dynamic_subcommands, rules[0].kind);
+    try std.testing.expectEqualStrings("__rush_complete_tool", rules[0].value.?);
     try std.testing.expect(loader.attempted.contains("tool"));
 }
 
@@ -1584,7 +1587,9 @@ test "interactive semantic diagnostics render spans without message line" {
     defer history.deinit();
     var cache = CompletionCache.init(std.testing.allocator);
     defer cache.deinit();
-    var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &cache, .io = std.testing.io, .cwd = "." };
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &cache, .loader = &loader, .io = std.testing.io, .cwd = "." };
 
     const diagnostic = try diagnoseInteractiveLine(&completion_context, std.testing.allocator, std.testing.io, "git comit ") orelse return error.MissingDiagnostic;
     defer diagnostic.deinit(std.testing.allocator);
@@ -2112,6 +2117,21 @@ test "omitted newline marker follows displayed output stream" {
     try std.testing.expect(outputNeedsNewlineMarker("ok", ""));
     try std.testing.expect(!outputNeedsNewlineMarker("ok", "err\n"));
     try std.testing.expect(outputNeedsNewlineMarker("ok\n", "err"));
+}
+
+test "startup config runtime errors include source path and line" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\echo before
+        \\complete git --function __rush_complete_git
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush", .source_path = "/tmp/rush/config.rush" });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("before\n", result.stdout);
+    try std.testing.expectEqualStrings("/tmp/rush/config.rush:2: complete: --function requires --subcommands, --options, --argument, or --option-value\n", result.stderr);
 }
 
 test "user config path prefers XDG_CONFIG_HOME" {

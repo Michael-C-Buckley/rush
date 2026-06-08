@@ -31,6 +31,7 @@ pub const ExecuteOptions = struct {
     features: compat.Features = .{},
     external_stdio: ExternalStdio = .capture,
     arg_zero: []const u8 = "rush",
+    source_path: ?[]const u8 = null,
     suppress_functions: bool = false,
     suppress_errexit: bool = false,
 };
@@ -1411,6 +1412,7 @@ pub const Executor = struct {
                     .subshell => try self.executeSubshell(program.subshells[statement.index], options),
                 };
                 defer result.deinit();
+                try self.annotateSourcedError(program.source, statement.span.start, options, &result);
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = result.status;
@@ -1430,6 +1432,7 @@ pub const Executor = struct {
                 else
                     try self.executePipeline(program, pipeline, options);
                 defer result.deinit();
+                try self.annotateSourcedError(program.source, pipeline.span.start, options, &result);
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = result.status;
@@ -1444,6 +1447,7 @@ pub const Executor = struct {
             self.setCurrentLineNumber(program.source, command.span.start);
             var result = try self.executeSimpleCommand(command, options);
             defer result.deinit();
+            try self.annotateSourcedError(program.source, command.span.start, options, &result);
             try self.appendOrWriteResult(options, &stdout, &stderr, result);
             try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
             last_status = result.status;
@@ -1452,6 +1456,15 @@ pub const Executor = struct {
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
         return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
+    }
+
+    fn annotateSourcedError(self: *Executor, source: []const u8, offset: usize, options: ExecuteOptions, result: *CommandResult) !void {
+        if (result.status == 0 or result.stderr.len == 0) return;
+        const path = options.source_path orelse return;
+        const line = sourceLineNumber(source, offset);
+        const annotated = try std.fmt.allocPrint(self.allocator, "{s}:{d}: {s}", .{ path, line, result.stderr });
+        self.allocator.free(result.stderr);
+        result.stderr = annotated;
     }
 
     fn dispatchPendingSignalTrap(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)) !void {
@@ -3760,6 +3773,14 @@ fn spanText(source: []const u8, span: parser.Span) []const u8 {
     return source[@min(span.start, source.len)..@min(span.end, source.len)];
 }
 
+fn sourceLineNumber(source: []const u8, offset: usize) usize {
+    var line: usize = 1;
+    for (source[0..@min(offset, source.len)]) |byte| {
+        if (byte == '\n') line += 1;
+    }
+    return line;
+}
+
 fn setCloseOnExec(fd: std.posix.fd_t) !void {
     const rc = std.c.fcntl(fd, @as(c_int, std.c.F.SETFD), @as(c_int, std.c.FD_CLOEXEC));
     switch (std.c.errno(rc)) {
@@ -4201,7 +4222,9 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
         else => |e| return e,
     };
     defer self.allocator.free(contents);
-    return self.executeScriptSlice(contents, options);
+    var source_options = options;
+    source_options.source_path = command.argv[1].text;
+    return self.executeScriptSlice(contents, source_options);
 }
 
 fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -6571,6 +6594,29 @@ test "executor implements source and dot builtins" {
     var source_result = try executor.executeProgram(source_lowered.program, .{ .io = std.testing.io });
     defer source_result.deinit();
     try std.testing.expectEqualStrings("from-source\n", source_result.stdout);
+}
+
+test "source builtin reports file and line for runtime errors" {
+    const path = "rush-source-error-test.sh";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data =
+        \\echo ok
+        \\complete git --function __rush_complete_git
+    });
+
+    var lowered = try parseAndLower(std.testing.allocator, ". ./rush-source-error-test.sh");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("ok\n", result.stdout);
+    try std.testing.expectEqualStrings("./rush-source-error-test.sh:2: complete: --function requires --subcommands, --options, --argument, or --option-value\n", result.stderr);
 }
 
 test "executor supports break and continue builtins in loops" {
