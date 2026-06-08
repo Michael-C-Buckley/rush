@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("vaxis");
+    const use_system_sqlite = b.systemIntegrationOption("sqlite3", .{ .default = false });
 
     const exe = b.addExecutable(.{
         .name = "rush",
@@ -20,6 +21,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    linkSqlite(b, exe.root_module, use_system_sqlite);
 
     b.installArtifact(exe);
 
@@ -43,6 +45,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    linkSqlite(b, exe_tests.root_module, use_system_sqlite);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 
     const compile_test_step = b.step("compile-test", "Compile unit tests without running them");
@@ -86,4 +89,28 @@ pub fn build(b: *std.Build) void {
     compliance_report.step.dependOn(&exe.step);
     compliance_report.step.dependOn(fmt_step);
     compliance_step.dependOn(&compliance_report.step);
+}
+
+fn linkSqlite(b: *std.Build, module: *std.Build.Module, use_system_sqlite: bool) void {
+    if (use_system_sqlite) {
+        module.linkSystemLibrary("sqlite3", .{
+            .use_pkg_config = .yes,
+            .preferred_link_mode = .dynamic,
+            .search_strategy = .paths_first,
+        });
+        return;
+    }
+
+    const sqlite = b.dependency("sqlite", .{});
+    module.addCSourceFile(.{
+        .file = sqlite.path("sqlite3.c"),
+        .flags = &.{
+            "-DSQLITE_ENABLE_FTS5",
+            "-DSQLITE_THREADSAFE=1",
+            "-DSQLITE_OMIT_LOAD_EXTENSION",
+            "-DSQLITE_DEFAULT_MEMSTATUS=0",
+        },
+    });
+    module.addIncludePath(sqlite.path("."));
+    module.link_libc = true;
 }

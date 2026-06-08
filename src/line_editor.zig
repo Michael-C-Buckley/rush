@@ -215,6 +215,18 @@ pub const Prompt = struct {
 
 pub const HistoryView = struct {
     entries: []const []const u8 = &.{},
+    context: ?*anyopaque = null,
+    previous: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
+    next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, i64) anyerror!?HistoryEntry = null,
+
+    pub const HistoryEntry = struct {
+        id: i64,
+        text: []const u8,
+
+        pub fn deinit(self: HistoryEntry, allocator: std.mem.Allocator) void {
+            allocator.free(self.text);
+        }
+    };
 };
 
 pub const CompletionMenu = struct {
@@ -280,7 +292,7 @@ pub const LineSession = struct {
     prompt: Prompt,
     editor: Editor,
     history: HistoryView = .{},
-    history_index: ?usize = null,
+    history_index: ?i64 = null,
     saved_edit: std.ArrayList(u8) = .empty,
     kill_ring: std.ArrayList(u8) = .empty,
     completion_menu: CompletionMenu = .{},
@@ -440,11 +452,18 @@ pub const LineSession = struct {
     }
 
     fn historyPrevious(self: *LineSession) !void {
-        if (self.history.entries.len == 0) return;
         const prefix = try self.historyPrefix();
-        const start = self.history_index orelse self.history.entries.len;
+        if (try self.queryPreviousHistory(prefix)) |entry| {
+            defer entry.deinit(self.allocator);
+            self.history_index = entry.id;
+            try self.editor.buffer.replace(entry.text);
+            self.completion_menu.clear(self.allocator);
+            return;
+        }
+        if (self.history.entries.len == 0) return;
+        const start: usize = if (self.history_index) |index| @intCast(index) else self.history.entries.len;
         const index = self.findPreviousHistoryMatch(start, prefix) orelse return;
-        self.history_index = index;
+        self.history_index = @intCast(index);
         try self.editor.buffer.replace(self.history.entries[index]);
         self.completion_menu.clear(self.allocator);
     }
@@ -452,16 +471,42 @@ pub const LineSession = struct {
     fn historyNext(self: *LineSession) !void {
         const index = self.history_index orelse return;
         const prefix = self.saved_edit.items;
-        const next_index = self.findNextHistoryMatch(index + 1, prefix) orelse {
+        if (try self.queryNextHistory(prefix, index)) |entry| {
+            defer entry.deinit(self.allocator);
+            self.history_index = entry.id;
+            try self.editor.buffer.replace(entry.text);
+            self.completion_menu.clear(self.allocator);
+            return;
+        }
+        if (self.history.context != null) {
+            self.history_index = null;
+            try self.editor.buffer.replace(self.saved_edit.items);
+            self.saved_edit.clearRetainingCapacity();
+            self.completion_menu.clear(self.allocator);
+            return;
+        }
+        const next_index = self.findNextHistoryMatch(@as(usize, @intCast(index)) + 1, prefix) orelse {
             self.history_index = null;
             try self.editor.buffer.replace(self.saved_edit.items);
             self.saved_edit.clearRetainingCapacity();
             self.completion_menu.clear(self.allocator);
             return;
         };
-        self.history_index = next_index;
+        self.history_index = @intCast(next_index);
         try self.editor.buffer.replace(self.history.entries[next_index]);
         self.completion_menu.clear(self.allocator);
+    }
+
+    fn queryPreviousHistory(self: *LineSession, prefix: []const u8) !?HistoryView.HistoryEntry {
+        const context = self.history.context orelse return null;
+        const previous = self.history.previous orelse return null;
+        return previous(context, self.allocator, prefix, self.history_index);
+    }
+
+    fn queryNextHistory(self: *LineSession, prefix: []const u8, after: i64) !?HistoryView.HistoryEntry {
+        const context = self.history.context orelse return null;
+        const next = self.history.next orelse return null;
+        return next(context, self.allocator, prefix, after);
     }
 
     fn historyPrefix(self: *LineSession) ![]const u8 {
