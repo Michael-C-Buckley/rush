@@ -110,8 +110,62 @@ pub const Editor = struct {
     }
 };
 
-pub const RenderOptions = struct {
+pub const LineSession = struct {
+    allocator: std.mem.Allocator,
     prompt: []const u8,
+    editor: Editor,
+    state: State = .editing,
+    submitted_line: ?[]const u8 = null,
+
+    pub const State = enum {
+        editing,
+        submitted,
+        canceled,
+    };
+
+    pub fn init(allocator: std.mem.Allocator, prompt: []const u8) !LineSession {
+        return .{
+            .allocator = allocator,
+            .prompt = try allocator.dupe(u8, prompt),
+            .editor = .init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *LineSession) void {
+        if (self.submitted_line) |line| self.allocator.free(line);
+        self.editor.deinit();
+        self.allocator.free(self.prompt);
+        self.* = undefined;
+    }
+
+    pub fn handleKey(self: *LineSession, event: KeyEvent) !void {
+        if (self.state != .editing) return;
+        switch (event.key) {
+            .enter => {
+                std.debug.assert(self.submitted_line == null);
+                self.submitted_line = try self.allocator.dupe(u8, self.editor.buffer.text());
+                self.state = .submitted;
+            },
+            .escape => self.state = .canceled,
+            else => try self.editor.handleKey(event),
+        }
+    }
+
+    pub fn render(self: LineSession, allocator: std.mem.Allocator, options: RenderOptions) ![]const u8 {
+        var render_options = options;
+        render_options.prompt = self.prompt;
+        return renderLine(allocator, self.editor, render_options);
+    }
+
+    pub fn takeSubmittedLine(self: *LineSession) ?[]const u8 {
+        const line = self.submitted_line orelse return null;
+        self.submitted_line = null;
+        return line;
+    }
+};
+
+pub const RenderOptions = struct {
+    prompt: []const u8 = "",
     width_method: vaxis.gwidth.Method = .unicode,
     synchronized_output: bool = true,
 };
@@ -194,6 +248,42 @@ test "edit buffer reports cursor display width with vaxis" {
 
     try buffer.insertText("a界");
     try std.testing.expectEqual(@as(u16, 3), buffer.cursorDisplayWidth(.unicode));
+}
+
+test "line session submits an owned copy on enter" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "echo hi" });
+    try session.handleKey(.{ .key = .enter });
+
+    try std.testing.expectEqual(LineSession.State.submitted, session.state);
+    const line = session.takeSubmittedLine().?;
+    defer std.testing.allocator.free(line);
+    try std.testing.expectEqualStrings("echo hi", line);
+}
+
+test "line session cancels on escape" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "abc" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "d" });
+
+    try std.testing.expectEqual(LineSession.State.canceled, session.state);
+    try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+}
+
+test "line session renders with its prompt" {
+    var session = try LineSession.init(std.testing.allocator, "rush> ");
+    defer session.deinit();
+    try session.handleKey(.{ .key = .text, .text = "x" });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("\r\x1b[2Krush> x\r\x1b[7C", rendered);
 }
 
 test "render line redraws prompt and buffer inside synchronized output" {
