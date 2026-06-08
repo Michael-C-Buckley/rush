@@ -1192,7 +1192,7 @@ pub const Executor = struct {
                 break;
             }
         }
-        if (!has_builtin and !pipelineHasRedirections(program, pipeline)) return self.executeExternalPipeline(program, pipeline, io);
+        if (!has_builtin and !pipelineHasRedirections(program, pipeline)) return self.executeExternalPipeline(program, pipeline, options, io);
         return self.executeMixedPipeline(program, pipeline, options, io);
     }
 
@@ -1437,7 +1437,7 @@ pub const Executor = struct {
         return file;
     }
 
-    fn executeExternalPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, io: std.Io) !CommandResult {
+    fn executeExternalPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
         const children = try self.allocator.alloc(std.process.Child, pipeline.command_indexes.len);
         defer self.allocator.free(children);
         var spawned: usize = 0;
@@ -1445,6 +1445,9 @@ pub const Executor = struct {
 
         var previous_stdout: ?std.Io.File = null;
         defer if (previous_stdout) |file| file.close(io);
+        const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit);
+        defer restoreForegroundTerminal(foreground_terminal);
+        var pipeline_pgrp: ?std.posix.pid_t = null;
 
         for (pipeline.command_indexes, 0..) |command_index, index| {
             const command = program.commands[command_index];
@@ -1457,9 +1460,10 @@ pub const Executor = struct {
             children[index] = std.process.spawn(io, .{
                 .argv = argv,
                 .environ_map = &child_env,
-                .stdin = if (previous_stdout) |file| .{ .file = file } else .ignore,
+                .stdin = if (previous_stdout) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
                 .stdout = .pipe,
                 .stderr = if (is_last) .pipe else .inherit,
+                .pgid = if (foreground_terminal != null) (pipeline_pgrp orelse 0) else null,
             }) catch |err| switch (err) {
                 error.FileNotFound => {
                     const open_stdin = previous_stdout;
@@ -1468,6 +1472,7 @@ pub const Executor = struct {
                 },
                 else => return err,
             };
+            if (pipeline_pgrp == null and foreground_terminal != null) pipeline_pgrp = children[index].id;
             spawned += 1;
 
             if (previous_stdout) |file| file.close(io);
@@ -1478,6 +1483,8 @@ pub const Executor = struct {
                 children[index].stdout = null;
             }
         }
+
+        if (pipeline_pgrp) |pgrp| try giveTerminalToForegroundPgrp(pgrp, foreground_terminal);
 
         const last_child = &children[pipeline.command_indexes.len - 1];
         var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
@@ -2646,11 +2653,15 @@ fn prepareForegroundTerminal(enabled: bool) !?ForegroundTerminal {
 }
 
 fn giveTerminalToForegroundChild(child: *std.process.Child, terminal: ?ForegroundTerminal) !void {
-    const active = terminal orelse return;
     const child_pgrp = child.id orelse return;
+    return giveTerminalToForegroundPgrp(child_pgrp, terminal);
+}
+
+fn giveTerminalToForegroundPgrp(pgrp: std.posix.pid_t, terminal: ?ForegroundTerminal) !void {
+    const active = terminal orelse return;
     var sigttou = ignoreSignal(.TTOU);
     defer sigttou.restore();
-    terminalSetPgrp(active.tty_fd, child_pgrp) catch |err| switch (err) {
+    terminalSetPgrp(active.tty_fd, pgrp) catch |err| switch (err) {
         error.NotATerminal, error.NotAPgrpMember => return,
         else => return err,
     };
