@@ -1,0 +1,3 @@
+set -- -a -b -- c
+while getopts ab opt; do echo "$opt:$OPTIND"; done
+echo end:$OPTIND:$opt

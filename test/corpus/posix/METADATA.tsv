@@ -224,3 +224,4 @@ builtin-return-status-default	builtin	behavior	return uses explicit status or pr
 builtin-exit-status-default	builtin	behavior	exit without operands exits with previous command status
 builtin-loop-control-nested-levels	builtin	behavior	break and continue honor nested loop count operands
 builtin-command-option-terminator	builtin	behavior	command accepts -- to terminate option parsing
+builtin-getopts-option-terminator	builtin	behavior	getopts stops at -- and advances OPTIND past it
