@@ -108,3 +108,5 @@ x=8; echo $((x /= 2)); echo $x; echo $((x %= 3)); echo $x
 echo $((3 > 2)); echo $((3 == 2)); echo $((1 || 0)); echo $((1 && 0)); echo $(((5 & 3) | 4)); echo $((1 << 4)); echo $((0 ? 1 : 7))
 exec /bin/sh -c 'printf exec-ok'; echo nope
 VAR=ok exec /bin/sh -c 'printf "$VAR"'
+read cooked <<'EOF1'; read -r raw <<'EOF2'; echo "$cooked/$raw"\na\ b\nEOF1\na\ b\nEOF2
+IFS=: read a b c <<EOF\none::three\nEOF\necho "$a/$b/$c"

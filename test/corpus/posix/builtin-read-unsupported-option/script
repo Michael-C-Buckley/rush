@@ -1,0 +1,2 @@
+read -z var
+echo status=$?

@@ -1,0 +1,5 @@
+read cooked <<'EOF1'; read -r raw <<'EOF2'; echo "$cooked/$raw"
+a\ b
+EOF1
+a\ b
+EOF2

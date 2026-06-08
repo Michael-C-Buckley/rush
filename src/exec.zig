@@ -3183,31 +3183,41 @@ fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = options;
     var arg_start: usize = 1;
-    if (arg_start < command.argv.len and std.mem.eql(u8, command.argv[arg_start].text, "-r")) {
+    var raw_mode = false;
+    while (arg_start < command.argv.len and std.mem.startsWith(u8, command.argv[arg_start].text, "-") and command.argv[arg_start].text.len > 1) {
+        const option = command.argv[arg_start].text;
+        if (std.mem.eql(u8, option, "--")) {
+            arg_start += 1;
+            break;
+        }
+        if (!std.mem.eql(u8, option, "-r")) return errorResult(self.allocator, 2, "read", "unsupported option");
+        raw_mode = true;
         arg_start += 1;
     }
 
     const names = command.argv[arg_start..];
     const line_end = std.mem.indexOfScalar(u8, stdin, '\n') orelse stdin.len;
     const status: ExitStatus = if (line_end < stdin.len) 0 else 1;
-    const line = if (line_end < stdin.len and line_end > 0 and stdin[line_end - 1] == '\r') stdin[0 .. line_end - 1] else stdin[0..line_end];
+    const raw_line = if (line_end < stdin.len and line_end > 0 and stdin[line_end - 1] == '\r') stdin[0 .. line_end - 1] else stdin[0..line_end];
+    const line = if (raw_mode) try self.allocator.dupe(u8, raw_line) else try unescapeReadLine(self.allocator, raw_line);
+    defer self.allocator.free(line);
     if (names.len == 0) {
         try self.setEnv("REPLY", line);
         return emptyResult(self.allocator, status);
     }
 
-    var field_start = skipIfsWhitespace(line, 0);
+    const ifs = self.getEnv("IFS") orelse " \t\n";
+    var cursor = skipReadIfsWhitespace(line, 0, ifs);
     for (names, 0..) |name_word, index| {
         if (!isShellName(name_word.text)) return errorResult(self.allocator, 2, "read", "invalid variable name");
         if (index == names.len - 1) {
-            const value_end = trimTrailingIfsWhitespace(line, line.len);
-            const value = if (field_start <= value_end) line[field_start..value_end] else "";
+            const value_end = trimTrailingReadIfsWhitespace(line, line.len, ifs);
+            const value = if (cursor <= value_end) line[cursor..value_end] else "";
             try self.setEnv(name_word.text, value);
             break;
         }
-        const field_end = nextIfsWhitespace(line, field_start);
-        try self.setEnv(name_word.text, line[field_start..field_end]);
-        field_start = skipIfsWhitespace(line, field_end);
+        const field = nextReadField(line, &cursor, ifs);
+        try self.setEnv(name_word.text, field);
     }
     return emptyResult(self.allocator, status);
 }
@@ -3333,26 +3343,62 @@ fn isShellName(name: []const u8) bool {
     return true;
 }
 
-fn skipIfsWhitespace(text: []const u8, start: usize) usize {
+fn unescapeReadLine(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    var index: usize = 0;
+    while (index < raw.len) {
+        if (raw[index] == '\\' and index + 1 < raw.len) {
+            index += 1;
+        }
+        try out.append(allocator, raw[index]);
+        index += 1;
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn nextReadField(text: []const u8, cursor: *usize, ifs: []const u8) []const u8 {
+    cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs);
+    if (cursor.* >= text.len) return "";
+    if (isReadIfsNonWhitespace(text[cursor.*], ifs)) {
+        cursor.* += 1;
+        cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs);
+        return "";
+    }
+    const start = cursor.*;
+    while (cursor.* < text.len and !isReadIfs(text[cursor.*], ifs)) : (cursor.* += 1) {}
+    const end = cursor.*;
+    if (cursor.* < text.len and isReadIfsNonWhitespace(text[cursor.*], ifs)) cursor.* += 1;
+    cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs);
+    return text[start..end];
+}
+
+fn skipReadIfsWhitespace(text: []const u8, start: usize, ifs: []const u8) usize {
     var index = start;
-    while (index < text.len and isIfsWhitespace(text[index])) : (index += 1) {}
+    while (index < text.len and isReadIfsWhitespace(text[index], ifs)) : (index += 1) {}
     return index;
 }
 
-fn nextIfsWhitespace(text: []const u8, start: usize) usize {
-    var index = start;
-    while (index < text.len and !isIfsWhitespace(text[index])) : (index += 1) {}
-    return index;
-}
-
-fn trimTrailingIfsWhitespace(text: []const u8, end: usize) usize {
+fn trimTrailingReadIfsWhitespace(text: []const u8, end: usize, ifs: []const u8) usize {
     var index = end;
-    while (index > 0 and isIfsWhitespace(text[index - 1])) : (index -= 1) {}
+    while (index > 0 and isReadIfsWhitespace(text[index - 1], ifs)) : (index -= 1) {}
     return index;
 }
 
-fn isIfsWhitespace(byte: u8) bool {
+fn isReadIfs(byte: u8, ifs: []const u8) bool {
+    return std.mem.indexOfScalar(u8, ifs, byte) != null;
+}
+
+fn isDefaultReadIfsWhitespace(byte: u8) bool {
     return byte == ' ' or byte == '\t' or byte == '\n';
+}
+
+fn isReadIfsWhitespace(byte: u8, ifs: []const u8) bool {
+    return isDefaultReadIfsWhitespace(byte) and isReadIfs(byte, ifs);
+}
+
+fn isReadIfsNonWhitespace(byte: u8, ifs: []const u8) bool {
+    return !isDefaultReadIfsWhitespace(byte) and isReadIfs(byte, ifs);
 }
 
 fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -4829,6 +4875,38 @@ test "executor implements read and printf builtins" {
     var read_result = try executor.executeProgram(read_lowered.program, .{});
     defer read_result.deinit();
     try std.testing.expectEqualStrings("one/two three\n", read_result.stdout);
+
+    var backslash_lowered = try parseAndLower(std.testing.allocator,
+        \\read cooked <<'EOF'; read -r raw <<'EOF2'; printf '%s/%s\n' "$cooked" "$raw"
+        \\a\ b
+        \\EOF
+        \\a\ b
+        \\EOF2
+    );
+    defer backslash_lowered.parsed.deinit();
+    defer backslash_lowered.program.deinit();
+    var backslash_result = try executor.executeProgram(backslash_lowered.program, .{});
+    defer backslash_result.deinit();
+    try std.testing.expectEqualStrings("a b/a\\ b\n", backslash_result.stdout);
+
+    var ifs_lowered = try parseAndLower(std.testing.allocator,
+        \\IFS=: read a b c <<EOF; printf '%s/%s/%s\n' "$a" "$b" "$c"
+        \\one::three
+        \\EOF
+    );
+    defer ifs_lowered.parsed.deinit();
+    defer ifs_lowered.program.deinit();
+    var ifs_result = try executor.executeProgram(ifs_lowered.program, .{});
+    defer ifs_result.deinit();
+    try std.testing.expectEqualStrings("one//three\n", ifs_result.stdout);
+
+    var unsupported = try parseAndLower(std.testing.allocator, "read -z var");
+    defer unsupported.parsed.deinit();
+    defer unsupported.program.deinit();
+    var unsupported_result = try executor.executeProgram(unsupported.program, .{});
+    defer unsupported_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), unsupported_result.status);
+    try std.testing.expectEqualStrings("read: unsupported option\n", unsupported_result.stderr);
 }
 
 test "executor implements pwd cd and export builtins" {
