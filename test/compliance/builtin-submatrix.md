@@ -48,7 +48,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `alias`, `unalias` | `builtin-alias`, `builtin-alias-usage-errors`, alias lexing rows | list, remove, invalid-name/not-found diagnostics, reserved-word/function-name protection | recursive substitution timing, trailing-space rules |
 | `cat` | `builtin-cat-helper` | stdin, `-`, file operands | POSIX utility options are intentionally not a shell-conformance focus |
 | `cd`, `pwd` | `builtin-cd-pwd`, `vars-pwd` | logical PWD/OLDPWD unit coverage | `CDPATH`, physical mode, diagnostics, symlink normalization |
-| `command` | `builtin-command` | `-p`, `-v`, `-V`, lookup suppression | edge cases around special builtins, functions, utilities, PATH errors |
+| `command` | `builtin-command`, `builtin-command-usage-errors` | `-p`, `-v`, `-V`, lookup suppression, option and lookup operand diagnostics | edge cases around special builtins, functions, utilities, PATH errors |
 | `env` | `builtin-env`, `builtin-env-usage-errors` | `-i`, assignments, command execution, printing, invalid option and command-not-found diagnostics | additional command propagation edge cases |
 | `getopts` | `builtin-getopts`, `builtin-getopts-usage-errors` | clusters, required args, silent missing arg, invalid optstring and variable-name diagnostics | OPTIND edge cases, explicit args edge cases |
 | `printf` | `builtin-printf`, `builtin-printf-usage-errors`, printf subrows | escapes, format reuse, octal/hex, width/precision, missing format, invalid format/conversion, invalid numeric operand diagnostics | full format grammar |
