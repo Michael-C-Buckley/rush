@@ -158,3 +158,4 @@ set -- alpha beta; echo "$1/$2/$#"; set --; echo "count=$# first=${1-unset}"
 rm -rf dot-scripts; mkdir dot-scripts; printf '%s\n' 'DOTPATH_VALUE=ok' > dot-scripts/dotfile; PATH=dot-scripts; . dotfile; echo $DOTPATH_VALUE
 printf '%b' 'a\nb'; echo; printf '%c:%c\n' abc Z
 alias a='echo A'; alias b='echo B'; unalias -a; alias; echo done
+f() { return 7; }; f; echo status=$?; g() { false; return; }; g; echo default=$?

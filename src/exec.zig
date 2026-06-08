@@ -760,6 +760,10 @@ pub const Executor = struct {
         self.last_status_text_len = text.len;
     }
 
+    fn lastStatus(self: Executor) ExitStatus {
+        return std.fmt.parseInt(ExitStatus, self.last_status_text[0..self.last_status_text_len], 10) catch 0;
+    }
+
     fn setCurrentLineNumber(self: *Executor, source: []const u8, offset: usize) void {
         var line: usize = 1;
         var index: usize = 0;
@@ -6299,7 +6303,7 @@ fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     const status: ExitStatus = if (command.argv.len == 2) blk: {
         const parsed = std.fmt.parseInt(u8, command.argv[1].text, 10) catch return returnUsageError(self, "numeric argument required");
         break :blk parsed;
-    } else 0;
+    } else self.lastStatus();
     self.pending_return = status;
     return emptyResult(self.allocator, status);
 }
