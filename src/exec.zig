@@ -1964,6 +1964,7 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
+            if (self.pending_exit != null) break;
             if (self.pending_return != null) break;
             if (self.consumeLoopControl()) |control| switch (control) {
                 .break_loop => break,
@@ -2023,6 +2024,7 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
+            if (self.pending_exit != null) break;
             if (self.pending_return != null) break;
             if (self.consumeLoopControl()) |control| switch (control) {
                 .break_loop => break,
