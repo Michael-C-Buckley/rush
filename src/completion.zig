@@ -131,7 +131,7 @@ fn commonCandidatePrefix(candidates: []const Candidate) []const u8 {
     return prefix;
 }
 
-fn cloneCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) ![]Candidate {
+pub fn cloneCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) ![]Candidate {
     const cloned = try allocator.alloc(Candidate, candidates.len);
     errdefer allocator.free(cloned);
     var initialized: usize = 0;

@@ -152,6 +152,24 @@ pub const HistoryView = struct {
     entries: []const []const u8 = &.{},
 };
 
+pub const CompletionMenu = struct {
+    candidates: []completion.Candidate = &.{},
+
+    pub fn deinit(self: *CompletionMenu, allocator: std.mem.Allocator) void {
+        if (self.candidates.len != 0) completion.freeCandidates(allocator, self.candidates);
+        self.* = .{};
+    }
+
+    pub fn replace(self: *CompletionMenu, allocator: std.mem.Allocator, candidates: []const completion.Candidate) !void {
+        self.deinit(allocator);
+        self.candidates = try completion.cloneCandidates(allocator, candidates);
+    }
+
+    pub fn clear(self: *CompletionMenu, allocator: std.mem.Allocator) void {
+        self.deinit(allocator);
+    }
+};
+
 pub const LineSession = struct {
     allocator: std.mem.Allocator,
     prompt: Prompt,
@@ -159,6 +177,7 @@ pub const LineSession = struct {
     history: HistoryView = .{},
     history_index: ?usize = null,
     saved_edit: std.ArrayList(u8) = .empty,
+    completion_menu: CompletionMenu = .{},
     state: State = .editing,
     submitted_line: ?[]const u8 = null,
     paste_depth: usize = 0,
@@ -188,6 +207,7 @@ pub const LineSession = struct {
 
     pub fn deinit(self: *LineSession) void {
         if (self.submitted_line) |line| self.allocator.free(line);
+        self.completion_menu.deinit(self.allocator);
         self.saved_edit.deinit(self.allocator);
         self.editor.deinit();
         self.allocator.free(self.prompt.bytes);
@@ -200,18 +220,27 @@ pub const LineSession = struct {
             if (event.key == .text or event.key == .enter) {
                 const text = if (event.key == .enter) "\n" else event.text;
                 try self.editor.handleKey(.{ .key = .text, .text = text });
+                self.completion_menu.clear(self.allocator);
             }
             return;
         }
         switch (event.key) {
             .enter => {
+                self.completion_menu.clear(self.allocator);
                 std.debug.assert(self.submitted_line == null);
                 self.submitted_line = try self.allocator.dupe(u8, self.editor.buffer.text());
                 self.state = .submitted;
             },
-            .escape => self.state = .canceled,
-            .ctrl_c => self.state = .canceled,
+            .escape => {
+                self.completion_menu.clear(self.allocator);
+                self.state = .canceled;
+            },
+            .ctrl_c => {
+                self.completion_menu.clear(self.allocator);
+                self.state = .canceled;
+            },
             .ctrl_d => {
+                self.completion_menu.clear(self.allocator);
                 if (self.editor.buffer.text().len == 0) {
                     self.state = .eof;
                 } else {
@@ -221,14 +250,21 @@ pub const LineSession = struct {
             .up => try self.historyPrevious(),
             .down => try self.historyNext(),
             .tab => {},
-            else => try self.editor.handleKey(event),
+            else => {
+                try self.editor.handleKey(event);
+                self.completion_menu.clear(self.allocator);
+            },
         }
     }
 
     pub fn applyCompletion(self: *LineSession, application: completion.Application) !void {
         switch (application) {
-            .edit => |edit| try self.editor.buffer.applyCompletionEdit(edit),
-            .none, .ambiguous => {},
+            .edit => |edit| {
+                try self.editor.buffer.applyCompletionEdit(edit);
+                self.completion_menu.clear(self.allocator);
+            },
+            .ambiguous => |candidates| try self.completion_menu.replace(self.allocator, candidates),
+            .none => self.completion_menu.clear(self.allocator),
         }
     }
 
@@ -243,6 +279,7 @@ pub const LineSession = struct {
     pub fn render(self: LineSession, allocator: std.mem.Allocator, options: RenderOptions) ![]const u8 {
         var render_options = options;
         render_options.prompt = self.prompt;
+        render_options.completion_menu = self.completion_menu.candidates;
         return renderLine(allocator, self.editor, render_options);
     }
 
@@ -259,6 +296,7 @@ pub const LineSession = struct {
         const index = self.findPreviousHistoryMatch(start, prefix) orelse return;
         self.history_index = index;
         try self.editor.buffer.replace(self.history.entries[index]);
+        self.completion_menu.clear(self.allocator);
     }
 
     fn historyNext(self: *LineSession) !void {
@@ -268,10 +306,12 @@ pub const LineSession = struct {
             self.history_index = null;
             try self.editor.buffer.replace(self.saved_edit.items);
             self.saved_edit.clearRetainingCapacity();
+            self.completion_menu.clear(self.allocator);
             return;
         };
         self.history_index = next_index;
         try self.editor.buffer.replace(self.history.entries[next_index]);
+        self.completion_menu.clear(self.allocator);
     }
 
     fn historyPrefix(self: *LineSession) ![]const u8 {
@@ -317,6 +357,7 @@ pub const LineSession = struct {
 
 pub const RenderOptions = struct {
     prompt: Prompt = .{ .bytes = "" },
+    completion_menu: []const completion.Candidate = &.{},
     width_method: vaxis.gwidth.Method = .unicode,
     synchronized_output: bool = true,
 };
@@ -330,14 +371,45 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     try output.appendSlice(allocator, options.prompt.bytes);
     try output.appendSlice(allocator, editor.buffer.text());
 
+    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu);
+
     const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
     const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
-    const cursor_sequence = try std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{cursor_width});
+    const cursor_sequence = if (menu_rows == 0)
+        try std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{cursor_width})
+    else
+        try std.fmt.allocPrint(allocator, "\x1b[{d}A\r\x1b[{d}C", .{ menu_rows, cursor_width });
     defer allocator.free(cursor_sequence);
     try output.appendSlice(allocator, cursor_sequence);
     if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026l");
 
     return output.toOwnedSlice(allocator);
+}
+
+fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate) !usize {
+    if (candidates.len == 0) return 0;
+    var rows: usize = 0;
+    for (candidates[0..@min(candidates.len, 20)]) |candidate| {
+        const label = candidate.display orelse candidate.value;
+        try output.appendSlice(allocator, "\r\n  ");
+        const header = try std.fmt.allocPrint(allocator, "{s:<20} {s:<10}", .{ label, @tagName(candidate.kind) });
+        defer allocator.free(header);
+        try output.appendSlice(allocator, header);
+        if (candidate.description) |description| {
+            if (description.len != 0) {
+                try output.append(allocator, ' ');
+                try output.appendSlice(allocator, description);
+            }
+        }
+        rows += 1;
+    }
+    if (candidates.len > 20) {
+        const more = try std.fmt.allocPrint(allocator, "\r\n  … {d} more", .{candidates.len - 20});
+        defer allocator.free(more);
+        try output.appendSlice(allocator, more);
+        rows += 1;
+    }
+    return rows;
 }
 
 pub fn visibleWidth(bytes: []const u8, method: vaxis.gwidth.Method) u16 {
@@ -493,6 +565,39 @@ test "line session leaves ambiguous and empty completions unchanged" {
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
     try session.applyCompletion(.none);
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
+}
+
+test "line session renders ambiguous completion menu" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git che");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .description = "switch branches", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+        .{ .value = "cherry-pick", .display = "cherry", .description = "apply commits", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "checkout") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "cherry") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "subcommand") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
+}
+
+test "completion edit clears rendered menu" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git st");
+    var candidates = [_]completion.Candidate{.{ .value = "status", .kind = .subcommand, .replace_start = 4, .replace_end = 6 }};
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    try std.testing.expectEqual(@as(usize, 1), session.completion_menu.candidates.len);
+
+    try session.applyCompletion(.{ .edit = .{ .replace_start = 4, .replace_end = 6, .replacement = "status", .append_space = true } });
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
+    try std.testing.expectEqualStrings("git status ", session.editor.buffer.text());
 }
 
 test "line session submits an owned copy on enter" {

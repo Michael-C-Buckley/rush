@@ -288,9 +288,6 @@ pub const TerminalSession = struct {
                             const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                             defer application.deinit(self.allocator);
                             try session.applyCompletion(application);
-                            if (application == .ambiguous) {
-                                try renderCompletionMenu(self.allocator, &self.tty, application.ambiguous);
-                            }
                         } else {
                             try session.handleKey(key);
                         }
@@ -336,29 +333,6 @@ fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session
     });
     defer allocator.free(rendered);
     try writeTtyAll(tty, rendered);
-}
-
-fn renderCompletionMenu(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, candidates: []const completion.Candidate) !void {
-    if (candidates.len == 0) return;
-    const output = try formatCompletionMenu(allocator, candidates);
-    defer allocator.free(output);
-    try writeTtyAll(tty, output);
-}
-
-fn formatCompletionMenu(allocator: std.mem.Allocator, candidates: []const completion.Candidate) ![]const u8 {
-    var output: std.Io.Writer.Allocating = .init(allocator);
-    defer output.deinit();
-    try output.writer.writeAll("\r\n");
-    for (candidates[0..@min(candidates.len, 20)]) |candidate| {
-        const label = candidate.display orelse candidate.value;
-        try output.writer.print("  {s:<20} {s:<10}", .{ label, @tagName(candidate.kind) });
-        if (candidate.description) |description| {
-            if (description.len != 0) try output.writer.print(" {s}", .{description});
-        }
-        try output.writer.writeAll("\r\n");
-    }
-    if (candidates.len > 20) try output.writer.print("  … {d} more\r\n", .{candidates.len - 20});
-    return output.toOwnedSlice();
 }
 
 fn writeTtyAll(tty: *vaxis.tty.PosixTty, bytes: []const u8) !void {
@@ -726,21 +700,6 @@ test "terminal parser emits tab key" {
 
     try std.testing.expectEqual(@as(usize, 1), events.items.len);
     try std.testing.expect(isCompletionTab(events.items[0].key_press));
-}
-
-test "completion menu formats value kind and description" {
-    const candidates = [_]completion.Candidate{
-        .{ .value = "checkout", .description = "switch branches", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
-        .{ .value = "cherry-pick", .display = "cherry", .description = "apply commits", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
-    };
-    const menu = try formatCompletionMenu(std.testing.allocator, &candidates);
-    defer std.testing.allocator.free(menu);
-
-    try std.testing.expect(std.mem.indexOf(u8, menu, "checkout") != null);
-    try std.testing.expect(std.mem.indexOf(u8, menu, "cherry") != null);
-    try std.testing.expect(std.mem.indexOf(u8, menu, "subcommand") != null);
-    try std.testing.expect(std.mem.indexOf(u8, menu, "switch branches") != null);
-    try std.testing.expect(std.mem.indexOf(u8, menu, "apply commits") != null);
 }
 
 test "one-shot reader reads only after it is armed" {
