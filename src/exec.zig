@@ -6549,6 +6549,10 @@ fn evalUnaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, op: []co
         }) catch return false;
         return true;
     }
+    if (std.mem.eql(u8, op, "-t")) {
+        const fd = std.fmt.parseInt(std.c.fd_t, operand, 10) catch return error.InvalidTestExpression;
+        return std.c.isatty(fd) == 1;
+    }
     return error.InvalidTestExpression;
 }
 

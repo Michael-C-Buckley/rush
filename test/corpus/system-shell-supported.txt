@@ -150,3 +150,4 @@ V=ok; unset -v V; echo ${V-unset}; f() { echo f; }; command -v f; unset -f f; if
 umask 022; umask -S
 rm -f regular fifo; : > regular; mkfifo fifo; test -c /dev/null; echo char=$?; test -p fifo; echo fifo=$?; test -b regular; echo block=$?; test -S regular; echo sock=$?
 rm -f target link; : > target; ln -s target link; test -L link; echo L=$?; test -h link; echo h=$?; test -L target; echo file=$?; test -f link; echo follows=$?
+test -t 0; echo stdin=$?

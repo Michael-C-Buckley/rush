@@ -212,3 +212,4 @@ builtin-unset-variable-function	builtin	behavior	unset -v removes variables and 
 builtin-umask-symbolic-output	builtin	behavior	umask -S prints symbolic permissions for the current mask
 builtin-test-file-specials	builtin	behavior	test file type predicates for character devices pipes block devices and sockets
 builtin-test-symlink-predicates	builtin	behavior	test -L and -h recognize symbolic links without breaking followed file predicates
+builtin-test-terminal-predicate	builtin	behavior	test -t reports false for non-terminal stdin in corpus mode
