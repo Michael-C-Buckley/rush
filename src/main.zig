@@ -266,14 +266,63 @@ pub fn freeCompletions(allocator: std.mem.Allocator, completions: []Completion) 
 const InteractiveCompletionContext = struct {
     executor: *exec.Executor,
     history: *const History,
+    cache: *CompletionCache,
     cwd: []const u8 = "",
 };
 
+const CompletionCache = struct {
+    entries: std.StringHashMapUnmanaged([]completion_model.Candidate) = .empty,
+
+    pub fn deinit(self: *CompletionCache, allocator: std.mem.Allocator) void {
+        self.clear(allocator);
+        self.entries.deinit(allocator);
+        self.* = undefined;
+    }
+
+    pub fn clear(self: *CompletionCache, allocator: std.mem.Allocator) void {
+        var iter = self.entries.iterator();
+        while (iter.next()) |entry| {
+            allocator.free(entry.key_ptr.*);
+            completion_model.freeCandidates(allocator, entry.value_ptr.*);
+        }
+        self.entries.clearRetainingCapacity();
+    }
+
+    pub fn get(self: CompletionCache, source: []const u8, cursor: usize, cwd: []const u8) ?[]const completion_model.Candidate {
+        var key_buffer: [4096]u8 = undefined;
+        const key = completionCacheKey(&key_buffer, source, cursor, cwd) catch return null;
+        return self.entries.get(key);
+    }
+
+    pub fn put(self: *CompletionCache, allocator: std.mem.Allocator, source: []const u8, cursor: usize, cwd: []const u8, candidates: []const completion_model.Candidate) !void {
+        var key_buffer: [4096]u8 = undefined;
+        const key = try completionCacheKey(&key_buffer, source, cursor, cwd);
+        const owned_key = try allocator.dupe(u8, key);
+        errdefer allocator.free(owned_key);
+        const owned_candidates = try completion_model.cloneCandidates(allocator, candidates);
+        errdefer completion_model.freeCandidates(allocator, owned_candidates);
+        const result = try self.entries.getOrPut(allocator, owned_key);
+        if (result.found_existing) {
+            allocator.free(owned_key);
+            completion_model.freeCandidates(allocator, result.value_ptr.*);
+        }
+        result.value_ptr.* = owned_candidates;
+    }
+};
+
+fn completionCacheKey(buffer: []u8, source: []const u8, cursor: usize, cwd: []const u8) ![]const u8 {
+    return std.fmt.bufPrint(buffer, "{s}\x00{d}\x00{s}", .{ source, cursor, cwd });
+}
+
 fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8, cursor: usize) !completion_model.Application {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    if (completion_context.cache.get(source, cursor, completion_context.cwd)) |cached| {
+        return completion_model.applyCandidatesForInput(allocator, source, cached);
+    }
     const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true });
     defer completion_context.executor.freeCompletions(candidates);
     rankCompletionCandidates(candidates, completion_context.history.*, completion_context.cwd);
+    try completion_context.cache.put(allocator, source, cursor, completion_context.cwd, candidates);
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
@@ -456,6 +505,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
     try loadInteractiveConfig(allocator, io, &executor);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
+    var completion_cache: CompletionCache = .{};
+    defer completion_cache.deinit(allocator);
 
     while (true) {
         const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" }, "rush$ ") catch |err| switch (err) {
@@ -464,7 +515,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
         };
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
-        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cwd = cwd_buffer[0..cwd_len] };
+        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .cwd = cwd_buffer[0..cwd_len] };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
             .history = .{ .entries = history.entries.items },
@@ -492,6 +543,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             try writeAll(io, .stderr, result.stderr);
             last_status = result.status;
             try history.addCommand(io, line, result.status);
+            completion_cache.clear(allocator);
             if (executor.pending_exit) |status| {
                 last_status = status;
                 editor_mode_left = false;
@@ -749,6 +801,41 @@ test "history path follows XDG state home then HOME fallback" {
     const home_path = (try historyPath(std.testing.allocator, &env)).?;
     defer std.testing.allocator.free(home_path);
     try std.testing.expectEqualStrings("/home/me/.local/state/rush/history", home_path);
+}
+
+test "completion cache stores cloned candidates by input cursor and cwd" {
+    var cache: CompletionCache = .{};
+    defer cache.deinit(std.testing.allocator);
+
+    var candidates = [_]completion_model.Candidate{.{
+        .value = "checkout",
+        .description = "switch branches",
+        .kind = .subcommand,
+        .replace_start = 4,
+        .replace_end = 6,
+    }};
+    try cache.put(std.testing.allocator, "git ch", 6, "/tmp/project", &candidates);
+
+    const cached = cache.get("git ch", 6, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
+    try std.testing.expectEqual(@as(usize, 1), cached.len);
+    try std.testing.expectEqualStrings("checkout", cached[0].value);
+    try std.testing.expectEqualStrings("switch branches", cached[0].description.?);
+    try std.testing.expect(cache.get("git ch", 5, "/tmp/project") == null);
+    try std.testing.expect(cache.get("git ch", 6, "/tmp/other") == null);
+}
+
+test "completion cache replaces existing entries" {
+    var cache: CompletionCache = .{};
+    defer cache.deinit(std.testing.allocator);
+
+    var first = [_]completion_model.Candidate{.{ .value = "checkout", .replace_start = 4, .replace_end = 6 }};
+    var second = [_]completion_model.Candidate{.{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 }};
+    try cache.put(std.testing.allocator, "git ch", 6, "/tmp/project", &first);
+    try cache.put(std.testing.allocator, "git ch", 6, "/tmp/project", &second);
+
+    const cached = cache.get("git ch", 6, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
+    try std.testing.expectEqual(@as(usize, 1), cached.len);
+    try std.testing.expectEqualStrings("cherry-pick", cached[0].value);
 }
 
 test "interactive completion helper suggests commands variables and paths" {
