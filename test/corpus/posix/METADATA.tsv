@@ -221,3 +221,4 @@ builtin-dot-path-search	builtin	behavior	dot searches PATH for scripts without s
 builtin-printf-b-c-conversions	builtin	behavior	printf %b expands escapes and %c uses the first character
 builtin-unalias-all	builtin	behavior	unalias -a removes all aliases
 builtin-return-status-default	builtin	behavior	return uses explicit status or previous command status when omitted
+builtin-exit-status-default	builtin	behavior	exit without operands exits with previous command status

@@ -4893,7 +4893,7 @@ fn builtinExit(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     _ = stdin;
     _ = options;
     if (command.argv.len > 2) return exitUsageError(self, "too many arguments");
-    const status: ExitStatus = if (command.argv.len == 2) std.fmt.parseInt(u8, command.argv[1].text, 10) catch return exitUsageError(self, "numeric argument required") else 0;
+    const status: ExitStatus = if (command.argv.len == 2) std.fmt.parseInt(u8, command.argv[1].text, 10) catch return exitUsageError(self, "numeric argument required") else self.lastStatus();
     self.pending_exit = status;
     return emptyResult(self.allocator, status);
 }

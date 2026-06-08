@@ -22,7 +22,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `break`, `continue` | `builtin-break-continue`, `builtin-loop-control-outside-loop`, `builtin-loop-control-usage-errors` | `builtin-loop-control`, outside-loop and operand diagnostic negative corpus | nested levels |
 | `eval` | `builtin-eval` | `builtin-eval`, `builtin-eval-special-assignment` | parse/expansion failure consequences |
 | `exec` | `builtin-exec` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-replaces-process` | redirection-only exec, failure status details, no-return contexts |
-| `exit` | `builtin-exit`, `builtin-exit-usage-errors` | `builtin-exit`, `builtin-exit-invalid-operand`, `builtin-exit-too-many` | additional status/diagnostic corpus |
+| `exit` | `builtin-exit`, `builtin-exit-status-default`, `builtin-exit-usage-errors` | explicit/default status, invalid-operand, and too-many diagnostics | additional nested/non-interactive consequence cases |
 | `export` | `builtin-export-unset`, `builtin-export-readonly-p`, `builtin-variable-usage-errors` | `builtin-export-env`, `export -p`, invalid-name, readonly-assignment, unsupported-option, and `-p` usage diagnostics | full reusable listing quoting details |
 | `readonly` | `vars-readonly`, `builtin-export-readonly-p`, `builtin-variable-usage-errors` | `builtin-readonly`, `readonly -p`, invalid-name, readonly-assignment, unsupported-option, and `-p` usage diagnostics | full reusable listing quoting details |
 | `return` | `builtin-return-status-default`, `builtin-return-usage-errors` plus function tests | explicit status, default previous-status behavior, outside-function, invalid-operand, and too-many diagnostics | additional nested function edge cases |
