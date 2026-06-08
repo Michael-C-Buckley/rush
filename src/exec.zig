@@ -3886,16 +3886,36 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 }
 
 fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    _ = options;
-    // Initial pipeline-friendly `cat`: with no operands, copy stdin to stdout.
-    // File operands belong with the fuller POSIX builtin/external behavior later.
-    if (command.argv.len > 1) {
-        return errorResult(self.allocator, 1, "cat", "file operands are not implemented yet");
+    if (command.argv.len == 1) {
+        return .{
+            .allocator = self.allocator,
+            .status = 0,
+            .stdout = try self.allocator.dupe(u8, stdin),
+            .stderr = try self.allocator.alloc(u8, 0),
+        };
+    }
+
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (command.argv[1..]) |arg| {
+        if (std.mem.eql(u8, arg.text, "-")) {
+            try stdout.appendSlice(self.allocator, stdin);
+            continue;
+        }
+        const contents = std.Io.Dir.cwd().readFileAlloc(io, arg.text, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+            error.FileNotFound => return errorResult(self.allocator, 1, arg.text, "not found"),
+            error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 1, arg.text, "permission denied"),
+            error.IsDir => return errorResult(self.allocator, 1, arg.text, "is a directory"),
+            else => return err,
+        };
+        defer self.allocator.free(contents);
+        try stdout.appendSlice(self.allocator, contents);
     }
     return .{
         .allocator = self.allocator,
         .status = 0,
-        .stdout = try self.allocator.dupe(u8, stdin),
+        .stdout = try stdout.toOwnedSlice(self.allocator),
         .stderr = try self.allocator.alloc(u8, 0),
     };
 }
@@ -6102,6 +6122,28 @@ test "executor pipes stdout into stdin-consuming builtins" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("hello\n", result.stdout);
+}
+
+test "executor reads cat file operands" {
+    const first_path = "rush-cat-first.tmp";
+    const second_path = "rush-cat-second.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = first_path, .data = "one\n" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = second_path, .data = "two\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, first_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, second_path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator, "echo stdin | cat rush-cat-first.tmp - rush-cat-second.tmp");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("one\nstdin\ntwo\n", result.stdout);
 }
 
 test "executor redirects stdin from files for builtins" {

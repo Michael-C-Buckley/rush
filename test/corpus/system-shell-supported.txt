@@ -119,3 +119,4 @@ PATH=/nope; command -p sh -c 'echo path-ok'; printf '%s\n' "$PATH"
 trap 'echo int' INT; /bin/kill -INT $$; echo after
 alias if='echo bad'; if true; then echo ok; fi
 alias greet='echo alias'; greet() { echo function; }; unalias greet; greet
+echo one > one; echo two > two; echo stdin | cat one - two
