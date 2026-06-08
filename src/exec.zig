@@ -5952,7 +5952,7 @@ fn listExported(self: *Executor) !CommandResult {
         try stdout.appendSlice(self.allocator, "export ");
         try stdout.appendSlice(self.allocator, name);
         try stdout.append(self.allocator, '=');
-        try stdout.appendSlice(self.allocator, self.env.get(name).?);
+        try appendShellSingleQuoted(self.allocator, &stdout, self.env.get(name).?);
         try stdout.append(self.allocator, '\n');
     }
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
@@ -6023,9 +6023,25 @@ fn listReadonly(self: *Executor) !CommandResult {
     for (names.items) |name| {
         try stdout.appendSlice(self.allocator, "readonly ");
         try stdout.appendSlice(self.allocator, name);
+        if (self.env.get(name)) |value| {
+            try stdout.append(self.allocator, '=');
+            try appendShellSingleQuoted(self.allocator, &stdout, value);
+        }
         try stdout.append(self.allocator, '\n');
     }
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn appendShellSingleQuoted(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
+    try out.append(allocator, '\'');
+    for (value) |byte| {
+        if (byte == '\'') {
+            try out.appendSlice(allocator, "'\\''");
+        } else {
+            try out.append(allocator, byte);
+        }
+    }
+    try out.append(allocator, '\'');
 }
 
 fn variableBuiltinUsageError(self: *Executor, name: []const u8, message: []const u8) !CommandResult {

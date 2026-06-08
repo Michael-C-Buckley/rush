@@ -226,3 +226,4 @@ builtin-loop-control-nested-levels	builtin	behavior	break and continue honor nes
 builtin-command-option-terminator	builtin	behavior	command accepts -- to terminate option parsing
 builtin-getopts-option-terminator	builtin	behavior	getopts stops at -- and advances OPTIND past it
 builtin-test-expression-grammar	builtin	behavior	test supports ! -a -o and parenthesized expression grammar
+builtin-export-readonly-p-reusable	builtin	behavior	export -p and readonly -p quote assigned values for reuse
