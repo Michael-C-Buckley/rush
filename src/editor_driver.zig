@@ -354,6 +354,7 @@ pub const TerminalSession = struct {
                         if (!sameWinsize(self.winsize, winsize)) {
                             render_needed = true;
                             self.winsize = winsize;
+                            self.renderer.reset(self.allocator);
                         }
                     },
                     .capability => |capability| {
