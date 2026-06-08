@@ -53,7 +53,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `getopts` | `builtin-getopts`, `builtin-getopts-usage-errors` | clusters, required args, silent missing arg, invalid optstring and variable-name diagnostics | OPTIND edge cases, explicit args edge cases |
 | `printf` | `builtin-printf`, `builtin-printf-usage-errors`, printf subrows | escapes, format reuse, octal/hex, width/precision, missing format, invalid format/conversion, invalid numeric operand diagnostics | full format grammar |
 | `read` | `builtin-read`, read subrows | backslash, `-r`, custom IFS, last-variable remainder assignment, unsupported option diagnostic | EOF status, additional IFS edge cases, prompts if ever added |
-| `test`, `[` | `builtin-test`, test subrows | file predicates including special file types, string comparisons, integer comparisons, ordering, invalid expression | complete POSIX expression grammar, precedence edge cases |
+| `test`, `[` | `builtin-test`, test subrows | file predicates including symlinks and special file types, string comparisons, integer comparisons, ordering, invalid expression | complete POSIX expression grammar, precedence edge cases |
 | `umask` | `builtin-umask`, `builtin-umask-symbolic-output`, `builtin-umask-usage-errors` | basic get/set, `-S` symbolic output, invalid numeric/symbolic masks, unsupported options, excess operands | symbolic mask operands |
 | `wait` | `builtin-wait`, `builtin-wait-usage-errors` | tracked pid wait, invalid/unknown pid diagnostics | job specs, all-job semantics, stopped/interrupted jobs |
 

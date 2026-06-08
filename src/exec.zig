@@ -6535,6 +6535,11 @@ fn evalUnaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, op: []co
         if (std.mem.eql(u8, op, "-p")) return stat.kind == .named_pipe;
         if (std.mem.eql(u8, op, "-S")) return stat.kind == .unix_domain_socket;
     }
+    if (std.mem.eql(u8, op, "-L") or std.mem.eql(u8, op, "-h")) {
+        const io = options.io orelse return false;
+        const stat = statPathNoFollow(allocator, io, operand) catch return false;
+        return stat.kind == .sym_link;
+    }
     if (std.mem.eql(u8, op, "-r") or std.mem.eql(u8, op, "-w") or std.mem.eql(u8, op, "-x")) {
         const io = options.io orelse return false;
         std.Io.Dir.cwd().access(io, operand, .{
@@ -6567,6 +6572,11 @@ fn evalBinaryTest(left: []const u8, op: []const u8, right: []const u8) !bool {
 fn statPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !std.Io.File.Stat {
     _ = allocator;
     return std.Io.Dir.cwd().statFile(io, path, .{});
+}
+
+fn statPathNoFollow(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !std.Io.File.Stat {
+    _ = allocator;
+    return std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
 }
 
 fn joinParams(allocator: std.mem.Allocator, params: []const []const u8) ![]const u8 {

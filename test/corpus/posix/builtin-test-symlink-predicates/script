@@ -1,0 +1,7 @@
+rm -f target link
+: > target
+ln -s target link
+test -L link; echo L=$?
+test -h link; echo h=$?
+test -L target; echo file=$?
+test -f link; echo follows=$?
