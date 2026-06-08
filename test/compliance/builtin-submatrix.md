@@ -26,7 +26,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `export` | `builtin-export-unset`, `builtin-variable-usage-errors` | `builtin-export-env`, invalid-name and readonly-assignment negative corpus | option forms |
 | `readonly` | `vars-readonly`, `builtin-variable-usage-errors` | `builtin-readonly`, invalid-name and readonly-assignment negative corpus | option forms, additional assignment diagnostics |
 | `return` | `builtin-return-usage-errors` plus function tests | `builtin-return-status`, `builtin-return-outside-function`, `builtin-return-invalid-operand`, `builtin-return-too-many`, unit coverage | additional status/diagnostic corpus |
-| `set` | `option-set`, option rows | shell option and positional parameter corpus | many POSIX flags, `--`, invalid options, exact diagnostics |
+| `set` | `option-set`, `option-set-usage-errors`, option rows | shell option and positional parameter corpus, invalid option diagnostics | many POSIX flags, broader `--` behavior |
 | `shift` | `builtin-shift-too-far`, `builtin-shift-usage-errors`, builtin row through tests | `builtin-shift`, `builtin-shift-too-far`, `builtin-shift-invalid-operand`, `builtin-shift-too-many` | additional status/diagnostic corpus |
 | `times` | `builtin-times` | `builtin-times` | portability/runtime precision is baseline only |
 | `trap` | `builtin-trap`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus | signal semantics, ignored signals, invalid names, inheritance |

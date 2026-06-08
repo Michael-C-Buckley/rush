@@ -6235,9 +6235,14 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
             self.shell_options.verbose = enabled;
             return emptyResult(self.allocator, 0);
         }
-        return errorResult(self.allocator, 2, "set", "unknown option name");
+        return setUsageError(self, "unknown option name");
     }
-    return errorResult(self.allocator, 2, "set", "unsupported arguments");
+    return setUsageError(self, "unsupported arguments");
+}
+
+fn setUsageError(self: *Executor, message: []const u8) !CommandResult {
+    self.pending_exit = 2;
+    return errorResult(self.allocator, 2, "set", message);
 }
 
 fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
