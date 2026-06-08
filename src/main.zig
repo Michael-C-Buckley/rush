@@ -969,6 +969,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         };
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
+        try terminal.reportCurrentDirectory(cwd_buffer[0..cwd_len], history.hostname);
         var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .io = io, .cwd = cwd_buffer[0..cwd_len] };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,

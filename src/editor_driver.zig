@@ -301,6 +301,17 @@ pub const TerminalSession = struct {
         try self.capabilities.sendQueries(&self.tty);
     }
 
+    pub fn reportCurrentDirectory(self: *TerminalSession, cwd: []const u8, hostname: []const u8) !void {
+        const host = if (hostname.len != 0) hostname else "localhost";
+        var writer: std.Io.Writer.Allocating = .init(self.allocator);
+        defer writer.deinit();
+        try writer.writer.writeAll("\x1b]7;file://");
+        try writer.writer.print("{f}", .{std.fmt.alt(std.Uri.Component{ .raw = host }, .formatHost)});
+        try writer.writer.print("{f}", .{std.fmt.alt(std.Uri.Component{ .raw = cwd }, .formatPath)});
+        try writer.writer.writeByte(0x07);
+        try writeTtyAll(&self.tty, writer.written());
+    }
+
     pub fn finishSemanticCommand(self: *TerminalSession, status: u8) !void {
         const sequence = try std.fmt.allocPrint(self.allocator, "\x1b]133;D;{d}\x07", .{status});
         defer self.allocator.free(sequence);
