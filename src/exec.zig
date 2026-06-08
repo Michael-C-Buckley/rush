@@ -538,6 +538,7 @@ pub const Executor = struct {
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     completion_providers: std.StringHashMapUnmanaged(CompletionProvider) = .empty,
     completion_rules: std.ArrayList(completion.Rule) = .empty,
+    completion_generation: u64 = 0,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList([]const u8) = .empty,
     next_job_id: usize = 1,
@@ -724,6 +725,7 @@ pub const Executor = struct {
             self.allocator.free(result.value_ptr.function);
         }
         result.value_ptr.* = .{ .function = owned_function };
+        self.completion_generation +%= 1;
     }
 
     pub fn registerCompletionRule(self: *Executor, rule: completion.Rule) !void {
@@ -748,10 +750,19 @@ pub const Executor = struct {
         for (rule.path) |segment| try path.append(self.allocator, try self.allocator.dupe(u8, segment));
         owned_rule.path = try path.toOwnedSlice(self.allocator);
         try self.completion_rules.append(self.allocator, owned_rule);
+        self.completion_generation +%= 1;
     }
 
     pub fn completionProvider(self: Executor, command: []const u8) ?CompletionProvider {
         return self.completion_providers.get(command);
+    }
+
+    pub fn completionGeneration(self: Executor) u64 {
+        return self.completion_generation;
+    }
+
+    pub fn completionRules(self: Executor) []const completion.Rule {
+        return self.completion_rules.items;
     }
 
     pub fn lastCompletionContext(self: Executor) ?CompletionEvalContext {

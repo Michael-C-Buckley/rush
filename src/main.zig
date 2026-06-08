@@ -687,18 +687,18 @@ const CompletionCache = struct {
         self.entries.clearRetainingCapacity();
     }
 
-    pub fn get(self: *CompletionCache, source: []const u8, cursor: usize, cwd: []const u8) ?[]const completion_model.Candidate {
+    pub fn get(self: *CompletionCache, source: []const u8, cursor: usize, cwd: []const u8, generation: u64) ?[]const completion_model.Candidate {
         self.reapRefresh();
         var key_buffer: [4096]u8 = undefined;
-        const key = completionCacheKey(&key_buffer, source, cursor, cwd) catch return null;
+        const key = completionCacheKey(&key_buffer, source, cursor, cwd, generation) catch return null;
         lockMutex(&self.mutex);
         defer self.mutex.unlock();
         return self.entries.get(key);
     }
 
-    pub fn put(self: *CompletionCache, source: []const u8, cursor: usize, cwd: []const u8, candidates: []const completion_model.Candidate) !void {
+    pub fn put(self: *CompletionCache, source: []const u8, cursor: usize, cwd: []const u8, generation: u64, candidates: []const completion_model.Candidate) !void {
         var key_buffer: [4096]u8 = undefined;
-        const key = try completionCacheKey(&key_buffer, source, cursor, cwd);
+        const key = try completionCacheKey(&key_buffer, source, cursor, cwd, generation);
         const owned_key = try self.allocator.dupe(u8, key);
         errdefer self.allocator.free(owned_key);
         const owned_candidates = try completion_model.cloneCandidates(self.allocator, candidates);
@@ -714,7 +714,7 @@ const CompletionCache = struct {
         result.value_ptr.* = owned_candidates;
     }
 
-    pub fn startRefresh(self: *CompletionCache, executor: *const exec.Executor, history: *const History, io: std.Io, source: []const u8, cursor: usize, cwd: []const u8) !void {
+    pub fn startRefresh(self: *CompletionCache, executor: *const exec.Executor, history: *const History, io: std.Io, source: []const u8, cursor: usize, cwd: []const u8, generation: u64) !void {
         self.reapRefresh();
         if (self.active_refresh != null) return;
 
@@ -727,6 +727,7 @@ const CompletionCache = struct {
             .source = try self.allocator.dupe(u8, source),
             .cursor = cursor,
             .cwd = try self.allocator.dupe(u8, cwd),
+            .generation = generation,
             .executor = exec.Executor.init(self.allocator),
             .history = History.init(self.allocator),
         };
@@ -766,6 +767,7 @@ const CompletionRefresh = struct {
     source: []const u8,
     cursor: usize,
     cwd: []const u8,
+    generation: u64,
     executor: exec.Executor = undefined,
     history: History = .{ .allocator = undefined },
     thread: std.Thread = undefined,
@@ -776,7 +778,7 @@ const CompletionRefresh = struct {
         const candidates = self.executor.collectCompletionsForInput(self.source, self.cursor, .{ .io = self.io, .allow_external = true }) catch return;
         defer self.executor.freeCompletions(candidates);
         rankCompletionCandidates(self.allocator, candidates, self.history, self.cwd) catch return;
-        self.cache.put(self.source, self.cursor, self.cwd, candidates) catch return;
+        self.cache.put(self.source, self.cursor, self.cwd, self.generation, candidates) catch return;
     }
 
     fn deinitFields(self: *CompletionRefresh) void {
@@ -787,8 +789,8 @@ const CompletionRefresh = struct {
     }
 };
 
-fn completionCacheKey(buffer: []u8, source: []const u8, cursor: usize, cwd: []const u8) ![]const u8 {
-    return std.fmt.bufPrint(buffer, "{s}\x00{d}\x00{s}", .{ source, cursor, cwd });
+fn completionCacheKey(buffer: []u8, source: []const u8, cursor: usize, cwd: []const u8, generation: u64) ![]const u8 {
+    return std.fmt.bufPrint(buffer, "{s}\x00{d}\x00{s}\x00{d}", .{ source, cursor, cwd, generation });
 }
 
 fn validCompletionScriptCommand(command: []const u8) bool {
@@ -840,14 +842,15 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     if (eval_context.position != .command) {
         try completion_context.loader.ensureLoaded(completion_context.io, completion_context.executor, eval_context.command, completion_context.arg_zero);
     }
-    if (completion_context.cache.get(source, cursor, completion_context.cwd)) |cached| {
-        try completion_context.cache.startRefresh(completion_context.executor, completion_context.history, completion_context.io, source, cursor, completion_context.cwd);
+    const generation = completion_context.executor.completionGeneration();
+    if (completion_context.cache.get(source, cursor, completion_context.cwd, generation)) |cached| {
+        try completion_context.cache.startRefresh(completion_context.executor, completion_context.history, completion_context.io, source, cursor, completion_context.cwd, generation);
         return completion_model.applyCandidatesForInput(allocator, source, cached);
     }
     const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true });
     defer completion_context.executor.freeCompletions(candidates);
     try rankCompletionCandidates(allocator, candidates, completion_context.history.*, completion_context.cwd);
-    try completion_context.cache.put(source, cursor, completion_context.cwd, candidates);
+    try completion_context.cache.put(source, cursor, completion_context.cwd, completion_context.executor.completionGeneration(), candidates);
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
@@ -916,6 +919,25 @@ fn debugCompletion(allocator: std.mem.Allocator, io: std.Io, environ_map: *const
     try writeAll(io, .stdout, output);
 }
 
+fn semanticCompletionPath(allocator: std.mem.Allocator, context: exec.CompletionSemanticContext) ![]const u8 {
+    var path: std.ArrayList(u8) = .empty;
+    errdefer path.deinit(allocator);
+    for (context.path, 0..) |segment, index| {
+        if (index != 0) try path.append(allocator, ' ');
+        try path.appendSlice(allocator, segment);
+    }
+    return path.toOwnedSlice(allocator);
+}
+
+fn debugCompletionRuleMatches(rule: completion_model.Rule, context: exec.CompletionSemanticContext) bool {
+    if (!std.mem.eql(u8, rule.root, context.root)) return false;
+    if (rule.path.len > context.path.len) return false;
+    for (rule.path, context.path[0..rule.path.len]) |expected, actual| {
+        if (!std.mem.eql(u8, expected, actual)) return false;
+    }
+    return true;
+}
+
 fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, source: []const u8) ![]const u8 {
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
@@ -936,6 +958,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
 
     const context = try exec.completionEvalContextForInput(allocator, source, source.len);
     const provider = executor.completionProvider(context.command);
+    var semantic = try executor.analyzeCompletionsForInput(source, source.len);
+    defer semantic.deinit();
+    const semantic_path = try semanticCompletionPath(allocator, semantic);
+    defer allocator.free(semantic_path);
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
     defer executor.freeCompletions(candidates);
     const effective_context = executor.lastCompletionContext() orelse context;
@@ -956,7 +982,14 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  option-name: {s}
         \\  option-spelling: {s}
         \\  replace: {d}..{d}
+        \\semantic:
+        \\  root: {s}
+        \\  path: {s}
+        \\  position: {s}
+        \\  prefix: {s}
+        \\  replace: {d}..{d}
         \\provider: {s}
+        \\rules:
         \\candidates:
     , .{
         source,
@@ -969,8 +1002,23 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         if (effective_context.option_value) |option_value| option_value.spelling else "",
         effective_context.replace_start,
         effective_context.replace_end,
+        semantic.root,
+        semantic_path,
+        @tagName(semantic.position),
+        semantic.prefix,
+        semantic.replace_start,
+        semantic.replace_end,
         if (provider) |p| p.function else "<none>",
     });
+    for (executor.completionRules()) |rule| {
+        if (!debugCompletionRuleMatches(rule, semantic)) continue;
+        try out.writer.print("  - kind: {s}\n    root: {s}\n    path:", .{
+            @tagName(rule.kind),
+            rule.root,
+        });
+        for (rule.path) |segment| try out.writer.print(" {s}", .{segment});
+        try out.writer.print("\n    value: {s}\n", .{rule.value orelse ""});
+    }
     for (candidates) |candidate| {
         const prefix = if (candidate.replace_end <= source.len and candidate.replace_start <= candidate.replace_end) source[candidate.replace_start..candidate.replace_end] else "";
         const matches = std.mem.startsWith(u8, candidate.value, prefix);
@@ -1453,14 +1501,14 @@ test "completion cache stores cloned candidates by input cursor and cwd" {
         .replace_start = 4,
         .replace_end = 6,
     }};
-    try cache.put("git ch", 6, "/tmp/project", &candidates);
+    try cache.put("git ch", 6, "/tmp/project", 0, &candidates);
 
-    const cached = cache.get("git ch", 6, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
+    const cached = cache.get("git ch", 6, "/tmp/project", 0) orelse return error.MissingCompletionCacheEntry;
     try std.testing.expectEqual(@as(usize, 1), cached.len);
     try std.testing.expectEqualStrings("checkout", cached[0].value);
     try std.testing.expectEqualStrings("switch branches", cached[0].description.?);
-    try std.testing.expect(cache.get("git ch", 5, "/tmp/project") == null);
-    try std.testing.expect(cache.get("git ch", 6, "/tmp/other") == null);
+    try std.testing.expect(cache.get("git ch", 5, "/tmp/project", 0) == null);
+    try std.testing.expect(cache.get("git ch", 6, "/tmp/other", 0) == null);
 }
 
 test "completion cache replaces existing entries" {
@@ -1469,10 +1517,10 @@ test "completion cache replaces existing entries" {
 
     var first = [_]completion_model.Candidate{.{ .value = "checkout", .replace_start = 4, .replace_end = 6 }};
     var second = [_]completion_model.Candidate{.{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 }};
-    try cache.put("git ch", 6, "/tmp/project", &first);
-    try cache.put("git ch", 6, "/tmp/project", &second);
+    try cache.put("git ch", 6, "/tmp/project", 0, &first);
+    try cache.put("git ch", 6, "/tmp/project", 0, &second);
 
-    const cached = cache.get("git ch", 6, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
+    const cached = cache.get("git ch", 6, "/tmp/project", 0) orelse return error.MissingCompletionCacheEntry;
     try std.testing.expectEqual(@as(usize, 1), cached.len);
     try std.testing.expectEqualStrings("cherry-pick", cached[0].value);
 }
@@ -1528,6 +1576,19 @@ test "completion scripts lazy-load from XDG data home" {
     try std.testing.expect(loader.attempted.contains("tool"));
 }
 
+test "completion cache keys include completion generation" {
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
+
+    var candidates = [_]completion_model.Candidate{.{ .value = "checkout", .replace_start = 4, .replace_end = 6 }};
+    try cache.put("git ch", 6, "/tmp/project", 1, &candidates);
+
+    try std.testing.expect(cache.get("git ch", 6, "/tmp/project", 0) == null);
+    try std.testing.expect(cache.get("git ch", 6, "/tmp/project", 2) == null);
+    const cached = cache.get("git ch", 6, "/tmp/project", 1) orelse return error.MissingCompletionCacheEntry;
+    try std.testing.expectEqualStrings("checkout", cached[0].value);
+}
+
 test "completion cache refresh updates entries in background" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
@@ -1543,12 +1604,12 @@ test "completion cache refresh updates entries in background" {
     var cache = CompletionCache.init(std.testing.allocator);
     defer cache.deinit();
     var stale = [_]completion_model.Candidate{.{ .value = "stale", .replace_start = 4, .replace_end = 5 }};
-    try cache.put("git f", 5, "/tmp/project", &stale);
+    try cache.put("git f", 5, "/tmp/project", executor.completionGeneration(), &stale);
 
-    try cache.startRefresh(&executor, &history, std.testing.io, "git f", 5, "/tmp/project");
+    try cache.startRefresh(&executor, &history, std.testing.io, "git f", 5, "/tmp/project", executor.completionGeneration());
     cache.waitForRefresh();
 
-    const cached = cache.get("git f", 5, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
+    const cached = cache.get("git f", 5, "/tmp/project", executor.completionGeneration()) orelse return error.MissingCompletionCacheEntry;
     try std.testing.expectEqual(@as(usize, 1), cached.len);
     try std.testing.expectEqualStrings("fresh", cached[0].value);
 }
@@ -1686,6 +1747,30 @@ test "completion debug output shows context provider candidates and application"
     try std.testing.expect(std.mem.indexOf(u8, output, "provider: __rush_complete_git") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "value: status") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "replacement: status") != null);
+}
+
+test "completion debug output shows semantic structured context and rules" {
+    const root = "rush-debug-structured-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, "rush-debug-structured-test/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = "rush-debug-structured-test/rush/config.rush", .data =
+        \\complete git --subcommand commit --description commit
+        \\complete 'git commit' --option --long amend --description amend
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    const output = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, "git commit --a");
+    defer std.testing.allocator.free(output);
+
+    try std.testing.expect(std.mem.indexOf(u8, output, "semantic:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "root: git") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "path: commit") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "position: option") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "kind: option") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "value: --amend") != null);
 }
 
 test "interactive highlight renderer uses parser classifications" {
