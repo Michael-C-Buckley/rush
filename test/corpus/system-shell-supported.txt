@@ -110,3 +110,5 @@ exec /bin/sh -c 'printf exec-ok'; echo nope
 VAR=ok exec /bin/sh -c 'printf "$VAR"'
 read cooked <<'EOF1'; read -r raw <<'EOF2'; echo "$cooked/$raw"\na\ b\nEOF1\na\ b\nEOF2
 IFS=: read a b c <<EOF\none::three\nEOF\necho "$a/$b/$c"
+printf '[%5s][%-5s][%.3s][%04d]' a b abcdef 7
+printf '[%o][%x][%X]' 10 255 255

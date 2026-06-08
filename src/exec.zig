@@ -3507,6 +3507,14 @@ fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     };
 }
 
+const PrintfSpec = struct {
+    spec: u8,
+    left_adjust: bool = false,
+    zero_pad: bool = false,
+    width: ?usize = null,
+    precision: ?usize = null,
+};
+
 fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), format: []const u8, args: []const ir.WordRef) !void {
     var arg_index: usize = 0;
     var first_pass = true;
@@ -3521,8 +3529,7 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                     if (index >= format.len) {
                         try stdout.append(allocator, '\\');
                     } else {
-                        try appendEscapedSequence(allocator, stdout, format[index]);
-                        index += 1;
+                        _ = try appendEscapedSequence(allocator, stdout, format, &index);
                     }
                 },
                 '%' => {
@@ -3531,9 +3538,11 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                         try stdout.append(allocator, '%');
                         break;
                     }
-                    const spec = format[index];
-                    index += 1;
-                    if (spec == '%') {
+                    const spec = parsePrintfSpec(format, &index) orelse {
+                        try stdout.append(allocator, '%');
+                        continue;
+                    };
+                    if (spec.spec == '%') {
                         try stdout.append(allocator, '%');
                         continue;
                     }
@@ -3542,23 +3551,7 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                         arg_index += 1;
                         break :blk value;
                     } else "";
-                    switch (spec) {
-                        's' => try stdout.appendSlice(allocator, arg),
-                        'b' => try appendEscapedString(allocator, stdout, arg),
-                        'c' => try stdout.append(allocator, if (arg.len == 0) 0 else arg[0]),
-                        'd', 'i' => {
-                            const value = std.fmt.parseInt(i64, arg, 10) catch 0;
-                            try stdout.print(allocator, "{d}", .{value});
-                        },
-                        'u' => {
-                            const value = std.fmt.parseInt(u64, arg, 10) catch 0;
-                            try stdout.print(allocator, "{d}", .{value});
-                        },
-                        else => {
-                            try stdout.append(allocator, '%');
-                            try stdout.append(allocator, spec);
-                        },
-                    }
+                    if (!try appendPrintfConversion(allocator, stdout, spec, arg)) return;
                 },
                 else => {
                     try stdout.append(allocator, format[index]);
@@ -3570,7 +3563,88 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
     }
 }
 
-fn appendEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8) !void {
+fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
+    var result: PrintfSpec = .{ .spec = 0 };
+    while (index.* < format.len) {
+        switch (format[index.*]) {
+            '-' => result.left_adjust = true,
+            '0' => result.zero_pad = true,
+            '+', ' ', '#' => {},
+            else => break,
+        }
+        index.* += 1;
+    }
+    if (index.* < format.len and std.ascii.isDigit(format[index.*])) {
+        const start = index.*;
+        while (index.* < format.len and std.ascii.isDigit(format[index.*])) : (index.* += 1) {}
+        result.width = std.fmt.parseInt(usize, format[start..index.*], 10) catch null;
+    }
+    if (index.* < format.len and format[index.*] == '.') {
+        index.* += 1;
+        const start = index.*;
+        while (index.* < format.len and std.ascii.isDigit(format[index.*])) : (index.* += 1) {}
+        result.precision = if (start == index.*) 0 else std.fmt.parseInt(usize, format[start..index.*], 10) catch 0;
+    }
+    if (index.* >= format.len) return null;
+    result.spec = format[index.*];
+    index.* += 1;
+    return result;
+}
+
+fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), spec: PrintfSpec, arg: []const u8) !bool {
+    const rendered: []u8 = switch (spec.spec) {
+        's' => try formatPrintfString(allocator, arg, spec.precision),
+        'b' => blk: {
+            var escaped: std.ArrayList(u8) = .empty;
+            errdefer escaped.deinit(allocator);
+            const keep_going = try appendEscapedString(allocator, &escaped, arg);
+            const bytes = try escaped.toOwnedSlice(allocator);
+            if (!keep_going) {
+                try appendPadded(allocator, stdout, bytes, spec);
+                allocator.free(bytes);
+                return false;
+            }
+            break :blk bytes;
+        },
+        'c' => try allocator.dupe(u8, if (arg.len == 0) &[_]u8{0} else arg[0..1]),
+        'd', 'i' => try std.fmt.allocPrint(allocator, "{d}", .{parsePrintfSigned(arg)}),
+        'u' => try std.fmt.allocPrint(allocator, "{d}", .{parsePrintfUnsigned(arg)}),
+        'o' => try std.fmt.allocPrint(allocator, "{o}", .{parsePrintfUnsigned(arg)}),
+        'x' => try std.fmt.allocPrint(allocator, "{x}", .{parsePrintfUnsigned(arg)}),
+        'X' => try std.fmt.allocPrint(allocator, "{X}", .{parsePrintfUnsigned(arg)}),
+        else => try std.fmt.allocPrint(allocator, "%{c}", .{spec.spec}),
+    };
+    defer allocator.free(rendered);
+    try appendPadded(allocator, stdout, rendered, spec);
+    return true;
+}
+
+fn formatPrintfString(allocator: std.mem.Allocator, arg: []const u8, precision: ?usize) ![]u8 {
+    const limit = if (precision) |value| @min(value, arg.len) else arg.len;
+    return allocator.dupe(u8, arg[0..limit]);
+}
+
+fn appendPadded(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, spec: PrintfSpec) !void {
+    const width = spec.width orelse 0;
+    const pad_len = if (width > text.len) width - text.len else 0;
+    const pad_byte: u8 = if (spec.zero_pad and !spec.left_adjust) '0' else ' ';
+    if (!spec.left_adjust) try stdout.appendNTimes(allocator, pad_byte, pad_len);
+    try stdout.appendSlice(allocator, text);
+    if (spec.left_adjust) try stdout.appendNTimes(allocator, ' ', pad_len);
+}
+
+fn parsePrintfSigned(arg: []const u8) i64 {
+    return std.fmt.parseInt(i64, arg, 0) catch 0;
+}
+
+fn parsePrintfUnsigned(arg: []const u8) u64 {
+    return std.fmt.parseInt(u64, arg, 0) catch blk: {
+        const signed = std.fmt.parseInt(i64, arg, 0) catch break :blk 0;
+        break :blk @bitCast(signed);
+    };
+}
+
+fn appendEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8) !bool {
     var index: usize = 0;
     while (index < text.len) {
         if (text[index] != '\\') {
@@ -3581,27 +3655,56 @@ fn appendEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8),
         index += 1;
         if (index >= text.len) {
             try stdout.append(allocator, '\\');
-        } else {
-            try appendEscapedSequence(allocator, stdout, text[index]);
-            index += 1;
+        } else if (!try appendEscapedSequence(allocator, stdout, text, &index)) {
+            return false;
         }
     }
+    return true;
 }
 
-fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), byte: u8) !void {
+fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize) !bool {
+    const byte = text[index.*];
     switch (byte) {
         'a' => try stdout.append(allocator, 0x07),
         'b' => try stdout.append(allocator, 0x08),
+        'c' => {
+            index.* += 1;
+            return false;
+        },
         'f' => try stdout.append(allocator, 0x0c),
         'n' => try stdout.append(allocator, '\n'),
         'r' => try stdout.append(allocator, '\r'),
         't' => try stdout.append(allocator, '\t'),
         'v' => try stdout.append(allocator, 0x0b),
         '\\' => try stdout.append(allocator, '\\'),
+        '0'...'7' => {
+            try appendOctalEscape(allocator, stdout, text, index);
+            return true;
+        },
         else => {
             try stdout.append(allocator, '\\');
             try stdout.append(allocator, byte);
         },
+    }
+    index.* += 1;
+    return true;
+}
+
+fn appendOctalEscape(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize) !void {
+    var value: u8 = 0;
+    var count: usize = 0;
+    var cursor = index.*;
+    if (cursor < text.len and text[cursor] == '0') cursor += 1;
+    while (cursor < text.len and count < 3 and text[cursor] >= '0' and text[cursor] <= '7') : (count += 1) {
+        value = value * 8 + (text[cursor] - '0');
+        cursor += 1;
+    }
+    if (count == 0) {
+        try stdout.append(allocator, 0);
+        index.* += 1;
+    } else {
+        try stdout.append(allocator, value);
+        index.* = cursor;
     }
 }
 
@@ -5121,12 +5224,26 @@ test "executor implements read and printf builtins" {
     defer repeat_result.deinit();
     try std.testing.expectEqualStrings("a:b\nc:d\n", repeat_result.stdout);
 
+    var width_lowered = try parseAndLower(std.testing.allocator, "printf '[%5s][%-5s][%.3s][%04d][%o][%x][%X]' a b abcdef 7 10 255 255");
+    defer width_lowered.parsed.deinit();
+    defer width_lowered.program.deinit();
+    var width_result = try executor.executeProgram(width_lowered.program, .{});
+    defer width_result.deinit();
+    try std.testing.expectEqualStrings("[    a][b    ][abc][0007][12][ff][FF]", width_result.stdout);
+
     var escaped_lowered = try parseAndLower(std.testing.allocator, "printf '%b' 'x\\ny'");
     defer escaped_lowered.parsed.deinit();
     defer escaped_lowered.program.deinit();
     var escaped_result = try executor.executeProgram(escaped_lowered.program, .{});
     defer escaped_result.deinit();
     try std.testing.expectEqualStrings("x\ny", escaped_result.stdout);
+
+    var octal_escape = try parseAndLower(std.testing.allocator, "printf 'A\\101'; printf '%b' 'B\\0101'; printf '%b' 'C\\cD'");
+    defer octal_escape.parsed.deinit();
+    defer octal_escape.program.deinit();
+    var octal_escape_result = try executor.executeProgram(octal_escape.program, .{});
+    defer octal_escape_result.deinit();
+    try std.testing.expectEqualStrings("AABAC", octal_escape_result.stdout);
 
     var unknown_escape = try parseAndLower(std.testing.allocator, "printf 'a\\ b'");
     defer unknown_escape.parsed.deinit();

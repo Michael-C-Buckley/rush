@@ -1,0 +1,1 @@
+printf 'A\101'; printf '%b' 'B\0101'; printf '%b' 'C\cD'
