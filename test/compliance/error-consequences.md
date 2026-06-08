@@ -41,7 +41,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `errors-syntax` | baseline | high | POSIX corpus and negative corpus | strict mode has initial diagnostics; recovery parser remains intentionally permissive for tooling |
 | `errors-expansion` | partial | high | nounset and `${parameter:?word}` coverage | ordinary and special-builtin expansion failures have baseline shell-exit coverage; more expansion classes need coverage |
 | `errors-special-builtin` | partial | high | assignment persistence redirection and expansion negative coverage | additional utilities and assignment side-effect consequences need more detail |
-| `errors-nounset` | baseline | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution in current baseline |
+| `errors-nounset` | supported | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution, with default-operator and disable behavior covered separately |
 | `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | bad input/output fd, noclobber, missing input, and directory output diagnostics exist; more redirection classes need stricter modeling |
 | `errors-special-builtin-redirection` | supported | high | negative corpus | noclobber, missing input, bad input/output fd, and directory output special-builtin redirection failures exit non-interactive execution across representative POSIX special builtins |
 | `errors-special-builtin-expansion` | supported | high | negative corpus | ${parameter:?word} and nounset special-builtin expansion failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap` |
