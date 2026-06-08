@@ -2323,7 +2323,8 @@ pub const Executor = struct {
 
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
-        const effective_stdin = try self.applyInputRedirections(expanded, stdin, options, &owned_stdin);
+        const input_special_builtin = expanded.argv.len > 0 and isSpecialBuiltin(expanded.argv[0].text);
+        const effective_stdin = self.applyInputRedirections(expanded, stdin, options, &owned_stdin) catch |err| return self.redirectionErrorResult(expanded, err, input_special_builtin);
 
         if (expanded.argv.len == 0) {
             try self.applyAssignments(expanded.assignments);
@@ -2382,6 +2383,7 @@ pub const Executor = struct {
         const result = switch (err) {
             error.PathAlreadyExists => try errorResult(self.allocator, 1, noclobberTargetName(command), "cannot overwrite existing file"),
             error.BadFileDescriptor => try errorResult(self.allocator, 1, badFdTargetName(command), "bad file descriptor"),
+            error.FileNotFound => try errorResult(self.allocator, 1, inputTargetName(command), "no such file or directory"),
             else => return err,
         };
         if (special_builtin) self.pending_exit = result.status;
@@ -5911,6 +5913,13 @@ fn noclobberTargetName(command: ir.SimpleCommand) []const u8 {
 fn badFdTargetName(command: ir.SimpleCommand) []const u8 {
     for (command.redirections) |redirection| {
         if (redirection.operator == .greater_and or redirection.operator == .less_and) return targetName(redirection);
+    }
+    return "redirection";
+}
+
+fn inputTargetName(command: ir.SimpleCommand) []const u8 {
+    for (command.redirections) |redirection| {
+        if (isStdinFileRedirection(redirection)) return targetName(redirection);
     }
     return "redirection";
 }
