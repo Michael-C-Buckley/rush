@@ -9,7 +9,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | POSIX area | manifest rows | current status | primary gaps |
 | --- | --- | --- | --- |
 | Tilde expansion | `expansion-tilde` | baseline | `~user`, assignment-word contexts, unset HOME edge cases |
-| Parameter expansion | `expansion-parameter-*` | baseline/partial | `${parameter:?word}` diagnostics, nested word edge cases, special-builtin consequences |
+| Parameter expansion | `expansion-parameter-*` | baseline | unquoted braced-word parser edge cases, nested word edge cases, special-builtin consequences |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline/partial | unquoted `$@`/`$*`, empty positionals, custom IFS interactions |
 | Command substitution | `expansion-command-substitution`, `lex-backquote` | baseline | trailing-newline trimming edge cases, nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
@@ -42,16 +42,16 @@ Manifest rows:
 - `expansion-parameter-error`
 - `expansion-parameter-error-unset`
 
-Covered corpus includes defaults, assignment, alternate/length, null-colon behavior, nested default words, and pattern removal.
+Covered corpus includes defaults, assignment, alternate/length, null-colon behavior, nested default words, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit.
 
-High-risk gaps:
+Remaining high-risk gaps:
 
-- `${parameter:?word}` should expand `word` for diagnostics and apply POSIX non-interactive shell error consequences.
-- Nested `word` portions need broader recursive expansion coverage.
-- Diagnostics should distinguish unset/null parameter cases where POSIX requires it.
-- Special builtin expansion failures need separate consequences from ordinary command failures.
+- unquoted spaces in braced parameter `word` portions currently depend on parser word splitting and need hardening;
+- nested `word` portions need broader recursive expansion coverage;
+- diagnostics should distinguish unset/null parameter cases where POSIX requires it;
+- special builtin expansion failures need separate consequences from ordinary command failures.
 
-Follow-up task: `#155 Improve parameter error expansion diagnostics`.
+Follow-up tasks: `#156 Model POSIX special builtin error consequences` and parser/parameter hardening tasks.
 
 ## Special parameters and positional fields
 

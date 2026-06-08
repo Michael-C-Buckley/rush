@@ -14,6 +14,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | --- | --- | --- | --- |
 | `syntax-missing-pipeline-command` | syntax | covered baseline | parse diagnostic, status 2, no execution |
 | `expansion-nounset-unset-parameter` | expansion | covered baseline | diagnostic, status 1, non-interactive execution stops |
+| `expansion-parameter-error-word` | expansion | covered baseline | diagnostic word expansion, status 1, non-interactive execution stops |
 | `redirection-bad-fd-duplication` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `redirection-noclobber-overwrite` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `builtin-test-invalid-expression` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
@@ -26,7 +27,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | --- | --- | --- | --- | --- |
 | `errors-command-not-found` | supported | medium | POSIX and differential corpus | simple not-found and unknown wait pid behavior are covered |
 | `errors-syntax` | baseline | high | POSIX corpus and negative corpus | strict mode has initial diagnostics; recovery parser remains intentionally permissive for tooling |
-| `errors-expansion` | partial | high | nounset coverage only | `${parameter:?word}` and special-builtin expansion consequences remain incomplete |
+| `errors-expansion` | partial | high | nounset and `${parameter:?word}` coverage | special-builtin expansion consequences remain incomplete |
 | `errors-special-builtin` | partial | high | assignment persistence coverage only | shell-exit consequences for failures are not modeled in detail |
 | `errors-nounset` | baseline | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution in current baseline |
 | `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | diagnostics exist; shell-exit and special-builtin consequences need stricter modeling |
@@ -41,7 +42,7 @@ Current coverage starts with a missing pipeline command. Additional cases should
 
 ### Expansion errors
 
-Current coverage includes nounset. Add negative cases for `${parameter:?word}` with unset and null parameters, including word expansion in diagnostics. Distinguish ordinary command failures from special builtin expansion failures because POSIX assigns different non-interactive shell consequences.
+Current coverage includes nounset and `${parameter:?word}` with diagnostic word expansion. Add more cases for null parameters and parser edge cases in unquoted braced words. Distinguish ordinary command failures from special builtin expansion failures because POSIX assigns different non-interactive shell consequences.
 
 ### Redirection errors
 
@@ -67,7 +68,6 @@ Track expected status families separately:
 
 ## Follow-up implementation targets
 
-- `#155 Improve parameter error expansion diagnostics`
 - `#156 Model POSIX special builtin error consequences`
 - `#147 Add negative POSIX diagnostics corpus` seeded the first corpus slice; future cases should extend it.
 - Add follow-up tasks when a new negative case documents a known Rush/POSIX gap rather than implemented behavior.

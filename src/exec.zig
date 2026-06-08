@@ -383,6 +383,7 @@ pub const Executor = struct {
     last_completion_context: ?CompletionEvalContext = null,
     getopts_offset: usize = 1,
     getopts_last_optind: usize = 1,
+    parameter_error: expand.ParameterError = .{},
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         var executor: Executor = .{ .allocator = allocator };
@@ -460,6 +461,7 @@ pub const Executor = struct {
         self.completion_providers.deinit(self.allocator);
         for (self.background_jobs.items) |job| self.allocator.free(job.command);
         self.background_jobs.deinit(self.allocator);
+        self.parameter_error.clear(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
         if (self.completion_builder) |*builder| builder.deinit(self.allocator);
@@ -1762,7 +1764,7 @@ pub const Executor = struct {
                 self.pending_exit = 1;
                 return errorResult(self.allocator, 1, "parameter", "unset parameter");
             },
-            error.ParameterExpansionFailed => return errorResult(self.allocator, 1, "parameter", "expansion failed"),
+            error.ParameterExpansionFailed => return self.parameterExpansionErrorResult(),
             else => return err,
         };
         defer self.freeExpandedCommand(expanded);
@@ -1834,6 +1836,17 @@ pub const Executor = struct {
         return try self.applyExternalPostRedirections(expanded, try self.executeExternal(expanded, io, options), options);
     }
 
+    fn parameterExpansionErrorResult(self: *Executor) !CommandResult {
+        if (self.parameter_error.name.len == 0) return errorResult(self.allocator, 1, "parameter", "expansion failed");
+        const name = self.parameter_error.name;
+        const message = if (self.parameter_error.message.len != 0) self.parameter_error.message else "parameter null or not set";
+        self.pending_exit = 1;
+        errdefer self.parameter_error.clear(self.allocator);
+        const result = try errorResult(self.allocator, 1, name, message);
+        self.parameter_error.clear(self.allocator);
+        return result;
+    }
+
     fn executeBuiltinWithAssignments(self: *Executor, builtin: BuiltinFn, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
         if (isSpecialBuiltin(command.argv[0].text)) {
             try self.applyAssignments(command.assignments);
@@ -1886,7 +1899,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         const positionals: []const []const u8 = self.currentPositionals().params;
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -1936,14 +1949,14 @@ pub const Executor = struct {
     fn expandHereDoc(self: *Executor, text: []const u8, quoted: bool, options: ExecuteOptions) ![]const u8 {
         if (quoted) return self.allocator.dupe(u8, text);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        return expand.expandWordScalar(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset });
+        return expand.expandWordScalar(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
         const raw = try self.allocator.dupe(u8, word.raw);
         errdefer self.allocator.free(raw);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -6617,6 +6630,21 @@ test "executor implements set shell option baseline" {
     defer verbose.deinit();
     try std.testing.expectEqualStrings("verbose\n", verbose.stdout);
     try std.testing.expect(std.mem.indexOf(u8, verbose.stderr, "echo verbose") != null);
+}
+
+test "executor reports parameter error expansion diagnostics" {
+    var lowered = try parseAndLower(std.testing.allocator, "MSG=why; echo ${RUSH_UNSET_FOR_TEST:?bad-${MSG}}; echo after");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("RUSH_UNSET_FOR_TEST: bad-why\n", result.stderr);
 }
 
 test "executor runs builtin async jobs as waitable children" {

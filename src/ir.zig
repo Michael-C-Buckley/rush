@@ -1015,7 +1015,11 @@ fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, to
     const token = parsed.tokens[token_index];
     const raw = try allocator.dupe(u8, token.lexeme(parsed.source));
     errdefer allocator.free(raw);
-    const text = try expand.expandWordScalar(allocator, raw, .{});
+    const text = expand.expandWordScalar(allocator, raw, .{}) catch |err| switch (err) {
+        error.NounsetParameter, error.ParameterExpansionFailed => try allocator.dupe(u8, raw),
+        else => return err,
+    };
+    errdefer allocator.free(text);
     return .{
         .span = token.span,
         .raw = raw,

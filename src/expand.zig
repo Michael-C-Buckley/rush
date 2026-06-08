@@ -36,6 +36,17 @@ pub const CommandSubstitution = struct {
     }
 };
 
+pub const ParameterError = struct {
+    name: []const u8 = "",
+    message: []const u8 = "",
+
+    pub fn clear(self: *ParameterError, allocator: std.mem.Allocator) void {
+        if (self.name.len != 0) allocator.free(self.name);
+        if (self.message.len != 0) allocator.free(self.message);
+        self.* = .{};
+    }
+};
+
 pub const Options = struct {
     env: EnvLookup = .{},
     env_set: EnvSet = .{},
@@ -45,6 +56,7 @@ pub const Options = struct {
     positionals: []const []const u8 = &.{},
     pathname_expansion: bool = true,
     nounset: bool = false,
+    parameter_error: ?*ParameterError = null,
 };
 
 pub const Phase = enum {
@@ -351,13 +363,24 @@ fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
 
     if (raw[next] == '{') {
         const name_start = next + 1;
-        var name_end = name_start;
-        while (name_end < raw.len and raw[name_end] != '}') : (name_end += 1) {}
-        if (name_end >= raw.len) return null;
+        var index = name_start;
+        var depth: usize = 1;
+        while (index < raw.len) : (index += 1) {
+            if (raw[index] == '$' and index + 1 < raw.len and raw[index + 1] == '{') {
+                depth += 1;
+                index += 1;
+                continue;
+            }
+            if (raw[index] == '}') {
+                depth -= 1;
+                if (depth == 0) break;
+            }
+        }
+        if (index >= raw.len or depth != 0) return null;
         return .{
             .kind = .parameter,
-            .span = .init(dollar, name_end + 1),
-            .value_span = .init(name_start, name_end),
+            .span = .init(dollar, index + 1),
+            .value_span = .init(name_start, index),
         };
     }
 
@@ -465,6 +488,21 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
         },
         .error_if_unset => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
+            const message = if (parsed.word.len != 0)
+                try expandWordScalar(allocator, parsed.word, options)
+            else
+                try allocator.dupe(u8, "parameter null or not set");
+            if (options.parameter_error) |parameter_error| {
+                const name = allocator.dupe(u8, parsed.name) catch |err| {
+                    allocator.free(message);
+                    return err;
+                };
+                parameter_error.clear(allocator);
+                parameter_error.name = name;
+                parameter_error.message = message;
+            } else {
+                allocator.free(message);
+            }
             return error.ParameterExpansionFailed;
         },
         .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
