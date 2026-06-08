@@ -6523,13 +6523,17 @@ fn evalUnaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, op: []co
     if (std.mem.eql(u8, op, "!")) return operand.len == 0;
     if (std.mem.eql(u8, op, "-n")) return operand.len != 0;
     if (std.mem.eql(u8, op, "-z")) return operand.len == 0;
-    if (std.mem.eql(u8, op, "-e") or std.mem.eql(u8, op, "-f") or std.mem.eql(u8, op, "-d") or std.mem.eql(u8, op, "-s")) {
+    if (std.mem.eql(u8, op, "-e") or std.mem.eql(u8, op, "-f") or std.mem.eql(u8, op, "-d") or std.mem.eql(u8, op, "-s") or std.mem.eql(u8, op, "-b") or std.mem.eql(u8, op, "-c") or std.mem.eql(u8, op, "-p") or std.mem.eql(u8, op, "-S")) {
         const io = options.io orelse return false;
         const stat = statPath(allocator, io, operand) catch return false;
         if (std.mem.eql(u8, op, "-e")) return true;
         if (std.mem.eql(u8, op, "-f")) return stat.kind == .file;
         if (std.mem.eql(u8, op, "-d")) return stat.kind == .directory;
         if (std.mem.eql(u8, op, "-s")) return stat.size > 0;
+        if (std.mem.eql(u8, op, "-b")) return stat.kind == .block_device;
+        if (std.mem.eql(u8, op, "-c")) return stat.kind == .character_device;
+        if (std.mem.eql(u8, op, "-p")) return stat.kind == .named_pipe;
+        if (std.mem.eql(u8, op, "-S")) return stat.kind == .unix_domain_socket;
     }
     if (std.mem.eql(u8, op, "-r") or std.mem.eql(u8, op, "-w") or std.mem.eql(u8, op, "-x")) {
         const io = options.io orelse return false;
@@ -6562,9 +6566,7 @@ fn evalBinaryTest(left: []const u8, op: []const u8, right: []const u8) !bool {
 
 fn statPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !std.Io.File.Stat {
     _ = allocator;
-    var file = try std.Io.Dir.cwd().openFile(io, path, .{});
-    defer file.close(io);
-    return file.stat(io);
+    return std.Io.Dir.cwd().statFile(io, path, .{});
 }
 
 fn joinParams(allocator: std.mem.Allocator, params: []const []const u8) ![]const u8 {

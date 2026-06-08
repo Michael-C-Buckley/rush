@@ -148,3 +148,4 @@ rm -rf real link; mkdir real; ln -s real link; cd -L link; case "$PWD" in */link
 export RUSH_EXPORT_P_TEST=ok; case "$(export -p)" in *RUSH_EXPORT_P_TEST*ok*) echo export-p ;; *) echo export-bad ;; esac; readonly RUSH_READONLY_P_TEST=ok; case "$(readonly -p)" in *RUSH_READONLY_P_TEST*) echo readonly-p ;; *) echo readonly-bad ;; esac
 V=ok; unset -v V; echo ${V-unset}; f() { echo f; }; command -v f; unset -f f; if command -v f; then echo bad; else echo unset-f; fi
 umask 022; umask -S
+rm -f regular fifo; : > regular; mkfifo fifo; test -c /dev/null; echo char=$?; test -p fifo; echo fifo=$?; test -b regular; echo block=$?; test -S regular; echo sock=$?
