@@ -331,6 +331,17 @@ pub const CallFrame = struct {
     }
 };
 
+pub const FunctionValue = struct {
+    body: []const u8,
+    program: ir.Program,
+
+    pub fn deinit(self: *FunctionValue, allocator: std.mem.Allocator) void {
+        allocator.free(self.body);
+        self.program.deinit();
+        self.* = undefined;
+    }
+};
+
 pub const BackgroundJob = struct {
     id: usize,
     pid: i64,
@@ -355,7 +366,7 @@ pub const Executor = struct {
     env: std.StringHashMapUnmanaged([]const u8) = .empty,
     readonly: std.StringHashMapUnmanaged(void) = .empty,
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
-    functions: std.StringHashMapUnmanaged([]const u8) = .empty,
+    functions: std.StringHashMapUnmanaged(FunctionValue) = .empty,
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     completion_providers: std.StringHashMapUnmanaged(CompletionProvider) = .empty,
@@ -447,7 +458,7 @@ pub const Executor = struct {
         var function_iter = self.functions.iterator();
         while (function_iter.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.*);
+            entry.value_ptr.deinit(self.allocator);
         }
         self.functions.deinit(self.allocator);
         var alias_iter = self.aliases.iterator();
@@ -517,7 +528,7 @@ pub const Executor = struct {
     pub fn collectCompletionsWithContext(self: *Executor, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
         if (context.position == .command) return self.collectRootCommandCompletions(context, options);
         const provider = self.completionProvider(command) orelse return self.allocator.alloc(completion.Candidate, 0);
-        const body = self.functions.get(provider.function) orelse return self.allocator.alloc(completion.Candidate, 0);
+        const function_value = self.functions.getPtr(provider.function) orelse return self.allocator.alloc(completion.Candidate, 0);
         if (self.completion_builder != null) return error.RecursiveCompletion;
         self.completion_builder = .{};
         self.completion_context = context;
@@ -534,7 +545,7 @@ pub const Executor = struct {
         const call: ir.SimpleCommand = .{ .span = .{ .start = 0, .end = 0 }, .assignments = &.{}, .argv = &argv, .redirections = &.{} };
         var completion_options = options;
         completion_options.external_stdio = .capture;
-        var result = try self.executeFunctionBody(call, body, completion_options);
+        var result = try self.executeFunctionBody(call, function_value, completion_options);
         defer result.deinit();
 
         var builder = self.completion_builder.?;
@@ -907,7 +918,7 @@ pub const Executor = struct {
         var open_fd_iter = other.open_fds.iterator();
         while (open_fd_iter.next()) |entry| try self.open_fds.put(self.allocator, entry.key_ptr.*, {});
         var function_iter = other.functions.iterator();
-        while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.*);
+        while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body);
         var alias_iter = other.aliases.iterator();
         while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
         var completion_iter = other.completion_providers.iterator();
@@ -1044,14 +1055,16 @@ pub const Executor = struct {
         errdefer self.allocator.free(owned_name);
         const owned_body = try self.allocator.dupe(u8, body);
         errdefer self.allocator.free(owned_body);
+        var parsed = try parser.parse(self.allocator, owned_body, .{});
+        defer parsed.deinit();
+        var program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        errdefer program.deinit();
         const result = try self.functions.getOrPut(self.allocator, owned_name);
         if (result.found_existing) {
             self.allocator.free(owned_name);
-            self.allocator.free(result.value_ptr.*);
-            result.value_ptr.* = owned_body;
-        } else {
-            result.value_ptr.* = owned_body;
+            result.value_ptr.deinit(self.allocator);
         }
+        result.value_ptr.* = .{ .body = owned_body, .program = program };
     }
 
     fn setTrap(self: *Executor, name: []const u8, action: []const u8) !void {
@@ -1797,12 +1810,12 @@ pub const Executor = struct {
             return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, 0), options, false);
         }
 
-        if (!options.suppress_functions and self.functions.get(expanded.argv[0].text) != null) {
-            const body = self.functions.get(expanded.argv[0].text).?;
+        if (!options.suppress_functions and self.functions.getPtr(expanded.argv[0].text) != null) {
+            const function_value = self.functions.getPtr(expanded.argv[0].text).?;
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, false)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
-                var result = try self.executeFunctionBody(expanded, body, options);
+                var result = try self.executeFunctionBody(expanded, function_value, options);
                 defer result.deinit();
                 writeInheritedResult(options.io.?, result) catch |err| switch (err) {
                     error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
@@ -1810,7 +1823,7 @@ pub const Executor = struct {
                 };
                 return emptyResult(self.allocator, result.status);
             }
-            var result = try self.executeFunctionBody(expanded, body, options);
+            var result = try self.executeFunctionBody(expanded, function_value, options);
             errdefer result.deinit();
             return try self.applyOutputRedirections(expanded, result, options, false);
         }
@@ -1870,14 +1883,14 @@ pub const Executor = struct {
         return builtin(self, command, stdin, options);
     }
 
-    fn executeFunctionBody(self: *Executor, command: ir.SimpleCommand, body: []const u8, options: ExecuteOptions) anyerror!CommandResult {
+    fn executeFunctionBody(self: *Executor, command: ir.SimpleCommand, function_value: *const FunctionValue, options: ExecuteOptions) anyerror!CommandResult {
         var assignment_scope = try self.pushTemporaryAssignments(command.assignments);
         defer assignment_scope.restore();
         try self.pushCallFrame(command.argv[1..]);
         defer self.popCallFrame();
         self.function_depth += 1;
         defer self.function_depth -= 1;
-        var result = try self.executeScriptSlice(body, options);
+        var result = try self.executeProgram(function_value.program, options);
         errdefer result.deinit();
         if (self.pending_return) |status| {
             self.pending_return = null;
@@ -5532,6 +5545,8 @@ test "executor parses and executes POSIX shell functions" {
     defer result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("hi\n", result.stdout);
+    const stored = executor.functions.get("greet") orelse return error.MissingFunction;
+    try std.testing.expect(stored.program.commands.len > 0 or stored.program.statements.len > 0);
 
     var redefine = try parseAndLower(std.testing.allocator, "greet() { echo one; }; greet() { echo two; }; greet");
     defer redefine.parsed.deinit();
