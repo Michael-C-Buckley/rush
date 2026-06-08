@@ -51,7 +51,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `command` | `builtin-command` | `-p`, `-v`, `-V`, lookup suppression | edge cases around special builtins, functions, utilities, PATH errors |
 | `env` | `builtin-env` | `-i`, assignments, command execution, printing | invalid options, command-not-found propagation edge cases |
 | `getopts` | `builtin-getopts`, `builtin-getopts-usage-errors` | clusters, required args, silent missing arg, invalid optstring and variable-name diagnostics | OPTIND edge cases, explicit args edge cases |
-| `printf` | `builtin-printf`, printf subrows | escapes, format reuse, octal/hex, width/precision | full format grammar, invalid formats, diagnostic corpus |
+| `printf` | `builtin-printf`, `builtin-printf-usage-errors`, printf subrows | escapes, format reuse, octal/hex, width/precision, missing format, invalid format/conversion, invalid numeric operand diagnostics | full format grammar |
 | `read` | `builtin-read`, read subrows | backslash, `-r`, custom IFS, last-variable remainder assignment, unsupported option diagnostic | EOF status, additional IFS edge cases, prompts if ever added |
 | `test`, `[` | `builtin-test`, test subrows | file predicates, string comparisons, integer comparisons, ordering, invalid expression | complete POSIX expression grammar, precedence edge cases |
 | `umask` | `builtin-umask`, `builtin-umask-usage-errors` | basic get/set, invalid numeric/symbolic masks, excess operands | symbolic mode support, exact output format |
@@ -73,7 +73,6 @@ Follow-up tasks:
 
 The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `read`, `wait`). Add cases for:
 
-- `printf` invalid format and missing numeric conversions;
 - special builtin redirection and expansion failures.
 
 ## Promotion guidance

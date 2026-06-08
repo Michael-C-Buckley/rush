@@ -5076,12 +5076,15 @@ fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(self.allocator);
-    try appendPrintfOutput(self.allocator, &stdout, command.argv[1].text, command.argv[2..]);
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(self.allocator);
+    var status: ExitStatus = 0;
+    try appendPrintfOutput(self.allocator, &stdout, &stderr, &status, command.argv[1].text, command.argv[2..]);
     return .{
         .allocator = self.allocator,
-        .status = 0,
+        .status = status,
         .stdout = try stdout.toOwnedSlice(self.allocator),
-        .stderr = try self.allocator.alloc(u8, 0),
+        .stderr = try stderr.toOwnedSlice(self.allocator),
     };
 }
 
@@ -5197,7 +5200,7 @@ const PrintfSpec = struct {
     precision: ?usize = null,
 };
 
-fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), format: []const u8, args: []const ir.WordRef) !void {
+fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, format: []const u8, args: []const ir.WordRef) !void {
     var arg_index: usize = 0;
     var first_pass = true;
     while (first_pass or arg_index < args.len) {
@@ -5217,11 +5220,11 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                 '%' => {
                     index += 1;
                     if (index >= format.len) {
-                        try stdout.append(allocator, '%');
+                        try printfDiagnostic(allocator, stderr, status, "invalid format");
                         break;
                     }
                     const spec = parsePrintfSpec(format, &index) orelse {
-                        try stdout.append(allocator, '%');
+                        try printfDiagnostic(allocator, stderr, status, "invalid format");
                         continue;
                     };
                     if (spec.spec == '%') {
@@ -5233,7 +5236,7 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                         arg_index += 1;
                         break :blk value;
                     } else "";
-                    if (!try appendPrintfConversion(allocator, stdout, spec, arg)) return;
+                    if (!try appendPrintfConversion(allocator, stdout, stderr, status, spec, arg)) return;
                 },
                 else => {
                     try stdout.append(allocator, format[index]);
@@ -5243,6 +5246,13 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
         }
         if (arg_index == before) break;
     }
+}
+
+fn printfDiagnostic(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, message: []const u8) !void {
+    status.* = 1;
+    try stderr.appendSlice(allocator, "printf: ");
+    try stderr.appendSlice(allocator, message);
+    try stderr.append(allocator, '\n');
 }
 
 fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
@@ -5273,7 +5283,7 @@ fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
     return result;
 }
 
-fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), spec: PrintfSpec, arg: []const u8) !bool {
+fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, spec: PrintfSpec, arg: []const u8) !bool {
     const rendered: []u8 = switch (spec.spec) {
         's' => try formatPrintfString(allocator, arg, spec.precision),
         'b' => blk: {
@@ -5289,12 +5299,15 @@ fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u
             break :blk bytes;
         },
         'c' => try allocator.dupe(u8, if (arg.len == 0) &[_]u8{0} else arg[0..1]),
-        'd', 'i' => try std.fmt.allocPrint(allocator, "{d}", .{parsePrintfSigned(arg)}),
-        'u' => try std.fmt.allocPrint(allocator, "{d}", .{parsePrintfUnsigned(arg)}),
-        'o' => try std.fmt.allocPrint(allocator, "{o}", .{parsePrintfUnsigned(arg)}),
-        'x' => try std.fmt.allocPrint(allocator, "{x}", .{parsePrintfUnsigned(arg)}),
-        'X' => try std.fmt.allocPrint(allocator, "{X}", .{parsePrintfUnsigned(arg)}),
-        else => try std.fmt.allocPrint(allocator, "%{c}", .{spec.spec}),
+        'd', 'i' => try std.fmt.allocPrint(allocator, "{d}", .{try parsePrintfSigned(allocator, stderr, status, arg)}),
+        'u' => try std.fmt.allocPrint(allocator, "{d}", .{try parsePrintfUnsigned(allocator, stderr, status, arg)}),
+        'o' => try std.fmt.allocPrint(allocator, "{o}", .{try parsePrintfUnsigned(allocator, stderr, status, arg)}),
+        'x' => try std.fmt.allocPrint(allocator, "{x}", .{try parsePrintfUnsigned(allocator, stderr, status, arg)}),
+        'X' => try std.fmt.allocPrint(allocator, "{X}", .{try parsePrintfUnsigned(allocator, stderr, status, arg)}),
+        else => blk: {
+            try printfDiagnostic(allocator, stderr, status, "invalid conversion");
+            break :blk try allocator.alloc(u8, 0);
+        },
     };
     defer allocator.free(rendered);
     try appendPadded(allocator, stdout, rendered, spec);
@@ -5315,13 +5328,19 @@ fn appendPadded(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: 
     if (spec.left_adjust) try stdout.appendNTimes(allocator, ' ', pad_len);
 }
 
-fn parsePrintfSigned(arg: []const u8) i64 {
-    return std.fmt.parseInt(i64, arg, 0) catch 0;
+fn parsePrintfSigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, arg: []const u8) !i64 {
+    return std.fmt.parseInt(i64, arg, 0) catch {
+        try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+        return 0;
+    };
 }
 
-fn parsePrintfUnsigned(arg: []const u8) u64 {
+fn parsePrintfUnsigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, arg: []const u8) !u64 {
     return std.fmt.parseInt(u64, arg, 0) catch blk: {
-        const signed = std.fmt.parseInt(i64, arg, 0) catch break :blk 0;
+        const signed = std.fmt.parseInt(i64, arg, 0) catch {
+            try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+            return 0;
+        };
         break :blk @bitCast(signed);
     };
 }
