@@ -255,7 +255,9 @@ pub const CallFrame = struct {
 };
 
 pub const BackgroundJob = struct {
+    id: usize,
     pid: i64,
+    command: []const u8,
     child: std.process.Child,
     done: bool = false,
     status: ExitStatus = 0,
@@ -281,6 +283,7 @@ pub const Executor = struct {
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     completion_providers: std.StringHashMapUnmanaged(CompletionProvider) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
+    next_job_id: usize = 1,
     open_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, void) = .empty,
     shell_options: ShellOptions = .{},
     global_positionals: PositionalParams = .{},
@@ -370,6 +373,7 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.function);
         }
         self.completion_providers.deinit(self.allocator);
+        for (self.background_jobs.items) |job| self.allocator.free(job.command);
         self.background_jobs.deinit(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
@@ -2176,7 +2180,12 @@ pub const Executor = struct {
         if (child.id) |pid| {
             const numeric_pid: i64 = @intCast(pid);
             self.setLastBackgroundPid(numeric_pid);
-            try self.background_jobs.append(self.allocator, .{ .pid = numeric_pid, .child = child });
+            const argv_text = try argvForCommand(self.allocator, command);
+            defer self.allocator.free(argv_text);
+            const command_text = try joinParams(self.allocator, argv_text);
+            errdefer self.allocator.free(command_text);
+            try self.background_jobs.append(self.allocator, .{ .id = self.next_job_id, .pid = numeric_pid, .command = command_text, .child = child });
+            self.next_job_id += 1;
         }
         return emptyResult(self.allocator, 0);
     }
@@ -2860,6 +2869,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "shift")) return builtinShift;
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "getopts")) return builtinGetopts;
+    if (std.mem.eql(u8, name, "jobs")) return builtinJobs;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
     if (std.mem.eql(u8, name, "eval")) return builtinEval;
@@ -4228,6 +4238,22 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     const new_mask = std.fmt.parseInt(u16, command.argv[1].text, 8) catch return errorResult(self.allocator, 2, "umask", "invalid mask");
     _ = shellUmask(new_mask);
     return emptyResult(self.allocator, 0);
+}
+
+fn builtinJobs(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len != 1) return errorResult(self.allocator, 2, "jobs", "arguments are not implemented yet");
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (self.background_jobs.items) |job| {
+        if (job.done) {
+            try stdout.print(self.allocator, "[{d}] Done({d}) {s}\n", .{ job.id, job.status, job.command });
+        } else {
+            try stdout.print(self.allocator, "[{d}] Running {s}\n", .{ job.id, job.command });
+        }
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -6048,6 +6074,21 @@ test "executor handles builtin async fallback" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("bg\nfg\n", result.stdout);
+}
+
+test "executor reports tracked background jobs" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & jobs; wait $!; jobs");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] Running /bin/sleep 0\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] Done(0) /bin/sleep 0\n") != null);
 }
 
 test "executor waits for background pid operands" {
