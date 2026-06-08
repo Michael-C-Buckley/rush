@@ -230,3 +230,4 @@ builtin-export-readonly-p-reusable	builtin	behavior	export -p and readonly -p qu
 builtin-read-empty-ifs	builtin	behavior	read with empty IFS assigns the whole line to the first variable
 builtin-env-option-terminator	builtin	behavior	env accepts -- after -i before assignments
 builtin-read-option-terminator	builtin	behavior	read accepts -- before variable names
+builtin-command-function-suppression	builtin	behavior	command suppresses shell function lookup

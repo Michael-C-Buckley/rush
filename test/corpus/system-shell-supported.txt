@@ -166,3 +166,4 @@ if test ! ""; then echo not-empty; fi; if test "x" = x -a "y" = y; then echo and
 printf "%s\n" "a b c" >in; IFS=; read x y <in; echo "<$x><${y-unset}>"
 env -i -- RUSH_ENV_TERM=ok
 printf "%s\n" ok >in; read -- x <in; echo "$x"
+echo() { printf "func:%s\n" "$1"; }; echo one; command echo two
