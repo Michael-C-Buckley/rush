@@ -217,3 +217,4 @@ builtin-test-mode-bit-predicates	builtin	behavior	test -u -g and -k recognize se
 builtin-getopts-explicit-args	builtin	behavior	getopts parses explicit arg operands instead of positional parameters
 builtin-set-positionals	builtin	behavior	set -- sets and clears positional parameters
 builtin-read-eof-status	builtin	behavior	read returns non-zero at EOF while assigning an empty value
+builtin-dot-path-search	builtin	behavior	dot searches PATH for scripts without slash operands

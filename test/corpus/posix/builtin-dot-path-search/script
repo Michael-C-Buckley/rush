@@ -1,0 +1,6 @@
+rm -rf dot-scripts
+mkdir dot-scripts
+printf '%s\n' 'DOTPATH_VALUE=ok' > dot-scripts/dotfile
+PATH=dot-scripts
+. dotfile
+echo $DOTPATH_VALUE

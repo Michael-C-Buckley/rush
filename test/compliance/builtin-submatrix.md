@@ -18,7 +18,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
 | `:` | `builtin-colon` | `basic-colon`, `builtin-colon-special-assignment` | redirection failure consequences need negative coverage |
-| `.` | `builtin-dot`, `builtin-dot-current-env`, `builtin-dot-usage-errors` | `dash-smoke-dot-current-env` plus missing/nonexistent file diagnostics and unit coverage | PATH search, non-readable file behavior |
+| `.` | `builtin-dot`, `builtin-dot-current-env`, `builtin-dot-path-search`, `builtin-dot-usage-errors` | current-shell effects, PATH search, missing/nonexistent file diagnostics and unit coverage | non-readable file behavior |
 | `break`, `continue` | `builtin-break-continue`, `builtin-loop-control-outside-loop`, `builtin-loop-control-usage-errors` | `builtin-loop-control`, outside-loop and operand diagnostic negative corpus | nested levels |
 | `eval` | `builtin-eval` | `builtin-eval`, `builtin-eval-special-assignment` | parse/expansion failure consequences |
 | `exec` | `builtin-exec` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-replaces-process` | redirection-only exec, failure status details, no-return contexts |
