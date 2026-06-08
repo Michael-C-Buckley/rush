@@ -141,6 +141,7 @@ pub const Executor = struct {
     readonly: std.StringHashMapUnmanaged(void) = .empty,
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged([]const u8) = .empty,
+    traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     open_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, void) = .empty,
     shell_options: ShellOptions = .{},
     global_positionals: PositionalParams = .{},
@@ -150,6 +151,8 @@ pub const Executor = struct {
     loop_depth: usize = 0,
     pending_loop_control: ?LoopControl = null,
     pending_exit: ?ExitStatus = null,
+    execution_depth: usize = 0,
+    running_exit_trap: bool = false,
     arg_zero: []const u8 = "rush",
     last_status_text: [3]u8 = .{ '0', 0, 0 },
     last_status_text_len: usize = 1,
@@ -208,6 +211,12 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.functions.deinit(self.allocator);
+        var trap_iter = self.traps.iterator();
+        while (trap_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.traps.deinit(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
         self.global_positionals.deinit(self.allocator);
@@ -322,6 +331,10 @@ pub const Executor = struct {
     }
 
     pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) anyerror!CommandResult {
+        const root_execution = self.execution_depth == 0;
+        self.execution_depth += 1;
+        defer self.execution_depth -= 1;
+
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
         var stderr: std.ArrayList(u8) = .empty;
@@ -349,7 +362,7 @@ pub const Executor = struct {
                 self.applyErrexit(last_status, options, statement.op_before);
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
             }
-            return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+            return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
         }
 
         if (program.pipelines.len > 0) {
@@ -363,7 +376,7 @@ pub const Executor = struct {
                 self.applyErrexit(last_status, options, pipeline.op_before);
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
             }
-            return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+            return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
         }
 
         for (program.commands) |command| {
@@ -375,7 +388,28 @@ pub const Executor = struct {
             self.applyErrexit(last_status, options, .sequence);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
-        return .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+        return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
+    }
+
+    fn finishExecuteProgram(self: *Executor, root_execution: bool, options: ExecuteOptions, result: CommandResult) !CommandResult {
+        if (!root_execution or self.running_exit_trap) return result;
+        const action = self.traps.get("EXIT") orelse return result;
+        var final = result;
+        errdefer final.deinit();
+        self.running_exit_trap = true;
+        defer self.running_exit_trap = false;
+        var trap_result = try self.executeScriptSlice(action, options);
+        defer trap_result.deinit();
+        const stdout = try std.mem.concat(self.allocator, u8, &.{ final.stdout, trap_result.stdout });
+        errdefer self.allocator.free(stdout);
+        const stderr = try std.mem.concat(self.allocator, u8, &.{ final.stderr, trap_result.stderr });
+        errdefer self.allocator.free(stderr);
+        self.allocator.free(final.stdout);
+        self.allocator.free(final.stderr);
+        final.stdout = stdout;
+        final.stderr = stderr;
+        if (self.pending_exit) |status| final.status = status;
+        return final;
     }
 
     fn applyErrexit(self: *Executor, status: ExitStatus, options: ExecuteOptions, op_before: ir.ListOp) void {
@@ -480,6 +514,8 @@ pub const Executor = struct {
         while (open_fd_iter.next()) |entry| try self.open_fds.put(self.allocator, entry.key_ptr.*, {});
         var function_iter = other.functions.iterator();
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.*);
+        var trap_iter = other.traps.iterator();
+        while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
         var array_iter = other.arrays.iterator();
         while (array_iter.next()) |entry| {
             for (entry.value_ptr.values.items, 0..) |value, index| {
@@ -521,6 +557,28 @@ pub const Executor = struct {
             result.value_ptr.* = owned_body;
         } else {
             result.value_ptr.* = owned_body;
+        }
+    }
+
+    fn setTrap(self: *Executor, name: []const u8, action: []const u8) !void {
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_action = try self.allocator.dupe(u8, action);
+        errdefer self.allocator.free(owned_action);
+        const result = try self.traps.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            self.allocator.free(result.value_ptr.*);
+            result.value_ptr.* = owned_action;
+        } else {
+            result.value_ptr.* = owned_action;
+        }
+    }
+
+    fn clearTrap(self: *Executor, name: []const u8) void {
+        if (self.traps.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value);
         }
     }
 
@@ -2291,6 +2349,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "source")) return builtinSource;
     if (std.mem.eql(u8, name, "test")) return builtinTest;
     if (std.mem.eql(u8, name, "times")) return builtinTimes;
+    if (std.mem.eql(u8, name, "trap")) return builtinTrap;
     if (std.mem.eql(u8, name, "umask")) return builtinUmask;
     if (std.mem.eql(u8, name, "wait")) return builtinWait;
     if (std.mem.eql(u8, name, "[")) return builtinTest;
@@ -2730,6 +2789,72 @@ fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         .stdout = stdout,
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len == 1) return listTraps(self);
+
+    var action_index: usize = 1;
+    if (std.mem.eql(u8, command.argv[action_index].text, "--")) {
+        action_index += 1;
+        if (action_index >= command.argv.len) return listTraps(self);
+    }
+    const action = command.argv[action_index].text;
+    if (action_index + 1 >= command.argv.len) return errorResult(self.allocator, 2, "trap", "missing signal");
+
+    for (command.argv[action_index + 1 ..]) |signal_word| {
+        const name = try normalizeTrapName(self.allocator, signal_word.text);
+        defer self.allocator.free(name);
+        if (std.mem.eql(u8, action, "-")) {
+            self.clearTrap(name);
+        } else {
+            try self.setTrap(name, action);
+        }
+    }
+    return emptyResult(self.allocator, 0);
+}
+
+fn listTraps(self: *Executor) !CommandResult {
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(self.allocator);
+    var iter = self.traps.iterator();
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (names.items) |name| {
+        const quoted = try singleQuote(self.allocator, self.traps.get(name).?);
+        defer self.allocator.free(quoted);
+        try stdout.print(self.allocator, "trap -- {s} {s}\n", .{ quoted, name });
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn normalizeTrapName(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    if (std.mem.eql(u8, raw, "0")) return allocator.dupe(u8, "EXIT");
+    const start: usize = if (std.ascii.startsWithIgnoreCase(raw, "SIG") and raw.len > 3) 3 else 0;
+    if (start >= raw.len) return allocator.dupe(u8, raw);
+    const name = try allocator.alloc(u8, raw.len - start);
+    for (raw[start..], 0..) |byte, index| name[index] = std.ascii.toUpper(byte);
+    return name;
+}
+
+fn singleQuote(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    try out.append(allocator, '\'');
+    for (text) |byte| {
+        if (byte == '\'') {
+            try out.appendSlice(allocator, "'\\''");
+        } else {
+            try out.append(allocator, byte);
+        }
+    }
+    try out.append(allocator, '\'');
+    return out.toOwnedSlice(allocator);
 }
 
 fn builtinGetopts(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -3798,6 +3923,35 @@ test "executor implements test and bracket builtins" {
         defer result.deinit();
         try std.testing.expectEqual(case.status, result.status);
     }
+}
+
+test "executor implements trap builtin baseline" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var list = try parseAndLower(std.testing.allocator, "trap 'echo bye' EXIT; trap 'echo int' INT; trap");
+    defer list.parsed.deinit();
+    defer list.program.deinit();
+    var list_result = try executor.executeProgram(list.program, .{});
+    defer list_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), list_result.status);
+    try std.testing.expectEqualStrings("trap -- 'echo bye' EXIT\ntrap -- 'echo int' INT\nbye\n", list_result.stdout);
+
+    var cleared = try parseAndLower(std.testing.allocator, "trap - EXIT; trap");
+    defer cleared.parsed.deinit();
+    defer cleared.program.deinit();
+    var cleared_result = try executor.executeProgram(cleared.program, .{});
+    defer cleared_result.deinit();
+    try std.testing.expectEqualStrings("trap -- 'echo int' INT\n", cleared_result.stdout);
+
+    var zero = try parseAndLower(std.testing.allocator, "trap 'echo zero' 0; echo body");
+    defer zero.parsed.deinit();
+    defer zero.program.deinit();
+    var zero_executor = Executor.init(std.testing.allocator);
+    defer zero_executor.deinit();
+    var zero_result = try zero_executor.executeProgram(zero.program, .{});
+    defer zero_result.deinit();
+    try std.testing.expectEqualStrings("body\nzero\n", zero_result.stdout);
 }
 
 test "executor implements getopts builtin" {

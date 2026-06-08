@@ -99,3 +99,4 @@ set -- -a value rest; while getopts a: opt; do echo "$opt/$OPTARG/$OPTIND"; done
 getopts :a: opt -a; echo "$opt/$OPTARG/$OPTIND/$?"
 set -- "$(printf 'a b')" c; echo "$#:$1:$2"
 set -- "`printf 'a b'`" c; echo "$#:$1:$2"
+trap 'echo bye' 0; echo body
