@@ -181,3 +181,4 @@ rm -rf t; mkdir t; cd t; touch a; set -fu; echo *; set +fu; echo $RUSH_UNSET_FOR
 HOME=/tmp/rush-home VALUE=~ LIST=~/bin:~ command -p env | grep -E '^(VALUE|LIST)=' | sort; A=one B=$A command -p env | grep -E '^(A|B)=' | sort
 u=~root; case "$u" in /*) echo user-abs ;; "~root") echo user-literal ;; *) echo user-other ;; esac; OWNER=~root command -p env | grep ^OWNER= | sed "s|=.*|=ABS|"
 PATH=/nope command -p env | grep ^PATH=
+VAR=hidden; command -p env | grep ^VAR=; echo hidden=$?; set -a; AUTO=ok; command -p env | grep ^AUTO=; set +a; LOCAL=no; command -p env | grep ^LOCAL=; echo local=$?

@@ -45,6 +45,7 @@ pub const ShellOptions = struct {
     errexit: bool = false,
     xtrace: bool = false,
     verbose: bool = false,
+    allexport: bool = false,
 };
 
 pub const CommandResult = struct {
@@ -629,6 +630,7 @@ pub const ArrayValue = struct {
 pub const Executor = struct {
     allocator: std.mem.Allocator,
     env: std.StringHashMapUnmanaged([]const u8) = .empty,
+    exported: std.StringHashMapUnmanaged(void) = .empty,
     readonly: std.StringHashMapUnmanaged(void) = .empty,
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged(FunctionValue) = .empty,
@@ -686,6 +688,7 @@ pub const Executor = struct {
         var iter = environ_map.iterator();
         while (iter.next()) |entry| {
             try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
+            try self.setExported(entry.key_ptr.*);
         }
     }
 
@@ -702,6 +705,7 @@ pub const Executor = struct {
         const cwd = try std.process.currentPathAlloc(io, self.allocator);
         defer self.allocator.free(cwd);
         try self.setEnv("PWD", cwd);
+        try self.setExported("PWD");
     }
 
     pub fn initializeInteractiveVariables(self: *Executor) !void {
@@ -729,6 +733,9 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.env.clearRetainingCapacity();
+        var exported_iter = self.exported.iterator();
+        while (exported_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.exported.clearRetainingCapacity();
     }
 
     pub fn setLastStatus(self: *Executor, status: ExitStatus) void {
@@ -769,6 +776,9 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.env.deinit(self.allocator);
+        var exported_iter = self.exported.iterator();
+        while (exported_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.exported.deinit(self.allocator);
         var readonly_iter = self.readonly.iterator();
         while (readonly_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
         self.readonly.deinit(self.allocator);
@@ -1434,10 +1444,28 @@ pub const Executor = struct {
 
     pub fn unsetEnv(self: *Executor, name: []const u8) void {
         if (self.isReadonly(name)) return;
+        self.unsetExported(name);
         if (self.env.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
         }
+    }
+
+    fn isExported(self: Executor, name: []const u8) bool {
+        return self.exported.contains(name);
+    }
+
+    fn setExported(self: *Executor, name: []const u8) !void {
+        if (self.exported.contains(name)) return;
+        try self.exported.put(self.allocator, try self.allocator.dupe(u8, name), {});
+    }
+
+    fn unsetExported(self: *Executor, name: []const u8) void {
+        if (self.exported.fetchRemove(name)) |entry| self.allocator.free(entry.key);
+    }
+
+    fn restoreExported(self: *Executor, name: []const u8, exported: bool) !void {
+        if (exported) try self.setExported(name) else self.unsetExported(name);
     }
 
     fn unsetFunction(self: *Executor, name: []const u8) void {
@@ -1689,6 +1717,8 @@ pub const Executor = struct {
         self.getopts_last_optind = other.getopts_last_optind;
         var env_iter = other.env.iterator();
         while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
+        var exported_iter = other.exported.iterator();
+        while (exported_iter.next()) |entry| try self.setExported(entry.key_ptr.*);
         var readonly_iter = other.readonly.iterator();
         while (readonly_iter.next()) |entry| try self.setReadonly(entry.key_ptr.*);
         var open_fd_iter = other.open_fds.iterator();
@@ -3141,6 +3171,7 @@ pub const Executor = struct {
     const SavedAssignment = struct {
         name: []const u8,
         old_value: ?[]const u8,
+        old_exported: bool = false,
     };
 
     const AssignmentExpansionScope = struct {
@@ -3156,7 +3187,7 @@ pub const Executor = struct {
             const name = assignment.text[0..equals];
             const old_value = if (self.executor.getEnv(name)) |value| try self.executor.allocator.dupe(u8, value) else null;
             errdefer if (old_value) |value| self.executor.allocator.free(value);
-            try self.saved.append(self.executor.allocator, .{ .name = try self.executor.allocator.dupe(u8, name), .old_value = old_value });
+            try self.saved.append(self.executor.allocator, .{ .name = try self.executor.allocator.dupe(u8, name), .old_value = old_value, .old_exported = self.executor.isExported(name) });
             try self.executor.setEnv(name, assignment.text[equals + 1 ..]);
         }
 
@@ -3171,6 +3202,7 @@ pub const Executor = struct {
                 } else {
                     self.executor.unsetEnv(entry.name);
                 }
+                self.executor.restoreExported(entry.name, entry.old_exported) catch {};
                 self.executor.allocator.free(entry.name);
             }
             self.saved.deinit(self.executor.allocator);
@@ -3193,6 +3225,7 @@ pub const Executor = struct {
                 } else {
                     self.executor.unsetEnv(entry.name);
                 }
+                self.executor.restoreExported(entry.name, entry.old_exported) catch {};
                 self.executor.allocator.free(entry.name);
             }
             self.executor.allocator.free(self.saved);
@@ -3215,9 +3248,10 @@ pub const Executor = struct {
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
             const name = assignment.text[0..equals];
             const old_value = if (self.getEnv(name)) |value| try self.allocator.dupe(u8, value) else null;
-            saved[initialized] = .{ .name = try self.allocator.dupe(u8, name), .old_value = old_value };
+            saved[initialized] = .{ .name = try self.allocator.dupe(u8, name), .old_value = old_value, .old_exported = self.isExported(name) };
             initialized += 1;
             try self.setEnv(name, assignment.text[equals + 1 ..]);
+            try self.setExported(name);
         }
 
         return .{ .executor = self, .saved = saved[0..initialized] };
@@ -3226,15 +3260,19 @@ pub const Executor = struct {
     fn applyAssignments(self: *Executor, assignments: []const ir.WordRef) !void {
         for (assignments) |assignment| {
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
-            try self.setEnv(assignment.text[0..equals], assignment.text[equals + 1 ..]);
+            const name = assignment.text[0..equals];
+            try self.setEnv(name, assignment.text[equals + 1 ..]);
+            if (self.shell_options.allexport) try self.setExported(name);
         }
     }
 
     fn buildProcessEnv(self: *Executor, assignments: []const ir.WordRef) !std.process.Environ.Map {
         var map = std.process.Environ.Map.init(self.allocator);
         errdefer map.deinit();
-        var iter = self.env.iterator();
-        while (iter.next()) |entry| try map.put(entry.key_ptr.*, entry.value_ptr.*);
+        var iter = self.exported.iterator();
+        while (iter.next()) |entry| {
+            if (self.env.get(entry.key_ptr.*)) |value| try map.put(entry.key_ptr.*, value);
+        }
         for (assignments) |assignment| {
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
             try map.put(assignment.text[0..equals], assignment.text[equals + 1 ..]);
@@ -4228,7 +4266,7 @@ fn traceLineForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) 
 fn simpleCommandFromArgs(command: ir.SimpleCommand, start: usize) ir.SimpleCommand {
     return .{
         .span = command.span,
-        .assignments = &.{},
+        .assignments = command.assignments,
         .argv = command.argv[start..],
         .redirections = &.{},
     };
@@ -6018,6 +6056,7 @@ fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
             if (self.isReadonly(name)) return variableBuiltinUsageError(self, "export", "readonly variable");
             try self.setEnv(name, arg.text[equals + 1 ..]);
         }
+        try self.setExported(name);
     }
     return emptyResult(self.allocator, 0);
 }
@@ -6025,8 +6064,8 @@ fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 fn listExported(self: *Executor) !CommandResult {
     var names: std.ArrayList([]const u8) = .empty;
     defer names.deinit(self.allocator);
-    var iter = self.env.iterator();
-    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    var iter = self.exported.iterator();
+    while (iter.next()) |entry| if (self.env.contains(entry.key_ptr.*)) try names.append(self.allocator, entry.key_ptr.*);
     std.mem.sort([]const u8, names.items, {}, lessThanString);
 
     var stdout: std.ArrayList(u8) = .empty;
@@ -6476,6 +6515,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         try applySetShortOptionCluster(self, command.argv[1].text);
         return emptyResult(self.allocator, 0);
     }
+    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-a") or std.mem.eql(u8, command.argv[1].text, "+a"))) {
+        self.shell_options.allexport = command.argv[1].text[0] == '-';
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-f") or std.mem.eql(u8, command.argv[1].text, "+f"))) {
         self.shell_options.noglob = command.argv[1].text[0] == '-';
         return emptyResult(self.allocator, 0);
@@ -6506,6 +6549,10 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         const enabled = command.argv[1].text[0] == '-';
         if (std.mem.eql(u8, command.argv[2].text, "pipefail")) {
             self.shell_options.pipefail = enabled;
+            return emptyResult(self.allocator, 0);
+        }
+        if (std.mem.eql(u8, command.argv[2].text, "allexport")) {
+            self.shell_options.allexport = enabled;
             return emptyResult(self.allocator, 0);
         }
         if (std.mem.eql(u8, command.argv[2].text, "noglob")) {
@@ -6541,7 +6588,7 @@ fn isSetShortOptionCluster(text: []const u8) bool {
     if (text.len <= 2) return false;
     if (text[0] != '-' and text[0] != '+') return false;
     for (text[1..]) |option| switch (option) {
-        'e', 'f', 'u', 'x', 'v', 'C' => {},
+        'a', 'e', 'f', 'u', 'x', 'v', 'C' => {},
         else => return false,
     };
     return true;
@@ -6550,6 +6597,7 @@ fn isSetShortOptionCluster(text: []const u8) bool {
 fn applySetShortOptionCluster(self: *Executor, text: []const u8) !void {
     const enabled = text[0] == '-';
     for (text[1..]) |option| switch (option) {
+        'a' => self.shell_options.allexport = enabled,
         'e' => self.shell_options.errexit = enabled,
         'f' => self.shell_options.noglob = enabled,
         'u' => self.shell_options.nounset = enabled,
@@ -6574,9 +6622,9 @@ fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
     const stdout = if (reusable)
-        try std.fmt.allocPrint(self.allocator, "set {s}o errexit\nset {s}o noclobber\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\nset {s}o verbose\nset {s}o xtrace\n", .{ if (self.shell_options.errexit) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+", if (self.shell_options.verbose) "-" else "+", if (self.shell_options.xtrace) "-" else "+" })
+        try std.fmt.allocPrint(self.allocator, "set {s}o allexport\nset {s}o errexit\nset {s}o noclobber\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\nset {s}o verbose\nset {s}o xtrace\n", .{ if (self.shell_options.allexport) "-" else "+", if (self.shell_options.errexit) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+", if (self.shell_options.verbose) "-" else "+", if (self.shell_options.xtrace) "-" else "+" })
     else
-        try std.fmt.allocPrint(self.allocator, "errexit\t{s}\nnoclobber\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\nverbose\t{s}\nxtrace\t{s}\n", .{ if (self.shell_options.errexit) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off", if (self.shell_options.verbose) "on" else "off", if (self.shell_options.xtrace) "on" else "off" });
+        try std.fmt.allocPrint(self.allocator, "allexport\t{s}\nerrexit\t{s}\nnoclobber\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\nverbose\t{s}\nxtrace\t{s}\n", .{ if (self.shell_options.allexport) "on" else "off", if (self.shell_options.errexit) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off", if (self.shell_options.verbose) "on" else "off", if (self.shell_options.xtrace) "on" else "off" });
     errdefer self.allocator.free(stdout);
     return .{
         .allocator = self.allocator,
@@ -6610,10 +6658,15 @@ fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     while (index < command.argv.len) {
         const assignment = envAssignment(command.argv[index].text) orelse break;
         try child.setEnv(assignment.name, assignment.value);
+        try child.setExported(assignment.name);
         index += 1;
     }
 
-    if (index >= command.argv.len) return printEnvironment(self.allocator, child.env);
+    if (index >= command.argv.len) {
+        var process_env = try child.buildProcessEnv(&.{});
+        defer process_env.deinit();
+        return printProcessEnvironment(self.allocator, &process_env);
+    }
 
     const nested: ir.SimpleCommand = .{
         .span = command.span,
@@ -6629,6 +6682,29 @@ fn printEnvironment(allocator: std.mem.Allocator, env: std.StringHashMapUnmanage
     defer names.deinit(allocator);
     var iter = env.iterator();
     while (iter.next()) |entry| try names.append(allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(allocator);
+    for (names.items) |name| {
+        try stdout.appendSlice(allocator, name);
+        try stdout.append(allocator, '=');
+        try stdout.appendSlice(allocator, env.get(name).?);
+        try stdout.append(allocator, '\n');
+    }
+
+    return .{
+        .allocator = allocator,
+        .status = 0,
+        .stdout = try stdout.toOwnedSlice(allocator),
+        .stderr = try allocator.alloc(u8, 0),
+    };
+}
+
+fn printProcessEnvironment(allocator: std.mem.Allocator, env: *const std.process.Environ.Map) !CommandResult {
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(allocator);
+    for (env.keys()) |name| try names.append(allocator, name);
     std.mem.sort([]const u8, names.items, {}, lessThanString);
 
     var stdout: std.ArrayList(u8) = .empty;
@@ -7684,6 +7760,21 @@ test "executor implements unset and env builtins" {
     try std.testing.expectEqual(@as(ExitStatus, 0), command_env_result.status);
     try std.testing.expect(std.mem.indexOf(u8, command_env_result.stdout, "INNER=value\n") != null);
     try std.testing.expect(std.mem.endsWith(u8, command_env_result.stdout, "unset/keep\n"));
+
+    var local_env = try parseAndLower(std.testing.allocator, "LOCAL=hidden; env");
+    defer local_env.parsed.deinit();
+    defer local_env.program.deinit();
+    var local_env_result = try executor.executeProgram(local_env.program, .{});
+    defer local_env_result.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, local_env_result.stdout, "LOCAL=hidden\n") == null);
+
+    var allexport = try parseAndLower(std.testing.allocator, "set -a; AUTO=ok; set +a; LOCAL=hidden; env");
+    defer allexport.parsed.deinit();
+    defer allexport.program.deinit();
+    var allexport_result = try executor.executeProgram(allexport.program, .{});
+    defer allexport_result.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, allexport_result.stdout, "AUTO=ok\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, allexport_result.stdout, "LOCAL=hidden\n") == null);
 }
 
 test "executor implements global positional parameters via set --" {
@@ -8412,7 +8503,7 @@ test "executor implements set shell option baseline" {
     var show = try executor.executeProgram(show_lowered.program, .{});
     defer show.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
-    try std.testing.expectEqualStrings("errexit\toff\nnoclobber\toff\nnoglob\toff\nnounset\toff\npipefail\toff\nverbose\toff\nxtrace\toff\n", show.stdout);
+    try std.testing.expectEqualStrings("allexport\toff\nerrexit\toff\nnoclobber\toff\nnoglob\toff\nnounset\toff\npipefail\toff\nverbose\toff\nxtrace\toff\n", show.stdout);
 
     var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
     defer enable_lowered.parsed.deinit();
@@ -8427,7 +8518,7 @@ test "executor implements set shell option baseline" {
     defer reusable_lowered.program.deinit();
     var reusable = try executor.executeProgram(reusable_lowered.program, .{});
     defer reusable.deinit();
-    try std.testing.expectEqualStrings("set +o errexit\nset +o noclobber\nset +o noglob\nset +o nounset\nset -o pipefail\nset +o verbose\nset +o xtrace\n", reusable.stdout);
+    try std.testing.expectEqualStrings("set +o allexport\nset +o errexit\nset +o noclobber\nset +o noglob\nset +o nounset\nset -o pipefail\nset +o verbose\nset +o xtrace\n", reusable.stdout);
 
     var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");
     defer disable_lowered.parsed.deinit();
