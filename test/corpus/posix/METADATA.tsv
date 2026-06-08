@@ -236,3 +236,4 @@ builtin-unset-default-variable	builtin	behavior	unset without -f removes variabl
 expansion-command-substitution-newline-trim	expansion	behavior	command substitution removes trailing newlines while preserving embedded newlines
 builtin-eval-arguments	builtin	behavior	eval concatenates arguments and empty eval succeeds
 expansion-tilde-home	expansion	behavior	tilde expansion uses HOME for ~ and ~/path
+expansion-field-splitting-adjacent-nonwhitespace	expansion	behavior	adjacent non-whitespace IFS delimiters produce empty fields

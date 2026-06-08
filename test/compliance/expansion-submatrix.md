@@ -108,12 +108,11 @@ Manifest rows:
 - `expansion-field-splitting-ifs-nonwhitespace`
 - `expansion-field-splitting-empty-ifs`
 
-Current corpus covers newline splitting, comma/colon splitting, and empty IFS disabling splitting.
+Current corpus covers newline splitting, comma/colon splitting, adjacent non-whitespace delimiters producing empty fields, and empty IFS disabling splitting.
 
 Remaining gaps:
 
 - leading/trailing IFS whitespace combinations;
-- adjacent non-whitespace IFS delimiters and empty fields;
 - generated empty fields from parameter expansion;
 - interactions with quoted/unquoted `$@` and `$*`.
 

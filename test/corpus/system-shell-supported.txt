@@ -172,3 +172,4 @@ f=var; f() { echo func; }; unset f; echo var=${f-unset}; if command -v f; then e
 x=$(printf a; echo; echo); printf "<%s>\n" "$x"; y=$(printf a; echo; echo; printf b); printf "<%s>\n" "$y"
 eval echo one two; eval; echo after-empty:$?
 HOME=/tmp/rush-home; echo ~; echo ~/x
+IFS=,; v=a,,b,; for x in $v; do echo "<$x>"; done
