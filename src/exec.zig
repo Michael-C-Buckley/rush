@@ -9,6 +9,13 @@ const ir = @import("ir.zig");
 const parser = @import("parser.zig");
 const vaxis = @import("vaxis");
 
+extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
+extern "c" fn close(fd: c_int) c_int;
+extern "c" fn dup(fd: c_int) c_int;
+extern "c" fn dup2(oldfd: c_int, newfd: c_int) c_int;
+extern "c" fn fork() std.c.pid_t;
+extern "c" fn pause() c_int;
+
 var pending_trap_signal: std.atomic.Value(u8) = .init(0);
 
 pub const ExitStatus = u8;
@@ -7079,6 +7086,85 @@ test "executor reports tracked background jobs" {
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ Running /bin/sleep 1\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ Done(0) /bin/sleep 1\n") != null);
+}
+
+test "executor drains interactive stopped and done job notifications once" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 1,
+        .pid = 999_999,
+        .command = try std.testing.allocator.dupe(u8, "sleep 1"),
+        .child = undefined,
+        .state = .stopped,
+    });
+
+    try executor.queueJobNotification(&executor.background_jobs.items[0]);
+    const stopped = try executor.drainJobNotifications();
+    defer std.testing.allocator.free(stopped);
+    try std.testing.expectEqualStrings("[1] Stopped sleep 1\n", stopped);
+
+    const empty = try executor.drainJobNotifications();
+    defer std.testing.allocator.free(empty);
+    try std.testing.expectEqualStrings("", empty);
+
+    executor.background_jobs.items[0].state = .done;
+    try executor.queueJobNotification(&executor.background_jobs.items[0]);
+    const done = try executor.drainJobNotifications();
+    defer std.testing.allocator.free(done);
+    try std.testing.expectEqualStrings("[1] Done sleep 1\n", done);
+}
+
+test "executor restores saved pty terminal modes before continuing stopped job" {
+    var master: c_int = -1;
+    var slave: c_int = -1;
+    if (openpty(&master, &slave, null, null, null) != 0) return error.SkipZigTest;
+    defer _ = close(master);
+    defer _ = close(slave);
+
+    const original_stdin = dup(std.Io.File.stdin().handle);
+    if (original_stdin < 0) return error.SkipZigTest;
+    defer _ = close(original_stdin);
+    if (dup2(slave, std.Io.File.stdin().handle) < 0) return error.SkipZigTest;
+    defer _ = dup2(original_stdin, std.Io.File.stdin().handle);
+
+    const saved = try std.posix.tcgetattr(std.Io.File.stdin().handle);
+    var changed = saved;
+    if (@hasField(@TypeOf(changed.lflag), "ECHO")) {
+        changed.lflag.ECHO = !changed.lflag.ECHO;
+    } else {
+        changed.lflag = ~changed.lflag;
+    }
+    try std.posix.tcsetattr(std.Io.File.stdin().handle, .FLUSH, changed);
+    defer std.posix.tcsetattr(std.Io.File.stdin().handle, .FLUSH, saved) catch {};
+
+    const child_pid = fork();
+    if (child_pid < 0) return error.SkipZigTest;
+    if (child_pid == 0) {
+        while (true) _ = pause();
+    }
+    defer {
+        std.posix.kill(child_pid, .TERM) catch {};
+        _ = std.c.waitpid(child_pid, null, 0);
+    }
+    try std.posix.kill(child_pid, .STOP);
+    var status: c_int = 0;
+    _ = std.c.waitpid(child_pid, &status, @intCast(std.posix.W.UNTRACED));
+
+    var job: BackgroundJob = .{
+        .id = 1,
+        .pid = child_pid,
+        .command = "sleep 1",
+        .child = undefined,
+        .state = .stopped,
+        .saved_termios = saved,
+    };
+    try continueStoppedJob(&job);
+
+    const restored = try std.posix.tcgetattr(std.Io.File.stdin().handle);
+    try std.testing.expectEqualSlices(u8, std.mem.asBytes(&saved), std.mem.asBytes(&restored));
+    try std.testing.expectEqual(JobState.running, job.state);
 }
 
 test "executor waits for background pid operands" {
