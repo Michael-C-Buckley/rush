@@ -22,6 +22,7 @@ pub const TerminalEvent = union(enum) {
     paste_end,
     focus_in,
     focus_out,
+    resize: vaxis.Winsize,
     capability: Capability,
 };
 
@@ -156,7 +157,8 @@ pub const TerminalParser = struct {
             .cap_da1 => .{ .capability = .da1 },
             .cap_color_scheme_updates => .{ .capability = .color_scheme_updates },
             .cap_multi_cursor => .{ .capability = .multi_cursor },
-            .mouse, .mouse_leave, .paste, .color_report, .color_scheme, .winsize => null,
+            .winsize => |winsize| .{ .resize = winsize },
+            .mouse, .mouse_leave, .paste, .color_report, .color_scheme => null,
         };
     }
 
@@ -205,6 +207,7 @@ pub const TerminalSession = struct {
     reader: OneShotReader,
     terminal_parser: TerminalParser,
     capabilities: TerminalCapabilities = .{},
+    winsize: vaxis.Winsize,
     events: std.ArrayList(TerminalEvent) = .empty,
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io) !TerminalSession {
@@ -220,6 +223,7 @@ pub const TerminalSession = struct {
         const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
         var reader = try OneShotReader.init(allocator, io, read_file, wake.write);
         errdefer reader.deinit();
+        const winsize = tty.getWinsize() catch vaxis.Winsize{ .rows = 24, .cols = 80, .x_pixel = 0, .y_pixel = 0 };
 
         var self: TerminalSession = .{
             .allocator = allocator,
@@ -229,6 +233,7 @@ pub const TerminalSession = struct {
             .wake = wake,
             .reader = reader,
             .terminal_parser = .init(allocator),
+            .winsize = winsize,
         };
         try self.capabilities.sendQueries(&self.tty);
         return self;
@@ -272,7 +277,7 @@ pub const TerminalSession = struct {
         }, options.history);
         defer session.deinit();
 
-        try renderSession(self.allocator, &self.tty, session, self.capabilities);
+        try renderSession(self.allocator, &self.tty, session, self.capabilities, self.winsize);
         try self.reader.arm();
         while (session.state == .editing) {
             var wake_buffer: [32]u8 = undefined;
@@ -294,12 +299,13 @@ pub const TerminalSession = struct {
                     },
                     .paste_start => session.beginPaste(),
                     .paste_end => session.endPaste(),
+                    .resize => |winsize| self.winsize = winsize,
                     .capability => |capability| try self.capabilities.apply(self.allocator, &self.tty, capability),
                     .key_release, .focus_in, .focus_out => {},
                 }
             }
             if (session.state == .editing) {
-                try renderSession(self.allocator, &self.tty, session, self.capabilities);
+                try renderSession(self.allocator, &self.tty, session, self.capabilities, self.winsize);
                 try self.reader.arm();
             }
         }
@@ -326,8 +332,10 @@ fn isCompletionTab(key: line_editor.KeyEvent) bool {
     return key.key == .tab or (key.key == .text and std.mem.eql(u8, key.text, "\t"));
 }
 
-fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: line_editor.LineSession, capabilities: TerminalCapabilities) !void {
+fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize) !void {
     const rendered = try session.render(allocator, .{
+        .width = winsize.cols,
+        .height = winsize.rows,
         .width_method = capabilities.widthMethod(),
         .synchronized_output = capabilities.synchronized_output,
     });
@@ -700,6 +708,19 @@ test "terminal parser emits tab key" {
 
     try std.testing.expectEqual(@as(usize, 1), events.items.len);
     try std.testing.expect(isCompletionTab(events.items[0].key_press));
+}
+
+test "terminal parser emits in-band resize events" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[48;30;120;600;1200t", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(@as(u16, 30), events.items[0].resize.rows);
+    try std.testing.expectEqual(@as(u16, 120), events.items[0].resize.cols);
 }
 
 test "one-shot reader reads only after it is armed" {

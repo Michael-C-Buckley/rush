@@ -358,6 +358,8 @@ pub const LineSession = struct {
 pub const RenderOptions = struct {
     prompt: Prompt = .{ .bytes = "" },
     completion_menu: []const completion.Candidate = &.{},
+    width: u16 = 80,
+    height: u16 = 24,
     width_method: vaxis.gwidth.Method = .unicode,
     synchronized_output: bool = true,
 };
@@ -371,7 +373,7 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     try output.appendSlice(allocator, options.prompt.bytes);
     try output.appendSlice(allocator, editor.buffer.text());
 
-    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu);
+    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.height);
 
     const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
     const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
@@ -386,10 +388,12 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     return output.toOwnedSlice(allocator);
 }
 
-fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate) !usize {
+fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, height: u16) !usize {
     if (candidates.len == 0) return 0;
     var rows: usize = 0;
-    for (candidates[0..@min(candidates.len, 20)]) |candidate| {
+    const max_rows = @max(@as(usize, @intCast(height)) -| 2, 1);
+    const visible_count = @min(candidates.len, max_rows);
+    for (candidates[0..visible_count]) |candidate| {
         const label = candidate.display orelse candidate.value;
         try output.appendSlice(allocator, "\r\n  ");
         const header = try std.fmt.allocPrint(allocator, "{s:<20} {s:<10}", .{ label, @tagName(candidate.kind) });
@@ -403,8 +407,8 @@ fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8)
         }
         rows += 1;
     }
-    if (candidates.len > 20) {
-        const more = try std.fmt.allocPrint(allocator, "\r\n  … {d} more", .{candidates.len - 20});
+    if (candidates.len > visible_count) {
+        const more = try std.fmt.allocPrint(allocator, "\r\n  … {d} more", .{candidates.len - visible_count});
         defer allocator.free(more);
         try output.appendSlice(allocator, more);
         rows += 1;
@@ -598,6 +602,25 @@ test "completion edit clears rendered menu" {
     try session.applyCompletion(.{ .edit = .{ .replace_start = 4, .replace_end = 6, .replacement = "status", .append_space = true } });
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
     try std.testing.expectEqualStrings("git status ", session.editor.buffer.text());
+}
+
+test "completion menu respects render height" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git ");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "one", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+        .{ .value = "two", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+        .{ .value = "three", .kind = .subcommand, .replace_start = 4, .replace_end = 4 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 3 });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "one") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "two") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "… 2 more") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
 }
 
 test "line session submits an owned copy on enter" {
