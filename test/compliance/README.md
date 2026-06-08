@@ -69,6 +69,10 @@ The compliance report uses this metadata to print POSIX corpus case counts by ar
 
 `builtin-submatrix.md` tracks POSIX special builtins, regular utility builtins, job-control builtins, Rush helper builtins, and their diagnostic/operand gaps. Use it when changing builtin behavior or adding negative builtin corpus cases.
 
+## External test suites
+
+`external-test-suites.md` evaluates dash, BusyBox ash, Bash POSIX-mode, LTP/Open POSIX-style snippets, shellspec-style examples, and spec-clause examples for selective Rush corpus import. Use it before vendoring or translating any external suite.
+
 ## Error consequence submatrix
 
 `error-consequences.md` tracks syntax, expansion, redirection, special-builtin, and builtin diagnostic consequences separately from normal behavior coverage. Use it when adding negative corpus cases or implementing stricter POSIX shell-error behavior.
