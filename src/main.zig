@@ -221,8 +221,6 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
     defer history.save(io, ".rush_history") catch {};
 
     var last_status: exec.ExitStatus = 0;
-    var stdin_buffer: [4096]u8 = undefined;
-    var reader = std.Io.File.stdin().reader(io, &stdin_buffer);
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     try executor.importEnvironment(environ_map);
@@ -234,9 +232,12 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
             else => |e| return e,
         };
-        try writeAll(io, .stdout, prompt);
+        const line = try editor_driver.readLineFromTty(allocator, io, .{ .prompt = prompt }) orelse {
+            allocator.free(prompt);
+            break;
+        };
         allocator.free(prompt);
-        const line = (try reader.interface.takeDelimiter('\n')) orelse break;
+        defer allocator.free(line);
         if (std.mem.eql(u8, line, "exit")) break;
         if (line.len == 0) continue;
         try history.add(line);

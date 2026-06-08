@@ -35,6 +35,68 @@ pub const Capability = enum {
     multi_cursor,
 };
 
+pub const TerminalCapabilities = struct {
+    kitty_keyboard: bool = false,
+    kitty_graphics: bool = false,
+    rgb: bool = false,
+    sgr_pixels: bool = false,
+    unicode: bool = false,
+    da1: bool = false,
+    color_scheme_updates: bool = false,
+    multi_cursor: bool = false,
+    synchronized_output: bool = true,
+    bracketed_paste: bool = false,
+
+    pub fn widthMethod(self: TerminalCapabilities) vaxis.gwidth.Method {
+        return if (self.unicode) .unicode else .wcwidth;
+    }
+
+    pub fn sendQueries(self: *TerminalCapabilities, tty: *vaxis.tty.PosixTty) !void {
+        try writeTtyAll(
+            tty,
+            vaxis.ctlseqs.decrqm_sgr_pixels ++
+                vaxis.ctlseqs.decrqm_unicode ++
+                vaxis.ctlseqs.decrqm_color_scheme ++
+                vaxis.ctlseqs.csi_u_query ++
+                vaxis.ctlseqs.kitty_graphics_query ++
+                vaxis.ctlseqs.multi_cursor_query ++
+                vaxis.ctlseqs.primary_device_attrs ++
+                vaxis.ctlseqs.bp_set,
+        );
+        self.bracketed_paste = true;
+    }
+
+    pub fn apply(self: *TerminalCapabilities, allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, capability: Capability) !void {
+        switch (capability) {
+            .kitty_keyboard => {
+                if (!self.kitty_keyboard) {
+                    const flags: u5 = @bitCast(vaxis.Key.KittyFlags{});
+                    const sequence = try std.fmt.allocPrint(allocator, vaxis.ctlseqs.csi_u_push, .{flags});
+                    defer allocator.free(sequence);
+                    try writeTtyAll(tty, sequence);
+                }
+                self.kitty_keyboard = true;
+            },
+            .kitty_graphics => self.kitty_graphics = true,
+            .rgb => self.rgb = true,
+            .sgr_pixels => self.sgr_pixels = true,
+            .unicode => {
+                if (!self.unicode) try writeTtyAll(tty, vaxis.ctlseqs.unicode_set);
+                self.unicode = true;
+            },
+            .da1 => self.da1 = true,
+            .color_scheme_updates => self.color_scheme_updates = true,
+            .multi_cursor => self.multi_cursor = true,
+        }
+    }
+
+    pub fn reset(self: TerminalCapabilities, tty: *vaxis.tty.PosixTty) void {
+        if (self.kitty_keyboard) writeTtyAll(tty, vaxis.ctlseqs.csi_u_pop) catch {};
+        if (self.unicode) writeTtyAll(tty, vaxis.ctlseqs.unicode_reset) catch {};
+        if (self.bracketed_paste) writeTtyAll(tty, vaxis.ctlseqs.bp_reset) catch {};
+    }
+};
+
 pub const TerminalParser = struct {
     allocator: std.mem.Allocator,
     parser: vaxis.Parser = undefined,
@@ -104,6 +166,77 @@ pub const TerminalParser = struct {
         return event;
     }
 };
+
+pub const ReadLineOptions = struct {
+    prompt: []const u8,
+};
+
+pub fn readLineFromTty(allocator: std.mem.Allocator, io: std.Io, options: ReadLineOptions) !?[]const u8 {
+    if (comptime (builtin.is_test or builtin.os.tag == .windows)) return error.Unsupported;
+
+    var tty_buffer: [4096]u8 = undefined;
+    var tty = try vaxis.tty.PosixTty.init(io, &tty_buffer);
+    defer tty.deinit();
+
+    var wake = try makePipe(io);
+    defer wake.read.close(io);
+
+    const read_fd = try rawDup(tty.fd.handle);
+    const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
+    var reader = try OneShotReader.init(allocator, io, read_file, wake.write);
+    defer reader.deinit();
+    try reader.start();
+
+    var terminal_parser = TerminalParser.init(allocator);
+    defer terminal_parser.deinit();
+    var capabilities: TerminalCapabilities = .{};
+    defer capabilities.reset(&tty);
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(allocator);
+    var session = try line_editor.LineSession.init(allocator, options.prompt);
+    defer session.deinit();
+
+    try capabilities.sendQueries(&tty);
+    try renderSession(allocator, &tty, session, capabilities);
+    try reader.arm();
+    while (session.state == .editing) {
+        var wake_buffer: [32]u8 = undefined;
+        _ = try rawRead(wake.read.handle, &wake_buffer);
+        const bytes = try reader.takeReady();
+        terminal_parser.resetEventText();
+        events.clearRetainingCapacity();
+        try terminal_parser.feed(bytes, &events);
+        for (events.items) |event| {
+            switch (event) {
+                .key_press => |key| try session.handleKey(key),
+                .capability => |capability| try capabilities.apply(allocator, &tty, capability),
+                .key_release, .paste_start, .paste_end, .focus_in, .focus_out => {},
+            }
+        }
+        if (session.state == .editing) {
+            try renderSession(allocator, &tty, session, capabilities);
+            try reader.arm();
+        }
+    }
+
+    try writeTtyAll(&tty, "\r\n");
+    if (session.state == .submitted) return session.takeSubmittedLine();
+    return null;
+}
+
+fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: line_editor.LineSession, capabilities: TerminalCapabilities) !void {
+    const rendered = try session.render(allocator, .{
+        .width_method = capabilities.widthMethod(),
+        .synchronized_output = capabilities.synchronized_output,
+    });
+    defer allocator.free(rendered);
+    try writeTtyAll(tty, rendered);
+}
+
+fn writeTtyAll(tty: *vaxis.tty.PosixTty, bytes: []const u8) !void {
+    try tty.writer().writeAll(bytes);
+    try tty.writer().flush();
+}
 
 pub const Pipe = struct {
     read: std.Io.File,
@@ -343,6 +476,28 @@ fn rawWrite(fd: std.posix.fd_t, bytes: []const u8) !usize {
             .IO => return error.InputOutput,
             .NOSPC => return error.NoSpaceLeft,
             .PIPE => return error.BrokenPipe,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+fn rawDup(fd: std.posix.fd_t) !std.posix.fd_t {
+    if (builtin.os.tag == .linux and !builtin.link_libc) {
+        const rc = std.os.linux.dup(fd);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .BADF => return error.BadFileDescriptor,
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            else => return error.Unexpected,
+        }
+    }
+    while (true) {
+        const rc = std.c.dup(fd);
+        switch (std.c.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .BADF => return error.BadFileDescriptor,
+            .INTR => continue,
+            .MFILE => return error.ProcessFdQuotaExceeded,
             else => return error.Unexpected,
         }
     }
