@@ -295,11 +295,13 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
             else => |e| return e,
         };
-        const line = try terminal.readLine(.{ .prompt = prompt, .history = .{ .entries = history.entries.items } }) orelse {
-            allocator.free(prompt);
-            break;
-        };
+        const read_result = try terminal.readLine(.{ .prompt = prompt, .history = .{ .entries = history.entries.items } });
         allocator.free(prompt);
+        const line = switch (read_result) {
+            .submitted => |line| line,
+            .canceled => continue,
+            .eof => break,
+        };
         defer allocator.free(line);
         if (std.mem.eql(u8, line, "exit")) break;
         if (line.len == 0) continue;

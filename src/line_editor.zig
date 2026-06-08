@@ -23,6 +23,8 @@ pub const Key = union(enum) {
     home,
     end,
     escape,
+    ctrl_c,
+    ctrl_d,
 };
 
 pub const Modifiers = packed struct(u8) {
@@ -122,7 +124,7 @@ pub const Editor = struct {
             .end => self.buffer.moveEnd(),
             .backspace => self.buffer.deletePrevious(),
             .delete => self.buffer.deleteNext(),
-            .enter, .up, .down, .escape => {},
+            .enter, .up, .down, .escape, .ctrl_c, .ctrl_d => {},
         }
     }
 };
@@ -151,6 +153,7 @@ pub const LineSession = struct {
         editing,
         submitted,
         canceled,
+        eof,
     };
 
     pub fn init(allocator: std.mem.Allocator, prompt: []const u8) !LineSession {
@@ -193,6 +196,14 @@ pub const LineSession = struct {
                 self.state = .submitted;
             },
             .escape => self.state = .canceled,
+            .ctrl_c => self.state = .canceled,
+            .ctrl_d => {
+                if (self.editor.buffer.text().len == 0) {
+                    self.state = .eof;
+                } else {
+                    self.editor.buffer.deleteNext();
+                }
+            },
             .up => try self.historyPrevious(),
             .down => try self.historyNext(),
             else => try self.editor.handleKey(event),
@@ -344,14 +355,22 @@ pub fn visibleWidth(bytes: []const u8, method: vaxis.gwidth.Method) u16 {
 }
 
 pub fn keyEventFromVaxis(key: vaxis.Key) KeyEvent {
+    const modifiers: Modifiers = @bitCast(key.mods);
     return .{
-        .key = keyFromVaxisCodepoint(key.codepoint),
-        .modifiers = @bitCast(key.mods),
+        .key = keyFromVaxis(key.codepoint, modifiers),
+        .modifiers = modifiers,
         .text = key.text orelse "",
     };
 }
 
-fn keyFromVaxisCodepoint(codepoint: u21) Key {
+fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
+    if (modifiers.ctrl) {
+        switch (codepoint) {
+            'c' => return .ctrl_c,
+            'd' => return .ctrl_d,
+            else => {},
+        }
+    }
     return switch (codepoint) {
         vaxis.Key.enter => .enter,
         vaxis.Key.backspace => .backspace,
@@ -448,6 +467,32 @@ test "line session cancels on escape" {
 
     try std.testing.expectEqual(LineSession.State.canceled, session.state);
     try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+}
+
+test "line session cancels on ctrl-c" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "abc" });
+    try session.handleKey(.{ .key = .ctrl_c });
+
+    try std.testing.expectEqual(LineSession.State.canceled, session.state);
+    try std.testing.expect(session.takeSubmittedLine() == null);
+}
+
+test "line session treats ctrl-d as eof only on empty buffer" {
+    var empty = try LineSession.init(std.testing.allocator, "$ ");
+    defer empty.deinit();
+    try empty.handleKey(.{ .key = .ctrl_d });
+    try std.testing.expectEqual(LineSession.State.eof, empty.state);
+
+    var non_empty = try LineSession.init(std.testing.allocator, "$ ");
+    defer non_empty.deinit();
+    try non_empty.handleKey(.{ .key = .text, .text = "ab" });
+    non_empty.editor.buffer.moveLeft();
+    try non_empty.handleKey(.{ .key = .ctrl_d });
+    try std.testing.expectEqual(LineSession.State.editing, non_empty.state);
+    try std.testing.expectEqualStrings("a", non_empty.editor.buffer.text());
 }
 
 test "line session renders with its prompt" {

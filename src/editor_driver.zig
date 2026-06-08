@@ -172,12 +172,22 @@ pub const ReadLineOptions = struct {
     history: line_editor.HistoryView = .{},
 };
 
+pub const ReadLineResult = union(enum) {
+    submitted: []const u8,
+    canceled,
+    eof,
+};
+
 pub fn readLineFromTty(allocator: std.mem.Allocator, io: std.Io, options: ReadLineOptions) !?[]const u8 {
     if (comptime (builtin.is_test or builtin.os.tag == .windows)) return error.Unsupported;
 
     var session = try TerminalSession.init(allocator, io);
     defer session.deinit();
-    return session.readLine(options);
+    return switch (try session.readLine(options)) {
+        .submitted => |line| line,
+        .canceled => try allocator.dupe(u8, ""),
+        .eof => null,
+    };
 }
 
 pub const TerminalSession = struct {
@@ -237,7 +247,7 @@ pub const TerminalSession = struct {
         _ = try vaxis.tty.PosixTty.makeRaw(self.tty.fd.handle);
     }
 
-    pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !?[]const u8 {
+    pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !ReadLineResult {
         if (self.reader.thread == null) try self.reader.start();
 
         var session = try line_editor.LineSession.initWithOptions(self.allocator, .{
@@ -270,9 +280,21 @@ pub const TerminalSession = struct {
             }
         }
 
-        try writeTtyAll(&self.tty, "\r\n");
-        if (session.state == .submitted) return session.takeSubmittedLine();
-        return null;
+        switch (session.state) {
+            .submitted => {
+                try writeTtyAll(&self.tty, "\r\n");
+                return .{ .submitted = session.takeSubmittedLine().? };
+            },
+            .canceled => {
+                try writeTtyAll(&self.tty, "^C\r\n");
+                return .canceled;
+            },
+            .eof => {
+                try writeTtyAll(&self.tty, "\r\n");
+                return .eof;
+            },
+            .editing => unreachable,
+        }
     }
 };
 
