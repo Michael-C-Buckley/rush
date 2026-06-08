@@ -8,6 +8,7 @@ pub const expand = @import("expand.zig");
 pub const ir = @import("ir.zig");
 pub const exec = @import("exec.zig");
 pub const line_editor = @import("line_editor.zig");
+pub const editor_driver = @import("editor_driver.zig");
 
 const usage =
     \\usage: rush -c SCRIPT
@@ -764,4 +765,5 @@ test {
     std.testing.refAllDecls(ir);
     std.testing.refAllDecls(exec);
     std.testing.refAllDecls(line_editor);
+    std.testing.refAllDecls(editor_driver);
 }
