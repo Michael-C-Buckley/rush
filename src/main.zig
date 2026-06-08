@@ -345,6 +345,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     const provider = executor.completionProvider(context.command);
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
     defer executor.freeCompletions(candidates);
+    const effective_context = executor.lastCompletionContext() orelse context;
     rankCompletionCandidates(candidates, history, cwd);
     const application = try completion_model.applyCandidatesForInput(allocator, source, candidates);
     defer application.deinit(allocator);
@@ -359,18 +360,22 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  previous: {s}
         \\  argument-index: {d}
         \\  position: {s}
+        \\  option-name: {s}
+        \\  option-spelling: {s}
         \\  replace: {d}..{d}
         \\provider: {s}
         \\candidates:
     , .{
         source,
-        context.command,
-        context.prefix,
-        context.previous,
-        context.argument_index,
-        @tagName(context.position),
-        context.replace_start,
-        context.replace_end,
+        effective_context.command,
+        effective_context.prefix,
+        effective_context.previous,
+        effective_context.argument_index,
+        if (effective_context.option_value != null) "option_value" else @tagName(effective_context.position),
+        if (effective_context.option_value) |option_value| option_value.name else "",
+        if (effective_context.option_value) |option_value| option_value.spelling else "",
+        effective_context.replace_start,
+        effective_context.replace_end,
         if (provider) |p| p.function else "<none>",
     });
     for (candidates) |candidate| {

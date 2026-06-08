@@ -165,8 +165,14 @@ pub const CompletionEvalContext = struct {
     argument_index: usize = 0,
     previous: []const u8 = "",
     position: parser.CompletionKind = .command,
+    option_value: ?CompletionOptionValue = null,
     replace_start: usize = 0,
     replace_end: usize = 0,
+};
+
+pub const CompletionOptionValue = struct {
+    name: []const u8,
+    spelling: []const u8,
 };
 
 const builtin_names = [_][]const u8{
@@ -374,6 +380,7 @@ pub const Executor = struct {
     prompt_builder: ?PromptBuilder = null,
     completion_builder: ?CompletionBuilder = null,
     completion_context: ?CompletionEvalContext = null,
+    last_completion_context: ?CompletionEvalContext = null,
     getopts_offset: usize = 1,
     getopts_last_optind: usize = 1,
 
@@ -483,6 +490,10 @@ pub const Executor = struct {
         return self.completion_providers.get(command);
     }
 
+    pub fn lastCompletionContext(self: Executor) ?CompletionEvalContext {
+        return self.last_completion_context;
+    }
+
     pub fn collectCompletions(self: *Executor, command: []const u8, options: ExecuteOptions) ![]completion.Candidate {
         return self.collectCompletionsWithContext(command, .{ .command = command, .position = .argument }, options);
     }
@@ -517,10 +528,12 @@ pub const Executor = struct {
 
         var builder = self.completion_builder.?;
         self.completion_builder = null;
+        const final_context = self.completion_context orelse context;
+        self.last_completion_context = final_context;
         for (builder.candidates.items) |*candidate| {
             if (candidate.replace_start == 0 and candidate.replace_end == 0) {
-                candidate.replace_start = context.replace_start;
-                candidate.replace_end = context.replace_end;
+                candidate.replace_start = final_context.replace_start;
+                candidate.replace_end = final_context.replace_end;
             }
         }
         self.completion_context = null;
@@ -528,6 +541,7 @@ pub const Executor = struct {
     }
 
     fn collectRootCommandCompletions(self: *Executor, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
+        self.last_completion_context = context;
         var builder: CompletionBuilder = .{};
         errdefer builder.deinit(self.allocator);
         var seen: std.StringHashMapUnmanaged(void) = .empty;
@@ -3338,8 +3352,10 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     if (std.mem.eql(u8, subcommand, "previous")) return completionContextLine(self, subcommand, completionContextValue(self.*, .previous));
     if (std.mem.eql(u8, subcommand, "position")) {
         const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
-        return stdoutLine(self.allocator, @tagName(context.position), 0);
+        return stdoutLine(self.allocator, if (context.option_value != null) "option_value" else @tagName(context.position), 0);
     }
+    if (std.mem.eql(u8, subcommand, "option-name")) return completionOptionContextLine(self, subcommand, .name);
+    if (std.mem.eql(u8, subcommand, "option-spelling")) return completionOptionContextLine(self, subcommand, .spelling);
     if (std.mem.eql(u8, subcommand, "files")) return builtinCompletionFiles(self, builder, command, options, false);
     if (std.mem.eql(u8, subcommand, "directories")) return builtinCompletionFiles(self, builder, command, options, true);
     if (std.mem.eql(u8, subcommand, "executables")) return builtinCompletionExecutables(self, builder, command, options);
@@ -3410,6 +3426,7 @@ fn builtinCompletionOption(self: *Executor, builder: *CompletionBuilder, command
     }
 
     if (option.long == null and option.short == null) return errorResult(self.allocator, 2, "completion", "missing option spelling");
+    if (updateCompletionOptionValueContext(self, option)) return emptyResult(self.allocator, 0);
     if (option.long) |long| {
         const value = try std.mem.concat(self.allocator, u8, &.{ "--", long });
         defer self.allocator.free(value);
@@ -3437,6 +3454,54 @@ fn completionContextValue(self: Executor, field: CompletionContextField) ?[]cons
 fn completionContextLine(self: *Executor, name: []const u8, value: ?[]const u8) !CommandResult {
     _ = name;
     return stdoutLine(self.allocator, value orelse return errorResult(self.allocator, 2, "completion", "missing completion context"), 0);
+}
+
+fn completionOptionContextLine(self: *Executor, name: []const u8, field: enum { name, spelling }) !CommandResult {
+    _ = name;
+    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const option_value = context.option_value orelse return errorResult(self.allocator, 2, "completion", "missing active option");
+    return stdoutLine(self.allocator, switch (field) {
+        .name => option_value.name,
+        .spelling => option_value.spelling,
+    }, 0);
+}
+
+fn updateCompletionOptionValueContext(self: *Executor, option: completion.Option) bool {
+    if (option.argument == null) return false;
+    var context = self.completion_context orelse return false;
+    if (context.option_value != null) return true;
+
+    if (option.long) |long| {
+        var attached_prefix_buffer: [256]u8 = undefined;
+        const attached_prefix = std.fmt.bufPrint(&attached_prefix_buffer, "--{s}=", .{long}) catch return false;
+        if (std.mem.startsWith(u8, context.prefix, attached_prefix)) {
+            const value_start = context.replace_start + attached_prefix.len;
+            const spelling = context.prefix[0 .. attached_prefix.len - 1];
+            context.option_value = .{ .name = spelling[2..], .spelling = spelling };
+            context.prefix = context.prefix[attached_prefix.len..];
+            context.replace_start = value_start;
+            self.completion_context = context;
+            return true;
+        }
+
+        var spelling_buffer: [256]u8 = undefined;
+        const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return false;
+        if (std.mem.eql(u8, context.previous, spelling)) {
+            context.option_value = .{ .name = context.previous[2..], .spelling = context.previous };
+            self.completion_context = context;
+            return true;
+        }
+    }
+    if (option.short) |short| {
+        var spelling_buffer: [16]u8 = undefined;
+        const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return false;
+        if (std.mem.eql(u8, context.previous, spelling)) {
+            context.option_value = .{ .name = context.previous[1..], .spelling = context.previous };
+            self.completion_context = context;
+            return true;
+        }
+    }
+    return false;
 }
 
 fn completionPrefixOption(self: *Executor, command: ir.SimpleCommand, start: usize) ![]const u8 {
@@ -7040,6 +7105,107 @@ test "completion option works with engine-owned prefix filtering" {
     const edit = application.edit;
     try std.testing.expectEqualStrings("--author", edit.replacement);
     try std.testing.expect(edit.append_space);
+}
+
+test "completion detects detached long option value slots" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_git() {
+        \\  completion option --long author --argument user --description author
+        \\  if test "$(completion position)" = option_value; then
+        \\    completion candidate tim --display "$(completion option-name)" --description "$(completion option-spelling)"
+        \\  fi
+        \\}
+        \\complete git --function __rush_complete_git
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "git --author t";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+
+    try std.testing.expectEqual(@as(usize, 1), candidates.len);
+    try std.testing.expectEqualStrings("tim", candidates[0].value);
+    try std.testing.expectEqualStrings("author", candidates[0].display.?);
+    try std.testing.expectEqualStrings("--author", candidates[0].description.?);
+    try std.testing.expectEqual(@as(usize, "git --author ".len), candidates[0].replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), candidates[0].replace_end);
+    const context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    try std.testing.expectEqualStrings("t", context.prefix);
+    try std.testing.expectEqualStrings("author", context.option_value.?.name);
+    try std.testing.expectEqualStrings("--author", context.option_value.?.spelling);
+}
+
+test "completion detects attached long option value slots" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_git() {
+        \\  completion option --long author --argument user --description author
+        \\  if test "$(completion position)" = option_value; then
+        \\    completion candidate tim --description "$(completion prefix)"
+        \\  fi
+        \\}
+        \\complete git --function __rush_complete_git
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "git --author=t";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+
+    try std.testing.expectEqual(@as(usize, 1), candidates.len);
+    try std.testing.expectEqualStrings("tim", candidates[0].value);
+    try std.testing.expectEqualStrings("t", candidates[0].description.?);
+    try std.testing.expectEqual(@as(usize, "git --author=".len), candidates[0].replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), candidates[0].replace_end);
+    const context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    try std.testing.expectEqualStrings("t", context.prefix);
+    try std.testing.expectEqualStrings("--author", context.option_value.?.spelling);
+}
+
+test "completion detects short option value slots" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_git() {
+        \\  completion option --short m --long message --argument text --description message
+        \\  if test "$(completion position)" = option_value; then
+        \\    completion candidate fix --display "$(completion option-spelling)"
+        \\  fi
+        \\}
+        \\complete git --function __rush_complete_git
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "git -m f";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+
+    try std.testing.expectEqual(@as(usize, 1), candidates.len);
+    try std.testing.expectEqualStrings("fix", candidates[0].value);
+    try std.testing.expectEqualStrings("-m", candidates[0].display.?);
+    try std.testing.expectEqual(@as(usize, "git -m ".len), candidates[0].replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), candidates[0].replace_end);
 }
 
 test "root command completion includes builtins functions aliases and executables" {
