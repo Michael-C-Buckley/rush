@@ -27,6 +27,7 @@ const usage =
 
 const system_profile_path = "/etc/rush/profile.rush";
 const system_config_path = "/etc/rush/config.rush";
+const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 
 pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
@@ -1013,6 +1014,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             defer result.deinit();
             try writeAll(io, .stdout, result.stdout);
             try writeAll(io, .stderr, result.stderr);
+            if (outputNeedsNewlineMarker(result.stdout, result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
             last_status = result.status;
             executor.setLastCommandDuration(command_duration_ms);
             try history.addCommand(io, line, result.status, command_started_at, command_duration_ms);
@@ -1030,6 +1032,12 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     }
 
     return last_status;
+}
+
+fn outputNeedsNewlineMarker(stdout: []const u8, stderr: []const u8) bool {
+    const output = if (stderr.len != 0) stderr else stdout;
+    if (output.len == 0) return false;
+    return output[output.len - 1] != '\n';
 }
 
 pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8) !exec.CommandResult {
@@ -1857,6 +1865,14 @@ test "prompt duration exposes previous command duration" {
     const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
     defer std.testing.allocator.free(prompt);
     try std.testing.expectEqualStrings("1234ms", prompt);
+}
+
+test "omitted newline marker follows displayed output stream" {
+    try std.testing.expect(!outputNeedsNewlineMarker("", ""));
+    try std.testing.expect(!outputNeedsNewlineMarker("ok\n", ""));
+    try std.testing.expect(outputNeedsNewlineMarker("ok", ""));
+    try std.testing.expect(!outputNeedsNewlineMarker("ok", "err\n"));
+    try std.testing.expect(outputNeedsNewlineMarker("ok\n", "err"));
 }
 
 test "user config path prefers XDG_CONFIG_HOME" {
