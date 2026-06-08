@@ -14,12 +14,29 @@ Status legend:
 
 ## Current snapshot
 
+The machine-readable checklist in `test/compliance/posix-shell.tsv` and the generated `zig build compliance --summary all` report are the source of truth for current scoring. The percentages are planning heuristics, not formal POSIX certification.
+
 Validated for this audit refresh:
 
-- `zig build test --summary all`: `149/149` passing
-- `zig build corpus --summary all`: `102` cases, `408` comparisons across available comparison shells
-- `zig build posix-corpus --summary all`: `119` expected-output POSIX cases
+- `zig build compliance --summary all`: passing
+- `zig build test --summary all`: `251/251` passing
+- `zig build corpus --summary all`: `122` cases, `488` comparisons across available comparison shells
+- `zig build posix-corpus --summary all`: `153` expected-output POSIX cases
+- `zig build posix-negative-corpus --summary all`: `15` expected-error POSIX cases
 - `zig build cross-check --summary all`: passing for Linux/macOS/BSD compile checks
+
+Current compliance report snapshot:
+
+- tracked items: `110`
+- scored POSIX items: `108`
+- supported: `15`
+- baseline: `78`
+- partial: `11`
+- missing: `4`
+- out of scope: `2`
+- strict supported only: `13.9%`
+- practical supported+baseline: `86.1%`
+- weighted progress: `67.5%`
 
 Recent notable capabilities:
 
@@ -31,10 +48,10 @@ Recent notable capabilities:
 - POSIX compound command execution baseline: `if`, `while`, `until`, `for`, `case`, functions, subshells, and brace groups.
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
-- Baseline asynchronous external command execution with `&`, `$!`, background job records, and `wait` for pid operands.
-- POSIX parameter expansion operators, pattern removal, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and true quoted `$@`/`$*` field behavior.
+- Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
+- POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
-- Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, and `unalias`.
+- Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, and `bg`.
 - POSIX shell options baseline for `errexit`, `noglob`, `noclobber`, `nounset`, `verbose`, and `xtrace`.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
 
@@ -108,7 +125,7 @@ Recent notable capabilities:
   - alternate terminators in future Bash modes
 - `for` supports POSIX word lists, but not Bash-style arithmetic for loops.
 - Function definitions use body source slicing and reparse at call time; semantics work for baseline tests but are not yet a fully lowered function body IR.
-- Async execution has a real external-command baseline and pid/job metadata, but compound/builtin async fallback is not a true subshell/background job yet.
+- Async execution has real external-command baseline, forked builtin/compound jobs where IO/fork context is available, and pid/job metadata.
 - Strict syntax errors where POSIX requires them are not fully enforced; Rush still favors recovery/incomplete-input behavior for tooling.
 
 ## 3. Expansions
@@ -329,27 +346,27 @@ Implemented or partially implemented:
 - External simple commands inherit terminal stdio in CLI/REPL mode.
 - Foreground process group handoff for simple inherited-stdio external commands.
 - Rush survives SIGINT while idle/interactive; foreground children get default signal behavior.
-- Baseline async external commands with `&`.
-- `$!` and `wait pid` for tracked background external commands.
+- Baseline async external, builtin, and compound commands with `&`.
+- `$!` and `wait pid` for tracked background commands.
+- Visible job table through `jobs`, including `-l`, `-p`, and numeric/% job operands.
+- Baseline `fg` waits for current or explicit tracked jobs and returns their status.
+- Baseline `bg` reports current or explicit tracked jobs as backgrounded.
+- Foreground process group handling for inherited-stdio external pipelines.
 
 ### Partial / gaps
 
-- Process groups currently apply to simple external commands, not full pipelines/jobs.
-- Background builtins/compound commands are not true concurrent subshell jobs yet.
-- Job table is internal/minimal and not exposed through `jobs`.
-- Stopped jobs and job status reporting are missing.
+- Stopped jobs and precise job status refresh are still missing.
+- `fg`/`bg` do not yet resume stopped jobs with `SIGCONT`.
 - Terminal modes are not saved/restored beyond foreground pgrp handoff.
+- Signal handling for pipelines and asynchronous lists remains conservative.
 
 ### Missing / gaps
 
 - Full job control:
-  - process groups for foreground pipelines
-  - real background subshell execution for compound/builtin async lists
-  - job table UI
-  - `jobs`, `fg`, `bg`
   - stopped process handling
   - terminal mode save/restore per job
-- Signal handling model for pipelines and asynchronous lists.
+  - current/previous job markers and richer job specs
+  - interactive notifications for job state changes
 
 ## 9. Error handling and diagnostics
 
@@ -361,66 +378,43 @@ Implemented or partially implemented:
 - Missing pipeline stage spawn cleanup.
 - Redirection failures for bad fd duplication and noclobber are shell-visible errors.
 - Nounset produces a baseline unset-parameter diagnostic and exits non-interactive execution.
+- `${parameter:?word}` expands the diagnostic word, reports the parameter name, and exits non-interactive execution.
+- Special builtin redirection failures now stop non-interactive execution in the covered baseline.
+- Negative POSIX corpus covers syntax, expansion, redirection, and builtin diagnostic cases.
 
 ### Partial / gaps
 
-- POSIX-specified shell error consequences are not modeled in detail.
-- Expansion errors such as `${var:?word}` currently produce a baseline expansion failure rather than POSIX shell diagnostic text and exit behavior.
-- Redirection errors and special builtin errors need stricter shell behavior.
+- POSIX-specified shell error consequences are still incomplete for some special builtin expansion failures and utility-specific failures.
+- Redirection error consequences outside the special-builtin baseline need stricter context modeling.
 - Some CLI inherited-stdio paths now write per-command output directly; capture-mode tests still intentionally model output through `CommandResult`.
 
 ## 10. Recommended next roadmap batches
 
-### Batch A: Arithmetic and expansion correctness
+The detailed backlog lives in Tend and the machine-readable status lives in `test/compliance/posix-shell.tsv`. Current non-completion implementation priorities are:
 
-1. Add shell variable lookup in arithmetic expansion.
-2. Add arithmetic assignment and side effects on shell variables.
-3. Add comparison, logical, bitwise, shift, ternary, and comma operators.
-4. Harden unquoted `$@`/`$*` edge cases.
-5. Expand pathname behavior for slash components and POSIX edge cases.
-6. Add `~user` tilde lookup if desired.
-7. Improve `${var:?word}` diagnostics and exit behavior.
+### Batch A: Parser/CST precision
 
-### Batch B: Builtin depth
+1. `#158` Harden POSIX case grammar edge cases, especially empty arms and pattern-list forms.
+2. `#157` Lower function bodies into structured IR instead of reparsing source slices.
+3. Continue strict diagnostics only where explicitly requested by `--posix-strict` so editor recovery remains useful.
 
-1. Implement real `execve` replacement semantics for CLI `exec cmd`.
-2. Deepen `read` backslash/IFS behavior and option handling.
-3. Deepen `printf` format grammar and diagnostics.
-4. Deepen `test`/`[` operators and edge cases.
-5. Deepen `command` options and lookup semantics.
-6. Implement real `times` resource usage.
-7. Deepen `set` unsupported POSIX options where useful.
+### Batch B: Pathname and expansion edge cases
 
-### Batch C: Job control and signals
+1. `#159` Deepen pathname expansion POSIX edge cases, especially slash components, dotfiles, and unmatched patterns.
+2. Add narrower spec-clause rows if embedded or empty positional-parameter behavior needs separate scoring beyond `#160`.
+3. Keep diagnostics and shell-error consequences in the negative corpus when they are not differential-safe.
 
-1. Add a visible job table and `jobs` builtin.
-2. Add process groups for full foreground pipelines.
-3. Run async compound/builtin lists in real subshell/background jobs.
-4. Add `fg` and `bg` baselines.
-5. Track stopped jobs and terminal mode save/restore.
-6. Expand `trap` to real signal handling for common signals.
+### Batch C: Compliance evidence growth
 
-### Batch D: Parser/CST precision
+1. `#169` Import dash-derived POSIX language smoke cases.
+2. `#170` Import BusyBox ash-inspired builtin and redirection cases.
+3. `#171` Add spec-clause examples for current high-risk POSIX gaps.
+4. Keep `POSIX_AUDIT.md` as prose context and avoid duplicating generated compliance totals beyond snapshot refreshes.
 
-1. Improve alias substitution timing and reserved-word interaction.
-2. Add strict POSIX grammar diagnostics mode separate from recovery/tooling mode.
-3. More complete here-doc parser/token integration.
-4. Structure function body lowering instead of reparsing source slices.
-5. Harden case grammar edge cases.
+### Batch D: Job-control and error-consequence depth
 
-### Batch E: Redirection and execution edge cases
+1. Add stopped-job tracking and terminal mode save/restore.
+2. Deepen `fg`/`bg` to resume stopped jobs when process state is tracked.
+3. Add more special-builtin expansion and redirection consequence cases across utilities.
 
-1. Extend real fd semantics to more capture/test paths where practical.
-2. Audit obscure redirection ordering and special-builtin failure consequences.
-3. Improve here-doc materialization/parser integration further.
-4. Audit PATH search, executable permissions, and command hashing/caching behavior.
-
-## Suggested immediate priorities
-
-For the next milestone, the best sequence is:
-
-1. Arithmetic variable lookup and broader arithmetic operators.
-2. Real `exec` replacement semantics in CLI mode.
-3. Builtin depth for `read`, `printf`, `test`, and `command`.
-4. Job table and `jobs` builtin, building on the existing `$!`/`wait` metadata.
-5. Parser precision around alias substitution, strict diagnostics, and here-doc integration.
+Keep adding POSIX corpus, negative corpus, and manifest evidence alongside each behavior change.
