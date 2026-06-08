@@ -18,9 +18,10 @@ esac
 
 "$ROOT/scripts/check-compliance-manifest.sh" "$MANIFEST" >/dev/null
 
-printf 'POSIX compliance manifest\n'
-printf '=========================\n'
+printf 'POSIX conformance progress\n'
+printf '===========================\n'
 printf 'manifest: %s\n' "${MANIFEST#$ROOT/}"
+printf 'note: checklist scores are planning heuristics, not formal POSIX certification\n'
 
 awk -F '\t' '
 NR > 1 {
@@ -28,12 +29,28 @@ NR > 1 {
   status[$5]++
 }
 END {
-  printf "tracked_items: %d\n", total
-  split("supported baseline partial missing out_of_scope", statuses, " ")
-  for (i = 1; i <= length(statuses); i++) {
-    name = statuses[i]
-    printf "status.%-12s %d\n", name ":", status[name] + 0
-  }
+  supported = status["supported"] + 0
+  baseline = status["baseline"] + 0
+  partial = status["partial"] + 0
+  missing = status["missing"] + 0
+  out_of_scope = status["out_of_scope"] + 0
+  scored = total - out_of_scope
+  strict = scored == 0 ? 0 : supported * 100 / scored
+  practical = scored == 0 ? 0 : (supported + baseline) * 100 / scored
+  weighted = scored == 0 ? 0 : (supported + baseline * 0.7 + partial * 0.3) * 100 / scored
+
+  printf "tracked_items:       %d\n", total
+  printf "scored_posix_items:  %d\n", scored
+  printf "status.supported:    %d\n", supported
+  printf "status.baseline:     %d\n", baseline
+  printf "status.partial:      %d\n", partial
+  printf "status.missing:      %d\n", missing
+  printf "status.out_of_scope: %d\n", out_of_scope
+  printf "\nChecklist scores\n"
+  printf "strict_supported_only:      %.1f%%\n", strict
+  printf "practical_supported_baseline: %.1f%%\n", practical
+  printf "weighted_progress:          %.1f%%\n", weighted
+  printf "score_weights: supported=1.0 baseline=0.7 partial=0.3 missing=0.0\n"
 }
 ' "$MANIFEST"
 

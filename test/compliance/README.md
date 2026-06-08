@@ -21,3 +21,11 @@ The file is tab-separated UTF-8 with one header row and these columns:
 8. `notes` — concise notes without tabs or newlines.
 
 Run `scripts/check-compliance-manifest.sh` to validate the TSV shape and referenced POSIX corpus directories.
+
+Run `scripts/report-compliance.sh` or `zig build compliance` to summarize conformance progress. The checklist scores are planning heuristics, not formal POSIX certification:
+
+- `strict_supported_only`: only `supported` rows count.
+- `practical_supported_baseline`: `supported` plus `baseline` rows count.
+- `weighted_progress`: `supported=1.0`, `baseline=0.7`, `partial=0.3`, and `missing=0.0`.
+
+`out_of_scope` rows are excluded from score denominators. Corpus pass counts report the current test inventory only; they do not imply complete POSIX coverage.
