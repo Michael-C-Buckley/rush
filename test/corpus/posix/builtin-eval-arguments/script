@@ -1,0 +1,3 @@
+eval echo one two
+eval
+echo after-empty:$?
