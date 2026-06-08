@@ -1,3 +1,4 @@
 .zig-cache/
+mise.toml
 zig-pkg/
 zig-out/
