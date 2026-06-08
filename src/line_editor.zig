@@ -412,7 +412,7 @@ pub const LineSession = struct {
             .right, .end => {
                 if (self.editor.buffer.cursor_byte == self.editor.buffer.text().len and try self.acceptAutosuggestion()) return;
                 try self.editor.handleKey(event);
-                self.completion_menu.clear(self.allocator);
+                if (!self.completion_menu.isOpen()) self.completion_menu.clear(self.allocator);
             },
             .up => if (self.completion_menu.isOpen()) self.completion_menu.selectPrevious() else try self.historyPrevious(),
             .down => if (self.completion_menu.isOpen()) self.completion_menu.selectNext() else try self.historyNext(),
@@ -421,7 +421,7 @@ pub const LineSession = struct {
             },
             else => {
                 try self.editor.handleKey(event);
-                self.completion_menu.clear(self.allocator);
+                if (!self.completion_menu.isOpen()) self.completion_menu.clear(self.allocator);
             },
         }
     }
@@ -1635,6 +1635,27 @@ test "completion menu cycles selection with tab and shift tab" {
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
     try session.handleKey(.{ .key = .enter });
     try std.testing.expectEqualStrings("git status ", session.editor.buffer.text());
+}
+
+test "completion menu remains open across text edits and modifier-only events" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git s");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "status", .kind = .subcommand, .replace_start = 4, .replace_end = 5 },
+        .{ .value = "switch", .kind = .subcommand, .replace_start = 4, .replace_end = 5 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    try session.handleKey(.{ .key = .text, .text = "t" });
+    try std.testing.expectEqualStrings("git st", session.editor.buffer.text());
+    try std.testing.expect(session.hasCompletionMenu());
+    try session.handleKey(.{ .key = .text, .text = "" });
+    try std.testing.expectEqualStrings("git st", session.editor.buffer.text());
+    try std.testing.expect(session.hasCompletionMenu());
+
+    try session.handleKey(.{ .key = .escape });
+    try std.testing.expect(!session.hasCompletionMenu());
 }
 
 test "completion edit clears rendered menu" {

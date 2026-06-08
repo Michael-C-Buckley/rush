@@ -351,6 +351,13 @@ pub const TerminalSession = struct {
                             const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                             defer application.deinit(self.allocator);
                             try session.applyCompletion(application);
+                        } else if (session.hasCompletionMenu() and shouldRefreshCompletionMenu(key) and options.complete != null and options.completion_context != null) {
+                            try session.handleKey(key);
+                            if (session.hasCompletionMenu()) {
+                                const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
+                                defer application.deinit(self.allocator);
+                                try session.applyCompletion(application);
+                            }
                         } else {
                             try session.handleKey(key);
                         }
@@ -435,6 +442,28 @@ pub const TerminalSession = struct {
 
 fn isCompletionTab(key: line_editor.KeyEvent) bool {
     return key.key == .tab or (key.key == .text and std.mem.eql(u8, key.text, "\t"));
+}
+
+fn shouldRefreshCompletionMenu(key: line_editor.KeyEvent) bool {
+    return switch (key.key) {
+        .text => key.text.len != 0,
+        .backspace,
+        .delete,
+        .left,
+        .right,
+        .home,
+        .end,
+        .delete_to_start,
+        .delete_to_end,
+        .delete_previous_word,
+        .delete_next_word,
+        .word_left,
+        .word_right,
+        .transpose_chars,
+        .yank,
+        => true,
+        else => false,
+    };
 }
 
 fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
@@ -908,6 +937,15 @@ test "terminal parser emits tab key" {
 
     try std.testing.expectEqual(@as(usize, 1), events.items.len);
     try std.testing.expect(isCompletionTab(events.items[0].key_press));
+}
+
+test "completion refresh key classification tracks editing keys" {
+    try std.testing.expect(shouldRefreshCompletionMenu(.{ .key = .text, .text = "s" }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .text, .text = "" }));
+    try std.testing.expect(shouldRefreshCompletionMenu(.{ .key = .backspace }));
+    try std.testing.expect(shouldRefreshCompletionMenu(.{ .key = .left }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .tab }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .escape }));
 }
 
 test "terminal parser emits in-band resize events" {
