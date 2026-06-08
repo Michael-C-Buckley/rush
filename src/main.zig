@@ -800,7 +800,7 @@ test "completion application inserts one candidate" {
     try std.testing.expect(edit.append_space);
 }
 
-test "completion application inserts common prefix" {
+test "completion application reports shared-prefix candidates as ambiguous" {
     const candidates = [_]CompletionCandidate{
         .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
         .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
@@ -808,9 +808,9 @@ test "completion application inserts common prefix" {
     const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
-    const edit = application.edit;
-    try std.testing.expectEqualStrings("che", edit.replacement);
-    try std.testing.expect(!edit.append_space);
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+    try std.testing.expectEqualStrings("checkout", application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("cherry-pick", application.ambiguous[1].value);
 }
 
 test "completion application reports ambiguous candidates" {

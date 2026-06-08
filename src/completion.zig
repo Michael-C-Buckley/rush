@@ -89,17 +89,6 @@ pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candida
         } };
     }
 
-    const common = commonCandidatePrefix(candidates);
-    const current_len = replace_end - replace_start;
-    if (common.len > current_len) {
-        return .{ .edit = .{
-            .replace_start = replace_start,
-            .replace_end = replace_end,
-            .replacement = try allocator.dupe(u8, common),
-            .append_space = false,
-        } };
-    }
-
     return .{ .ambiguous = try cloneCandidates(allocator, candidates) };
 }
 
@@ -118,17 +107,6 @@ pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8,
     }
 
     return applyCandidates(allocator, matches.items);
-}
-
-fn commonCandidatePrefix(candidates: []const Candidate) []const u8 {
-    std.debug.assert(candidates.len != 0);
-    var prefix = candidates[0].value;
-    for (candidates[1..]) |candidate| {
-        var index: usize = 0;
-        while (index < prefix.len and index < candidate.value.len and prefix[index] == candidate.value[index]) index += 1;
-        prefix = prefix[0..index];
-    }
-    return prefix;
 }
 
 pub fn cloneCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) ![]Candidate {
@@ -192,7 +170,7 @@ test "application inserts one candidate" {
     try std.testing.expect(edit.append_space);
 }
 
-test "application inserts common prefix" {
+test "application reports shared-prefix candidates as ambiguous" {
     const candidates = [_]Candidate{
         .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
         .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
@@ -200,9 +178,9 @@ test "application inserts common prefix" {
     const application = try applyCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
-    const edit = application.edit;
-    try std.testing.expectEqualStrings("che", edit.replacement);
-    try std.testing.expect(!edit.append_space);
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+    try std.testing.expectEqualStrings("checkout", application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("cherry-pick", application.ambiguous[1].value);
 }
 
 test "application reports ambiguous candidates" {
@@ -231,7 +209,7 @@ test "application filters candidates by replacement prefix" {
     try std.testing.expect(edit.append_space);
 }
 
-test "application filtering preserves common prefix insertion" {
+test "application filtering reports multiple prefix matches as ambiguous" {
     const source = "git c";
     const candidates = [_]Candidate{
         .{ .value = "status", .replace_start = 4, .replace_end = 5 },
@@ -241,9 +219,9 @@ test "application filtering preserves common prefix insertion" {
     const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
     defer application.deinit(std.testing.allocator);
 
-    const edit = application.edit;
-    try std.testing.expectEqualStrings("che", edit.replacement);
-    try std.testing.expect(!edit.append_space);
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+    try std.testing.expectEqualStrings("checkout", application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("cherry-pick", application.ambiguous[1].value);
 }
 
 test "application filtering reports no matching candidates" {
