@@ -34,13 +34,13 @@ Recommended cases:
 Manifest rows:
 
 - `expansion-parameter-basic`
-- `expansion-parameter-default-alternate`
-- `expansion-parameter-assignment-operator`
-- `expansion-parameter-pattern`
+- `expansion-parameter-default-alternate` (supported)
+- `expansion-parameter-assignment-operator` (supported)
+- `expansion-parameter-pattern` (supported)
 - `expansion-parameter-error`
 - `expansion-parameter-error-unset`
 
-Covered corpus includes defaults, assignment, alternate/length, null-colon behavior, nested default words, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit.
+Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. Nested parameter-word hardening remains tracked by the broad baseline row.
 
 Remaining high-risk gaps:
 
