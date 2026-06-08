@@ -243,6 +243,16 @@ pub const History = struct {
         const db = self.db orelse return null;
         return queryHistoryEntry(db, allocator, prefix, after, .next);
     }
+
+    pub fn searchEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
+        const db = self.db orelse return null;
+        return queryHistorySearchEntry(db, allocator, query, before);
+    }
+
+    pub fn suggestEntry(self: *History, allocator: std.mem.Allocator, prefix: []const u8) !?line_editor.HistoryView.HistoryEntry {
+        const db = self.db orelse return null;
+        return queryHistoryEntry(db, allocator, prefix, null, .previous);
+    }
 };
 
 fn previousHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
@@ -253,6 +263,16 @@ fn previousHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefi
 fn nextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8, after: i64) !?line_editor.HistoryView.HistoryEntry {
     const history: *History = @ptrCast(@alignCast(context));
     return history.nextEntry(allocator, prefix, after);
+}
+
+fn searchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
+    const history: *History = @ptrCast(@alignCast(context));
+    return history.searchEntry(allocator, query, before);
+}
+
+fn suggestHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8) !?line_editor.HistoryView.HistoryEntry {
+    const history: *History = @ptrCast(@alignCast(context));
+    return history.suggestEntry(allocator, prefix);
 }
 
 const HistoryDirection = enum { previous, next };
@@ -311,6 +331,45 @@ fn appendSqlLikePrefix(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8)
         else => try pattern.append(allocator, byte),
     };
     try pattern.append(allocator, '%');
+}
+
+fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
+    var like_pattern: std.ArrayList(u8) = .empty;
+    defer like_pattern.deinit(allocator);
+    try like_pattern.append(allocator, '%');
+    for (query) |byte| switch (byte) {
+        '%', '_', '\\' => {
+            try like_pattern.append(allocator, '\\');
+            try like_pattern.append(allocator, byte);
+        },
+        else => try like_pattern.append(allocator, byte),
+    };
+    try like_pattern.append(allocator, '%');
+
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(db,
+        \\select id, command from history h
+        \\where (?1 is null or id < ?1)
+        \\  and (?2 = '' or command like ?2 escape '\')
+        \\  and not exists (
+        \\    select 1 from history newer
+        \\    where newer.id > h.id and newer.command = h.command
+        \\      and (?2 = '' or newer.command like ?2 escape '\')
+        \\  )
+        \\order by id desc limit 1
+    , -1, &stmt, null), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+    if (before) |id| {
+        try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, id), db);
+    } else {
+        try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 1), db);
+    }
+    try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 2, like_pattern.items.ptr, @intCast(like_pattern.items.len), null), db);
+    const rc = sqlite.sqlite3_step(stmt);
+    if (rc == sqlite.SQLITE_DONE) return null;
+    if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+    const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse return null;
+    return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, std.mem.span(command_text)) };
 }
 
 fn configureHistoryDb(db: *sqlite.sqlite3) !void {
@@ -682,6 +741,17 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
+fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8) !?[]const u8 {
+    _ = context;
+    if (source.len == 0) return null;
+    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
+    defer parsed.deinit();
+    if (parsed.diagnostics.len == 0) return null;
+    const diagnostic = parsed.diagnostics[0];
+    const line = try std.fmt.allocPrint(allocator, "\x1b[31m{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ @tagName(diagnostic.kind), diagnostic.message });
+    return line;
+}
+
 fn rankCompletionCandidates(allocator: std.mem.Allocator, candidates: []completion_model.Candidate, history: History, cwd: []const u8) !void {
     if (history.db) |db| {
         var snapshot = History.init(allocator);
@@ -886,9 +956,13 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
                 .context = &history,
                 .previous = previousHistoryEntry,
                 .next = nextHistoryEntry,
+                .search = searchHistoryEntry,
+                .suggest = suggestHistoryEntry,
             },
             .completion_context = &completion_context,
             .complete = completeInteractiveLine,
+            .diagnostic_context = &completion_context,
+            .diagnose = diagnoseInteractiveLine,
         });
         allocator.free(prompt);
         const line = switch (read_result) {
@@ -913,6 +987,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             try writeAll(io, .stdout, result.stdout);
             try writeAll(io, .stderr, result.stderr);
             last_status = result.status;
+            executor.setLastCommandDuration(command_duration_ms);
             try history.addCommand(io, line, result.status, command_started_at, command_duration_ms);
             completion_cache.clear();
             if (executor.pending_exit) |status| {
@@ -1655,6 +1730,22 @@ test "prompt segment supports text attributes" {
     const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
     defer std.testing.allocator.free(prompt);
     try std.testing.expectEqualStrings("\x1b[1m\x1b[3m\x1b[4m\x1b[7m\x1b[9mcustom\x1b[0m", prompt);
+}
+
+test "prompt duration exposes previous command duration" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    executor.setLastCommandDuration(1234);
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt text $(prompt_duration)ms; }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+
+    const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("1234ms", prompt);
 }
 
 test "user config path prefers XDG_CONFIG_HOME" {

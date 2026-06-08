@@ -191,6 +191,8 @@ pub const ReadLineOptions = struct {
     history: line_editor.HistoryView = .{},
     completion_context: ?*anyopaque = null,
     complete: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8, usize) anyerror!completion.Application = null,
+    diagnostic_context: ?*anyopaque = null,
+    diagnose: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?[]const u8 = null,
 };
 
 pub const ReadLineResult = union(enum) {
@@ -305,9 +307,9 @@ pub const TerminalSession = struct {
         }, options.history);
         defer session.deinit();
 
-        try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize);
+        try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
         try self.reader.arm();
-        while (session.state == .editing) {
+        while (session.state == .editing or session.state == .history_search) {
             var render_needed = false;
             var loop_events: [8]event_loop.Event = undefined;
             const ready = try self.loop.wait(&loop_events);
@@ -351,19 +353,20 @@ pub const TerminalSession = struct {
                     .key_release, .focus_in, .focus_out => {},
                 }
             }
-            if (session.state == .editing) {
+            if (session.state == .editing or session.state == .history_search) {
                 if (render_needed) {
                     if (session.takeClearScreenRequest()) {
                         self.renderer.reset(self.allocator);
                         try writeTtyAll(&self.tty, "\x1b[H\x1b[2J");
                     }
-                    try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize);
+                    try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
                 }
                 try self.reader.arm();
             }
         }
 
         switch (session.state) {
+            .history_search => unreachable,
             .submitted => {
                 self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, "\r\n");
@@ -417,11 +420,17 @@ fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
         a.y_pixel == b.y_pixel;
 }
 
-fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize) !void {
+fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize, options: ReadLineOptions) !void {
+    const diagnostic_line = if (options.diagnose != null and options.diagnostic_context != null)
+        try options.diagnose.?(options.diagnostic_context.?, allocator, session.editor.buffer.text())
+    else
+        null;
+    defer if (diagnostic_line) |line| allocator.free(line);
     var frame = try session.renderFrame(allocator, .{
         .width = winsize.cols,
         .height = winsize.rows,
         .width_method = capabilities.widthMethod(),
+        .diagnostic_line = diagnostic_line orelse "",
     });
     defer frame.deinit(allocator);
     const rendered = try renderer.render(allocator, frame, .{ .synchronized_output = capabilities.synchronized_output });

@@ -375,6 +375,8 @@ pub const Executor = struct {
     arg_zero: []const u8 = "rush",
     last_status_text: [3]u8 = .{ '0', 0, 0 },
     last_status_text_len: usize = 1,
+    last_command_duration_text: [32]u8 = .{ '0', 0 } ++ .{0} ** 30,
+    last_command_duration_text_len: usize = 1,
     pid_text: [32]u8 = undefined,
     pid_text_len: usize = 0,
     last_background_pid_text: [32]u8 = undefined,
@@ -413,6 +415,11 @@ pub const Executor = struct {
     pub fn setLastStatus(self: *Executor, status: ExitStatus) void {
         const text = std.fmt.bufPrint(&self.last_status_text, "{d}", .{status}) catch unreachable;
         self.last_status_text_len = text.len;
+    }
+
+    pub fn setLastCommandDuration(self: *Executor, duration_ms: i64) void {
+        const text = std.fmt.bufPrint(&self.last_command_duration_text, "{d}", .{@max(duration_ms, 0)}) catch unreachable;
+        self.last_command_duration_text_len = text.len;
     }
 
     fn setPidText(self: *Executor) void {
@@ -3222,6 +3229,7 @@ fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
     if (self.prompt_builder != null) {
         if (std.mem.eql(u8, name, "prompt")) return builtinPrompt;
         if (std.mem.eql(u8, name, "prompt_pwd")) return builtinPromptPwd;
+        if (std.mem.eql(u8, name, "prompt_duration")) return builtinPromptDuration;
     }
     if (self.completion_builder != null) {
         if (std.mem.eql(u8, name, "completion")) return builtinCompletion;
@@ -3889,6 +3897,13 @@ fn builtinPromptPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u
     const display = try homeRelativePath(self.allocator, cwd, self.getEnv("HOME"));
     defer if (display.owned) self.allocator.free(display.text);
     return stdoutLine(self.allocator, display.text, 0);
+}
+
+fn builtinPromptDuration(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = command;
+    _ = stdin;
+    _ = options;
+    return stdoutLine(self.allocator, self.last_command_duration_text[0..self.last_command_duration_text_len], 0);
 }
 
 const PromptPath = struct {

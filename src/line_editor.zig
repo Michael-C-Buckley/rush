@@ -27,6 +27,7 @@ pub const Key = union(enum) {
     escape,
     ctrl_c,
     ctrl_d,
+    ctrl_r,
     clear_screen,
     delete_to_start,
     delete_to_end,
@@ -203,7 +204,7 @@ pub const Editor = struct {
             .delete_previous_word => self.buffer.deletePreviousWord(),
             .delete_next_word => self.buffer.deleteNextWord(),
             .transpose_chars => self.buffer.transposeChars(),
-            .enter, .up, .down, .tab, .escape, .ctrl_c, .ctrl_d, .clear_screen, .yank => {},
+            .enter, .up, .down, .tab, .escape, .ctrl_c, .ctrl_d, .ctrl_r, .clear_screen, .yank => {},
         }
     }
 };
@@ -218,6 +219,8 @@ pub const HistoryView = struct {
     context: ?*anyopaque = null,
     previous: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, i64) anyerror!?HistoryEntry = null,
+    search: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
+    suggest: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?HistoryEntry = null,
 
     pub const HistoryEntry = struct {
         id: i64,
@@ -294,6 +297,9 @@ pub const LineSession = struct {
     history: HistoryView = .{},
     history_index: ?i64 = null,
     saved_edit: std.ArrayList(u8) = .empty,
+    history_search_query: std.ArrayList(u8) = .empty,
+    history_search_original: std.ArrayList(u8) = .empty,
+    history_search_match: ?HistoryView.HistoryEntry = null,
     kill_ring: std.ArrayList(u8) = .empty,
     completion_menu: CompletionMenu = .{},
     state: State = .editing,
@@ -303,6 +309,7 @@ pub const LineSession = struct {
 
     pub const State = enum {
         editing,
+        history_search,
         submitted,
         canceled,
         eof,
@@ -326,6 +333,9 @@ pub const LineSession = struct {
 
     pub fn deinit(self: *LineSession) void {
         if (self.submitted_line) |line| self.allocator.free(line);
+        if (self.history_search_match) |entry| entry.deinit(self.allocator);
+        self.history_search_original.deinit(self.allocator);
+        self.history_search_query.deinit(self.allocator);
         self.completion_menu.deinit(self.allocator);
         self.kill_ring.deinit(self.allocator);
         self.saved_edit.deinit(self.allocator);
@@ -335,7 +345,7 @@ pub const LineSession = struct {
     }
 
     pub fn handleKey(self: *LineSession, event: KeyEvent) !void {
-        if (self.state != .editing) return;
+        if (self.state != .editing and self.state != .history_search) return;
         if (self.paste_depth != 0) {
             if (event.key == .text or event.key == .enter) {
                 const text = if (event.key == .enter) "\n" else event.text;
@@ -344,6 +354,7 @@ pub const LineSession = struct {
             }
             return;
         }
+        if (self.state == .history_search) return self.handleHistorySearchKey(event);
         switch (event.key) {
             .enter => {
                 if (self.completion_menu.selectedCandidate()) |candidate| {
@@ -371,6 +382,7 @@ pub const LineSession = struct {
                     self.editor.buffer.deleteNext();
                 }
             },
+            .ctrl_r => try self.beginHistorySearch(),
             .clear_screen => {
                 self.completion_menu.clear(self.allocator);
                 self.clear_screen_requested = true;
@@ -390,6 +402,11 @@ pub const LineSession = struct {
                     try self.editor.buffer.insertText(self.kill_ring.items);
                     self.completion_menu.clear(self.allocator);
                 }
+            },
+            .right, .end => {
+                if (self.editor.buffer.cursor_byte == self.editor.buffer.text().len and try self.acceptAutosuggestion()) return;
+                try self.editor.handleKey(event);
+                self.completion_menu.clear(self.allocator);
             },
             .up => if (self.completion_menu.isOpen()) self.completion_menu.selectPrevious() else try self.historyPrevious(),
             .down => if (self.completion_menu.isOpen()) self.completion_menu.selectNext() else try self.historyNext(),
@@ -432,10 +449,25 @@ pub const LineSession = struct {
 
     pub fn renderFrame(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) !Frame {
         var render_options = options;
+        var status_line: ?[]const u8 = null;
+        var suggestion_suffix: ?[]const u8 = null;
+        defer if (status_line) |line| allocator.free(line);
+        defer if (suggestion_suffix) |suffix| allocator.free(suffix);
         render_options.prompt = self.prompt;
         render_options.completion_menu = self.completion_menu.candidates;
         render_options.completion_selection = self.completion_menu.selected;
         render_options.completion_window_start = self.completion_menu.visibleWindowStart(render_options.menuCandidateRows());
+        if (self.state == .history_search) {
+            status_line = try std.fmt.allocPrint(allocator, "\x1b[2mhistory `{s}`: {s}\x1b[22m", .{ self.history_search_query.items, if (self.history_search_match) |entry| entry.text else "no match" });
+            render_options.status_line = status_line.?;
+        } else if (try self.currentAutosuggestion(allocator)) |suggestion| {
+            defer suggestion.deinit(allocator);
+            const text = self.editor.buffer.text();
+            if (std.mem.startsWith(u8, suggestion.text, text) and renderableInlineText(suggestion.text)) {
+                suggestion_suffix = try allocator.dupe(u8, suggestion.text[text.len..]);
+                render_options.suggestion = suggestion_suffix.?;
+            }
+        }
         return frameFromLine(allocator, self.editor, render_options);
     }
 
@@ -507,6 +539,89 @@ pub const LineSession = struct {
         const context = self.history.context orelse return null;
         const next = self.history.next orelse return null;
         return next(context, self.allocator, prefix, after);
+    }
+
+    fn beginHistorySearch(self: *LineSession) !void {
+        const search = self.history.search orelse return;
+        _ = search;
+        self.history_search_query.clearRetainingCapacity();
+        self.history_search_original.clearRetainingCapacity();
+        try self.history_search_original.appendSlice(self.allocator, self.editor.buffer.text());
+        self.clearHistorySearchMatch();
+        self.state = .history_search;
+        try self.refreshHistorySearch(null);
+        self.completion_menu.clear(self.allocator);
+    }
+
+    fn handleHistorySearchKey(self: *LineSession, event: KeyEvent) !void {
+        switch (event.key) {
+            .enter, .tab => {
+                if (self.history_search_match) |entry| try self.editor.buffer.replace(entry.text);
+                self.finishHistorySearch();
+            },
+            .escape, .ctrl_c => {
+                try self.editor.buffer.replace(self.history_search_original.items);
+                self.finishHistorySearch();
+            },
+            .ctrl_r, .up => try self.refreshHistorySearch(if (self.history_search_match) |entry| entry.id else null),
+            .down => try self.refreshHistorySearch(null),
+            .backspace => {
+                if (self.history_search_query.items.len != 0) {
+                    const start = previousGraphemeStart(self.history_search_query.items, self.history_search_query.items.len);
+                    self.history_search_query.replaceRange(self.allocator, start, self.history_search_query.items.len - start, "") catch unreachable;
+                    try self.refreshHistorySearch(null);
+                }
+            },
+            .text => {
+                try self.history_search_query.appendSlice(self.allocator, event.text);
+                try self.refreshHistorySearch(null);
+            },
+            else => {},
+        }
+    }
+
+    fn refreshHistorySearch(self: *LineSession, before: ?i64) !void {
+        self.clearHistorySearchMatch();
+        const context = self.history.context orelse return;
+        const search = self.history.search orelse return;
+        if (try search(context, self.allocator, self.history_search_query.items, before)) |entry| {
+            self.history_search_match = entry;
+            try self.editor.buffer.replace(entry.text);
+        } else {
+            try self.editor.buffer.replace(self.history_search_original.items);
+        }
+    }
+
+    fn finishHistorySearch(self: *LineSession) void {
+        self.clearHistorySearchMatch();
+        self.history_search_query.clearRetainingCapacity();
+        self.history_search_original.clearRetainingCapacity();
+        self.state = .editing;
+    }
+
+    fn clearHistorySearchMatch(self: *LineSession) void {
+        if (self.history_search_match) |entry| entry.deinit(self.allocator);
+        self.history_search_match = null;
+    }
+
+    fn currentAutosuggestion(self: *LineSession, allocator: std.mem.Allocator) !?HistoryView.HistoryEntry {
+        if (self.completion_menu.isOpen()) return null;
+        if (self.editor.buffer.cursor_byte != self.editor.buffer.text().len) return null;
+        if (self.editor.buffer.text().len == 0) return null;
+        const context = self.history.context orelse return null;
+        const suggest = self.history.suggest orelse return null;
+        return suggest(context, allocator, self.editor.buffer.text());
+    }
+
+    fn acceptAutosuggestion(self: *LineSession) !bool {
+        if (try self.currentAutosuggestion(self.allocator)) |suggestion| {
+            defer suggestion.deinit(self.allocator);
+            if (!renderableInlineText(suggestion.text)) return false;
+            try self.editor.buffer.replace(suggestion.text);
+            self.completion_menu.clear(self.allocator);
+            return true;
+        }
+        return false;
     }
 
     fn historyPrefix(self: *LineSession) ![]const u8 {
@@ -627,6 +742,9 @@ pub const RenderOptions = struct {
     completion_menu: []const completion.Candidate = &.{},
     completion_selection: usize = 0,
     completion_window_start: usize = 0,
+    suggestion: []const u8 = "",
+    status_line: []const u8 = "",
+    diagnostic_line: []const u8 = "",
     width: u16 = 80,
     height: u16 = 24,
     width_method: vaxis.gwidth.Method = .unicode,
@@ -654,6 +772,11 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     errdefer input_line.deinit(allocator);
     try input_line.appendSlice(allocator, options.prompt.bytes);
     try input_line.appendSlice(allocator, editor.buffer.text());
+    if (options.suggestion.len != 0 and renderableInlineText(options.suggestion)) {
+        try input_line.appendSlice(allocator, "\x1b[90m");
+        try input_line.appendSlice(allocator, options.suggestion);
+        try input_line.appendSlice(allocator, "\x1b[39m");
+    }
     const input_line_bytes = try input_line.toOwnedSlice(allocator);
     defer allocator.free(input_line_bytes);
 
@@ -666,6 +789,8 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
 
     try appendWrappedLine(allocator, &lines, input_line_bytes, wrap_width, options.width_method);
     if (cursor_position.row == lines.items.len) try lines.append(allocator, try allocator.dupe(u8, ""));
+    if (options.status_line.len != 0) try appendWrappedLine(allocator, &lines, options.status_line, wrap_width, options.width_method);
+    if (options.diagnostic_line.len != 0) try appendWrappedLine(allocator, &lines, options.diagnostic_line, wrap_width, options.width_method);
     try appendCompletionMenuLines(allocator, &lines, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height);
 
     return .{
@@ -673,6 +798,14 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
         .cursor_row = cursor_position.row,
         .cursor_col = cursor_position.col,
     };
+}
+
+fn renderableInlineText(bytes: []const u8) bool {
+    if (!std.unicode.utf8ValidateSlice(bytes)) return false;
+    for (bytes) |byte| {
+        if (byte < 0x20 or byte == 0x7f) return false;
+    }
+    return true;
 }
 
 fn serializeFullFrame(allocator: std.mem.Allocator, frame: Frame, synchronized_output: bool) ![]const u8 {
@@ -822,7 +955,7 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
     const window = completionMenuWindow(candidates.len, selected, window_start, max_rows);
     const label_width = @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
     const kind_width = @as(usize, 10);
-    const fixed_width = 2 + label_width + 1 + kind_width + 1;
+    const fixed_width = 2 + label_width + 1 + kind_width + 2;
     const description_width = @as(usize, @intCast(width)) -| fixed_width;
     for (candidates[window.start..window.end], window.start..) |candidate, index| {
         var line: std.ArrayList(u8) = .empty;
@@ -844,6 +977,10 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
                 try appendTruncated(allocator, &line, description, description_width);
                 try line.appendSlice(allocator, "\x1b[39m");
             }
+        }
+        if (candidates.len > window.end - window.start) {
+            try line.append(allocator, ' ');
+            try line.appendSlice(allocator, if (index == selected) "\x1b[38;5;81m┃\x1b[39m" else "\x1b[90m│\x1b[39m");
         }
         try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
@@ -982,6 +1119,7 @@ fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
             'm' => return .enter,
             'n' => return .down,
             'p' => return .up,
+            'r' => return .ctrl_r,
             't' => return .transpose_chars,
             'u' => return .delete_to_start,
             'w' => return .delete_previous_word,
@@ -1005,6 +1143,7 @@ fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
     if (codepoint == 0x0d) return .enter;
     if (codepoint == 0x0e) return .down;
     if (codepoint == 0x10) return .up;
+    if (codepoint == 0x12) return .ctrl_r;
     if (codepoint == 0x14) return .transpose_chars;
     if (codepoint == 0x15) return .delete_to_start;
     if (codepoint == 0x17) return .delete_previous_word;
