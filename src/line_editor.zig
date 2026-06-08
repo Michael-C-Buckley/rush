@@ -1235,8 +1235,7 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
     const max_rows = @min(@max(@as(usize, @intCast(height)) -| 2, 1), max_menu_candidate_rows);
     const window = completionMenuWindow(candidates.len, selected, window_start, max_rows);
     const label_width = @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
-    const kind_width = @as(usize, 10);
-    const fixed_width = 2 + label_width + 1 + kind_width + 2;
+    const fixed_width = 2 + label_width + 1;
     const description_width = @as(usize, @intCast(width)) -| fixed_width;
     for (candidates[window.start..window.end], window.start..) |candidate, index| {
         var line: std.ArrayList(u8) = .empty;
@@ -1248,10 +1247,6 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
         try appendCompletionKindStyle(allocator, &line, candidate.kind);
         try appendPaddedCell(allocator, &line, label.text, label_width);
         try line.appendSlice(allocator, "\x1b[22;39m");
-        try line.append(allocator, ' ');
-        try line.appendSlice(allocator, "\x1b[2m");
-        try appendPaddedCell(allocator, &line, @tagName(candidate.kind), kind_width);
-        try line.appendSlice(allocator, "\x1b[22m");
         if (candidate.description) |description| {
             if (description.len != 0 and description_width != 0) {
                 try line.append(allocator, ' ');
@@ -1758,11 +1753,9 @@ test "line session renders ambiguous completion menu" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "checkout") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "cherry") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "subcommand") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯") == null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2msubcommand") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mswitch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "git che\x1b[J") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
@@ -2304,7 +2297,6 @@ test "history search seeds query from current buffer and renders menu-style matc
     try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2mplain") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mhistory · 30s") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
 }

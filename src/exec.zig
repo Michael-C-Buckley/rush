@@ -3585,7 +3585,7 @@ pub const Executor = struct {
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
             .stdout = if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stderr = if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
         }) catch |err| switch (err) {
@@ -3662,7 +3662,7 @@ pub const Executor = struct {
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
             .stdout = if (stdout_file) |file| .{ .file = file } else if (capture_stdout) .pipe else .inherit,
             .stderr = if (stderr_file) |file| .{ .file = file } else if (capture_stderr) .pipe else .inherit,
             .pgid = if (foreground_terminal != null) 0 else null,
@@ -3671,6 +3671,8 @@ pub const Executor = struct {
             else => return err,
         };
         defer child.kill(io);
+        defer if (capture_stdout) if (child.stdout) |file| file.close(io);
+        defer if (capture_stderr) if (child.stderr) |file| file.close(io);
         try giveTerminalToForegroundChild(&child, foreground_terminal);
         defer restoreForegroundTerminal(foreground_terminal);
 
@@ -3693,16 +3695,24 @@ pub const Executor = struct {
             self.allocator.free(stderr);
             stdout = try multi_reader.toOwnedSlice(0);
             stderr = try multi_reader.toOwnedSlice(1);
+            child.stdout.?.close(io);
+            child.stdout = null;
+            child.stderr.?.close(io);
+            child.stderr = null;
         } else if (capture_stdout) {
             var reader_buffer: [4096]u8 = undefined;
             var reader = child.stdout.?.reader(io, &reader_buffer);
             self.allocator.free(stdout);
             stdout = try reader.interface.allocRemaining(self.allocator, .limited(1024 * 1024));
+            child.stdout.?.close(io);
+            child.stdout = null;
         } else if (capture_stderr) {
             var reader_buffer: [4096]u8 = undefined;
             var reader = child.stderr.?.reader(io, &reader_buffer);
             self.allocator.free(stderr);
             stderr = try reader.interface.allocRemaining(self.allocator, .limited(1024 * 1024));
+            child.stderr.?.close(io);
+            child.stderr = null;
         }
 
         const term = try child.wait(io);
@@ -9756,6 +9766,75 @@ test "completion candidates sort non-options before grouped options" {
     try std.testing.expectEqualStrings("-v", candidates[2].value);
     try std.testing.expectEqualStrings("--alpha", candidates[3].value);
     try std.testing.expectEqualStrings("--zeta", candidates[4].value);
+}
+
+fn openFdCount() !usize {
+    if (zig_builtin.os.tag == .windows or zig_builtin.os.tag == .wasi) return error.SkipZigTest;
+    var dir = std.Io.Dir.cwd().openDir(std.testing.io, "/dev/fd", .{ .iterate = true }) catch return error.SkipZigTest;
+    defer dir.close(std.testing.io);
+    var count: usize = 0;
+    var iterator = dir.iterate();
+    while (try iterator.next(std.testing.io)) |_| count += 1;
+    return count;
+}
+
+test "root command completion closes PATH directory fds" {
+    const root = "rush-fd-completion-path-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
+
+    var path_builder: std.ArrayList(u8) = .empty;
+    defer path_builder.deinit(std.testing.allocator);
+    var index: usize = 0;
+    while (index < 64) : (index += 1) {
+        const dir = try std.fmt.allocPrint(std.testing.allocator, "{s}/bin{d}", .{ root, index });
+        defer std.testing.allocator.free(dir);
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
+        if (index != 0) try path_builder.append(std.testing.allocator, ':');
+        try path_builder.appendSlice(std.testing.allocator, dir);
+    }
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", path_builder.items);
+
+    const before = try openFdCount();
+    index = 0;
+    while (index < 8) : (index += 1) {
+        const candidates = try executor.collectCompletionsForInput("x", "x".len, .{ .io = std.testing.io });
+        executor.freeCompletions(candidates);
+    }
+    const after = try openFdCount();
+    try std.testing.expectEqual(before, after);
+}
+
+test "dynamic completion providers close external command fds" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_external() {
+        \\  value=$(/bin/echo candidate)
+        \\  /bin/echo err >&2
+        \\  completion candidate candidate
+        \\}
+        \\complete tool --argument --function __rush_complete_external
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", "/bin:/usr/bin");
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const before = try openFdCount();
+    var index: usize = 0;
+    while (index < 16) : (index += 1) {
+        const candidates = try executor.collectCompletionsForInput("tool ", "tool ".len, .{ .io = std.testing.io, .allow_external = true });
+        executor.freeCompletions(candidates);
+    }
+    const after = try openFdCount();
+    try std.testing.expectEqual(before, after);
 }
 
 test "structured completion keeps parent options available in subcommand contexts" {
