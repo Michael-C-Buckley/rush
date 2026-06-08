@@ -321,6 +321,12 @@ const MatchedCompletionOption = struct {
     spelling: []const u8,
 };
 
+const ShortOptionCluster = struct {
+    valid: bool,
+    takes_next_value: bool = false,
+    unknown_offset: ?usize = null,
+};
+
 const AttachedCompletionOptionValue = struct {
     name: []const u8,
     spelling: []const u8,
@@ -359,6 +365,29 @@ fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: 
         }
     }
     return null;
+}
+
+fn findShortCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, short: u8) ?MatchedCompletionOption {
+    for (rules) |rule| {
+        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextMatches(rule, root, path)) continue;
+        const option_short = rule.option.short orelse continue;
+        if (option_short.len != 1 or option_short[0] != short) continue;
+        const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
+        return .{ .takes_value = takes_value, .attached_value = false, .name = option_short, .spelling = option_short };
+    }
+    return null;
+}
+
+fn analyzeShortOptionCluster(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?ShortOptionCluster {
+    if (!isShortOptionCluster(word)) return null;
+    var index: usize = 1;
+    while (index < word.len) : (index += 1) {
+        const matched = findShortCompletionOption(rules, root, path, word[index]) orelse return .{ .valid = false, .unknown_offset = index };
+        if (matched.takes_value) {
+            return .{ .valid = true, .takes_next_value = index + 1 == word.len };
+        }
+    }
+    return .{ .valid = true };
 }
 
 fn findCompletionSubcommand(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) bool {
@@ -458,6 +487,10 @@ fn completionCommandPath(allocator: std.mem.Allocator, context: CompletionSemant
 
 fn isOptionLike(word: []const u8) bool {
     return word.len > 1 and word[0] == '-';
+}
+
+fn isShortOptionCluster(word: []const u8) bool {
+    return word.len > 2 and word[0] == '-' and word[1] != '-';
 }
 
 fn deinitSeenCompletionNames(allocator: std.mem.Allocator, seen: *std.StringHashMapUnmanaged(void)) void {
@@ -980,6 +1013,19 @@ pub const Executor = struct {
                         option_value = .{ .name = matched.name, .spelling = matched.spelling };
                     }
                 }
+            } else if (analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word)) |cluster| {
+                if (!cluster.valid) {
+                    suspicious = token.span;
+                } else if (cluster.takes_next_value) {
+                    if (index + 1 < words.items.len) {
+                        const value_token = words.items[index + 1];
+                        const value_is_current = current_token_index != null and value_token.span.start == parsed.tokens[current_token_index.?].span.start and clamped_cursor <= value_token.span.end;
+                        if (!value_is_current and value_token.span.end <= clamped_cursor) {
+                            index += 1;
+                            previous = value_token.lexeme(source);
+                        }
+                    }
+                }
             } else if (isOptionLike(word)) {
                 suspicious = token.span;
             } else if (findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) {
@@ -1066,6 +1112,30 @@ pub const Executor = struct {
             const word_complete = token.span.end < clamped_cursor;
             if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
                 if (matched.takes_value and !matched.attached_value) {
+                    if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
+                        try diagnostics.append(self.allocator, .{
+                            .kind = .missing_option_value,
+                            .severity = .warning,
+                            .start = token.span.start,
+                            .end = token.span.end,
+                            .message = "option requires a value",
+                        });
+                    } else if (words.items[index + 1].span.end <= clamped_cursor) {
+                        index += 1;
+                    }
+                }
+            } else if (analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word)) |cluster| {
+                if (!cluster.valid) {
+                    if (word_complete) {
+                        try diagnostics.append(self.allocator, .{
+                            .kind = .unknown_option,
+                            .severity = .err,
+                            .start = token.span.start + (cluster.unknown_offset orelse 0),
+                            .end = token.span.end,
+                            .message = "unknown option",
+                        });
+                    }
+                } else if (cluster.takes_next_value) {
                     if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
                         try diagnostics.append(self.allocator, .{
                             .kind = .missing_option_value,
@@ -8775,6 +8845,75 @@ test "completion diagnostics report missing option value" {
     try std.testing.expectEqual(CompletionDiagnosticSeverity.warning, diagnostics[0].severity);
     try std.testing.expectEqual(@as(usize, 4), diagnostics[0].start);
     try std.testing.expectEqual(@as(usize, 6), diagnostics[0].end);
+}
+
+test "completion diagnostics accept combined short option clusters" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete ls --option --short a
+        \\complete ls --option --short l
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const diagnostics = try executor.completionDiagnosticsForInput("ls -al ", "ls -al ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.len);
+}
+
+test "completion diagnostics report invalid combined short option members" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete ls --option --short a
+        \\complete ls --option --short l
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const diagnostics = try executor.completionDiagnosticsForInput("ls -alz ", "ls -alz ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.unknown_option, diagnostics[0].kind);
+    try std.testing.expectEqual(@as(usize, 6), diagnostics[0].start);
+    try std.testing.expectEqual(@as(usize, 7), diagnostics[0].end);
+}
+
+test "completion diagnostics handle value-taking short options in clusters" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete grep --option --short n
+        \\complete grep --option --short e --value-name pattern
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const attached = try executor.completionDiagnosticsForInput("grep -nefoo ", "grep -nefoo ".len);
+    defer std.testing.allocator.free(attached);
+    try std.testing.expectEqual(@as(usize, 0), attached.len);
+
+    const next_word = try executor.completionDiagnosticsForInput("grep -ne foo ", "grep -ne foo ".len);
+    defer std.testing.allocator.free(next_word);
+    try std.testing.expectEqual(@as(usize, 0), next_word.len);
+
+    const missing = try executor.completionDiagnosticsForInput("grep -ne ", "grep -ne ".len);
+    defer std.testing.allocator.free(missing);
+    try std.testing.expectEqual(@as(usize, 1), missing.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.missing_option_value, missing[0].kind);
 }
 
 test "structured completion rules emit subcommand and option candidates" {
