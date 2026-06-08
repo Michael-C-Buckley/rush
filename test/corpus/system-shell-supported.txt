@@ -159,3 +159,4 @@ rm -rf dot-scripts; mkdir dot-scripts; printf '%s\n' 'DOTPATH_VALUE=ok' > dot-sc
 printf '%b' 'a\nb'; echo; printf '%c:%c\n' abc Z
 alias a='echo A'; alias b='echo B'; unalias -a; alias; echo done
 f() { return 7; }; f; echo status=$?; g() { false; return; }; g; echo default=$?
+for outer in a b; do for inner in 1 2; do echo "break:$outer$inner"; break 2; done; echo bad; done; for outer in a b; do for inner in 1 2; do echo "continue:$outer$inner"; continue 2; done; echo bad; done; echo done

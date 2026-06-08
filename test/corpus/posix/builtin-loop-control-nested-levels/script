@@ -1,0 +1,3 @@
+for outer in a b; do for inner in 1 2; do echo "break:$outer$inner"; break 2; done; echo bad; done
+for outer in a b; do for inner in 1 2; do echo "continue:$outer$inner"; continue 2; done; echo bad; done
+echo done

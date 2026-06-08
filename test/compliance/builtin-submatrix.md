@@ -19,7 +19,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | --- | --- | --- | --- |
 | `:` | `builtin-colon` | `basic-colon`, `builtin-colon-special-assignment` | redirection failure consequences need negative coverage |
 | `.` | `builtin-dot`, `builtin-dot-current-env`, `builtin-dot-path-search`, `builtin-dot-usage-errors` | current-shell effects, PATH search, missing/nonexistent file diagnostics and unit coverage | non-readable file behavior |
-| `break`, `continue` | `builtin-break-continue`, `builtin-loop-control-outside-loop`, `builtin-loop-control-usage-errors` | `builtin-loop-control`, outside-loop and operand diagnostic negative corpus | nested levels |
+| `break`, `continue` | `builtin-break-continue`, `builtin-loop-control-nested-levels`, `builtin-loop-control-outside-loop`, `builtin-loop-control-usage-errors` | basic loop control, nested levels, outside-loop and operand diagnostic negative corpus | deeper mixed compound-command edge cases |
 | `eval` | `builtin-eval` | `builtin-eval`, `builtin-eval-special-assignment` | parse/expansion failure consequences |
 | `exec` | `builtin-exec` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-replaces-process` | redirection-only exec, failure status details, no-return contexts |
 | `exit` | `builtin-exit`, `builtin-exit-status-default`, `builtin-exit-usage-errors` | explicit/default status, invalid-operand, and too-many diagnostics | additional nested/non-interactive consequence cases |
