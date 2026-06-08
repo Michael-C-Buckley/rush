@@ -840,14 +840,14 @@ fn appendDiagnosticStyledInput(allocator: std.mem.Allocator, out: *std.ArrayList
         const grapheme_end = i + grapheme.len;
         const severity = diagnosticSeverityAt(spans, i, grapheme_end);
         if (active != severity) {
-            if (active != null) try out.appendSlice(allocator, "\x1b[24;39m");
+            if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
             if (severity) |value| try out.appendSlice(allocator, diagnosticUnderlineAnsi(value));
             active = severity;
         }
         try out.appendSlice(allocator, text[i..grapheme_end]);
         i = grapheme_end;
     }
-    if (active != null) try out.appendSlice(allocator, "\x1b[24;39m");
+    if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
     if (i < text.len) try out.appendSlice(allocator, text[i..]);
 }
 
@@ -859,11 +859,8 @@ fn diagnosticSeverityAt(spans: []const DiagnosticSpan, start: usize, end: usize)
     return null;
 }
 
-fn diagnosticUnderlineAnsi(severity: DiagnosticSeverity) []const u8 {
-    return switch (severity) {
-        .warning => "\x1b[4;33m",
-        .err => "\x1b[4;31m",
-    };
+fn diagnosticUnderlineAnsi(_: DiagnosticSeverity) []const u8 {
+    return "\x1b[4:3;58;5;1m";
 }
 
 fn renderableInlineText(bytes: []const u8) bool {
@@ -1773,7 +1770,7 @@ test "render line styles diagnostic spans without moving cursor" {
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4;31mcomit\x1b[24;39m\x1b[J\r\x1b[11C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4:3;58;5;1mcomit\x1b[24;59m\x1b[J\r\x1b[11C", rendered);
 }
 
 test "render line wraps styled diagnostic spans" {
@@ -1790,7 +1787,7 @@ test "render line wraps styled diagnostic spans" {
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[4;33m--amend\x1b[24;39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[4:3;58;5;1m--amend\x1b[24;59m") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\r\n") != null);
     try std.testing.expect(std.mem.endsWith(u8, rendered, "\r\x1b[8C"));
 }
