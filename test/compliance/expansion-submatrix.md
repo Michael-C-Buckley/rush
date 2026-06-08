@@ -9,8 +9,8 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | POSIX area | manifest rows | current status | primary gaps |
 | --- | --- | --- | --- |
 | Tilde expansion | `expansion-tilde` | baseline | `~user`, assignment-word contexts, unset HOME edge cases |
-| Parameter expansion | `expansion-parameter-*` | baseline | unquoted braced-word parser edge cases, nested word edge cases, special-builtin consequences |
-| Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | embedded `$@`/`$*`, empty positionals, deeper custom IFS interactions |
+| Parameter expansion | `expansion-parameter-*` | supported/baseline | nested word edge cases, special-builtin consequences, broad-operator audit |
+| Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
 | Command substitution | `expansion-command-substitution`, `lex-backquote` | baseline | trailing-newline trimming edge cases, nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
 | Field splitting | `expansion-field-splitting-*` | baseline | empty-field edge cases, generated-empty fields, interactions with special parameters |
@@ -46,12 +46,12 @@ Covered corpus includes defaults, assignment, alternate/length, null-colon behav
 
 Remaining high-risk gaps:
 
-- unquoted spaces in braced parameter `word` portions currently depend on parser word splitting and need hardening;
 - nested `word` portions need broader recursive expansion coverage;
-- diagnostics should distinguish unset/null parameter cases where POSIX requires it;
 - special builtin expansion failures need separate consequences from ordinary command failures.
 
-Follow-up tasks: `#156 Model POSIX special builtin error consequences` and parser/parameter hardening tasks.
+The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, and unquoted multi-word braced words.
+
+Follow-up tasks: `#156 Model POSIX special builtin error consequences` and broader nested parameter-word hardening tasks.
 
 ## Special parameters and positional fields
 
@@ -63,14 +63,12 @@ Manifest rows:
 - `expansion-positionals-quoted-star`
 - `expansion-positionals-unquoted-at-star`
 
-Rush has strong baseline coverage for `$?`, `$$`, `$!`, `$0`, `set --`, quoted `$@`, quoted `$*`, and unquoted `$@`/`$*` with custom IFS.
+Rush has supported spec-clause coverage for `$?`, `$$`, `$!`, `$0`, quoted `$@`, quoted `$*`, and unquoted `$@`/`$*` with custom IFS.
 
 Remaining high-risk gaps:
 
-- embedded unquoted `$@`/`$*` with literal prefixes/suffixes;
-- zero positional parameters;
-- empty positional parameters in more command contexts;
-- deeper interactions with field splitting and quote removal.
+- the broad `expansion-positionals` row remains baseline because unquoted `$*` empty-field behavior diverges across comparison shells;
+- deeper interactions with field splitting and quote removal still belong to broader expansion audits.
 
 Follow-up work should add narrower spec-clause rows if these edge cases need separate scoring.
 
