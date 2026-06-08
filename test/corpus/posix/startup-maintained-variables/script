@@ -1,0 +1,3 @@
+case $PPID in ''|*[!0123456789]*) echo bad-ppid ;; *) echo ppid-ok ;; esac
+printf '<%s>\n' "$IFS"
+case $PWD in /*) echo pwd-ok ;; *) echo bad-pwd ;; esac

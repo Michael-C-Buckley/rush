@@ -920,6 +920,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     try executor.importEnvironment(environ_map);
+    try executor.initializeShellVariables(io);
     executor.arg_zero = "rush";
     try loadInteractiveConfig(allocator, io, &executor, .{});
 
@@ -1049,6 +1050,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     try executor.importEnvironment(environ_map);
+    try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
     try loadInteractiveConfig(allocator, io, &executor, options);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
@@ -1190,10 +1192,10 @@ pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []
 }
 
 pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map) !exec.CommandResult {
-    _ = io;
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     if (environ_map) |map| try executor.importEnvironment(map);
+    try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
 
     return runScriptWithExecutor(allocator, &executor, script, options);
@@ -1710,12 +1712,18 @@ test "runScriptWithEnvironment imports initial shell variables" {
     var env = std.process.Environ.Map.init(std.testing.allocator);
     defer env.deinit();
     try env.put("RUSH_IMPORTED_ENV", "present");
+    try env.put("IFS", ":");
+    try env.put("PWD", "/definitely/not/rush/current/directory");
 
-    var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io, "echo $RUSH_IMPORTED_ENV", .{ .io = std.testing.io, .allow_external = true }, &env);
+    var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io,
+        \\case $PPID in ''|*[!0123456789]*) echo bad-ppid ;; *) echo ppid-ok ;; esac
+        \\printf '<%s>\n' "$RUSH_IMPORTED_ENV" "$IFS"
+        \\case $PWD in /definitely/not/rush/*) echo bad-pwd ;; /*) echo pwd-ok ;; *) echo bad-pwd ;; esac
+    , .{ .io = std.testing.io, .allow_external = true }, &env);
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("present\n", result.stdout);
+    try std.testing.expectEqualStrings("ppid-ok\n<present>\n< \t\n>\npwd-ok\n", result.stdout);
 }
 
 test "runScriptWithOptions accepts inherit mode for external commands" {

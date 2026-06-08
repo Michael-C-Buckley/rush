@@ -182,6 +182,7 @@ special-builtin-assignment-prefix	variables	behavior	-
 special-last-background	job_control	behavior	-
 special-pid	variables	behavior	-
 special-status	variables	behavior	-
+startup-maintained-variables	variables	behavior	startup IFS PPID and PWD shell-maintained variables
 strict-misplaced-reserved-word	errors	negative	-
 subshell-isolates-env	grammar	behavior	-
 unquoted-at-custom-ifs	expansion	behavior	unquoted $@ splits each positional with custom IFS

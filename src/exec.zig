@@ -556,6 +556,28 @@ pub const Executor = struct {
         }
     }
 
+    pub fn initializeShellVariables(self: *Executor, io: std.Io) !void {
+        try self.setEnv("IFS", " \t\n");
+
+        var ppid_buffer: [32]u8 = undefined;
+        const ppid = try std.fmt.bufPrint(&ppid_buffer, "{d}", .{std.posix.getppid()});
+        try self.setEnv("PPID", ppid);
+
+        if (self.getEnv("PWD")) |pwd| {
+            if (try self.validLogicalPwd(io, pwd)) return;
+        }
+        const cwd = try std.process.currentPathAlloc(io, self.allocator);
+        defer self.allocator.free(cwd);
+        try self.setEnv("PWD", cwd);
+    }
+
+    fn validLogicalPwd(self: *Executor, io: std.Io, pwd: []const u8) !bool {
+        if (pwd.len == 0 or pwd[0] != '/') return false;
+        const cwd = try std.process.currentPathAlloc(io, self.allocator);
+        defer self.allocator.free(cwd);
+        return std.mem.eql(u8, pwd, cwd);
+    }
+
     fn clearEnvironment(self: *Executor) void {
         var iter = self.env.iterator();
         while (iter.next()) |entry| {
