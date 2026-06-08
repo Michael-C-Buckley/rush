@@ -54,7 +54,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `printf` | `builtin-printf`, printf subrows | escapes, format reuse, octal/hex, width/precision | full format grammar, invalid formats, diagnostic corpus |
 | `read` | `builtin-read`, read subrows | backslash, `-r`, custom IFS, last-variable remainder assignment, unsupported option diagnostic | EOF status, additional IFS edge cases, prompts if ever added |
 | `test`, `[` | `builtin-test`, test subrows | file predicates, string comparisons, integer comparisons, ordering, invalid expression | complete POSIX expression grammar, precedence edge cases |
-| `umask` | `builtin-umask` | basic get/set | symbolic modes, invalid operands, exact output format |
+| `umask` | `builtin-umask`, `builtin-umask-usage-errors` | basic get/set, invalid numeric/symbolic masks, excess operands | symbolic mode support, exact output format |
 | `wait` | `builtin-wait` | tracked pid wait, unknown pid diagnostic | job specs, all-job semantics, stopped/interrupted jobs |
 
 ## Job-control builtins
@@ -74,7 +74,6 @@ Follow-up tasks:
 The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `read`, `wait`). Add cases for:
 
 - `printf` invalid format and missing numeric conversions;
-- `umask` invalid symbolic/numeric modes;
 - special builtin redirection and expansion failures.
 
 ## Promotion guidance
