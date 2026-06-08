@@ -67,6 +67,9 @@ builtin-trap-list	signals	builtin	-
 builtin-umask	builtin	builtin	-
 builtin-unalias-remove	builtin	builtin	-
 builtin-wait	builtin	builtin	-
+busybox-ash-smoke-printf-redirection	builtin	external-suite-smoke	BusyBox ash-inspired printf with output redirection
+busybox-ash-smoke-read-redirection	redirection	external-suite-smoke	BusyBox ash-inspired input redirection into read loop
+busybox-ash-smoke-test-redirection	builtin	external-suite-smoke	BusyBox ash-inspired test -s around redirected files
 case-default	grammar	behavior	-
 case-final-arm-no-terminator	grammar	behavior	final case arm may omit double-semicolon terminator
 case-leading-paren-empty-arm	grammar	behavior	case arm with optional leading parenthesis and empty body

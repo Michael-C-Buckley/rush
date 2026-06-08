@@ -1,0 +1,3 @@
+printf "alpha\nbeta\n" > bb-in
+read line < bb-in
+printf "[%s]\n" "$line"

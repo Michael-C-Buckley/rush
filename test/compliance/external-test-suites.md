@@ -68,12 +68,20 @@ Further import plan:
 
 Target rows:
 
-- `redirection-fd-dup-close`
+- `redirection-basic`
 - `builtin-test`
 - `builtin-read`
 - `builtin-printf`
 
-Import plan:
+Imported starter slice:
+
+- `busybox-ash-smoke-printf-redirection`
+- `busybox-ash-smoke-test-redirection`
+- `busybox-ash-smoke-read-redirection`
+
+These are hand-translated BusyBox ash-style smoke cases, not vendored BusyBox harness files. They are also present in the differential corpus after comparison across the available shells.
+
+Further import plan:
 
 - mine individual simple scripts rather than running the BusyBox harness;
 - keep BusyBox-specific applet assumptions out of Rush tests;

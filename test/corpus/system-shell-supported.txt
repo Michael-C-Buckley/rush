@@ -125,3 +125,6 @@ OUTER=keep; env INNER=value env | grep ^INNER=; echo ${INNER:-unset}/$OUTER
 f() { printf "%s\n" "$1"; }; f dash-smoke > out; cat out
 (x=subshell; echo "$x"); echo "${x:-unset}"
 for x in a b; do case "$x" in a) echo A ;; b) echo B ;; esac; done
+printf "%s:%d\n" bb 7 > bb-out; cat bb-out
+: > bb-empty; test -s bb-empty; echo empty=$?; printf x > bb-empty; test -s bb-empty; echo full=$?
+printf "alpha\nbeta\n" > bb-in; read line < bb-in; printf "[%s]\n" "$line"
