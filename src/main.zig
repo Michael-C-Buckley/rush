@@ -1707,6 +1707,26 @@ test "repl expands aliases defined on previous input lines" {
     try std.testing.expectEqualStrings("ll: command not found\n", result.stderr);
 }
 
+test "aliases recursively expand and trailing blanks keep command position" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io,
+        \\alias say='echo recursive-ok'
+        \\alias run=say
+        \\run
+        \\alias prefix='run '
+        \\alias word='recursive-trailing-ok'
+        \\prefix word
+        \\alias self=self
+        \\self
+        \\exit
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok recursive-trailing-ok\n") != null);
+    try std.testing.expectEqualStrings("self: command not found\n", result.stderr);
+}
+
 test "prompt DSL commands are scoped to prompt rendering" {
     var prompt_result = try runScript(std.testing.allocator, std.testing.io, "prompt text hi");
     defer prompt_result.deinit();

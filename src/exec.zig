@@ -978,8 +978,21 @@ pub const Executor = struct {
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
         var output: std.ArrayList(u8) = .empty;
         errdefer output.deinit(self.allocator);
+        var active_aliases: std.ArrayList([]const u8) = .empty;
+        defer active_aliases.deinit(self.allocator);
+        _ = try self.expandAliasesInto(script, &output, &active_aliases, true);
+        return output.toOwnedSlice(self.allocator);
+    }
+
+    fn expandAliasesInto(
+        self: *Executor,
+        script: []const u8,
+        output: *std.ArrayList(u8),
+        active_aliases: *std.ArrayList([]const u8),
+        initial_command_position: bool,
+    ) !bool {
         var index: usize = 0;
-        var command_position = true;
+        var command_position = initial_command_position;
         while (index < script.len) {
             const byte = script[index];
             if (byte == '\'' or byte == '"') {
@@ -1015,15 +1028,22 @@ pub const Executor = struct {
             const word = script[start..index];
             if (command_position and !isReservedAliasWord(word) and !looksLikeFunctionDefinitionName(script, index)) {
                 if (self.aliases.get(word)) |value| {
-                    try output.appendSlice(self.allocator, value);
-                    command_position = value.len > 0 and (value[value.len - 1] == ' ' or value[value.len - 1] == '\t');
+                    if (!isActiveAlias(active_aliases.items, word)) {
+                        try active_aliases.append(self.allocator, word);
+                        _ = try self.expandAliasesInto(value, output, active_aliases, true);
+                        _ = active_aliases.pop();
+                        command_position = value.len > 0 and isAliasTrailingBlank(value[value.len - 1]);
+                        continue;
+                    }
+                    try output.appendSlice(self.allocator, word);
+                    command_position = false;
                     continue;
                 }
             }
             try output.appendSlice(self.allocator, word);
             command_position = false;
         }
-        return output.toOwnedSlice(self.allocator);
+        return command_position;
     }
 
     fn setAlias(self: *Executor, name: []const u8, value: []const u8) !void {
@@ -3180,6 +3200,17 @@ fn isShellSeparatorByte(byte: u8) bool {
 
 fn isAliasWordBoundary(byte: u8) bool {
     return byte == ' ' or byte == '\t' or byte == '\r' or byte == '\n' or byte == ';' or byte == '&' or byte == '|' or byte == '(' or byte == ')' or byte == '<' or byte == '>';
+}
+
+fn isAliasTrailingBlank(byte: u8) bool {
+    return byte == ' ' or byte == '\t';
+}
+
+fn isActiveAlias(active_aliases: []const []const u8, word: []const u8) bool {
+    for (active_aliases) |active| {
+        if (std.mem.eql(u8, active, word)) return true;
+    }
+    return false;
 }
 
 fn isReservedAliasWord(word: []const u8) bool {
