@@ -148,6 +148,18 @@ pub const CompletionBuilder = struct {
         try self.candidates.append(allocator, owned_candidate);
     }
 
+    pub fn appendCandidateIfMissing(self: *CompletionBuilder, allocator: std.mem.Allocator, candidate: completion.Candidate) !void {
+        if (self.containsCandidate(candidate)) return;
+        try self.appendCandidate(allocator, candidate);
+    }
+
+    fn containsCandidate(self: CompletionBuilder, candidate: completion.Candidate) bool {
+        for (self.candidates.items) |existing| {
+            if (completionCandidateIdentityMatches(existing, candidate)) return true;
+        }
+        return false;
+    }
+
     fn dupeField(self: *CompletionBuilder, allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
         const owned = try allocator.dupe(u8, value);
         errdefer allocator.free(owned);
@@ -374,11 +386,13 @@ fn completionOptionValueMatches(rule: completion.Rule, option_value: ?Completion
     return rule.option.long == null and rule.option.short == null;
 }
 
-fn completionBuilderContains(builder: CompletionBuilder, value: []const u8) bool {
-    for (builder.candidates.items) |candidate| {
-        if (std.mem.eql(u8, candidate.value, value)) return true;
-    }
-    return false;
+// Completion candidates are deduplicated by the edit they would apply:
+// replacement span plus inserted value. The first source wins so metadata stays
+// deterministic across legacy providers, static rules, and dynamic rules.
+fn completionCandidateIdentityMatches(a: completion.Candidate, b: completion.Candidate) bool {
+    return a.replace_start == b.replace_start and
+        a.replace_end == b.replace_end and
+        std.mem.eql(u8, a.value, b.value);
 }
 
 fn completionCommandPath(allocator: std.mem.Allocator, context: CompletionSemanticContext) ![]const u8 {
@@ -799,7 +813,7 @@ pub const Executor = struct {
 
         var builder: CompletionBuilder = .{};
         errdefer builder.deinit(self.allocator);
-        for (candidates) |candidate| try builder.appendCandidate(self.allocator, candidate);
+        for (candidates) |candidate| try builder.appendCandidateIfMissing(self.allocator, candidate);
         if (semantic.position != .option_value) try self.appendStructuredCompletionCandidates(&builder, semantic);
         try self.appendDynamicStructuredCompletionCandidates(&builder, context, semantic, options);
         self.freeCompletions(candidates);
@@ -930,6 +944,7 @@ pub const Executor = struct {
 
         var builder = self.completion_builder.?;
         self.completion_builder = null;
+        errdefer builder.deinit(self.allocator);
         const final_context = self.completion_context orelse context;
         self.last_completion_context = final_context;
         for (builder.candidates.items) |*candidate| {
@@ -939,7 +954,12 @@ pub const Executor = struct {
             }
         }
         self.completion_context = null;
-        return builder.finish(self.allocator);
+
+        var deduplicated: CompletionBuilder = .{};
+        errdefer deduplicated.deinit(self.allocator);
+        for (builder.candidates.items) |candidate| try deduplicated.appendCandidateIfMissing(self.allocator, candidate);
+        builder.deinit(self.allocator);
+        return deduplicated.finish(self.allocator);
     }
 
     fn collectRootCommandCompletions(self: *Executor, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
@@ -981,14 +1001,6 @@ pub const Executor = struct {
     }
 
     fn appendStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
-        var seen: std.StringHashMapUnmanaged(void) = .empty;
-        defer deinitSeenCompletionNames(self.allocator, &seen);
-        for (builder.candidates.items) |candidate| {
-            const seen_name = try self.allocator.dupe(u8, candidate.value);
-            errdefer self.allocator.free(seen_name);
-            try seen.put(self.allocator, seen_name, {});
-        }
-
         for (self.completion_rules.items) |rule| {
             switch (rule.kind) {
                 .function_provider, .dynamic_subcommands, .dynamic_options, .dynamic_argument, .dynamic_option_value => {},
@@ -996,7 +1008,7 @@ pub const Executor = struct {
                     if (context.position != .subcommand) continue;
                     if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
                     const value = rule.value orelse continue;
-                    try self.appendStructuredCompletionCandidate(builder, &seen, value, rule.description, .subcommand, null, context, true);
+                    try self.appendStructuredCompletionCandidate(builder, value, rule.description, .subcommand, null, context, true);
                 },
                 .option => {
                     if (context.position != .option) continue;
@@ -1004,12 +1016,12 @@ pub const Executor = struct {
                     if (rule.option.long) |long| {
                         var spelling_buffer: [256]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
-                        try self.appendStructuredCompletionCandidate(builder, &seen, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
+                        try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
                     }
                     if (rule.option.short) |short| {
                         var spelling_buffer: [32]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch continue;
-                        try self.appendStructuredCompletionCandidate(builder, &seen, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
+                        try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
                     }
                 },
             }
@@ -1019,7 +1031,6 @@ pub const Executor = struct {
     fn appendStructuredCompletionCandidate(
         self: *Executor,
         builder: *CompletionBuilder,
-        seen: *std.StringHashMapUnmanaged(void),
         value: []const u8,
         description: ?[]const u8,
         kind: completion.Kind,
@@ -1028,11 +1039,7 @@ pub const Executor = struct {
         append_space: bool,
     ) !void {
         if (!std.mem.startsWith(u8, value, context.prefix)) return;
-        if (seen.contains(value)) return;
-        const seen_name = try self.allocator.dupe(u8, value);
-        errdefer self.allocator.free(seen_name);
-        try seen.put(self.allocator, seen_name, {});
-        try builder.appendCandidate(self.allocator, .{
+        try builder.appendCandidateIfMissing(self.allocator, .{
             .value = value,
             .description = description,
             .kind = kind,
@@ -1058,8 +1065,7 @@ pub const Executor = struct {
             const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options);
             defer self.freeCompletions(candidates);
             for (candidates) |candidate| {
-                if (completionBuilderContains(builder.*, candidate.value)) continue;
-                try builder.appendCandidate(self.allocator, candidate);
+                try builder.appendCandidateIfMissing(self.allocator, candidate);
             }
         }
     }
@@ -8541,6 +8547,84 @@ test "dynamic structured option value provider is scoped to option" {
     try std.testing.expectEqual(@as(usize, "git log --format ".len), full.replace_start);
 }
 
+test "completion candidate merge deduplicates by replacement span and value" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_dynamic_subcommands() {
+        \\  completion candidate commit --kind subcommand --description dynamic
+        \\}
+        \\complete git --subcommand commit --description static
+        \\complete git --subcommands --function __git_dynamic_subcommands
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git c", "git c".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try std.testing.expectEqual(@as(usize, 1), countCandidates(candidates, "commit"));
+    const commit = findCandidate(candidates, "commit") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("static", commit.description.?);
+}
+
+test "completion candidate merge keeps first metadata for legacy and static overlap" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_legacy_options() {
+        \\  completion option --long amend --description legacy
+        \\}
+        \\complete git --function __git_legacy_options
+        \\complete git --option --long amend --description static
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git --a", "git --a".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try std.testing.expectEqual(@as(usize, 1), countCandidates(candidates, "--amend"));
+    const amend = findCandidate(candidates, "--amend") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("legacy", amend.description.?);
+}
+
+test "completion candidate merge deduplicates provider helper fallback overlap" {
+    const path = "rush-dedup-path-candidate";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_paths() {
+        \\  completion candidate rush-dedup-path-candidate --description dynamic
+        \\  completion files
+        \\}
+        \\complete git --subcommand checkout
+        \\complete 'git checkout' --argument --function __git_paths
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const source = "git checkout rush-dedup";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try std.testing.expectEqual(@as(usize, 1), countCandidates(candidates, path));
+    const candidate = findCandidate(candidates, path) orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("dynamic", candidate.description.?);
+}
+
 test "completion context helpers expose semantic command path in scoped providers" {
     var setup = try parseAndLower(std.testing.allocator,
         \\__git_commit_args() {
@@ -9005,6 +9089,14 @@ fn findCandidate(candidates: []const completion.Candidate, value: []const u8) ?c
         if (std.mem.eql(u8, candidate.value, value)) return candidate;
     }
     return null;
+}
+
+fn countCandidates(candidates: []const completion.Candidate, value: []const u8) usize {
+    var count: usize = 0;
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) count += 1;
+    }
+    return count;
 }
 
 fn expectNoCandidate(candidates: []const completion.Candidate, value: []const u8) !void {
