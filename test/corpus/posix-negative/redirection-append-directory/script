@@ -1,0 +1,1 @@
+mkdir dir; echo hi >> dir; echo after

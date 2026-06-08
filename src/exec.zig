@@ -2384,6 +2384,7 @@ pub const Executor = struct {
             error.PathAlreadyExists => try errorResult(self.allocator, 1, noclobberTargetName(command), "cannot overwrite existing file"),
             error.BadFileDescriptor => try errorResult(self.allocator, 1, badFdTargetName(command), "bad file descriptor"),
             error.FileNotFound => try errorResult(self.allocator, 1, inputTargetName(command), "no such file or directory"),
+            error.IsDir => try errorResult(self.allocator, 1, redirectionTargetName(command), "is a directory"),
             else => return err,
         };
         if (special_builtin) self.pending_exit = result.status;
@@ -2800,6 +2801,12 @@ pub const Executor = struct {
                     error.PathAlreadyExists => {
                         redirected.deinit();
                         const failure = try errorResult(self.allocator, 1, targetName(redirection), "cannot overwrite existing file");
+                        if (special_exit) self.pending_exit = failure.status;
+                        return failure;
+                    },
+                    error.IsDir => {
+                        redirected.deinit();
+                        const failure = try errorResult(self.allocator, 1, targetName(redirection), "is a directory");
                         if (special_exit) self.pending_exit = failure.status;
                         return failure;
                     },
@@ -5913,6 +5920,13 @@ fn noclobberTargetName(command: ir.SimpleCommand) []const u8 {
 fn badFdTargetName(command: ir.SimpleCommand) []const u8 {
     for (command.redirections) |redirection| {
         if (redirection.operator == .greater_and or redirection.operator == .less_and) return targetName(redirection);
+    }
+    return "redirection";
+}
+
+fn redirectionTargetName(command: ir.SimpleCommand) []const u8 {
+    for (command.redirections) |redirection| {
+        if (redirection.target != null) return targetName(redirection);
     }
     return "redirection";
 }
