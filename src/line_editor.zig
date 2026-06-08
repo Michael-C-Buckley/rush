@@ -425,10 +425,17 @@ pub const LineSession = struct {
                     self.completion_menu.clear(self.allocator);
                 }
             },
-            .right, .end => {
-                if (self.editor.buffer.cursor_byte == self.editor.buffer.text().len and try self.acceptAutosuggestion()) return;
+            .left, .home, .word_left, .word_right => {
                 try self.editor.handleKey(event);
-                if (!self.completion_menu.isOpen()) self.completion_menu.clear(self.allocator);
+                self.completion_menu.clear(self.allocator);
+            },
+            .right, .end => {
+                if (self.editor.buffer.cursor_byte == self.editor.buffer.text().len and try self.acceptAutosuggestion()) {
+                    self.completion_menu.clear(self.allocator);
+                    return;
+                }
+                try self.editor.handleKey(event);
+                self.completion_menu.clear(self.allocator);
             },
             .up => if (self.completion_menu.isOpen()) self.completion_menu.selectPrevious() else try self.historyPrevious(),
             .down => if (self.completion_menu.isOpen()) self.completion_menu.selectNext() else try self.historyNext(),
@@ -1691,6 +1698,26 @@ test "completion menu closes on deletion edits" {
     try session.applyCompletion(.{ .ambiguous = &candidates });
     try session.handleKey(.{ .key = .delete_previous_word });
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
+    try std.testing.expect(!session.hasCompletionMenu());
+}
+
+test "completion menu closes on cursor movement" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git st");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "status", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+        .{ .value = "stash", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    try session.handleKey(.{ .key = .left });
+    try std.testing.expectEqual(@as(usize, "git s".len), session.editor.buffer.cursor_byte);
+    try std.testing.expect(!session.hasCompletionMenu());
+
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    try session.handleKey(.{ .key = .home });
+    try std.testing.expectEqual(@as(usize, 0), session.editor.buffer.cursor_byte);
     try std.testing.expect(!session.hasCompletionMenu());
 }
 

@@ -447,12 +447,6 @@ fn isCompletionTab(key: line_editor.KeyEvent) bool {
 fn shouldRefreshCompletionMenu(key: line_editor.KeyEvent) bool {
     return switch (key.key) {
         .text => key.text.len != 0,
-        .left,
-        .right,
-        .home,
-        .end,
-        .word_left,
-        .word_right,
         .transpose_chars,
         .yank,
         => true,
@@ -940,7 +934,9 @@ test "completion refresh key classification tracks editing keys" {
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .delete }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .delete_previous_word }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .delete_to_start }));
-    try std.testing.expect(shouldRefreshCompletionMenu(.{ .key = .left }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .left }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .home }));
+    try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .word_left }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .tab }));
     try std.testing.expect(!shouldRefreshCompletionMenu(.{ .key = .escape }));
 }
