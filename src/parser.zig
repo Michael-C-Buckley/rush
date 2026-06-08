@@ -1281,10 +1281,20 @@ const SyntaxParser = struct {
         const token_start = self.index;
         var item_children: std.ArrayList(SyntaxChild) = .empty;
         defer item_children.deinit(self.allocator);
+        var saw_pattern_end = false;
 
         while (!self.at(.eof) and !self.atWord("esac")) {
             try self.appendCurrentTokenChildTo(&item_children);
+            if (self.previousToken().kind == .right_paren) saw_pattern_end = true;
             if (self.previousToken().kind == .dsemicolon) break;
+        }
+
+        if (!saw_pattern_end) {
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing ) in case item",
+            });
         }
 
         const token_end = self.index;
@@ -2227,6 +2237,28 @@ test "parser builds POSIX case command nodes" {
     }
     try std.testing.expect(found);
     try std.testing.expectEqual(@as(usize, 2), item_count);
+}
+
+test "parser accepts POSIX case edge items" {
+    var result = try parse(std.testing.allocator, "case b in (a|b) ;; c) echo c esac", .{});
+    defer result.deinit();
+
+    var saw_case = false;
+    var item_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .case_command) saw_case = true;
+        if (node.kind == .case_item) item_count += 1;
+    }
+    try std.testing.expect(saw_case);
+    try std.testing.expectEqual(@as(usize, 2), item_count);
+}
+
+test "parser reports missing POSIX case item terminator" {
+    var result = try parse(std.testing.allocator, "case foo in f* echo yes ;; esac", .{});
+    defer result.deinit();
+
+    try std.testing.expect(result.diagnostics.len >= 1);
+    try std.testing.expectEqualStrings("missing ) in case item", result.diagnostics[0].message);
 }
 
 test "parser reports incomplete POSIX case commands" {

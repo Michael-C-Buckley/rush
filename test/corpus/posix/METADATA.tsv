@@ -68,6 +68,9 @@ builtin-umask	builtin	builtin	-
 builtin-unalias-remove	builtin	builtin	-
 builtin-wait	builtin	builtin	-
 case-default	grammar	behavior	-
+case-final-arm-no-terminator	grammar	behavior	final case arm may omit double-semicolon terminator
+case-leading-paren-empty-arm	grammar	behavior	case arm with optional leading parenthesis and empty body
+case-multiple-patterns	grammar	behavior	case arm with multiple pattern alternatives
 case-pattern	grammar	behavior	-
 command-substitution	expansion	behavior	-
 comments-ignored	lexing	behavior	-

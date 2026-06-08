@@ -1,0 +1,1 @@
+case z in a) echo a ;; *) echo star esac
