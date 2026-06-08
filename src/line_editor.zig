@@ -61,22 +61,22 @@ pub const EditBuffer = struct {
     }
 
     pub fn moveLeft(self: *EditBuffer) void {
-        self.cursor_byte = previousScalarStart(self.bytes.items, self.cursor_byte);
+        self.cursor_byte = previousGraphemeStart(self.bytes.items, self.cursor_byte);
     }
 
     pub fn moveRight(self: *EditBuffer) void {
-        self.cursor_byte = nextScalarEnd(self.bytes.items, self.cursor_byte);
+        self.cursor_byte = nextGraphemeEnd(self.bytes.items, self.cursor_byte);
     }
 
     pub fn deletePrevious(self: *EditBuffer) void {
-        const start = previousScalarStart(self.bytes.items, self.cursor_byte);
+        const start = previousGraphemeStart(self.bytes.items, self.cursor_byte);
         if (start == self.cursor_byte) return;
         self.bytes.replaceRange(self.allocator, start, self.cursor_byte - start, "") catch unreachable;
         self.cursor_byte = start;
     }
 
     pub fn deleteNext(self: *EditBuffer) void {
-        const end = nextScalarEnd(self.bytes.items, self.cursor_byte);
+        const end = nextGraphemeEnd(self.bytes.items, self.cursor_byte);
         if (end == self.cursor_byte) return;
         self.bytes.replaceRange(self.allocator, self.cursor_byte, end - self.cursor_byte, "") catch unreachable;
     }
@@ -213,21 +213,22 @@ fn keyFromVaxisCodepoint(codepoint: u21) Key {
     };
 }
 
-fn previousScalarStart(bytes: []const u8, cursor_byte: usize) usize {
+fn previousGraphemeStart(bytes: []const u8, cursor_byte: usize) usize {
     if (cursor_byte == 0) return 0;
-    var index = cursor_byte - 1;
-    while (index > 0 and (bytes[index] & 0b1100_0000) == 0b1000_0000) index -= 1;
-    return index;
+    var iter = vaxis.unicode.graphemeIterator(bytes[0..cursor_byte]);
+    var start: usize = 0;
+    while (iter.next()) |grapheme| start = grapheme.start;
+    return start;
 }
 
-fn nextScalarEnd(bytes: []const u8, cursor_byte: usize) usize {
+fn nextGraphemeEnd(bytes: []const u8, cursor_byte: usize) usize {
     if (cursor_byte >= bytes.len) return bytes.len;
-    var index = cursor_byte + 1;
-    while (index < bytes.len and (bytes[index] & 0b1100_0000) == 0b1000_0000) index += 1;
-    return index;
+    var iter = vaxis.unicode.graphemeIterator(bytes[cursor_byte..]);
+    const grapheme = iter.next() orelse return cursor_byte;
+    return cursor_byte + grapheme.len;
 }
 
-test "edit buffer inserts and deletes utf8 scalars" {
+test "edit buffer inserts and deletes utf8 graphemes" {
     var editor = Editor.init(std.testing.allocator);
     defer editor.deinit();
 
@@ -238,6 +239,26 @@ test "edit buffer inserts and deletes utf8 scalars" {
     editor.buffer.moveLeft();
     try std.testing.expectEqual(@as(usize, 3), editor.buffer.cursor_byte);
     editor.buffer.deletePrevious();
+    try std.testing.expectEqualStrings("ab", editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 1), editor.buffer.cursor_byte);
+}
+
+test "edit buffer moves and deletes by grapheme cluster" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+
+    try editor.handleKey(.{ .key = .text, .text = "a👩‍🚀éb" });
+    try std.testing.expectEqual(@as(usize, "a👩‍🚀éb".len), editor.buffer.cursor_byte);
+
+    editor.buffer.moveLeft();
+    try std.testing.expectEqual(@as(usize, "a👩‍🚀é".len), editor.buffer.cursor_byte);
+    editor.buffer.moveLeft();
+    try std.testing.expectEqual(@as(usize, "a👩‍🚀".len), editor.buffer.cursor_byte);
+    editor.buffer.deletePrevious();
+    try std.testing.expectEqualStrings("aéb", editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 1), editor.buffer.cursor_byte);
+
+    editor.buffer.deleteNext();
     try std.testing.expectEqualStrings("ab", editor.buffer.text());
     try std.testing.expectEqual(@as(usize, 1), editor.buffer.cursor_byte);
 }
