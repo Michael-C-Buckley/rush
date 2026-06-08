@@ -1275,11 +1275,12 @@ pub const Executor = struct {
             while (path_iter.next()) |path_dir| {
                 if (path_dir.len == 0) continue;
                 var dir = std.Io.Dir.cwd().openDir(io, path_dir, .{ .iterate = true }) catch continue;
-                defer dir.close(io);
+                errdefer dir.close(io);
                 var iterator = dir.iterate();
                 while (iterator.next(io) catch null) |entry| {
                     try appendRootCommandCandidate(self.allocator, &builder, &seen, entry.name, .command, "executable", context);
                 }
+                dir.close(io);
             }
         }
 
@@ -4973,13 +4974,14 @@ fn builtinCompletionExecutables(self: *Executor, builder: *CompletionBuilder, co
     while (path_iter.next()) |path_dir| {
         if (path_dir.len == 0) continue;
         var dir = std.Io.Dir.cwd().openDir(io, path_dir, .{ .iterate = true }) catch continue;
-        defer dir.close(io);
+        errdefer dir.close(io);
         var iterator = dir.iterate();
         while (iterator.next(io) catch null) |entry| {
             if (completion.fuzzyMatchRank(entry.name, prefix) != null) {
                 try builder.appendCandidate(self.allocator, .{ .value = entry.name, .kind = .command, .replace_start = completionHelperReplaceStart(self.*, prefix), .replace_end = completionHelperReplaceEnd(self.*, prefix) });
             }
         }
+        dir.close(io);
     }
     return emptyResult(self.allocator, 0);
 }

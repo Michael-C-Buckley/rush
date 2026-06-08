@@ -6,6 +6,8 @@ const std = @import("std");
 const completion = @import("completion.zig");
 const vaxis = @import("vaxis");
 
+const max_menu_candidate_rows = 16;
+
 pub const KeyEvent = struct {
     key: Key,
     modifiers: Modifiers = .{},
@@ -264,12 +266,12 @@ pub const CompletionMenu = struct {
 
     pub fn selectPrevious(self: *CompletionMenu) void {
         if (self.candidates.len == 0) return;
-        self.selected = if (self.selected == no_selection or self.selected == 0) self.candidates.len - 1 else self.selected - 1;
+        self.selected = if (self.selected == no_selection or self.selected == 0) 0 else self.selected - 1;
     }
 
     pub fn selectNext(self: *CompletionMenu) void {
         if (self.candidates.len == 0) return;
-        self.selected = if (self.selected == no_selection) 0 else (self.selected + 1) % self.candidates.len;
+        self.selected = if (self.selected == no_selection) 0 else @min(self.selected + 1, self.candidates.len - 1);
     }
 
     pub fn selectedCandidate(self: CompletionMenu) ?completion.Candidate {
@@ -741,13 +743,13 @@ pub const LineSession = struct {
 
     fn selectNextHistorySearchMatch(self: *LineSession) void {
         if (self.history_search_matches.items.len == 0) return;
-        self.history_search_selected = (self.history_search_selected + 1) % self.history_search_matches.items.len;
+        self.history_search_selected = @min(self.history_search_selected + 1, self.history_search_matches.items.len - 1);
         self.replaceHistorySearchMatchFromSelection() catch {};
     }
 
     fn selectPreviousHistorySearchMatch(self: *LineSession) void {
         if (self.history_search_matches.items.len == 0) return;
-        self.history_search_selected = if (self.history_search_selected == 0) self.history_search_matches.items.len - 1 else self.history_search_selected - 1;
+        self.history_search_selected = if (self.history_search_selected == 0) 0 else self.history_search_selected - 1;
         self.replaceHistorySearchMatchFromSelection() catch {};
     }
 
@@ -969,7 +971,7 @@ pub const RenderOptions = struct {
     synchronized_output: bool = true,
 
     fn menuCandidateRows(self: RenderOptions) usize {
-        return @max(@as(usize, @intCast(self.height)) -| 2, 1);
+        return @min(@max(@as(usize, @intCast(self.height)) -| 2, 1), max_menu_candidate_rows);
     }
 };
 
@@ -1230,7 +1232,7 @@ fn escapeSequenceEnd(bytes: []const u8, index: usize) ?usize {
 
 fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList([]const u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16) !void {
     if (candidates.len == 0) return;
-    const max_rows = @max(@as(usize, @intCast(height)) -| 2, 1);
+    const max_rows = @min(@max(@as(usize, @intCast(height)) -| 2, 1), max_menu_candidate_rows);
     const window = completionMenuWindow(candidates.len, selected, window_start, max_rows);
     const label_width = @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
     const kind_width = @as(usize, 10);
@@ -1861,7 +1863,7 @@ test "accepting completion clears previously rendered menu rows" {
     try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "\x1b[2A") == null);
 }
 
-test "completion menu selection wraps with arrow keys" {
+test "completion menu selection clamps with arrow keys" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
     var candidates = [_]completion.Candidate{
@@ -1871,12 +1873,16 @@ test "completion menu selection wraps with arrow keys" {
     try session.applyCompletion(.{ .ambiguous = &candidates });
 
     try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
+    try session.handleKey(.{ .key = .down });
     try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
     try session.handleKey(.{ .key = .down });
+    try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
+    try session.handleKey(.{ .key = .up });
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
 }
 
-test "completion menu cycles selection with tab and shift tab" {
+test "completion menu moves selection with tab and shift tab" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
     try session.editor.buffer.replace("git ");
@@ -1897,6 +1903,12 @@ test "completion menu cycles selection with tab and shift tab" {
     try session.handleKey(.{ .key = .tab, .modifiers = .{ .shift = true } });
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
+    try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
+    try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
+    try std.testing.expectEqual(@as(usize, 2), session.completion_menu.selected);
+    try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
+    try std.testing.expectEqual(@as(usize, 2), session.completion_menu.selected);
+    try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
     try std.testing.expectEqual(@as(usize, 1), session.completion_menu.selected);
     try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.selected);
@@ -1997,6 +2009,38 @@ test "completion menu respects render height" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "two") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 1-1 of 3") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
+}
+
+test "completion menu caps visible candidates at sixteen rows" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "item00", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item01", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item02", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item03", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item04", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item05", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item06", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item07", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item08", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item09", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item10", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item11", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item12", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item13", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item14", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item15", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item16", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "item17", .kind = .plain, .replace_start = 0, .replace_end = 0 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 40 });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "item15") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "item16") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 1-16 of 18") != null);
 }
 
 test "completion menu visible window follows selection" {
@@ -2395,7 +2439,7 @@ test "history search uses fuzzy query matching" {
     try std.testing.expectEqual(@as(usize, 0), session.history_search_matches.items.len);
 }
 
-test "history search first tab cycles the already-open menu" {
+test "history search first tab advances the already-open menu" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
     var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
@@ -2424,14 +2468,34 @@ test "history search first tab cycles the already-open menu" {
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
     try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
     try session.handleKey(.{ .key = .tab });
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
 
     try session.handleKey(.{ .key = .enter });
     try std.testing.expectEqual(LineSession.State.editing, session.state);
-    try std.testing.expectEqualStrings("git show", session.editor.buffer.text());
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
 }
 
-test "history search shift tab cycles backward" {
+test "history search menu caps visible candidates at sixteen rows" {
+    const entries = [_][]const u8{
+        "cmd00", "cmd01", "cmd02", "cmd03", "cmd04", "cmd05",
+        "cmd06", "cmd07", "cmd08", "cmd09", "cmd10", "cmd11",
+        "cmd12", "cmd13", "cmd14", "cmd15", "cmd16", "cmd17",
+    };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .ctrl_r });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 40 });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "cmd17") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "cmd02") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "cmd01") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 1-16 of 18") != null);
+}
+
+test "history search shift tab clamps at first match" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
     var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
@@ -2443,16 +2507,16 @@ test "history search shift tab cycles backward" {
 
     try session.handleKey(.{ .key = .tab, .modifiers = .{ .shift = true } });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
-    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
 
     try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
-    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
 
     try session.handleKey(.{ .key = .tab });
-    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
 }
 
-test "history search ctrl n and ctrl p cycle like completion" {
+test "history search ctrl n and ctrl p clamp like completion" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
     var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
@@ -2466,9 +2530,15 @@ test "history search ctrl n and ctrl p cycle like completion" {
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
 
+    try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+
     try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
 }
 
 test "line session hides older duplicate history commands" {

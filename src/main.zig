@@ -727,7 +727,7 @@ const CompletionRefresh = struct {
         defer self.done.store(true, .release);
         const candidates = self.executor.collectCompletionsForInput(self.source, self.cursor, .{ .io = self.io, .allow_external = true }) catch return;
         defer self.executor.freeCompletions(candidates);
-        rankCompletionCandidates(self.allocator, candidates, self.history, self.cwd) catch return;
+        rankCompletionCandidates(self.allocator, candidates, self.history, self.cwd, self.source) catch return;
         self.cache.put(self.source, self.cursor, self.cwd, self.generation, candidates) catch return;
     }
 
@@ -799,7 +799,7 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     }
     const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true });
     defer completion_context.executor.freeCompletions(candidates);
-    try rankCompletionCandidates(allocator, candidates, completion_context.history.*, completion_context.cwd);
+    try rankCompletionCandidates(allocator, candidates, completion_context.history.*, completion_context.cwd, source);
     try completion_context.cache.put(source, cursor, completion_context.cwd, completion_context.executor.completionGeneration(), candidates);
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
@@ -834,30 +834,41 @@ fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     };
 }
 
-fn rankCompletionCandidates(allocator: std.mem.Allocator, candidates: []completion_model.Candidate, history: History, cwd: []const u8) !void {
+fn rankCompletionCandidates(allocator: std.mem.Allocator, candidates: []completion_model.Candidate, history: History, cwd: []const u8, source: []const u8) !void {
     if (history.db) |db| {
         var snapshot = History.init(allocator);
         defer snapshot.deinit();
         try snapshot.loadRecentRows(db, 500);
-        std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = snapshot, .cwd = cwd }, lessThanRankedCompletion);
+        std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = snapshot, .cwd = cwd, .source = source }, lessThanRankedCompletion);
         return;
     }
-    std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = history, .cwd = cwd }, lessThanRankedCompletion);
+    std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = history, .cwd = cwd, .source = source }, lessThanRankedCompletion);
 }
 
 const CompletionRankContext = struct {
     history: History,
     cwd: []const u8,
+    source: []const u8,
 };
 
 fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.Candidate, b: completion_model.Candidate) bool {
     const a_class = completionRankClass(a);
     const b_class = completionRankClass(b);
     if (a_class != b_class) return a_class < b_class;
+    const a_match_rank = completionCandidateRankSortKey(context.source, a);
+    const b_match_rank = completionCandidateRankSortKey(context.source, b);
+    if (a_match_rank != b_match_rank) return a_match_rank < b_match_rank;
     const a_score = completionRankScore(context.history, context.cwd, a.value);
     const b_score = completionRankScore(context.history, context.cwd, b.value);
     if (a_score != b_score) return a_score > b_score;
     return lessThanCompletionLabel(a, b);
+}
+
+fn completionCandidateRankSortKey(source: []const u8, candidate: completion_model.Candidate) u8 {
+    if (candidate.replace_start > candidate.replace_end or candidate.replace_end > source.len) return 3;
+    const query = source[candidate.replace_start..candidate.replace_end];
+    const rank = completion_model.candidateFuzzyMatchRank(candidate, query) orelse return 3;
+    return @intFromEnum(rank);
 }
 
 fn completionRankClass(candidate: completion_model.Candidate) u8 {
@@ -961,7 +972,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
     defer executor.freeCompletions(candidates);
     const effective_context = executor.lastCompletionContext() orelse context;
-    try rankCompletionCandidates(allocator, candidates, history, cwd);
+    try rankCompletionCandidates(allocator, candidates, history, cwd, source);
     const application = try completion_model.applyCandidatesForInput(allocator, source, candidates);
     defer application.deinit(allocator);
 
@@ -1808,7 +1819,7 @@ test "completion ranking prefers recent successful same-cwd history" {
         .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
         .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
     };
-    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo");
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ch");
 
     try std.testing.expectEqualStrings("checkout", candidates[0].value);
     try std.testing.expectEqualStrings("cherry-pick", candidates[1].value);
@@ -1822,10 +1833,25 @@ test "completion ranking falls back to lexical order" {
         .{ .value = "status", .replace_start = 4, .replace_end = 4 },
         .{ .value = "checkout", .replace_start = 4, .replace_end = 4 },
     };
-    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo");
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ");
 
     try std.testing.expectEqualStrings("checkout", candidates[0].value);
     try std.testing.expectEqualStrings("status", candidates[1].value);
+}
+
+test "completion ranking prefers prefix matches before fuzzy matches" {
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.addRecord(.{ .cmd = "age-inspect file", .status = 0, .cwd = "/repo" });
+
+    var candidates = [_]completion_model.Candidate{
+        .{ .value = "age-inspect", .kind = .command, .replace_start = 0, .replace_end = 2 },
+        .{ .value = "git", .kind = .command, .replace_start = 0, .replace_end = 2 },
+    };
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "gi");
+
+    try std.testing.expectEqualStrings("git", candidates[0].value);
+    try std.testing.expectEqualStrings("age-inspect", candidates[1].value);
 }
 
 test "completion ranking sorts equal scores by display label" {
@@ -1837,7 +1863,7 @@ test "completion ranking sorts equal scores by display label" {
         .{ .value = "checkout", .display = "branch checkout", .replace_start = 4, .replace_end = 4 },
         .{ .value = "add", .replace_start = 4, .replace_end = 4 },
     };
-    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo");
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ");
 
     try std.testing.expectEqualStrings("add", candidates[0].value);
     try std.testing.expectEqualStrings("checkout", candidates[1].value);

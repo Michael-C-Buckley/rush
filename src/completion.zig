@@ -114,9 +114,7 @@ pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candida
         } };
     }
 
-    const cloned = try cloneCandidates(allocator, candidates);
-    sortCandidates(cloned);
-    return .{ .ambiguous = cloned };
+    return .{ .ambiguous = try cloneCandidates(allocator, candidates) };
 }
 
 pub fn sortCandidates(candidates: []Candidate) void {
