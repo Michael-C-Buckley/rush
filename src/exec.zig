@@ -344,7 +344,9 @@ pub const Executor = struct {
         if (program.statements.len > 0) {
             for (program.statements) |statement| {
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
-                var result = switch (statement.kind) {
+                var result = if (statement.async_after)
+                    try self.executeAsyncStatement(program, statement, options)
+                else switch (statement.kind) {
                     .pipeline => try self.executePipeline(program, program.pipelines[statement.index], options),
                     .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
                     .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
@@ -368,7 +370,10 @@ pub const Executor = struct {
         if (program.pipelines.len > 0) {
             for (program.pipelines) |pipeline| {
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
-                var result = try self.executePipeline(program, pipeline, options);
+                var result = if (pipeline.async_after)
+                    try self.executeAsyncPipeline(program, pipeline, options)
+                else
+                    try self.executePipeline(program, pipeline, options);
                 defer result.deinit();
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 last_status = result.status;
@@ -766,6 +771,38 @@ pub const Executor = struct {
             self.allocator.free(result.stderr);
             result.stderr = stderr;
         }
+        return result;
+    }
+
+    fn executeAsyncStatement(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
+        var result = switch (statement.kind) {
+            .pipeline => return self.executeAsyncPipeline(program, program.pipelines[statement.index], options),
+            .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
+            .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
+            .for_command => try self.executeForCommand(program.for_commands[statement.index], options),
+            .case_command => try self.executeCaseCommand(program.case_commands[statement.index], options),
+            .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index]),
+            .bash_test_command => try self.executeBashTestCommand(program.bash_test_commands[statement.index], options),
+            .brace_group => try self.executeBraceGroup(program.brace_groups[statement.index], options),
+            .subshell => try self.executeSubshell(program.subshells[statement.index], options),
+        };
+        result.status = 0;
+        return result;
+    }
+
+    fn executeAsyncPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) !CommandResult {
+        if (pipeline.command_indexes.len != 1 or !options.allow_external or options.io == null) return self.executeAsyncPipelineFallback(program, pipeline, options);
+        const command = program.commands[pipeline.command_indexes[0]];
+        if (command.argv.len == 0 or builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) return self.executeAsyncPipelineFallback(program, pipeline, options);
+        const expanded = try self.expandSimpleCommand(command, options);
+        defer self.freeExpandedCommand(expanded);
+        if (expanded.argv.len == 0) return emptyResult(self.allocator, 0);
+        return self.executeExternalAsync(expanded, options.io.?, options);
+    }
+
+    fn executeAsyncPipelineFallback(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) !CommandResult {
+        var result = try self.executePipeline(program, pipeline, options);
+        result.status = 0;
         return result;
     }
 
@@ -1705,6 +1742,71 @@ pub const Executor = struct {
         }
     }
 
+    fn setLastBackgroundPid(self: *Executor, pid: std.process.Child.Id) void {
+        const text = std.fmt.bufPrint(&self.last_background_pid_text, "{d}", .{pid}) catch return;
+        self.last_background_pid_text_len = text.len;
+    }
+
+    fn executeExternalAsync(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
+        const argv = try argvForCommand(self.allocator, command);
+        defer self.allocator.free(argv);
+
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(io);
+        var stdout_file: ?std.Io.File = null;
+        defer if (stdout_file) |file| file.close(io);
+        var stderr_file: ?std.Io.File = null;
+        defer if (stderr_file) |file| file.close(io);
+
+        for (command.redirections) |redirection| {
+            if (isHereDocRedirection(redirection)) {
+                if (stdin_file) |file| file.close(io);
+                stdin_file = try fileFromBytes(io, redirection.here_doc orelse "");
+                continue;
+            }
+            if (isStdinFileRedirection(redirection)) {
+                const target = redirection.target orelse continue;
+                if (stdin_file) |file| file.close(io);
+                stdin_file = try std.Io.Dir.cwd().openFile(io, target.text, .{});
+                continue;
+            }
+            if (isFileOutputRedirection(redirection)) {
+                const target = redirection.target orelse continue;
+                const fd = redirectionFd(redirection) orelse 1;
+                var file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
+                switch (fd) {
+                    1 => {
+                        if (stdout_file) |old| old.close(io);
+                        stdout_file = file;
+                    },
+                    2 => {
+                        if (stderr_file) |old| old.close(io);
+                        stderr_file = file;
+                    },
+                    else => file.close(io),
+                }
+            }
+        }
+
+        var child_env = try self.buildProcessEnv(command.assignments);
+        defer child_env.deinit();
+        var child = std.process.spawn(io, .{
+            .argv = argv,
+            .environ_map = &child_env,
+            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+            .stdout = if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+            .stderr = if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+        }) catch |err| switch (err) {
+            error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            else => return err,
+        };
+        errdefer child.kill(io);
+        if (child.id) |pid| self.setLastBackgroundPid(pid);
+        const thread = try std.Thread.spawn(.{}, reapBackgroundChild, .{ io, child });
+        thread.detach();
+        return emptyResult(self.allocator, 0);
+    }
+
     fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
@@ -1806,6 +1908,11 @@ pub const Executor = struct {
         };
     }
 };
+
+fn reapBackgroundChild(io: std.Io, child: std.process.Child) void {
+    var owned_child = child;
+    _ = owned_child.wait(io) catch {};
+}
 
 fn shellPid() i64 {
     if (zig_builtin.os.tag == .linux and !zig_builtin.link_libc) return @intCast(std.os.linux.getpid());
@@ -4714,6 +4821,36 @@ test "executor implements set shell option baseline" {
     defer verbose.deinit();
     try std.testing.expectEqualStrings("verbose\n", verbose.stdout);
     try std.testing.expect(std.mem.indexOf(u8, verbose.stderr, "echo verbose") != null);
+}
+
+test "executor handles builtin async fallback" {
+    var lowered = try parseAndLower(std.testing.allocator, "echo bg & echo fg");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("bg\nfg\n", result.stdout);
+}
+
+test "executor starts external commands asynchronously" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & echo pid=$!; echo done");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "pid="));
+    try std.testing.expect(std.mem.endsWith(u8, result.stdout, "\ndone\n"));
+    try std.testing.expect(result.stdout.len > "pid=\ndone\n".len);
 }
 
 test "executor applies POSIX pipeline negation" {

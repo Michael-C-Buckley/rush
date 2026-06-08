@@ -37,6 +37,7 @@ pub const Pipeline = struct {
     command_indexes: []usize,
     op_before: ListOp = .sequence,
     negated: bool = false,
+    async_after: bool = false,
 };
 
 pub const IfCommand = struct {
@@ -115,6 +116,7 @@ pub const Statement = struct {
     kind: StatementKind,
     index: usize,
     op_before: ListOp = .sequence,
+    async_after: bool = false,
 };
 
 pub const Program = struct {
@@ -232,6 +234,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         if (previous_pipeline_token_end) |previous_end| {
             lowered.op_before = listOpBetween(parsed.tokens, previous_end, node.token_start);
         }
+        lowered.async_after = statementHasAsyncTerminator(parsed.tokens, node.token_end, nextStatementStart(parsed, node.token_end));
         previous_pipeline_token_end = node.token_end;
         try statement_refs.append(allocator, .{ .kind = .pipeline, .index = pipelines.items.len, .token_start = node.token_start, .token_end = node.token_end });
         try pipelines.append(allocator, lowered);
@@ -294,6 +297,8 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
         if (previous_statement_end) |previous_end| {
             statement.op_before = listOpBetween(parsed.tokens, previous_end, statement_ref.token_start);
         }
+        statement.async_after = statementHasAsyncTerminator(parsed.tokens, statement_ref.token_end, nextStatementStart(parsed, statement_ref.token_end));
+        if (statement.kind == .pipeline) pipelines.items[statement.index].async_after = statement.async_after;
         previous_statement_end = statement_ref.token_end;
         try statements.append(allocator, statement);
     }
@@ -750,6 +755,23 @@ fn lowerPipeline(allocator: std.mem.Allocator, parsed: parser.ParseResult, node:
         .command_indexes = try command_indexes.toOwnedSlice(allocator),
         .negated = negated,
     };
+}
+
+fn nextStatementStart(parsed: parser.ParseResult, start: usize) usize {
+    var index = start;
+    while (index < parsed.tokens.len) : (index += 1) {
+        const kind = parsed.tokens[index].kind;
+        if (kind.isTrivia() or kind == .semicolon or kind == .ampersand or kind == .and_if or kind == .or_if) continue;
+        break;
+    }
+    return index;
+}
+
+fn statementHasAsyncTerminator(tokens: []const parser.Token, start: usize, end: usize) bool {
+    for (tokens[start..end]) |token| {
+        if (token.kind == .ampersand) return true;
+    }
+    return false;
 }
 
 fn listOpBetween(tokens: []const parser.Token, start: usize, end: usize) ListOp {
