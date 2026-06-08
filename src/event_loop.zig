@@ -59,7 +59,7 @@ const EpollEventLoop = struct {
 
     pub fn init() !EpollEventLoop {
         const rc = std.os.linux.epoll_create1(std.os.linux.EPOLL.CLOEXEC);
-        switch (std.os.linux.E.init(rc)) {
+        switch (std.os.linux.errno(rc)) {
             .SUCCESS => return .{ .fd = @intCast(rc) },
             else => return error.Unexpected,
         }
@@ -76,7 +76,7 @@ const EpollEventLoop = struct {
             .data = .{ .u32 = @intFromEnum(source) },
         };
         const rc = std.os.linux.epoll_ctl(self.fd, std.os.linux.EPOLL.CTL_ADD, fd, &event);
-        switch (std.os.linux.E.init(rc)) {
+        switch (std.os.linux.errno(rc)) {
             .SUCCESS => {},
             else => return error.Unexpected,
         }
@@ -85,7 +85,7 @@ const EpollEventLoop = struct {
     pub fn wait(self: *EpollEventLoop, out: []Event) ![]Event {
         var events: [16]std.os.linux.epoll_event = undefined;
         const count = std.os.linux.epoll_wait(self.fd, &events, @intCast(@min(events.len, out.len)), -1);
-        switch (std.os.linux.E.init(count)) {
+        switch (std.os.linux.errno(count)) {
             .SUCCESS => {},
             .INTR => return self.wait(out),
             else => return error.Unexpected,
