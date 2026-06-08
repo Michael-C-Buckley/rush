@@ -214,3 +214,4 @@ builtin-test-file-specials	builtin	behavior	test file type predicates for charac
 builtin-test-symlink-predicates	builtin	behavior	test -L and -h recognize symbolic links without breaking followed file predicates
 builtin-test-terminal-predicate	builtin	behavior	test -t reports false for non-terminal stdin in corpus mode
 builtin-test-mode-bit-predicates	builtin	behavior	test -u -g and -k recognize setuid setgid and sticky mode bits
+builtin-getopts-explicit-args	builtin	behavior	getopts parses explicit arg operands instead of positional parameters

@@ -152,3 +152,4 @@ rm -f regular fifo; : > regular; mkfifo fifo; test -c /dev/null; echo char=$?; t
 rm -f target link; : > target; ln -s target link; test -L link; echo L=$?; test -h link; echo h=$?; test -L target; echo file=$?; test -f link; echo follows=$?
 test -t 0; echo stdin=$?
 rm -f modefile; : > modefile; chmod 7600 modefile; test -u modefile; echo setuid=$?; test -g modefile; echo setgid=$?; test -k modefile; echo sticky=$?; chmod 0600 modefile; test -u modefile; echo no-setuid=$?
+while getopts ab: opt -a -b bee; do printf '%s/%s/%s\n' "$opt" "${OPTARG-}" "$OPTIND"; done; echo done=$OPTIND
