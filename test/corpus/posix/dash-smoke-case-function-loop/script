@@ -1,0 +1,2 @@
+classify() { case "$1" in a|b) echo small ;; *) echo other ;; esac; }
+for x in a c; do classify "$x"; done

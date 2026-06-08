@@ -68,6 +68,7 @@ builtin-umask	builtin	builtin	-
 builtin-unalias-remove	builtin	builtin	-
 builtin-wait	builtin	builtin	-
 busybox-ash-smoke-printf-redirection	builtin	external-suite-smoke	BusyBox ash-inspired printf with output redirection
+busybox-ash-smoke-read-ifs-redirection	builtin	external-suite-smoke	BusyBox ash-inspired read IFS splitting with input redirection
 busybox-ash-smoke-read-redirection	redirection	external-suite-smoke	BusyBox ash-inspired input redirection into read loop
 busybox-ash-smoke-test-redirection	builtin	external-suite-smoke	BusyBox ash-inspired test -s around redirected files
 case-default	grammar	behavior	-
@@ -77,9 +78,12 @@ case-multiple-patterns	grammar	behavior	case arm with multiple pattern alternati
 case-pattern	grammar	behavior	-
 command-substitution	expansion	behavior	-
 comments-ignored	lexing	behavior	-
+dash-smoke-case-function-loop	grammar	external-suite-smoke	dash-compatible function case dispatch inside a for loop
 dash-smoke-function-redirection	grammar	external-suite-smoke	dash-compatible function redirection smoke case
 dash-smoke-loop-case	grammar	external-suite-smoke	dash-compatible loop and case smoke case
+dash-smoke-shift-operands	builtin	external-suite-smoke	dash-compatible shift operand smoke case
 dash-smoke-subshell-env	grammar	external-suite-smoke	dash-compatible subshell environment isolation smoke case
+dash-smoke-subshell-status	grammar	external-suite-smoke	dash-compatible subshell status and environment smoke case
 errexit-and-or-final-exits	options	option	final AND-OR list command failure triggers errexit
 errexit-and-or-suppression	options	option	errexit is suppressed before AND-OR list operators
 errexit-negation-suppression	options	option	errexit is suppressed for negated pipelines
