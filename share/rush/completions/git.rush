@@ -1,38 +1,236 @@
-# Small first-party Git completion slice.
+# Practical first-party Git completion slice using Rush's structured DSL.
 
+# Global options.
 complete git --option --short C --value-name path --description 'run as if git started in path'
 complete git --option --long git-dir --value-name path --description 'path to the repository'
+complete git --option --long work-tree --value-name path --description 'path to the working tree'
 complete git --option --long help --description 'show help'
+complete git --option --long version --description 'show version'
+complete git --option --long paginate --description 'pipe output into a pager'
+complete git --option --long no-pager --description 'do not pipe output into a pager'
 
-complete git --subcommand status --description 'show the working tree status'
+# Common root subcommands.
 complete git --subcommand add --description 'add file contents to the index'
-complete git --subcommand commit --description 'record changes to the repository'
-complete git --subcommand checkout --description 'switch branches or restore paths'
-complete git --subcommand switch --description 'switch branches'
 complete git --subcommand branch --description 'list, create, or delete branches'
-complete git --subcommand log --description 'show commit logs'
+complete git --subcommand checkout --description 'switch branches or restore paths'
+complete git --subcommand clone --description 'clone a repository'
+complete git --subcommand commit --description 'record changes to the repository'
+complete git --subcommand config --description 'get and set repository or global options'
 complete git --subcommand diff --description 'show changes'
+complete git --subcommand fetch --description 'download objects and refs from another repository'
+complete git --subcommand grep --description 'print lines matching a pattern'
+complete git --subcommand init --description 'create an empty repository'
+complete git --subcommand log --description 'show commit logs'
+complete git --subcommand merge --description 'join development histories'
+complete git --subcommand mv --description 'move or rename a file'
+complete git --subcommand pull --description 'fetch from and integrate with another repository'
+complete git --subcommand push --description 'update remote refs'
+complete git --subcommand rebase --description 'reapply commits on top of another base'
+complete git --subcommand remote --description 'manage tracked repositories'
+complete git --subcommand reset --description 'reset current HEAD'
+complete git --subcommand restore --description 'restore working tree files'
+complete git --subcommand rm --description 'remove files from the working tree and index'
+complete git --subcommand show --description 'show objects'
+complete git --subcommand stash --description 'stash working tree changes'
+complete git --subcommand status --description 'show the working tree status'
+complete git --subcommand switch --description 'switch branches'
+complete git --subcommand tag --description 'create, list, delete, or verify tags'
 
+# add
 complete 'git add' --option --long patch --description 'interactively choose hunks'
+complete 'git add' --option --short p --description 'interactively choose hunks'
 complete 'git add' --option --long all --description 'add changes from the whole tree'
+complete 'git add' --option --short A --description 'add changes from the whole tree'
+complete 'git add' --option --long update --description 'update tracked files'
 complete 'git add' --argument --function __rush_complete_git_paths
 
-complete 'git commit' --option --long amend --description 'amend the previous commit'
-complete 'git commit' --option --short m --value-name message --description 'use the given commit message'
-complete 'git commit' --option --long message --value-name message --description 'use the given commit message'
-complete 'git commit' --option --long all --description 'stage tracked files before committing'
+# branch
+complete 'git branch' --option --long all --description 'list remote-tracking and local branches'
+complete 'git branch' --option --short a --description 'list remote-tracking and local branches'
+complete 'git branch' --option --long delete --description 'delete a branch'
+complete 'git branch' --option --short d --description 'delete a branch'
+complete 'git branch' --option --long force --description 'force creation, move, or deletion'
+complete 'git branch' --option --short f --description 'force creation, move, or deletion'
+complete 'git branch' --option --long move --description 'move or rename a branch'
+complete 'git branch' --option --short m --description 'move or rename a branch'
+complete 'git branch' --argument --function __rush_complete_git_branches
 
+# checkout / switch
 complete 'git checkout' --option --long branch --description 'create and checkout a new branch'
+complete 'git checkout' --option --short b --value-name branch --description 'create and checkout a new branch'
+complete 'git checkout' --option --long force --description 'force checkout'
+complete 'git checkout' --option --short f --description 'force checkout'
+complete 'git checkout' --option --long detach --description 'detach HEAD'
 complete 'git checkout' --argument --function __rush_complete_git_refs
 complete 'git switch' --option --long create --value-name branch --description 'create a new branch'
-complete 'git switch' --argument --function __rush_complete_git_refs
+complete 'git switch' --option --short c --value-name branch --description 'create a new branch'
+complete 'git switch' --option --long detach --description 'detach HEAD'
+complete 'git switch' --option --long force --description 'force switch'
+complete 'git switch' --argument --function __rush_complete_git_branches
+
+# commit
+complete 'git commit' --option --long amend --description 'amend the previous commit'
+complete 'git commit' --option --long all --description 'stage tracked files before committing'
+complete 'git commit' --option --short a --description 'stage tracked files before committing'
+complete 'git commit' --option --long message --value-name message --description 'use the given commit message'
+complete 'git commit' --option --short m --value-name message --description 'use the given commit message'
+complete 'git commit' --option --long signoff --description 'add a Signed-off-by trailer'
+complete 'git commit' --option --short s --description 'add a Signed-off-by trailer'
+complete 'git commit' --option --long no-verify --description 'bypass pre-commit and commit-msg hooks'
+
+# diff / log / show / grep
+complete 'git diff' --option --long staged --description 'compare staged changes'
+complete 'git diff' --option --long cached --description 'compare staged changes'
+complete 'git diff' --option --long name-only --description 'show only names of changed files'
+complete 'git diff' --option --long stat --description 'show diffstat'
+complete 'git diff' --argument --function __rush_complete_git_refs
+complete 'git log' --option --long oneline --description 'show one commit per line'
+complete 'git log' --option --long graph --description 'draw commit graph'
+complete 'git log' --option --long decorate --description 'print ref names'
+complete 'git log' --option --long all --description 'show all refs'
+complete 'git log' --argument --function __rush_complete_git_refs
+complete 'git show' --option --long stat --description 'show diffstat'
+complete 'git show' --argument --function __rush_complete_git_refs
+complete 'git grep' --option --long ignore-case --description 'match case-insensitively'
+complete 'git grep' --option --short i --description 'match case-insensitively'
+complete 'git grep' --option --long line-number --description 'show line numbers'
+complete 'git grep' --option --short n --description 'show line numbers'
+
+# fetch / pull / push
+complete 'git fetch' --option --long all --description 'fetch all remotes'
+complete 'git fetch' --option --long prune --description 'prune deleted remote refs'
+complete 'git fetch' --option --long tags --description 'fetch all tags'
+complete 'git fetch' --argument --function __rush_complete_git_remotes
+complete 'git pull' --option --long rebase --description 'rebase after fetching'
+complete 'git pull' --option --long ff-only --description 'refuse non-fast-forward merges'
+complete 'git pull' --argument --function __rush_complete_git_remotes
+complete 'git push' --option --long force-with-lease --description 'force safely with lease'
+complete 'git push' --option --long force --description 'force update remote refs'
+complete 'git push' --option --short f --description 'force update remote refs'
+complete 'git push' --option --long tags --description 'push all refs under refs/tags'
+complete 'git push' --option --long set-upstream --description 'set upstream for the branch'
+complete 'git push' --option --short u --description 'set upstream for the branch'
+complete 'git push' --argument --function __rush_complete_git_remotes
+
+# merge / rebase / reset / restore
+complete 'git merge' --option --long abort --description 'abort the current merge'
+complete 'git merge' --option --long continue --description 'continue the current merge'
+complete 'git merge' --option --long no-ff --description 'create a merge commit'
+complete 'git merge' --argument --function __rush_complete_git_refs
+complete 'git rebase' --option --long abort --description 'abort the current rebase'
+complete 'git rebase' --option --long continue --description 'continue the current rebase'
+complete 'git rebase' --option --long interactive --description 'make a list of commits to rebase'
+complete 'git rebase' --option --short i --description 'make a list of commits to rebase'
+complete 'git rebase' --argument --function __rush_complete_git_refs
+complete 'git reset' --option --long soft --description 'reset HEAD only'
+complete 'git reset' --option --long mixed --description 'reset index but not working tree'
+complete 'git reset' --option --long hard --description 'reset index and working tree'
+complete 'git reset' --argument --function __rush_complete_git_refs
+complete 'git restore' --option --long staged --description 'restore the index'
+complete 'git restore' --option --long source --value-name tree --description 'restore from tree-ish'
+complete 'git restore' --option-value --long source --function __rush_complete_git_refs
+complete 'git restore' --argument --function __rush_complete_git_paths
+
+# rm / mv
+complete 'git rm' --option --long cached --description 'unstage and remove paths only from the index'
+complete 'git rm' --option --long force --description 'override up-to-date checks'
+complete 'git rm' --option --short f --description 'override up-to-date checks'
+complete 'git rm' --argument --function __rush_complete_git_paths
+complete 'git mv' --option --long force --description 'force rename or move'
+complete 'git mv' --option --short f --description 'force rename or move'
+complete 'git mv' --argument --function __rush_complete_git_paths
+
+# remote
+complete 'git remote' --subcommand add --description 'add a remote'
+complete 'git remote' --subcommand remove --description 'remove a remote'
+complete 'git remote' --subcommand rename --description 'rename a remote'
+complete 'git remote' --subcommand set-url --description 'change remote URL'
+complete 'git remote' --subcommand show --description 'show remote information'
+complete 'git remote remove' --argument --function __rush_complete_git_remotes
+complete 'git remote rename' --argument --function __rush_complete_git_remotes
+complete 'git remote set-url' --argument --function __rush_complete_git_remotes
+complete 'git remote show' --argument --function __rush_complete_git_remotes
+
+# stash
+complete 'git stash' --subcommand push --description 'save local changes'
+complete 'git stash' --subcommand list --description 'list stashes'
+complete 'git stash' --subcommand pop --description 'apply and drop a stash'
+complete 'git stash' --subcommand apply --description 'apply a stash'
+complete 'git stash' --subcommand drop --description 'drop a stash'
+complete 'git stash' --subcommand clear --description 'remove all stashes'
+complete 'git stash push' --option --long message --value-name message --description 'stash message'
+complete 'git stash push' --option --short m --value-name message --description 'stash message'
+complete 'git stash pop' --argument --function __rush_complete_git_stashes
+complete 'git stash apply' --argument --function __rush_complete_git_stashes
+complete 'git stash drop' --argument --function __rush_complete_git_stashes
+
+# tag / config / clone / init
+complete 'git tag' --option --long annotated --description 'make an unsigned annotated tag'
+complete 'git tag' --option --short a --description 'make an unsigned annotated tag'
+complete 'git tag' --option --long delete --description 'delete tags'
+complete 'git tag' --option --short d --description 'delete tags'
+complete 'git tag' --option --long force --description 'replace an existing tag'
+complete 'git tag' --option --short f --description 'replace an existing tag'
+complete 'git tag' --argument --function __rush_complete_git_tags
+complete 'git config' --option --long global --description 'use global config file'
+complete 'git config' --option --long local --description 'use repository config file'
+complete 'git config' --option --long unset --description 'remove a variable'
+complete 'git config' --option --long list --description 'list variables'
+complete 'git clone' --option --long branch --value-name branch --description 'checkout branch instead of remote HEAD'
+complete 'git clone' --option --short b --value-name branch --description 'checkout branch instead of remote HEAD'
+complete 'git clone' --option --long depth --value-name depth --description 'create a shallow clone'
+complete 'git clone' --option --long recurse-submodules --description 'initialize submodules'
+complete 'git clone' --argument --function __rush_complete_git_directories
+complete 'git init' --option --long bare --description 'create a bare repository'
+complete 'git init' --option --long initial-branch --value-name branch --description 'initial branch name'
+complete 'git init' --option --short b --value-name branch --description 'initial branch name'
+complete 'git init' --argument --function __rush_complete_git_directories
 
 __rush_complete_git_paths() {
   completion files
 }
 
-__rush_complete_git_refs() {
-  git branch --format='%(refname:short)' 2>/dev/null | while read ref; do
+__rush_complete_git_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_git_branches() {
+  tmp=$(mktemp)
+  git branch --format='%(refname:short)' > "$tmp" 2>/dev/null
+  while read ref; do
     completion candidate "$ref" --kind plain --description branch
-  done
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_tags() {
+  tmp=$(mktemp)
+  git tag --list > "$tmp" 2>/dev/null
+  while read tag; do
+    completion candidate "$tag" --kind plain --description tag
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_remotes() {
+  tmp=$(mktemp)
+  git remote > "$tmp" 2>/dev/null
+  while read remote; do
+    completion candidate "$remote" --kind plain --description remote
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_refs() {
+  __rush_complete_git_branches
+  __rush_complete_git_tags
+}
+
+__rush_complete_git_stashes() {
+  tmp=$(mktemp)
+  git stash list --format='%gd' > "$tmp" 2>/dev/null
+  while read stash; do
+    completion candidate "$stash" --kind plain --description stash
+  done < "$tmp"
+  rm -f "$tmp"
 }
