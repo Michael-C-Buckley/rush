@@ -38,7 +38,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `errors-special-builtin` | partial | high | assignment persistence and redirection negative coverage | expansion and utility-specific shell-exit consequences need more detail |
 | `errors-nounset` | baseline | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution in current baseline |
 | `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | bad fd, noclobber, and missing input diagnostics exist; more redirection classes need stricter modeling |
-| `errors-special-builtin-redirection` | baseline | high | negative corpus | noclobber special-builtin redirection failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap`; missing input redirection failure exits for `:`; more redirection classes need cases |
+| `errors-special-builtin-redirection` | baseline | high | negative corpus | noclobber special-builtin redirection failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap`; missing input and bad fd redirection failures exit for `:`; more redirection classes need cases |
 | `errors-special-builtin-expansion` | baseline | high | negative corpus | ${parameter:?word} special-builtin expansion failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap`; more expansion classes need cases |
 
 ## POSIX consequence areas to expand
@@ -57,7 +57,7 @@ Current coverage includes bad fd duplication, noclobber, and missing input redir
 
 ### Special builtin failures
 
-High-risk and under-covered. `:` plus `eval`, `export`, `readonly`, `set`, `unset`, and `trap` now cover baseline non-interactive exit consequences for noclobber redirection failures and `${parameter:?word}` expansion failures; `:` also covers missing input redirection exit consequences. Add cases for other POSIX special builtins and for other expansion or redirection classes. Track whether non-interactive execution should stop and whether assignment side effects persist.
+High-risk and under-covered. `:` plus `eval`, `export`, `readonly`, `set`, `unset`, and `trap` now cover baseline non-interactive exit consequences for noclobber redirection failures and `${parameter:?word}` expansion failures; `:` also covers missing input and bad fd redirection exit consequences. Add cases for other POSIX special builtins and for other expansion or redirection classes. Track whether non-interactive execution should stop and whether assignment side effects persist.
 
 ### Regular builtin failures
 
