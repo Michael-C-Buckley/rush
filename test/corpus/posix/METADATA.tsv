@@ -90,6 +90,7 @@ case-subject-in-word	grammar	behavior	case subject word may be the reserved word
 command-substitution	expansion	behavior	-
 comments-ignored	lexing	behavior	-
 dash-smoke-case-function-loop	grammar	external-suite-smoke	dash-compatible function case dispatch inside a for loop
+dash-smoke-dot-current-env	builtin	external-suite-smoke	dash-compatible dot utility current-shell environment smoke case
 dash-smoke-function-redirection	grammar	external-suite-smoke	dash-compatible function redirection smoke case
 dash-smoke-loop-case	grammar	external-suite-smoke	dash-compatible loop and case smoke case
 dash-smoke-shift-operands	builtin	external-suite-smoke	dash-compatible shift operand smoke case

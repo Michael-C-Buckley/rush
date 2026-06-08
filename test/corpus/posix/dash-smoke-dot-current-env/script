@@ -1,0 +1,4 @@
+printf '%s\n' 'dot_value=loaded' 'dot_func() { echo func:$dot_value; }' > dot-script
+. ./dot-script
+echo var:$dot_value
+dot_func
