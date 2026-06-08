@@ -180,6 +180,9 @@ special-status	variables	behavior	-
 strict-misplaced-reserved-word	errors	negative	-
 subshell-isolates-env	grammar	behavior	-
 unquoted-at-custom-ifs	expansion	behavior	unquoted $@ splits each positional with custom IFS
+unquoted-at-embedded-positionals	expansion	behavior	embedded unquoted $@ applies surrounding text to first and last generated fields
+unquoted-at-empty-positionals	expansion	behavior	unquoted $@ removes empty positional fields during field splitting
+unquoted-at-zero-positionals	expansion	behavior	unquoted $@ with no positional parameters produces no fields
 unquoted-star-custom-ifs	expansion	behavior	unquoted $* joins with custom IFS then splits
 until-true	grammar	behavior	-
 while-false	grammar	behavior	-
