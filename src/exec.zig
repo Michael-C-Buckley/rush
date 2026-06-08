@@ -5855,8 +5855,8 @@ fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     _ = options;
     const positionals = self.currentPositionalsPtr();
     const amount: usize = if (command.argv.len == 1) 1 else blk: {
-        if (command.argv.len > 2) return errorResult(self.allocator, 2, "shift", "too many arguments");
-        break :blk std.fmt.parseInt(usize, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, "shift", "numeric argument required");
+        if (command.argv.len > 2) return shiftUsageError(self, "too many arguments");
+        break :blk std.fmt.parseInt(usize, command.argv[1].text, 10) catch return shiftUsageError(self, "numeric argument required");
     };
     if (amount > positionals.params.len) {
         self.pending_exit = 1;
@@ -5871,6 +5871,11 @@ fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     }
     try positionals.rebuildDerived(self.allocator);
     return emptyResult(self.allocator, 0);
+}
+
+fn shiftUsageError(self: *Executor, message: []const u8) !CommandResult {
+    self.pending_exit = 2;
+    return errorResult(self.allocator, 2, "shift", message);
 }
 
 fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
