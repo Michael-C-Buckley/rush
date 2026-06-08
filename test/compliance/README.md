@@ -39,3 +39,59 @@ Run `scripts/report-compliance.sh` or `zig build compliance` to summarize confor
 `out_of_scope` rows are excluded from score denominators. Corpus pass counts report the current test inventory only; they do not imply complete POSIX coverage.
 
 The `granularity` and `risk` fields are intended to prevent false confidence. A 100% score over mostly `coarse` rows is weaker than a 100% score over `detailed` or `spec_clause` rows, and high-risk baseline rows should usually be expanded before being promoted to `supported`.
+
+## Status promotion criteria
+
+Manifest status changes should be evidence-based. When in doubt, use the lower status and record the remaining gap in `notes`.
+
+### `missing`
+
+Use `missing` when Rush has no implementation, only placeholder behavior, or rejects the feature entirely. A row can leave `missing` only when there is executable behavior plus at least one unit test or corpus case showing the intended baseline.
+
+### `partial`
+
+Use `partial` when Rush has recognizable behavior but significant POSIX semantics are absent or knowingly wrong. Typical `partial` rows have one or more of:
+
+- implementation exists for only a narrow happy path;
+- major operands, options, grammar branches, or error consequences are absent;
+- behavior is known to diverge from POSIX for common scripts;
+- no POSIX expected-output corpus coverage exists yet;
+- high-risk behavior is still represented by a coarse row.
+
+Promote `partial` to `baseline` when the common behavior works, meaningful unit or POSIX corpus coverage exists, and remaining gaps are edge cases documented in `notes` or follow-up Tend tasks.
+
+### `baseline`
+
+Use `baseline` when Rush implements useful, script-relevant behavior and has meaningful test coverage, but the row is not yet exhaustive enough for `supported`. A `baseline` row should normally have:
+
+- unit coverage or POSIX expected-output corpus coverage;
+- differential corpus coverage when comparison shells agree and diagnostics are stable enough;
+- documented remaining POSIX edge cases in `notes`;
+- no known failures for the common behavior described by `feature`.
+
+Keep a row at `baseline` instead of `supported` when it is `coarse`, `high` risk, or represents a utility/semantic area with many untracked subrequirements.
+
+### `supported`
+
+Use `supported` only when the row is narrow enough and covered enough that we are comfortable treating it as implemented for the tracked POSIX requirement. A `supported` row should have:
+
+- `granularity=detailed` or `granularity=spec_clause`, except for genuinely small low-risk features;
+- unit coverage for parser/executor internals where applicable;
+- POSIX expected-output corpus coverage for externally visible behavior;
+- differential corpus coverage when comparison shells agree;
+- negative/error coverage when the feature includes diagnostics or shell-error consequences;
+- no known untracked high-risk edge cases in `notes`.
+
+High-risk rows should generally not be promoted to `supported` until they have been split into detailed or spec-clause subitems and those subitems have coverage.
+
+### `out_of_scope`
+
+Use `out_of_scope` for POSIX-adjacent extensions or intentionally deferred UX/Bash features that should not affect POSIX conformance scoring. Keep completion, prompt, editor, and Bash-only features out of POSIX score denominators unless they directly affect POSIX shell semantics.
+
+## Coverage expectations
+
+- **Unit tests** prove internal parser, expansion, or executor mechanics.
+- **POSIX corpus cases** prove Rush's expected externally visible behavior.
+- **Differential corpus cases** prove agreement with available comparison shells where portable agreement exists.
+- **Negative corpus cases** are required before error-heavy rows can be considered `supported`.
+- **Cross-target compile checks** are required for portability-sensitive implementation changes, but they do not replace runtime POSIX behavior tests.
