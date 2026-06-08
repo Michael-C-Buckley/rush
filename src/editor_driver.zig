@@ -11,6 +11,11 @@ const line_editor = @import("line_editor.zig");
 const completion = @import("completion.zig");
 
 const read_chunk_size = 4096;
+const invalid_fd: std.posix.fd_t = -1;
+
+const ResizeSignalFd = struct {
+    var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
+};
 
 pub const DriverEvent = union(enum) {
     tty_read_ready,
@@ -49,6 +54,8 @@ pub const TerminalCapabilities = struct {
     multi_cursor: bool = false,
     synchronized_output: bool = true,
     bracketed_paste: bool = false,
+    in_band_resize_enabled: bool = false,
+    in_band_resize: bool = false,
 
     pub fn widthMethod(self: TerminalCapabilities) vaxis.gwidth.Method {
         return if (self.unicode) .unicode else .wcwidth;
@@ -64,9 +71,11 @@ pub const TerminalCapabilities = struct {
                 vaxis.ctlseqs.kitty_graphics_query ++
                 vaxis.ctlseqs.multi_cursor_query ++
                 vaxis.ctlseqs.primary_device_attrs ++
+                vaxis.ctlseqs.in_band_resize_set ++
                 vaxis.ctlseqs.bp_set,
         );
         self.bracketed_paste = true;
+        self.in_band_resize_enabled = true;
     }
 
     pub fn apply(self: *TerminalCapabilities, allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, capability: Capability) !void {
@@ -96,9 +105,12 @@ pub const TerminalCapabilities = struct {
     pub fn reset(self: *TerminalCapabilities, tty: *vaxis.tty.PosixTty) void {
         if (self.kitty_keyboard) writeTtyAll(tty, vaxis.ctlseqs.csi_u_pop) catch {};
         if (self.unicode) writeTtyAll(tty, vaxis.ctlseqs.unicode_reset) catch {};
+        if (self.in_band_resize_enabled) writeTtyAll(tty, vaxis.ctlseqs.in_band_resize_reset) catch {};
         if (self.bracketed_paste) writeTtyAll(tty, vaxis.ctlseqs.bp_reset) catch {};
         self.kitty_keyboard = false;
         self.unicode = false;
+        self.in_band_resize_enabled = false;
+        self.in_band_resize = false;
         self.bracketed_paste = false;
     }
 };
@@ -205,6 +217,7 @@ pub const TerminalSession = struct {
     tty_buffer: []u8,
     tty: vaxis.tty.PosixTty,
     wake: Pipe,
+    resize: ResizeSignalSource,
     loop: event_loop.EventLoop,
     reader: OneShotReader,
     terminal_parser: TerminalParser,
@@ -220,9 +233,12 @@ pub const TerminalSession = struct {
 
         var wake = try makePipe(io);
         errdefer wake.close(io);
+        var resize = try ResizeSignalSource.init(io);
+        errdefer resize.deinit(io);
         var loop = try event_loop.EventLoop.init();
         errdefer loop.deinit();
         try loop.addReadFd(wake.read.handle, .tty_input);
+        try loop.addReadFd(resize.readFd(), .resize);
 
         const read_fd = try rawDup(tty.fd.handle);
         const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
@@ -236,6 +252,7 @@ pub const TerminalSession = struct {
             .tty_buffer = tty_buffer,
             .tty = tty,
             .wake = wake,
+            .resize = resize,
             .loop = loop,
             .reader = reader,
             .terminal_parser = .init(allocator),
@@ -251,6 +268,7 @@ pub const TerminalSession = struct {
         self.terminal_parser.deinit();
         self.reader.deinit();
         self.loop.deinit();
+        self.resize.deinit(self.io);
         self.wake.read.close(self.io);
         self.tty.deinit();
         self.allocator.free(self.tty_buffer);
@@ -287,18 +305,20 @@ pub const TerminalSession = struct {
         try renderSession(self.allocator, &self.tty, session, self.capabilities, self.winsize);
         try self.reader.arm();
         while (session.state == .editing) {
+            var render_needed = false;
             var loop_events: [8]event_loop.Event = undefined;
             const ready = try self.loop.wait(&loop_events);
             self.events.clearRetainingCapacity();
             for (ready) |ready_event| {
                 switch (ready_event.source) {
                     .tty_input => try self.processTtyInput(),
-                    .resize => {},
+                    .resize => try self.processResizeSignal(),
                 }
             }
             for (self.events.items) |event| {
                 switch (event) {
                     .key_press => |key| {
+                        render_needed = true;
                         if (isCompletionTab(key) and options.complete != null and options.completion_context != null) {
                             const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                             defer application.deinit(self.allocator);
@@ -307,15 +327,29 @@ pub const TerminalSession = struct {
                             try session.handleKey(key);
                         }
                     },
-                    .paste_start => session.beginPaste(),
-                    .paste_end => session.endPaste(),
-                    .resize => |winsize| self.winsize = winsize,
-                    .capability => |capability| try self.capabilities.apply(self.allocator, &self.tty, capability),
+                    .paste_start => {
+                        render_needed = true;
+                        session.beginPaste();
+                    },
+                    .paste_end => {
+                        render_needed = true;
+                        session.endPaste();
+                    },
+                    .resize => |winsize| {
+                        if (!sameWinsize(self.winsize, winsize)) {
+                            render_needed = true;
+                            self.winsize = winsize;
+                        }
+                    },
+                    .capability => |capability| {
+                        render_needed = true;
+                        try self.capabilities.apply(self.allocator, &self.tty, capability);
+                    },
                     .key_release, .focus_in, .focus_out => {},
                 }
             }
             if (session.state == .editing) {
-                try renderSession(self.allocator, &self.tty, session, self.capabilities, self.winsize);
+                if (render_needed) try renderSession(self.allocator, &self.tty, session, self.capabilities, self.winsize);
                 try self.reader.arm();
             }
         }
@@ -342,12 +376,33 @@ pub const TerminalSession = struct {
         _ = try rawRead(self.wake.read.handle, &wake_buffer);
         const bytes = try self.reader.takeReady();
         self.terminal_parser.resetEventText();
+        const old_len = self.events.items.len;
         try self.terminal_parser.feed(bytes, &self.events);
+        for (self.events.items[old_len..]) |event| {
+            if (event == .resize and !self.capabilities.in_band_resize) {
+                self.capabilities.in_band_resize = true;
+                self.resize.disable(self.io);
+            }
+        }
+    }
+
+    fn processResizeSignal(self: *TerminalSession) !void {
+        self.resize.drain();
+        const winsize = self.tty.getWinsize() catch return;
+        if (sameWinsize(self.winsize, winsize)) return;
+        try self.events.append(self.allocator, .{ .resize = winsize });
     }
 };
 
 fn isCompletionTab(key: line_editor.KeyEvent) bool {
     return key.key == .tab or (key.key == .text and std.mem.eql(u8, key.text, "\t"));
+}
+
+fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
+    return a.rows == b.rows and
+        a.cols == b.cols and
+        a.x_pixel == b.x_pixel and
+        a.y_pixel == b.y_pixel;
 }
 
 fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize) !void {
@@ -376,6 +431,61 @@ pub const Pipe = struct {
         self.* = undefined;
     }
 };
+
+const ResizeSignalSource = struct {
+    pipe: ?Pipe,
+    previous: ?std.posix.Sigaction,
+
+    fn init(io: std.Io) !ResizeSignalSource {
+        var pipe = try makePipe(io);
+        errdefer pipe.close(io);
+        try setNonBlocking(pipe.read.handle);
+        try setNonBlocking(pipe.write.handle);
+
+        ResizeSignalFd.value.store(pipe.write.handle, .release);
+        const action: std.posix.Sigaction = .{
+            .handler = .{ .handler = resizeSignalHandler },
+            .mask = std.posix.sigemptyset(),
+            .flags = 0,
+        };
+        var previous: std.posix.Sigaction = undefined;
+        std.posix.sigaction(.WINCH, &action, &previous);
+        return .{ .pipe = pipe, .previous = previous };
+    }
+
+    fn readFd(self: ResizeSignalSource) std.posix.fd_t {
+        return self.pipe.?.read.handle;
+    }
+
+    fn drain(self: *ResizeSignalSource) void {
+        const pipe = self.pipe orelse return;
+        var buffer: [64]u8 = undefined;
+        _ = rawRead(pipe.read.handle, &buffer) catch {};
+    }
+
+    fn disable(self: *ResizeSignalSource, io: std.Io) void {
+        ResizeSignalFd.value.store(invalid_fd, .release);
+        if (self.previous) |previous| {
+            std.posix.sigaction(.WINCH, &previous, null);
+            self.previous = null;
+        }
+        if (self.pipe) |*pipe| {
+            pipe.close(io);
+            self.pipe = null;
+        }
+    }
+
+    fn deinit(self: *ResizeSignalSource, io: std.Io) void {
+        self.disable(io);
+        self.* = undefined;
+    }
+};
+
+fn resizeSignalHandler(_: std.posix.SIG) callconv(.c) void {
+    const fd = ResizeSignalFd.value.load(.acquire);
+    if (fd == invalid_fd) return;
+    _ = std.c.write(fd, "r", 1);
+}
 
 pub fn makePipe(io: std.Io) !Pipe {
     const fds = switch (builtin.os.tag) {
@@ -643,6 +753,22 @@ fn setCloseOnExec(fd: std.posix.fd_t) !void {
         .SUCCESS => {},
         .BADF => return error.BadFileDescriptor,
         .INVAL => return error.Unexpected,
+        else => return error.Unexpected,
+    }
+}
+
+fn setNonBlocking(fd: std.posix.fd_t) !void {
+    const flags = std.c.fcntl(fd, @as(c_int, std.c.F.GETFL));
+    switch (std.c.errno(flags)) {
+        .SUCCESS => {},
+        .BADF => return error.BadFileDescriptor,
+        else => return error.Unexpected,
+    }
+    const nonblock: c_int = @bitCast(std.c.O{ .NONBLOCK = true });
+    const rc = std.c.fcntl(fd, @as(c_int, std.c.F.SETFL), flags | nonblock);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => {},
+        .BADF => return error.BadFileDescriptor,
         else => return error.Unexpected,
     }
 }
