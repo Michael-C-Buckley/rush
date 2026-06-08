@@ -61,6 +61,10 @@ Metadata columns:
 
 The compliance report uses this metadata to print POSIX corpus case counts by area.
 
+## Expansion submatrix
+
+`expansion-submatrix.md` tracks POSIX expansion phases, current corpus coverage, known gaps, and follow-up tasks. Use it when adding expansion corpus cases or changing parameter, command substitution, arithmetic, field splitting, pathname, or quote-removal behavior.
+
 ## Error consequence submatrix
 
 `error-consequences.md` tracks syntax, expansion, redirection, special-builtin, and builtin diagnostic consequences separately from normal behavior coverage. Use it when adding negative corpus cases or implementing stricter POSIX shell-error behavior.
