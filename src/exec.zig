@@ -293,19 +293,20 @@ const MatchedCompletionOption = struct {
 
 fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?MatchedCompletionOption {
     for (rules) |rule| {
-        if (rule.kind != .option or !completionRuleContextMatches(rule, root, path)) continue;
+        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextMatches(rule, root, path)) continue;
+        const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
         if (rule.option.long) |long| {
             var spelling_buffer: [256]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = rule.option.argument != null, .attached_value = false, .name = long, .spelling = word };
-            if (rule.option.argument != null and std.mem.startsWith(u8, word, spelling) and word.len > spelling.len and word[spelling.len] == '=') {
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = long, .spelling = word };
+            if (takes_value and std.mem.startsWith(u8, word, spelling) and word.len > spelling.len and word[spelling.len] == '=') {
                 return .{ .takes_value = true, .attached_value = true, .name = long, .spelling = word[0..spelling.len] };
             }
         }
         if (rule.option.short) |short| {
             var spelling_buffer: [32]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = rule.option.argument != null, .attached_value = false, .name = short, .spelling = word };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = short, .spelling = word };
         }
     }
     return null;
@@ -334,6 +335,30 @@ fn completionRuleContextAppliesToPath(rule: completion.Rule, root: []const u8, p
         if (!std.mem.eql(u8, expected, actual)) return false;
     }
     return true;
+}
+
+fn completionDynamicRuleMatches(rule: completion.Rule, context: CompletionSemanticContext) bool {
+    return switch (rule.kind) {
+        .dynamic_subcommands => context.position == .subcommand and completionRuleContextMatches(rule, context.root, context.path),
+        .dynamic_options => context.position == .option and completionRuleContextAppliesToPath(rule, context.root, context.path),
+        .dynamic_argument => (context.position == .subcommand or context.position == .argument) and completionRuleContextMatches(rule, context.root, context.path),
+        .dynamic_option_value => context.position == .option_value and completionRuleContextMatches(rule, context.root, context.path) and completionOptionValueMatches(rule, context.option_value),
+        else => false,
+    };
+}
+
+fn completionOptionValueMatches(rule: completion.Rule, option_value: ?CompletionOptionValue) bool {
+    const active = option_value orelse return false;
+    if (rule.option.long) |long| if (std.mem.eql(u8, active.name, long)) return true;
+    if (rule.option.short) |short| if (std.mem.eql(u8, active.name, short)) return true;
+    return rule.option.long == null and rule.option.short == null;
+}
+
+fn completionBuilderContains(builder: CompletionBuilder, value: []const u8) bool {
+    for (builder.candidates.items) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) return true;
+    }
+    return false;
 }
 
 fn isOptionLike(word: []const u8) bool {
@@ -683,12 +708,13 @@ pub const Executor = struct {
         }
 
         const candidates = try self.collectCompletionsWithContext(context.command, context, options);
-        if (semantic.root.len == 0 or semantic.position == .command or semantic.position == .option_value) return candidates;
+        if (semantic.root.len == 0 or semantic.position == .command) return candidates;
 
         var builder: CompletionBuilder = .{};
         errdefer builder.deinit(self.allocator);
         for (candidates) |candidate| try builder.appendCandidate(self.allocator, candidate);
-        try self.appendStructuredCompletionCandidates(&builder, semantic);
+        if (semantic.position != .option_value) try self.appendStructuredCompletionCandidates(&builder, semantic);
+        try self.appendDynamicStructuredCompletionCandidates(&builder, context, semantic, options);
         self.freeCompletions(candidates);
         const merged = try builder.finish(self.allocator);
         return merged;
@@ -783,7 +809,11 @@ pub const Executor = struct {
     pub fn collectCompletionsWithContext(self: *Executor, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
         if (context.position == .command) return self.collectRootCommandCompletions(context, options);
         const provider = self.completionProvider(command) orelse return self.allocator.alloc(completion.Candidate, 0);
-        const function_value = self.functions.getPtr(provider.function) orelse return self.allocator.alloc(completion.Candidate, 0);
+        return self.collectCompletionsFromFunction(provider.function, command, context, options);
+    }
+
+    fn collectCompletionsFromFunction(self: *Executor, function: []const u8, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
+        const function_value = self.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
         if (self.completion_builder != null) return error.RecursiveCompletion;
         self.completion_builder = .{};
         self.completion_context = context;
@@ -794,7 +824,7 @@ pub const Executor = struct {
         }
 
         var argv = [_]ir.WordRef{
-            .{ .raw = provider.function, .text = provider.function, .span = .{ .start = 0, .end = 0 } },
+            .{ .raw = function, .text = function, .span = .{ .start = 0, .end = 0 } },
             .{ .raw = command, .text = command, .span = .{ .start = 0, .end = 0 } },
         };
         const call: ir.SimpleCommand = .{ .span = .{ .start = 0, .end = 0 }, .assignments = &.{}, .argv = &argv, .redirections = &.{} };
@@ -866,7 +896,7 @@ pub const Executor = struct {
 
         for (self.completion_rules.items) |rule| {
             switch (rule.kind) {
-                .function_provider => {},
+                .function_provider, .dynamic_subcommands, .dynamic_options, .dynamic_argument, .dynamic_option_value => {},
                 .subcommand => {
                     if (context.position != .subcommand) continue;
                     if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
@@ -916,6 +946,19 @@ pub const Executor = struct {
             .replace_end = context.replace_end,
             .append_space = append_space,
         });
+    }
+
+    fn appendDynamicStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionEvalContext, semantic: CompletionSemanticContext, options: ExecuteOptions) !void {
+        for (self.completion_rules.items) |rule| {
+            if (!completionDynamicRuleMatches(rule, semantic)) continue;
+            const function = rule.value orelse continue;
+            const candidates = try self.collectCompletionsFromFunction(function, context.command, context, options);
+            defer self.freeCompletions(candidates);
+            for (candidates) |candidate| {
+                if (completionBuilderContains(builder.*, candidate.value)) continue;
+                try builder.appendCandidate(self.allocator, candidate);
+            }
+        }
     }
 
     pub fn freeCompletions(self: *Executor, candidates: []completion.Candidate) void {
@@ -3908,23 +3951,46 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
     var function_name: ?[]const u8 = null;
     var rule: completion.Rule = .{ .root = pattern.root, .path = pattern.path, .kind = .function_provider };
     var rule_set = false;
+    var legacy_function_provider = false;
     while (index < command.argv.len) {
         const option = command.argv[index].text;
         index += 1;
         if (std.mem.eql(u8, option, "--function")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing function name");
             function_name = command.argv[index].text;
-            rule = .{ .root = pattern.root, .path = pattern.path, .kind = .function_provider, .value = command.argv[index].text };
+            rule.value = command.argv[index].text;
+            if (!rule_set) {
+                rule.kind = .function_provider;
+                legacy_function_provider = true;
+            }
             rule_set = true;
             index += 1;
+        } else if (std.mem.eql(u8, option, "--subcommands")) {
+            rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_subcommands, .value = function_name };
+            rule_set = true;
+            legacy_function_provider = false;
+        } else if (std.mem.eql(u8, option, "--options")) {
+            rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_options, .value = function_name };
+            rule_set = true;
+            legacy_function_provider = false;
+        } else if (std.mem.eql(u8, option, "--argument")) {
+            rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_argument, .value = function_name };
+            rule_set = true;
+            legacy_function_provider = false;
+        } else if (std.mem.eql(u8, option, "--option-value")) {
+            rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_option_value, .value = function_name };
+            rule_set = true;
+            legacy_function_provider = false;
         } else if (std.mem.eql(u8, option, "--subcommand")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing subcommand name");
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .subcommand, .value = command.argv[index].text };
             rule_set = true;
+            legacy_function_provider = false;
             index += 1;
         } else if (std.mem.eql(u8, option, "--option")) {
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .option };
             rule_set = true;
+            legacy_function_provider = false;
         } else if (std.mem.eql(u8, option, "--long")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing long option name");
             rule.option.long = command.argv[index].text;
@@ -3947,9 +4013,13 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
             return errorResult(self.allocator, 2, "complete", "unsupported option");
         }
     }
-    if (function_name) |name| try self.registerCompletionProvider(pattern.root, name);
+    if (legacy_function_provider) if (function_name) |name| try self.registerCompletionProvider(pattern.root, name);
     if (rule_set) {
         if (rule.kind == .option and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
+        if (rule.kind == .dynamic_option_value and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
+        if (rule.kind == .function_provider or rule.kind == .dynamic_subcommands or rule.kind == .dynamic_options or rule.kind == .dynamic_argument or rule.kind == .dynamic_option_value) {
+            if (rule.value == null) return errorResult(self.allocator, 2, "complete", "missing function name");
+        }
         try self.registerCompletionRule(rule);
     } else {
         return errorResult(self.allocator, 2, "complete", "missing completion rule");
@@ -8194,6 +8264,80 @@ test "structured completion keeps parent options available in subcommand context
     defer executor.freeCompletions(candidates);
     try expectCandidate(candidates, "--verbose", .option);
     try expectCandidate(candidates, "--amend", .option);
+}
+
+test "dynamic structured completion merges with static subcommands" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_dynamic_subcommands() {
+        \\  completion candidate checkout --kind subcommand
+        \\}
+        \\complete git --subcommand commit
+        \\complete git --subcommands --function __git_dynamic_subcommands
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git c", "git c".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "commit", .subcommand);
+    try expectCandidate(candidates, "checkout", .subcommand);
+}
+
+test "dynamic structured argument provider is scoped to command path" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_refs() {
+        \\  completion candidate main --kind plain
+        \\}
+        \\complete git --subcommand checkout
+        \\complete git --subcommand commit
+        \\complete 'git checkout' --argument --function __git_refs
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const checkout = try executor.collectCompletionsForInput("git checkout ma", "git checkout ma".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(checkout);
+    try expectCandidate(checkout, "main", .plain);
+
+    const commit = try executor.collectCompletionsForInput("git commit ma", "git commit ma".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(commit);
+    try expectNoCandidate(commit, "main");
+}
+
+test "dynamic structured option value provider is scoped to option" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_log_formats() {
+        \\  completion candidate full --kind plain
+        \\}
+        \\complete git --subcommand log
+        \\complete 'git log' --option-value --long format --function __git_log_formats
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git log --format f", "git log --format f".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "full", .plain);
+    const full = findCandidate(candidates, "full") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "git log --format ".len), full.replace_start);
 }
 
 test "completion candidate is scoped to completion evaluation" {

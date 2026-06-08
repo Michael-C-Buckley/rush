@@ -34,6 +34,10 @@ pub const Option = struct {
 
 pub const RuleKind = enum {
     function_provider,
+    dynamic_subcommands,
+    dynamic_options,
+    dynamic_argument,
+    dynamic_option_value,
     subcommand,
     option,
 };
