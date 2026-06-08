@@ -221,26 +221,64 @@ pub const LineSession = struct {
 
     fn historyPrevious(self: *LineSession) !void {
         if (self.history.entries.len == 0) return;
-        if (self.history_index == null) {
-            self.saved_edit.clearRetainingCapacity();
-            try self.saved_edit.appendSlice(self.allocator, self.editor.buffer.text());
-            self.history_index = self.history.entries.len - 1;
-        } else if (self.history_index.? != 0) {
-            self.history_index.? -= 1;
-        }
-        try self.editor.buffer.replace(self.history.entries[self.history_index.?]);
+        const prefix = try self.historyPrefix();
+        const start = self.history_index orelse self.history.entries.len;
+        const index = self.findPreviousHistoryMatch(start, prefix) orelse return;
+        self.history_index = index;
+        try self.editor.buffer.replace(self.history.entries[index]);
     }
 
     fn historyNext(self: *LineSession) !void {
         const index = self.history_index orelse return;
-        if (index + 1 < self.history.entries.len) {
-            self.history_index = index + 1;
-            try self.editor.buffer.replace(self.history.entries[index + 1]);
-        } else {
+        const prefix = self.saved_edit.items;
+        const next_index = self.findNextHistoryMatch(index + 1, prefix) orelse {
             self.history_index = null;
             try self.editor.buffer.replace(self.saved_edit.items);
             self.saved_edit.clearRetainingCapacity();
+            return;
+        };
+        self.history_index = next_index;
+        try self.editor.buffer.replace(self.history.entries[next_index]);
+    }
+
+    fn historyPrefix(self: *LineSession) ![]const u8 {
+        if (self.history_index == null) {
+            self.saved_edit.clearRetainingCapacity();
+            try self.saved_edit.appendSlice(self.allocator, self.editor.buffer.text());
         }
+        return self.saved_edit.items;
+    }
+
+    fn findPreviousHistoryMatch(self: LineSession, start: usize, prefix: []const u8) ?usize {
+        var index = start;
+        while (index > 0) {
+            index -= 1;
+            if (self.historyEntryMatches(index, prefix)) return index;
+        }
+        return null;
+    }
+
+    fn findNextHistoryMatch(self: LineSession, start: usize, prefix: []const u8) ?usize {
+        var index = start;
+        while (index < self.history.entries.len) : (index += 1) {
+            if (self.historyEntryMatches(index, prefix)) return index;
+        }
+        return null;
+    }
+
+    fn historyEntryMatches(self: LineSession, index: usize, prefix: []const u8) bool {
+        const entry = self.history.entries[index];
+        if (prefix.len != 0 and !std.mem.startsWith(u8, entry, prefix)) return false;
+        return self.isNewestMatchingCommand(index, prefix);
+    }
+
+    fn isNewestMatchingCommand(self: LineSession, index: usize, prefix: []const u8) bool {
+        const entry = self.history.entries[index];
+        for (self.history.entries[index + 1 ..]) |newer| {
+            if (prefix.len != 0 and !std.mem.startsWith(u8, newer, prefix)) continue;
+            if (std.mem.eql(u8, newer, entry)) return false;
+        }
+        return true;
     }
 };
 
@@ -423,12 +461,11 @@ test "line session renders with its prompt" {
     try std.testing.expectEqualStrings("\r\x1b[2Krush> x\r\x1b[7C", rendered);
 }
 
-test "line session navigates history and restores draft" {
+test "line session navigates full history from empty buffer" {
     const entries = [_][]const u8{ "echo one", "echo two" };
     var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries });
     defer session.deinit();
 
-    try session.handleKey(.{ .key = .text, .text = "draft" });
     try session.handleKey(.{ .key = .up });
     try std.testing.expectEqualStrings("echo two", session.editor.buffer.text());
     try session.handleKey(.{ .key = .up });
@@ -436,7 +473,37 @@ test "line session navigates history and restores draft" {
     try session.handleKey(.{ .key = .down });
     try std.testing.expectEqualStrings("echo two", session.editor.buffer.text());
     try session.handleKey(.{ .key = .down });
-    try std.testing.expectEqualStrings("draft", session.editor.buffer.text());
+    try std.testing.expectEqualStrings("", session.editor.buffer.text());
+}
+
+test "line session searches history by draft prefix" {
+    const entries = [_][]const u8{ "echo one", "git status", "echo two", "git diff" };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqualStrings("git diff", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .down });
+    try std.testing.expectEqualStrings("git diff", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .down });
+    try std.testing.expectEqualStrings("git", session.editor.buffer.text());
+}
+
+test "line session hides older duplicate history commands" {
+    const entries = [_][]const u8{ "git status", "echo hi", "git status", "git diff" };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqualStrings("git diff", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
 }
 
 test "line session inserts enter literally during paste" {
