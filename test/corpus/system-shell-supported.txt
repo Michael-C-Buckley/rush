@@ -179,3 +179,4 @@ exec 3>&1; exec >out; echo hi; exec 1>&3; cat out
 mkdir -p real/a; ln -s real link; cd -L link/a; case "$(pwd)" in */link/a) echo logical-a ;; *) echo bad-a ;; esac; cd ..; case "$(pwd)" in */link) echo logical-parent ;; *) echo bad-parent ;; esac; cd -P ../link/a; case "$(pwd)" in */real/a) echo physical-a ;; *) echo bad-physical ;; esac
 rm -rf t; mkdir t; cd t; touch a; set -fu; echo *; set +fu; echo $RUSH_UNSET_FOR_TEST; echo after
 HOME=/tmp/rush-home VALUE=~ LIST=~/bin:~ command -p env | grep -E '^(VALUE|LIST)=' | sort; A=one B=$A command -p env | grep -E '^(A|B)=' | sort
+u=~root; case "$u" in /*) echo user-abs ;; "~root") echo user-literal ;; *) echo user-other ;; esac; OWNER=~root command -p env | grep ^OWNER= | sed "s|=.*|=ABS|"

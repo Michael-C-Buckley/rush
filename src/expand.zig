@@ -4,6 +4,7 @@
 //! can be added later without baking it into parsing or execution IR.
 
 const std = @import("std");
+const zig_builtin = @import("builtin");
 const compat = @import("compat.zig");
 
 pub const EnvLookup = struct {
@@ -1301,14 +1302,14 @@ fn matchBracket(pattern: []const u8, pattern_index: usize, text: []const u8, tex
 
 pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
     if (raw.len == 0 or raw[0] != '~') return allocator.dupe(u8, raw);
-    if (raw.len > 1 and raw[1] != '/') return allocator.dupe(u8, raw);
-    const home = env.get("HOME") orelse return allocator.dupe(u8, raw);
-    return std.mem.concat(allocator, u8, &.{ home, raw[1..] });
+    const end = tildePrefixEnd(raw, 0, false);
+    const home = try lookupTildeHome(allocator, raw[1..end], env) orelse return allocator.dupe(u8, raw);
+    defer allocator.free(home);
+    return std.mem.concat(allocator, u8, &.{ home, raw[end..] });
 }
 
 pub fn expandAssignmentTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
     const equals = std.mem.indexOfScalar(u8, raw, '=') orelse return allocator.dupe(u8, raw);
-    const home = env.get("HOME") orelse return allocator.dupe(u8, raw);
 
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
@@ -1348,9 +1349,16 @@ pub fn expandAssignmentTilde(allocator: std.mem.Allocator, raw: []const u8, env:
                 at_tilde_prefix = false;
             },
             '~' => {
-                if (at_tilde_prefix and isCurrentUserTildePrefix(raw, index)) {
-                    try output.appendSlice(allocator, home);
-                    index += 1;
+                if (at_tilde_prefix) {
+                    const end = tildePrefixEnd(raw, index, true);
+                    if (try lookupTildeHome(allocator, raw[index + 1 .. end], env)) |tilde_home| {
+                        defer allocator.free(tilde_home);
+                        try output.appendSlice(allocator, tilde_home);
+                        index = end;
+                    } else {
+                        try output.append(allocator, raw[index]);
+                        index += 1;
+                    }
                 } else {
                     try output.append(allocator, raw[index]);
                     index += 1;
@@ -1373,9 +1381,23 @@ pub fn expandAssignmentTilde(allocator: std.mem.Allocator, raw: []const u8, env:
     return output.toOwnedSlice(allocator);
 }
 
-fn isCurrentUserTildePrefix(raw: []const u8, index: usize) bool {
+fn tildePrefixEnd(raw: []const u8, index: usize, colon_separator: bool) usize {
     std.debug.assert(raw[index] == '~');
-    return index + 1 == raw.len or raw[index + 1] == '/' or raw[index + 1] == ':';
+    var end = index + 1;
+    while (end < raw.len and raw[end] != '/' and !(colon_separator and raw[end] == ':')) : (end += 1) {}
+    return end;
+}
+
+fn lookupTildeHome(allocator: std.mem.Allocator, user: []const u8, env: EnvLookup) !?[]const u8 {
+    if (user.len == 0) return if (env.get("HOME")) |home| try allocator.dupe(u8, home) else null;
+    if (!zig_builtin.link_libc) return null;
+    if (std.mem.indexOfScalar(u8, user, 0) != null) return null;
+
+    const user_z = try allocator.dupeZ(u8, user);
+    defer allocator.free(user_z);
+    const passwd = std.c.getpwnam(user_z.ptr) orelse return null;
+    const dir = passwd.dir orelse return null;
+    return @as(?[]const u8, try allocator.dupe(u8, std.mem.span(dir)));
 }
 
 pub fn expandParameters(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {

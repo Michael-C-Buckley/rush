@@ -245,3 +245,4 @@ builtin-exec-redirection-only	builtin	behavior	exec without command operands app
 builtin-cd-logical-dotdot	builtin	behavior	cd -L preserves logical symlink path through dotdot while cd -P resolves physically
 option-set-short-clusters	options	behavior	set accepts clustered short option flags
 expansion-assignment-prefix-context	expansion	behavior	assignment prefix expansion sees earlier assignments and tilde-prefix contexts
+expansion-tilde-named-user	expansion	behavior	tilde expansion resolves a named user through the user database
