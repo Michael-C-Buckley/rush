@@ -855,14 +855,24 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
 }
 
 fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8) !?[]const u8 {
-    _ = context;
     if (source.len == 0) return null;
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
     defer parsed.deinit();
-    if (parsed.diagnostics.len == 0) return null;
-    const diagnostic = parsed.diagnostics[0];
-    const line = try std.fmt.allocPrint(allocator, "\x1b[31m{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ @tagName(diagnostic.kind), diagnostic.message });
-    return line;
+    if (parsed.diagnostics.len != 0) {
+        const diagnostic = parsed.diagnostics[0];
+        return std.fmt.allocPrint(allocator, "\x1b[31m{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ @tagName(diagnostic.kind), diagnostic.message });
+    }
+
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    const diagnostics = try completion_context.executor.completionDiagnosticsForInput(source, source.len);
+    defer completion_context.executor.freeCompletionDiagnostics(diagnostics);
+    if (diagnostics.len == 0) return null;
+    const diagnostic = diagnostics[0];
+    const color = switch (diagnostic.severity) {
+        .warning => "\x1b[33m",
+        .err => "\x1b[31m",
+    };
+    return std.fmt.allocPrint(allocator, "{s}{s}\x1b[39m \x1b[2m{s}\x1b[22m", .{ color, @tagName(diagnostic.kind), diagnostic.message });
 }
 
 fn rankCompletionCandidates(allocator: std.mem.Allocator, candidates: []completion_model.Candidate, history: History, cwd: []const u8) !void {

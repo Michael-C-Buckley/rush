@@ -223,6 +223,26 @@ pub const CompletionSemanticContext = struct {
     }
 };
 
+pub const CompletionDiagnosticSeverity = enum {
+    warning,
+    err,
+};
+
+pub const CompletionDiagnosticKind = enum {
+    unknown_command,
+    unknown_subcommand,
+    unknown_option,
+    missing_option_value,
+};
+
+pub const CompletionDiagnostic = struct {
+    kind: CompletionDiagnosticKind,
+    severity: CompletionDiagnosticSeverity,
+    start: usize,
+    end: usize,
+    message: []const u8,
+};
+
 const builtin_names = [_][]const u8{
     ".",
     ":",
@@ -348,6 +368,38 @@ fn findCompletionSubcommand(rules: []const completion.Rule, root: []const u8, pa
     for (rules) |rule| {
         if (rule.kind == .subcommand and completionRuleContextMatches(rule, root, path)) {
             if (rule.value) |value| if (std.mem.eql(u8, value, word)) return true;
+        }
+    }
+    return false;
+}
+
+fn completionContextHasSubcommands(rules: []const completion.Rule, root: []const u8, path: []const []const u8) bool {
+    for (rules) |rule| {
+        if (rule.kind == .subcommand and completionRuleContextMatches(rule, root, path)) return true;
+    }
+    return false;
+}
+
+fn completionSubcommandPrefixMatches(rules: []const completion.Rule, root: []const u8, path: []const []const u8, prefix: []const u8) bool {
+    for (rules) |rule| {
+        if (rule.kind != .subcommand or !completionRuleContextMatches(rule, root, path)) continue;
+        if (rule.value) |value| if (std.mem.startsWith(u8, value, prefix)) return true;
+    }
+    return false;
+}
+
+fn completionOptionPrefixMatches(rules: []const completion.Rule, root: []const u8, path: []const []const u8, prefix: []const u8) bool {
+    for (rules) |rule| {
+        if (rule.kind != .option or !completionRuleContextAppliesToPath(rule, root, path)) continue;
+        if (rule.option.long) |long| {
+            var spelling_buffer: [256]u8 = undefined;
+            const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
+            if (std.mem.startsWith(u8, spelling, prefix)) return true;
+        }
+        if (rule.option.short) |short| {
+            var spelling_buffer: [32]u8 = undefined;
+            const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch continue;
+            if (std.mem.startsWith(u8, spelling, prefix)) return true;
         }
     }
     return false;
@@ -779,6 +831,17 @@ pub const Executor = struct {
         return self.completion_rules.items;
     }
 
+    fn completionCommandKnown(self: Executor, command: []const u8) bool {
+        if (builtinFor(command) != null) return true;
+        if (self.functions.get(command) != null) return true;
+        if (self.aliases.get(command) != null) return true;
+        if (self.completionProvider(command) != null) return true;
+        for (self.completion_rules.items) |rule| {
+            if (std.mem.eql(u8, rule.root, command)) return true;
+        }
+        return false;
+    }
+
     pub fn lastCompletionContext(self: Executor) ?CompletionEvalContext {
         return self.last_completion_context;
     }
@@ -913,6 +976,88 @@ pub const Executor = struct {
             .suspicious_start = if (suspicious) |span| span.start else null,
             .suspicious_end = if (suspicious) |span| span.end else null,
         };
+    }
+
+    pub fn completionDiagnosticsForInput(self: *Executor, source: []const u8, cursor: usize) ![]CompletionDiagnostic {
+        var parsed = try parser.parse(self.allocator, source, .{ .mode = .interactive, .cursor = cursor });
+        defer parsed.deinit();
+        const clamped_cursor = @min(cursor, source.len);
+
+        var words: std.ArrayList(parser.Token) = .empty;
+        defer words.deinit(self.allocator);
+        for (parsed.tokens) |token| {
+            if (token.span.start > clamped_cursor) break;
+            if (token.kind == .word) try words.append(self.allocator, token);
+        }
+        if (words.items.len == 0) return self.allocator.alloc(CompletionDiagnostic, 0);
+
+        var diagnostics: std.ArrayList(CompletionDiagnostic) = .empty;
+        errdefer diagnostics.deinit(self.allocator);
+
+        const root_token = words.items[0];
+        const root = root_token.lexeme(source);
+        if (root_token.span.end < clamped_cursor and !self.completionCommandKnown(root)) {
+            try diagnostics.append(self.allocator, .{
+                .kind = .unknown_command,
+                .severity = .err,
+                .start = root_token.span.start,
+                .end = root_token.span.end,
+                .message = "unknown command",
+            });
+            return diagnostics.toOwnedSlice(self.allocator);
+        }
+
+        var path: std.ArrayList([]const u8) = .empty;
+        defer path.deinit(self.allocator);
+        var index: usize = 1;
+        while (index < words.items.len) : (index += 1) {
+            const token = words.items[index];
+            if (token.span.end > clamped_cursor) break;
+            const word = token.lexeme(source);
+            const word_complete = token.span.end < clamped_cursor;
+            if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
+                if (matched.takes_value and !matched.attached_value) {
+                    if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
+                        try diagnostics.append(self.allocator, .{
+                            .kind = .missing_option_value,
+                            .severity = .warning,
+                            .start = token.span.start,
+                            .end = token.span.end,
+                            .message = "option requires a value",
+                        });
+                    } else if (words.items[index + 1].span.end <= clamped_cursor) {
+                        index += 1;
+                    }
+                }
+            } else if (isOptionLike(word)) {
+                if (word_complete and !completionOptionPrefixMatches(self.completion_rules.items, root, path.items, word)) {
+                    try diagnostics.append(self.allocator, .{
+                        .kind = .unknown_option,
+                        .severity = .err,
+                        .start = token.span.start,
+                        .end = token.span.end,
+                        .message = "unknown option",
+                    });
+                }
+            } else if (findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) {
+                try path.append(self.allocator, word);
+            } else if (completionContextHasSubcommands(self.completion_rules.items, root, path.items)) {
+                if (word_complete and !completionSubcommandPrefixMatches(self.completion_rules.items, root, path.items, word)) {
+                    try diagnostics.append(self.allocator, .{
+                        .kind = .unknown_subcommand,
+                        .severity = .err,
+                        .start = token.span.start,
+                        .end = token.span.end,
+                        .message = "unknown subcommand",
+                    });
+                }
+                break;
+            } else {
+                break;
+            }
+        }
+
+        return diagnostics.toOwnedSlice(self.allocator);
     }
 
     pub fn collectCompletionsWithContext(self: *Executor, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
@@ -1082,6 +1227,10 @@ pub const Executor = struct {
             }
         }
         self.allocator.free(candidates);
+    }
+
+    pub fn freeCompletionDiagnostics(self: *Executor, diagnostics: []CompletionDiagnostic) void {
+        self.allocator.free(diagnostics);
     }
 
     pub fn renderPrompt(self: *Executor, options: ExecuteOptions, fallback: []const u8) ![]const u8 {
@@ -8427,6 +8576,92 @@ test "completion analysis handles nested subcommands and unknown options conserv
     try std.testing.expectEqual(@as(usize, 0), unknown_analysis.path.len);
     try std.testing.expect(unknown_analysis.suspicious_start != null);
     try std.testing.expectEqualStrings("prod", unknown_analysis.previous);
+}
+
+test "completion diagnostics report unknown command" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const diagnostics = try executor.completionDiagnosticsForInput("gti ", "gti ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.unknown_command, diagnostics[0].kind);
+    try std.testing.expectEqual(CompletionDiagnosticSeverity.err, diagnostics[0].severity);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics[0].start);
+    try std.testing.expectEqual(@as(usize, 3), diagnostics[0].end);
+}
+
+test "completion diagnostics report unknown subcommand after valid prefixes" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --subcommand commit
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const prefix = try executor.completionDiagnosticsForInput("git com", "git com".len);
+    defer std.testing.allocator.free(prefix);
+    try std.testing.expectEqual(@as(usize, 0), prefix.len);
+
+    const diagnostics = try executor.completionDiagnosticsForInput("git comit ", "git comit ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.unknown_subcommand, diagnostics[0].kind);
+    try std.testing.expectEqual(@as(usize, 4), diagnostics[0].start);
+    try std.testing.expectEqual(@as(usize, 9), diagnostics[0].end);
+}
+
+test "completion diagnostics report unknown option after valid prefixes" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --subcommand commit
+        \\complete 'git commit' --option --long amend
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const prefix = try executor.completionDiagnosticsForInput("git commit --am", "git commit --am".len);
+    defer std.testing.allocator.free(prefix);
+    try std.testing.expectEqual(@as(usize, 0), prefix.len);
+
+    const diagnostics = try executor.completionDiagnosticsForInput("git commit --ammend ", "git commit --ammend ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.unknown_option, diagnostics[0].kind);
+    try std.testing.expectEqual(@as(usize, 11), diagnostics[0].start);
+    try std.testing.expectEqual(@as(usize, 19), diagnostics[0].end);
+}
+
+test "completion diagnostics report missing option value" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --option --short C --value-name path
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const diagnostics = try executor.completionDiagnosticsForInput("git -C", "git -C".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.missing_option_value, diagnostics[0].kind);
+    try std.testing.expectEqual(CompletionDiagnosticSeverity.warning, diagnostics[0].severity);
+    try std.testing.expectEqual(@as(usize, 4), diagnostics[0].start);
+    try std.testing.expectEqual(@as(usize, 6), diagnostics[0].end);
 }
 
 test "structured completion rules emit subcommand and option candidates" {
