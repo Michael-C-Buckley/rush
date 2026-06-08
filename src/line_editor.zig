@@ -324,13 +324,19 @@ pub const LineSession = struct {
         if (self.paste_depth != 0) self.paste_depth -= 1;
     }
 
-    pub fn render(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) ![]const u8 {
+    pub fn renderFrame(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) !Frame {
         var render_options = options;
         render_options.prompt = self.prompt;
         render_options.completion_menu = self.completion_menu.candidates;
         render_options.completion_selection = self.completion_menu.selected;
         render_options.completion_window_start = self.completion_menu.visibleWindowStart(render_options.menuCandidateRows());
-        return renderLine(allocator, self.editor, render_options);
+        return frameFromLine(allocator, self.editor, render_options);
+    }
+
+    pub fn render(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) ![]const u8 {
+        var frame = try self.renderFrame(allocator, options);
+        defer frame.deinit(allocator);
+        return serializeFullFrame(allocator, frame, options.synchronized_output);
     }
 
     pub fn takeSubmittedLine(self: *LineSession) ?[]const u8 {
@@ -415,6 +421,59 @@ pub const LineSession = struct {
     }
 };
 
+pub const Frame = struct {
+    lines: []const []const u8,
+    cursor_row: usize = 0,
+    cursor_col: u16 = 0,
+
+    pub fn deinit(self: *Frame, allocator: std.mem.Allocator) void {
+        for (self.lines) |line| allocator.free(line);
+        allocator.free(self.lines);
+        self.* = undefined;
+    }
+
+    pub fn clone(self: Frame, allocator: std.mem.Allocator) !Frame {
+        const lines = try allocator.alloc([]const u8, self.lines.len);
+        errdefer allocator.free(lines);
+        var initialized: usize = 0;
+        errdefer for (lines[0..initialized]) |line| allocator.free(line);
+        for (self.lines, 0..) |line, index| {
+            lines[index] = try allocator.dupe(u8, line);
+            initialized += 1;
+        }
+        return .{ .lines = lines, .cursor_row = self.cursor_row, .cursor_col = self.cursor_col };
+    }
+};
+
+pub const FrameRenderer = struct {
+    previous: ?Frame = null,
+
+    pub fn deinit(self: *FrameRenderer, allocator: std.mem.Allocator) void {
+        if (self.previous) |*previous| previous.deinit(allocator);
+        self.* = undefined;
+    }
+
+    pub fn render(self: *FrameRenderer, allocator: std.mem.Allocator, frame: Frame, options: FrameRenderOptions) ![]const u8 {
+        const output = if (self.previous) |previous| blk: {
+            if (frame.lines.len > previous.lines.len) break :blk try serializeFullFrame(allocator, frame, options.synchronized_output);
+            break :blk try serializeFrameDiff(allocator, previous, frame, options.synchronized_output);
+        } else try serializeFullFrame(allocator, frame, options.synchronized_output);
+        errdefer allocator.free(output);
+        if (self.previous) |*previous| previous.deinit(allocator);
+        self.previous = try frame.clone(allocator);
+        return output;
+    }
+
+    pub fn reset(self: *FrameRenderer, allocator: std.mem.Allocator) void {
+        if (self.previous) |*previous| previous.deinit(allocator);
+        self.previous = null;
+    }
+};
+
+pub const FrameRenderOptions = struct {
+    synchronized_output: bool = true,
+};
+
 pub const RenderOptions = struct {
     prompt: Prompt = .{ .bytes = "" },
     completion_menu: []const completion.Candidate = &.{},
@@ -431,33 +490,94 @@ pub const RenderOptions = struct {
 };
 
 pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderOptions) ![]const u8 {
+    var frame = try frameFromLine(allocator, editor, options);
+    defer frame.deinit(allocator);
+    return serializeFullFrame(allocator, frame, options.synchronized_output);
+}
+
+pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: RenderOptions) !Frame {
+    var lines: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (lines.items) |line| allocator.free(line);
+        lines.deinit(allocator);
+    }
+
+    var input_line: std.ArrayList(u8) = .empty;
+    errdefer input_line.deinit(allocator);
+    try input_line.appendSlice(allocator, options.prompt.bytes);
+    try input_line.appendSlice(allocator, editor.buffer.text());
+    try lines.append(allocator, try input_line.toOwnedSlice(allocator));
+
+    try appendCompletionMenuLines(allocator, &lines, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height);
+
+    const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
+    return .{
+        .lines = try lines.toOwnedSlice(allocator),
+        .cursor_row = 0,
+        .cursor_col = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method),
+    };
+}
+
+fn serializeFullFrame(allocator: std.mem.Allocator, frame: Frame, synchronized_output: bool) ![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
-    if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026h");
+    if (synchronized_output) try output.appendSlice(allocator, "\x1b[?2026h");
     try output.appendSlice(allocator, "\r\x1b[2K");
-    try output.appendSlice(allocator, options.prompt.bytes);
-    try output.appendSlice(allocator, editor.buffer.text());
+    if (frame.lines.len != 0) try output.appendSlice(allocator, frame.lines[0]);
     try output.appendSlice(allocator, "\x1b[J");
-
-    const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height);
-
-    const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
-    const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
-    const cursor_sequence = if (menu_rows == 0)
-        try std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{cursor_width})
-    else
-        try std.fmt.allocPrint(allocator, "\x1b[{d}A\r\x1b[{d}C", .{ menu_rows, cursor_width });
+    for (frame.lines[1..]) |line| {
+        try output.appendSlice(allocator, "\r\n");
+        try output.appendSlice(allocator, line);
+    }
+    const cursor_sequence = try cursorMoveFrom(frame.lines.len -| 1, frame.cursor_row, frame.cursor_col, allocator);
     defer allocator.free(cursor_sequence);
     try output.appendSlice(allocator, cursor_sequence);
-    if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026l");
+    if (synchronized_output) try output.appendSlice(allocator, "\x1b[?2026l");
 
     return output.toOwnedSlice(allocator);
 }
 
-fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16) !usize {
-    if (candidates.len == 0) return 0;
-    var rows: usize = 0;
+fn serializeFrameDiff(allocator: std.mem.Allocator, previous: Frame, frame: Frame, synchronized_output: bool) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    if (synchronized_output) try output.appendSlice(allocator, "\x1b[?2026h");
+
+    var current_row = previous.cursor_row;
+    const max_lines = @max(previous.lines.len, frame.lines.len);
+    for (0..max_lines) |row| {
+        const old_line = if (row < previous.lines.len) previous.lines[row] else null;
+        const new_line = if (row < frame.lines.len) frame.lines[row] else null;
+        const changed = if (old_line) |old| if (new_line) |new| !std.mem.eql(u8, old, new) else true else new_line != null;
+        if (!changed) continue;
+        const move = try cursorMoveFrom(current_row, row, 0, allocator);
+        defer allocator.free(move);
+        try output.appendSlice(allocator, move);
+        try output.appendSlice(allocator, "\x1b[2K");
+        if (new_line) |line| try output.appendSlice(allocator, line);
+        current_row = row;
+    }
+
+    const cursor_sequence = try cursorMoveFrom(current_row, frame.cursor_row, frame.cursor_col, allocator);
+    defer allocator.free(cursor_sequence);
+    try output.appendSlice(allocator, cursor_sequence);
+    if (synchronized_output) try output.appendSlice(allocator, "\x1b[?2026l");
+    return output.toOwnedSlice(allocator);
+}
+
+fn cursorMoveFrom(from_row: usize, to_row: usize, col: u16, allocator: std.mem.Allocator) ![]const u8 {
+    if (col == 0) {
+        if (from_row > to_row) return std.fmt.allocPrint(allocator, "\x1b[{d}A\r", .{from_row - to_row});
+        if (to_row > from_row) return std.fmt.allocPrint(allocator, "\x1b[{d}B\r", .{to_row - from_row});
+        return allocator.dupe(u8, "\r");
+    }
+    if (from_row > to_row) return std.fmt.allocPrint(allocator, "\x1b[{d}A\r\x1b[{d}C", .{ from_row - to_row, col });
+    if (to_row > from_row) return std.fmt.allocPrint(allocator, "\x1b[{d}B\r\x1b[{d}C", .{ to_row - from_row, col });
+    return std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{col});
+}
+
+fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList([]const u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16) !void {
+    if (candidates.len == 0) return;
     const max_rows = @max(@as(usize, @intCast(height)) -| 2, 1);
     const window = completionMenuWindow(candidates.len, selected, window_start, max_rows);
     const label_width = @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
@@ -465,28 +585,25 @@ fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8)
     const fixed_width = 2 + label_width + 1 + kind_width + 1;
     const description_width = @as(usize, @intCast(width)) -| fixed_width;
     for (candidates[window.start..window.end], window.start..) |candidate, index| {
+        var line: std.ArrayList(u8) = .empty;
+        errdefer line.deinit(allocator);
         const label = candidate.display orelse candidate.value;
-        try output.appendSlice(allocator, "\r\n");
-        if (index == selected) try output.appendSlice(allocator, "\x1b[7m❯ ") else try output.appendSlice(allocator, "  ");
-        try appendPaddedCell(allocator, output, label, label_width);
-        try output.append(allocator, ' ');
-        try appendPaddedCell(allocator, output, @tagName(candidate.kind), kind_width);
+        if (index == selected) try line.appendSlice(allocator, "\x1b[7m❯ ") else try line.appendSlice(allocator, "  ");
+        try appendPaddedCell(allocator, &line, label, label_width);
+        try line.append(allocator, ' ');
+        try appendPaddedCell(allocator, &line, @tagName(candidate.kind), kind_width);
         if (candidate.description) |description| {
             if (description.len != 0 and description_width != 0) {
-                try output.append(allocator, ' ');
-                try appendTruncated(allocator, output, description, description_width);
+                try line.append(allocator, ' ');
+                try appendTruncated(allocator, &line, description, description_width);
             }
         }
-        if (index == selected) try output.appendSlice(allocator, "\x1b[27m");
-        rows += 1;
+        if (index == selected) try line.appendSlice(allocator, "\x1b[27m");
+        try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
     if (window.start != 0 or window.end != candidates.len) {
-        const more = try std.fmt.allocPrint(allocator, "\r\n  showing {d}-{d} of {d}", .{ window.start + 1, window.end, candidates.len });
-        defer allocator.free(more);
-        try output.appendSlice(allocator, more);
-        rows += 1;
+        try lines.append(allocator, try std.fmt.allocPrint(allocator, "  showing {d}-{d} of {d}", .{ window.start + 1, window.end, candidates.len }));
     }
-    return rows;
 }
 
 const CompletionMenuWindow = struct {
@@ -1013,4 +1130,83 @@ test "render line ignores ansi prompt bytes for cursor placement" {
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("\r\x1b[2K\x1b[34mrush> \x1b[0mx\x1b[J\r\x1b[7C", rendered);
+}
+
+test "frame renderer diffs changed input line" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var first_editor = Editor.init(std.testing.allocator);
+    defer first_editor.deinit();
+    try first_editor.handleKey(.{ .key = .text, .text = "a" });
+    var first = try frameFromLine(std.testing.allocator, first_editor, .{ .prompt = .{ .bytes = "$ " }, .synchronized_output = false });
+    defer first.deinit(std.testing.allocator);
+    const first_output = try renderer.render(std.testing.allocator, first, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(first_output);
+    try std.testing.expect(std.mem.indexOf(u8, first_output, "\x1b[J") != null);
+
+    var second_editor = Editor.init(std.testing.allocator);
+    defer second_editor.deinit();
+    try second_editor.handleKey(.{ .key = .text, .text = "ab" });
+    var second = try frameFromLine(std.testing.allocator, second_editor, .{ .prompt = .{ .bytes = "$ " }, .synchronized_output = false });
+    defer second.deinit(std.testing.allocator);
+    const second_output = try renderer.render(std.testing.allocator, second, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(second_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[J") == null);
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[2K$ ab") != null);
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\r\x1b[0C") == null);
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\r\x1b[4C") != null);
+}
+
+test "frame renderer redraws when frame adds lines" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
+    var input_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer input_frame.deinit(std.testing.allocator);
+    const input_output = try renderer.render(std.testing.allocator, input_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(input_output);
+
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    var menu_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer menu_frame.deinit(std.testing.allocator);
+    const menu_output = try renderer.render(std.testing.allocator, menu_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(menu_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\x1b[J") != null);
+    try std.testing.expect(std.mem.indexOf(u8, menu_output, "checkout") != null);
+}
+
+test "frame renderer diffs when frame removes lines" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    var menu_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer menu_frame.deinit(std.testing.allocator);
+    const menu_output = try renderer.render(std.testing.allocator, menu_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(menu_output);
+
+    try session.handleKey(.{ .key = .enter });
+    var accepted_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer accepted_frame.deinit(std.testing.allocator);
+    const accepted_output = try renderer.render(std.testing.allocator, accepted_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(accepted_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[J") == null);
+    try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[2K$ checkout ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[1B\r\x1b[2K") != null);
 }

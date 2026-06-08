@@ -221,6 +221,7 @@ pub const TerminalSession = struct {
     loop: event_loop.EventLoop,
     reader: OneShotReader,
     terminal_parser: TerminalParser,
+    renderer: line_editor.FrameRenderer = .{},
     capabilities: TerminalCapabilities = .{},
     winsize: vaxis.Winsize,
     events: std.ArrayList(TerminalEvent) = .empty,
@@ -266,6 +267,7 @@ pub const TerminalSession = struct {
         self.capabilities.reset(&self.tty);
         self.events.deinit(self.allocator);
         self.terminal_parser.deinit();
+        self.renderer.deinit(self.allocator);
         self.reader.deinit();
         self.resize.deinit(self.io, &self.loop);
         self.loop.deinit();
@@ -284,6 +286,7 @@ pub const TerminalSession = struct {
     }
 
     pub fn leaveEditorMode(self: *TerminalSession) !void {
+        self.renderer.reset(self.allocator);
         self.capabilities.reset(&self.tty);
         try self.suspendRawMode();
     }
@@ -302,7 +305,7 @@ pub const TerminalSession = struct {
         }, options.history);
         defer session.deinit();
 
-        try renderSession(self.allocator, &self.tty, &session, self.capabilities, self.winsize);
+        try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize);
         try self.reader.arm();
         while (session.state == .editing) {
             var render_needed = false;
@@ -349,21 +352,24 @@ pub const TerminalSession = struct {
                 }
             }
             if (session.state == .editing) {
-                if (render_needed) try renderSession(self.allocator, &self.tty, &session, self.capabilities, self.winsize);
+                if (render_needed) try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize);
                 try self.reader.arm();
             }
         }
 
         switch (session.state) {
             .submitted => {
+                self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, "\r\n");
                 return .{ .submitted = session.takeSubmittedLine().? };
             },
             .canceled => {
+                self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, "^C\r\n");
                 return .canceled;
             },
             .eof => {
+                self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, "\r\n");
                 return .eof;
             },
@@ -405,13 +411,14 @@ fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
         a.y_pixel == b.y_pixel;
 }
 
-fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize) !void {
-    const rendered = try session.render(allocator, .{
+fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize) !void {
+    var frame = try session.renderFrame(allocator, .{
         .width = winsize.cols,
         .height = winsize.rows,
         .width_method = capabilities.widthMethod(),
-        .synchronized_output = capabilities.synchronized_output,
     });
+    defer frame.deinit(allocator);
+    const rendered = try renderer.render(allocator, frame, .{ .synchronized_output = capabilities.synchronized_output });
     defer allocator.free(rendered);
     try writeTtyAll(tty, rendered);
 }
