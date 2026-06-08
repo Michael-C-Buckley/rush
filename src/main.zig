@@ -226,13 +226,15 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
     try executor.importEnvironment(environ_map);
     executor.arg_zero = "rush";
     try loadInteractiveConfig(allocator, io, &executor);
+    var terminal = try editor_driver.TerminalSession.init(allocator, io);
+    defer terminal.deinit();
 
     while (true) {
         const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" }, "rush$ ") catch |err| switch (err) {
             error.RecursivePrompt => try allocator.dupe(u8, "rush$ "),
             else => |e| return e,
         };
-        const line = try editor_driver.readLineFromTty(allocator, io, .{ .prompt = prompt }) orelse {
+        const line = try terminal.readLine(.{ .prompt = prompt, .history = .{ .entries = history.entries.items } }) orelse {
             allocator.free(prompt);
             break;
         };

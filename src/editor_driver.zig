@@ -169,60 +169,103 @@ pub const TerminalParser = struct {
 
 pub const ReadLineOptions = struct {
     prompt: []const u8,
+    history: line_editor.HistoryView = .{},
 };
 
 pub fn readLineFromTty(allocator: std.mem.Allocator, io: std.Io, options: ReadLineOptions) !?[]const u8 {
     if (comptime (builtin.is_test or builtin.os.tag == .windows)) return error.Unsupported;
 
-    var tty_buffer: [4096]u8 = undefined;
-    var tty = try vaxis.tty.PosixTty.init(io, &tty_buffer);
-    defer tty.deinit();
-
-    var wake = try makePipe(io);
-    defer wake.read.close(io);
-
-    const read_fd = try rawDup(tty.fd.handle);
-    const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
-    var reader = try OneShotReader.init(allocator, io, read_file, wake.write);
-    defer reader.deinit();
-    try reader.start();
-
-    var terminal_parser = TerminalParser.init(allocator);
-    defer terminal_parser.deinit();
-    var capabilities: TerminalCapabilities = .{};
-    defer capabilities.reset(&tty);
-    var events: std.ArrayList(TerminalEvent) = .empty;
-    defer events.deinit(allocator);
-    var session = try line_editor.LineSession.init(allocator, options.prompt);
+    var session = try TerminalSession.init(allocator, io);
     defer session.deinit();
+    return session.readLine(options);
+}
 
-    try capabilities.sendQueries(&tty);
-    try renderSession(allocator, &tty, session, capabilities);
-    try reader.arm();
-    while (session.state == .editing) {
-        var wake_buffer: [32]u8 = undefined;
-        _ = try rawRead(wake.read.handle, &wake_buffer);
-        const bytes = try reader.takeReady();
-        terminal_parser.resetEventText();
-        events.clearRetainingCapacity();
-        try terminal_parser.feed(bytes, &events);
-        for (events.items) |event| {
-            switch (event) {
-                .key_press => |key| try session.handleKey(key),
-                .capability => |capability| try capabilities.apply(allocator, &tty, capability),
-                .key_release, .paste_start, .paste_end, .focus_in, .focus_out => {},
-            }
-        }
-        if (session.state == .editing) {
-            try renderSession(allocator, &tty, session, capabilities);
-            try reader.arm();
-        }
+pub const TerminalSession = struct {
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    tty_buffer: []u8,
+    tty: vaxis.tty.PosixTty,
+    wake: Pipe,
+    reader: OneShotReader,
+    terminal_parser: TerminalParser,
+    capabilities: TerminalCapabilities = .{},
+    events: std.ArrayList(TerminalEvent) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator, io: std.Io) !TerminalSession {
+        const tty_buffer = try allocator.alloc(u8, 4096);
+        errdefer allocator.free(tty_buffer);
+        var tty = try vaxis.tty.PosixTty.init(io, tty_buffer);
+        errdefer tty.deinit();
+
+        var wake = try makePipe(io);
+        errdefer wake.close(io);
+
+        const read_fd = try rawDup(tty.fd.handle);
+        const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
+        var reader = try OneShotReader.init(allocator, io, read_file, wake.write);
+        errdefer reader.deinit();
+        try reader.start();
+
+        var self: TerminalSession = .{
+            .allocator = allocator,
+            .io = io,
+            .tty_buffer = tty_buffer,
+            .tty = tty,
+            .wake = wake,
+            .reader = reader,
+            .terminal_parser = .init(allocator),
+        };
+        try self.capabilities.sendQueries(&self.tty);
+        return self;
     }
 
-    try writeTtyAll(&tty, "\r\n");
-    if (session.state == .submitted) return session.takeSubmittedLine();
-    return null;
-}
+    pub fn deinit(self: *TerminalSession) void {
+        self.capabilities.reset(&self.tty);
+        self.events.deinit(self.allocator);
+        self.terminal_parser.deinit();
+        self.reader.deinit();
+        self.wake.read.close(self.io);
+        self.tty.deinit();
+        self.allocator.free(self.tty_buffer);
+        self.* = undefined;
+    }
+
+    pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !?[]const u8 {
+        var session = try line_editor.LineSession.initWithOptions(self.allocator, .{
+            .bytes = options.prompt,
+            .visible_width = line_editor.visibleWidth(options.prompt, self.capabilities.widthMethod()),
+        }, options.history);
+        defer session.deinit();
+
+        try renderSession(self.allocator, &self.tty, session, self.capabilities);
+        try self.reader.arm();
+        while (session.state == .editing) {
+            var wake_buffer: [32]u8 = undefined;
+            _ = try rawRead(self.wake.read.handle, &wake_buffer);
+            const bytes = try self.reader.takeReady();
+            self.terminal_parser.resetEventText();
+            self.events.clearRetainingCapacity();
+            try self.terminal_parser.feed(bytes, &self.events);
+            for (self.events.items) |event| {
+                switch (event) {
+                    .key_press => |key| try session.handleKey(key),
+                    .paste_start => session.beginPaste(),
+                    .paste_end => session.endPaste(),
+                    .capability => |capability| try self.capabilities.apply(self.allocator, &self.tty, capability),
+                    .key_release, .focus_in, .focus_out => {},
+                }
+            }
+            if (session.state == .editing) {
+                try renderSession(self.allocator, &self.tty, session, self.capabilities);
+                try self.reader.arm();
+            }
+        }
+
+        try writeTtyAll(&self.tty, "\r\n");
+        if (session.state == .submitted) return session.takeSubmittedLine();
+        return null;
+    }
+};
 
 fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, session: line_editor.LineSession, capabilities: TerminalCapabilities) !void {
     const rendered = try session.render(allocator, .{

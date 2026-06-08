@@ -54,6 +54,13 @@ pub const EditBuffer = struct {
         return self.bytes.items;
     }
 
+    pub fn replace(self: *EditBuffer, text_bytes: []const u8) !void {
+        if (!std.unicode.utf8ValidateSlice(text_bytes)) return error.InvalidUtf8;
+        self.bytes.clearRetainingCapacity();
+        try self.bytes.appendSlice(self.allocator, text_bytes);
+        self.cursor_byte = self.bytes.items.len;
+    }
+
     pub fn insertText(self: *EditBuffer, text_bytes: []const u8) !void {
         if (!std.unicode.utf8ValidateSlice(text_bytes)) return error.InvalidUtf8;
         try self.bytes.insertSlice(self.allocator, self.cursor_byte, text_bytes);
@@ -66,6 +73,14 @@ pub const EditBuffer = struct {
 
     pub fn moveRight(self: *EditBuffer) void {
         self.cursor_byte = nextGraphemeEnd(self.bytes.items, self.cursor_byte);
+    }
+
+    pub fn moveHome(self: *EditBuffer) void {
+        self.cursor_byte = 0;
+    }
+
+    pub fn moveEnd(self: *EditBuffer) void {
+        self.cursor_byte = self.bytes.items.len;
     }
 
     pub fn deletePrevious(self: *EditBuffer) void {
@@ -103,19 +118,34 @@ pub const Editor = struct {
             .text => try self.buffer.insertText(event.text),
             .left => self.buffer.moveLeft(),
             .right => self.buffer.moveRight(),
+            .home => self.buffer.moveHome(),
+            .end => self.buffer.moveEnd(),
             .backspace => self.buffer.deletePrevious(),
             .delete => self.buffer.deleteNext(),
-            .enter, .up, .down, .home, .end, .escape => {},
+            .enter, .up, .down, .escape => {},
         }
     }
 };
 
+pub const Prompt = struct {
+    bytes: []const u8,
+    visible_width: ?u16 = null,
+};
+
+pub const HistoryView = struct {
+    entries: []const []const u8 = &.{},
+};
+
 pub const LineSession = struct {
     allocator: std.mem.Allocator,
-    prompt: []const u8,
+    prompt: Prompt,
     editor: Editor,
+    history: HistoryView = .{},
+    history_index: ?usize = null,
+    saved_edit: std.ArrayList(u8) = .empty,
     state: State = .editing,
     submitted_line: ?[]const u8 = null,
+    paste_depth: usize = 0,
 
     pub const State = enum {
         editing,
@@ -124,22 +154,38 @@ pub const LineSession = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator, prompt: []const u8) !LineSession {
+        return initWithOptions(allocator, .{ .bytes = prompt }, .{});
+    }
+
+    pub fn initWithOptions(allocator: std.mem.Allocator, prompt: Prompt, history: HistoryView) !LineSession {
         return .{
             .allocator = allocator,
-            .prompt = try allocator.dupe(u8, prompt),
+            .prompt = .{
+                .bytes = try allocator.dupe(u8, prompt.bytes),
+                .visible_width = prompt.visible_width,
+            },
             .editor = .init(allocator),
+            .history = history,
         };
     }
 
     pub fn deinit(self: *LineSession) void {
         if (self.submitted_line) |line| self.allocator.free(line);
+        self.saved_edit.deinit(self.allocator);
         self.editor.deinit();
-        self.allocator.free(self.prompt);
+        self.allocator.free(self.prompt.bytes);
         self.* = undefined;
     }
 
     pub fn handleKey(self: *LineSession, event: KeyEvent) !void {
         if (self.state != .editing) return;
+        if (self.paste_depth != 0) {
+            if (event.key == .text or event.key == .enter) {
+                const text = if (event.key == .enter) "\n" else event.text;
+                try self.editor.handleKey(.{ .key = .text, .text = text });
+            }
+            return;
+        }
         switch (event.key) {
             .enter => {
                 std.debug.assert(self.submitted_line == null);
@@ -147,8 +193,18 @@ pub const LineSession = struct {
                 self.state = .submitted;
             },
             .escape => self.state = .canceled,
+            .up => try self.historyPrevious(),
+            .down => try self.historyNext(),
             else => try self.editor.handleKey(event),
         }
+    }
+
+    pub fn beginPaste(self: *LineSession) void {
+        self.paste_depth += 1;
+    }
+
+    pub fn endPaste(self: *LineSession) void {
+        if (self.paste_depth != 0) self.paste_depth -= 1;
     }
 
     pub fn render(self: LineSession, allocator: std.mem.Allocator, options: RenderOptions) ![]const u8 {
@@ -162,10 +218,34 @@ pub const LineSession = struct {
         self.submitted_line = null;
         return line;
     }
+
+    fn historyPrevious(self: *LineSession) !void {
+        if (self.history.entries.len == 0) return;
+        if (self.history_index == null) {
+            self.saved_edit.clearRetainingCapacity();
+            try self.saved_edit.appendSlice(self.allocator, self.editor.buffer.text());
+            self.history_index = self.history.entries.len - 1;
+        } else if (self.history_index.? != 0) {
+            self.history_index.? -= 1;
+        }
+        try self.editor.buffer.replace(self.history.entries[self.history_index.?]);
+    }
+
+    fn historyNext(self: *LineSession) !void {
+        const index = self.history_index orelse return;
+        if (index + 1 < self.history.entries.len) {
+            self.history_index = index + 1;
+            try self.editor.buffer.replace(self.history.entries[index + 1]);
+        } else {
+            self.history_index = null;
+            try self.editor.buffer.replace(self.saved_edit.items);
+            self.saved_edit.clearRetainingCapacity();
+        }
+    }
 };
 
 pub const RenderOptions = struct {
-    prompt: []const u8 = "",
+    prompt: Prompt = .{ .bytes = "" },
     width_method: vaxis.gwidth.Method = .unicode,
     synchronized_output: bool = true,
 };
@@ -176,10 +256,10 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
 
     if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026h");
     try output.appendSlice(allocator, "\r\x1b[2K");
-    try output.appendSlice(allocator, options.prompt);
+    try output.appendSlice(allocator, options.prompt.bytes);
     try output.appendSlice(allocator, editor.buffer.text());
 
-    const prompt_width = vaxis.gwidth.gwidth(options.prompt, options.width_method);
+    const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
     const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
     const cursor_sequence = try std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{cursor_width});
     defer allocator.free(cursor_sequence);
@@ -187,6 +267,42 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026l");
 
     return output.toOwnedSlice(allocator);
+}
+
+pub fn visibleWidth(bytes: []const u8, method: vaxis.gwidth.Method) u16 {
+    var width: u16 = 0;
+    var plain_start: usize = 0;
+    var i: usize = 0;
+    while (i < bytes.len) {
+        if (bytes[i] != 0x1b) {
+            i += 1;
+            continue;
+        }
+        width += vaxis.gwidth.gwidth(bytes[plain_start..i], method);
+        if (i + 1 >= bytes.len) return width;
+        if (bytes[i + 1] == '[') {
+            i += 2;
+            while (i < bytes.len and !(bytes[i] >= 0x40 and bytes[i] <= 0x7e)) i += 1;
+            if (i < bytes.len) i += 1;
+        } else if (bytes[i + 1] == ']') {
+            i += 2;
+            while (i < bytes.len) : (i += 1) {
+                if (bytes[i] == 0x07) {
+                    i += 1;
+                    break;
+                }
+                if (bytes[i] == 0x1b and i + 1 < bytes.len and bytes[i + 1] == '\\') {
+                    i += 2;
+                    break;
+                }
+            }
+        } else {
+            i += 2;
+        }
+        plain_start = i;
+    }
+    width += vaxis.gwidth.gwidth(bytes[plain_start..], method);
+    return width;
 }
 
 pub fn keyEventFromVaxis(key: vaxis.Key) KeyEvent {
@@ -307,13 +423,43 @@ test "line session renders with its prompt" {
     try std.testing.expectEqualStrings("\r\x1b[2Krush> x\r\x1b[7C", rendered);
 }
 
+test "line session navigates history and restores draft" {
+    const entries = [_][]const u8{ "echo one", "echo two" };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "draft" });
+    try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqualStrings("echo two", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .up });
+    try std.testing.expectEqualStrings("echo one", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .down });
+    try std.testing.expectEqualStrings("echo two", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .down });
+    try std.testing.expectEqualStrings("draft", session.editor.buffer.text());
+}
+
+test "line session inserts enter literally during paste" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+
+    session.beginPaste();
+    try session.handleKey(.{ .key = .text, .text = "echo" });
+    try session.handleKey(.{ .key = .enter });
+    try session.handleKey(.{ .key = .text, .text = "hi" });
+    session.endPaste();
+
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings("echo\nhi", session.editor.buffer.text());
+}
+
 test "render line redraws prompt and buffer inside synchronized output" {
     var editor = Editor.init(std.testing.allocator);
     defer editor.deinit();
     try editor.handleKey(.{ .key = .text, .text = "abc" });
     editor.buffer.moveLeft();
 
-    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = "$ " });
+    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "$ " } });
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("\x1b[?2026h\r\x1b[2K$ abc\r\x1b[4C\x1b[?2026l", rendered);
@@ -324,8 +470,19 @@ test "render line can omit synchronized output" {
     defer editor.deinit();
     try editor.handleKey(.{ .key = .text, .text = "界" });
 
-    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = "> ", .synchronized_output = false });
+    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "> " }, .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("\r\x1b[2K> 界\r\x1b[4C", rendered);
+}
+
+test "render line ignores ansi prompt bytes for cursor placement" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.handleKey(.{ .key = .text, .text = "x" });
+
+    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "\x1b[34mrush> \x1b[0m" }, .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("\r\x1b[2K\x1b[34mrush> \x1b[0mx\r\x1b[7C", rendered);
 }
