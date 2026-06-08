@@ -506,15 +506,24 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     errdefer input_line.deinit(allocator);
     try input_line.appendSlice(allocator, options.prompt.bytes);
     try input_line.appendSlice(allocator, editor.buffer.text());
-    try lines.append(allocator, try input_line.toOwnedSlice(allocator));
+    const input_line_bytes = try input_line.toOwnedSlice(allocator);
+    defer allocator.free(input_line_bytes);
 
+    const wrap_width = @max(options.width, 1);
+    var cursor_prefix: std.ArrayList(u8) = .empty;
+    defer cursor_prefix.deinit(allocator);
+    try cursor_prefix.appendSlice(allocator, options.prompt.bytes);
+    try cursor_prefix.appendSlice(allocator, editor.buffer.text()[0..editor.buffer.cursor_byte]);
+    const cursor_position = wrappedPosition(cursor_prefix.items, wrap_width, options.width_method);
+
+    try appendWrappedLine(allocator, &lines, input_line_bytes, wrap_width, options.width_method);
+    if (cursor_position.row == lines.items.len) try lines.append(allocator, try allocator.dupe(u8, ""));
     try appendCompletionMenuLines(allocator, &lines, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height);
 
-    const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
     return .{
         .lines = try lines.toOwnedSlice(allocator),
-        .cursor_row = 0,
-        .cursor_col = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method),
+        .cursor_row = cursor_position.row,
+        .cursor_col = cursor_position.col,
     };
 }
 
@@ -574,6 +583,89 @@ fn cursorMoveFrom(from_row: usize, to_row: usize, col: u16, allocator: std.mem.A
     if (from_row > to_row) return std.fmt.allocPrint(allocator, "\x1b[{d}A\r\x1b[{d}C", .{ from_row - to_row, col });
     if (to_row > from_row) return std.fmt.allocPrint(allocator, "\x1b[{d}B\r\x1b[{d}C", .{ to_row - from_row, col });
     return std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{col});
+}
+
+fn appendWrappedLine(allocator: std.mem.Allocator, lines: *std.ArrayList([]const u8), bytes: []const u8, width: u16, method: vaxis.gwidth.Method) !void {
+    var row: std.ArrayList(u8) = .empty;
+    errdefer row.deinit(allocator);
+    var row_width: u16 = 0;
+    var i: usize = 0;
+    while (i < bytes.len) {
+        if (escapeSequenceEnd(bytes, i)) |end| {
+            try row.appendSlice(allocator, bytes[i..end]);
+            i = end;
+            continue;
+        }
+
+        var iter = vaxis.unicode.graphemeIterator(bytes[i..]);
+        const grapheme = iter.next() orelse break;
+        const grapheme_bytes = bytes[i .. i + grapheme.len];
+        const grapheme_width = vaxis.gwidth.gwidth(grapheme_bytes, method);
+        if (row_width != 0 and row_width + grapheme_width > width) {
+            try lines.append(allocator, try row.toOwnedSlice(allocator));
+            row = .empty;
+            row_width = 0;
+        }
+        try row.appendSlice(allocator, grapheme_bytes);
+        row_width += grapheme_width;
+        i += grapheme.len;
+        if (row_width == width and i < bytes.len) {
+            try lines.append(allocator, try row.toOwnedSlice(allocator));
+            row = .empty;
+            row_width = 0;
+        }
+    }
+    try lines.append(allocator, try row.toOwnedSlice(allocator));
+}
+
+const WrappedPosition = struct {
+    row: usize,
+    col: u16,
+};
+
+fn wrappedPosition(bytes: []const u8, width: u16, method: vaxis.gwidth.Method) WrappedPosition {
+    var row: usize = 0;
+    var col: u16 = 0;
+    var i: usize = 0;
+    while (i < bytes.len) {
+        if (escapeSequenceEnd(bytes, i)) |end| {
+            i = end;
+            continue;
+        }
+        var iter = vaxis.unicode.graphemeIterator(bytes[i..]);
+        const grapheme = iter.next() orelse break;
+        const grapheme_width = vaxis.gwidth.gwidth(bytes[i .. i + grapheme.len], method);
+        if (col != 0 and col + grapheme_width > width) {
+            row += 1;
+            col = 0;
+        }
+        col += grapheme_width;
+        i += grapheme.len;
+        if (col == width) {
+            row += 1;
+            col = 0;
+        }
+    }
+    return .{ .row = row, .col = col };
+}
+
+fn escapeSequenceEnd(bytes: []const u8, index: usize) ?usize {
+    if (index >= bytes.len or bytes[index] != 0x1b) return null;
+    if (index + 1 >= bytes.len) return bytes.len;
+    if (bytes[index + 1] == '[') {
+        var i = index + 2;
+        while (i < bytes.len and !(bytes[i] >= 0x40 and bytes[i] <= 0x7e)) i += 1;
+        return if (i < bytes.len) i + 1 else bytes.len;
+    }
+    if (bytes[index + 1] == ']') {
+        var i = index + 2;
+        while (i < bytes.len) : (i += 1) {
+            if (bytes[i] == 0x07) return i + 1;
+            if (bytes[i] == 0x1b and i + 1 < bytes.len and bytes[i + 1] == '\\') return i + 2;
+        }
+        return bytes.len;
+    }
+    return index + 2;
 }
 
 fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList([]const u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16) !void {
@@ -1130,6 +1222,66 @@ test "render line ignores ansi prompt bytes for cursor placement" {
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("\r\x1b[2K\x1b[34mrush> \x1b[0mx\x1b[J\r\x1b[7C", rendered);
+}
+
+test "frame wraps long input at terminal width" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.handleKey(.{ .key = .text, .text = "abcdef" });
+
+    var frame = try frameFromLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "$ " }, .width = 5 });
+    defer frame.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), frame.lines.len);
+    try std.testing.expectEqualStrings("$ abc", frame.lines[0]);
+    try std.testing.expectEqualStrings("def", frame.lines[1]);
+    try std.testing.expectEqual(@as(usize, 1), frame.cursor_row);
+    try std.testing.expectEqual(@as(u16, 3), frame.cursor_col);
+}
+
+test "frame wrapping keeps cursor on trailing empty row at exact width" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.handleKey(.{ .key = .text, .text = "abc" });
+
+    var frame = try frameFromLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "$ " }, .width = 5 });
+    defer frame.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), frame.lines.len);
+    try std.testing.expectEqualStrings("$ abc", frame.lines[0]);
+    try std.testing.expectEqualStrings("", frame.lines[1]);
+    try std.testing.expectEqual(@as(usize, 1), frame.cursor_row);
+    try std.testing.expectEqual(@as(u16, 0), frame.cursor_col);
+}
+
+test "frame wrapping preserves prompt escape sequences" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.handleKey(.{ .key = .text, .text = "abcd" });
+
+    var frame = try frameFromLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "\x1b[34m$ \x1b[0m", .visible_width = 2 }, .width = 4 });
+    defer frame.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), frame.lines.len);
+    try std.testing.expectEqualStrings("\x1b[34m$ \x1b[0mab", frame.lines[0]);
+    try std.testing.expectEqualStrings("cd", frame.lines[1]);
+    try std.testing.expectEqual(@as(usize, 1), frame.cursor_row);
+    try std.testing.expectEqual(@as(u16, 2), frame.cursor_col);
+}
+
+test "frame wrapping computes cursor with wide graphemes" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.handleKey(.{ .key = .text, .text = "ab界" });
+
+    var frame = try frameFromLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "$ " }, .width = 5 });
+    defer frame.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), frame.lines.len);
+    try std.testing.expectEqualStrings("$ ab", frame.lines[0]);
+    try std.testing.expectEqualStrings("界", frame.lines[1]);
+    try std.testing.expectEqual(@as(usize, 1), frame.cursor_row);
+    try std.testing.expectEqual(@as(u16, 2), frame.cursor_col);
 }
 
 test "frame renderer diffs changed input line" {
