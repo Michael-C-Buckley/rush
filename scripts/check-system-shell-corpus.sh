@@ -23,9 +23,26 @@ failures=0
 case_no=0
 comparisons=0
 
+skip_comparison() {
+  case "$label:$case_no" in
+    # yash reports external command paths for `command -v` where other POSIX-ish
+    # comparison shells report the utility name for this smoke case.
+    yash:46) return 0 ;;
+    # yash advances OPTIND past the missing option argument in silent getopts
+    # mode; keep the spec-derived Rush expectation in the POSIX corpus instead.
+    yash:99) return 0 ;;
+    # With PATH intentionally set to /nope, yash cannot find the following
+    # printf utility after `command -p`; this case checks Rush preserves PATH.
+    yash:118) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 compare_shell() {
   label=$1
   shift
+  if skip_comparison; then return; fi
+
   tmp=$(mktemp -d)
   rush_out=$tmp/rush.out
   rush_err=$tmp/rush.err

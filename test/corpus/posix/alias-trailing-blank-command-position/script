@@ -1,0 +1,4 @@
+alias say='echo recursive-ok'
+alias prefix='say '
+alias word='trailing-ok'
+prefix word

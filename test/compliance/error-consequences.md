@@ -15,6 +15,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `syntax-missing-pipeline-command` | syntax | covered baseline | parse diagnostic, status 2, no execution |
 | `expansion-nounset-unset-parameter` | expansion | covered baseline | diagnostic, status 1, non-interactive execution stops |
 | `expansion-parameter-error-word` | expansion | covered baseline | diagnostic word expansion, status 1, non-interactive execution stops |
+| `expansion-parameter-error-null` | expansion | covered baseline | null parameter with `:?` diagnostic, status 1, non-interactive execution stops |
 | `redirection-bad-fd-duplication` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `redirection-noclobber-overwrite` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `errors-special-builtin-redirection` | special builtin | covered baseline | diagnostic, status 1, non-interactive execution stops |
@@ -46,7 +47,7 @@ Current coverage starts with a missing pipeline command. Additional cases should
 
 ### Expansion errors
 
-Current coverage includes nounset and `${parameter:?word}` with diagnostic word expansion. Add more cases for null parameters and parser edge cases in unquoted braced words. Distinguish ordinary command failures from special builtin expansion failures because POSIX assigns different non-interactive shell consequences.
+Current coverage includes nounset and `${parameter:?word}` with diagnostic word expansion for unset and null parameters. Add more cases for parser edge cases in unquoted braced words. Distinguish ordinary command failures from special builtin expansion failures because POSIX assigns different non-interactive shell consequences.
 
 ### Redirection errors
 

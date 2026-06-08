@@ -54,6 +54,11 @@ fi
 
 failures=0
 cases=0
+times_stdout_matches() {
+  [ "$(wc -l <"$1" | tr -d ' ')" -eq 2 ] || return 1
+  grep -Eq '^[0-9]+m[0-9]+\.[0-9][0-9]s [0-9]+m[0-9]+\.[0-9][0-9]s$' "$1"
+}
+
 for case_dir in "$CORPUS_DIR"/*; do
   [ -d "$case_dir" ] || continue
   name=$(basename "$case_dir")
@@ -90,7 +95,14 @@ for case_dir in "$CORPUS_DIR"/*; do
   actual_status=${actual_status:-0}
   want_status=$(cat "$expected_status")
 
-  if [ "$actual_status" -ne "$want_status" ] || ! cmp -s "$expected_stdout" "$actual_stdout" || ! cmp -s "$expected_stderr" "$actual_stderr"; then
+  stdout_ok=false
+  if cmp -s "$expected_stdout" "$actual_stdout"; then
+    stdout_ok=true
+  elif [ "$name" = builtin-times ] && times_stdout_matches "$actual_stdout"; then
+    stdout_ok=true
+  fi
+
+  if [ "$actual_status" -ne "$want_status" ] || [ "$stdout_ok" != true ] || ! cmp -s "$expected_stderr" "$actual_stderr"; then
     failures=$((failures + 1))
     echo "FAIL [$name]" >&2
     echo "  status: got $actual_status want $want_status" >&2

@@ -1,0 +1,3 @@
+alias say='echo recursive-ok'
+alias run=say
+run

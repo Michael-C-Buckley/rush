@@ -1,6 +1,9 @@
 case	area	tags	notes
 alias-function-definition-protection	lexing	behavior	-
+alias-later-complete-command	lexing	behavior	Alias defined by an earlier complete command affects a later command
+alias-recursive-expansion	lexing	behavior	Recursive alias substitution for command-position aliases
 alias-reserved-word-protection	lexing	behavior	-
+alias-trailing-blank-command-position	lexing	behavior	Alias value ending in blank keeps the next word in command position
 and-or-lists	grammar	behavior	-
 arithmetic-assignment-side-effect	expansion	behavior	-
 arithmetic-compound-assignment	expansion	behavior	-
@@ -75,6 +78,8 @@ case-default	grammar	behavior	-
 case-final-arm-no-terminator	grammar	behavior	final case arm may omit double-semicolon terminator
 case-leading-paren-empty-arm	grammar	behavior	case arm with optional leading parenthesis and empty body
 case-multiple-patterns	grammar	behavior	case arm with multiple pattern alternatives
+case-newline-pattern-list	grammar	behavior	case item pattern lists and bodies may span newlines
+case-no-match-status	grammar	behavior	case command with no matching arm exits successfully
 case-pattern	grammar	behavior	-
 command-substitution	expansion	behavior	-
 comments-ignored	lexing	behavior	-
@@ -121,6 +126,8 @@ parameter-assignment	expansion	behavior	-
 parameter-defaults	expansion	behavior	-
 parameter-pattern-removal	expansion	behavior	-
 pathname-dotfiles	expansion	behavior	pathname expansion only matches leading dot with explicit dot pattern
+pathname-bracket-negation	expansion	behavior	bracket expression negation in pathname expansion
+pathname-bracket-ranges	expansion	behavior	bracket expression ranges in pathname expansion
 pathname-slash-components	expansion	behavior	pathname expansion matches slash-separated components
 pathname-unmatched-slash	expansion	behavior	unmatched slash-containing patterns remain literal
 pipeline-negation-false	grammar	behavior	-
@@ -129,7 +136,11 @@ pipeline-negation-true	grammar	behavior	-
 quote-double-expands	expansion	behavior	-
 quote-single-literal	expansion	behavior	-
 quoted-at-positionals	expansion	behavior	-
+quoted-at-embedded-positionals	expansion	behavior	embedded quoted $@ preserves first and last fields with surrounding text
+quoted-at-empty-positionals	expansion	behavior	quoted $@ with no positional parameters produces no fields
+quoted-at-empty-parameter	expansion	behavior	quoted $@ preserves an empty positional parameter as an empty field
 quoted-star-positionals	expansion	behavior	-
+quoted-star-empty-positionals	expansion	behavior	quoted $* with no positional parameters produces one empty field
 read-printf	builtin	behavior	-
 redirection-append-order	redirection	behavior	-
 redirection-arbitrary-fd-group	redirection	behavior	-
