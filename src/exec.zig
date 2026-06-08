@@ -4381,7 +4381,7 @@ test "executor applies real redirections to spawned external commands" {
     const stdin_path = "rush-external-stdin-redirection.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, stdin_path) catch {};
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = stdin_path, .data = "from-file" });
-    var stdin_lowered = try parseAndLower(std.testing.allocator, "/usr/bin/cat < rush-external-stdin-redirection.tmp");
+    var stdin_lowered = try parseAndLower(std.testing.allocator, "/bin/cat < rush-external-stdin-redirection.tmp");
     defer stdin_lowered.parsed.deinit();
     defer stdin_lowered.program.deinit();
     var stdin_result = try executor.executeProgram(stdin_lowered.program, .{ .io = std.testing.io, .allow_external = true });
@@ -4437,7 +4437,7 @@ test "executor implements set shell option baseline" {
 
     const clobber_path = "rush-noclobber.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, clobber_path) catch {};
-    var noclobber_lowered = try parseAndLower(std.testing.allocator, "echo old > rush-noclobber.tmp; set -C; echo new > rush-noclobber.tmp; echo status=$?; echo forced >| rush-noclobber.tmp; /usr/bin/cat rush-noclobber.tmp");
+    var noclobber_lowered = try parseAndLower(std.testing.allocator, "echo old > rush-noclobber.tmp; set -C; echo new > rush-noclobber.tmp; echo status=$?; echo forced >| rush-noclobber.tmp; /bin/cat rush-noclobber.tmp");
     defer noclobber_lowered.parsed.deinit();
     defer noclobber_lowered.program.deinit();
     var noclobber = try executor.executeProgram(noclobber_lowered.program, .{ .io = std.testing.io, .allow_external = true });
@@ -4612,7 +4612,7 @@ test "executor supports here-doc stdin redirections" {
     try std.testing.expectEqualStrings("stripped\n", stripped_result.stdout);
 
     var piped = try parseAndLower(std.testing.allocator,
-        \\cat <<EOF | /usr/bin/cat
+        \\cat <<EOF | /bin/cat
         \\pipe
         \\EOF
     );
@@ -4691,7 +4691,7 @@ test "executor cleans up pipelines when a stage command is missing" {
     try std.testing.expectEqual(@as(ExitStatus, 127), mixed_last_result.status);
     try std.testing.expectEqualStrings("hi: command not found\n", mixed_last_result.stderr);
 
-    var external_first = try parseAndLower(std.testing.allocator, "hi | /usr/bin/cat");
+    var external_first = try parseAndLower(std.testing.allocator, "hi | /bin/cat");
     defer external_first.parsed.deinit();
     defer external_first.program.deinit();
     var external_first_result = try executor.executeProgram(external_first.program, .{ .io = std.testing.io, .allow_external = true });
@@ -4733,7 +4733,7 @@ test "executor supports real redirections on pipeline stages" {
     const input_path = "rush-pipeline-stage-input.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = "from-input" });
-    var input = try parseAndLower(std.testing.allocator, "cat < rush-pipeline-stage-input.tmp | /usr/bin/cat");
+    var input = try parseAndLower(std.testing.allocator, "cat < rush-pipeline-stage-input.tmp | /bin/cat");
     defer input.parsed.deinit();
     defer input.program.deinit();
     var input_result = try executor.executeProgram(input.program, .{ .io = std.testing.io, .allow_external = true });
@@ -4742,7 +4742,7 @@ test "executor supports real redirections on pipeline stages" {
 }
 
 test "executor supports mixed builtin and external pipeline stages" {
-    var builtin_to_external = try parseAndLower(std.testing.allocator, "echo hello | /usr/bin/cat");
+    var builtin_to_external = try parseAndLower(std.testing.allocator, "echo hello | /bin/cat");
     defer builtin_to_external.parsed.deinit();
     defer builtin_to_external.program.deinit();
 
@@ -4781,7 +4781,7 @@ test "executor supports mixed builtin and external pipeline stages" {
 }
 
 test "executor wires external pipelines with real process pipes" {
-    var lowered = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | /usr/bin/cat");
+    var lowered = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | /bin/cat");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
