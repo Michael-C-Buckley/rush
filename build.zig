@@ -3,6 +3,10 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const vaxis = b.dependency("vaxis", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("vaxis");
 
     const exe = b.addExecutable(.{
         .name = "rush",
@@ -10,6 +14,9 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .name = "vaxis", .module = vaxis },
+            },
         }),
     });
 
@@ -30,6 +37,9 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .name = "vaxis", .module = vaxis },
+            },
         }),
     });
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);

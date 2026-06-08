@@ -1,0 +1,172 @@
+//! Terminal-independent line editor core.
+
+const Self = @This();
+
+const std = @import("std");
+const vaxis = @import("vaxis");
+
+pub const KeyEvent = struct {
+    key: Key,
+    modifiers: Modifiers = .{},
+    text: []const u8 = "",
+};
+
+pub const Key = union(enum) {
+    text,
+    enter,
+    backspace,
+    delete,
+    left,
+    right,
+    up,
+    down,
+    home,
+    end,
+    escape,
+};
+
+pub const Modifiers = packed struct(u8) {
+    shift: bool = false,
+    alt: bool = false,
+    ctrl: bool = false,
+    super: bool = false,
+    hyper: bool = false,
+    meta: bool = false,
+    caps_lock: bool = false,
+    num_lock: bool = false,
+};
+
+pub const EditBuffer = struct {
+    allocator: std.mem.Allocator,
+    bytes: std.ArrayList(u8) = .empty,
+    cursor_byte: usize = 0,
+
+    pub fn init(allocator: std.mem.Allocator) EditBuffer {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *EditBuffer) void {
+        self.bytes.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn text(self: EditBuffer) []const u8 {
+        return self.bytes.items;
+    }
+
+    pub fn insertText(self: *EditBuffer, text_bytes: []const u8) !void {
+        if (!std.unicode.utf8ValidateSlice(text_bytes)) return error.InvalidUtf8;
+        try self.bytes.insertSlice(self.allocator, self.cursor_byte, text_bytes);
+        self.cursor_byte += text_bytes.len;
+    }
+
+    pub fn moveLeft(self: *EditBuffer) void {
+        self.cursor_byte = previousScalarStart(self.bytes.items, self.cursor_byte);
+    }
+
+    pub fn moveRight(self: *EditBuffer) void {
+        self.cursor_byte = nextScalarEnd(self.bytes.items, self.cursor_byte);
+    }
+
+    pub fn deletePrevious(self: *EditBuffer) void {
+        const start = previousScalarStart(self.bytes.items, self.cursor_byte);
+        if (start == self.cursor_byte) return;
+        self.bytes.replaceRange(self.allocator, start, self.cursor_byte - start, "") catch unreachable;
+        self.cursor_byte = start;
+    }
+
+    pub fn deleteNext(self: *EditBuffer) void {
+        const end = nextScalarEnd(self.bytes.items, self.cursor_byte);
+        if (end == self.cursor_byte) return;
+        self.bytes.replaceRange(self.allocator, self.cursor_byte, end - self.cursor_byte, "") catch unreachable;
+    }
+
+    pub fn cursorDisplayWidth(self: EditBuffer, method: vaxis.gwidth.Method) u16 {
+        return vaxis.gwidth.gwidth(self.bytes.items[0..self.cursor_byte], method);
+    }
+};
+
+pub const Editor = struct {
+    buffer: EditBuffer,
+
+    pub fn init(allocator: std.mem.Allocator) Editor {
+        return .{ .buffer = .init(allocator) };
+    }
+
+    pub fn deinit(self: *Editor) void {
+        self.buffer.deinit();
+        self.* = undefined;
+    }
+
+    pub fn handleKey(self: *Editor, event: KeyEvent) !void {
+        switch (event.key) {
+            .text => try self.buffer.insertText(event.text),
+            .left => self.buffer.moveLeft(),
+            .right => self.buffer.moveRight(),
+            .backspace => self.buffer.deletePrevious(),
+            .delete => self.buffer.deleteNext(),
+            .enter, .up, .down, .home, .end, .escape => {},
+        }
+    }
+};
+
+pub fn keyEventFromVaxis(key: vaxis.Key) KeyEvent {
+    return .{
+        .key = keyFromVaxisCodepoint(key.codepoint),
+        .modifiers = @bitCast(key.mods),
+        .text = key.text orelse "",
+    };
+}
+
+fn keyFromVaxisCodepoint(codepoint: u21) Key {
+    return switch (codepoint) {
+        vaxis.Key.enter => .enter,
+        vaxis.Key.backspace => .backspace,
+        vaxis.Key.delete => .delete,
+        vaxis.Key.left => .left,
+        vaxis.Key.right => .right,
+        vaxis.Key.up => .up,
+        vaxis.Key.down => .down,
+        vaxis.Key.home => .home,
+        vaxis.Key.end => .end,
+        vaxis.Key.escape => .escape,
+        else => .text,
+    };
+}
+
+fn previousScalarStart(bytes: []const u8, cursor_byte: usize) usize {
+    if (cursor_byte == 0) return 0;
+    var index = cursor_byte - 1;
+    while (index > 0 and (bytes[index] & 0b1100_0000) == 0b1000_0000) index -= 1;
+    return index;
+}
+
+fn nextScalarEnd(bytes: []const u8, cursor_byte: usize) usize {
+    if (cursor_byte >= bytes.len) return bytes.len;
+    var index = cursor_byte + 1;
+    while (index < bytes.len and (bytes[index] & 0b1100_0000) == 0b1000_0000) index += 1;
+    return index;
+}
+
+test "edit buffer inserts and deletes utf8 scalars" {
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+
+    try editor.handleKey(.{ .key = .text, .text = "aéb" });
+    try std.testing.expectEqualStrings("aéb", editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 4), editor.buffer.cursor_byte);
+
+    editor.buffer.moveLeft();
+    try std.testing.expectEqual(@as(usize, 3), editor.buffer.cursor_byte);
+    editor.buffer.deletePrevious();
+    try std.testing.expectEqualStrings("ab", editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 1), editor.buffer.cursor_byte);
+}
+
+test "edit buffer reports cursor display width with vaxis" {
+    var buffer = EditBuffer.init(std.testing.allocator);
+    defer buffer.deinit();
+
+    try buffer.insertText("a界");
+    try std.testing.expectEqual(@as(u16, 3), buffer.cursorDisplayWidth(.unicode));
+}

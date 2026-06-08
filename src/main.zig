@@ -7,6 +7,7 @@ pub const parser = @import("parser.zig");
 pub const expand = @import("expand.zig");
 pub const ir = @import("ir.zig");
 pub const exec = @import("exec.zig");
+pub const line_editor = @import("line_editor.zig");
 
 const usage =
     \\usage: rush -c SCRIPT
@@ -762,4 +763,5 @@ test {
     std.testing.refAllDecls(expand);
     std.testing.refAllDecls(ir);
     std.testing.refAllDecls(exec);
+    std.testing.refAllDecls(line_editor);
 }
