@@ -4841,10 +4841,15 @@ fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 fn builtinExit(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len > 2) return errorResult(self.allocator, 2, "exit", "too many arguments");
-    const status: ExitStatus = if (command.argv.len == 2) std.fmt.parseInt(u8, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, "exit", "numeric argument required") else 0;
+    if (command.argv.len > 2) return exitUsageError(self, "too many arguments");
+    const status: ExitStatus = if (command.argv.len == 2) std.fmt.parseInt(u8, command.argv[1].text, 10) catch return exitUsageError(self, "numeric argument required") else 0;
     self.pending_exit = status;
     return emptyResult(self.allocator, status);
+}
+
+fn exitUsageError(self: *Executor, message: []const u8) !CommandResult {
+    self.pending_exit = 2;
+    return errorResult(self.allocator, 2, "exit", message);
 }
 
 fn builtinBreak(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {

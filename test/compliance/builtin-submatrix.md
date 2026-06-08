@@ -22,7 +22,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `break`, `continue` | `builtin-break-continue`, `builtin-loop-control-outside-loop` | `builtin-loop-control`, outside-loop negative corpus | numeric operands and nested levels |
 | `eval` | `builtin-eval` | `builtin-eval`, `builtin-eval-special-assignment` | parse/expansion failure consequences |
 | `exec` | `builtin-exec` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-replaces-process` | redirection-only exec, failure status details, no-return contexts |
-| `exit` | `builtin-exit` | `builtin-exit` | invalid numeric operand diagnostics, too many operands |
+| `exit` | `builtin-exit`, `builtin-exit-usage-errors` | `builtin-exit`, `builtin-exit-invalid-operand`, `builtin-exit-too-many` | additional status/diagnostic corpus |
 | `export` | `builtin-export-unset` | `builtin-export-env` | option forms, invalid names, readonly interactions |
 | `readonly` | `vars-readonly` | `builtin-readonly` | option forms, invalid names, assignment diagnostics |
 | `return` | covered by function tests | `builtin-return-status`, unit coverage | negative corpus for return outside function and invalid operands |
@@ -75,7 +75,6 @@ The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `r
 
 - `return` outside a function;
 - `break`/`continue` invalid levels;
-- `exit` invalid numeric operand;
 - `export`, `readonly`, and `unset` invalid or readonly names;
 - `printf` invalid format and missing numeric conversions;
 - `getopts` invalid optstring and bad variable name;
