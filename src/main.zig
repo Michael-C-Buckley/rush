@@ -1,6 +1,7 @@
 //! Application entry point.
 
 const std = @import("std");
+const build_options = @import("builtin");
 
 pub const compat = @import("compat.zig");
 pub const parser = @import("parser.zig");
@@ -27,7 +28,12 @@ pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
     if (args.len == 1) {
-        return runInteractive(allocator, init.io, init.environ_map);
+        var completion_debug_allocator: if (build_options.mode == .Debug) std.heap.DebugAllocator(.{}) else void = if (build_options.mode == .Debug) .init else {};
+        defer if (build_options.mode == .Debug) {
+            _ = completion_debug_allocator.deinit();
+        };
+        const completion_allocator = if (build_options.mode == .Debug) completion_debug_allocator.allocator() else std.heap.smp_allocator;
+        return runInteractive(allocator, completion_allocator, init.io, init.environ_map);
     }
 
     if (args.len == 2 and std.mem.eql(u8, args[1], "--help")) {
@@ -84,6 +90,18 @@ pub const History = struct {
         self.records.deinit(self.allocator);
         self.entries.deinit(self.allocator);
         self.* = undefined;
+    }
+
+    pub fn copyFrom(self: *History, other: *const History) !void {
+        self.* = .init(self.allocator);
+        for (other.records.items) |record| {
+            try self.addRecord(.{
+                .cmd = record.cmd,
+                .when = record.when,
+                .status = record.status,
+                .cwd = record.cwd,
+            });
+        }
     }
 
     pub fn add(self: *History, line: []const u8) !void {
@@ -267,46 +285,136 @@ const InteractiveCompletionContext = struct {
     executor: *exec.Executor,
     history: *const History,
     cache: *CompletionCache,
+    io: std.Io,
     cwd: []const u8 = "",
 };
 
 const CompletionCache = struct {
+    allocator: std.mem.Allocator,
+    mutex: std.atomic.Mutex = .unlocked,
     entries: std.StringHashMapUnmanaged([]completion_model.Candidate) = .empty,
+    active_refresh: ?*CompletionRefresh = null,
 
-    pub fn deinit(self: *CompletionCache, allocator: std.mem.Allocator) void {
-        self.clear(allocator);
-        self.entries.deinit(allocator);
+    pub fn init(allocator: std.mem.Allocator) CompletionCache {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *CompletionCache) void {
+        self.waitForRefresh();
+        self.clear();
+        self.entries.deinit(self.allocator);
         self.* = undefined;
     }
 
-    pub fn clear(self: *CompletionCache, allocator: std.mem.Allocator) void {
+    pub fn clear(self: *CompletionCache) void {
+        self.waitForRefresh();
+        lockMutex(&self.mutex);
+        defer self.mutex.unlock();
         var iter = self.entries.iterator();
         while (iter.next()) |entry| {
-            allocator.free(entry.key_ptr.*);
-            completion_model.freeCandidates(allocator, entry.value_ptr.*);
+            self.allocator.free(entry.key_ptr.*);
+            completion_model.freeCandidates(self.allocator, entry.value_ptr.*);
         }
         self.entries.clearRetainingCapacity();
     }
 
-    pub fn get(self: CompletionCache, source: []const u8, cursor: usize, cwd: []const u8) ?[]const completion_model.Candidate {
+    pub fn get(self: *CompletionCache, source: []const u8, cursor: usize, cwd: []const u8) ?[]const completion_model.Candidate {
+        self.reapRefresh();
         var key_buffer: [4096]u8 = undefined;
         const key = completionCacheKey(&key_buffer, source, cursor, cwd) catch return null;
+        lockMutex(&self.mutex);
+        defer self.mutex.unlock();
         return self.entries.get(key);
     }
 
-    pub fn put(self: *CompletionCache, allocator: std.mem.Allocator, source: []const u8, cursor: usize, cwd: []const u8, candidates: []const completion_model.Candidate) !void {
+    pub fn put(self: *CompletionCache, source: []const u8, cursor: usize, cwd: []const u8, candidates: []const completion_model.Candidate) !void {
         var key_buffer: [4096]u8 = undefined;
         const key = try completionCacheKey(&key_buffer, source, cursor, cwd);
-        const owned_key = try allocator.dupe(u8, key);
-        errdefer allocator.free(owned_key);
-        const owned_candidates = try completion_model.cloneCandidates(allocator, candidates);
-        errdefer completion_model.freeCandidates(allocator, owned_candidates);
-        const result = try self.entries.getOrPut(allocator, owned_key);
+        const owned_key = try self.allocator.dupe(u8, key);
+        errdefer self.allocator.free(owned_key);
+        const owned_candidates = try completion_model.cloneCandidates(self.allocator, candidates);
+        errdefer completion_model.freeCandidates(self.allocator, owned_candidates);
+
+        lockMutex(&self.mutex);
+        defer self.mutex.unlock();
+        const result = try self.entries.getOrPut(self.allocator, owned_key);
         if (result.found_existing) {
-            allocator.free(owned_key);
-            completion_model.freeCandidates(allocator, result.value_ptr.*);
+            self.allocator.free(owned_key);
+            completion_model.freeCandidates(self.allocator, result.value_ptr.*);
         }
         result.value_ptr.* = owned_candidates;
+    }
+
+    pub fn startRefresh(self: *CompletionCache, executor: *const exec.Executor, history: *const History, io: std.Io, source: []const u8, cursor: usize, cwd: []const u8) !void {
+        self.reapRefresh();
+        if (self.active_refresh != null) return;
+
+        const refresh = try self.allocator.create(CompletionRefresh);
+        errdefer self.allocator.destroy(refresh);
+        refresh.* = .{
+            .allocator = self.allocator,
+            .cache = self,
+            .io = io,
+            .source = try self.allocator.dupe(u8, source),
+            .cursor = cursor,
+            .cwd = try self.allocator.dupe(u8, cwd),
+            .executor = exec.Executor.init(self.allocator),
+            .history = History.init(self.allocator),
+        };
+        errdefer refresh.deinitFields();
+        try refresh.executor.copyStateFrom(executor);
+        try refresh.history.copyFrom(history);
+        refresh.thread = try std.Thread.spawn(.{}, CompletionRefresh.run, .{refresh});
+        self.active_refresh = refresh;
+    }
+
+    fn reapRefresh(self: *CompletionCache) void {
+        const refresh = self.active_refresh orelse return;
+        if (!refresh.done.load(.acquire)) return;
+        self.active_refresh = null;
+        refresh.thread.join();
+        refresh.deinitFields();
+        self.allocator.destroy(refresh);
+    }
+
+    fn waitForRefresh(self: *CompletionCache) void {
+        const refresh = self.active_refresh orelse return;
+        self.active_refresh = null;
+        refresh.thread.join();
+        refresh.deinitFields();
+        self.allocator.destroy(refresh);
+    }
+};
+
+fn lockMutex(mutex: *std.atomic.Mutex) void {
+    while (!mutex.tryLock()) std.Thread.yield() catch {};
+}
+
+const CompletionRefresh = struct {
+    allocator: std.mem.Allocator,
+    cache: *CompletionCache,
+    io: std.Io,
+    source: []const u8,
+    cursor: usize,
+    cwd: []const u8,
+    executor: exec.Executor = undefined,
+    history: History = .{ .allocator = undefined },
+    thread: std.Thread = undefined,
+    done: std.atomic.Value(bool) = .init(false),
+
+    fn run(self: *CompletionRefresh) void {
+        defer self.done.store(true, .release);
+        const candidates = self.executor.collectCompletionsForInput(self.source, self.cursor, .{ .io = self.io, .allow_external = true }) catch return;
+        defer self.executor.freeCompletions(candidates);
+        rankCompletionCandidates(candidates, self.history, self.cwd);
+        self.cache.put(self.source, self.cursor, self.cwd, candidates) catch return;
+    }
+
+    fn deinitFields(self: *CompletionRefresh) void {
+        self.executor.deinit();
+        self.history.deinit();
+        self.allocator.free(self.source);
+        self.allocator.free(self.cwd);
     }
 };
 
@@ -317,12 +425,13 @@ fn completionCacheKey(buffer: []u8, source: []const u8, cursor: usize, cwd: []co
 fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8, cursor: usize) !completion_model.Application {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
     if (completion_context.cache.get(source, cursor, completion_context.cwd)) |cached| {
+        try completion_context.cache.startRefresh(completion_context.executor, completion_context.history, completion_context.io, source, cursor, completion_context.cwd);
         return completion_model.applyCandidatesForInput(allocator, source, cached);
     }
     const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true });
     defer completion_context.executor.freeCompletions(candidates);
     rankCompletionCandidates(candidates, completion_context.history.*, completion_context.cwd);
-    try completion_context.cache.put(allocator, source, cursor, completion_context.cwd, candidates);
+    try completion_context.cache.put(source, cursor, completion_context.cwd, candidates);
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
@@ -487,7 +596,7 @@ fn ansiForHighlight(kind: parser.HighlightKind) []const u8 {
     };
 }
 
-pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map) !u8 {
+pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map) !u8 {
     installInteractiveSignalHandlers();
 
     var history = History.init(allocator);
@@ -505,8 +614,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
     try loadInteractiveConfig(allocator, io, &executor);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
-    var completion_cache: CompletionCache = .{};
-    defer completion_cache.deinit(allocator);
+
+    var completion_cache = CompletionCache.init(completion_allocator);
+    defer completion_cache.deinit();
 
     while (true) {
         const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" }, "rush$ ") catch |err| switch (err) {
@@ -515,7 +625,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
         };
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
-        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .cwd = cwd_buffer[0..cwd_len] };
+        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .io = io, .cwd = cwd_buffer[0..cwd_len] };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
             .history = .{ .entries = history.entries.items },
@@ -543,7 +653,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             try writeAll(io, .stderr, result.stderr);
             last_status = result.status;
             try history.addCommand(io, line, result.status);
-            completion_cache.clear(allocator);
+            completion_cache.clear();
             if (executor.pending_exit) |status| {
                 last_status = status;
                 editor_mode_left = false;
@@ -804,8 +914,8 @@ test "history path follows XDG state home then HOME fallback" {
 }
 
 test "completion cache stores cloned candidates by input cursor and cwd" {
-    var cache: CompletionCache = .{};
-    defer cache.deinit(std.testing.allocator);
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
 
     var candidates = [_]completion_model.Candidate{.{
         .value = "checkout",
@@ -814,7 +924,7 @@ test "completion cache stores cloned candidates by input cursor and cwd" {
         .replace_start = 4,
         .replace_end = 6,
     }};
-    try cache.put(std.testing.allocator, "git ch", 6, "/tmp/project", &candidates);
+    try cache.put("git ch", 6, "/tmp/project", &candidates);
 
     const cached = cache.get("git ch", 6, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
     try std.testing.expectEqual(@as(usize, 1), cached.len);
@@ -825,17 +935,42 @@ test "completion cache stores cloned candidates by input cursor and cwd" {
 }
 
 test "completion cache replaces existing entries" {
-    var cache: CompletionCache = .{};
-    defer cache.deinit(std.testing.allocator);
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
 
     var first = [_]completion_model.Candidate{.{ .value = "checkout", .replace_start = 4, .replace_end = 6 }};
     var second = [_]completion_model.Candidate{.{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 }};
-    try cache.put(std.testing.allocator, "git ch", 6, "/tmp/project", &first);
-    try cache.put(std.testing.allocator, "git ch", 6, "/tmp/project", &second);
+    try cache.put("git ch", 6, "/tmp/project", &first);
+    try cache.put("git ch", 6, "/tmp/project", &second);
 
     const cached = cache.get("git ch", 6, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
     try std.testing.expectEqual(@as(usize, 1), cached.len);
     try std.testing.expectEqualStrings("cherry-pick", cached[0].value);
+}
+
+test "completion cache refresh updates entries in background" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var setup_result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\__rush_complete_git() { completion candidate fresh --kind subcommand; }
+        \\complete git --function __rush_complete_git
+    , .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup_result.status);
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
+    var stale = [_]completion_model.Candidate{.{ .value = "stale", .replace_start = 4, .replace_end = 5 }};
+    try cache.put("git f", 5, "/tmp/project", &stale);
+
+    try cache.startRefresh(&executor, &history, std.testing.io, "git f", 5, "/tmp/project");
+    cache.waitForRefresh();
+
+    const cached = cache.get("git f", 5, "/tmp/project") orelse return error.MissingCompletionCacheEntry;
+    try std.testing.expectEqual(@as(usize, 1), cached.len);
+    try std.testing.expectEqualStrings("fresh", cached[0].value);
 }
 
 test "interactive completion helper suggests commands variables and paths" {

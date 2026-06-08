@@ -885,7 +885,7 @@ pub const Executor = struct {
         return emptyResult(self.allocator, 0);
     }
 
-    fn copyStateFrom(self: *Executor, other: *const Executor) !void {
+    pub fn copyStateFrom(self: *Executor, other: *const Executor) !void {
         self.shell_options = other.shell_options;
         self.getopts_offset = other.getopts_offset;
         self.getopts_last_optind = other.getopts_last_optind;
@@ -899,6 +899,8 @@ pub const Executor = struct {
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.*);
         var alias_iter = other.aliases.iterator();
         while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
+        var completion_iter = other.completion_providers.iterator();
+        while (completion_iter.next()) |entry| try self.registerCompletionProvider(entry.key_ptr.*, entry.value_ptr.function);
         var trap_iter = other.traps.iterator();
         while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
         var array_iter = other.arrays.iterator();
