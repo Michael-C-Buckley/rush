@@ -4,11 +4,105 @@ const Self = @This();
 
 const std = @import("std");
 const builtin = @import("builtin");
+const vaxis = @import("vaxis");
+
+const line_editor = @import("line_editor.zig");
 
 const read_chunk_size = 4096;
 
 pub const DriverEvent = union(enum) {
     tty_read_ready,
+};
+
+pub const TerminalEvent = union(enum) {
+    key_press: line_editor.KeyEvent,
+    key_release: line_editor.KeyEvent,
+    paste_start,
+    paste_end,
+    focus_in,
+    focus_out,
+    capability: Capability,
+};
+
+pub const Capability = enum {
+    kitty_keyboard,
+    kitty_graphics,
+    rgb,
+    sgr_pixels,
+    unicode,
+    da1,
+    color_scheme_updates,
+    multi_cursor,
+};
+
+pub const TerminalParser = struct {
+    allocator: std.mem.Allocator,
+    parser: vaxis.Parser = undefined,
+    pending: std.ArrayList(u8) = .empty,
+    event_text: std.ArrayList(u8) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator) TerminalParser {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *TerminalParser) void {
+        self.pending.deinit(self.allocator);
+        self.event_text.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn resetEventText(self: *TerminalParser) void {
+        self.event_text.clearRetainingCapacity();
+    }
+
+    pub fn feed(self: *TerminalParser, bytes: []const u8, events: *std.ArrayList(TerminalEvent)) !void {
+        if (self.pending.items.len == 0 and std.mem.eql(u8, bytes, "\x1b")) {
+            try events.append(self.allocator, .{ .key_press = .{ .key = .escape } });
+            return;
+        }
+
+        try self.pending.appendSlice(self.allocator, bytes);
+        while (self.pending.items.len != 0) {
+            const result = try self.parser.parse(self.pending.items, null);
+            if (result.n == 0) break;
+            if (result.event) |event| {
+                if (try self.eventFromVaxis(event)) |terminal_event| {
+                    try events.append(self.allocator, terminal_event);
+                }
+            }
+            self.pending.replaceRange(self.allocator, 0, result.n, "") catch unreachable;
+        }
+    }
+
+    fn eventFromVaxis(self: *TerminalParser, event: vaxis.Event) !?TerminalEvent {
+        return switch (event) {
+            .key_press => |key| .{ .key_press = try self.keyEventFromVaxis(key) },
+            .key_release => |key| .{ .key_release = try self.keyEventFromVaxis(key) },
+            .paste_start => .paste_start,
+            .paste_end => .paste_end,
+            .focus_in => .focus_in,
+            .focus_out => .focus_out,
+            .cap_kitty_keyboard => .{ .capability = .kitty_keyboard },
+            .cap_kitty_graphics => .{ .capability = .kitty_graphics },
+            .cap_rgb => .{ .capability = .rgb },
+            .cap_sgr_pixels => .{ .capability = .sgr_pixels },
+            .cap_unicode => .{ .capability = .unicode },
+            .cap_da1 => .{ .capability = .da1 },
+            .cap_color_scheme_updates => .{ .capability = .color_scheme_updates },
+            .cap_multi_cursor => .{ .capability = .multi_cursor },
+            .mouse, .mouse_leave, .paste, .color_report, .color_scheme, .winsize => null,
+        };
+    }
+
+    fn keyEventFromVaxis(self: *TerminalParser, key: vaxis.Key) !line_editor.KeyEvent {
+        var event = line_editor.keyEventFromVaxis(key);
+        if (event.text.len != 0) {
+            const start = self.event_text.items.len;
+            try self.event_text.appendSlice(self.allocator, event.text);
+            event.text = self.event_text.items[start..];
+        }
+        return event;
+    }
 };
 
 pub const Pipe = struct {
@@ -273,6 +367,70 @@ fn setCloseOnExec(fd: std.posix.fd_t) !void {
 fn readAllFromFile(io: std.Io, file: std.Io.File, buffer: []u8) !usize {
     _ = io;
     return rawRead(file.handle, buffer);
+}
+
+test "terminal parser emits text keys" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("a", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.text, events.items[0].key_press.key);
+    try std.testing.expectEqualStrings("a", events.items[0].key_press.text);
+}
+
+test "terminal parser treats single escape chunk as escape key" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.escape, events.items[0].key_press.key);
+}
+
+test "terminal parser emits arrow keys" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[D", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.left, events.items[0].key_press.key);
+}
+
+test "terminal parser keeps split escape sequences pending" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[", &events);
+    try std.testing.expectEqual(@as(usize, 0), events.items.len);
+    try parser.feed("D", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.left, events.items[0].key_press.key);
+}
+
+test "terminal parser emits enter and backspace" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\r\x7f", &events);
+
+    try std.testing.expectEqual(@as(usize, 2), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.enter, events.items[0].key_press.key);
+    try std.testing.expectEqual(line_editor.Key.backspace, events.items[1].key_press.key);
 }
 
 test "one-shot reader reads only after it is armed" {
