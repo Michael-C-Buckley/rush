@@ -6510,17 +6510,112 @@ fn evalBashTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []c
 }
 
 fn evalTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []const ir.WordRef) !bool {
+    if (hasTestExpressionOperator(args)) {
+        var test_parser: TestExpressionParser = .{ .allocator = allocator, .options = options, .args = args };
+        const result = try test_parser.parseOr();
+        if (test_parser.index != args.len) return error.InvalidTestExpression;
+        return result;
+    }
+    return evalSimpleTest(allocator, options, args);
+}
+
+fn evalSimpleTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []const ir.WordRef) !bool {
     return switch (args.len) {
         0 => false,
         1 => args[0].text.len != 0,
         2 => try evalUnaryTest(allocator, options, args[0].text, args[1].text),
         3 => if (std.mem.eql(u8, args[0].text, "!"))
-            !(try evalTest(allocator, options, args[1..]))
+            !(try evalSimpleTest(allocator, options, args[1..]))
         else
             try evalBinaryTest(args[0].text, args[1].text, args[2].text),
-        4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalTest(allocator, options, args[1..])) else error.InvalidTestExpression,
+        4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalSimpleTest(allocator, options, args[1..])) else error.InvalidTestExpression,
         else => error.InvalidTestExpression,
     };
+}
+
+fn hasTestExpressionOperator(args: []const ir.WordRef) bool {
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg.text, "-a") or std.mem.eql(u8, arg.text, "-o") or std.mem.eql(u8, arg.text, "(") or std.mem.eql(u8, arg.text, ")")) return true;
+    }
+    return false;
+}
+
+const TestExpressionError = error{InvalidTestExpression};
+
+const TestExpressionParser = struct {
+    allocator: std.mem.Allocator,
+    options: ExecuteOptions,
+    args: []const ir.WordRef,
+    index: usize = 0,
+
+    fn parseOr(self: *TestExpressionParser) TestExpressionError!bool {
+        var result = try self.parseAnd();
+        while (self.match("-o")) {
+            const rhs = try self.parseAnd();
+            result = result or rhs;
+        }
+        return result;
+    }
+
+    fn parseAnd(self: *TestExpressionParser) TestExpressionError!bool {
+        var result = try self.parseNot();
+        while (self.match("-a")) {
+            const rhs = try self.parseNot();
+            result = result and rhs;
+        }
+        return result;
+    }
+
+    fn parseNot(self: *TestExpressionParser) TestExpressionError!bool {
+        if (self.match("!")) return !(try self.parseNot());
+        return self.parsePrimary();
+    }
+
+    fn parsePrimary(self: *TestExpressionParser) TestExpressionError!bool {
+        if (self.index >= self.args.len) return error.InvalidTestExpression;
+        if (self.match("(")) {
+            const result = try self.parseOr();
+            if (!self.match(")")) return error.InvalidTestExpression;
+            return result;
+        }
+        if (self.index + 2 < self.args.len and isBinaryTestOperator(self.args[self.index + 1].text)) {
+            const left = self.args[self.index].text;
+            const op = self.args[self.index + 1].text;
+            const right = self.args[self.index + 2].text;
+            self.index += 3;
+            return evalBinaryTest(left, op, right);
+        }
+        if (self.index + 1 < self.args.len and isUnaryTestOperator(self.args[self.index].text)) {
+            const op = self.args[self.index].text;
+            const operand = self.args[self.index + 1].text;
+            self.index += 2;
+            return evalUnaryTest(self.allocator, self.options, op, operand);
+        }
+        const value = self.args[self.index].text.len != 0;
+        self.index += 1;
+        return value;
+    }
+
+    fn match(self: *TestExpressionParser, text: []const u8) bool {
+        if (self.index >= self.args.len or !std.mem.eql(u8, self.args[self.index].text, text)) return false;
+        self.index += 1;
+        return true;
+    }
+};
+
+fn isUnaryTestOperator(op: []const u8) bool {
+    return std.mem.eql(u8, op, "!") or std.mem.eql(u8, op, "-n") or std.mem.eql(u8, op, "-z") or
+        std.mem.eql(u8, op, "-e") or std.mem.eql(u8, op, "-f") or std.mem.eql(u8, op, "-d") or std.mem.eql(u8, op, "-s") or
+        std.mem.eql(u8, op, "-b") or std.mem.eql(u8, op, "-c") or std.mem.eql(u8, op, "-p") or std.mem.eql(u8, op, "-S") or
+        std.mem.eql(u8, op, "-L") or std.mem.eql(u8, op, "-h") or std.mem.eql(u8, op, "-u") or std.mem.eql(u8, op, "-g") or
+        std.mem.eql(u8, op, "-k") or std.mem.eql(u8, op, "-r") or std.mem.eql(u8, op, "-w") or std.mem.eql(u8, op, "-x") or
+        std.mem.eql(u8, op, "-t");
+}
+
+fn isBinaryTestOperator(op: []const u8) bool {
+    return std.mem.eql(u8, op, "=") or std.mem.eql(u8, op, "==") or std.mem.eql(u8, op, "!=") or
+        std.mem.eql(u8, op, "<") or std.mem.eql(u8, op, ">") or std.mem.eql(u8, op, "-eq") or std.mem.eql(u8, op, "-ne") or
+        std.mem.eql(u8, op, "-gt") or std.mem.eql(u8, op, "-ge") or std.mem.eql(u8, op, "-lt") or std.mem.eql(u8, op, "-le");
 }
 
 fn evalUnaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, op: []const u8, operand: []const u8) !bool {

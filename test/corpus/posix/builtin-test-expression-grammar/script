@@ -1,0 +1,5 @@
+if test ! ""; then echo not-empty; fi
+if test "x" = x -a "y" = y; then echo and-ok; fi
+if test "" -o "z"; then echo or-ok; fi
+if test \( "x" = x \); then echo group-ok; fi
+if [ \( "x" = x -a "" \) -o z ]; then echo bracket-ok; fi

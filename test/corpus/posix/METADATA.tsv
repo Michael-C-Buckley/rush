@@ -225,3 +225,4 @@ builtin-exit-status-default	builtin	behavior	exit without operands exits with pr
 builtin-loop-control-nested-levels	builtin	behavior	break and continue honor nested loop count operands
 builtin-command-option-terminator	builtin	behavior	command accepts -- to terminate option parsing
 builtin-getopts-option-terminator	builtin	behavior	getopts stops at -- and advances OPTIND past it
+builtin-test-expression-grammar	builtin	behavior	test supports ! -a -o and parenthesized expression grammar
