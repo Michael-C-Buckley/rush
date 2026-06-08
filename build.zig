@@ -69,4 +69,9 @@ pub fn build(b: *std.Build) void {
     posix_corpus_check.step.dependOn(&exe.step);
     posix_corpus_check.step.dependOn(fmt_step);
     posix_corpus_step.dependOn(&posix_corpus_check.step);
+
+    const compliance_manifest_step = b.step("compliance-manifest", "Validate POSIX compliance manifest schema and references");
+    const compliance_manifest_check = b.addSystemCommand(&.{ "sh", "scripts/check-compliance-manifest.sh" });
+    compliance_manifest_check.step.dependOn(fmt_step);
+    compliance_manifest_step.dependOn(&compliance_manifest_check.step);
 }
