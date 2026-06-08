@@ -10,6 +10,7 @@ pub const exec = @import("exec.zig");
 pub const line_editor = @import("line_editor.zig");
 pub const editor_driver = @import("editor_driver.zig");
 pub const completion_model = @import("completion.zig");
+pub const event_loop = @import("event_loop.zig");
 
 const usage =
     \\usage: rush -c SCRIPT

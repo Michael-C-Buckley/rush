@@ -6,6 +6,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const vaxis = @import("vaxis");
 
+const event_loop = @import("event_loop.zig");
 const line_editor = @import("line_editor.zig");
 const completion = @import("completion.zig");
 
@@ -204,6 +205,7 @@ pub const TerminalSession = struct {
     tty_buffer: []u8,
     tty: vaxis.tty.PosixTty,
     wake: Pipe,
+    loop: event_loop.EventLoop,
     reader: OneShotReader,
     terminal_parser: TerminalParser,
     capabilities: TerminalCapabilities = .{},
@@ -218,6 +220,9 @@ pub const TerminalSession = struct {
 
         var wake = try makePipe(io);
         errdefer wake.close(io);
+        var loop = try event_loop.EventLoop.init();
+        errdefer loop.deinit();
+        try loop.addReadFd(wake.read.handle, .tty_input);
 
         const read_fd = try rawDup(tty.fd.handle);
         const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
@@ -231,6 +236,7 @@ pub const TerminalSession = struct {
             .tty_buffer = tty_buffer,
             .tty = tty,
             .wake = wake,
+            .loop = loop,
             .reader = reader,
             .terminal_parser = .init(allocator),
             .winsize = winsize,
@@ -244,6 +250,7 @@ pub const TerminalSession = struct {
         self.events.deinit(self.allocator);
         self.terminal_parser.deinit();
         self.reader.deinit();
+        self.loop.deinit();
         self.wake.read.close(self.io);
         self.tty.deinit();
         self.allocator.free(self.tty_buffer);
@@ -280,12 +287,15 @@ pub const TerminalSession = struct {
         try renderSession(self.allocator, &self.tty, session, self.capabilities, self.winsize);
         try self.reader.arm();
         while (session.state == .editing) {
-            var wake_buffer: [32]u8 = undefined;
-            _ = try rawRead(self.wake.read.handle, &wake_buffer);
-            const bytes = try self.reader.takeReady();
-            self.terminal_parser.resetEventText();
+            var loop_events: [8]event_loop.Event = undefined;
+            const ready = try self.loop.wait(&loop_events);
             self.events.clearRetainingCapacity();
-            try self.terminal_parser.feed(bytes, &self.events);
+            for (ready) |ready_event| {
+                switch (ready_event.source) {
+                    .tty_input => try self.processTtyInput(),
+                    .resize => {},
+                }
+            }
             for (self.events.items) |event| {
                 switch (event) {
                     .key_press => |key| {
@@ -325,6 +335,14 @@ pub const TerminalSession = struct {
             },
             .editing => unreachable,
         }
+    }
+
+    fn processTtyInput(self: *TerminalSession) !void {
+        var wake_buffer: [32]u8 = undefined;
+        _ = try rawRead(self.wake.read.handle, &wake_buffer);
+        const bytes = try self.reader.takeReady();
+        self.terminal_parser.resetEventText();
+        try self.terminal_parser.feed(bytes, &self.events);
     }
 };
 
