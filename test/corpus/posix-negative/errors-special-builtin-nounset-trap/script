@@ -1,0 +1,1 @@
+set -u; trap ${RUSH_UNSET_FOR_TEST}; echo after

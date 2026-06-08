@@ -19,6 +19,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `grammar-case-missing-esac` | `test/corpus/posix-negative` | `grammar-case` | missing `esac` diagnostic for incomplete case command |
 | `errors-special-builtin-expansion` | `test/corpus/posix-negative` | `errors-special-builtin-expansion` | special builtin `${parameter:?word}` expansion failure exits non-interactive execution |
 | `errors-special-builtin-expansion-{eval,export,readonly,set,unset,trap}` | `test/corpus/posix-negative` | `errors-special-builtin-expansion` | utility-specific special builtin `${parameter:?word}` expansion failures exit non-interactive execution |
+| `errors-special-builtin-nounset-{colon,eval,export,readonly,set,unset,trap}` | `test/corpus/posix-negative` | `errors-special-builtin-expansion` | utility-specific special builtin nounset expansion failures exit non-interactive execution |
 | `errors-special-builtin-redirection-{eval,export,readonly,set,unset,trap}` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | utility-specific special builtin noclobber redirection failures exit non-interactive execution |
 | `errors-special-builtin-redirection-input` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | special builtin missing input redirection failure exits non-interactive execution |
 | `errors-special-builtin-redirection-bad-fd` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | special builtin bad fd duplication failure exits non-interactive execution |

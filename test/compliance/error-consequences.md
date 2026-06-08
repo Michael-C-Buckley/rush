@@ -28,6 +28,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `errors-special-builtin-redirection-bad-input-fd{-eval,-export,-readonly,-set,-unset,-trap}` | special builtin | covered baseline | bad input fd diagnostic, status 1, non-interactive execution stops |
 | `errors-special-builtin-expansion` | special builtin | covered baseline | diagnostic, status 1, non-interactive execution stops |
 | `errors-special-builtin-expansion-{eval,export,readonly,set,unset,trap}` | special builtin | covered baseline | `${parameter:?word}` diagnostic, status 1, non-interactive execution stops |
+| `errors-special-builtin-nounset-{colon,eval,export,readonly,set,unset,trap}` | special builtin | covered baseline | nounset expansion diagnostic, status 1, non-interactive execution stops |
 | `builtin-test-invalid-expression` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
 | `builtin-read-unsupported-option` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
 | `builtin-wait-unknown-pid` | builtin diagnostics | covered baseline | diagnostic, builtin status 127, following command runs |
@@ -38,12 +39,12 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | --- | --- | --- | --- | --- |
 | `errors-command-not-found` | supported | medium | POSIX and differential corpus | simple not-found and unknown wait pid behavior are covered |
 | `errors-syntax` | baseline | high | POSIX corpus and negative corpus | strict mode has initial diagnostics; recovery parser remains intentionally permissive for tooling |
-| `errors-expansion` | partial | high | nounset and `${parameter:?word}` coverage | special-builtin expansion consequences remain incomplete |
-| `errors-special-builtin` | partial | high | assignment persistence and redirection negative coverage | expansion and utility-specific shell-exit consequences need more detail |
+| `errors-expansion` | partial | high | nounset and `${parameter:?word}` coverage | ordinary and special-builtin expansion failures have baseline shell-exit coverage; more expansion classes need coverage |
+| `errors-special-builtin` | partial | high | assignment persistence redirection and expansion negative coverage | additional utilities and assignment side-effect consequences need more detail |
 | `errors-nounset` | baseline | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution in current baseline |
 | `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | bad input/output fd, noclobber, missing input, and directory output diagnostics exist; more redirection classes need stricter modeling |
 | `errors-special-builtin-redirection` | baseline | high | negative corpus | noclobber, missing input, bad input/output fd, and directory output special-builtin redirection failures exit non-interactive execution; more redirection classes need cases |
-| `errors-special-builtin-expansion` | baseline | high | negative corpus | ${parameter:?word} special-builtin expansion failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap`; more expansion classes need cases |
+| `errors-special-builtin-expansion` | baseline | high | negative corpus | ${parameter:?word} and nounset special-builtin expansion failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap`; more expansion classes need cases |
 
 ## POSIX consequence areas to expand
 
@@ -61,7 +62,7 @@ Current coverage includes bad input/output fd duplication, noclobber, missing in
 
 ### Special builtin failures
 
-High-risk and under-covered. `:` plus `eval`, `export`, `readonly`, `set`, `unset`, and `trap` now cover baseline non-interactive exit consequences for noclobber, missing input, bad input/output fd, and `${parameter:?word}` failures. `:` also covers directory output failures. Add cases for other POSIX special builtins and for other expansion or redirection classes. Track whether non-interactive execution should stop and whether assignment side effects persist.
+High-risk and under-covered. `:` plus `eval`, `export`, `readonly`, `set`, `unset`, and `trap` now cover baseline non-interactive exit consequences for noclobber, missing input, bad input/output fd, `${parameter:?word}`, and nounset failures. `:` also covers directory output failures. Add cases for other POSIX special builtins and for other expansion or redirection classes. Track whether non-interactive execution should stop and whether assignment side effects persist.
 
 ### Regular builtin failures
 
