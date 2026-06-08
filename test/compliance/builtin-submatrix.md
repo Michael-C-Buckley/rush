@@ -26,7 +26,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `export` | `builtin-export-unset`, `builtin-export-readonly-p`, `builtin-variable-usage-errors` | `builtin-export-env`, `export -p`, invalid-name, readonly-assignment, unsupported-option, and `-p` usage diagnostics | full reusable listing quoting details |
 | `readonly` | `vars-readonly`, `builtin-export-readonly-p`, `builtin-variable-usage-errors` | `builtin-readonly`, `readonly -p`, invalid-name, readonly-assignment, unsupported-option, and `-p` usage diagnostics | full reusable listing quoting details |
 | `return` | `builtin-return-usage-errors` plus function tests | `builtin-return-status`, `builtin-return-outside-function`, `builtin-return-invalid-operand`, `builtin-return-too-many`, unit coverage | additional status/diagnostic corpus |
-| `set` | `option-set`, `option-set-usage-errors`, option rows | shell option and positional parameter corpus, invalid option diagnostics | many POSIX flags, broader `--` behavior |
+| `set` | `option-set`, `builtin-set-positionals`, `option-set-usage-errors`, option rows | shell option and set -- positional parameter corpus, invalid option diagnostics | many POSIX flags, combined option/operand forms |
 | `shift` | `builtin-shift-too-far`, `builtin-shift-usage-errors`, builtin row through tests | `builtin-shift`, `builtin-shift-too-far`, `builtin-shift-invalid-operand`, `builtin-shift-too-many` | additional status/diagnostic corpus |
 | `times` | `builtin-times` | `builtin-times` | portability/runtime precision is baseline only |
 | `trap` | `builtin-trap`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus | signal semantics, ignored signals, invalid names, inheritance |

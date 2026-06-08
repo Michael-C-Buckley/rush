@@ -1,0 +1,4 @@
+set -- alpha beta
+echo "$1/$2/$#"
+set --
+echo "count=$# first=${1-unset}"

@@ -215,3 +215,4 @@ builtin-test-symlink-predicates	builtin	behavior	test -L and -h recognize symbol
 builtin-test-terminal-predicate	builtin	behavior	test -t reports false for non-terminal stdin in corpus mode
 builtin-test-mode-bit-predicates	builtin	behavior	test -u -g and -k recognize setuid setgid and sticky mode bits
 builtin-getopts-explicit-args	builtin	behavior	getopts parses explicit arg operands instead of positional parameters
+builtin-set-positionals	builtin	behavior	set -- sets and clears positional parameters
