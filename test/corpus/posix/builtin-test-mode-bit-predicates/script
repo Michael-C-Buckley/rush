@@ -1,0 +1,8 @@
+rm -f modefile
+: > modefile
+chmod 7600 modefile
+test -u modefile; echo setuid=$?
+test -g modefile; echo setgid=$?
+test -k modefile; echo sticky=$?
+chmod 0600 modefile
+test -u modefile; echo no-setuid=$?

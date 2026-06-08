@@ -6540,6 +6540,14 @@ fn evalUnaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, op: []co
         const stat = statPathNoFollow(allocator, io, operand) catch return false;
         return stat.kind == .sym_link;
     }
+    if (std.mem.eql(u8, op, "-u") or std.mem.eql(u8, op, "-g") or std.mem.eql(u8, op, "-k")) {
+        const io = options.io orelse return false;
+        const stat = statPathNoFollow(allocator, io, operand) catch return false;
+        const mode = stat.permissions.toMode();
+        if (std.mem.eql(u8, op, "-u")) return mode & 0o4000 != 0;
+        if (std.mem.eql(u8, op, "-g")) return mode & 0o2000 != 0;
+        if (std.mem.eql(u8, op, "-k")) return mode & 0o1000 != 0;
+    }
     if (std.mem.eql(u8, op, "-r") or std.mem.eql(u8, op, "-w") or std.mem.eql(u8, op, "-x")) {
         const io = options.io orelse return false;
         std.Io.Dir.cwd().access(io, operand, .{
