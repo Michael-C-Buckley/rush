@@ -50,7 +50,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `cd`, `pwd` | `builtin-cd-pwd`, `vars-pwd` | logical PWD/OLDPWD unit coverage | `CDPATH`, physical mode, diagnostics, symlink normalization |
 | `command` | `builtin-command` | `-p`, `-v`, `-V`, lookup suppression | edge cases around special builtins, functions, utilities, PATH errors |
 | `env` | `builtin-env` | `-i`, assignments, command execution, printing | invalid options, command-not-found propagation edge cases |
-| `getopts` | `builtin-getopts` | clusters, required args, silent missing arg | invalid optstrings, OPTIND edge cases, explicit args edge cases |
+| `getopts` | `builtin-getopts`, `builtin-getopts-usage-errors` | clusters, required args, silent missing arg, invalid optstring and variable-name diagnostics | OPTIND edge cases, explicit args edge cases |
 | `printf` | `builtin-printf`, printf subrows | escapes, format reuse, octal/hex, width/precision | full format grammar, invalid formats, diagnostic corpus |
 | `read` | `builtin-read`, read subrows | backslash, `-r`, custom IFS, last-variable remainder assignment, unsupported option diagnostic | EOF status, additional IFS edge cases, prompts if ever added |
 | `test`, `[` | `builtin-test`, test subrows | file predicates, string comparisons, integer comparisons, ordering, invalid expression | complete POSIX expression grammar, precedence edge cases |
@@ -74,7 +74,6 @@ Follow-up tasks:
 The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `read`, `wait`). Add cases for:
 
 - `printf` invalid format and missing numeric conversions;
-- `getopts` invalid optstring and bad variable name;
 - `umask` invalid symbolic/numeric modes;
 - special builtin redirection and expansion failures.
 

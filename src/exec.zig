@@ -5668,6 +5668,7 @@ fn builtinGetopts(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     if (command.argv.len < 3) return errorResult(self.allocator, 2, "getopts", "usage: getopts optstring name [arg ...]");
     const optstring = command.argv[1].text;
     const name = command.argv[2].text;
+    if (!isValidGetoptsOptstring(optstring)) return errorResult(self.allocator, 2, "getopts", "invalid optstring");
     if (!isShellName(name)) return errorResult(self.allocator, 2, "getopts", "invalid variable name");
 
     const arg_count = if (command.argv.len > 3) command.argv.len - 3 else self.currentPositionals().params.len;
@@ -5761,6 +5762,19 @@ fn builtinGetopts(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
 }
 
 const GetoptsSpec = enum { invalid, no_arg, requires_arg };
+
+fn isValidGetoptsOptstring(optstring: []const u8) bool {
+    const start: usize = if (optstring.len > 0 and optstring[0] == ':') 1 else 0;
+    var index = start;
+    while (index < optstring.len) : (index += 1) {
+        switch (optstring[index]) {
+            '?' => return false,
+            ':' => if (index == start or optstring[index - 1] == ':') return false,
+            else => {},
+        }
+    }
+    return true;
+}
 
 fn getoptsSpec(optstring: []const u8, option: u8) GetoptsSpec {
     if (option == ':' or option == '?') return .invalid;
