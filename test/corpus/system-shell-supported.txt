@@ -122,3 +122,6 @@ alias greet='echo alias'; greet() { echo function; }; unalias greet; greet
 echo one > one; echo two > two; echo stdin | cat one - two
 env -i ONLY=value env
 OUTER=keep; env INNER=value env | grep ^INNER=; echo ${INNER:-unset}/$OUTER
+f() { printf "%s\n" "$1"; }; f dash-smoke > out; cat out
+(x=subshell; echo "$x"); echo "${x:-unset}"
+for x in a b; do case "$x" in a) echo A ;; b) echo B ;; esac; done

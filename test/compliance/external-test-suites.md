@@ -43,16 +43,24 @@ Avoid importing tests that require a particular `/bin/sh`, assume GNU utilities,
 
 Target rows:
 
-- `lex-quotes`
 - `grammar-case`
 - `grammar-function`
-- `expansion-field-splitting`
+- `grammar-loop`
+- `grammar-subshell`
 - `redirection-basic`
 
-Import plan:
+Imported starter slice:
 
-- review dash test licensing and attribution requirements;
-- select 10-20 language-only tests with no dash-only diagnostics;
+- `dash-smoke-function-redirection`
+- `dash-smoke-subshell-env`
+- `dash-smoke-loop-case`
+
+These are hand-translated POSIX language smoke cases, not vendored dash harness files. They are also present in the differential corpus after comparison across the available shells.
+
+Further import plan:
+
+- review dash test licensing and attribution requirements before copying any upstream text;
+- select additional language-only tests with no dash-only diagnostics;
 - translate each to Rush expected-output corpus cases;
 - add differential entries only for cases confirmed across dash, BusyBox ash, bash POSIX mode, and yash when available.
 

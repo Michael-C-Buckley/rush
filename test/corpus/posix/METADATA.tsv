@@ -74,6 +74,9 @@ case-multiple-patterns	grammar	behavior	case arm with multiple pattern alternati
 case-pattern	grammar	behavior	-
 command-substitution	expansion	behavior	-
 comments-ignored	lexing	behavior	-
+dash-smoke-function-redirection	grammar	external-suite-smoke	dash-compatible function redirection smoke case
+dash-smoke-loop-case	grammar	external-suite-smoke	dash-compatible loop and case smoke case
+dash-smoke-subshell-env	grammar	external-suite-smoke	dash-compatible subshell environment isolation smoke case
 errexit-negation-suppression	options	option	errexit is suppressed for negated pipelines
 expansion-arithmetic-precedence	expansion	behavior	-
 expansion-command-substitution-splitting	expansion	behavior	-
