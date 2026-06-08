@@ -154,3 +154,4 @@ test -t 0; echo stdin=$?
 rm -f modefile; : > modefile; chmod 7600 modefile; test -u modefile; echo setuid=$?; test -g modefile; echo setgid=$?; test -k modefile; echo sticky=$?; chmod 0600 modefile; test -u modefile; echo no-setuid=$?
 while getopts ab: opt -a -b bee; do printf '%s/%s/%s\n' "$opt" "${OPTARG-}" "$OPTIND"; done; echo done=$OPTIND
 set -- alpha beta; echo "$1/$2/$#"; set --; echo "count=$# first=${1-unset}"
+: > empty; read line < empty; echo status=$? value=${line-unset}
