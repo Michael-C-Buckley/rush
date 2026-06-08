@@ -4338,6 +4338,7 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
         }
         try self.registerCompletionRule(rule);
     } else {
+        if (function_name != null) return errorResult(self.allocator, 2, "complete", "--function requires --subcommands, --options, --argument, or --option-value");
         return errorResult(self.allocator, 2, "complete", "missing completion rule");
     }
     return emptyResult(self.allocator, 0);
@@ -8434,7 +8435,32 @@ test "complete requires function providers to declare a structured context" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("complete: --function requires --subcommands, --options, --argument, or --option-value\n", result.stderr);
     try std.testing.expectEqual(@as(usize, 0), executor.completion_rules.items.len);
+}
+
+test "complete accepts structured function provider selectors" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\complete git --subcommands --function __rush_complete_git_subcommands
+        \\complete git --options --function __rush_complete_git_options
+        \\complete git --argument --function __rush_complete_git_arguments
+        \\complete git --option-value --long config --function __rush_complete_git_config_values
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 4), executor.completion_rules.items.len);
+    try std.testing.expectEqual(completion.RuleKind.dynamic_subcommands, executor.completion_rules.items[0].kind);
+    try std.testing.expectEqual(completion.RuleKind.dynamic_options, executor.completion_rules.items[1].kind);
+    try std.testing.expectEqual(completion.RuleKind.dynamic_argument, executor.completion_rules.items[2].kind);
+    try std.testing.expectEqual(completion.RuleKind.dynamic_option_value, executor.completion_rules.items[3].kind);
 }
 
 test "complete registers static subcommand rules" {
