@@ -1,0 +1,3 @@
+rush: parse_error: misplaced reserved word
+  then echo bad
+  ^^^^

@@ -921,6 +921,16 @@ const SyntaxParser = struct {
                 continue;
             }
 
+            if (self.features.strict_diagnostics and self.atMisplacedReservedWord()) {
+                try self.diagnostics.append(self.allocator, .{
+                    .kind = .parse_error,
+                    .span = self.current().span,
+                    .message = "misplaced reserved word",
+                });
+                try self.appendCurrentTokenChildTo(&list_children);
+                continue;
+            }
+
             if (self.startsPipeline()) {
                 const pipeline = try self.parsePipeline();
                 try list_children.append(self.allocator, .{ .node = pipeline });
@@ -1592,6 +1602,19 @@ const SyntaxParser = struct {
 
     fn startsPipeline(self: SyntaxParser) bool {
         return self.startsSimpleCommand();
+    }
+
+    fn atMisplacedReservedWord(self: SyntaxParser) bool {
+        if (!self.at(.word)) return false;
+        const lexeme = self.current().lexeme(self.source);
+        return std.mem.eql(u8, lexeme, "then") or
+            std.mem.eql(u8, lexeme, "else") or
+            std.mem.eql(u8, lexeme, "elif") or
+            std.mem.eql(u8, lexeme, "fi") or
+            std.mem.eql(u8, lexeme, "do") or
+            std.mem.eql(u8, lexeme, "done") or
+            std.mem.eql(u8, lexeme, "esac") or
+            std.mem.eql(u8, lexeme, "in");
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {

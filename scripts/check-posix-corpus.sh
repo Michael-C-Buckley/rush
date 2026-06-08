@@ -35,7 +35,12 @@ for case_dir in "$CORPUS_DIR"/*; do
   actual_stdout=$tmp/stdout
   actual_stderr=$tmp/stderr
 
-  (cd "$tmp" && "$RUSH" -c "$(cat "$script")" >"$actual_stdout" 2>"$actual_stderr") || actual_status=$?
+  rush_args=
+  if [ -f "$case_dir/args" ]; then
+    rush_args=$(cat "$case_dir/args")
+  fi
+  # shellcheck disable=SC2086 # corpus args are controlled one-word CLI flags
+  (cd "$tmp" && "$RUSH" $rush_args -c "$(cat "$script")" >"$actual_stdout" 2>"$actual_stderr") || actual_status=$?
   actual_status=${actual_status:-0}
   want_status=$(cat "$expected_status")
 

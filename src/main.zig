@@ -14,6 +14,7 @@ pub const event_loop = @import("event_loop.zig");
 
 const usage =
     \\usage: rush -c SCRIPT
+    \\       rush --posix-strict -c SCRIPT
     \\       rush complete --debug INPUT
     \\       rush --help
     \\
@@ -39,12 +40,19 @@ pub fn main(init: std.process.Init) !u8 {
         return 0;
     }
 
-    if (args.len != 3 or !std.mem.eql(u8, args[1], "-c")) {
+    var script_arg: ?[]const u8 = null;
+    var features: compat.Features = .{};
+    if (args.len == 3 and std.mem.eql(u8, args[1], "-c")) {
+        script_arg = args[2];
+    } else if (args.len == 4 and std.mem.eql(u8, args[1], "--posix-strict") and std.mem.eql(u8, args[2], "-c")) {
+        script_arg = args[3];
+        features = .strictPosix();
+    } else {
         try writeAll(init.io, .stderr, usage);
         return 2;
     }
 
-    var result = try runScriptWithEnvironment(allocator, init.io, args[2], .{ .io = init.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = args[0] }, init.environ_map);
+    var result = try runScriptWithEnvironment(allocator, init.io, script_arg.?, .{ .io = init.io, .allow_external = true, .features = features, .external_stdio = .inherit, .arg_zero = args[0] }, init.environ_map);
     defer result.deinit();
 
     try writeAll(init.io, .stdout, result.stdout);
@@ -545,7 +553,7 @@ fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor,
     _ = options.io;
     const aliased = try executor.expandAliasesForScript(script);
     defer allocator.free(aliased);
-    var parsed = try parser.parse(allocator, aliased, .{});
+    var parsed = try parser.parse(allocator, aliased, .{ .features = options.features });
     defer parsed.deinit();
 
     if (parsed.diagnostics.len != 0) {
@@ -927,6 +935,19 @@ test "compatibility feature plumbing accepts Bash mode without changing baseline
     defer result.deinit();
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ok\n", result.stdout);
+}
+
+test "strict POSIX mode reports misplaced reserved words" {
+    var loose = try runScript(std.testing.allocator, std.testing.io, "then echo bad");
+    defer loose.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 127), loose.status);
+    try std.testing.expect(std.mem.indexOf(u8, loose.stderr, "then: command not found") != null);
+
+    var strict = try runScriptWithOptions(std.testing.allocator, std.testing.io, "then echo bad", .{ .io = std.testing.io, .allow_external = true, .features = .strictPosix() });
+    defer strict.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 2), strict.status);
+    try std.testing.expectEqualStrings("", strict.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, strict.stderr, "misplaced reserved word") != null);
 }
 
 test "runScript returns parse diagnostics" {
