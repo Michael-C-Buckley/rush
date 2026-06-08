@@ -170,6 +170,7 @@ pub const CompletionProvider = struct {
 pub const CompletionEvalContext = struct {
     prefix: []const u8 = "",
     command: []const u8 = "",
+    command_path: []const u8 = "",
     argument_index: usize = 0,
     previous: []const u8 = "",
     position: parser.CompletionKind = .command,
@@ -291,6 +292,25 @@ const MatchedCompletionOption = struct {
     spelling: []const u8,
 };
 
+const AttachedCompletionOptionValue = struct {
+    name: []const u8,
+    spelling: []const u8,
+    value_offset: usize,
+};
+
+fn attachedCompletionOptionValue(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?AttachedCompletionOptionValue {
+    const equals_index = std.mem.indexOfScalar(u8, word, '=') orelse return null;
+    if (equals_index == 0) return null;
+    const spelling = word[0..equals_index];
+    const matched = findCompletionOption(rules, root, path, spelling) orelse return null;
+    if (!matched.takes_value) return null;
+    return .{
+        .name = matched.name,
+        .spelling = spelling,
+        .value_offset = equals_index + 1,
+    };
+}
+
 fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?MatchedCompletionOption {
     for (rules) |rule| {
         if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextMatches(rule, root, path)) continue;
@@ -359,6 +379,18 @@ fn completionBuilderContains(builder: CompletionBuilder, value: []const u8) bool
         if (std.mem.eql(u8, candidate.value, value)) return true;
     }
     return false;
+}
+
+fn completionCommandPath(allocator: std.mem.Allocator, context: CompletionSemanticContext) ![]const u8 {
+    if (context.root.len == 0) return allocator.alloc(u8, 0);
+    var path: std.ArrayList(u8) = .empty;
+    errdefer path.deinit(allocator);
+    try path.appendSlice(allocator, context.root);
+    for (context.path) |segment| {
+        try path.append(allocator, ' ');
+        try path.appendSlice(allocator, segment);
+    }
+    return path.toOwnedSlice(allocator);
 }
 
 fn isOptionLike(word: []const u8) bool {
@@ -734,9 +766,12 @@ pub const Executor = struct {
         var context = try completionEvalContextForInput(self.allocator, source, cursor);
         var semantic = try self.analyzeCompletionsForInput(source, cursor);
         defer semantic.deinit();
+        const command_path = try completionCommandPath(self.allocator, semantic);
+        defer self.allocator.free(command_path);
 
-        if (semantic.root.len != 0 and semantic.option_value != null) {
+        if (semantic.root.len != 0) {
             context.command = semantic.root;
+            context.command_path = command_path;
             context.prefix = semantic.prefix;
             context.previous = semantic.previous;
             context.option_value = semantic.option_value;
@@ -823,7 +858,15 @@ pub const Executor = struct {
             index += 1;
         }
 
-        const prefix = completionContextPrefix(source, parser_context);
+        var prefix = completionContextPrefix(source, parser_context);
+        var replace_start = parser_context.span.start;
+        if (option_value == null) {
+            if (attachedCompletionOptionValue(self.completion_rules.items, root, path.items, prefix)) |attached| {
+                option_value = .{ .name = attached.name, .spelling = attached.spelling };
+                prefix = prefix[attached.value_offset..];
+                replace_start += attached.value_offset;
+            }
+        }
         const position: CompletionSemanticPosition = if (option_value != null)
             .option_value
         else if (parser_context.kind == .command)
@@ -840,7 +883,7 @@ pub const Executor = struct {
             .previous = previous,
             .position = position,
             .option_value = option_value,
-            .replace_start = parser_context.span.start,
+            .replace_start = replace_start,
             .replace_end = @min(parser_context.cursor, parser_context.span.end),
             .suspicious_start = if (suspicious) |span| span.start else null,
             .suspicious_end = if (suspicious) |span| span.end else null,
@@ -993,7 +1036,15 @@ pub const Executor = struct {
         for (self.completion_rules.items) |rule| {
             if (!completionDynamicRuleMatches(rule, semantic)) continue;
             const function = rule.value orelse continue;
-            const candidates = try self.collectCompletionsFromFunction(function, context.command, context, options);
+            var provider_context = context;
+            provider_context.position = switch (rule.kind) {
+                .dynamic_argument => .argument,
+                .dynamic_subcommands => .argument,
+                .dynamic_options => .argument,
+                .dynamic_option_value => .argument,
+                else => provider_context.position,
+            };
+            const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options);
             defer self.freeCompletions(candidates);
             for (candidates) |candidate| {
                 if (completionBuilderContains(builder.*, candidate.value)) continue;
@@ -4133,6 +4184,7 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     const subcommand = command.argv[1].text;
     if (std.mem.eql(u8, subcommand, "prefix")) return completionContextLine(self, subcommand, completionContextValue(self.*, .prefix));
     if (std.mem.eql(u8, subcommand, "command")) return completionContextLine(self, subcommand, completionContextValue(self.*, .command));
+    if (std.mem.eql(u8, subcommand, "command-path")) return completionContextLine(self, subcommand, completionContextValue(self.*, .command_path));
     if (std.mem.eql(u8, subcommand, "argument-index")) {
         const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         const text = try std.fmt.allocPrint(self.allocator, "{d}\n", .{context.argument_index});
@@ -4229,13 +4281,14 @@ fn builtinCompletionOption(self: *Executor, builder: *CompletionBuilder, command
     return emptyResult(self.allocator, 0);
 }
 
-const CompletionContextField = enum { prefix, command, previous };
+const CompletionContextField = enum { prefix, command, command_path, previous };
 
 fn completionContextValue(self: Executor, field: CompletionContextField) ?[]const u8 {
     const context = self.completion_context orelse return null;
     return switch (field) {
         .prefix => context.prefix,
         .command => context.command,
+        .command_path => if (context.command_path.len != 0) context.command_path else context.command,
         .previous => context.previous,
     };
 }
@@ -8475,6 +8528,70 @@ test "dynamic structured option value provider is scoped to option" {
     try expectCandidate(candidates, "full", .plain);
     const full = findCandidate(candidates, "full") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqual(@as(usize, "git log --format ".len), full.replace_start);
+}
+
+test "completion context helpers expose semantic command path in scoped providers" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_commit_args() {
+        \\  completion candidate "$(completion command-path)" --display "$(completion command)" --description "$(completion previous)" --kind plain
+        \\  completion candidate "$(completion position)" --display "$(completion prefix)"
+        \\}
+        \\complete git --subcommand commit
+        \\complete 'git commit' --argument --function __git_commit_args
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const source = "git commit fi";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "git commit", .plain);
+    const path = findCandidate(candidates, "git commit") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("git", path.display.?);
+    try std.testing.expectEqualStrings("commit", path.description.?);
+    try expectCandidate(candidates, "argument", .plain);
+    const position = findCandidate(candidates, "argument") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("fi", position.display.?);
+}
+
+test "completion context helpers expose semantic option value context in scoped providers" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_authors() {
+        \\  completion candidate "$(completion prefix)" --display "$(completion position)" --description "$(completion option-name):$(completion option-spelling)"
+        \\}
+        \\complete git --subcommand commit
+        \\complete 'git commit' --option-value --long author --function __git_authors
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const detached_source = "git commit --author ti";
+    const detached = try executor.collectCompletionsForInput(detached_source, detached_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(detached);
+    const detached_candidate = findCandidate(detached, "ti") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("option_value", detached_candidate.display.?);
+    try std.testing.expectEqualStrings("author:--author", detached_candidate.description.?);
+    try std.testing.expectEqual(@as(usize, "git commit --author ".len), detached_candidate.replace_start);
+
+    const attached_source = "git commit --author=ti";
+    const attached = try executor.collectCompletionsForInput(attached_source, attached_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(attached);
+    const attached_candidate = findCandidate(attached, "ti") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("option_value", attached_candidate.display.?);
+    try std.testing.expectEqualStrings("author:--author", attached_candidate.description.?);
+    try std.testing.expectEqual(@as(usize, "git commit --author=".len), attached_candidate.replace_start);
 }
 
 test "completion candidate is scoped to completion evaluation" {
