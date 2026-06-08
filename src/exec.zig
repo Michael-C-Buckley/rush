@@ -170,11 +170,37 @@ pub const CompletionBuilder = struct {
 
     pub fn finish(self: *CompletionBuilder, allocator: std.mem.Allocator) ![]completion.Candidate {
         const candidates = try self.candidates.toOwnedSlice(allocator);
+        std.mem.sort(completion.Candidate, candidates, {}, lessThanCompletionCandidate);
         self.owned.deinit(allocator);
         self.* = undefined;
         return candidates;
     }
 };
+
+fn lessThanCompletionCandidate(_: void, a: completion.Candidate, b: completion.Candidate) bool {
+    const a_class = completionCandidateSortClass(a);
+    const b_class = completionCandidateSortClass(b);
+    if (a_class != b_class) return a_class < b_class;
+    return std.mem.lessThan(u8, completionCandidateSortKey(a), completionCandidateSortKey(b));
+}
+
+fn completionCandidateSortClass(candidate: completion.Candidate) u8 {
+    if (candidate.kind != .option) return 0;
+    if (candidate.option) |option| {
+        if (option.long == null and option.short != null) return 1;
+    }
+    return 2;
+}
+
+fn completionCandidateSortKey(candidate: completion.Candidate) []const u8 {
+    if (candidate.kind == .option) {
+        if (candidate.option) |option| {
+            if (option.long) |long| return long;
+            if (option.short) |short| return short;
+        }
+    }
+    return candidate.display orelse candidate.value;
+}
 
 pub const CompletionEvalContext = struct {
     prefix: []const u8 = "",
@@ -9121,6 +9147,23 @@ test "structured completion rules emit subcommand and option candidates" {
     try expectCandidate(nested_options, "HEAD", .plain);
 }
 
+test "completion candidates sort non-options before grouped options" {
+    var builder: CompletionBuilder = .{};
+    try builder.appendCandidate(std.testing.allocator, .{ .value = "--zeta", .kind = .option, .option = .{ .long = "zeta" }, .replace_start = 0, .replace_end = 0 });
+    try builder.appendCandidate(std.testing.allocator, .{ .value = "-v", .kind = .option, .option = .{ .short = "v" }, .replace_start = 0, .replace_end = 0 });
+    try builder.appendCandidate(std.testing.allocator, .{ .value = "status", .kind = .subcommand, .replace_start = 0, .replace_end = 0 });
+    try builder.appendCandidate(std.testing.allocator, .{ .value = "--alpha", .kind = .option, .option = .{ .long = "alpha", .short = "a" }, .replace_start = 0, .replace_end = 0 });
+    try builder.appendCandidate(std.testing.allocator, .{ .value = "add", .kind = .subcommand, .replace_start = 0, .replace_end = 0 });
+
+    const candidates = try builder.finish(std.testing.allocator);
+    defer completion.freeCandidates(std.testing.allocator, candidates);
+    try std.testing.expectEqualStrings("add", candidates[0].value);
+    try std.testing.expectEqualStrings("status", candidates[1].value);
+    try std.testing.expectEqualStrings("-v", candidates[2].value);
+    try std.testing.expectEqualStrings("--alpha", candidates[3].value);
+    try std.testing.expectEqualStrings("--zeta", candidates[4].value);
+}
+
 test "structured completion keeps parent options available in subcommand contexts" {
     var setup = try parseAndLower(std.testing.allocator,
         \\complete git --option --long verbose --description verbose
@@ -9442,12 +9485,12 @@ test "completion functions can read semantic context" {
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
     defer executor.freeCompletions(candidates);
     try std.testing.expectEqual(@as(usize, 2), candidates.len);
-    try std.testing.expectEqualStrings("ma", candidates[0].value);
-    try std.testing.expectEqualStrings("git", candidates[0].display.?);
-    try std.testing.expectEqualStrings("checkout", candidates[0].description.?);
-    try std.testing.expectEqual(completion.Kind.option, candidates[0].kind);
-    try std.testing.expectEqualStrings("2", candidates[1].value);
-    try std.testing.expectEqualStrings("argument", candidates[1].display.?);
+    const prefix = findCandidate(candidates, "ma") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("git", prefix.display.?);
+    try std.testing.expectEqualStrings("checkout", prefix.description.?);
+    try std.testing.expectEqual(completion.Kind.option, prefix.kind);
+    const argument_index = findCandidate(candidates, "2") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("argument", argument_index.display.?);
 }
 
 test "completion option emits structured option candidates" {

@@ -1239,11 +1239,12 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
     for (candidates[window.start..window.end], window.start..) |candidate, index| {
         var line: std.ArrayList(u8) = .empty;
         errdefer line.deinit(allocator);
-        const label = candidate.display orelse candidate.value;
+        const label = try completionMenuLabel(allocator, candidate);
+        defer if (label.owned) |owned| allocator.free(owned);
         if (index == selected) try line.appendSlice(allocator, "\x1b[1;38;5;81m❯\x1b[22;39m ") else try line.appendSlice(allocator, "  ");
         if (index == selected) try line.appendSlice(allocator, "\x1b[1m");
         try appendCompletionKindStyle(allocator, &line, candidate.kind);
-        try appendPaddedCell(allocator, &line, label, label_width);
+        try appendPaddedCell(allocator, &line, label.text, label_width);
         try line.appendSlice(allocator, "\x1b[22;39m");
         try line.append(allocator, ' ');
         try line.appendSlice(allocator, "\x1b[2m");
@@ -1257,15 +1258,29 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
                 try line.appendSlice(allocator, "\x1b[39m");
             }
         }
-        if (candidates.len > window.end - window.start) {
-            try line.append(allocator, ' ');
-            try line.appendSlice(allocator, if (index == selected) "\x1b[38;5;81m┃\x1b[39m" else "\x1b[90m│\x1b[39m");
-        }
         try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
     if (window.start != 0 or window.end != candidates.len) {
         try lines.append(allocator, try std.fmt.allocPrint(allocator, "  \x1b[2mshowing {d}-{d} of {d}\x1b[22m", .{ window.start + 1, window.end, candidates.len }));
     }
+}
+
+const CompletionMenuLabel = struct {
+    text: []const u8,
+    owned: ?[]const u8 = null,
+};
+
+fn completionMenuLabel(allocator: std.mem.Allocator, candidate: completion.Candidate) !CompletionMenuLabel {
+    if (candidate.display) |display| return .{ .text = display };
+    if (candidate.kind != .option) return .{ .text = candidate.value };
+    const option = candidate.option orelse return .{ .text = candidate.value };
+    if (option.long) |long| {
+        if (option.short) |short| {
+            const owned = try std.fmt.allocPrint(allocator, "--{s},-{s}", .{ long, short });
+            return .{ .text = owned, .owned = owned };
+        }
+    }
+    return .{ .text = candidate.value };
 }
 
 fn appendCompletionKindStyle(allocator: std.mem.Allocator, line: *std.ArrayList(u8), kind: completion.Kind) !void {
@@ -1766,6 +1781,41 @@ test "completion menu styles candidates by kind" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;81m--help") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;45m$HOME") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;33msrc") != null);
+}
+
+test "completion menu renders paired option spellings" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{.{
+        .value = "--interactive",
+        .description = "add modified contents interactively",
+        .kind = .option,
+        .option = .{ .long = "interactive", .short = "i" },
+        .replace_start = 0,
+        .replace_end = 0,
+    }};
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "--interactive,-i") != null);
+}
+
+test "completion menu does not render trailing scrollbar border" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "one", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "two", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "three", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 3 });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "┃") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "│") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 1-1 of 3") != null);
 }
 
 test "completion menu selection accepts selected candidate" {
