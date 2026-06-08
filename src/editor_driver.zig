@@ -195,7 +195,7 @@ pub const ReadLineOptions = struct {
     completion_context: ?*anyopaque = null,
     complete: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8, usize) anyerror!completion.Application = null,
     diagnostic_context: ?*anyopaque = null,
-    diagnose: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?line_editor.DiagnosticRender = null,
+    diagnose: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8) anyerror!?line_editor.DiagnosticRender = null,
 };
 
 pub const ReadLineResult = union(enum) {
@@ -328,7 +328,7 @@ pub const TerminalSession = struct {
         defer session.deinit();
 
         try writeTtyAll(&self.tty, semanticCommandStart);
-        try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
+        try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
         try self.reader.arm();
         while (session.state == .editing or session.state == .history_search) {
             var render_needed = false;
@@ -381,7 +381,7 @@ pub const TerminalSession = struct {
                         self.renderer.reset(self.allocator);
                         try writeTtyAll(&self.tty, "\x1b[H\x1b[2J");
                     }
-                    try renderSession(self.allocator, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
+                    try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
                 }
                 try self.reader.arm();
             }
@@ -442,9 +442,9 @@ fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
         a.y_pixel == b.y_pixel;
 }
 
-fn renderSession(allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize, options: ReadLineOptions) !void {
+fn renderSession(allocator: std.mem.Allocator, io: std.Io, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize, options: ReadLineOptions) !void {
     const diagnostic = if (options.diagnose != null and options.diagnostic_context != null)
-        try options.diagnose.?(options.diagnostic_context.?, allocator, session.editor.buffer.text())
+        try options.diagnose.?(options.diagnostic_context.?, allocator, io, session.editor.buffer.text())
     else
         null;
     defer if (diagnostic) |render| render.deinit(allocator);

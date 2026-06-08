@@ -762,7 +762,7 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
-fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8) !?line_editor.DiagnosticRender {
+fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8) !?line_editor.DiagnosticRender {
     if (source.len == 0) return null;
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
     defer parsed.deinit();
@@ -774,7 +774,7 @@ fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, so
     }
 
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    const diagnostics = try completion_context.executor.completionDiagnosticsForInput(source, source.len);
+    const diagnostics = try completion_context.executor.completionDiagnosticsForInputOptions(source, source.len, .{ .io = io });
     defer completion_context.executor.freeCompletionDiagnostics(diagnostics);
     if (diagnostics.len == 0) return null;
     const diagnostic = diagnostics[0];

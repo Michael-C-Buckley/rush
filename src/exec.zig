@@ -802,12 +802,31 @@ pub const Executor = struct {
         return self.completion_rules.items;
     }
 
-    fn completionCommandKnown(self: Executor, command: []const u8) bool {
+    fn completionCommandKnown(self: Executor, command: []const u8, io: ?std.Io) !bool {
         if (builtinFor(command) != null) return true;
         if (self.functions.get(command) != null) return true;
         if (self.aliases.get(command) != null) return true;
         for (self.completion_rules.items) |rule| {
             if (std.mem.eql(u8, rule.root, command)) return true;
+        }
+        if (try self.completionCommandInPath(command, io)) return true;
+        return false;
+    }
+
+    fn completionCommandInPath(self: Executor, command: []const u8, maybe_io: ?std.Io) !bool {
+        const io = maybe_io orelse return false;
+        if (std.mem.indexOfScalar(u8, command, '/') != null) {
+            std.Io.Dir.cwd().access(io, command, .{ .execute = true }) catch return false;
+            return true;
+        }
+        const path_value = self.getEnv("PATH") orelse return false;
+        var parts = std.mem.splitScalar(u8, path_value, ':');
+        while (parts.next()) |part| {
+            const dir = if (part.len == 0) "." else part;
+            const candidate = try std.mem.concat(self.allocator, u8, &.{ dir, "/", command });
+            defer self.allocator.free(candidate);
+            std.Io.Dir.cwd().access(io, candidate, .{ .execute = true }) catch continue;
+            return true;
         }
         return false;
     }
@@ -945,6 +964,10 @@ pub const Executor = struct {
     }
 
     pub fn completionDiagnosticsForInput(self: *Executor, source: []const u8, cursor: usize) ![]CompletionDiagnostic {
+        return self.completionDiagnosticsForInputOptions(source, cursor, .{});
+    }
+
+    pub fn completionDiagnosticsForInputOptions(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]CompletionDiagnostic {
         var parsed = try parser.parse(self.allocator, source, .{ .mode = .interactive, .cursor = cursor });
         defer parsed.deinit();
         const clamped_cursor = @min(cursor, source.len);
@@ -962,7 +985,7 @@ pub const Executor = struct {
 
         const root_token = words.items[0];
         const root = root_token.lexeme(source);
-        if (root_token.span.end < clamped_cursor and !self.completionCommandKnown(root)) {
+        if (root_token.span.end < clamped_cursor and !try self.completionCommandKnown(root, options.io)) {
             try diagnostics.append(self.allocator, .{
                 .kind = .unknown_command,
                 .severity = .err,
@@ -8528,6 +8551,26 @@ test "completion diagnostics report unknown command" {
     try std.testing.expectEqual(CompletionDiagnosticSeverity.err, diagnostics[0].severity);
     try std.testing.expectEqual(@as(usize, 0), diagnostics[0].start);
     try std.testing.expectEqual(@as(usize, 3), diagnostics[0].end);
+}
+
+test "completion diagnostics accept executable commands from PATH" {
+    const root = "rush-completion-path-command-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
+    try std.Io.Dir.cwd().symLink(std.testing.io, "/bin/sh", "rush-completion-path-command-test/rush-path-command", .{});
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", root);
+
+    const available = try executor.completionDiagnosticsForInputOptions("rush-path-command ", "rush-path-command ".len, .{ .io = std.testing.io });
+    defer std.testing.allocator.free(available);
+    try std.testing.expectEqual(@as(usize, 0), available.len);
+
+    const missing = try executor.completionDiagnosticsForInputOptions("rush-missing-command ", "rush-missing-command ".len, .{ .io = std.testing.io });
+    defer std.testing.allocator.free(missing);
+    try std.testing.expectEqual(@as(usize, 1), missing.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.unknown_command, missing[0].kind);
 }
 
 test "completion diagnostics report unknown subcommand after valid prefixes" {
