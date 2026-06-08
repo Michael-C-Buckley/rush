@@ -74,4 +74,10 @@ pub fn build(b: *std.Build) void {
     const compliance_manifest_check = b.addSystemCommand(&.{ "sh", "scripts/check-compliance-manifest.sh" });
     compliance_manifest_check.step.dependOn(fmt_step);
     compliance_manifest_step.dependOn(&compliance_manifest_check.step);
+
+    const compliance_step = b.step("compliance", "Report POSIX compliance metrics and validate corpora");
+    const compliance_report = b.addSystemCommand(&.{ "sh", "scripts/report-compliance.sh", "--run-corpora" });
+    compliance_report.step.dependOn(&exe.step);
+    compliance_report.step.dependOn(fmt_step);
+    compliance_step.dependOn(&compliance_report.step);
 }
