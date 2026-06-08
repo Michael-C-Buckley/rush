@@ -339,16 +339,47 @@ const Lexer = struct {
     }
 
     fn consumeDollarExpansion(self: *Lexer) !void {
-        if (self.index + 1 >= self.source.len or self.source[self.index + 1] != '(') {
+        if (self.index + 1 >= self.source.len) {
             self.index += 1;
             return;
         }
 
-        if (self.index + 2 < self.source.len and self.source[self.index + 2] == '(') {
+        if (self.source[self.index + 1] == '{') {
+            try self.consumeParameterExpansion();
+        } else if (self.source[self.index + 1] == '(' and self.index + 2 < self.source.len and self.source[self.index + 2] == '(') {
             try self.consumeArithmeticExpansion();
-        } else {
+        } else if (self.source[self.index + 1] == '(') {
             try self.consumeCommandSubstitution();
+        } else {
+            self.index += 1;
         }
+    }
+
+    fn consumeParameterExpansion(self: *Lexer) !void {
+        const start = self.index;
+        self.index += 2;
+        var depth: usize = 1;
+        while (!self.isAtEnd()) {
+            if (self.peek() == '$' and self.index + 1 < self.source.len and self.source[self.index + 1] == '{') {
+                depth += 1;
+                self.index += 2;
+                continue;
+            }
+            if (self.peek() == '}') {
+                depth -= 1;
+                self.index += 1;
+                if (depth == 0) return;
+                continue;
+            }
+            switch (self.peek()) {
+                '\'' => try self.consumeQuoted('\'', "unterminated single quote in parameter expansion"),
+                '"' => try self.consumeDoubleQuoted(),
+                '\\' => self.consumeBackslash(),
+                else => self.index += 1,
+            }
+        }
+
+        try self.addIncomplete(.init(start, self.source.len), "unterminated parameter expansion");
     }
 
     fn consumeArithmeticExpansion(self: *Lexer) !void {
