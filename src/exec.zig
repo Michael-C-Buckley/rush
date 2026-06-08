@@ -183,6 +183,33 @@ pub const CompletionOptionValue = struct {
     spelling: []const u8,
 };
 
+pub const CompletionSemanticPosition = enum {
+    command,
+    subcommand,
+    option,
+    option_value,
+    argument,
+};
+
+pub const CompletionSemanticContext = struct {
+    allocator: std.mem.Allocator,
+    root: []const u8 = "",
+    path: []const []const u8 = &.{},
+    prefix: []const u8 = "",
+    previous: []const u8 = "",
+    position: CompletionSemanticPosition = .command,
+    option_value: ?CompletionOptionValue = null,
+    replace_start: usize = 0,
+    replace_end: usize = 0,
+    suspicious_start: ?usize = null,
+    suspicious_end: ?usize = null,
+
+    pub fn deinit(self: *CompletionSemanticContext) void {
+        self.allocator.free(self.path);
+        self.* = undefined;
+    }
+};
+
 const builtin_names = [_][]const u8{
     ".",
     ":",
@@ -255,6 +282,54 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.option.short) |short| allocator.free(short);
     if (rule.option.argument) |argument| allocator.free(argument);
     if (rule.description) |description| allocator.free(description);
+}
+
+const MatchedCompletionOption = struct {
+    takes_value: bool,
+    attached_value: bool,
+    name: []const u8,
+    spelling: []const u8,
+};
+
+fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?MatchedCompletionOption {
+    for (rules) |rule| {
+        if (rule.kind != .option or !completionRuleContextMatches(rule, root, path)) continue;
+        if (rule.option.long) |long| {
+            var spelling_buffer: [256]u8 = undefined;
+            const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return null;
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = rule.option.argument != null, .attached_value = false, .name = long, .spelling = word };
+            if (rule.option.argument != null and std.mem.startsWith(u8, word, spelling) and word.len > spelling.len and word[spelling.len] == '=') {
+                return .{ .takes_value = true, .attached_value = true, .name = long, .spelling = word[0..spelling.len] };
+            }
+        }
+        if (rule.option.short) |short| {
+            var spelling_buffer: [32]u8 = undefined;
+            const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return null;
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = rule.option.argument != null, .attached_value = false, .name = short, .spelling = word };
+        }
+    }
+    return null;
+}
+
+fn findCompletionSubcommand(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) bool {
+    for (rules) |rule| {
+        if (rule.kind == .subcommand and completionRuleContextMatches(rule, root, path)) {
+            if (rule.value) |value| if (std.mem.eql(u8, value, word)) return true;
+        }
+    }
+    return false;
+}
+
+fn completionRuleContextMatches(rule: completion.Rule, root: []const u8, path: []const []const u8) bool {
+    if (!std.mem.eql(u8, rule.root, root) or rule.path.len != path.len) return false;
+    for (rule.path, path) |expected, actual| {
+        if (!std.mem.eql(u8, expected, actual)) return false;
+    }
+    return true;
+}
+
+fn isOptionLike(word: []const u8) bool {
+    return word.len > 1 and word[0] == '-';
 }
 
 fn deinitSeenCompletionNames(allocator: std.mem.Allocator, seen: *std.StringHashMapUnmanaged(void)) void {
@@ -584,6 +659,92 @@ pub const Executor = struct {
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
         const context = try completionEvalContextForInput(self.allocator, source, cursor);
         return self.collectCompletionsWithContext(context.command, context, options);
+    }
+
+    pub fn analyzeCompletionsForInput(self: *Executor, source: []const u8, cursor: usize) !CompletionSemanticContext {
+        var parsed = try parser.parse(self.allocator, source, .{ .mode = .interactive, .cursor = cursor });
+        defer parsed.deinit();
+        const parser_context = parser.completionContext(parsed, cursor);
+        const clamped_cursor = @min(cursor, source.len);
+
+        var words: std.ArrayList(parser.Token) = .empty;
+        defer words.deinit(self.allocator);
+        for (parsed.tokens) |token| {
+            if (token.span.start > clamped_cursor) break;
+            if (token.kind == .word) try words.append(self.allocator, token);
+        }
+
+        if (words.items.len == 0) {
+            return .{
+                .allocator = self.allocator,
+                .path = try self.allocator.alloc([]const u8, 0),
+                .prefix = completionContextPrefix(source, parser_context),
+                .replace_start = parser_context.span.start,
+                .replace_end = @min(parser_context.cursor, parser_context.span.end),
+            };
+        }
+
+        const current_token_index = parser_context.token_index;
+        const root = words.items[0].lexeme(source);
+        var path: std.ArrayList([]const u8) = .empty;
+        errdefer path.deinit(self.allocator);
+        var index: usize = 1;
+        var previous: []const u8 = "";
+        var suspicious: ?parser.Span = null;
+        var option_value: ?CompletionOptionValue = null;
+        while (index < words.items.len) {
+            const token = words.items[index];
+            const is_current = current_token_index != null and token.span.start == parsed.tokens[current_token_index.?].span.start and clamped_cursor <= token.span.end;
+            if (is_current or token.span.end > clamped_cursor) break;
+            const word = token.lexeme(source);
+            previous = word;
+            if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
+                if (matched.takes_value and !matched.attached_value) {
+                    if (index + 1 < words.items.len) {
+                        const value_token = words.items[index + 1];
+                        const value_is_current = current_token_index != null and value_token.span.start == parsed.tokens[current_token_index.?].span.start and clamped_cursor <= value_token.span.end;
+                        if (!value_is_current and value_token.span.end <= clamped_cursor) {
+                            index += 1;
+                            previous = value_token.lexeme(source);
+                        } else {
+                            option_value = .{ .name = matched.name, .spelling = matched.spelling };
+                        }
+                    } else {
+                        option_value = .{ .name = matched.name, .spelling = matched.spelling };
+                    }
+                }
+            } else if (isOptionLike(word)) {
+                suspicious = token.span;
+            } else if (findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) {
+                try path.append(self.allocator, word);
+            } else {
+                break;
+            }
+            index += 1;
+        }
+
+        const prefix = completionContextPrefix(source, parser_context);
+        const position: CompletionSemanticPosition = if (option_value != null)
+            .option_value
+        else if (parser_context.kind == .command)
+            .command
+        else if (std.mem.startsWith(u8, prefix, "-"))
+            .option
+        else
+            .subcommand;
+        return .{
+            .allocator = self.allocator,
+            .root = root,
+            .path = try path.toOwnedSlice(self.allocator),
+            .prefix = prefix,
+            .previous = previous,
+            .position = position,
+            .option_value = option_value,
+            .replace_start = parser_context.span.start,
+            .replace_end = @min(parser_context.cursor, parser_context.span.end),
+            .suspicious_start = if (suspicious) |span| span.start else null,
+            .suspicious_end = if (suspicious) |span| span.end else null,
+        };
     }
 
     pub fn collectCompletionsWithContext(self: *Executor, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
@@ -7787,6 +7948,105 @@ test "complete registers path scoped option rules" {
     try std.testing.expectEqualStrings("commit", rule.path[0]);
     try std.testing.expectEqualStrings("amend", rule.option.long.?);
     try std.testing.expectEqualStrings("amend previous commit", rule.description.?);
+}
+
+test "completion analysis resolves subcommand context and option prefix" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --subcommand commit
+        \\complete 'git commit' --option --long amend --description amend
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const source = "git commit --am";
+    var analysis = try executor.analyzeCompletionsForInput(source, source.len);
+    defer analysis.deinit();
+
+    try std.testing.expectEqualStrings("git", analysis.root);
+    try std.testing.expectEqual(@as(usize, 1), analysis.path.len);
+    try std.testing.expectEqualStrings("commit", analysis.path[0]);
+    try std.testing.expectEqual(CompletionSemanticPosition.option, analysis.position);
+    try std.testing.expectEqualStrings("--am", analysis.prefix);
+    try std.testing.expectEqual(@as(usize, "git commit ".len), analysis.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), analysis.replace_end);
+}
+
+test "completion analysis consumes parent options before subcommands" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --option --short C --value-name path
+        \\complete git --option --long git-dir --value-name path
+        \\complete git --subcommand commit
+        \\complete 'git commit' --option --long amend
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const detached = "git -C repo commit --am";
+    var detached_analysis = try executor.analyzeCompletionsForInput(detached, detached.len);
+    defer detached_analysis.deinit();
+    try std.testing.expectEqual(@as(usize, 1), detached_analysis.path.len);
+    try std.testing.expectEqualStrings("commit", detached_analysis.path[0]);
+    try std.testing.expectEqualStrings("--am", detached_analysis.prefix);
+    try std.testing.expectEqualStrings("commit", detached_analysis.previous);
+
+    const value_slot = "git -C re";
+    var value_analysis = try executor.analyzeCompletionsForInput(value_slot, value_slot.len);
+    defer value_analysis.deinit();
+    try std.testing.expectEqual(CompletionSemanticPosition.option_value, value_analysis.position);
+    try std.testing.expectEqualStrings("C", value_analysis.option_value.?.name);
+    try std.testing.expectEqualStrings("-C", value_analysis.option_value.?.spelling);
+    try std.testing.expectEqualStrings("re", value_analysis.prefix);
+
+    const attached = "git --git-dir=.git commit --am";
+    var attached_analysis = try executor.analyzeCompletionsForInput(attached, attached.len);
+    defer attached_analysis.deinit();
+    try std.testing.expectEqual(@as(usize, 1), attached_analysis.path.len);
+    try std.testing.expectEqualStrings("commit", attached_analysis.path[0]);
+    try std.testing.expectEqualStrings("--am", attached_analysis.prefix);
+}
+
+test "completion analysis handles nested subcommands and unknown options conservatively" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete kubectl --option --long context --value-name name
+        \\complete kubectl --subcommand get
+        \\complete 'kubectl get' --subcommand pods
+        \\complete 'kubectl get pods' --option --long watch
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const nested = "kubectl --context prod get pods --w";
+    var nested_analysis = try executor.analyzeCompletionsForInput(nested, nested.len);
+    defer nested_analysis.deinit();
+    try std.testing.expectEqual(@as(usize, 2), nested_analysis.path.len);
+    try std.testing.expectEqualStrings("get", nested_analysis.path[0]);
+    try std.testing.expectEqualStrings("pods", nested_analysis.path[1]);
+    try std.testing.expectEqualStrings("--w", nested_analysis.prefix);
+
+    const unknown = "kubectl --unknown prod get pods --w";
+    var unknown_analysis = try executor.analyzeCompletionsForInput(unknown, unknown.len);
+    defer unknown_analysis.deinit();
+    try std.testing.expectEqual(@as(usize, 0), unknown_analysis.path.len);
+    try std.testing.expect(unknown_analysis.suspicious_start != null);
+    try std.testing.expectEqualStrings("prod", unknown_analysis.previous);
 }
 
 test "completion candidate is scoped to completion evaluation" {
