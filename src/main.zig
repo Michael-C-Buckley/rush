@@ -508,98 +508,6 @@ fn exitSignalFromStatus(status: exec.ExitStatus) ?u8 {
     return status - 128;
 }
 
-pub const Completion = struct {
-    text: []const u8,
-};
-
-pub const CompletionKind = completion_model.Kind;
-pub const CompletionCandidate = completion_model.Candidate;
-pub const CompletionEdit = completion_model.Edit;
-pub const CompletionApplication = completion_model.Application;
-pub const applyCompletionCandidates = completion_model.applyCandidates;
-pub const applyCompletionCandidatesForInput = completion_model.applyCandidatesForInput;
-
-pub fn completeInput(allocator: std.mem.Allocator, io: std.Io, executor: exec.Executor, source: []const u8, cursor: usize) ![]Completion {
-    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = cursor });
-    defer parsed.deinit();
-    const context = parser.completionContext(parsed, cursor);
-    const prefix = completionPrefix(source, context);
-
-    if (isVariableCompletion(source, context)) {
-        return completeVariables(allocator, executor, prefix);
-    }
-
-    return switch (context.kind) {
-        .command => completeCommands(allocator, prefix),
-        .argument, .redirect_target => completePaths(allocator, io, prefix),
-        .assignment_name => completeVariables(allocator, executor, prefix),
-        .assignment_value, .separator, .quoted_string => allocator.alloc(Completion, 0),
-    };
-}
-
-fn isVariableCompletion(source: []const u8, context: parser.CompletionContext) bool {
-    if (context.token_index == null or context.span.start >= source.len) return false;
-    return source[context.span.start] == '$';
-}
-
-fn completionPrefix(source: []const u8, context: parser.CompletionContext) []const u8 {
-    if (context.token_index == null) return "";
-    const start = context.span.start;
-    const end = @min(context.cursor, context.span.end);
-    if (start >= end or end > source.len) return "";
-    const raw = source[start..end];
-    if (raw.len > 0 and raw[0] == '$') return raw[1..];
-    return raw;
-}
-
-fn completeCommands(allocator: std.mem.Allocator, prefix: []const u8) ![]Completion {
-    const builtins = [_][]const u8{ ".", ":", "cat", "cd", "echo", "env", "export", "false", "pwd", "set", "source", "test", "true", "unset", "[" };
-    var completions: std.ArrayList(Completion) = .empty;
-    errdefer freeCompletions(allocator, completions.items);
-    for (builtins) |builtin| {
-        if (std.mem.startsWith(u8, builtin, prefix)) {
-            try completions.append(allocator, .{ .text = try allocator.dupe(u8, builtin) });
-        }
-    }
-    return completions.toOwnedSlice(allocator);
-}
-
-fn completeVariables(allocator: std.mem.Allocator, executor: exec.Executor, prefix: []const u8) ![]Completion {
-    var completions: std.ArrayList(Completion) = .empty;
-    errdefer freeCompletions(allocator, completions.items);
-    var iter = executor.env.iterator();
-    while (iter.next()) |entry| {
-        if (std.mem.startsWith(u8, entry.key_ptr.*, prefix)) {
-            try completions.append(allocator, .{ .text = try allocator.dupe(u8, entry.key_ptr.*) });
-        }
-    }
-    return completions.toOwnedSlice(allocator);
-}
-
-fn completePaths(allocator: std.mem.Allocator, io: std.Io, prefix: []const u8) ![]Completion {
-    var dir = try std.Io.Dir.cwd().openDir(io, ".", .{ .iterate = true });
-    defer dir.close(io);
-    var completions: std.ArrayList(Completion) = .empty;
-    errdefer freeCompletions(allocator, completions.items);
-    var iterator = dir.iterate();
-    while (try iterator.next(io)) |entry| {
-        if (std.mem.startsWith(u8, entry.name, prefix)) {
-            try completions.append(allocator, .{ .text = try allocator.dupe(u8, entry.name) });
-        }
-    }
-    std.mem.sort(Completion, completions.items, {}, lessThanCompletion);
-    return completions.toOwnedSlice(allocator);
-}
-
-fn lessThanCompletion(_: void, a: Completion, b: Completion) bool {
-    return std.mem.lessThan(u8, a.text, b.text);
-}
-
-pub fn freeCompletions(allocator: std.mem.Allocator, completions: []Completion) void {
-    for (completions) |completion| allocator.free(completion.text);
-    allocator.free(completions);
-}
-
 const InteractiveCompletionContext = struct {
     executor: *exec.Executor,
     history: *const History,
@@ -1624,51 +1532,63 @@ test "completion cache refresh updates entries in background" {
     try std.testing.expectEqualStrings("fresh", cached[0].value);
 }
 
-test "interactive completion helper suggests commands variables and paths" {
+test "interactive completion uses semantic executor path for commands variables and paths" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
     try executor.setEnv("RUSH_COMPLETION_VAR", "ok");
 
-    const command_completions = try completeInput(std.testing.allocator, std.testing.io, executor, "ec", 2);
-    defer freeCompletions(std.testing.allocator, command_completions);
-    try std.testing.expect(hasCompletion(command_completions, "echo"));
+    const command_completions = try executor.collectCompletionsForInput("ec", 2, .{ .io = std.testing.io });
+    defer executor.freeCompletions(command_completions);
+    try std.testing.expect(hasCompletionCandidate(command_completions, "echo"));
 
-    const variable_completions = try completeInput(std.testing.allocator, std.testing.io, executor, "echo $RUSH", 10);
-    defer freeCompletions(std.testing.allocator, variable_completions);
-    try std.testing.expect(hasCompletion(variable_completions, "RUSH_COMPLETION_VAR"));
+    var variable_setup = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\__rush_complete_variables() { completion variables; }
+        \\complete echo --argument --function __rush_complete_variables
+    , .{ .io = std.testing.io });
+    defer variable_setup.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), variable_setup.status);
+    const variable_completions = try executor.collectCompletionsForInput("echo RUSH", "echo RUSH".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(variable_completions);
+    try std.testing.expect(hasCompletionCandidate(variable_completions, "RUSH_COMPLETION_VAR"));
 
     const path = "rush-complete-path.tmp";
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    const path_completions = try completeInput(std.testing.allocator, std.testing.io, executor, "echo rush-complete", 18);
-    defer freeCompletions(std.testing.allocator, path_completions);
-    try std.testing.expect(hasCompletion(path_completions, path));
+    var path_setup = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\__rush_complete_paths() { completion files; }
+        \\complete cat --argument --function __rush_complete_paths
+    , .{ .io = std.testing.io });
+    defer path_setup.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), path_setup.status);
+    const path_completions = try executor.collectCompletionsForInput("cat rush-complete", "cat rush-complete".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(path_completions);
+    try std.testing.expect(hasCompletionCandidate(path_completions, path));
 }
 
-fn hasCompletion(completions: []const Completion, text: []const u8) bool {
-    for (completions) |completion| {
-        if (std.mem.eql(u8, completion.text, text)) return true;
+fn hasCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) bool {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) return true;
     }
     return false;
 }
 
 test "completion application handles no candidates" {
-    const candidates = [_]CompletionCandidate{};
-    const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
+    const candidates = [_]completion_model.Candidate{};
+    const application = try completion_model.applyCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(CompletionApplication.none, application);
+    try std.testing.expectEqual(completion_model.Application.none, application);
 }
 
 test "completion application inserts one candidate" {
-    const candidates = [_]CompletionCandidate{.{
+    const candidates = [_]completion_model.Candidate{.{
         .value = "status",
         .kind = .subcommand,
         .replace_start = 4,
         .replace_end = 6,
         .append_space = true,
     }};
-    const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
+    const application = try completion_model.applyCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
     const edit = application.edit;
@@ -1679,11 +1599,11 @@ test "completion application inserts one candidate" {
 }
 
 test "completion application reports shared-prefix candidates as ambiguous" {
-    const candidates = [_]CompletionCandidate{
+    const candidates = [_]completion_model.Candidate{
         .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
         .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
     };
-    const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
+    const application = try completion_model.applyCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
@@ -1692,11 +1612,11 @@ test "completion application reports shared-prefix candidates as ambiguous" {
 }
 
 test "completion application reports ambiguous candidates" {
-    const candidates = [_]CompletionCandidate{
+    const candidates = [_]completion_model.Candidate{
         .{ .value = "status", .replace_start = 4, .replace_end = 4 },
         .{ .value = "diff", .replace_start = 4, .replace_end = 4 },
     };
-    const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
+    const application = try completion_model.applyCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
@@ -1709,7 +1629,7 @@ test "completion ranking prefers recent successful same-cwd history" {
     try history.addRecord(.{ .cmd = "git checkout cherry-pick", .status = 1, .cwd = "/repo" });
     try history.addRecord(.{ .cmd = "git checkout checkout", .status = 0, .cwd = "/repo" });
 
-    var candidates = [_]CompletionCandidate{
+    var candidates = [_]completion_model.Candidate{
         .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
         .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
     };
@@ -1723,7 +1643,7 @@ test "completion ranking falls back to lexical order" {
     var history = History.init(std.testing.allocator);
     defer history.deinit();
 
-    var candidates = [_]CompletionCandidate{
+    var candidates = [_]completion_model.Candidate{
         .{ .value = "status", .replace_start = 4, .replace_end = 4 },
         .{ .value = "checkout", .replace_start = 4, .replace_end = 4 },
     };
