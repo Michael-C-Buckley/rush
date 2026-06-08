@@ -165,6 +165,7 @@ pub const CompletionCandidate = completion_model.Candidate;
 pub const CompletionEdit = completion_model.Edit;
 pub const CompletionApplication = completion_model.Application;
 pub const applyCompletionCandidates = completion_model.applyCandidates;
+pub const applyCompletionCandidatesForInput = completion_model.applyCandidatesForInput;
 
 pub fn completeInput(allocator: std.mem.Allocator, io: std.Io, executor: exec.Executor, source: []const u8, cursor: usize) ![]Completion {
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = cursor });
@@ -255,7 +256,7 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
     const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true });
     defer completion_context.executor.freeCompletions(candidates);
-    return completion_model.applyCandidates(allocator, candidates);
+    return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
 pub fn renderHighlightedInput(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {

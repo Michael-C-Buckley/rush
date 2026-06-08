@@ -77,6 +77,23 @@ pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candida
     return .ambiguous;
 }
 
+pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8, candidates: []const Candidate) !Application {
+    if (candidates.len == 0) return .none;
+
+    var matches: std.ArrayList(Candidate) = .empty;
+    defer matches.deinit(allocator);
+    for (candidates) |candidate| {
+        std.debug.assert(candidate.replace_start <= candidate.replace_end);
+        std.debug.assert(candidate.replace_end <= source.len);
+        const prefix = source[candidate.replace_start..candidate.replace_end];
+        if (std.mem.startsWith(u8, candidate.value, prefix)) {
+            try matches.append(allocator, candidate);
+        }
+    }
+
+    return applyCandidates(allocator, matches.items);
+}
+
 fn commonCandidatePrefix(candidates: []const Candidate) []const u8 {
     std.debug.assert(candidates.len != 0);
     var prefix = candidates[0].value;
@@ -136,4 +153,46 @@ test "application reports ambiguous candidates" {
     defer application.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(Application.ambiguous, application);
+}
+
+test "application filters candidates by replacement prefix" {
+    const source = "git st";
+    const candidates = [_]Candidate{
+        .{ .value = "status", .replace_start = 4, .replace_end = 6 },
+        .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
+        .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
+    };
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("status", edit.replacement);
+    try std.testing.expect(edit.append_space);
+}
+
+test "application filtering preserves common prefix insertion" {
+    const source = "git c";
+    const candidates = [_]Candidate{
+        .{ .value = "status", .replace_start = 4, .replace_end = 5 },
+        .{ .value = "checkout", .replace_start = 4, .replace_end = 5 },
+        .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 5 },
+    };
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("che", edit.replacement);
+    try std.testing.expect(!edit.append_space);
+}
+
+test "application filtering reports no matching candidates" {
+    const source = "git zz";
+    const candidates = [_]Candidate{
+        .{ .value = "status", .replace_start = 4, .replace_end = 6 },
+        .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
+    };
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(Application.none, application);
 }
