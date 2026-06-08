@@ -63,6 +63,7 @@ builtin-shift	builtin	builtin	-
 builtin-status-parameter	builtin	builtin	-
 builtin-test-file-predicates	builtin	builtin	-
 builtin-test-file-string	builtin	builtin	-
+builtin-test-integer-comparison	builtin	builtin	test integer binary comparison operators
 builtin-test-invalid-expression	builtin	negative;builtin	-
 builtin-test-string-order	builtin	builtin	-
 builtin-times	builtin	builtin	-

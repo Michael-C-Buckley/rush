@@ -134,6 +134,7 @@ foo=outer; ( foo=inner; echo "$foo"; exit 3 ); echo status=$?/foo=$foo
 printf '<%s:%d>\n' a 1 b 2 c 3
 printf "%s:%d\n" bb 7 > bb-out; cat bb-out
 : > bb-empty; test -s bb-empty; echo empty=$?; printf x > bb-empty; test -s bb-empty; echo full=$?
+test 5 -eq 5; echo eq=$?; test 5 -ne 4; echo ne=$?; test 5 -gt 4; echo gt=$?; test 5 -ge 5; echo ge=$?; test 4 -lt 5; echo lt=$?; test 5 -le 5; echo le=$?
 printf "alpha\nbeta\n" > bb-in; read line < bb-in; printf "[%s]\n" "$line"
 printf '%s\n' "x y" > bb-in; IFS=' ' read a b < bb-in; test "$a" = x && test "$b" = y; echo status=$?
 printf 'one,two,three\n' > read-in; IFS=, read first rest < read-in; printf '<%s><%s>\n' "$first" "$rest"
