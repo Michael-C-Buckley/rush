@@ -150,6 +150,14 @@ pub const CompletionProvider = struct {
     function: []const u8,
 };
 
+pub const CompletionEvalContext = struct {
+    prefix: []const u8 = "",
+    command: []const u8 = "",
+    argument_index: usize = 0,
+    previous: []const u8 = "",
+    position: parser.CompletionKind = .command,
+};
+
 const PromptStyle = struct {
     fg: vaxis.Color = .default,
     bg: vaxis.Color = .default,
@@ -284,6 +292,7 @@ pub const Executor = struct {
     last_background_pid_text_len: usize = 0,
     prompt_builder: ?PromptBuilder = null,
     completion_builder: ?CompletionBuilder = null,
+    completion_context: ?CompletionEvalContext = null,
     getopts_offset: usize = 1,
     getopts_last_optind: usize = 1,
 
@@ -384,13 +393,24 @@ pub const Executor = struct {
     }
 
     pub fn collectCompletions(self: *Executor, command: []const u8, options: ExecuteOptions) ![]completion.Candidate {
+        return self.collectCompletionsWithContext(command, .{ .command = command }, options);
+    }
+
+    pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
+        const context = try completionEvalContextForInput(self.allocator, source, cursor);
+        return self.collectCompletionsWithContext(context.command, context, options);
+    }
+
+    pub fn collectCompletionsWithContext(self: *Executor, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
         const provider = self.completionProvider(command) orelse return self.allocator.alloc(completion.Candidate, 0);
         const body = self.functions.get(provider.function) orelse return self.allocator.alloc(completion.Candidate, 0);
         if (self.completion_builder != null) return error.RecursiveCompletion;
         self.completion_builder = .{};
+        self.completion_context = context;
         errdefer {
             self.completion_builder.?.deinit(self.allocator);
             self.completion_builder = null;
+            self.completion_context = null;
         }
 
         var argv = [_]ir.WordRef{
@@ -405,6 +425,7 @@ pub const Executor = struct {
 
         var builder = self.completion_builder.?;
         self.completion_builder = null;
+        self.completion_context = null;
         return builder.finish(self.allocator);
     }
 
@@ -2886,6 +2907,18 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     const builder = if (self.completion_builder) |*builder| builder else return errorResult(self.allocator, 2, "completion", "not completing a command");
     if (command.argv.len < 2) return errorResult(self.allocator, 2, "completion", "missing subcommand");
     const subcommand = command.argv[1].text;
+    if (std.mem.eql(u8, subcommand, "prefix")) return completionContextLine(self, subcommand, completionContextValue(self.*, .prefix));
+    if (std.mem.eql(u8, subcommand, "command")) return completionContextLine(self, subcommand, completionContextValue(self.*, .command));
+    if (std.mem.eql(u8, subcommand, "argument-index")) {
+        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const text = try std.fmt.allocPrint(self.allocator, "{d}\n", .{context.argument_index});
+        return .{ .allocator = self.allocator, .status = 0, .stdout = text, .stderr = try self.allocator.alloc(u8, 0) };
+    }
+    if (std.mem.eql(u8, subcommand, "previous")) return completionContextLine(self, subcommand, completionContextValue(self.*, .previous));
+    if (std.mem.eql(u8, subcommand, "position")) {
+        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        return stdoutLine(self.allocator, @tagName(context.position), 0);
+    }
     if (!std.mem.eql(u8, subcommand, "candidate")) return errorResult(self.allocator, 2, "completion", "unsupported subcommand");
 
     var candidate: completion.Candidate = .{ .value = "", .replace_start = 0, .replace_end = 0 };
@@ -2922,11 +2955,69 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     return emptyResult(self.allocator, 0);
 }
 
+const CompletionContextField = enum { prefix, command, previous };
+
+fn completionContextValue(self: Executor, field: CompletionContextField) ?[]const u8 {
+    const context = self.completion_context orelse return null;
+    return switch (field) {
+        .prefix => context.prefix,
+        .command => context.command,
+        .previous => context.previous,
+    };
+}
+
+fn completionContextLine(self: *Executor, name: []const u8, value: ?[]const u8) !CommandResult {
+    _ = name;
+    return stdoutLine(self.allocator, value orelse return errorResult(self.allocator, 2, "completion", "missing completion context"), 0);
+}
+
 fn parseCompletionKind(name: []const u8) ?completion.Kind {
     inline for (@typeInfo(completion.Kind).@"enum".fields) |field| {
         if (std.mem.eql(u8, name, field.name)) return @enumFromInt(field.value);
     }
     return null;
+}
+
+fn completionEvalContextForInput(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !CompletionEvalContext {
+    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = cursor });
+    defer parsed.deinit();
+    const context = parser.completionContext(parsed, cursor);
+    const prefix = completionContextPrefix(source, context);
+    const current_token_index = context.token_index;
+
+    var command: []const u8 = "";
+    var previous: []const u8 = "";
+    var argument_index: usize = 0;
+    var words_seen: usize = 0;
+    for (parsed.tokens, 0..) |token, index| {
+        if (token.span.start > context.cursor) break;
+        if (token.kind != .word) continue;
+        const is_current_token = index == current_token_index and context.cursor <= token.span.end;
+        const word = token.lexeme(source);
+        if (words_seen == 0) {
+            command = word;
+        } else {
+            argument_index = words_seen;
+        }
+        if (!is_current_token and token.span.end <= context.cursor) previous = word;
+        words_seen += 1;
+    }
+
+    return .{
+        .prefix = prefix,
+        .command = command,
+        .argument_index = argument_index,
+        .previous = previous,
+        .position = context.kind,
+    };
+}
+
+fn completionContextPrefix(source: []const u8, context: parser.CompletionContext) []const u8 {
+    if (context.token_index == null) return "";
+    const start = context.span.start;
+    const end = @min(context.cursor, context.span.end);
+    if (start >= end or end > source.len) return "";
+    return source[start..end];
 }
 
 fn builtinEval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -5910,4 +6001,34 @@ test "completion candidate is scoped to completion evaluation" {
     try std.testing.expectEqualStrings("show status", candidates[0].description.?);
     try std.testing.expectEqual(completion.Kind.subcommand, candidates[0].kind);
     try std.testing.expect(!candidates[0].append_space);
+}
+
+test "completion functions can read semantic context" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_git() {
+        \\  completion candidate $(completion prefix) --display $(completion command) --description $(completion previous) --kind option
+        \\  completion candidate $(completion argument-index) --display $(completion position)
+        \\}
+        \\complete git --function __rush_complete_git
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "git checkout ma";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try std.testing.expectEqual(@as(usize, 2), candidates.len);
+    try std.testing.expectEqualStrings("ma", candidates[0].value);
+    try std.testing.expectEqualStrings("git", candidates[0].display.?);
+    try std.testing.expectEqualStrings("checkout", candidates[0].description.?);
+    try std.testing.expectEqual(completion.Kind.option, candidates[0].kind);
+    try std.testing.expectEqualStrings("2", candidates[1].value);
+    try std.testing.expectEqualStrings("argument", candidates[1].display.?);
 }
