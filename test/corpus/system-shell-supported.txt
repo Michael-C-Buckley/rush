@@ -145,3 +145,4 @@ f() { echo before; return 7; echo after; }; f; echo status=$?
 : > bb-log; printf '%s\n' one >> bb-log; printf '%s\n' two >> bb-log; cat bb-log
 rm -rf real link; mkdir real; ln -s real link; cd link; case "$(pwd -L)" in */link) echo logical ;; *) echo bad-L ;; esac; case "$(pwd -P)" in */real) echo physical ;; *) echo bad-P ;; esac
 rm -rf real link; mkdir real; ln -s real link; cd -L link; case "$PWD" in */link) echo cd-L ;; *) echo bad-L:$PWD ;; esac; cd ..; cd -P link; case "$PWD" in */real) echo cd-P ;; *) echo bad-P:$PWD ;; esac
+export RUSH_EXPORT_P_TEST=ok; case "$(export -p)" in *RUSH_EXPORT_P_TEST*ok*) echo export-p ;; *) echo export-bad ;; esac; readonly RUSH_READONLY_P_TEST=ok; case "$(readonly -p)" in *RUSH_READONLY_P_TEST*) echo readonly-p ;; *) echo readonly-bad ;; esac

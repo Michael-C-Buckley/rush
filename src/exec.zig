@@ -5908,24 +5908,12 @@ fn finishGetoptsEnd(self: *Executor, name: []const u8, optind: usize) !CommandRe
 fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len == 1) {
-        var names: std.ArrayList([]const u8) = .empty;
-        defer names.deinit(self.allocator);
-        var iter = self.env.iterator();
-        while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
-        std.mem.sort([]const u8, names.items, {}, lessThanString);
-
-        var stdout: std.ArrayList(u8) = .empty;
-        errdefer stdout.deinit(self.allocator);
-        for (names.items) |name| {
-            try stdout.appendSlice(self.allocator, "export ");
-            try stdout.appendSlice(self.allocator, name);
-            try stdout.append(self.allocator, '=');
-            try stdout.appendSlice(self.allocator, self.env.get(name).?);
-            try stdout.append(self.allocator, '\n');
-        }
-        return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+    if (command.argv.len == 1) return listExported(self);
+    if (std.mem.eql(u8, command.argv[1].text, "-p")) {
+        if (command.argv.len != 2) return variableBuiltinUsageError(self, "export", "too many arguments");
+        return listExported(self);
     }
+    if (std.mem.startsWith(u8, command.argv[1].text, "-") and !std.mem.eql(u8, command.argv[1].text, "-")) return variableBuiltinUsageError(self, "export", "unsupported option");
 
     for (command.argv[1..]) |arg| {
         const assignment = std.mem.indexOfScalar(u8, arg.text, '=');
@@ -5937,6 +5925,25 @@ fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
         }
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn listExported(self: *Executor) !CommandResult {
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(self.allocator);
+    var iter = self.env.iterator();
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (names.items) |name| {
+        try stdout.appendSlice(self.allocator, "export ");
+        try stdout.appendSlice(self.allocator, name);
+        try stdout.append(self.allocator, '=');
+        try stdout.appendSlice(self.allocator, self.env.get(name).?);
+        try stdout.append(self.allocator, '\n');
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -5953,21 +5960,12 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
 fn builtinReadonly(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len == 1) {
-        var names: std.ArrayList([]const u8) = .empty;
-        defer names.deinit(self.allocator);
-        var iter = self.readonly.iterator();
-        while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
-        std.mem.sort([]const u8, names.items, {}, lessThanString);
-        var stdout: std.ArrayList(u8) = .empty;
-        errdefer stdout.deinit(self.allocator);
-        for (names.items) |name| {
-            try stdout.appendSlice(self.allocator, "readonly ");
-            try stdout.appendSlice(self.allocator, name);
-            try stdout.append(self.allocator, '\n');
-        }
-        return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+    if (command.argv.len == 1) return listReadonly(self);
+    if (std.mem.eql(u8, command.argv[1].text, "-p")) {
+        if (command.argv.len != 2) return variableBuiltinUsageError(self, "readonly", "too many arguments");
+        return listReadonly(self);
     }
+    if (std.mem.startsWith(u8, command.argv[1].text, "-") and !std.mem.eql(u8, command.argv[1].text, "-")) return variableBuiltinUsageError(self, "readonly", "unsupported option");
     for (command.argv[1..]) |arg| {
         if (std.mem.indexOfScalar(u8, arg.text, '=')) |equals| {
             const name = arg.text[0..equals];
@@ -5981,6 +5979,22 @@ fn builtinReadonly(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
         }
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn listReadonly(self: *Executor) !CommandResult {
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(self.allocator);
+    var iter = self.readonly.iterator();
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (names.items) |name| {
+        try stdout.appendSlice(self.allocator, "readonly ");
+        try stdout.appendSlice(self.allocator, name);
+        try stdout.append(self.allocator, '\n');
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn variableBuiltinUsageError(self: *Executor, name: []const u8, message: []const u8) !CommandResult {

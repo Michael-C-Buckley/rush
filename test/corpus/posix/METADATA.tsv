@@ -207,3 +207,4 @@ dash-smoke-function-return	grammar	behavior	dash-style function return status sm
 busybox-ash-smoke-append-order	redirection	behavior	BusyBox ash-style append redirection order smoke case
 builtin-pwd-logical-physical	builtin	behavior	pwd -L preserves logical PWD while pwd -P reports physical cwd through a symlink
 builtin-cd-logical-physical	builtin	behavior	cd -L sets logical PWD while cd -P sets physical PWD through a symlink
+builtin-export-readonly-p	builtin	behavior	export -p and readonly -p list marked variables

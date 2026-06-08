@@ -1,0 +1,4 @@
+export RUSH_EXPORT_P_TEST=ok
+case "$(export -p)" in *RUSH_EXPORT_P_TEST*ok*) echo export-p ;; *) echo export-bad ;; esac
+readonly RUSH_READONLY_P_TEST=ok
+case "$(readonly -p)" in *RUSH_READONLY_P_TEST*) echo readonly-p ;; *) echo readonly-bad ;; esac

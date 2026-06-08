@@ -23,8 +23,8 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `eval` | `builtin-eval` | `builtin-eval`, `builtin-eval-special-assignment` | parse/expansion failure consequences |
 | `exec` | `builtin-exec` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-replaces-process` | redirection-only exec, failure status details, no-return contexts |
 | `exit` | `builtin-exit`, `builtin-exit-usage-errors` | `builtin-exit`, `builtin-exit-invalid-operand`, `builtin-exit-too-many` | additional status/diagnostic corpus |
-| `export` | `builtin-export-unset`, `builtin-variable-usage-errors` | `builtin-export-env`, invalid-name and readonly-assignment negative corpus | option forms |
-| `readonly` | `vars-readonly`, `builtin-variable-usage-errors` | `builtin-readonly`, invalid-name and readonly-assignment negative corpus | option forms, additional assignment diagnostics |
+| `export` | `builtin-export-unset`, `builtin-export-readonly-p`, `builtin-variable-usage-errors` | `builtin-export-env`, `export -p`, invalid-name, readonly-assignment, unsupported-option, and `-p` usage diagnostics | full reusable listing quoting details |
+| `readonly` | `vars-readonly`, `builtin-export-readonly-p`, `builtin-variable-usage-errors` | `builtin-readonly`, `readonly -p`, invalid-name, readonly-assignment, unsupported-option, and `-p` usage diagnostics | full reusable listing quoting details |
 | `return` | `builtin-return-usage-errors` plus function tests | `builtin-return-status`, `builtin-return-outside-function`, `builtin-return-invalid-operand`, `builtin-return-too-many`, unit coverage | additional status/diagnostic corpus |
 | `set` | `option-set`, `option-set-usage-errors`, option rows | shell option and positional parameter corpus, invalid option diagnostics | many POSIX flags, broader `--` behavior |
 | `shift` | `builtin-shift-too-far`, `builtin-shift-usage-errors`, builtin row through tests | `builtin-shift`, `builtin-shift-too-far`, `builtin-shift-invalid-operand`, `builtin-shift-too-many` | additional status/diagnostic corpus |

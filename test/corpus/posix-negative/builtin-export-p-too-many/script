@@ -1,0 +1,2 @@
+export -p x
+echo after
