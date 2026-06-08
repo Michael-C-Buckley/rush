@@ -1,0 +1,1 @@
+set >&9; echo after
