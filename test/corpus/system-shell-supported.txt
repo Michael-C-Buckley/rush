@@ -112,3 +112,5 @@ read cooked <<'EOF1'; read -r raw <<'EOF2'; echo "$cooked/$raw"\na\ b\nEOF1\na\ 
 IFS=: read a b c <<EOF\none::three\nEOF\necho "$a/$b/$c"
 printf '[%5s][%-5s][%.3s][%04d]' a b abcdef 7
 printf '[%o][%x][%X]' 10 255 255
+printf x > file; test -s file; echo size=$?; test -r file; echo read=$?; test -x file; echo exec=$?
+test a \< b; echo lt=$?; test b \> a; echo gt=$?

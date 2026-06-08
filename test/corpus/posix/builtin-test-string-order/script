@@ -1,0 +1,2 @@
+test a \< b; echo lt=$?
+test b \> a; echo gt=$?

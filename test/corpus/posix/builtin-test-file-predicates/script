@@ -1,0 +1,4 @@
+printf x > file
+test -s file; echo size=$?
+test -r file; echo read=$?
+test -x file; echo exec=$?
