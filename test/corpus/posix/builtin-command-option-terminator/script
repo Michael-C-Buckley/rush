@@ -1,0 +1,2 @@
+command -- echo ok
+command -v -- echo
