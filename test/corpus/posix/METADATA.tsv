@@ -13,6 +13,7 @@ arithmetic-operator-coverage	expansion	behavior	-
 arithmetic-variable-lookup	expansion	behavior	-
 assignment-prefix-external	variables	behavior	-
 assignment-prefix-temporary	variables	behavior	-
+assignment-command-substitution-status	variables	behavior	assignment-only command status follows last command substitution
 async-builtin-fallback	job_control	job	-
 async-builtin-job-wait	job_control	job	-
 async-compound-job-wait	job_control	job	-
@@ -91,6 +92,7 @@ dash-smoke-subshell-env	grammar	external-suite-smoke	dash-compatible subshell en
 dash-smoke-subshell-status	grammar	external-suite-smoke	dash-compatible subshell status and environment smoke case
 errexit-and-or-final-exits	options	option	final AND-OR list command failure triggers errexit
 errexit-and-or-suppression	options	option	errexit is suppressed before AND-OR list operators
+errexit-assignment-command-substitution	options	option	assignment-only command substitution failure triggers errexit
 errexit-negation-suppression	options	option	errexit is suppressed for negated pipelines
 expansion-arithmetic-precedence	expansion	behavior	-
 expansion-command-substitution-splitting	expansion	behavior	-

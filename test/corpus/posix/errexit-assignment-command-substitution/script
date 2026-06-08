@@ -1,0 +1,3 @@
+set -e
+value=$(false)
+echo after

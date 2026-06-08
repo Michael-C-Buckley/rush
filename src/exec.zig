@@ -538,6 +538,7 @@ pub const Executor = struct {
     getopts_offset: usize = 1,
     getopts_last_optind: usize = 1,
     parameter_error: expand.ParameterError = .{},
+    command_substitution_status: ?ExitStatus = null,
     script_stdin: ?[]const u8 = null,
     script_stdin_offset: usize = 0,
 
@@ -2326,12 +2327,13 @@ pub const Executor = struct {
 
         if (expanded.argv.len == 0) {
             try self.applyAssignments(expanded.assignments);
+            const assignment_status = self.command_substitution_status orelse 0;
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, false)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
-                return emptyResult(self.allocator, 0);
+                return emptyResult(self.allocator, assignment_status);
             }
-            return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, 0), options, false);
+            return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, assignment_status), options, false);
         }
 
         if (!options.suppress_functions and self.functions.getPtr(expanded.argv[0].text) != null) {
@@ -2424,6 +2426,7 @@ pub const Executor = struct {
     }
 
     fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !ir.SimpleCommand {
+        self.command_substitution_status = null;
         const assignments = try self.expandWords(command.assignments, options);
         errdefer self.freeWords(assignments);
         const argv = try self.expandArgv(command.argv, options);
@@ -2613,8 +2616,12 @@ pub const Executor = struct {
         defer program.deinit();
         var sub_options = substitution_context.options;
         sub_options.external_stdio = .capture;
+        const saved_pending_exit = substitution_context.executor.pending_exit;
+        substitution_context.executor.pending_exit = null;
+        defer substitution_context.executor.pending_exit = saved_pending_exit;
         var result = try substitution_context.executor.executeProgram(program, sub_options);
         defer result.deinit();
+        substitution_context.executor.command_substitution_status = result.status;
         return allocator.dupe(u8, result.stdout);
     }
 
