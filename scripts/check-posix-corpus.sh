@@ -4,6 +4,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 RUSH="$ROOT/zig-out/bin/rush"
 CORPUS_DIR=${1:-$ROOT/test/corpus/posix}
+CORPUS_LABEL=${CORPUS_LABEL:-POSIX corpus}
 
 zig build --summary none >/dev/null
 
@@ -110,4 +111,4 @@ fi
 
 if [ -n "$metadata_seen" ]; then rm -f "$metadata_seen"; fi
 
-echo "POSIX corpus passed ($cases cases)"
+echo "$CORPUS_LABEL passed ($cases cases)"

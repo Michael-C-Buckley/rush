@@ -75,6 +75,12 @@ pub fn build(b: *std.Build) void {
     compliance_manifest_check.step.dependOn(fmt_step);
     compliance_manifest_step.dependOn(&compliance_manifest_check.step);
 
+    const posix_negative_corpus_step = b.step("posix-negative-corpus", "Run POSIX negative diagnostics corpus");
+    const posix_negative_corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-posix-negative-corpus.sh" });
+    posix_negative_corpus_check.step.dependOn(&exe.step);
+    posix_negative_corpus_check.step.dependOn(fmt_step);
+    posix_negative_corpus_step.dependOn(&posix_negative_corpus_check.step);
+
     const compliance_step = b.step("compliance", "Report POSIX compliance metrics and validate corpora");
     const compliance_report = b.addSystemCommand(&.{ "sh", "scripts/report-compliance.sh", "--run-corpora" });
     compliance_report.step.dependOn(&exe.step);

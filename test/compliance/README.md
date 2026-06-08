@@ -114,5 +114,5 @@ Use `out_of_scope` for POSIX-adjacent extensions or intentionally deferred UX/Ba
 - **Unit tests** prove internal parser, expansion, or executor mechanics.
 - **POSIX corpus cases** prove Rush's expected externally visible behavior.
 - **Differential corpus cases** prove agreement with available comparison shells where portable agreement exists.
-- **Negative corpus cases** are required before error-heavy rows can be considered `supported`.
+- **Negative corpus cases** live under `test/corpus/posix-negative` and are required before error-heavy rows can be considered `supported`.
 - **Cross-target compile checks** are required for portability-sensitive implementation changes, but they do not replace runtime POSIX behavior tests.

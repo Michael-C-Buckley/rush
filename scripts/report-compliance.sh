@@ -4,6 +4,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MANIFEST=${MANIFEST:-$ROOT/test/compliance/posix-shell.tsv}
 POSIX_CORPUS_DIR=${POSIX_CORPUS_DIR:-$ROOT/test/corpus/posix}
+POSIX_NEGATIVE_CORPUS_DIR=${POSIX_NEGATIVE_CORPUS_DIR:-$ROOT/test/corpus/posix-negative}
 DIFF_CORPUS=${DIFF_CORPUS:-$ROOT/test/corpus/system-shell-supported.txt}
 RUN_CORPORA=0
 
@@ -133,14 +134,20 @@ if [ -d "$POSIX_CORPUS_DIR" ]; then
   posix_cases=$(find "$POSIX_CORPUS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
 fi
 
+negative_cases=0
+if [ -d "$POSIX_NEGATIVE_CORPUS_DIR" ]; then
+  negative_cases=$(find "$POSIX_NEGATIVE_CORPUS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+fi
+
 diff_cases=0
 if [ -f "$DIFF_CORPUS" ]; then
   diff_cases=$(grep -v '^[[:space:]]*$' "$DIFF_CORPUS" | grep -v '^[[:space:]]*#' | wc -l | tr -d ' ')
 fi
 
 printf '\nCorpus inventory\n'
-printf 'posix_expected_cases: %s\n' "$posix_cases"
-printf 'differential_cases:  %s\n' "$diff_cases"
+printf 'posix_expected_cases:  %s\n' "$posix_cases"
+printf 'posix_negative_cases:  %s\n' "$negative_cases"
+printf 'differential_cases:   %s\n' "$diff_cases"
 
 metadata=$POSIX_CORPUS_DIR/METADATA.tsv
 if [ -f "$metadata" ]; then
@@ -165,5 +172,6 @@ fi
 if [ "$RUN_CORPORA" -eq 1 ]; then
   printf '\nCorpus validation\n'
   "$ROOT/scripts/check-posix-corpus.sh" "$POSIX_CORPUS_DIR"
+  "$ROOT/scripts/check-posix-negative-corpus.sh"
   "$ROOT/scripts/check-system-shell-corpus.sh" "$DIFF_CORPUS"
 fi
