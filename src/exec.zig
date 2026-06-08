@@ -2903,7 +2903,6 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
 
 fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
-    _ = options;
     const builder = if (self.completion_builder) |*builder| builder else return errorResult(self.allocator, 2, "completion", "not completing a command");
     if (command.argv.len < 2) return errorResult(self.allocator, 2, "completion", "missing subcommand");
     const subcommand = command.argv[1].text;
@@ -2919,6 +2918,10 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
         const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         return stdoutLine(self.allocator, @tagName(context.position), 0);
     }
+    if (std.mem.eql(u8, subcommand, "files")) return builtinCompletionFiles(self, builder, command, options, false);
+    if (std.mem.eql(u8, subcommand, "directories")) return builtinCompletionFiles(self, builder, command, options, true);
+    if (std.mem.eql(u8, subcommand, "executables")) return builtinCompletionExecutables(self, builder, command, options);
+    if (std.mem.eql(u8, subcommand, "variables")) return builtinCompletionVariables(self, builder, command);
     if (!std.mem.eql(u8, subcommand, "candidate")) return errorResult(self.allocator, 2, "completion", "unsupported subcommand");
 
     var candidate: completion.Candidate = .{ .value = "", .replace_start = 0, .replace_end = 0 };
@@ -2969,6 +2972,117 @@ fn completionContextValue(self: Executor, field: CompletionContextField) ?[]cons
 fn completionContextLine(self: *Executor, name: []const u8, value: ?[]const u8) !CommandResult {
     _ = name;
     return stdoutLine(self.allocator, value orelse return errorResult(self.allocator, 2, "completion", "missing completion context"), 0);
+}
+
+fn completionPrefixOption(self: *Executor, command: ir.SimpleCommand, start: usize) ![]const u8 {
+    var prefix: ?[]const u8 = null;
+    var index = start;
+    while (index < command.argv.len) {
+        const option = command.argv[index].text;
+        index += 1;
+        if (std.mem.eql(u8, option, "--prefix")) {
+            if (index >= command.argv.len) return error.MissingCompletionPrefix;
+            prefix = command.argv[index].text;
+            index += 1;
+        } else {
+            return error.UnsupportedCompletionOption;
+        }
+    }
+    if (prefix) |value| return value;
+    const context = self.completion_context orelse return "";
+    return context.prefix;
+}
+
+fn builtinCompletionFiles(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand, options: ExecuteOptions, directories_only: bool) !CommandResult {
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    var append_slash = false;
+    var extension: ?[]const u8 = null;
+    var prefix: ?[]const u8 = null;
+    var index: usize = 2;
+    while (index < command.argv.len) {
+        const option = command.argv[index].text;
+        index += 1;
+        if (std.mem.eql(u8, option, "--prefix")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing prefix");
+            prefix = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--extension") and !directories_only) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing extension");
+            extension = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--append-slash") and directories_only) {
+            append_slash = true;
+        } else {
+            return errorResult(self.allocator, 2, "completion", "unsupported helper option");
+        }
+    }
+    const effective_prefix = prefix orelse if (self.completion_context) |context| context.prefix else "";
+    try appendPathCandidates(self, builder, io, effective_prefix, extension, directories_only, append_slash);
+    return emptyResult(self.allocator, 0);
+}
+
+fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io, prefix: []const u8, extension: ?[]const u8, directories_only: bool, append_slash: bool) !void {
+    if (std.mem.indexOfScalar(u8, prefix, '/') != null) return;
+    var dir = try std.Io.Dir.cwd().openDir(io, ".", .{ .iterate = true });
+    defer dir.close(io);
+    var iterator = dir.iterate();
+    while (try iterator.next(io)) |entry| {
+        if (entry.name.len == 0) continue;
+        if (entry.name[0] == '.' and (prefix.len == 0 or prefix[0] != '.')) continue;
+        if (!std.mem.startsWith(u8, entry.name, prefix)) continue;
+        const is_directory = entry.kind == .directory;
+        if (directories_only and !is_directory) continue;
+        if (extension) |ext| {
+            if (!std.mem.endsWith(u8, entry.name, ext)) continue;
+        }
+        const value = if (append_slash and is_directory) try std.mem.concat(self.allocator, u8, &.{ entry.name, "/" }) else entry.name;
+        defer if (append_slash and is_directory) self.allocator.free(value);
+        try builder.appendCandidate(self.allocator, .{
+            .value = value,
+            .kind = if (is_directory) .directory else .file,
+            .replace_start = 0,
+            .replace_end = prefix.len,
+            .append_space = !is_directory,
+        });
+    }
+}
+
+fn builtinCompletionVariables(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand) !CommandResult {
+    const prefix = completionPrefixOption(self, command, 2) catch |err| switch (err) {
+        error.MissingCompletionPrefix => return errorResult(self.allocator, 2, "completion", "missing prefix"),
+        error.UnsupportedCompletionOption => return errorResult(self.allocator, 2, "completion", "unsupported helper option"),
+        else => |e| return e,
+    };
+    var iter = self.env.iterator();
+    while (iter.next()) |entry| {
+        if (std.mem.startsWith(u8, entry.key_ptr.*, prefix)) {
+            try builder.appendCandidate(self.allocator, .{ .value = entry.key_ptr.*, .kind = .variable, .replace_start = 0, .replace_end = prefix.len });
+        }
+    }
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinCompletionExecutables(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand, options: ExecuteOptions) !CommandResult {
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    const prefix = completionPrefixOption(self, command, 2) catch |err| switch (err) {
+        error.MissingCompletionPrefix => return errorResult(self.allocator, 2, "completion", "missing prefix"),
+        error.UnsupportedCompletionOption => return errorResult(self.allocator, 2, "completion", "unsupported helper option"),
+        else => |e| return e,
+    };
+    const path = self.getEnv("PATH") orelse return emptyResult(self.allocator, 0);
+    var path_iter = std.mem.splitScalar(u8, path, ':');
+    while (path_iter.next()) |path_dir| {
+        if (path_dir.len == 0) continue;
+        var dir = std.Io.Dir.cwd().openDir(io, path_dir, .{ .iterate = true }) catch continue;
+        defer dir.close(io);
+        var iterator = dir.iterate();
+        while (iterator.next(io) catch null) |entry| {
+            if (std.mem.startsWith(u8, entry.name, prefix)) {
+                try builder.appendCandidate(self.allocator, .{ .value = entry.name, .kind = .command, .replace_start = 0, .replace_end = prefix.len });
+            }
+        }
+    }
+    return emptyResult(self.allocator, 0);
 }
 
 fn parseCompletionKind(name: []const u8) ?completion.Kind {
@@ -6031,4 +6145,58 @@ test "completion functions can read semantic context" {
     try std.testing.expectEqual(completion.Kind.option, candidates[0].kind);
     try std.testing.expectEqualStrings("2", candidates[1].value);
     try std.testing.expectEqualStrings("argument", candidates[1].display.?);
+}
+
+test "completion helper builtins append structured candidates" {
+    const zig_path = "rush-complete-helper-test.zig";
+    const txt_path = "rush-complete-helper-test.txt";
+    const dir_path = "rush-complete-helper-dir";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, zig_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, txt_path) catch {};
+    defer std.Io.Dir.cwd().deleteDir(std.testing.io, dir_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = zig_path, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = txt_path, .data = "" });
+    try std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir);
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_files() {
+        \\  completion files --prefix rush-complete-helper --extension .zig
+        \\  completion directories --prefix rush-complete-helper --append-slash
+        \\  completion variables --prefix RUSH_COMPLETION_HELPER_
+        \\}
+        \\complete helper --function __rush_complete_files
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("RUSH_COMPLETION_HELPER_VARIABLE", "1");
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const candidates = try executor.collectCompletions("helper", .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, zig_path, .file);
+    try expectNoCandidate(candidates, txt_path);
+    try expectCandidate(candidates, "rush-complete-helper-dir/", .directory);
+    try expectCandidate(candidates, "RUSH_COMPLETION_HELPER_VARIABLE", .variable);
+}
+
+fn expectCandidate(candidates: []const completion.Candidate, value: []const u8, kind: completion.Kind) !void {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) {
+            try std.testing.expectEqual(kind, candidate.kind);
+            return;
+        }
+    }
+    return error.MissingCompletionCandidate;
+}
+
+fn expectNoCandidate(candidates: []const completion.Candidate, value: []const u8) !void {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) return error.UnexpectedCompletionCandidate;
+    }
 }
