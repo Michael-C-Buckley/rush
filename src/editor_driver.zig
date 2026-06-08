@@ -229,6 +229,14 @@ pub const TerminalSession = struct {
         self.* = undefined;
     }
 
+    pub fn suspendRawMode(self: *TerminalSession) !void {
+        try std.posix.tcsetattr(self.tty.fd.handle, .FLUSH, self.tty.termios);
+    }
+
+    pub fn resumeRawMode(self: *TerminalSession) !void {
+        _ = try vaxis.tty.PosixTty.makeRaw(self.tty.fd.handle);
+    }
+
     pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !?[]const u8 {
         if (self.reader.thread == null) try self.reader.start();
 

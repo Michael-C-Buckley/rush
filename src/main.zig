@@ -244,11 +244,20 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
         if (line.len == 0) continue;
         try history.add(line);
 
-        var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" });
-        defer result.deinit();
-        try writeAll(io, .stdout, result.stdout);
-        try writeAll(io, .stderr, result.stderr);
-        last_status = result.status;
+        {
+            try terminal.suspendRawMode();
+            var raw_suspended = true;
+            defer if (raw_suspended) terminal.resumeRawMode() catch {};
+
+            var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" });
+            defer result.deinit();
+            try writeAll(io, .stdout, result.stdout);
+            try writeAll(io, .stderr, result.stderr);
+            last_status = result.status;
+
+            try terminal.resumeRawMode();
+            raw_suspended = false;
+        }
     }
 
     return last_status;
