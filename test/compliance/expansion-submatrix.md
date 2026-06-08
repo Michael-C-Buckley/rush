@@ -14,7 +14,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | Command substitution | `expansion-command-substitution`, `lex-backquote` | baseline | trailing-newline trimming edge cases, nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
 | Field splitting | `expansion-field-splitting-*` | baseline | empty-field edge cases, generated-empty fields, interactions with special parameters |
-| Pathname expansion | `expansion-pathname-*` | partial/missing | dotfiles, slash components, unmatched patterns, directory ordering edge cases |
+| Pathname expansion | `expansion-pathname-*` | baseline | bracket expressions, escaping, collation and deeper directory edge cases |
 | Quote removal | `expansion-quote-removal`, `lex-quotes` | baseline | recursive contexts, escaped newline interactions, here-doc delimiter contexts |
 
 ## Tilde expansion
@@ -131,17 +131,14 @@ Manifest rows:
 - `expansion-pathname-dotfiles`
 - `expansion-pathname-slash-components`
 
-Rush has basic sorted pathname expansion. Dotfile and slash-component semantics are explicitly `missing` in the manifest until audited.
+Rush has baseline sorted pathname expansion with recursive slash-component matching. Leading-dot entries only match when the pattern component begins with `.`, and unmatched patterns remain literal.
 
-Required cases:
+Remaining cases:
 
-- `*` should not match leading-dot names unless pattern explicitly begins with `.`;
-- patterns with `/` should match path components correctly;
-- unmatched patterns should remain literal;
 - bracket expressions and escaping should be audited against POSIX pattern rules;
-- sort order should be deterministic and locale decision should be documented.
-
-Follow-up task: `#159 Deepen pathname expansion POSIX edge cases`.
+- sort order is bytewise deterministic today; locale collation behavior should be documented if Rush later becomes locale-aware;
+- absolute-path patterns and permission-denied directories need portable policy decisions;
+- deeper directory edge cases should be added as spec-clause corpus cases.
 
 ## Quote removal
 

@@ -1,0 +1,5 @@
+mkdir rush-dot-dir
+: > rush-dot-dir/visible
+: > rush-dot-dir/.hidden
+echo rush-dot-dir/*
+echo rush-dot-dir/.*

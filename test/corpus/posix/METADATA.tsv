@@ -104,6 +104,9 @@ parameter-alternate-length	expansion	behavior	-
 parameter-assignment	expansion	behavior	-
 parameter-defaults	expansion	behavior	-
 parameter-pattern-removal	expansion	behavior	-
+pathname-dotfiles	expansion	behavior	pathname expansion only matches leading dot with explicit dot pattern
+pathname-slash-components	expansion	behavior	pathname expansion matches slash-separated components
+pathname-unmatched-slash	expansion	behavior	unmatched slash-containing patterns remain literal
 pipeline-negation-false	grammar	behavior	-
 pipeline-negation-pipeline	grammar	behavior	-
 pipeline-negation-true	grammar	behavior	-

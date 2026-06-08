@@ -1139,30 +1139,72 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
 }
 
 fn globCwd(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
-    if (std.mem.indexOfScalar(u8, pattern, '/') != null) {
-        return allocator.alloc([]const u8, 0);
-    }
-
-    var dir = try std.Io.Dir.cwd().openDir(io, ".", .{ .iterate = true });
-    defer dir.close(io);
-
-    var matches: std.ArrayList([]const u8) = .empty;
+    var prefixes: std.ArrayList([]const u8) = .empty;
     errdefer {
-        for (matches.items) |match| allocator.free(match);
-        matches.deinit(allocator);
+        for (prefixes.items) |prefix| allocator.free(prefix);
+        prefixes.deinit(allocator);
     }
+    try prefixes.append(allocator, try allocator.dupe(u8, ""));
+
+    var component_iter = std.mem.splitScalar(u8, pattern, '/');
+    while (component_iter.next()) |component| {
+        var next_prefixes: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (next_prefixes.items) |prefix| allocator.free(prefix);
+            next_prefixes.deinit(allocator);
+        }
+
+        for (prefixes.items) |prefix| {
+            if (hasGlobSyntax(component)) {
+                try appendGlobComponentMatches(allocator, io, &next_prefixes, prefix, component);
+            } else {
+                const candidate = try joinPathComponent(allocator, prefix, component);
+                errdefer allocator.free(candidate);
+                if (try pathComponentExists(io, candidate)) try next_prefixes.append(allocator, candidate) else allocator.free(candidate);
+            }
+        }
+
+        for (prefixes.items) |prefix| allocator.free(prefix);
+        prefixes.deinit(allocator);
+        prefixes = next_prefixes;
+    }
+
+    std.mem.sort([]const u8, prefixes.items, {}, lessThanString);
+    return prefixes.toOwnedSlice(allocator);
+}
+
+fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches: *std.ArrayList([]const u8), prefix: []const u8, component: []const u8) !void {
+    const dir_path = if (prefix.len == 0) "." else prefix;
+    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir => return,
+        else => return err,
+    };
+    defer dir.close(io);
 
     var iterator = dir.iterate();
     while (try iterator.next(io)) |entry| {
         if (entry.name.len == 0) continue;
-        if (entry.name[0] == '.' and (pattern.len == 0 or pattern[0] != '.')) continue;
-        if (globMatches(pattern, entry.name)) {
-            try matches.append(allocator, try allocator.dupe(u8, entry.name));
+        if (entry.name[0] == '.' and (component.len == 0 or component[0] != '.')) continue;
+        if (globMatches(component, entry.name)) {
+            try matches.append(allocator, try joinPathComponent(allocator, prefix, entry.name));
         }
     }
+}
 
-    std.mem.sort([]const u8, matches.items, {}, lessThanString);
-    return matches.toOwnedSlice(allocator);
+fn joinPathComponent(allocator: std.mem.Allocator, prefix: []const u8, component: []const u8) ![]const u8 {
+    if (prefix.len == 0) return allocator.dupe(u8, component);
+    if (component.len == 0) return allocator.dupe(u8, prefix);
+    return std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, component });
+}
+
+fn pathComponentExists(io: std.Io, path: []const u8) !bool {
+    if (path.len == 0) return true;
+    var file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir => return false,
+        else => return err,
+    };
+    file.close(io);
+    return true;
 }
 
 fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
@@ -1685,6 +1727,34 @@ test "pathname expansion matches sorted cwd entries" {
     try std.testing.expectEqual(@as(usize, 2), result.fields.len);
     try std.testing.expectEqualStrings(a, result.fields[0]);
     try std.testing.expectEqualStrings(b, result.fields[1]);
+}
+
+test "pathname expansion handles slash components and dotfiles" {
+    const dir = "rush-glob-dir";
+    const visible = "rush-glob-dir/visible.tmp";
+    const hidden = "rush-glob-dir/.hidden.tmp";
+    const missing_suffix = "rush-glob-dir/*.missing";
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = visible, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, visible) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = hidden, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, hidden) catch {};
+
+    var slash = try expandWord(std.testing.allocator, "rush-glob-dir/*.tmp", .{ .io = std.testing.io });
+    defer slash.deinit();
+    try std.testing.expectEqual(@as(usize, 1), slash.fields.len);
+    try std.testing.expectEqualStrings(visible, slash.fields[0]);
+
+    var dot = try expandWord(std.testing.allocator, "rush-glob-dir/.*.tmp", .{ .io = std.testing.io });
+    defer dot.deinit();
+    try std.testing.expectEqual(@as(usize, 1), dot.fields.len);
+    try std.testing.expectEqualStrings(hidden, dot.fields[0]);
+
+    var unmatched = try expandWord(std.testing.allocator, missing_suffix, .{ .io = std.testing.io });
+    defer unmatched.deinit();
+    try std.testing.expectEqual(@as(usize, 1), unmatched.fields.len);
+    try std.testing.expectEqualStrings(missing_suffix, unmatched.fields[0]);
 }
 
 test "pathname expansion preserves unmatched patterns" {
