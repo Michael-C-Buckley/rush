@@ -259,7 +259,12 @@ pub const History = struct {
 
     pub fn searchEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
         const db = self.db orelse return null;
-        return queryHistorySearchEntry(db, allocator, query, before);
+        return queryHistorySearchEntry(db, allocator, query, before, .previous);
+    }
+
+    pub fn searchNextEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, after: ?i64) !?line_editor.HistoryView.HistoryEntry {
+        const db = self.db orelse return null;
+        return queryHistorySearchEntry(db, allocator, query, after, .next);
     }
 
     pub fn suggestEntry(self: *History, allocator: std.mem.Allocator, prefix: []const u8) !?line_editor.HistoryView.HistoryEntry {
@@ -281,6 +286,11 @@ fn nextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: [
 fn searchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
     const history: *History = @ptrCast(@alignCast(context));
     return history.searchEntry(allocator, query, before);
+}
+
+fn searchNextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, after: ?i64) !?line_editor.HistoryView.HistoryEntry {
+    const history: *History = @ptrCast(@alignCast(context));
+    return history.searchNextEntry(allocator, query, after);
 }
 
 fn suggestHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8) !?line_editor.HistoryView.HistoryEntry {
@@ -346,7 +356,7 @@ fn appendSqlLikePrefix(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8)
     try pattern.append(allocator, '%');
 }
 
-fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
+fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, query: []const u8, cursor: ?i64, direction: HistoryDirection) !?line_editor.HistoryView.HistoryEntry {
     var like_pattern: std.ArrayList(u8) = .empty;
     defer like_pattern.deinit(allocator);
     try like_pattern.append(allocator, '%');
@@ -360,7 +370,8 @@ fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, qu
     try like_pattern.append(allocator, '%');
 
     var stmt: ?*sqlite.sqlite3_stmt = null;
-    try sqliteCheck(sqlite.sqlite3_prepare_v2(db,
+    const sql = switch (direction) {
+        .previous =>
         \\select id, command from history h
         \\where (?1 is null or id < ?1)
         \\  and (?2 = '' or command like ?2 escape '\')
@@ -370,9 +381,22 @@ fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, qu
         \\      and (?2 = '' or newer.command like ?2 escape '\')
         \\  )
         \\order by id desc limit 1
-    , -1, &stmt, null), db);
+        ,
+        .next =>
+        \\select id, command from history h
+        \\where (?1 is null or id > ?1)
+        \\  and (?2 = '' or command like ?2 escape '\')
+        \\  and not exists (
+        \\    select 1 from history newer
+        \\    where newer.id > h.id and newer.command = h.command
+        \\      and (?2 = '' or newer.command like ?2 escape '\')
+        \\  )
+        \\order by id asc limit 1
+        ,
+    };
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(db, sql, -1, &stmt, null), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
-    if (before) |id| {
+    if (cursor) |id| {
         try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, id), db);
     } else {
         try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 1), db);
@@ -1061,6 +1085,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
                 .previous = previousHistoryEntry,
                 .next = nextHistoryEntry,
                 .search = searchHistoryEntry,
+                .search_next = searchNextHistoryEntry,
                 .suggest = suggestHistoryEntry,
             },
             .completion_context = &completion_context,

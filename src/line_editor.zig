@@ -220,6 +220,7 @@ pub const HistoryView = struct {
     previous: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, i64) anyerror!?HistoryEntry = null,
     search: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
+    search_next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     suggest: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?HistoryEntry = null,
 
     pub const HistoryEntry = struct {
@@ -605,16 +606,17 @@ pub const LineSession = struct {
 
     fn handleHistorySearchKey(self: *LineSession, event: KeyEvent) !void {
         switch (event.key) {
-            .enter, .tab => {
+            .enter => {
                 if (self.history_search_match) |entry| try self.editor.buffer.replace(entry.text);
                 self.finishHistorySearch();
             },
+            .tab => if (event.modifiers.shift) try self.refreshHistorySearchNext(if (self.history_search_match) |entry| entry.id else null) else try self.refreshHistorySearch(if (self.history_search_match) |entry| entry.id else null),
             .escape, .ctrl_c => {
                 try self.editor.buffer.replace(self.history_search_original.items);
                 self.finishHistorySearch();
             },
-            .ctrl_r, .up => try self.refreshHistorySearch(if (self.history_search_match) |entry| entry.id else null),
-            .down => try self.refreshHistorySearch(null),
+            .ctrl_r, .down => try self.refreshHistorySearch(if (self.history_search_match) |entry| entry.id else null),
+            .up => try self.refreshHistorySearchNext(if (self.history_search_match) |entry| entry.id else null),
             .backspace => {
                 self.editor.buffer.deletePrevious();
                 try self.syncHistorySearchQueryFromBuffer();
@@ -666,6 +668,19 @@ pub const LineSession = struct {
         const search = self.history.search orelse return;
         if (try search(context, self.allocator, self.history_search_query.items, before)) |entry| {
             self.history_search_match = entry;
+        } else if (before != null) {
+            self.history_search_match = try search(context, self.allocator, self.history_search_query.items, null);
+        }
+    }
+
+    fn refreshHistorySearchNext(self: *LineSession, after: ?i64) !void {
+        self.clearHistorySearchMatch();
+        const context = self.history.context orelse return;
+        const search_next = self.history.search_next orelse return try self.refreshHistorySearch(null);
+        if (try search_next(context, self.allocator, self.history_search_query.items, after)) |entry| {
+            self.history_search_match = entry;
+        } else if (after != null) {
+            self.history_search_match = try search_next(context, self.allocator, self.history_search_query.items, null);
         }
     }
 
@@ -2014,6 +2029,18 @@ fn testSearchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, que
     return null;
 }
 
+fn testSearchNextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, after: ?i64) !?HistoryView.HistoryEntry {
+    const history: *TestHistorySearch = @ptrCast(@alignCast(context));
+    var index = if (after) |id| @as(usize, @intCast(id)) + 1 else 0;
+    while (index < history.entries.len) : (index += 1) {
+        const entry = history.entries[index];
+        if (query.len == 0 or std.mem.indexOf(u8, entry, query) != null) {
+            return .{ .id = @intCast(index), .text = try allocator.dupe(u8, entry) };
+        }
+    }
+    return null;
+}
+
 test "history search seeds query from current buffer and renders menu-style match" {
     const entries = [_][]const u8{ "echo one", "git status", "git diff" };
     var history: TestHistorySearch = .{ .entries = &entries };
@@ -2138,6 +2165,71 @@ test "history search transitions from no match to match as query changes" {
     try std.testing.expectEqualStrings("git d", session.history_search_query.items);
     try std.testing.expect(session.history_search_match != null);
     try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+}
+
+test "history search tab cycles matches and enter accepts" {
+    const entries = [_][]const u8{ "git status", "git diff", "git show" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = .tab });
+    try std.testing.expectEqual(LineSession.State.history_search, session.state);
+    try std.testing.expectEqualStrings("git", session.editor.buffer.text());
+    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+    try session.handleKey(.{ .key = .tab });
+    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = .enter });
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings("git show", session.editor.buffer.text());
+}
+
+test "history search shift tab cycles backward" {
+    const entries = [_][]const u8{ "git status", "git diff", "git show" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = .tab, .modifiers = .{ .shift = true } });
+    try std.testing.expectEqual(LineSession.State.history_search, session.state);
+    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = .tab });
+    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+}
+
+test "history search ctrl n and ctrl p cycle like completion" {
+    const entries = [_][]const u8{ "git status", "git diff", "git show" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
+    try std.testing.expectEqual(LineSession.State.history_search, session.state);
+    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
+    try std.testing.expectEqual(LineSession.State.history_search, session.state);
+    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
 }
 
 test "line session hides older duplicate history commands" {
