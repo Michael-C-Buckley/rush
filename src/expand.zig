@@ -1144,10 +1144,11 @@ fn globCwd(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]c
         for (prefixes.items) |prefix| allocator.free(prefix);
         prefixes.deinit(allocator);
     }
-    try prefixes.append(allocator, try allocator.dupe(u8, ""));
+    try prefixes.append(allocator, try allocator.dupe(u8, if (std.mem.startsWith(u8, pattern, "/")) "/" else ""));
 
     var component_iter = std.mem.splitScalar(u8, pattern, '/');
     while (component_iter.next()) |component| {
+        if (component.len == 0 and prefixes.items.len == 1 and std.mem.eql(u8, prefixes.items[0], "/")) continue;
         var next_prefixes: std.ArrayList([]const u8) = .empty;
         errdefer {
             for (next_prefixes.items) |prefix| allocator.free(prefix);
@@ -1194,6 +1195,7 @@ fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches:
 fn joinPathComponent(allocator: std.mem.Allocator, prefix: []const u8, component: []const u8) ![]const u8 {
     if (prefix.len == 0) return allocator.dupe(u8, component);
     if (component.len == 0) return allocator.dupe(u8, prefix);
+    if (std.mem.eql(u8, prefix, "/")) return std.fmt.allocPrint(allocator, "/{s}", .{component});
     return std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, component });
 }
 
@@ -1254,11 +1256,13 @@ fn matchBracket(pattern: []const u8, pattern_index: usize, text: []const u8, tex
 
     var matched = false;
     var saw_end = false;
+    var first_expression = true;
     while (index < pattern.len) : (index += 1) {
-        if (pattern[index] == ']') {
+        if (pattern[index] == ']' and !first_expression) {
             saw_end = true;
             break;
         }
+        first_expression = false;
         if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
             const start = pattern[index];
             const end = pattern[index + 2];
@@ -1755,6 +1759,39 @@ test "pathname expansion handles slash components and dotfiles" {
     defer unmatched.deinit();
     try std.testing.expectEqual(@as(usize, 1), unmatched.fields.len);
     try std.testing.expectEqualStrings(missing_suffix, unmatched.fields[0]);
+}
+
+test "pathname expansion handles absolute path components" {
+    const dir = "/tmp/rush-absolute-glob-dir";
+    const file = "/tmp/rush-absolute-glob-dir/match.tmp";
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = file, .data = "" });
+
+    var result = try expandWord(std.testing.allocator, "/tmp/rush-absolute-glob-dir/*.tmp", .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), result.fields.len);
+    try std.testing.expectEqualStrings(file, result.fields[0]);
+}
+
+test "pathname expansion bracket expressions treat leading right bracket as literal" {
+    const close = "rush-bracket-].tmp";
+    const open = "rush-bracket-[.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = close, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = open, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, close) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, open) catch {};
+
+    var literal = try expandWord(std.testing.allocator, "rush-bracket-[]].tmp", .{ .io = std.testing.io });
+    defer literal.deinit();
+    try std.testing.expectEqual(@as(usize, 1), literal.fields.len);
+    try std.testing.expectEqualStrings(close, literal.fields[0]);
+
+    var negated = try expandWord(std.testing.allocator, "rush-bracket-[!]].tmp", .{ .io = std.testing.io });
+    defer negated.deinit();
+    try std.testing.expectEqual(@as(usize, 1), negated.fields.len);
+    try std.testing.expectEqualStrings(open, negated.fields[0]);
 }
 
 test "pathname expansion preserves unmatched patterns" {
