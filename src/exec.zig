@@ -142,6 +142,7 @@ pub const CompletionBuilder = struct {
                 .long = if (option.long) |long| try self.dupeField(allocator, long) else null,
                 .short = if (option.short) |short| try self.dupeField(allocator, short) else null,
                 .argument = if (option.argument) |argument| try self.dupeField(allocator, argument) else null,
+                .no_space = option.no_space,
             };
         }
         try self.candidates.append(allocator, owned_candidate);
@@ -243,6 +244,17 @@ fn appendRootCommandCandidate(
         .replace_start = context.replace_start,
         .replace_end = context.replace_end,
     });
+}
+
+fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void {
+    allocator.free(rule.root);
+    for (rule.path) |segment| allocator.free(segment);
+    allocator.free(rule.path);
+    if (rule.value) |value| allocator.free(value);
+    if (rule.option.long) |long| allocator.free(long);
+    if (rule.option.short) |short| allocator.free(short);
+    if (rule.option.argument) |argument| allocator.free(argument);
+    if (rule.description) |description| allocator.free(description);
 }
 
 fn deinitSeenCompletionNames(allocator: std.mem.Allocator, seen: *std.StringHashMapUnmanaged(void)) void {
@@ -385,6 +397,7 @@ pub const Executor = struct {
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     completion_providers: std.StringHashMapUnmanaged(CompletionProvider) = .empty,
+    completion_rules: std.ArrayList(completion.Rule) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList([]const u8) = .empty,
     next_job_id: usize = 1,
@@ -499,6 +512,8 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.function);
         }
         self.completion_providers.deinit(self.allocator);
+        for (self.completion_rules.items) |rule| freeCompletionRule(self.allocator, rule);
+        self.completion_rules.deinit(self.allocator);
         for (self.background_jobs.items) |job| self.allocator.free(job.command);
         self.background_jobs.deinit(self.allocator);
         for (self.pending_job_notifications.items) |notification| self.allocator.free(notification);
@@ -528,6 +543,30 @@ pub const Executor = struct {
             self.allocator.free(result.value_ptr.function);
         }
         result.value_ptr.* = .{ .function = owned_function };
+    }
+
+    pub fn registerCompletionRule(self: *Executor, rule: completion.Rule) !void {
+        var owned_rule: completion.Rule = .{
+            .root = try self.allocator.dupe(u8, rule.root),
+            .kind = rule.kind,
+            .value = if (rule.value) |value| try self.allocator.dupe(u8, value) else null,
+            .option = .{
+                .long = if (rule.option.long) |long| try self.allocator.dupe(u8, long) else null,
+                .short = if (rule.option.short) |short| try self.allocator.dupe(u8, short) else null,
+                .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
+                .no_space = rule.option.no_space,
+            },
+            .description = if (rule.description) |description| try self.allocator.dupe(u8, description) else null,
+        };
+        errdefer freeCompletionRule(self.allocator, owned_rule);
+        var path: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (path.items) |segment| self.allocator.free(segment);
+            path.deinit(self.allocator);
+        }
+        for (rule.path) |segment| try path.append(self.allocator, try self.allocator.dupe(u8, segment));
+        owned_rule.path = try path.toOwnedSlice(self.allocator);
+        try self.completion_rules.append(self.allocator, owned_rule);
     }
 
     pub fn completionProvider(self: Executor, command: []const u8) ?CompletionProvider {
@@ -945,6 +984,7 @@ pub const Executor = struct {
         while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
         var completion_iter = other.completion_providers.iterator();
         while (completion_iter.next()) |entry| try self.registerCompletionProvider(entry.key_ptr.*, entry.value_ptr.function);
+        for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
         var trap_iter = other.traps.iterator();
         while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
         var array_iter = other.arrays.iterator();
@@ -3605,22 +3645,92 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
     _ = stdin;
     _ = options;
     if (command.argv.len < 2) return errorResult(self.allocator, 2, "complete", "missing command name");
-    const command_name = command.argv[1].text;
+    var pattern = try parseCompletionPattern(self.allocator, command.argv[1].text);
+    defer pattern.deinit(self.allocator);
     var index: usize = 2;
     var function_name: ?[]const u8 = null;
+    var rule: completion.Rule = .{ .root = pattern.root, .path = pattern.path, .kind = .function_provider };
+    var rule_set = false;
     while (index < command.argv.len) {
         const option = command.argv[index].text;
         index += 1;
         if (std.mem.eql(u8, option, "--function")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing function name");
             function_name = command.argv[index].text;
+            rule = .{ .root = pattern.root, .path = pattern.path, .kind = .function_provider, .value = command.argv[index].text };
+            rule_set = true;
             index += 1;
+        } else if (std.mem.eql(u8, option, "--subcommand")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing subcommand name");
+            rule = .{ .root = pattern.root, .path = pattern.path, .kind = .subcommand, .value = command.argv[index].text };
+            rule_set = true;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--option")) {
+            rule = .{ .root = pattern.root, .path = pattern.path, .kind = .option };
+            rule_set = true;
+        } else if (std.mem.eql(u8, option, "--long")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing long option name");
+            rule.option.long = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--short")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing short option name");
+            rule.option.short = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--value-name")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing value name");
+            rule.option.argument = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--description")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing description text");
+            rule.description = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--no-space")) {
+            rule.option.no_space = true;
         } else {
             return errorResult(self.allocator, 2, "complete", "unsupported option");
         }
     }
-    try self.registerCompletionProvider(command_name, function_name orelse return errorResult(self.allocator, 2, "complete", "missing --function"));
+    if (function_name) |name| try self.registerCompletionProvider(pattern.root, name);
+    if (rule_set) {
+        if (rule.kind == .option and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
+        try self.registerCompletionRule(rule);
+    } else {
+        return errorResult(self.allocator, 2, "complete", "missing completion rule");
+    }
     return emptyResult(self.allocator, 0);
+}
+
+const CompletionPattern = struct {
+    root: []const u8,
+    path: []const []const u8,
+
+    fn deinit(self: *CompletionPattern, allocator: std.mem.Allocator) void {
+        allocator.free(self.root);
+        for (self.path) |segment| allocator.free(segment);
+        allocator.free(self.path);
+        self.* = undefined;
+    }
+};
+
+fn parseCompletionPattern(allocator: std.mem.Allocator, pattern: []const u8) !CompletionPattern {
+    var parsed = try parser.parse(allocator, pattern, .{});
+    defer parsed.deinit();
+    if (parsed.diagnostics.len != 0) return error.InvalidCompletionPattern;
+
+    var words: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (words.items) |word| allocator.free(word);
+        words.deinit(allocator);
+    }
+    for (parsed.tokens) |token| {
+        if (token.kind == .word) try words.append(allocator, try allocator.dupe(u8, token.lexeme(pattern)));
+    }
+    if (words.items.len == 0) return error.InvalidCompletionPattern;
+    const root = words.items[0];
+    const path = try allocator.alloc([]const u8, words.items.len - 1);
+    @memcpy(path, words.items[1..]);
+    words.deinit(allocator);
+    return .{ .root = root, .path = path };
 }
 
 fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -7610,6 +7720,73 @@ test "complete registers a function provider" {
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     const provider = executor.completionProvider("git") orelse return error.MissingCompletionProvider;
     try std.testing.expectEqualStrings("__rush_complete_git", provider.function);
+    try std.testing.expectEqual(@as(usize, 1), executor.completion_rules.items.len);
+    try std.testing.expectEqual(completion.RuleKind.function_provider, executor.completion_rules.items[0].kind);
+    try std.testing.expectEqualStrings("git", executor.completion_rules.items[0].root);
+    try std.testing.expectEqualStrings("__rush_complete_git", executor.completion_rules.items[0].value.?);
+}
+
+test "complete registers static subcommand rules" {
+    var lowered = try parseAndLower(std.testing.allocator, "complete git --subcommand commit --description 'record changes'");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), executor.completion_rules.items.len);
+    const rule = executor.completion_rules.items[0];
+    try std.testing.expectEqual(completion.RuleKind.subcommand, rule.kind);
+    try std.testing.expectEqualStrings("git", rule.root);
+    try std.testing.expectEqual(@as(usize, 0), rule.path.len);
+    try std.testing.expectEqualStrings("commit", rule.value.?);
+    try std.testing.expectEqualStrings("record changes", rule.description.?);
+}
+
+test "complete registers static option rules" {
+    var lowered = try parseAndLower(std.testing.allocator, "complete git --option --short C --value-name path --description 'change directory' --no-space");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    const rule = executor.completion_rules.items[0];
+    try std.testing.expectEqual(completion.RuleKind.option, rule.kind);
+    try std.testing.expectEqualStrings("git", rule.root);
+    try std.testing.expectEqualStrings("C", rule.option.short.?);
+    try std.testing.expectEqualStrings("path", rule.option.argument.?);
+    try std.testing.expectEqualStrings("change directory", rule.description.?);
+    try std.testing.expect(rule.option.no_space);
+}
+
+test "complete registers path scoped option rules" {
+    var lowered = try parseAndLower(std.testing.allocator, "complete 'git commit' --option --long amend --description 'amend previous commit'");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    const rule = executor.completion_rules.items[0];
+    try std.testing.expectEqual(completion.RuleKind.option, rule.kind);
+    try std.testing.expectEqualStrings("git", rule.root);
+    try std.testing.expectEqual(@as(usize, 1), rule.path.len);
+    try std.testing.expectEqualStrings("commit", rule.path[0]);
+    try std.testing.expectEqualStrings("amend", rule.option.long.?);
+    try std.testing.expectEqualStrings("amend previous commit", rule.description.?);
 }
 
 test "completion candidate is scoped to completion evaluation" {

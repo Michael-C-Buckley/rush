@@ -29,6 +29,22 @@ pub const Option = struct {
     long: ?[]const u8 = null,
     short: ?[]const u8 = null,
     argument: ?[]const u8 = null,
+    no_space: bool = false,
+};
+
+pub const RuleKind = enum {
+    function_provider,
+    subcommand,
+    option,
+};
+
+pub const Rule = struct {
+    root: []const u8,
+    path: []const []const u8 = &.{},
+    kind: RuleKind,
+    value: ?[]const u8 = null,
+    option: Option = .{},
+    description: ?[]const u8 = null,
 };
 
 pub const Edit = struct {
@@ -134,6 +150,7 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
             .long = if (option.long) |long| try allocator.dupe(u8, long) else null,
             .short = if (option.short) |short| try allocator.dupe(u8, short) else null,
             .argument = if (option.argument) |argument| try allocator.dupe(u8, argument) else null,
+            .no_space = option.no_space,
         };
     }
     errdefer if (cloned.option) |option| {
