@@ -159,6 +159,92 @@ pub const Completion = struct {
     text: []const u8,
 };
 
+pub const CompletionKind = enum {
+    command,
+    builtin,
+    function,
+    file,
+    directory,
+    variable,
+    option,
+    subcommand,
+    plain,
+};
+
+pub const CompletionCandidate = struct {
+    value: []const u8,
+    display: ?[]const u8 = null,
+    description: ?[]const u8 = null,
+    kind: CompletionKind = .plain,
+    replace_start: usize,
+    replace_end: usize,
+    append_space: bool = true,
+};
+
+pub const CompletionEdit = struct {
+    replace_start: usize,
+    replace_end: usize,
+    replacement: []const u8,
+    append_space: bool = false,
+};
+
+pub const CompletionApplication = union(enum) {
+    none,
+    edit: CompletionEdit,
+    ambiguous,
+
+    pub fn deinit(self: CompletionApplication, allocator: std.mem.Allocator) void {
+        switch (self) {
+            .edit => |edit| allocator.free(edit.replacement),
+            .none, .ambiguous => {},
+        }
+    }
+};
+
+pub fn applyCompletionCandidates(allocator: std.mem.Allocator, candidates: []const CompletionCandidate) !CompletionApplication {
+    if (candidates.len == 0) return .none;
+    const replace_start = candidates[0].replace_start;
+    const replace_end = candidates[0].replace_end;
+
+    for (candidates[1..]) |candidate| {
+        std.debug.assert(candidate.replace_start == replace_start);
+        std.debug.assert(candidate.replace_end == replace_end);
+    }
+
+    if (candidates.len == 1) {
+        return .{ .edit = .{
+            .replace_start = replace_start,
+            .replace_end = replace_end,
+            .replacement = try allocator.dupe(u8, candidates[0].value),
+            .append_space = candidates[0].append_space,
+        } };
+    }
+
+    const common = commonCandidatePrefix(candidates);
+    const current_len = replace_end - replace_start;
+    if (common.len > current_len) {
+        return .{ .edit = .{
+            .replace_start = replace_start,
+            .replace_end = replace_end,
+            .replacement = try allocator.dupe(u8, common),
+            .append_space = false,
+        } };
+    }
+
+    return .ambiguous;
+}
+
+fn commonCandidatePrefix(candidates: []const CompletionCandidate) []const u8 {
+    std.debug.assert(candidates.len != 0);
+    var prefix = candidates[0].value;
+    for (candidates[1..]) |candidate| {
+        var index: usize = 0;
+        while (index < prefix.len and index < candidate.value.len and prefix[index] == candidate.value[index]) index += 1;
+        prefix = prefix[0..index];
+    }
+    return prefix;
+}
+
 pub fn completeInput(allocator: std.mem.Allocator, io: std.Io, executor: exec.Executor, source: []const u8, cursor: usize) ![]Completion {
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = cursor });
     defer parsed.deinit();
@@ -593,6 +679,56 @@ fn hasCompletion(completions: []const Completion, text: []const u8) bool {
         if (std.mem.eql(u8, completion.text, text)) return true;
     }
     return false;
+}
+
+test "completion application handles no candidates" {
+    const candidates = [_]CompletionCandidate{};
+    const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(CompletionApplication.none, application);
+}
+
+test "completion application inserts one candidate" {
+    const candidates = [_]CompletionCandidate{.{
+        .value = "status",
+        .kind = .subcommand,
+        .replace_start = 4,
+        .replace_end = 6,
+        .append_space = true,
+    }};
+    const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqual(@as(usize, 4), edit.replace_start);
+    try std.testing.expectEqual(@as(usize, 6), edit.replace_end);
+    try std.testing.expectEqualStrings("status", edit.replacement);
+    try std.testing.expect(edit.append_space);
+}
+
+test "completion application inserts common prefix" {
+    const candidates = [_]CompletionCandidate{
+        .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
+        .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
+    };
+    const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("che", edit.replacement);
+    try std.testing.expect(!edit.append_space);
+}
+
+test "completion application reports ambiguous candidates" {
+    const candidates = [_]CompletionCandidate{
+        .{ .value = "status", .replace_start = 4, .replace_end = 4 },
+        .{ .value = "diff", .replace_start = 4, .replace_end = 4 },
+    };
+    const application = try applyCompletionCandidates(std.testing.allocator, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(CompletionApplication.ambiguous, application);
 }
 
 test "interactive highlight renderer uses parser classifications" {
