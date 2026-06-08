@@ -357,41 +357,25 @@ fn appendSqlLikePrefix(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8)
 }
 
 fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, query: []const u8, cursor: ?i64, direction: HistoryDirection) !?line_editor.HistoryView.HistoryEntry {
-    var like_pattern: std.ArrayList(u8) = .empty;
-    defer like_pattern.deinit(allocator);
-    try like_pattern.append(allocator, '%');
-    for (query) |byte| switch (byte) {
-        '%', '_', '\\' => {
-            try like_pattern.append(allocator, '\\');
-            try like_pattern.append(allocator, byte);
-        },
-        else => try like_pattern.append(allocator, byte),
-    };
-    try like_pattern.append(allocator, '%');
-
     var stmt: ?*sqlite.sqlite3_stmt = null;
     const sql = switch (direction) {
         .previous =>
         \\select id, command from history h
         \\where (?1 is null or id < ?1)
-        \\  and (?2 = '' or command like ?2 escape '\')
         \\  and not exists (
         \\    select 1 from history newer
         \\    where newer.id > h.id and newer.command = h.command
-        \\      and (?2 = '' or newer.command like ?2 escape '\')
         \\  )
-        \\order by id desc limit 1
+        \\order by id desc limit 500
         ,
         .next =>
         \\select id, command from history h
         \\where (?1 is null or id > ?1)
-        \\  and (?2 = '' or command like ?2 escape '\')
         \\  and not exists (
         \\    select 1 from history newer
         \\    where newer.id > h.id and newer.command = h.command
-        \\      and (?2 = '' or newer.command like ?2 escape '\')
         \\  )
-        \\order by id asc limit 1
+        \\order by id asc limit 500
         ,
     };
     try sqliteCheck(sqlite.sqlite3_prepare_v2(db, sql, -1, &stmt, null), db);
@@ -401,12 +385,16 @@ fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, qu
     } else {
         try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 1), db);
     }
-    try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 2, like_pattern.items.ptr, @intCast(like_pattern.items.len), null), db);
-    const rc = sqlite.sqlite3_step(stmt);
-    if (rc == sqlite.SQLITE_DONE) return null;
-    if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
-    const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse return null;
-    return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, std.mem.span(command_text)) };
+    while (true) {
+        const rc = sqlite.sqlite3_step(stmt);
+        if (rc == sqlite.SQLITE_DONE) return null;
+        if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+        const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse continue;
+        const command = std.mem.span(command_text);
+        if (completion_model.fuzzyMatchRank(command, query) != null) {
+            return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, command) };
+        }
+    }
 }
 
 fn configureHistoryDb(db: *sqlite.sqlite3) !void {
@@ -976,14 +964,14 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     }
     for (candidates) |candidate| {
         const prefix = if (candidate.replace_end <= source.len and candidate.replace_start <= candidate.replace_end) source[candidate.replace_start..candidate.replace_end] else "";
-        const matches = std.mem.startsWith(u8, candidate.value, prefix);
+        const match_rank = completion_model.candidateFuzzyMatchRank(candidate, prefix);
         try out.writer.print("  - value: {s}\n    kind: {s}\n    description: {s}\n    replace: {d}..{d}\n    matches-prefix: {}\n    rank-score: {d}\n", .{
             candidate.value,
             @tagName(candidate.kind),
             candidate.description orelse "",
             candidate.replace_start,
             candidate.replace_end,
-            matches,
+            match_rank != null,
             completionRankScore(history, cwd, candidate.value),
         });
         if (candidate.option) |option| {

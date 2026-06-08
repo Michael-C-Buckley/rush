@@ -25,6 +25,12 @@ pub const Candidate = struct {
     append_space: bool = true,
 };
 
+pub const MatchRank = enum(u8) {
+    exact = 0,
+    prefix = 1,
+    fuzzy = 2,
+};
+
 pub const Option = struct {
     long: ?[]const u8 = null,
     short: ?[]const u8 = null,
@@ -116,16 +122,59 @@ pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8,
 
     var matches: std.ArrayList(Candidate) = .empty;
     defer matches.deinit(allocator);
+    var exact_matches: std.ArrayList(Candidate) = .empty;
+    defer exact_matches.deinit(allocator);
+    var prefix_matches: std.ArrayList(Candidate) = .empty;
+    defer prefix_matches.deinit(allocator);
+    var fuzzy_matches: std.ArrayList(Candidate) = .empty;
+    defer fuzzy_matches.deinit(allocator);
     for (candidates) |candidate| {
         std.debug.assert(candidate.replace_start <= candidate.replace_end);
         std.debug.assert(candidate.replace_end <= source.len);
         const prefix = source[candidate.replace_start..candidate.replace_end];
-        if (std.mem.startsWith(u8, candidate.value, prefix)) {
-            try matches.append(allocator, candidate);
+        if (candidateFuzzyMatchRank(candidate, prefix)) |rank| {
+            switch (rank) {
+                .exact => try exact_matches.append(allocator, candidate),
+                .prefix => try prefix_matches.append(allocator, candidate),
+                .fuzzy => try fuzzy_matches.append(allocator, candidate),
+            }
         }
     }
+    try matches.appendSlice(allocator, exact_matches.items);
+    try matches.appendSlice(allocator, prefix_matches.items);
+    try matches.appendSlice(allocator, fuzzy_matches.items);
 
     return applyCandidates(allocator, matches.items);
+}
+
+pub fn candidateFuzzyMatchRank(candidate: Candidate, query: []const u8) ?MatchRank {
+    const value_rank = fuzzyMatchRank(candidate.value, query);
+    const display_rank = if (candidate.display) |display| fuzzyMatchRank(display, query) else null;
+    if (value_rank) |value| {
+        if (display_rank) |display| return if (@intFromEnum(display) < @intFromEnum(value)) display else value;
+        return value;
+    }
+    return display_rank;
+}
+
+pub fn fuzzyMatchRank(text: []const u8, query: []const u8) ?MatchRank {
+    if (query.len == 0) return .prefix;
+    if (std.ascii.eqlIgnoreCase(text, query)) return .exact;
+    if (std.ascii.startsWithIgnoreCase(text, query)) return .prefix;
+
+    var text_index: usize = 0;
+    for (query) |query_byte| {
+        var matched = false;
+        while (text_index < text.len) : (text_index += 1) {
+            if (std.ascii.toLower(text[text_index]) == std.ascii.toLower(query_byte)) {
+                text_index += 1;
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) return null;
+    }
+    return .fuzzy;
 }
 
 pub fn cloneCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) ![]Candidate {
@@ -227,6 +276,41 @@ test "application filters candidates by replacement prefix" {
     const edit = application.edit;
     try std.testing.expectEqualStrings("status", edit.replacement);
     try std.testing.expect(edit.append_space);
+}
+
+test "fuzzy matcher ranks exact prefix and ordered non-contiguous matches" {
+    try std.testing.expectEqual(MatchRank.exact, fuzzyMatchRank("git checkout", "git checkout").?);
+    try std.testing.expectEqual(MatchRank.prefix, fuzzyMatchRank("git checkout", "git").?);
+    try std.testing.expectEqual(MatchRank.fuzzy, fuzzyMatchRank("git checkout", "gco").?);
+    try std.testing.expect(fuzzyMatchRank("git checkout", "zq") == null);
+}
+
+test "application filtering uses fuzzy display and value matches" {
+    const source = "git gco";
+    const candidates = [_]Candidate{
+        .{ .value = "status", .replace_start = 4, .replace_end = 7 },
+        .{ .value = "checkout", .display = "git checkout", .replace_start = 4, .replace_end = 7 },
+        .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 7 },
+    };
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("checkout", edit.replacement);
+}
+
+test "application filtering ranks prefix matches before fuzzy matches" {
+    const source = "git ch";
+    const candidates = [_]Candidate{
+        .{ .value = "git-checkout", .replace_start = 4, .replace_end = 6 },
+        .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
+    };
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+    try std.testing.expectEqualStrings("checkout", application.ambiguous[0].value);
+    try std.testing.expectEqualStrings("git-checkout", application.ambiguous[1].value);
 }
 
 test "application filtering reports multiple prefix matches as ambiguous" {

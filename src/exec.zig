@@ -289,7 +289,7 @@ fn appendRootCommandCandidate(
     description: []const u8,
     context: CompletionEvalContext,
 ) !void {
-    if (!std.mem.startsWith(u8, name, context.prefix)) return;
+    if (completion.fuzzyMatchRank(name, context.prefix) == null) return;
     if (seen.contains(name)) return;
     const seen_name = try allocator.dupe(u8, name);
     errdefer allocator.free(seen_name);
@@ -1302,7 +1302,7 @@ pub const Executor = struct {
         context: CompletionSemanticContext,
         append_space: bool,
     ) !void {
-        if (!std.mem.startsWith(u8, value, context.prefix)) return;
+        if (completion.fuzzyMatchRank(value, context.prefix) == null) return;
         try builder.appendCandidateIfMissing(self.allocator, .{
             .value = value,
             .description = description,
@@ -4698,7 +4698,7 @@ fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io
     while (try iterator.next(io)) |entry| {
         if (entry.name.len == 0) continue;
         if (entry.name[0] == '.' and (prefix.len == 0 or prefix[0] != '.')) continue;
-        if (!std.mem.startsWith(u8, entry.name, prefix)) continue;
+        if (completion.fuzzyMatchRank(entry.name, prefix) == null) continue;
         const is_directory = entry.kind == .directory;
         if (directories_only and !is_directory) continue;
         if (extension) |ext| {
@@ -4724,7 +4724,7 @@ fn builtinCompletionVariables(self: *Executor, builder: *CompletionBuilder, comm
     };
     var iter = self.env.iterator();
     while (iter.next()) |entry| {
-        if (std.mem.startsWith(u8, entry.key_ptr.*, prefix)) {
+        if (completion.fuzzyMatchRank(entry.key_ptr.*, prefix) != null) {
             try builder.appendCandidate(self.allocator, .{ .value = entry.key_ptr.*, .kind = .variable, .replace_start = completionHelperReplaceStart(self.*, prefix), .replace_end = completionHelperReplaceEnd(self.*, prefix) });
         }
     }
@@ -4746,7 +4746,7 @@ fn builtinCompletionExecutables(self: *Executor, builder: *CompletionBuilder, co
         defer dir.close(io);
         var iterator = dir.iterate();
         while (iterator.next(io) catch null) |entry| {
-            if (std.mem.startsWith(u8, entry.name, prefix)) {
+            if (completion.fuzzyMatchRank(entry.name, prefix) != null) {
                 try builder.appendCandidate(self.allocator, .{ .value = entry.name, .kind = .command, .replace_start = completionHelperReplaceStart(self.*, prefix), .replace_end = completionHelperReplaceEnd(self.*, prefix) });
             }
         }
@@ -9131,6 +9131,33 @@ test "dynamic structured argument provider is scoped to command path" {
     const commit = try executor.collectCompletionsForInput("git commit ma", "git commit ma".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(commit);
     try expectNoCandidate(commit, "main");
+}
+
+test "dynamic structured completion candidates support fuzzy display filtering" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__git_args() {
+        \\  completion candidate checkout --display 'git checkout' --kind plain
+        \\  completion candidate status --kind plain
+        \\}
+        \\complete git --subcommand commit
+        \\complete 'git commit' --argument --function __git_args
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git commit gco", "git commit gco".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    const application = try completion.applyCandidatesForInput(std.testing.allocator, "git commit gco", candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("checkout", edit.replacement);
 }
 
 test "dynamic structured option value provider is scoped to option" {

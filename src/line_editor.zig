@@ -2022,7 +2022,7 @@ fn testSearchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, que
     while (index > 0) {
         index -= 1;
         const entry = history.entries[index];
-        if (query.len == 0 or std.mem.indexOf(u8, entry, query) != null) {
+        if (completion.fuzzyMatchRank(entry, query) != null) {
             return .{ .id = @intCast(index), .text = try allocator.dupe(u8, entry) };
         }
     }
@@ -2034,7 +2034,7 @@ fn testSearchNextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator,
     var index = if (after) |id| @as(usize, @intCast(id)) + 1 else 0;
     while (index < history.entries.len) : (index += 1) {
         const entry = history.entries[index];
-        if (query.len == 0 or std.mem.indexOf(u8, entry, query) != null) {
+        if (completion.fuzzyMatchRank(entry, query) != null) {
             return .{ .id = @intCast(index), .text = try allocator.dupe(u8, entry) };
         }
     }
@@ -2165,6 +2165,25 @@ test "history search transitions from no match to match as query changes" {
     try std.testing.expectEqualStrings("git d", session.history_search_query.items);
     try std.testing.expect(session.history_search_match != null);
     try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+}
+
+test "history search uses fuzzy query matching" {
+    const entries = [_][]const u8{ "git status", "git checkout", "git diff" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "gco" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try std.testing.expectEqual(LineSession.State.history_search, session.state);
+    try std.testing.expectEqualStrings("gco", session.history_search_query.items);
+    try std.testing.expect(session.history_search_match != null);
+    try std.testing.expectEqualStrings("git checkout", session.history_search_match.?.text);
+
+    try session.handleKey(.{ .key = .delete_to_start });
+    try session.handleKey(.{ .key = .text, .text = "zz" });
+    try std.testing.expectEqual(LineSession.State.history_search, session.state);
+    try std.testing.expect(session.history_search_match == null);
 }
 
 test "history search tab cycles matches and enter accepts" {
