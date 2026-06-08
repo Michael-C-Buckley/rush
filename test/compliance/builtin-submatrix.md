@@ -19,7 +19,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | --- | --- | --- | --- |
 | `:` | `builtin-colon` | `basic-colon`, `builtin-colon-special-assignment` | redirection failure consequences need negative coverage |
 | `.` | `builtin-dot`, `builtin-dot-current-env` | `dash-smoke-dot-current-env` plus unit coverage | PATH search, operand diagnostics, non-readable file behavior |
-| `break`, `continue` | `builtin-break-continue` | `builtin-loop-control` | diagnostics outside loops, numeric operands, nested levels |
+| `break`, `continue` | `builtin-break-continue`, `builtin-loop-control-outside-loop` | `builtin-loop-control`, outside-loop negative corpus | numeric operands and nested levels |
 | `eval` | `builtin-eval` | `builtin-eval`, `builtin-eval-special-assignment` | parse/expansion failure consequences |
 | `exec` | `builtin-exec` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-replaces-process` | redirection-only exec, failure status details, no-return contexts |
 | `exit` | `builtin-exit` | `builtin-exit` | invalid numeric operand diagnostics, too many operands |
@@ -74,7 +74,7 @@ Follow-up tasks:
 The POSIX negative corpus currently covers a few builtin diagnostics (`test`, `read`, `wait`). Add cases for:
 
 - `return` outside a function;
-- `break`/`continue` outside loops and invalid levels;
+- `break`/`continue` invalid levels;
 - `exit` invalid numeric operand;
 - `export`, `readonly`, and `unset` invalid or readonly names;
 - `printf` invalid format and missing numeric conversions;

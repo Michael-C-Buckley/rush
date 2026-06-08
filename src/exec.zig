@@ -4860,15 +4860,20 @@ fn builtinContinue(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
 }
 
 fn setLoopControlBuiltin(self: *Executor, command: ir.SimpleCommand, kind: LoopControlKind, name: []const u8) !CommandResult {
-    if (self.loop_depth == 0) return errorResult(self.allocator, 2, name, "not in a loop");
-    if (command.argv.len > 2) return errorResult(self.allocator, 2, name, "too many arguments");
+    if (self.loop_depth == 0) return loopControlUsageError(self, name, "not in a loop");
+    if (command.argv.len > 2) return loopControlUsageError(self, name, "too many arguments");
     const levels: usize = if (command.argv.len == 2) blk: {
-        const parsed = std.fmt.parseInt(usize, command.argv[1].text, 10) catch return errorResult(self.allocator, 2, name, "numeric argument required");
-        if (parsed == 0) return errorResult(self.allocator, 2, name, "loop count must be positive");
+        const parsed = std.fmt.parseInt(usize, command.argv[1].text, 10) catch return loopControlUsageError(self, name, "numeric argument required");
+        if (parsed == 0) return loopControlUsageError(self, name, "loop count must be positive");
         break :blk parsed;
     } else 1;
     self.pending_loop_control = .{ .kind = kind, .levels = levels };
     return emptyResult(self.allocator, 0);
+}
+
+fn loopControlUsageError(self: *Executor, name: []const u8, message: []const u8) !CommandResult {
+    self.pending_exit = 2;
+    return errorResult(self.allocator, 2, name, message);
 }
 
 fn builtinTrue(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
