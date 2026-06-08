@@ -91,10 +91,13 @@ pub const TerminalCapabilities = struct {
         }
     }
 
-    pub fn reset(self: TerminalCapabilities, tty: *vaxis.tty.PosixTty) void {
+    pub fn reset(self: *TerminalCapabilities, tty: *vaxis.tty.PosixTty) void {
         if (self.kitty_keyboard) writeTtyAll(tty, vaxis.ctlseqs.csi_u_pop) catch {};
         if (self.unicode) writeTtyAll(tty, vaxis.ctlseqs.unicode_reset) catch {};
         if (self.bracketed_paste) writeTtyAll(tty, vaxis.ctlseqs.bp_reset) catch {};
+        self.kitty_keyboard = false;
+        self.unicode = false;
+        self.bracketed_paste = false;
     }
 };
 
@@ -248,6 +251,16 @@ pub const TerminalSession = struct {
 
     pub fn resumeRawMode(self: *TerminalSession) !void {
         _ = try vaxis.tty.PosixTty.makeRaw(self.tty.fd.handle);
+    }
+
+    pub fn leaveEditorMode(self: *TerminalSession) !void {
+        self.capabilities.reset(&self.tty);
+        try self.suspendRawMode();
+    }
+
+    pub fn enterEditorMode(self: *TerminalSession) !void {
+        try self.resumeRawMode();
+        try self.capabilities.sendQueries(&self.tty);
     }
 
     pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !ReadLineResult {

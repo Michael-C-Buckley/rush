@@ -468,9 +468,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
         if (line.len == 0) continue;
 
         {
-            try terminal.suspendRawMode();
-            var raw_suspended = true;
-            defer if (raw_suspended) terminal.resumeRawMode() catch {};
+            try terminal.leaveEditorMode();
+            var editor_mode_left = true;
+            defer if (editor_mode_left) terminal.enterEditorMode() catch {};
 
             var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" });
             defer result.deinit();
@@ -479,8 +479,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *co
             last_status = result.status;
             try history.addCommand(io, line, result.status);
 
-            try terminal.resumeRawMode();
-            raw_suspended = false;
+            try terminal.enterEditorMode();
+            editor_mode_left = false;
         }
     }
 
