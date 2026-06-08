@@ -199,7 +199,6 @@ pub const LineSession = struct {
     history_index: ?usize = null,
     saved_edit: std.ArrayList(u8) = .empty,
     completion_menu: CompletionMenu = .{},
-    rendered_menu_rows: usize = 0,
     state: State = .editing,
     submitted_line: ?[]const u8 = null,
     paste_depth: usize = 0,
@@ -311,10 +310,7 @@ pub const LineSession = struct {
         render_options.prompt = self.prompt;
         render_options.completion_menu = self.completion_menu.candidates;
         render_options.completion_selection = self.completion_menu.selected;
-        render_options.previous_menu_rows = self.rendered_menu_rows;
-        const rendered = try renderLine(allocator, self.editor, render_options);
-        self.rendered_menu_rows = renderedMenuRows(self.completion_menu.candidates.len, self.completion_menu.selected, options.height);
-        return rendered;
+        return renderLine(allocator, self.editor, render_options);
     }
 
     pub fn takeSubmittedLine(self: *LineSession) ?[]const u8 {
@@ -403,7 +399,6 @@ pub const RenderOptions = struct {
     prompt: Prompt = .{ .bytes = "" },
     completion_menu: []const completion.Candidate = &.{},
     completion_selection: usize = 0,
-    previous_menu_rows: usize = 0,
     width: u16 = 80,
     height: u16 = 24,
     width_method: vaxis.gwidth.Method = .unicode,
@@ -418,34 +413,21 @@ pub fn renderLine(allocator: std.mem.Allocator, editor: Editor, options: RenderO
     try output.appendSlice(allocator, "\r\x1b[2K");
     try output.appendSlice(allocator, options.prompt.bytes);
     try output.appendSlice(allocator, editor.buffer.text());
+    try output.appendSlice(allocator, "\x1b[J");
 
     const menu_rows = try appendCompletionMenu(allocator, &output, options.completion_menu, options.completion_selection, options.width, options.height);
-    const rendered_rows = @max(menu_rows, options.previous_menu_rows);
-    var clear_row = menu_rows;
-    while (clear_row < options.previous_menu_rows) : (clear_row += 1) {
-        try output.appendSlice(allocator, "\r\n\x1b[2K");
-    }
 
     const prompt_width = options.prompt.visible_width orelse visibleWidth(options.prompt.bytes, options.width_method);
     const cursor_width = prompt_width + editor.buffer.cursorDisplayWidth(options.width_method);
-    const cursor_sequence = if (rendered_rows == 0)
+    const cursor_sequence = if (menu_rows == 0)
         try std.fmt.allocPrint(allocator, "\r\x1b[{d}C", .{cursor_width})
     else
-        try std.fmt.allocPrint(allocator, "\x1b[{d}A\r\x1b[{d}C", .{ rendered_rows, cursor_width });
+        try std.fmt.allocPrint(allocator, "\x1b[{d}A\r\x1b[{d}C", .{ menu_rows, cursor_width });
     defer allocator.free(cursor_sequence);
     try output.appendSlice(allocator, cursor_sequence);
     if (options.synchronized_output) try output.appendSlice(allocator, "\x1b[?2026l");
 
     return output.toOwnedSlice(allocator);
-}
-
-fn renderedMenuRows(candidate_count: usize, selected: usize, height: u16) usize {
-    if (candidate_count == 0) return 0;
-    const max_rows = @max(@as(usize, @intCast(height)) -| 2, 1);
-    const window = completionMenuWindow(candidate_count, selected, max_rows);
-    var rows = window.end - window.start;
-    if (window.start != 0 or window.end != candidate_count) rows += 1;
-    return rows;
 }
 
 fn appendCompletionMenu(allocator: std.mem.Allocator, output: *std.ArrayList(u8), candidates: []const completion.Candidate, selected: usize, width: u16, height: u16) !usize {
@@ -689,6 +671,7 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[7m❯ checkout") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "git che\x1b[J") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
 }
 
@@ -728,8 +711,8 @@ test "accepting completion clears previously rendered menu rows" {
     try session.handleKey(.{ .key = .enter });
     const accepted_frame = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(accepted_frame);
-    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "\r\n\x1b[2K\r\n\x1b[2K") != null);
-    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "\x1b[2A") != null);
+    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "git checkout \x1b[J") != null);
+    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "\x1b[2A") == null);
 }
 
 test "completion menu selection wraps with arrow keys" {
@@ -877,7 +860,7 @@ test "line session renders with its prompt" {
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2Krush> x\r\x1b[7C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2Krush> x\x1b[J\r\x1b[7C", rendered);
 }
 
 test "line session navigates full history from empty buffer" {
@@ -948,7 +931,7 @@ test "render line redraws prompt and buffer inside synchronized output" {
     const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "$ " } });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\x1b[?2026h\r\x1b[2K$ abc\r\x1b[4C\x1b[?2026l", rendered);
+    try std.testing.expectEqualStrings("\x1b[?2026h\r\x1b[2K$ abc\x1b[J\r\x1b[4C\x1b[?2026l", rendered);
 }
 
 test "render line can omit synchronized output" {
@@ -959,7 +942,7 @@ test "render line can omit synchronized output" {
     const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "> " }, .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2K> 界\r\x1b[4C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2K> 界\x1b[J\r\x1b[4C", rendered);
 }
 
 test "render line ignores ansi prompt bytes for cursor placement" {
@@ -970,5 +953,5 @@ test "render line ignores ansi prompt bytes for cursor placement" {
     const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "\x1b[34mrush> \x1b[0m" }, .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2K\x1b[34mrush> \x1b[0mx\r\x1b[7C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2K\x1b[34mrush> \x1b[0mx\x1b[J\r\x1b[7C", rendered);
 }

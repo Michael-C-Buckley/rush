@@ -169,6 +169,73 @@ pub const CompletionEvalContext = struct {
     replace_end: usize = 0,
 };
 
+const builtin_names = [_][]const u8{
+    ".",
+    ":",
+    "alias",
+    "break",
+    "true",
+    "false",
+    "echo",
+    "cat",
+    "command",
+    "complete",
+    "continue",
+    "cd",
+    "printf",
+    "pwd",
+    "read",
+    "readonly",
+    "return",
+    "shift",
+    "export",
+    "getopts",
+    "jobs",
+    "unset",
+    "env",
+    "eval",
+    "exec",
+    "exit",
+    "set",
+    "source",
+    "test",
+    "times",
+    "trap",
+    "umask",
+    "unalias",
+    "wait",
+    "[",
+};
+
+fn appendRootCommandCandidate(
+    allocator: std.mem.Allocator,
+    builder: *CompletionBuilder,
+    seen: *std.StringHashMapUnmanaged(void),
+    name: []const u8,
+    kind: completion.Kind,
+    description: []const u8,
+    context: CompletionEvalContext,
+) !void {
+    if (!std.mem.startsWith(u8, name, context.prefix)) return;
+    if (seen.contains(name)) return;
+    const seen_name = try allocator.dupe(u8, name);
+    errdefer allocator.free(seen_name);
+    try seen.put(allocator, seen_name, {});
+    try builder.appendCandidate(allocator, .{
+        .value = name,
+        .description = description,
+        .kind = kind,
+        .replace_start = context.replace_start,
+        .replace_end = context.replace_end,
+    });
+}
+
+fn deinitSeenCompletionNames(allocator: std.mem.Allocator, seen: *std.StringHashMapUnmanaged(void)) void {
+    var iter = seen.iterator();
+    while (iter.next()) |entry| allocator.free(entry.key_ptr.*);
+    seen.deinit(allocator);
+}
+
 const PromptStyle = struct {
     fg: vaxis.Color = .default,
     bg: vaxis.Color = .default,
@@ -408,7 +475,7 @@ pub const Executor = struct {
     }
 
     pub fn collectCompletions(self: *Executor, command: []const u8, options: ExecuteOptions) ![]completion.Candidate {
-        return self.collectCompletionsWithContext(command, .{ .command = command }, options);
+        return self.collectCompletionsWithContext(command, .{ .command = command, .position = .argument }, options);
     }
 
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
@@ -417,6 +484,7 @@ pub const Executor = struct {
     }
 
     pub fn collectCompletionsWithContext(self: *Executor, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
+        if (context.position == .command) return self.collectRootCommandCompletions(context, options);
         const provider = self.completionProvider(command) orelse return self.allocator.alloc(completion.Candidate, 0);
         const body = self.functions.get(provider.function) orelse return self.allocator.alloc(completion.Candidate, 0);
         if (self.completion_builder != null) return error.RecursiveCompletion;
@@ -447,6 +515,43 @@ pub const Executor = struct {
             }
         }
         self.completion_context = null;
+        return builder.finish(self.allocator);
+    }
+
+    fn collectRootCommandCompletions(self: *Executor, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
+        var builder: CompletionBuilder = .{};
+        errdefer builder.deinit(self.allocator);
+        var seen: std.StringHashMapUnmanaged(void) = .empty;
+        defer deinitSeenCompletionNames(self.allocator, &seen);
+
+        var alias_iter = self.aliases.iterator();
+        while (alias_iter.next()) |entry| {
+            try appendRootCommandCandidate(self.allocator, &builder, &seen, entry.key_ptr.*, .command, "alias", context);
+        }
+
+        var function_iter = self.functions.iterator();
+        while (function_iter.next()) |entry| {
+            try appendRootCommandCandidate(self.allocator, &builder, &seen, entry.key_ptr.*, .function, "function", context);
+        }
+
+        for (builtin_names) |name| {
+            try appendRootCommandCandidate(self.allocator, &builder, &seen, name, .builtin, "builtin", context);
+        }
+
+        if (options.io) |io| {
+            const path = self.getEnv("PATH") orelse "";
+            var path_iter = std.mem.splitScalar(u8, path, ':');
+            while (path_iter.next()) |path_dir| {
+                if (path_dir.len == 0) continue;
+                var dir = std.Io.Dir.cwd().openDir(io, path_dir, .{ .iterate = true }) catch continue;
+                defer dir.close(io);
+                var iterator = dir.iterate();
+                while (iterator.next(io) catch null) |entry| {
+                    try appendRootCommandCandidate(self.allocator, &builder, &seen, entry.name, .command, "executable", context);
+                }
+            }
+        }
+
         return builder.finish(self.allocator);
     }
 
@@ -6830,6 +6935,49 @@ test "completion option works with engine-owned prefix filtering" {
     const edit = application.edit;
     try std.testing.expectEqualStrings("--author", edit.replacement);
     try std.testing.expect(edit.append_space);
+}
+
+test "root command completion includes builtins functions aliases and executables" {
+    const dir_path = "rush-root-completion-bin";
+    const exe_path = "rush-root-completion-bin/rush-root-tool";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = exe_path, .data = "" });
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", dir_path);
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\rush_function() { :; }
+        \\alias rush_alias='echo alias'
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "rush";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "rush_function", .function);
+    try expectCandidate(candidates, "rush_alias", .command);
+    try expectCandidate(candidates, "rush-root-tool", .command);
+    const function = findCandidate(candidates, "rush_function") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("function", function.description.?);
+}
+
+test "root command completion includes builtin commands" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const source = "ex";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "exec", .builtin);
+    try expectCandidate(candidates, "exit", .builtin);
+    try expectCandidate(candidates, "export", .builtin);
 }
 
 test "completion helper builtins append structured candidates" {
