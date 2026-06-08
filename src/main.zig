@@ -812,6 +812,13 @@ fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.
     const a_score = completionRankScore(context.history, context.cwd, a.value);
     const b_score = completionRankScore(context.history, context.cwd, b.value);
     if (a_score != b_score) return a_score > b_score;
+    return lessThanCompletionLabel(a, b);
+}
+
+fn lessThanCompletionLabel(a: completion_model.Candidate, b: completion_model.Candidate) bool {
+    const a_label = a.display orelse a.value;
+    const b_label = b.display orelse b.value;
+    if (!std.mem.eql(u8, a_label, b_label)) return std.mem.lessThan(u8, a_label, b_label);
     return std.mem.lessThan(u8, a.value, b.value);
 }
 
@@ -1687,6 +1694,22 @@ test "completion ranking falls back to lexical order" {
 
     try std.testing.expectEqualStrings("checkout", candidates[0].value);
     try std.testing.expectEqualStrings("status", candidates[1].value);
+}
+
+test "completion ranking sorts equal scores by display label" {
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+
+    var candidates = [_]completion_model.Candidate{
+        .{ .value = "status", .display = "working tree", .replace_start = 4, .replace_end = 4 },
+        .{ .value = "checkout", .display = "branch checkout", .replace_start = 4, .replace_end = 4 },
+        .{ .value = "add", .replace_start = 4, .replace_end = 4 },
+    };
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo");
+
+    try std.testing.expectEqualStrings("add", candidates[0].value);
+    try std.testing.expectEqualStrings("checkout", candidates[1].value);
+    try std.testing.expectEqualStrings("status", candidates[2].value);
 }
 
 test "completion debug output shows context provider candidates and application" {
