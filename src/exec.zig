@@ -5699,7 +5699,9 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     var physical = false;
     if (arg_index < command.argv.len) {
         const option = command.argv[arg_index].text;
-        if (std.mem.eql(u8, option, "-L")) {
+        if (std.mem.eql(u8, option, "--")) {
+            arg_index += 1;
+        } else if (std.mem.eql(u8, option, "-L")) {
             physical = false;
             arg_index += 1;
         } else if (std.mem.eql(u8, option, "-P")) {
@@ -5781,7 +5783,9 @@ fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     var physical = false;
     if (command.argv.len == 2) {
         const option = command.argv[1].text;
-        if (std.mem.eql(u8, option, "-L")) {
+        if (std.mem.eql(u8, option, "--")) {
+            physical = false;
+        } else if (std.mem.eql(u8, option, "-L")) {
             physical = false;
         } else if (std.mem.eql(u8, option, "-P")) {
             physical = true;
@@ -6087,14 +6091,16 @@ fn finishGetoptsEnd(self: *Executor, name: []const u8, optind: usize) !CommandRe
 fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len == 1) return listExported(self);
-    if (std.mem.eql(u8, command.argv[1].text, "-p")) {
-        if (command.argv.len != 2) return variableBuiltinUsageError(self, "export", "too many arguments");
+    var index: usize = 1;
+    if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) index += 1;
+    if (index >= command.argv.len) return listExported(self);
+    if (std.mem.eql(u8, command.argv[index].text, "-p")) {
+        if (command.argv.len != index + 1) return variableBuiltinUsageError(self, "export", "too many arguments");
         return listExported(self);
     }
-    if (std.mem.startsWith(u8, command.argv[1].text, "-") and !std.mem.eql(u8, command.argv[1].text, "-")) return variableBuiltinUsageError(self, "export", "unsupported option");
+    if (std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return variableBuiltinUsageError(self, "export", "unsupported option");
 
-    for (command.argv[1..]) |arg| {
+    for (command.argv[index..]) |arg| {
         const assignment = std.mem.indexOfScalar(u8, arg.text, '=');
         const name = if (assignment) |equals| arg.text[0..equals] else arg.text;
         if (!isShellName(name)) return variableBuiltinUsageError(self, "export", "invalid variable name");
@@ -6133,7 +6139,9 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     var index: usize = 1;
     if (index < command.argv.len) {
         const option = command.argv[index].text;
-        if (std.mem.eql(u8, option, "-v")) {
+        if (std.mem.eql(u8, option, "--")) {
+            index += 1;
+        } else if (std.mem.eql(u8, option, "-v")) {
             mode = .variable;
             index += 1;
         } else if (std.mem.eql(u8, option, "-f")) {
@@ -6159,13 +6167,15 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
 fn builtinReadonly(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len == 1) return listReadonly(self);
-    if (std.mem.eql(u8, command.argv[1].text, "-p")) {
-        if (command.argv.len != 2) return variableBuiltinUsageError(self, "readonly", "too many arguments");
+    var index: usize = 1;
+    if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) index += 1;
+    if (index >= command.argv.len) return listReadonly(self);
+    if (std.mem.eql(u8, command.argv[index].text, "-p")) {
+        if (command.argv.len != index + 1) return variableBuiltinUsageError(self, "readonly", "too many arguments");
         return listReadonly(self);
     }
-    if (std.mem.startsWith(u8, command.argv[1].text, "-") and !std.mem.eql(u8, command.argv[1].text, "-")) return variableBuiltinUsageError(self, "readonly", "unsupported option");
-    for (command.argv[1..]) |arg| {
+    if (std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return variableBuiltinUsageError(self, "readonly", "unsupported option");
+    for (command.argv[index..]) |arg| {
         if (std.mem.indexOfScalar(u8, arg.text, '=')) |equals| {
             const name = arg.text[0..equals];
             if (!isShellName(name)) return variableBuiltinUsageError(self, "readonly", "invalid variable name");
@@ -6248,15 +6258,17 @@ fn shiftUsageError(self: *Executor, message: []const u8) !CommandResult {
 fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len > 2) return errorResult(self.allocator, 2, "umask", "too many arguments");
+    var arg_index: usize = 1;
+    if (arg_index < command.argv.len and std.mem.eql(u8, command.argv[arg_index].text, "--")) arg_index += 1;
+    if (command.argv.len > arg_index + 1) return errorResult(self.allocator, 2, "umask", "too many arguments");
     const old = shellUmask(0);
     _ = shellUmask(old);
-    if (command.argv.len == 1) {
+    if (arg_index >= command.argv.len) {
         const stdout = try std.fmt.allocPrint(self.allocator, "{o:0>4}\n", .{@as(u16, @intCast(old & 0o777))});
         errdefer self.allocator.free(stdout);
         return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
     }
-    const operand = command.argv[1].text;
+    const operand = command.argv[arg_index].text;
     if (std.mem.eql(u8, operand, "-S")) return symbolicUmaskResult(self.allocator, old);
     if (std.mem.startsWith(u8, operand, "-")) return errorResult(self.allocator, 2, "umask", "unsupported option");
     const new_mask = std.fmt.parseInt(u16, operand, 8) catch blk: {

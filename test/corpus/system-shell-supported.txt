@@ -197,3 +197,4 @@ rm -rf cs-a cs-b; mkdir cs-a cs-b; cd cs-a; echo before:${PWD##*/}; echo "$(cd .
 echo "$(f() { echo inner; }; f)"; if command -v f >/dev/null; then echo leak; else echo missing; fi
 definitely-missing-rush-command 2>/dev/null; echo status:$?
 wait --; echo status:$?
+cd -- .; echo cd:$?; pwd -- >/dev/null; echo pwd:$?; export -- X=ok; echo export:$X; readonly -- R=ok; echo readonly:$?; unset -- NO_SUCH_NAME; echo unset:$?; umask -- >/dev/null; echo umask:$?
