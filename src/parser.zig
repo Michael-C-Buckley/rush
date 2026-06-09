@@ -1127,11 +1127,26 @@ const SyntaxParser = struct {
             });
         }
 
+        try self.parseTrailingRedirections(&if_children);
+
         const token_end = self.index;
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, if_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.if_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseTrailingRedirections(self: *SyntaxParser, children: *std.ArrayList(SyntaxChild)) !void {
+        while (self.current().kind == .whitespace) {
+            try self.appendCurrentTokenChildTo(children);
+        }
+        while (self.startsRedirection()) {
+            const redirection = try self.parseRedirection();
+            try children.append(self.allocator, .{ .node = redirection });
+            while (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(children);
+            }
+        }
     }
 
     fn parseSubshell(self: *SyntaxParser) anyerror!NodeId {
@@ -1454,6 +1469,8 @@ const SyntaxParser = struct {
             });
         }
 
+        try self.parseTrailingRedirections(&for_children);
+
         const token_end = self.index;
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, for_children.items);
@@ -1482,16 +1499,7 @@ const SyntaxParser = struct {
             try self.appendCurrentTokenChildTo(&loop_children);
             closed = true;
         }
-        while (self.current().kind == .whitespace) {
-            try self.appendCurrentTokenChildTo(&loop_children);
-        }
-        while (self.startsRedirection()) {
-            const redirection = try self.parseRedirection();
-            try loop_children.append(self.allocator, .{ .node = redirection });
-            while (self.current().kind == .whitespace) {
-                try self.appendCurrentTokenChildTo(&loop_children);
-            }
-        }
+        try self.parseTrailingRedirections(&loop_children);
 
         if (!saw_do) {
             self.incomplete = true;

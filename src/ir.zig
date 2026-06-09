@@ -45,6 +45,7 @@ pub const IfCommand = struct {
     condition: []const u8,
     then_body: []const u8,
     else_body: ?[]const u8 = null,
+    redirections: []Redirection,
 };
 
 pub const LoopKind = enum {
@@ -66,6 +67,7 @@ pub const ForCommand = struct {
     words: []WordRef,
     use_positionals: bool = false,
     body: []const u8,
+    redirections: []Redirection,
 };
 
 pub const CaseArm = struct {
@@ -151,14 +153,11 @@ pub const Program = struct {
         }
         self.allocator.free(self.commands);
         self.allocator.free(self.pipelines);
+        for (self.if_commands) |command| freeIfCommand(self.allocator, command);
         self.allocator.free(self.if_commands);
         for (self.loop_commands) |command| freeLoopCommand(self.allocator, command);
         self.allocator.free(self.loop_commands);
-        for (self.for_commands) |command| {
-            self.allocator.free(command.name);
-            for (command.words) |word| freeWord(self.allocator, word);
-            self.allocator.free(command.words);
-        }
+        for (self.for_commands) |command| freeForCommand(self.allocator, command);
         self.allocator.free(self.for_commands);
         for (self.case_commands) |command| freeCaseCommand(self.allocator, command);
         self.allocator.free(self.case_commands);
@@ -248,7 +247,7 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     for (parsed.nodes) |node| {
         if (node.kind != .if_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         try statement_refs.append(allocator, .{ .kind = .if_command, .index = if_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
-        try if_commands.append(allocator, lowerIfCommand(parsed, node));
+        try if_commands.append(allocator, try lowerIfCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
@@ -658,12 +657,19 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
     const name = try allocator.dupe(u8, parsed.tokens[name_index].lexeme(parsed.source));
     errdefer allocator.free(name);
 
+    var redirections = try lowerCompoundRedirections(allocator, parsed, node);
+    errdefer {
+        for (redirections.items) |redirection| freeRedirection(allocator, redirection);
+        redirections.deinit(allocator);
+    }
+
     return .{
         .span = node.span,
         .name = name,
         .words = try words.toOwnedSlice(allocator),
         .use_positionals = in_token == null,
         .body = spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
+        .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
 
@@ -704,7 +710,7 @@ fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     };
 }
 
-fn lowerIfCommand(parsed: parser.ParseResult, node: parser.Node) IfCommand {
+fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !IfCommand {
     std.debug.assert(node.kind == .if_command);
     var then_token: ?usize = null;
     var else_token: ?usize = null;
@@ -740,11 +746,18 @@ fn lowerIfCommand(parsed: parser.ParseResult, node: parser.Node) IfCommand {
         break :blk spanSlice(parsed, @min(else_index + 1, node.token_end), fi_index);
     } else null;
 
+    var redirections = try lowerCompoundRedirections(allocator, parsed, node);
+    errdefer {
+        for (redirections.items) |redirection| freeRedirection(allocator, redirection);
+        redirections.deinit(allocator);
+    }
+
     return .{
         .span = node.span,
         .condition = spanSlice(parsed, condition_start, condition_end),
         .then_body = spanSlice(parsed, body_start, body_end),
         .else_body = else_body,
+        .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
 
@@ -1098,10 +1111,17 @@ fn freeCaseCommand(allocator: std.mem.Allocator, command: CaseCommand) void {
     allocator.free(command.arms);
 }
 
+fn freeIfCommand(allocator: std.mem.Allocator, command: IfCommand) void {
+    for (command.redirections) |redirection| freeRedirection(allocator, redirection);
+    allocator.free(command.redirections);
+}
+
 fn freeForCommand(allocator: std.mem.Allocator, command: ForCommand) void {
     allocator.free(command.name);
     for (command.words) |word| freeWord(allocator, word);
     allocator.free(command.words);
+    for (command.redirections) |redirection| freeRedirection(allocator, redirection);
+    allocator.free(command.redirections);
 }
 
 fn freeLoopCommand(allocator: std.mem.Allocator, command: LoopCommand) void {

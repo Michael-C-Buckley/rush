@@ -2017,6 +2017,21 @@ pub const Executor = struct {
     fn executeForCommand(self: *Executor, command: ir.ForCommand, options: ExecuteOptions) !CommandResult {
         self.loop_depth += 1;
         defer self.loop_depth -= 1;
+        var owned_stdin: ?[]u8 = null;
+        defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        const prior_stdin = self.script_stdin;
+        const prior_stdin_offset = self.script_stdin_offset;
+        defer {
+            self.script_stdin = prior_stdin;
+            self.script_stdin_offset = prior_stdin_offset;
+        }
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin);
+        if (redirected_stdin) |stdin| {
+            self.script_stdin = stdin;
+            self.script_stdin_offset = 0;
+        }
+        var execution_options = options;
+        if (command.redirections.len != 0) execution_options.external_stdio = .capture;
         const expanded_words = if (command.use_positionals) &[_]ir.WordRef{} else try self.expandArgv(command.words, options);
         defer if (!command.use_positionals) self.freeWords(expanded_words);
 
@@ -2029,7 +2044,7 @@ pub const Executor = struct {
         if (command.use_positionals) {
             for (self.currentPositionals().params) |param| {
                 try self.setEnv(command.name, param);
-                var body = try self.executeScriptSlice(command.body, options);
+                var body = try self.executeScriptSlice(command.body, execution_options);
                 defer body.deinit();
                 try stdout.appendSlice(self.allocator, body.stdout);
                 try stderr.appendSlice(self.allocator, body.stderr);
@@ -2044,7 +2059,7 @@ pub const Executor = struct {
         } else {
             for (expanded_words) |word| {
                 try self.setEnv(command.name, word.text);
-                var body = try self.executeScriptSlice(command.body, options);
+                var body = try self.executeScriptSlice(command.body, execution_options);
                 defer body.deinit();
                 try stdout.appendSlice(self.allocator, body.stdout);
                 try stderr.appendSlice(self.allocator, body.stderr);
@@ -2058,12 +2073,13 @@ pub const Executor = struct {
             }
         }
 
-        return .{
+        const result: CommandResult = .{
             .allocator = self.allocator,
             .status = status,
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
         };
+        return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
     fn executeLoopCommand(self: *Executor, command: ir.LoopCommand, options: ExecuteOptions) !CommandResult {
@@ -2077,11 +2093,13 @@ pub const Executor = struct {
             self.script_stdin = prior_stdin;
             self.script_stdin_offset = prior_stdin_offset;
         }
-        const redirected_stdin = try self.applyLoopInputRedirections(command, options, &owned_stdin);
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin);
         if (redirected_stdin) |stdin| {
             self.script_stdin = stdin;
             self.script_stdin_offset = 0;
         }
+        var execution_options = options;
+        if (command.redirections.len != 0) execution_options.external_stdio = .capture;
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
         var stderr: std.ArrayList(u8) = .empty;
@@ -2089,7 +2107,7 @@ pub const Executor = struct {
         var status: ExitStatus = 0;
 
         while (true) {
-            var condition_options = options;
+            var condition_options = execution_options;
             condition_options.suppress_errexit = true;
             var condition = try self.executeScriptSlice(command.condition, condition_options);
             defer condition.deinit();
@@ -2102,7 +2120,7 @@ pub const Executor = struct {
             };
             if (!run_body) break;
 
-            var body = try self.executeScriptSlice(command.body, options);
+            var body = try self.executeScriptSlice(command.body, execution_options);
             defer body.deinit();
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
@@ -2115,25 +2133,44 @@ pub const Executor = struct {
             };
         }
 
-        return .{
+        const result: CommandResult = .{
             .allocator = self.allocator,
             .status = status,
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
         };
+        return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
-    fn applyLoopInputRedirections(self: *Executor, command: ir.LoopCommand, options: ExecuteOptions, owned_stdin: *?[]u8) !?[]const u8 {
-        if (command.redirections.len == 0) return null;
-        if (!hasInputRedirection(command.redirections)) return null;
+    fn applyCompoundInputRedirections(self: *Executor, span: parser.Span, redirections: []const ir.Redirection, options: ExecuteOptions, owned_stdin: *?[]u8) !?[]const u8 {
+        if (redirections.len == 0) return null;
+        if (!hasInputRedirection(redirections)) return null;
+        const expanded_redirections = try self.expandRedirections(redirections, options);
+        defer self.freeRedirections(expanded_redirections);
         const wrapper: ir.SimpleCommand = .{
-            .span = command.span,
+            .span = span,
             .assignments = &.{},
             .argv = &.{},
-            .redirections = try self.expandRedirections(command.redirections, options),
+            .redirections = expanded_redirections,
         };
-        defer self.freeRedirections(wrapper.redirections);
         return try self.applyInputRedirections(wrapper, "", options, owned_stdin);
+    }
+
+    fn applyCompoundOutputRedirections(self: *Executor, span: parser.Span, redirections: []const ir.Redirection, result: CommandResult, options: ExecuteOptions) !CommandResult {
+        if (redirections.len == 0) return result;
+        var owned_result = result;
+        const expanded_redirections = self.expandRedirections(redirections, options) catch |err| {
+            owned_result.deinit();
+            return err;
+        };
+        defer self.freeRedirections(expanded_redirections);
+        const wrapper: ir.SimpleCommand = .{
+            .span = span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = expanded_redirections,
+        };
+        return self.applyOutputRedirections(wrapper, owned_result, options, false);
     }
 
     fn hasInputRedirection(redirections: []const ir.Redirection) bool {
@@ -2154,12 +2191,27 @@ pub const Executor = struct {
     }
 
     fn executeIfCommand(self: *Executor, command: ir.IfCommand, options: ExecuteOptions) !CommandResult {
+        var owned_stdin: ?[]u8 = null;
+        defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        const prior_stdin = self.script_stdin;
+        const prior_stdin_offset = self.script_stdin_offset;
+        defer {
+            self.script_stdin = prior_stdin;
+            self.script_stdin_offset = prior_stdin_offset;
+        }
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin);
+        if (redirected_stdin) |stdin| {
+            self.script_stdin = stdin;
+            self.script_stdin_offset = 0;
+        }
+        var execution_options = options;
+        if (command.redirections.len != 0) execution_options.external_stdio = .capture;
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
 
-        var condition_options = options;
+        var condition_options = execution_options;
         condition_options.suppress_errexit = true;
         var condition = try self.executeScriptSlice(command.condition, condition_options);
         defer condition.deinit();
@@ -2168,13 +2220,13 @@ pub const Executor = struct {
 
         var status: ExitStatus = 0;
         if (condition.status == 0) {
-            var body = try self.executeScriptSlice(command.then_body, options);
+            var body = try self.executeScriptSlice(command.then_body, execution_options);
             defer body.deinit();
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
         } else if (command.else_body) |else_body| {
-            var body = try self.executeElseBody(else_body, options);
+            var body = try self.executeElseBody(else_body, execution_options);
             defer body.deinit();
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
@@ -2183,12 +2235,13 @@ pub const Executor = struct {
             status = 0;
         }
 
-        return .{
+        const result: CommandResult = .{
             .allocator = self.allocator,
             .status = status,
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
         };
+        return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
     fn executeElseBody(self: *Executor, else_body: []const u8, options: ExecuteOptions) !CommandResult {

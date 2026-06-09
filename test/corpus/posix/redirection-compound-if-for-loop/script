@@ -1,0 +1,18 @@
+rm -f rf ri rw ru infile
+for x in a b; do echo $x; done >rf
+printf 'for:'
+cat rf
+if true; then echo yes; else echo no; fi >ri
+printf 'if:'
+cat ri
+n=0
+while [ $n -lt 2 ]; do n=$((n+1)); echo $n; done >rw
+printf 'while:'
+cat rw
+n=0
+until [ $n -ge 2 ]; do n=$((n+1)); echo $n; done >ru
+printf 'until:'
+cat ru
+echo ok >infile
+if read x; then echo input:$x; fi <infile
+rm -f rf ri rw ru infile
