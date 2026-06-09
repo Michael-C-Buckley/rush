@@ -114,6 +114,85 @@ index:236
   <pre><span class="cmd">prompt_pwd</span>       <span class="comment"># current directory, with $HOME shortened to ~</span>
 <span class="cmd">prompt_duration</span>  <span class="comment"># previous command duration</span></pre>
 
+  <h2 id="async-prompt"><a href="#async-prompt">Async prompt updates</a></h2>
+
+  <p>Prompts should stay fast. Use the async prompt helpers for clocks, Git status, and other data that may change while the editor is waiting for input. Background work requests a safe redraw with <code>prompt repaint</code>; Rush rerenders the prompt and input line through the line editor.</p>
+
+  <pre><span class="cmd">prompt</span> repaint
+<span class="cmd">prompt</span> refresh <span class="opt">--interval</span> MS
+<span class="cmd">prompt_time</span> FORMAT
+<span class="cmd">prompt_async</span> KEY <span class="opt">--ttl</span> MS <span class="opt">--</span> COMMAND...
+<span class="cmd">event</span> prompt FUNCTION
+<span class="cmd">event</span> preexec FUNCTION
+<span class="cmd">event</span> postexec FUNCTION
+<span class="cmd">event</span> variable FUNCTION
+<span class="cmd">interval</span> NAME <span class="opt">--interval</span> MS FUNCTION</pre>
+
+  <p><code>prompt repaint</code> is the low-level redraw primitive for hooks and hidden refresh jobs. It schedules a prompt redraw when Rush is editing a command line and does not write prompt or input bytes directly.</p>
+
+  <p><code>prompt refresh --interval MS</code> asks Rush to rerender the prompt periodically while the editor is idle. Timers are suspended while a foreground command is running.</p>
+
+  <p><code>prompt_time FORMAT</code> formats the current time using <a href="https://github.com/rockorager/zeit">zeit</a>. Both strftime formats and Go-style layouts are supported.</p>
+
+  <pre><span class="cmd">rush_prompt</span>() {
+  <span class="cmd">prompt</span> segment <span class="opt">--fg</span> yellow <span class="str">"$(prompt_time %H:%M:%S)"</span>
+  <span class="cmd">prompt</span> refresh <span class="opt">--interval</span> 1000
+  <span class="cmd">prompt</span> text <span class="str">' $ '</span>
+}</pre>
+
+  <p><code>prompt_async</code> returns cached stdout immediately. When the cache is missing or stale, Rush starts a hidden refresh and repaints the prompt when fresh data arrives. Cache entries are keyed by the current directory plus the explicit key. Duplicate refreshes for the same key are coalesced. Stderr is suppressed by default, and hidden refreshes preserve the interactive last status.</p>
+
+  <pre><span class="cmd">rush_prompt</span>() {
+  <span class="cmd">prompt</span> segment <span class="opt">--fg</span> bright-blue <span class="str">"$(prompt_pwd)"</span>
+
+  <span class="var">git_branch</span>=<span class="str">"$(prompt_async git-branch --ttl 5000 -- git branch --show-current)"</span>
+  <span class="kw">if</span> test <span class="str">"$git_branch"</span> != <span class="str">""</span>; <span class="kw">then</span>
+    <span class="cmd">prompt</span> text <span class="str">' '</span>
+    <span class="cmd">prompt</span> segment <span class="opt">--fg</span> green <span class="str">"$git_branch"</span>
+  <span class="kw">fi</span>
+
+  <span class="cmd">prompt</span> text <span class="str">' $ '</span>
+}</pre>
+
+  <p>Save <code>$?</code> before running other commands in a prompt if you want to display the previous command status.</p>
+
+  <pre><span class="cmd">rush_prompt</span>() {
+  <span class="var">status</span>=<span class="str">"$?"</span>
+
+  <span class="kw">if</span> test <span class="str">"$status"</span> != 0; <span class="kw">then</span>
+    <span class="cmd">prompt</span> segment <span class="opt">--fg</span> red <span class="str">"status $status"</span>
+    <span class="cmd">prompt</span> text <span class="str">' '</span>
+  <span class="kw">fi</span>
+
+  <span class="cmd">prompt</span> segment <span class="opt">--fg</span> bright-blue <span class="str">"$(prompt_pwd)"</span>
+  <span class="cmd">prompt</span> text <span class="str">' $ '</span>
+}</pre>
+
+  <h2 id="hooks"><a href="#hooks">Hooks and intervals</a></h2>
+
+  <p><code>event</code> registers lower-level hooks for advanced prompt setups. Prompt hooks run before each prompt render. Preexec and postexec hooks run around foreground commands. Variable hooks run after variable changes and receive the variable name. Named intervals run while the editor is idle and receive the interval name.</p>
+
+  <pre><span class="cmd">on_prompt</span>() {
+  <span class="comment"># Update cheap prompt variables before rendering.</span>
+}
+
+<span class="cmd">on_variable</span>() {
+  <span class="kw">if</span> test <span class="str">"$1"</span> = <span class="str">PWD</span>; <span class="kw">then</span>
+    <span class="cmd">prompt</span> repaint
+  <span class="kw">fi</span>
+}
+
+<span class="cmd">on_clock</span>() {
+  <span class="var">CLOCK</span>=<span class="str">"$(date +%H:%M:%S)"</span>
+  <span class="cmd">prompt</span> repaint
+}
+
+<span class="cmd">event</span> prompt on_prompt
+<span class="cmd">event</span> variable on_variable
+<span class="cmd">interval</span> clock <span class="opt">--interval</span> 1000 on_clock</pre>
+
+  <p>Prefer <code>prompt_async</code>, timers, and hooks over slow synchronous command substitutions in <code>rush_prompt</code>. They keep prompt rendering responsive and route redraws through <code>prompt repaint</code> instead of writing to the terminal from background contexts.</p>
+
   <h2 id="ps1"><a href="#ps1">PS1 fallback</a></h2>
 
   <p>If <code>rush_prompt</code> is not defined, Rush uses <code>PS1</code>. Rush initializes <code>PS1</code> to <code>$ </code> and <code>PS2</code> to <code>&gt; </code> for interactive shells.</p>
