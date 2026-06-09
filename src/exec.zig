@@ -205,6 +205,7 @@ pub const CompletionSemanticPosition = enum {
     subcommand,
     option,
     option_value,
+    redirect_target,
     argument,
 };
 
@@ -1339,7 +1340,7 @@ pub const Executor = struct {
             context.replace_end = semantic.replace_end;
             context.position = switch (semantic.position) {
                 .command => .command,
-                .option, .option_value, .subcommand, .argument => .argument,
+                .option, .option_value, .subcommand, .redirect_target, .argument => .argument,
             };
         }
 
@@ -1356,6 +1357,7 @@ pub const Executor = struct {
         try self.appendBuiltinCompletionCandidates(&builder, semantic, options);
         if (semantic.position != .option_value) try self.appendStructuredCompletionCandidates(&builder, semantic);
         try self.appendDynamicStructuredCompletionCandidates(&builder, context, semantic, options);
+        try self.appendDefaultCompletionCandidates(&builder, semantic, options);
         self.freeCompletions(candidates);
         const merged = try builder.finish(self.allocator);
         return merged;
@@ -1465,6 +1467,8 @@ pub const Executor = struct {
         }
         const position: CompletionSemanticPosition = if (option_value != null)
             .option_value
+        else if (parser_context.kind == .redirect_target)
+            .redirect_target
         else if (parser_context.kind == .command)
             .command
         else if (std.mem.startsWith(u8, prefix, "-"))
@@ -1900,6 +1904,36 @@ pub const Executor = struct {
                 try builder.appendCandidateIfMissing(self.allocator, candidate);
             }
         }
+    }
+
+    fn appendDefaultCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
+        if (builder.candidates.items.len != 0 and context.position != .redirect_target) return;
+        const io = options.io orelse return;
+        switch (context.position) {
+            .redirect_target => try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false),
+            .subcommand, .argument => {
+                if (self.hasExplicitCompletionRuleForContext(context)) return;
+                try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false);
+            },
+            .option_value => {
+                if (self.hasExplicitCompletionRuleForContext(context)) return;
+                try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false);
+            },
+            .command, .option => {},
+        }
+    }
+
+    fn hasExplicitCompletionRuleForContext(self: Executor, context: CompletionSemanticContext) bool {
+        for (self.completion_rules.items) |rule| {
+            switch (rule.kind) {
+                .dynamic_argument => if (completionDynamicRuleMatches(rule, context)) return true,
+                .dynamic_option_value => if (context.position == .option_value and completionDynamicRuleMatches(rule, context)) return true,
+                .subcommand => if (context.position == .subcommand and completionRuleContextMatches(rule, context.root, context.path)) return true,
+                .dynamic_subcommands => if (context.position == .subcommand and completionDynamicRuleMatches(rule, context)) return true,
+                .option, .dynamic_options => {},
+            }
+        }
+        return false;
     }
 
     pub fn freeCompletions(self: *Executor, candidates: []completion.Candidate) void {
@@ -11757,6 +11791,87 @@ test "builtin completion offers directory and command operands" {
     const command_candidates = try executor.collectCompletionsForInput("command ec", "command ec".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(command_candidates);
     try expectCandidate(command_candidates, "echo", .builtin);
+}
+
+test "default completion falls back to paths for unmatched arguments" {
+    const file_path = "rush-default-completion-file.txt";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const external_candidates = try executor.collectCompletionsForInput("unknowncmd rush-default", "unknowncmd rush-default".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(external_candidates);
+    try expectCandidate(external_candidates, file_path, .file);
+
+    const builtin_candidates = try executor.collectCompletionsForInput("printf rush-default", "printf rush-default".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(builtin_candidates);
+    try expectCandidate(builtin_candidates, file_path, .file);
+}
+
+test "default completion preserves explicit non-file argument rules" {
+    const file_path = "rush-explicit-completion-file.txt";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_tool_args() { completion candidate explicit; }
+        \\complete tool --argument --function __rush_complete_tool_args
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    const candidates = try executor.collectCompletionsForInput("tool rush-explicit", "tool rush-explicit".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "explicit", .plain);
+    try expectNoCandidate(candidates, file_path);
+}
+
+test "default completion skips option names and falls back for option values" {
+    const file_path = "rush-option-value-completion-file.txt";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+
+    var setup = try parseAndLower(std.testing.allocator, "complete tool --option --long config --value-name path");
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    const option_candidates = try executor.collectCompletionsForInput("tool -", "tool -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(option_candidates);
+    try expectCandidate(option_candidates, "--config", .option);
+    try expectNoCandidate(option_candidates, file_path);
+
+    const value_candidates = try executor.collectCompletionsForInput("tool --config rush-option", "tool --config rush-option".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(value_candidates);
+    try expectCandidate(value_candidates, file_path, .file);
+}
+
+test "default completion uses paths for redirection operands" {
+    const file_path = "rush-redirection-completion-file.txt";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const candidates = try executor.collectCompletionsForInput("echo hi > rush-redirection", "echo hi > rush-redirection".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, file_path, .file);
 }
 
 test "completion helper builtins append structured candidates" {
