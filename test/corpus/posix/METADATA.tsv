@@ -280,3 +280,4 @@ grammar-for-explicit-empty-in	grammar	behavior	for with explicit empty in list i
 grammar-for-quoted-at-words	grammar	behavior	for word lists preserve quoted at positional fields
 grammar-loop-exit-status	grammar	behavior	while and until exit statuses follow body execution
 builtin-loop-control-status	builtin	behavior	break and continue determine loop command status
+grammar-if-exit-status	grammar	behavior	if compound command exit status

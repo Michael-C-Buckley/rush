@@ -1,0 +1,8 @@
+if false; then true; fi
+echo no_else:$?
+if true; then false; else true; fi
+echo then_status:$?
+if false; then true; else false; fi
+echo else_status:$?
+if false; then true; elif true; then false; else true; fi
+echo elif_status:$?

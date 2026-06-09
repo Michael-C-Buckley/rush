@@ -212,3 +212,4 @@ set -- a b; for x in; do echo unexpected:$x; done; echo done:$#
 set -- "a b" c; for x in "$@"; do printf "<%s>\n" "$x"; done
 while false; do echo bad; done; echo while_empty:$?; until true; do echo bad; done; echo until_empty:$?; i=0; while [ $i -lt 2 ]; do i=$((i+1)); false; done; echo while_body:$?; i=0; until [ $i -ge 2 ]; do i=$((i+1)); false; done; echo until_body:$?
 while true; do break; false; done; echo break:$?; i=0; while [ $i -lt 1 ]; do i=$((i+1)); continue; false; done; echo continue:$?; for x in a; do break; false; done; echo for_break:$?
+if false; then true; fi; echo no_else:$?; if true; then false; else true; fi; echo then_status:$?; if false; then true; else false; fi; echo else_status:$?; if false; then true; elif true; then false; else true; fi; echo elif_status:$?
