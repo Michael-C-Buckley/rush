@@ -12206,6 +12206,37 @@ test "first-party tmux completion script loads commands targets and files" {
     try expectCandidate(source_files, file_path, .file);
 }
 
+test "first-party fzf completion script loads options and static values" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/fzf.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("fzf --pre", "fzf --pre".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--preview", .option);
+    try expectCandidate(options, "--preview-window", .option);
+
+    const preview_windows = try executor.collectCompletionsForInput("fzf --preview-window r", "fzf --preview-window r".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(preview_windows);
+    try expectCandidate(preview_windows, "right", .plain);
+
+    const bindings = try executor.collectCompletionsForInput("fzf --bind ctrl-r", "fzf --bind ctrl-r".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(bindings);
+    try expectCandidate(bindings, "ctrl-r:reload", .plain);
+
+    const colors = try executor.collectCompletionsForInput("fzf --color d", "fzf --color d".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(colors);
+    try expectCandidate(colors, "dark", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
