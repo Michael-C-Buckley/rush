@@ -252,3 +252,4 @@ builtin-export-mark-later-assignment	builtin	behavior	export marks an unset name
 builtin-command-v-function	builtin	behavior	command -v identifies shell functions by name
 builtin-readonly-p-marked-name	builtin	behavior	readonly -p lists a readonly name marked before assignment
 builtin-env-exported-only	builtin	behavior	env prints exported environment and omits local shell variables
+redirection-here-doc-mixed-quoted-delimiter	redirection	behavior	here-doc delimiter quote removal disables body expansion for mixed quoted delimiters
