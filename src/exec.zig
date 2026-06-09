@@ -5288,14 +5288,16 @@ fn normalizeLogicalPath(allocator: std.mem.Allocator, base: []const u8, target: 
 fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len == 1) return errorResult(self.allocator, 2, "printf", "missing format operand");
+    var format_index: usize = 1;
+    if (format_index < command.argv.len and std.mem.eql(u8, command.argv[format_index].text, "--")) format_index += 1;
+    if (format_index >= command.argv.len) return errorResult(self.allocator, 2, "printf", "missing format operand");
 
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(self.allocator);
     var stderr: std.ArrayList(u8) = .empty;
     errdefer stderr.deinit(self.allocator);
     var status: ExitStatus = 0;
-    try appendPrintfOutput(self.allocator, &stdout, &stderr, &status, command.argv[1].text, command.argv[2..]);
+    try appendPrintfOutput(self.allocator, &stdout, &stderr, &status, command.argv[format_index].text, command.argv[format_index + 1 ..]);
     return .{
         .allocator = self.allocator,
         .status = status,

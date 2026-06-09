@@ -199,3 +199,4 @@ definitely-missing-rush-command 2>/dev/null; echo status:$?
 wait --; echo status:$?
 cd -- .; echo cd:$?; pwd -- >/dev/null; echo pwd:$?; export -- X=ok; echo export:$X; readonly -- R=ok; echo readonly:$?; unset -- NO_SUCH_NAME; echo unset:$?; umask -- >/dev/null; echo umask:$?
 command -V echo; echo status:$?; command -V cd; echo status:$?
+printf -- %s ok; echo :$?
