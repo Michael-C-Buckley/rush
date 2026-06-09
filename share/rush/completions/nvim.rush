@@ -1,0 +1,87 @@
+# First-party Neovim completion slice.
+
+# Common startup, UI, and mode flags.
+complete nvim --option --short h --long help --description 'show help'
+complete nvim --option --short v --long version --description 'show version'
+complete nvim --option --long headless --description 'start without UI'
+complete nvim --option --long clean --description 'start with factory defaults'
+complete nvim --option --long noplugin --description 'do not load plugins'
+complete nvim --option --long embed --description 'use stdin/stdout as msgpack-rpc channel'
+complete nvim --option --long api-info --description 'write API metadata and exit'
+complete nvim --option --short R --description 'readonly mode'
+complete nvim --option --short m --description 'disable file modifications'
+complete nvim --option --short M --description 'disable file modifications and writes'
+complete nvim --option --short b --description 'binary mode'
+complete nvim --option --short n --description 'do not use swap files'
+complete nvim --option --short d --long diff --description 'diff mode'
+complete nvim --option --short o --value-name count --description 'open windows horizontally'
+complete nvim --option --short O --value-name count --description 'open windows vertically'
+complete nvim --option --short p --value-name count --description 'open tab pages'
+complete nvim --option --short r --description 'list swap files for recovery'
+
+# Config, script, and command/lua options.
+complete nvim --option --short u --value-name vimrc --description 'use vimrc file'
+complete nvim --option-value --short u --function __rush_complete_nvim_startup_files
+complete nvim --option --long cmd --value-name command --description 'execute command before processing vimrc'
+complete nvim --option-value --long cmd --function __rush_complete_nvim_commands
+complete nvim --option --short c --value-name command --description 'execute command after first file'
+complete nvim --option-value --short c --function __rush_complete_nvim_commands
+complete nvim --option --short S --value-name session --description 'source session file after first file'
+complete nvim --option-value --short S --function __rush_complete_nvim_files
+complete nvim --option --short s --value-name scriptin --description 'read Normal mode commands from file'
+complete nvim --option-value --short s --function __rush_complete_nvim_files
+complete nvim --option --short i --value-name shada --description 'use shada file'
+complete nvim --option-value --short i --function __rush_complete_nvim_files
+complete nvim --option --short l --value-name lua-script --description 'run Lua script'
+complete nvim --option-value --short l --function __rush_complete_nvim_lua_files
+complete nvim --option --long lua --value-name chunk --description 'execute Lua chunk'
+complete nvim --option --long startuptime --value-name file --description 'write startup timing to file'
+complete nvim --option-value --long startuptime --function __rush_complete_nvim_files
+complete nvim --option --long log --value-name file --description 'write log to file'
+complete nvim --option-value --long log --function __rush_complete_nvim_files
+
+# Server and remote options.
+complete nvim --option --long listen --value-name address --description 'listen on address for RPC clients'
+complete nvim --option-value --long listen --function __rush_complete_nvim_servers
+complete nvim --option --long server --value-name address --description 'connect to server address'
+complete nvim --option-value --long server --function __rush_complete_nvim_servers
+complete nvim --option --long remote --description 'edit files in server'
+complete nvim --option --long remote-silent --description 'edit files in server without complaints'
+complete nvim --option --long remote-wait --description 'edit files in server and wait'
+complete nvim --option --long remote-tab --description 'edit files in a server tab'
+complete nvim --option --long remote-send --value-name keys --description 'send key sequence to server'
+complete nvim --option --long remote-expr --value-name expr --description 'evaluate expression in server'
+complete nvim --option --long remote-ui --description 'connect UI to server'
+
+# File operands.
+complete nvim --argument --function __rush_complete_nvim_files
+
+__rush_complete_nvim_files() {
+  completion files
+}
+
+__rush_complete_nvim_lua_files() {
+  completion files --extension .lua
+}
+
+__rush_complete_nvim_startup_files() {
+  completion candidate NONE --kind plain --description 'do not load a vimrc'
+  completion candidate NORC --kind plain --description 'do not load user vimrc files'
+  completion files
+}
+
+__rush_complete_nvim_commands() {
+  completion candidate edit --kind plain
+  completion candidate help --kind plain
+  completion candidate qall --kind plain
+  completion candidate quit --kind plain
+  completion candidate source --kind plain
+  completion candidate tabedit --kind plain
+  completion candidate terminal --kind plain
+  completion candidate write --kind plain
+}
+
+__rush_complete_nvim_servers() {
+  completion candidate 127.0.0.1:6666 --kind plain --description 'TCP localhost example'
+  completion files
+}
