@@ -6094,13 +6094,14 @@ fn builtinExport(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     _ = stdin;
     _ = options;
     var index: usize = 1;
-    if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) index += 1;
+    const option_terminated = index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--");
+    if (option_terminated) index += 1;
     if (index >= command.argv.len) return listExported(self);
-    if (std.mem.eql(u8, command.argv[index].text, "-p")) {
+    if (!option_terminated and std.mem.eql(u8, command.argv[index].text, "-p")) {
         if (command.argv.len != index + 1) return variableBuiltinUsageError(self, "export", "too many arguments");
         return listExported(self);
     }
-    if (std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return variableBuiltinUsageError(self, "export", "unsupported option");
+    if (!option_terminated and std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return variableBuiltinUsageError(self, "export", "unsupported option");
 
     for (command.argv[index..]) |arg| {
         const assignment = std.mem.indexOfScalar(u8, arg.text, '=');
@@ -6170,13 +6171,14 @@ fn builtinReadonly(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
     _ = stdin;
     _ = options;
     var index: usize = 1;
-    if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) index += 1;
+    const option_terminated = index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--");
+    if (option_terminated) index += 1;
     if (index >= command.argv.len) return listReadonly(self);
-    if (std.mem.eql(u8, command.argv[index].text, "-p")) {
+    if (!option_terminated and std.mem.eql(u8, command.argv[index].text, "-p")) {
         if (command.argv.len != index + 1) return variableBuiltinUsageError(self, "readonly", "too many arguments");
         return listReadonly(self);
     }
-    if (std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return variableBuiltinUsageError(self, "readonly", "unsupported option");
+    if (!option_terminated and std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return variableBuiltinUsageError(self, "readonly", "unsupported option");
     for (command.argv[index..]) |arg| {
         if (std.mem.indexOfScalar(u8, arg.text, '=')) |equals| {
             const name = arg.text[0..equals];
