@@ -7295,10 +7295,45 @@ fn shellPatternMatchesFrom(pattern: []const u8, special: ?[]const bool, text: []
         return false;
     }
     if (text_index >= text.len) return false;
+    if (pattern[pattern_index] == '[' and isSpecialPatternByte(special, pattern_index)) {
+        if (matchShellBracket(pattern, pattern_index, text[text_index])) |matched| {
+            return matched.ok and shellPatternMatchesFrom(pattern, special, text, matched.next_pattern, text_index + 1);
+        }
+    }
     if ((pattern[pattern_index] == '?' and isSpecialPatternByte(special, pattern_index)) or pattern[pattern_index] == text[text_index]) {
         return shellPatternMatchesFrom(pattern, special, text, pattern_index + 1, text_index + 1);
     }
     return false;
+}
+
+const ShellBracketMatch = struct { ok: bool, next_pattern: usize };
+
+fn matchShellBracket(pattern: []const u8, pattern_index: usize, text: u8) ?ShellBracketMatch {
+    var index = pattern_index + 1;
+    if (index >= pattern.len) return null;
+    const negated = pattern[index] == '!' or pattern[index] == '^';
+    if (negated) index += 1;
+
+    var matched = false;
+    var first_expression = true;
+    while (index < pattern.len) : (index += 1) {
+        if (pattern[index] == ']' and !first_expression) {
+            return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1 };
+        }
+        first_expression = false;
+
+        if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
+            const start = pattern[index];
+            const end = pattern[index + 2];
+            if (start <= text and text <= end) matched = true;
+            index += 2;
+            continue;
+        }
+
+        if (pattern[index] == text) matched = true;
+    }
+
+    return null;
 }
 
 fn exitStatusFromTerm(term: std.process.Child.Term) ExitStatus {
