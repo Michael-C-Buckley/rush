@@ -1,0 +1,6 @@
+rm -rf cs-a cs-b
+mkdir cs-a cs-b
+cd cs-a
+echo before:${PWD##*/}
+echo "$(cd ../cs-b; echo inner:${PWD##*/})"
+echo after:${PWD##*/}

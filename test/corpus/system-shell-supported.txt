@@ -193,3 +193,4 @@ old=$(umask); umask 077; umask u=rwx,g=rx,o=; umask; umask "$old"
 trap 'echo status:$?' EXIT; false
 A="one two"; set -- $A; echo unquoted:$#; set -- "$A"; echo quoted:$#:$1
 A=outer; echo "$(A=inner; echo $A)"; echo "$A"
+rm -rf cs-a cs-b; mkdir cs-a cs-b; cd cs-a; echo before:${PWD##*/}; echo "$(cd ../cs-b; echo inner:${PWD##*/})"; echo after:${PWD##*/}
