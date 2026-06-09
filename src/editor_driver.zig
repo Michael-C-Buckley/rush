@@ -427,7 +427,7 @@ pub const TerminalSession = struct {
         switch (session.state) {
             .history_search => unreachable,
             .submitted => {
-                try self.clearRenderedRowsAfterFirst();
+                try self.handoffSubmittedInput();
                 self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, semanticInputEnd ++ "\r\n");
                 return .{ .submitted = session.takeSubmittedLine().? };
@@ -452,6 +452,12 @@ pub const TerminalSession = struct {
         const clear = try self.renderer.clearRowsAfterFirst(self.allocator);
         defer self.allocator.free(clear);
         try writeTtyAll(&self.tty, clear);
+    }
+
+    fn handoffSubmittedInput(self: *TerminalSession) !void {
+        const handoff = try self.renderer.submittedHandoff(self.allocator);
+        defer self.allocator.free(handoff);
+        try writeTtyAll(&self.tty, handoff);
     }
 
     fn processTtyInput(self: *TerminalSession) !void {

@@ -924,6 +924,7 @@ fn styledHistorySearchLabel(allocator: std.mem.Allocator, text: []const u8, quer
 
 pub const Frame = struct {
     lines: []const []const u8,
+    input_line_count: usize = 0,
     cursor_row: usize = 0,
     cursor_col: u16 = 0,
 
@@ -942,7 +943,7 @@ pub const Frame = struct {
             lines[index] = try allocator.dupe(u8, line);
             initialized += 1;
         }
-        return .{ .lines = lines, .cursor_row = self.cursor_row, .cursor_col = self.cursor_col };
+        return .{ .lines = lines, .input_line_count = self.input_line_count, .cursor_row = self.cursor_row, .cursor_col = self.cursor_col };
     }
 };
 
@@ -987,6 +988,28 @@ pub const FrameRenderer = struct {
         const restore = try cursorMoveFrom(current_row, previous.cursor_row, previous.cursor_col, allocator);
         defer allocator.free(restore);
         try output.appendSlice(allocator, restore);
+        return output.toOwnedSlice(allocator);
+    }
+
+    pub fn submittedHandoff(self: FrameRenderer, allocator: std.mem.Allocator) ![]const u8 {
+        const previous = self.previous orelse return allocator.dupe(u8, "");
+        const input_line_count = @min(@max(previous.input_line_count, 1), previous.lines.len);
+
+        var output: std.ArrayList(u8) = .empty;
+        errdefer output.deinit(allocator);
+        var current_row = previous.cursor_row;
+        if (previous.lines.len > input_line_count) {
+            for (input_line_count..previous.lines.len) |row| {
+                const move = try cursorMoveFrom(current_row, row, 0, allocator);
+                defer allocator.free(move);
+                try output.appendSlice(allocator, move);
+                try output.appendSlice(allocator, "\x1b[2K");
+                current_row = row;
+            }
+        }
+        const move_to_bottom = try cursorMoveFrom(current_row, input_line_count - 1, 0, allocator);
+        defer allocator.free(move_to_bottom);
+        try output.appendSlice(allocator, move_to_bottom);
         return output.toOwnedSlice(allocator);
     }
 };
@@ -1073,12 +1096,14 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
 
     try appendWrappedLine(allocator, &lines, input_line_bytes, wrap_width, options.width_method);
     if (cursor_position.row == lines.items.len) try lines.append(allocator, try allocator.dupe(u8, ""));
+    const input_line_count = lines.items.len;
     if (options.status_line.len != 0) try appendWrappedLine(allocator, &lines, options.status_line, wrap_width, options.width_method);
     if (options.diagnostic_line.len != 0) try appendWrappedLine(allocator, &lines, options.diagnostic_line, wrap_width, options.width_method);
     try appendCompletionMenuLines(allocator, &lines, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height);
 
     return .{
         .lines = try lines.toOwnedSlice(allocator),
+        .input_line_count = input_line_count,
         .cursor_row = cursor_position.row,
         .cursor_col = cursor_position.col,
     };
@@ -2881,4 +2906,56 @@ test "frame renderer clears input and menu rows on ctrl-c" {
     try std.testing.expect(std.mem.indexOf(u8, clear_output, "git ch") == null);
     try std.testing.expect(std.mem.indexOf(u8, clear_output, "checkout") == null);
     try std.testing.expect(std.mem.indexOf(u8, clear_output, "cherry-pick") == null);
+}
+
+test "submitted handoff moves to bottom of wrapped input without clearing it" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var editor = Editor.init(std.testing.allocator);
+    defer editor.deinit();
+    try editor.buffer.replace("abcdef");
+    editor.buffer.moveHome();
+
+    var frame = try frameFromLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "$ " }, .width = 5, .synchronized_output = false });
+    defer frame.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), frame.input_line_count);
+    const rendered = try renderer.render(std.testing.allocator, frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+
+    const handoff = try renderer.submittedHandoff(std.testing.allocator);
+    defer std.testing.allocator.free(handoff);
+
+    try std.testing.expectEqualStrings("\x1b[1B\r", handoff);
+    try std.testing.expect(std.mem.indexOf(u8, handoff, "\x1b[2K") == null);
+    try std.testing.expect(std.mem.indexOf(u8, handoff, "\x1b[J") == null);
+}
+
+test "submitted handoff clears completion rows but preserves wrapped input rows" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git checkout");
+    session.editor.buffer.moveHome();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 4, .replace_end = 12 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 4, .replace_end = 12 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    var frame = try session.renderFrame(std.testing.allocator, .{ .width = 8, .synchronized_output = false });
+    defer frame.deinit(std.testing.allocator);
+    try std.testing.expect(frame.input_line_count > 1);
+    try std.testing.expect(frame.lines.len > frame.input_line_count);
+    const rendered = try renderer.render(std.testing.allocator, frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+
+    const handoff = try renderer.submittedHandoff(std.testing.allocator);
+    defer std.testing.allocator.free(handoff);
+
+    try std.testing.expect(std.mem.indexOf(u8, handoff, "\x1b[J") == null);
+    try std.testing.expectEqual(frame.lines.len - frame.input_line_count, std.mem.count(u8, handoff, "\x1b[2K"));
+    try std.testing.expect(std.mem.endsWith(u8, handoff, "\r"));
 }
