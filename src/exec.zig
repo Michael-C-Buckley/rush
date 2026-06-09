@@ -12028,6 +12028,28 @@ test "completion lazy-loaded scripts can provide dynamic file arguments" {
     try std.testing.expectEqual(@as(usize, source.len), candidate.replace_end);
 }
 
+test "first-party direnv completion script loads subcommands and shell values" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/direnv.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const subcommands = try executor.collectCompletionsForInput("direnv a", "direnv a".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(subcommands);
+    try expectCandidate(subcommands, "allow", .subcommand);
+
+    const shells = try executor.collectCompletionsForInput("direnv export z", "direnv export z".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(shells);
+    try expectCandidate(shells, "zsh", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
