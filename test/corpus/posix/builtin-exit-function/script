@@ -1,0 +1,3 @@
+f() { echo before; exit 7; echo after; }
+f
+echo outside
