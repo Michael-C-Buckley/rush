@@ -12432,6 +12432,51 @@ test "first-party curl completion script loads options values and files" {
     try expectCandidate(operands, "http://", .plain);
 }
 
+test "first-party tar completion script loads options archives and paths" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/tar.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const archive_path = "rush-tar-completion.tar.gz";
+    var archive_file = try std.Io.Dir.cwd().createFile(std.testing.io, archive_path, .{ .truncate = true });
+    archive_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, archive_path) catch {};
+    const dir_path = "rush-tar-completion-dir";
+    std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const modes = try executor.collectCompletionsForInput("tar --cre", "tar --cre".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(modes);
+    try expectCandidate(modes, "--create", .option);
+
+    const compression = try executor.collectCompletionsForInput("tar --zs", "tar --zs".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(compression);
+    try expectCandidate(compression, "--zstd", .option);
+
+    const archives = try executor.collectCompletionsForInput("tar --file rush-tar", "tar --file rush-tar".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(archives);
+    try expectCandidate(archives, archive_path, .file);
+
+    const directories = try executor.collectCompletionsForInput("tar --directory rush-tar", "tar --directory rush-tar".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(directories);
+    try expectCandidate(directories, "rush-tar-completion-dir/", .directory);
+
+    const operands = try executor.collectCompletionsForInput("tar --create rush-tar", "tar --create rush-tar".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(operands);
+    try expectCandidate(operands, "rush-tar-completion-dir/", .directory);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
