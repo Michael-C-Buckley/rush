@@ -7,6 +7,7 @@ pub const Source = enum(u32) {
     tty_input,
     resize,
     prompt_redraw,
+    completion_result,
 };
 
 pub const Event = struct {

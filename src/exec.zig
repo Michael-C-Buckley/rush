@@ -32,12 +32,30 @@ pub const ExecuteOptions = struct {
     allow_external: bool = false,
     features: compat.Features = .{},
     external_stdio: ExternalStdio = .capture,
+    cancel: ?*completion.CancellationToken = null,
     arg_zero: []const u8 = "rush",
     source_path: ?[]const u8 = null,
     suppress_functions: bool = false,
     suppress_errexit: bool = false,
     default_path_lookup: bool = false,
 };
+
+fn checkCanceled(options: ExecuteOptions) !void {
+    if (options.cancel) |cancel| if (cancel.isCanceled()) return error.Canceled;
+}
+
+fn registerCancelableChild(options: ExecuteOptions, child: std.process.Child) ?i32 {
+    const cancel = options.cancel orelse return null;
+    const pid = child.id orelse return null;
+    const numeric_pid: i32 = @intCast(pid);
+    cancel.registerChild(numeric_pid);
+    return numeric_pid;
+}
+
+fn unregisterCancelableChild(options: ExecuteOptions, pid: ?i32) void {
+    const cancel = options.cancel orelse return;
+    cancel.unregisterChild(pid orelse return);
+}
 
 pub const ShellOptions = struct {
     pipefail: bool = false,
@@ -2107,6 +2125,7 @@ pub const Executor = struct {
 
         if (program.statements.len > 0) {
             for (program.statements, 0..) |statement, statement_index| {
+                try checkCanceled(options);
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, statement.span.start);
                 var result = if (statement.async_after)
@@ -2136,6 +2155,7 @@ pub const Executor = struct {
 
         if (program.pipelines.len > 0) {
             for (program.pipelines, 0..) |pipeline, pipeline_index| {
+                try checkCanceled(options);
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, pipeline.span.start);
                 var result = if (pipeline.async_after)
@@ -2155,6 +2175,7 @@ pub const Executor = struct {
         }
 
         for (program.commands) |command| {
+            try checkCanceled(options);
             self.setCurrentLineNumber(program.source, command.span.start);
             var result = try self.executeSimpleCommand(command, options);
             defer result.deinit();
@@ -3097,6 +3118,7 @@ pub const Executor = struct {
             exitForkedChild(status);
         }
 
+        _ = registerCancelableChild(options, childFromPid(pid));
         const numeric_pid: i64 = @intCast(pid);
         self.setLastBackgroundPid(numeric_pid);
         const owned_command = try self.allocator.dupe(u8, std.mem.trim(u8, command_text, " \t\r\n;&"));
@@ -3223,6 +3245,10 @@ pub const Executor = struct {
         defer self.allocator.free(children);
         const child_stage_indexes = try self.allocator.alloc(usize, pipeline.command_indexes.len);
         defer self.allocator.free(child_stage_indexes);
+        const cancel_pids = try self.allocator.alloc(?i32, pipeline.command_indexes.len);
+        defer self.allocator.free(cancel_pids);
+        @memset(cancel_pids, null);
+        defer for (cancel_pids) |pid| unregisterCancelableChild(options, pid);
         var spawned: usize = 0;
         errdefer for (children[0..spawned]) |*child| child.kill(io);
 
@@ -3235,6 +3261,7 @@ pub const Executor = struct {
         }
 
         for (pipeline.command_indexes, 0..) |command_index, index| {
+            try checkCanceled(options);
             const command = program.commands[command_index];
             const is_last = index + 1 == pipeline.command_indexes.len;
             var stdin_file = if (index == 0) null else takeRead(&pipes[index - 1]);
@@ -3287,6 +3314,7 @@ pub const Executor = struct {
                     },
                     else => return err,
                 };
+                cancel_pids[spawned] = registerCancelableChild(options, children[spawned]);
                 child_stage_indexes[spawned] = index;
                 spawned += 1;
                 if (stdin_file) |file| file.close(io);
@@ -3427,6 +3455,10 @@ pub const Executor = struct {
     fn executeExternalPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
         const children = try self.allocator.alloc(std.process.Child, pipeline.command_indexes.len);
         defer self.allocator.free(children);
+        const cancel_pids = try self.allocator.alloc(?i32, pipeline.command_indexes.len);
+        defer self.allocator.free(cancel_pids);
+        @memset(cancel_pids, null);
+        defer for (cancel_pids) |pid| unregisterCancelableChild(options, pid);
         var spawned: usize = 0;
         errdefer for (children[0..spawned]) |*child| child.kill(io);
 
@@ -3437,6 +3469,7 @@ pub const Executor = struct {
         var pipeline_pgrp: ?std.posix.pid_t = null;
 
         for (pipeline.command_indexes, 0..) |command_index, index| {
+            try checkCanceled(options);
             const command = program.commands[command_index];
             const argv = try argvForCommand(self.allocator, command);
             defer self.allocator.free(argv);
@@ -3459,6 +3492,7 @@ pub const Executor = struct {
                 },
                 else => return err,
             };
+            cancel_pids[index] = registerCancelableChild(options, children[index]);
             if (pipeline_pgrp == null and foreground_terminal != null) pipeline_pgrp = children[index].id;
             spawned += 1;
 
@@ -4461,6 +4495,7 @@ pub const Executor = struct {
             else => return err,
         };
         errdefer child.kill(io);
+        _ = registerCancelableChild(options, child);
         if (child.id) |pid| {
             const numeric_pid: i64 = @intCast(pid);
             self.setLastBackgroundPid(numeric_pid);
@@ -4569,6 +4604,7 @@ pub const Executor = struct {
         defer if (merged_capture) |*pipe| pipe.close(io);
         const merged_stderr_write: ?std.Io.File = if (merged_capture) |pipe| .{ .handle = try rawDup(pipe.write.?.handle), .flags = pipe.write.?.flags } else null;
         const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit and stdin_file == null);
+        try checkCanceled(options);
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
@@ -4580,6 +4616,8 @@ pub const Executor = struct {
             error.FileNotFound => return error.CommandNotFound,
             else => return err,
         };
+        const cancel_pid = registerCancelableChild(options, child);
+        defer unregisterCancelableChild(options, cancel_pid);
         defer child.kill(io);
         if (merged_capture) |*pipe| {
             pipe.write.?.close(io);

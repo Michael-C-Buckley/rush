@@ -2,6 +2,73 @@
 
 const std = @import("std");
 
+pub const CancellationToken = struct {
+    canceled: std.atomic.Value(bool) = .init(false),
+    mutex: std.atomic.Mutex = .unlocked,
+    child_pids: [32]i32 = .{0} ** 32,
+
+    pub fn cancel(self: *CancellationToken) void {
+        self.canceled.store(true, .release);
+        lockMutex(&self.mutex);
+        defer self.mutex.unlock();
+        for (self.child_pids) |pid| terminateProcess(pid);
+    }
+
+    pub fn isCanceled(self: *CancellationToken) bool {
+        return self.canceled.load(.acquire);
+    }
+
+    pub fn registerChild(self: *CancellationToken, pid: i32) void {
+        lockMutex(&self.mutex);
+        defer self.mutex.unlock();
+        for (&self.child_pids) |*slot| {
+            if (slot.* == 0) {
+                slot.* = pid;
+                break;
+            }
+        } else {
+            terminateProcess(pid);
+            return;
+        }
+        if (self.isCanceled()) terminateProcess(pid);
+    }
+
+    pub fn unregisterChild(self: *CancellationToken, pid: i32) void {
+        lockMutex(&self.mutex);
+        defer self.mutex.unlock();
+        for (&self.child_pids) |*slot| {
+            if (slot.* == pid) slot.* = 0;
+        }
+    }
+};
+
+fn lockMutex(mutex: *std.atomic.Mutex) void {
+    while (!mutex.tryLock()) std.Thread.yield() catch {};
+}
+
+fn terminateProcess(pid: i32) void {
+    if (pid <= 0) return;
+    switch (@import("builtin").os.tag) {
+        .windows => {},
+        else => std.posix.kill(@intCast(pid), .TERM) catch {},
+    }
+}
+
+test "cancellation token tracks multiple children" {
+    var token: CancellationToken = .{};
+    token.registerChild(-1);
+    token.registerChild(-2);
+    try std.testing.expectEqual(@as(i32, -1), token.child_pids[0]);
+    try std.testing.expectEqual(@as(i32, -2), token.child_pids[1]);
+
+    token.unregisterChild(-1);
+    try std.testing.expectEqual(@as(i32, 0), token.child_pids[0]);
+    try std.testing.expectEqual(@as(i32, -2), token.child_pids[1]);
+
+    token.cancel();
+    try std.testing.expect(token.isCanceled());
+}
+
 pub const Kind = enum {
     command,
     builtin,

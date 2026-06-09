@@ -105,6 +105,16 @@
 
   <p>The function runs only during completion. It adds candidates with <code>completion candidate</code>.</p>
 
+  <h2 id="async-provider-semantics"><a href="#async-provider-semantics">Async provider semantics</a></h2>
+
+  <p>Interactive dynamic providers run asynchronously. Rush keeps the editor responsive while the provider computes candidates.</p>
+
+  <p>A provider sees a snapshot of shell state from when the completion request started. Variables, aliases, functions, and completion rules are available in that snapshot, but shell-state mutations made by the provider are discarded when completion finishes.</p>
+
+  <p>Filesystem and external command side effects are not sandboxed. Completion providers should be written as read-only queries.</p>
+
+  <p>If a newer completion request supersedes an older one, Rush discards the stale result and asks in-flight external commands to terminate.</p>
+
   <h2 id="candidate-fields"><a href="#candidate-fields">Candidate fields</a></h2>
 
   <pre><span class="cmd">completion</span> candidate VALUE [<span class="opt">--display</span> TEXT] [<span class="opt">--description</span> TEXT] [<span class="opt">--kind</span> KIND] [<span class="opt">--no-space</span>]</pre>

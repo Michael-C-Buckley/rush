@@ -102,6 +102,14 @@ Dynamic provider registrations are context-scoped:
 - `complete PATTERN --option-value --short C --function FUNC` runs `FUNC` for
   the value of `-C` at `PATTERN`.
 
+Rush runs interactive dynamic providers asynchronously. A provider sees a
+snapshot of shell state from when the completion request started: variables,
+aliases, functions, and completion rules are available, but mutations made by
+the provider are discarded when completion finishes. Filesystem and external
+command side effects are not sandboxed, so providers should still be written as
+read-only queries. If a newer completion request supersedes an older one, Rush
+discards the stale result and asks in-flight external commands to terminate.
+
 ### Provider helper builtins
 
 Provider functions can emit candidates directly:

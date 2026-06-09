@@ -558,7 +558,82 @@ const InteractiveCompletionContext = struct {
     io: std.Io,
     cwd: []const u8 = "",
     arg_zero: []const u8 = "rush",
+    owned_executor: ?*exec.Executor = null,
+    owned_history: ?*History = null,
+    owned_cache: ?*CompletionCache = null,
+    owned_loader: ?*CompletionScriptLoader = null,
+    owned_cwd: ?[]u8 = null,
+    cancel: ?*completion_model.CancellationToken = null,
 };
+
+fn cloneInteractiveCompletionContext(context: *anyopaque, allocator: std.mem.Allocator, cancel: *completion_model.CancellationToken) !*anyopaque {
+    const source: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    const cloned = try allocator.create(InteractiveCompletionContext);
+    errdefer allocator.destroy(cloned);
+    const executor = try allocator.create(exec.Executor);
+    errdefer allocator.destroy(executor);
+    executor.* = exec.Executor.init(allocator);
+    errdefer executor.deinit();
+    try executor.copyStateFrom(source.executor);
+
+    const history = try allocator.create(History);
+    errdefer allocator.destroy(history);
+    history.* = History.init(allocator);
+    errdefer history.deinit();
+    try history.copyFrom(source.history);
+
+    const cache = try allocator.create(CompletionCache);
+    errdefer allocator.destroy(cache);
+    cache.* = CompletionCache.init(allocator);
+    errdefer cache.deinit();
+
+    const loader = try allocator.create(CompletionScriptLoader);
+    errdefer allocator.destroy(loader);
+    loader.* = CompletionScriptLoader.init(allocator);
+    errdefer loader.deinit();
+
+    const cwd = try allocator.dupe(u8, source.cwd);
+    errdefer allocator.free(cwd);
+
+    cloned.* = .{
+        .executor = executor,
+        .history = history,
+        .cache = cache,
+        .loader = loader,
+        .io = source.io,
+        .cwd = cwd,
+        .arg_zero = source.arg_zero,
+        .owned_executor = executor,
+        .owned_history = history,
+        .owned_cache = cache,
+        .owned_loader = loader,
+        .owned_cwd = cwd,
+        .cancel = cancel,
+    };
+    return cloned;
+}
+
+fn freeInteractiveCompletionContext(context: *anyopaque, allocator: std.mem.Allocator) void {
+    const cloned: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    if (cloned.owned_loader) |loader| {
+        loader.deinit();
+        allocator.destroy(loader);
+    }
+    if (cloned.owned_cache) |cache| {
+        cache.deinit();
+        allocator.destroy(cache);
+    }
+    if (cloned.owned_history) |history| {
+        history.deinit();
+        allocator.destroy(history);
+    }
+    if (cloned.owned_executor) |executor| {
+        executor.deinit();
+        allocator.destroy(executor);
+    }
+    if (cloned.owned_cwd) |cwd| allocator.free(cwd);
+    allocator.destroy(cloned);
+}
 
 fn renderInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
@@ -826,7 +901,7 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
         try completion_context.cache.startRefresh(completion_context.executor, completion_context.history, completion_context.io, source, cursor, completion_context.cwd, generation);
         return completion_model.applyCandidatesForInput(allocator, source, cached);
     }
-    const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true });
+    const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true, .cancel = completion_context.cancel });
     defer completion_context.executor.freeCompletions(candidates);
     try rankCompletionCandidates(allocator, candidates, completion_context.history.*, completion_context.cwd, source);
     try completion_context.cache.put(source, cursor, completion_context.cwd, completion_context.executor.completionGeneration(), candidates);
@@ -1187,6 +1262,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             },
             .completion_context = &completion_context,
             .complete = completeInteractiveLine,
+            .clone_completion_context = cloneInteractiveCompletionContext,
+            .free_completion_context = freeInteractiveCompletionContext,
             .expand_abbreviation = expandInteractiveAbbreviation,
             .diagnostic_context = &completion_context,
             .diagnose = diagnoseInteractiveLine,
