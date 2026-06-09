@@ -1,0 +1,310 @@
+# First-party helm completion slice.
+
+# Root options and common subcommands.
+complete helm --option --short h --long help --description 'show help'
+complete helm --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete helm --option-value --short n --function __rush_complete_helm_namespaces
+complete helm --option-value --long namespace --function __rush_complete_helm_namespaces
+complete helm --option --long kube-context --value-name context --description 'name of the kubeconfig context to use'
+complete helm --option --long kubeconfig --value-name file --description 'path to the kubeconfig file'
+complete helm --option-value --long kubeconfig --function __rush_complete_helm_files
+complete helm --option --long registry-config --value-name file --description 'path to registry config file'
+complete helm --option-value --long registry-config --function __rush_complete_helm_files
+complete helm --option --long repository-cache --value-name dir --description 'path to repository cache directory'
+complete helm --option-value --long repository-cache --function __rush_complete_helm_directories
+complete helm --option --long repository-config --value-name file --description 'path to repositories file'
+complete helm --option-value --long repository-config --function __rush_complete_helm_files
+
+complete helm --subcommand install --description 'install a chart'
+complete helm --subcommand upgrade --description 'upgrade a release'
+complete helm --subcommand uninstall --description 'uninstall a release'
+complete helm --subcommand list --description 'list releases'
+complete helm --subcommand status --description 'show release status'
+complete helm --subcommand repo --description 'manage chart repositories'
+complete helm --subcommand search --description 'search for charts'
+complete helm --subcommand show --description 'show chart information'
+complete helm --subcommand template --description 'render chart templates locally'
+complete helm --subcommand lint --description 'examine a chart for possible issues'
+complete helm --subcommand package --description 'package a chart directory'
+
+# install RELEASE CHART
+complete 'helm install' --option --short h --long help --description 'show help'
+complete 'helm install' --option --short n --long namespace --value-name namespace --description 'namespace to install into'
+complete 'helm install' --option-value --short n --function __rush_complete_helm_namespaces
+complete 'helm install' --option-value --long namespace --function __rush_complete_helm_namespaces
+complete 'helm install' --option --long create-namespace --description 'create the release namespace if not present'
+complete 'helm install' --option --long dependency-update --description 'update dependencies before installing'
+complete 'helm install' --option --long description --value-name string --description 'add a custom release description'
+complete 'helm install' --option --long dry-run --description 'simulate an install'
+complete 'helm install' --option --long generate-name --short g --description 'generate the release name'
+complete 'helm install' --option --long replace --description 'reuse a deleted release name'
+complete 'helm install' --option --long repo --value-name url --description 'chart repository URL'
+complete 'helm install' --option-value --long repo --function __rush_complete_helm_repo_urls
+complete 'helm install' --option --long set --value-name key=val --description 'set chart values'
+complete 'helm install' --option-value --long set --function __rush_complete_helm_set_values
+complete 'helm install' --option --long set-string --value-name key=val --description 'set string chart values'
+complete 'helm install' --option-value --long set-string --function __rush_complete_helm_set_values
+complete 'helm install' --option --short f --long values --value-name file --description 'specify values in a YAML file'
+complete 'helm install' --option-value --short f --function __rush_complete_helm_values_files
+complete 'helm install' --option-value --long values --function __rush_complete_helm_values_files
+complete 'helm install' --option --long version --value-name version --description 'chart version to install'
+complete 'helm install' --option --long wait --description 'wait until resources are ready'
+complete 'helm install' --argument --function __rush_complete_helm_install_args
+
+# upgrade RELEASE CHART
+complete 'helm upgrade' --option --short h --long help --description 'show help'
+complete 'helm upgrade' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'helm upgrade' --option-value --short n --function __rush_complete_helm_namespaces
+complete 'helm upgrade' --option-value --long namespace --function __rush_complete_helm_namespaces
+complete 'helm upgrade' --option --long atomic --description 'roll back changes on failure'
+complete 'helm upgrade' --option --long cleanup-on-fail --description 'delete new resources on failure'
+complete 'helm upgrade' --option --long dependency-update --description 'update dependencies before upgrading'
+complete 'helm upgrade' --option --long dry-run --description 'simulate an upgrade'
+complete 'helm upgrade' --option --short i --long install --description 'install if the release does not exist'
+complete 'helm upgrade' --option --long reset-values --description 'reset values to chart defaults'
+complete 'helm upgrade' --option --long reuse-values --description 'reuse the last release values'
+complete 'helm upgrade' --option --long set --value-name key=val --description 'set chart values'
+complete 'helm upgrade' --option-value --long set --function __rush_complete_helm_set_values
+complete 'helm upgrade' --option --long set-string --value-name key=val --description 'set string chart values'
+complete 'helm upgrade' --option-value --long set-string --function __rush_complete_helm_set_values
+complete 'helm upgrade' --option --short f --long values --value-name file --description 'specify values in a YAML file'
+complete 'helm upgrade' --option-value --short f --function __rush_complete_helm_values_files
+complete 'helm upgrade' --option-value --long values --function __rush_complete_helm_values_files
+complete 'helm upgrade' --option --long version --value-name version --description 'chart version to upgrade to'
+complete 'helm upgrade' --option --long wait --description 'wait until resources are ready'
+complete 'helm upgrade' --argument --function __rush_complete_helm_upgrade_args
+
+# release inspection and removal.
+complete 'helm uninstall' --option --short h --long help --description 'show help'
+complete 'helm uninstall' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'helm uninstall' --option-value --short n --function __rush_complete_helm_namespaces
+complete 'helm uninstall' --option-value --long namespace --function __rush_complete_helm_namespaces
+complete 'helm uninstall' --option --long dry-run --description 'simulate an uninstall'
+complete 'helm uninstall' --option --long keep-history --description 'remove resources but keep release history'
+complete 'helm uninstall' --option --long wait --description 'wait until resources are deleted'
+complete 'helm uninstall' --argument --function __rush_complete_helm_releases
+
+complete 'helm list' --option --short h --long help --description 'show help'
+complete 'helm list' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'helm list' --option-value --short n --function __rush_complete_helm_namespaces
+complete 'helm list' --option-value --long namespace --function __rush_complete_helm_namespaces
+complete 'helm list' --option --short A --long all-namespaces --description 'list releases across all namespaces'
+complete 'helm list' --option --short a --long all --description 'show all releases without filters'
+complete 'helm list' --option --long deployed --description 'show deployed releases'
+complete 'helm list' --option --long failed --description 'show failed releases'
+complete 'helm list' --option --long filter --value-name regex --description 'filter by regular expression'
+complete 'helm list' --option --short o --long output --value-name format --description 'output format'
+complete 'helm list' --option-value --short o --function __rush_complete_helm_output_formats
+complete 'helm list' --option-value --long output --function __rush_complete_helm_output_formats
+complete 'helm list' --option --long pending --description 'show pending releases'
+complete 'helm list' --option --long superseded --description 'show superseded releases'
+complete 'helm list' --option --long uninstalling --description 'show uninstalling releases'
+complete 'helm list' --option --long uninstalled --description 'show uninstalled releases'
+
+complete 'helm status' --option --short h --long help --description 'show help'
+complete 'helm status' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'helm status' --option-value --short n --function __rush_complete_helm_namespaces
+complete 'helm status' --option-value --long namespace --function __rush_complete_helm_namespaces
+complete 'helm status' --option --short o --long output --value-name format --description 'output format'
+complete 'helm status' --option-value --short o --function __rush_complete_helm_output_formats
+complete 'helm status' --option-value --long output --function __rush_complete_helm_output_formats
+complete 'helm status' --option --long show-resources --description 'show release resources'
+complete 'helm status' --argument --function __rush_complete_helm_releases
+
+# Repository management.
+complete 'helm repo' --option --short h --long help --description 'show help'
+complete 'helm repo' --subcommand add --description 'add a chart repository'
+complete 'helm repo' --subcommand list --description 'list chart repositories'
+complete 'helm repo' --subcommand remove --description 'remove chart repositories'
+complete 'helm repo' --subcommand update --description 'update repository index files'
+complete 'helm repo' --subcommand index --description 'generate an index file'
+complete 'helm repo add' --option --short h --long help --description 'show help'
+complete 'helm repo add' --option --long username --value-name username --description 'chart repository username'
+complete 'helm repo add' --option --long password --value-name password --description 'chart repository password'
+complete 'helm repo add' --argument --function __rush_complete_helm_repo_add_args
+complete 'helm repo list' --option --short h --long help --description 'show help'
+complete 'helm repo remove' --option --short h --long help --description 'show help'
+complete 'helm repo remove' --argument --function __rush_complete_helm_repos
+complete 'helm repo update' --option --short h --long help --description 'show help'
+complete 'helm repo update' --argument --function __rush_complete_helm_repos
+complete 'helm repo index' --option --short h --long help --description 'show help'
+complete 'helm repo index' --option --long url --value-name url --description 'repository base URL'
+complete 'helm repo index' --argument --function __rush_complete_helm_directories
+
+# Search and chart display.
+complete 'helm search' --option --short h --long help --description 'show help'
+complete 'helm search' --subcommand hub --description 'search Artifact Hub'
+complete 'helm search' --subcommand repo --description 'search repositories'
+complete 'helm search hub' --option --short h --long help --description 'show help'
+complete 'helm search hub' --option --long max-col-width --value-name width --description 'maximum column width'
+complete 'helm search hub' --argument --function __rush_complete_helm_charts
+complete 'helm search repo' --option --short h --long help --description 'show help'
+complete 'helm search repo' --option --long devel --description 'use development versions too'
+complete 'helm search repo' --option --long version --value-name version --description 'chart version constraint'
+complete 'helm search repo' --argument --function __rush_complete_helm_charts
+
+complete 'helm show' --option --short h --long help --description 'show help'
+complete 'helm show' --subcommand all --description 'show all chart information'
+complete 'helm show' --subcommand chart --description 'show the chart definition'
+complete 'helm show' --subcommand crds --description 'show chart CRDs'
+complete 'helm show' --subcommand readme --description 'show chart README'
+complete 'helm show' --subcommand values --description 'show chart values'
+complete 'helm show all' --argument --function __rush_complete_helm_charts_and_paths
+complete 'helm show chart' --argument --function __rush_complete_helm_charts_and_paths
+complete 'helm show crds' --argument --function __rush_complete_helm_charts_and_paths
+complete 'helm show readme' --argument --function __rush_complete_helm_charts_and_paths
+complete 'helm show values' --argument --function __rush_complete_helm_charts_and_paths
+
+# Local chart workflows.
+complete 'helm template' --option --short h --long help --description 'show help'
+complete 'helm template' --option --short n --long namespace --value-name namespace --description 'namespace scope for rendered manifests'
+complete 'helm template' --option-value --short n --function __rush_complete_helm_namespaces
+complete 'helm template' --option-value --long namespace --function __rush_complete_helm_namespaces
+complete 'helm template' --option --long dependency-update --description 'update dependencies before rendering'
+complete 'helm template' --option --long include-crds --description 'include CRDs in output'
+complete 'helm template' --option --long is-upgrade --description 'set release context to upgrade'
+complete 'helm template' --option --long set --value-name key=val --description 'set chart values'
+complete 'helm template' --option-value --long set --function __rush_complete_helm_set_values
+complete 'helm template' --option --short f --long values --value-name file --description 'specify values in a YAML file'
+complete 'helm template' --option-value --short f --function __rush_complete_helm_values_files
+complete 'helm template' --option-value --long values --function __rush_complete_helm_values_files
+complete 'helm template' --argument --function __rush_complete_helm_template_args
+
+complete 'helm lint' --option --short h --long help --description 'show help'
+complete 'helm lint' --option --long strict --description 'fail on lint warnings'
+complete 'helm lint' --option --long with-subcharts --description 'lint dependent charts'
+complete 'helm lint' --option --short f --long values --value-name file --description 'specify values in a YAML file'
+complete 'helm lint' --option-value --short f --function __rush_complete_helm_values_files
+complete 'helm lint' --option-value --long values --function __rush_complete_helm_values_files
+complete 'helm lint' --argument --function __rush_complete_helm_charts_and_paths
+
+complete 'helm package' --option --short h --long help --description 'show help'
+complete 'helm package' --option --long app-version --value-name version --description 'set appVersion on the chart'
+complete 'helm package' --option --short d --long destination --value-name dir --description 'location to write the chart archive'
+complete 'helm package' --option-value --short d --function __rush_complete_helm_directories
+complete 'helm package' --option-value --long destination --function __rush_complete_helm_directories
+complete 'helm package' --option --long dependency-update --description 'update dependencies before packaging'
+complete 'helm package' --option --long version --value-name version --description 'set chart version'
+complete 'helm package' --argument --function __rush_complete_helm_directories
+
+__rush_complete_helm_install_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_helm_release_names
+  else
+    __rush_complete_helm_charts_and_paths
+  fi
+}
+
+__rush_complete_helm_upgrade_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_helm_releases
+  else
+    __rush_complete_helm_charts_and_paths
+  fi
+}
+
+__rush_complete_helm_template_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_helm_release_names
+  else
+    __rush_complete_helm_charts_and_paths
+  fi
+}
+
+__rush_complete_helm_repo_add_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_helm_repos
+  else
+    __rush_complete_helm_repo_urls
+  fi
+}
+
+__rush_complete_helm_files() {
+  completion files
+}
+
+__rush_complete_helm_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_helm_values_files() {
+  completion candidate values.yaml --kind file
+  completion candidate values.yml --kind file
+  completion candidate values-production.yaml --kind file
+  completion candidate values-staging.yaml --kind file
+  completion files
+}
+
+__rush_complete_helm_charts_and_paths() {
+  __rush_complete_helm_charts
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_helm_charts() {
+  completion candidate bitnami/nginx --kind plain
+  completion candidate bitnami/postgresql --kind plain
+  completion candidate bitnami/redis --kind plain
+  completion candidate ingress-nginx/ingress-nginx --kind plain
+  completion candidate jetstack/cert-manager --kind plain
+  completion candidate prometheus-community/kube-prometheus-stack --kind plain
+  completion candidate ./chart --kind directory
+  completion candidate ./charts/ --kind directory
+}
+
+__rush_complete_helm_repos() {
+  completion candidate bitnami --kind plain
+  completion candidate ingress-nginx --kind plain
+  completion candidate jetstack --kind plain
+  completion candidate prometheus-community --kind plain
+  completion candidate stable --kind plain
+}
+
+__rush_complete_helm_repo_urls() {
+  completion candidate https://charts.bitnami.com/bitnami --kind plain
+  completion candidate https://kubernetes.github.io/ingress-nginx --kind plain
+  completion candidate https://charts.jetstack.io --kind plain
+  completion candidate https://prometheus-community.github.io/helm-charts --kind plain
+}
+
+__rush_complete_helm_release_names() {
+  completion candidate app --kind plain
+  completion candidate api --kind plain
+  completion candidate web --kind plain
+  completion candidate nginx --kind plain
+  completion candidate redis --kind plain
+  completion candidate postgres --kind plain
+}
+
+__rush_complete_helm_releases() {
+  __rush_complete_helm_release_names
+}
+
+__rush_complete_helm_namespaces() {
+  completion candidate default --kind plain
+  completion candidate kube-system --kind plain
+  completion candidate kube-public --kind plain
+  completion candidate kube-node-lease --kind plain
+  completion candidate cert-manager --kind plain
+  completion candidate ingress-nginx --kind plain
+  completion candidate monitoring --kind plain
+  completion candidate production --kind plain
+  completion candidate staging --kind plain
+  completion candidate dev --kind plain
+}
+
+__rush_complete_helm_output_formats() {
+  completion candidate table --kind plain
+  completion candidate json --kind plain
+  completion candidate yaml --kind plain
+}
+
+__rush_complete_helm_set_values() {
+  completion candidate image.tag= --kind variable
+  completion candidate image.repository= --kind variable
+  completion candidate replicaCount= --kind variable
+  completion candidate service.type= --kind variable
+  completion candidate ingress.enabled= --kind variable
+  completion candidate resources.requests.cpu= --kind variable
+  completion candidate resources.requests.memory= --kind variable
+}
