@@ -2761,12 +2761,16 @@ pub const Executor = struct {
                 return errorResult(self.allocator, 1, "parameter", "unset parameter");
             },
             error.ParameterExpansionFailed => return self.parameterExpansionErrorResult(),
+            error.ReadonlyVariable => return self.assignmentErrorResult(),
             else => return err,
         };
         defer self.freeExpandedCommand(expanded);
 
         if (isRedirectionOnlyExec(expanded)) {
-            try self.applyAssignments(expanded.assignments);
+            self.applyAssignments(expanded.assignments) catch |err| switch (err) {
+                error.ReadonlyVariable => return self.assignmentErrorResult(),
+                else => return err,
+            };
             if (self.applyPermanentRealFdRedirections(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, true)) {
                 return emptyResult(self.allocator, 0);
             }
@@ -2778,7 +2782,10 @@ pub const Executor = struct {
         const effective_stdin = self.applyInputRedirections(expanded, stdin, options, &owned_stdin) catch |err| return self.redirectionErrorResult(expanded, err, input_special_builtin);
 
         if (expanded.argv.len == 0) {
-            try self.applyAssignments(expanded.assignments);
+            self.applyAssignments(expanded.assignments) catch |err| switch (err) {
+                error.ReadonlyVariable => return self.assignmentErrorResult(),
+                else => return err,
+            };
             const assignment_status = self.command_substitution_status orelse 0;
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, false)) |guard_value| {
                 var guard = guard_value;
@@ -2842,6 +2849,11 @@ pub const Executor = struct {
         return result;
     }
 
+    fn assignmentErrorResult(self: *Executor) !CommandResult {
+        self.pending_exit = 2;
+        return errorResult(self.allocator, 2, "assignment", "readonly variable");
+    }
+
     fn parameterExpansionErrorResult(self: *Executor) !CommandResult {
         if (self.parameter_error.name.len == 0) return errorResult(self.allocator, 1, "parameter", "expansion failed");
         const name = self.parameter_error.name;
@@ -2855,16 +2867,25 @@ pub const Executor = struct {
 
     fn executeBuiltinWithAssignments(self: *Executor, builtin: BuiltinFn, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
         if (isSpecialBuiltin(command.argv[0].text)) {
-            try self.applyAssignments(command.assignments);
+            self.applyAssignments(command.assignments) catch |err| switch (err) {
+                error.ReadonlyVariable => return self.assignmentErrorResult(),
+                else => return err,
+            };
             return builtin(self, command, stdin, options);
         }
-        var assignment_scope = try self.pushTemporaryAssignments(command.assignments);
+        var assignment_scope = self.pushTemporaryAssignments(command.assignments) catch |err| switch (err) {
+            error.ReadonlyVariable => return self.assignmentErrorResult(),
+            else => return err,
+        };
         defer assignment_scope.restore();
         return builtin(self, command, stdin, options);
     }
 
     fn executeFunctionBody(self: *Executor, command: ir.SimpleCommand, function_value: *const FunctionValue, options: ExecuteOptions) anyerror!CommandResult {
-        var assignment_scope = try self.pushTemporaryAssignments(command.assignments);
+        var assignment_scope = self.pushTemporaryAssignments(command.assignments) catch |err| switch (err) {
+            error.ReadonlyVariable => return self.assignmentErrorResult(),
+            else => return err,
+        };
         defer assignment_scope.restore();
         try self.pushCallFrame(command.argv[1..]);
         defer self.popCallFrame();

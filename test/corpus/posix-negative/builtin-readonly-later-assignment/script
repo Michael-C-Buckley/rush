@@ -1,0 +1,3 @@
+readonly LATER
+LATER=ok
+echo after
