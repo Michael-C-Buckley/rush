@@ -390,12 +390,12 @@ pub const TerminalSession = struct {
                         if (isCompletionTab(key) and session.hasCompletionMenu()) {
                             try session.handleKey(.{ .key = .tab, .modifiers = key.modifiers });
                         } else if (isCompletionTab(key) and options.complete != null and options.completion_context != null) {
-                            try expandAbbreviationBeforeAccept(&session, options, false);
+                            _ = try expandAbbreviationBeforeAccept(&session, options, false);
                             const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                             defer application.deinit(self.allocator);
                             try session.applyCompletion(application);
                         } else if (key.key == .enter and !session.hasCompletionMenu()) {
-                            try expandAbbreviationBeforeAccept(&session, options, false);
+                            _ = try expandAbbreviationBeforeAccept(&session, options, false);
                             try session.handleKey(key);
                         } else if (isSpaceAccept(key) and try expandAbbreviationBeforeAccept(&session, options, true)) {} else if (session.hasCompletionMenu() and shouldRefreshCompletionMenu(key) and options.complete != null and options.completion_context != null) {
                             try session.handleKey(key);
