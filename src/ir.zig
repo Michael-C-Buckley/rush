@@ -64,6 +64,7 @@ pub const ForCommand = struct {
     span: parser.Span,
     name: []const u8,
     words: []WordRef,
+    use_positionals: bool = false,
     body: []const u8,
 };
 
@@ -661,6 +662,7 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
         .span = node.span,
         .name = name,
         .words = try words.toOwnedSlice(allocator),
+        .use_positionals = in_token == null,
         .body = spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
     };
 }

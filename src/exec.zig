@@ -2016,8 +2016,8 @@ pub const Executor = struct {
     fn executeForCommand(self: *Executor, command: ir.ForCommand, options: ExecuteOptions) !CommandResult {
         self.loop_depth += 1;
         defer self.loop_depth -= 1;
-        const expanded_words = try self.expandArgv(command.words, options);
-        defer self.freeWords(expanded_words);
+        const expanded_words = if (command.use_positionals) &[_]ir.WordRef{} else try self.expandArgv(command.words, options);
+        defer if (!command.use_positionals) self.freeWords(expanded_words);
 
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
@@ -2025,19 +2025,36 @@ pub const Executor = struct {
         errdefer stderr.deinit(self.allocator);
         var status: ExitStatus = 0;
 
-        for (expanded_words) |word| {
-            try self.setEnv(command.name, word.text);
-            var body = try self.executeScriptSlice(command.body, options);
-            defer body.deinit();
-            try stdout.appendSlice(self.allocator, body.stdout);
-            try stderr.appendSlice(self.allocator, body.stderr);
-            status = body.status;
-            if (self.pending_exit != null) break;
-            if (self.pending_return != null) break;
-            if (self.consumeLoopControl()) |control| switch (control) {
-                .break_loop => break,
-                .continue_loop => continue,
-            };
+        if (command.use_positionals) {
+            for (self.currentPositionals().params) |param| {
+                try self.setEnv(command.name, param);
+                var body = try self.executeScriptSlice(command.body, options);
+                defer body.deinit();
+                try stdout.appendSlice(self.allocator, body.stdout);
+                try stderr.appendSlice(self.allocator, body.stderr);
+                status = body.status;
+                if (self.pending_exit != null) break;
+                if (self.pending_return != null) break;
+                if (self.consumeLoopControl()) |control| switch (control) {
+                    .break_loop => break,
+                    .continue_loop => continue,
+                };
+            }
+        } else {
+            for (expanded_words) |word| {
+                try self.setEnv(command.name, word.text);
+                var body = try self.executeScriptSlice(command.body, options);
+                defer body.deinit();
+                try stdout.appendSlice(self.allocator, body.stdout);
+                try stderr.appendSlice(self.allocator, body.stderr);
+                status = body.status;
+                if (self.pending_exit != null) break;
+                if (self.pending_return != null) break;
+                if (self.consumeLoopControl()) |control| switch (control) {
+                    .break_loop => break,
+                    .continue_loop => continue,
+                };
+            }
         }
 
         return .{
