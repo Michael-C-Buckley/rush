@@ -1327,6 +1327,8 @@ const SyntaxParser = struct {
             });
         }
 
+        try self.parseTrailingRedirections(&case_children);
+
         const token_end = self.index;
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, case_children.items);

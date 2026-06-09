@@ -79,6 +79,7 @@ pub const CaseCommand = struct {
     span: parser.Span,
     word: WordRef,
     arms: []CaseArm,
+    redirections: []Redirection,
 };
 
 pub const FunctionDefinition = struct {
@@ -596,10 +597,17 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         });
     }
 
+    var redirections = try lowerCompoundRedirections(allocator, parsed, node);
+    errdefer {
+        for (redirections.items) |redirection| freeRedirection(allocator, redirection);
+        redirections.deinit(allocator);
+    }
+
     return .{
         .span = node.span,
         .word = subject,
         .arms = try arms.toOwnedSlice(allocator),
+        .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
 
@@ -1109,6 +1117,8 @@ fn freeCaseCommand(allocator: std.mem.Allocator, command: CaseCommand) void {
     freeWord(allocator, command.word);
     for (command.arms) |arm| freeCaseArm(allocator, arm);
     allocator.free(command.arms);
+    for (command.redirections) |redirection| freeRedirection(allocator, redirection);
+    allocator.free(command.redirections);
 }
 
 fn freeIfCommand(allocator: std.mem.Allocator, command: IfCommand) void {

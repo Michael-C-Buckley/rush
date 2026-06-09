@@ -1997,21 +1997,39 @@ pub const Executor = struct {
     }
 
     fn executeCaseCommand(self: *Executor, command: ir.CaseCommand, options: ExecuteOptions) !CommandResult {
-        const subject_words = try self.expandWords(&.{command.word}, options);
+        var owned_stdin: ?[]u8 = null;
+        defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        const prior_stdin = self.script_stdin;
+        const prior_stdin_offset = self.script_stdin_offset;
+        defer {
+            self.script_stdin = prior_stdin;
+            self.script_stdin_offset = prior_stdin_offset;
+        }
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin);
+        if (redirected_stdin) |stdin| {
+            self.script_stdin = stdin;
+            self.script_stdin_offset = 0;
+        }
+        var execution_options = options;
+        if (command.redirections.len != 0) execution_options.external_stdio = .capture;
+
+        const subject_words = try self.expandWords(&.{command.word}, execution_options);
         defer self.freeWords(subject_words);
         const subject = if (subject_words.len == 0) "" else subject_words[0].text;
 
         for (command.arms) |arm| {
             for (arm.patterns) |word| {
-                var pattern = try self.expandCasePattern(word, options);
+                var pattern = try self.expandCasePattern(word, execution_options);
                 defer pattern.deinit(self.allocator);
                 if (shellCasePatternMatches(pattern, subject)) {
-                    return self.executeScriptSlice(arm.body, options);
+                    const result = try self.executeScriptSlice(arm.body, execution_options);
+                    return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
                 }
             }
         }
 
-        return emptyResult(self.allocator, 0);
+        const result = try emptyResult(self.allocator, 0);
+        return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
     fn executeForCommand(self: *Executor, command: ir.ForCommand, options: ExecuteOptions) !CommandResult {

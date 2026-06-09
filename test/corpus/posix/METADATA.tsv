@@ -294,3 +294,4 @@ grammar-case-bracket-patterns	grammar	behavior	case bracket pattern expressions
 expansion-parameter-pattern-quoted-metacharacters	expansion	behavior	parameter pattern removal quote and bracket handling
 expansion-parameter-pattern-large-quoted-metacharacters	expansion	behavior	large parameter pattern removal quoted metacharacters
 redirection-compound-if-for-loop	redirection	behavior	if for while until compound command redirections
+redirection-compound-case-output	redirection	behavior	case compound command output redirection
