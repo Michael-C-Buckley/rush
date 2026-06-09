@@ -12477,6 +12477,52 @@ test "first-party tar completion script loads options archives and paths" {
     try expectCandidate(operands, "rush-tar-completion-dir/", .directory);
 }
 
+test "first-party rsync completion script loads options filters and paths" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/rsync.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const file_path = "rush-rsync-completion.txt";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+    const dir_path = "rush-rsync-completion-dir";
+    std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("rsync --del", "rsync --del".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--delete", .option);
+    try expectCandidate(options, "--delete-excluded", .option);
+
+    const filters = try executor.collectCompletionsForInput("rsync --filter mer", "rsync --filter mer".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(filters);
+    try expectCandidate(filters, "merge .rsync-filter", .plain);
+
+    const exclude_files = try executor.collectCompletionsForInput("rsync --exclude-from rush-rsync", "rsync --exclude-from rush-rsync".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(exclude_files);
+    try expectCandidate(exclude_files, file_path, .file);
+
+    const paths = try executor.collectCompletionsForInput("rsync rush-rsync", "rsync rush-rsync".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(paths);
+    try expectCandidate(paths, "rush-rsync-completion-dir/", .directory);
+
+    const remotes = try executor.collectCompletionsForInput("rsync user", "rsync user".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(remotes);
+    try expectCandidate(remotes, "user@host:", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
