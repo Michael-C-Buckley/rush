@@ -22,6 +22,7 @@ pub const ExitStatus = u8;
 
 pub const ExternalStdio = enum {
     capture,
+    capture_stdout,
     inherit,
 };
 
@@ -1711,7 +1712,9 @@ pub const Executor = struct {
             };
             return emptyResult(self.allocator, result.status);
         }
-        var result = try self.executeScriptSlice(group.body, options);
+        var execution_options = options;
+        if (options.external_stdio == .capture_stdout and commandDuplicatesStderrToStdout(redirections)) execution_options.external_stdio = .capture;
+        var result = try self.executeScriptSlice(group.body, execution_options);
         errdefer result.deinit();
         return self.applyOutputRedirections(wrapper, result, options, false);
     }
@@ -3314,7 +3317,7 @@ pub const Executor = struct {
         var program = try ir.lowerSimpleCommands(substitution_context.executor.allocator, parsed);
         defer program.deinit();
         var sub_options = substitution_context.options;
-        sub_options.external_stdio = .capture;
+        sub_options.external_stdio = .capture_stdout;
         var child = Executor.init(substitution_context.executor.allocator);
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
@@ -3799,6 +3802,31 @@ pub const Executor = struct {
                     },
                     else => file.close(io),
                 }
+                continue;
+            }
+            if (redirection.operator == .greater_and) {
+                const from_fd = redirectionFd(redirection) orelse 1;
+                const target = redirection.target orelse continue;
+                if (std.mem.eql(u8, target.text, "-")) {
+                    if (from_fd == 1) {
+                        if (stdout_file) |old| old.close(io);
+                        stdout_file = null;
+                    } else if (from_fd == 2) {
+                        if (stderr_file) |old| old.close(io);
+                        stderr_file = null;
+                    }
+                    continue;
+                }
+                const to_fd = parseFd(target.text) orelse continue;
+                if (from_fd == 2 and to_fd == 1 and stdout_file != null) {
+                    if (stderr_file) |old| old.close(io);
+                    const duped = try rawDup(stdout_file.?.handle);
+                    stderr_file = .{ .handle = duped, .flags = stdout_file.?.flags };
+                } else if (from_fd == 1 and to_fd == 2 and stderr_file != null) {
+                    if (stdout_file) |old| old.close(io);
+                    const duped = try rawDup(stderr_file.?.handle);
+                    stdout_file = .{ .handle = duped, .flags = stderr_file.?.flags };
+                }
             }
         }
 
@@ -3879,10 +3907,35 @@ pub const Executor = struct {
                     },
                     else => file.close(io),
                 }
+                continue;
+            }
+            if (redirection.operator == .greater_and) {
+                const from_fd = redirectionFd(redirection) orelse 1;
+                const target = redirection.target orelse continue;
+                if (std.mem.eql(u8, target.text, "-")) {
+                    if (from_fd == 1) {
+                        if (stdout_file) |old| old.close(io);
+                        stdout_file = null;
+                    } else if (from_fd == 2) {
+                        if (stderr_file) |old| old.close(io);
+                        stderr_file = null;
+                    }
+                    continue;
+                }
+                const to_fd = parseFd(target.text) orelse continue;
+                if (from_fd == 2 and to_fd == 1 and stdout_file != null) {
+                    if (stderr_file) |old| old.close(io);
+                    const duped = try rawDup(stdout_file.?.handle);
+                    stderr_file = .{ .handle = duped, .flags = stdout_file.?.flags };
+                } else if (from_fd == 1 and to_fd == 2 and stderr_file != null) {
+                    if (stdout_file) |old| old.close(io);
+                    const duped = try rawDup(stderr_file.?.handle);
+                    stdout_file = .{ .handle = duped, .flags = stderr_file.?.flags };
+                }
             }
         }
 
-        if (stdin_file == null and options.external_stdio == .capture) {
+        if (stdin_file == null and externalStdinUsesScriptInput(options.external_stdio)) {
             if (self.remainingScriptStdin()) |stdin| {
                 stdin_file = try fileFromBytes(io, stdin);
                 self.script_stdin_offset = (self.script_stdin orelse unreachable).len;
@@ -3891,21 +3944,30 @@ pub const Executor = struct {
 
         var child_env = try self.buildProcessEnv(command.assignments);
         defer child_env.deinit();
-        const capture_stdout = options.external_stdio == .capture and stdout_file == null;
-        const capture_stderr = options.external_stdio == .capture and stderr_file == null;
+        const duplicate_stderr_to_stdout = externalStdioCapturesStdout(options.external_stdio) and stderr_file == null and commandDuplicatesStderrToStdout(command.redirections);
+        const capture_stdout = externalStdioCapturesStdout(options.external_stdio) and stdout_file == null and !duplicate_stderr_to_stdout;
+        const capture_stderr = stderr_file == null and externalStdioCapturesStderr(options.external_stdio);
+        var merged_capture: ?PipelinePipe = if (duplicate_stderr_to_stdout) try makePipelinePipe(io) else null;
+        defer if (merged_capture) |*pipe| pipe.close(io);
+        const merged_stderr_write: ?std.Io.File = if (merged_capture) |pipe| .{ .handle = try rawDup(pipe.write.?.handle), .flags = pipe.write.?.flags } else null;
         const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit and stdin_file == null);
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
-            .stdout = if (stdout_file) |file| .{ .file = file } else if (capture_stdout) .pipe else .inherit,
-            .stderr = if (stderr_file) |file| .{ .file = file } else if (capture_stderr) .pipe else .inherit,
+            .stdin = if (stdin_file) |file| .{ .file = file } else if (externalStdioInheritsStdin(options.external_stdio)) .inherit else .close,
+            .stdout = if (stdout_file) |file| .{ .file = file } else if (merged_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stdout) .pipe else .inherit,
+            .stderr = if (stderr_file) |file| .{ .file = file } else if (merged_stderr_write) |file| .{ .file = file } else if (capture_stderr) .pipe else .inherit,
             .pgid = if (foreground_terminal != null) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return error.CommandNotFound,
             else => return err,
         };
         defer child.kill(io);
+        if (merged_capture) |*pipe| {
+            pipe.write.?.close(io);
+            pipe.write = null;
+        }
+        if (merged_stderr_write) |file| file.close(io);
         defer if (capture_stdout) if (child.stdout) |file| file.close(io);
         defer if (capture_stderr) if (child.stderr) |file| file.close(io);
         try giveTerminalToForegroundChild(&child, foreground_terminal);
@@ -3948,6 +4010,14 @@ pub const Executor = struct {
             stderr = try reader.interface.allocRemaining(self.allocator, .limited(1024 * 1024));
             child.stderr.?.close(io);
             child.stderr = null;
+        } else if (merged_capture) |pipe| {
+            var reader_buffer: [4096]u8 = undefined;
+            var reader = pipe.read.?.reader(io, &reader_buffer);
+            const combined = try reader.interface.allocRemaining(self.allocator, .limited(1024 * 1024));
+            self.allocator.free(stdout);
+            self.allocator.free(stderr);
+            stdout = combined;
+            stderr = try self.allocator.alloc(u8, 0);
         }
 
         const term = try child.wait(io);
@@ -7371,6 +7441,39 @@ fn isHereDocRedirection(redirection: ir.Redirection) bool {
     return fd == 0 and (redirection.operator == .dless or redirection.operator == .dless_dash);
 }
 
+fn externalStdioCapturesStdout(stdio: ExternalStdio) bool {
+    return stdio == .capture or stdio == .capture_stdout;
+}
+
+fn externalStdioCapturesStderr(stdio: ExternalStdio) bool {
+    return stdio == .capture;
+}
+
+fn externalStdinUsesScriptInput(stdio: ExternalStdio) bool {
+    return stdio == .capture or stdio == .capture_stdout;
+}
+
+fn externalStdioInheritsStdin(stdio: ExternalStdio) bool {
+    return stdio == .inherit;
+}
+
+fn commandDuplicatesStderrToStdout(redirections: []const ir.Redirection) bool {
+    var stderr_to_stdout = false;
+    for (redirections) |redirection| {
+        if (isFileOutputRedirection(redirection)) {
+            const fd = redirectionFd(redirection) orelse 1;
+            if (fd == 2) stderr_to_stdout = false;
+            continue;
+        }
+        if (redirection.operator != .greater_and) continue;
+        const from_fd = redirectionFd(redirection) orelse 1;
+        if (from_fd != 2) continue;
+        const target = redirection.target orelse continue;
+        stderr_to_stdout = std.mem.eql(u8, target.text, "1");
+    }
+    return stderr_to_stdout;
+}
+
 fn isStdinFileRedirection(redirection: ir.Redirection) bool {
     const fd = redirectionFd(redirection) orelse 0;
     return fd == 0 and (redirection.operator == .less or redirection.operator == .less_great);
@@ -9605,6 +9708,43 @@ test "executor captures stderr and status from spawned external commands" {
     try std.testing.expectEqual(@as(ExitStatus, 7), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("err\n", result.stderr);
+}
+
+test "command substitution captures external stdout while stderr remains pty" {
+    var master: c_int = -1;
+    var slave: c_int = -1;
+    if (openpty(&master, &slave, null, null, null) != 0) return error.SkipZigTest;
+    defer _ = close(master);
+    defer _ = close(slave);
+
+    const original_stderr = dup(std.Io.File.stderr().handle);
+    if (original_stderr < 0) return error.SkipZigTest;
+    defer _ = close(original_stderr);
+    if (dup2(slave, std.Io.File.stderr().handle) < 0) return error.SkipZigTest;
+    defer _ = dup2(original_stderr, std.Io.File.stderr().handle);
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\value=$(/bin/sh -c 'if test -t 2; then printf tty; else printf notty; fi')
+        \\echo stderr:$value
+        \\value=$(/bin/sh -c 'if test -t 2; then printf tty; else printf notty; fi; printf err-simple >&2' 2>&1)
+        \\echo dup:$value
+        \\value=$(/bin/sh -c 'printf err >&2; printf out' 2>&1)
+        \\echo order:$value
+        \\value=$({ /bin/sh -c 'if test -t 2; then printf tty; else printf notty; fi; printf err-group >&2'; } 2>&1)
+        \\echo group:$value
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("stderr:tty\ndup:nottyerr-simple\norder:errout\ngroup:nottyerr-group\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor can run an external command when allowed" {
