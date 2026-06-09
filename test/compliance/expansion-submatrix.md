@@ -13,7 +13,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
 | Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | baseline | nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
-| Field splitting | `expansion-field-splitting-*` | baseline | empty-field edge cases, generated-empty fields, interactions with special parameters |
+| Field splitting | `expansion-field-splitting-*` | supported/baseline | broad interactions with special parameters |
 | Pathname expansion | `expansion-pathname-*` | supported | bytewise matching model; locale-specific collation is intentionally out of scope for current evidence |
 | Quote removal | `expansion-quote-removal`, `lex-quotes` | baseline | recursive contexts, escaped newline interactions, here-doc delimiter contexts |
 
