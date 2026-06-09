@@ -269,3 +269,4 @@ builtin-option-terminators	builtin	behavior	common builtins accept option termin
 builtin-command-V-builtin	builtin	behavior	command -V describes shell builtins
 builtin-printf-option-terminator	builtin	behavior	printf accepts option terminator before format operand
 builtin-unalias-option-terminator	builtin	behavior	unalias accepts option terminator before alias operands
+builtin-test-single-argument-string	builtin	behavior	test single argument string truthiness
