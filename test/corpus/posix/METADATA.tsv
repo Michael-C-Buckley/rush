@@ -277,3 +277,4 @@ expansion-command-substitution-field-count	expansion	behavior	unquoted command s
 expansion-command-substitution-empty-fields	expansion	behavior	empty command substitution field behavior
 grammar-for-implicit-positionals	grammar	behavior	for without in iterates positional parameters
 grammar-for-explicit-empty-in	grammar	behavior	for with explicit empty in list iterates zero words
+grammar-for-quoted-at-words	grammar	behavior	for word lists preserve quoted at positional fields

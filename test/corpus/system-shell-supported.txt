@@ -209,3 +209,4 @@ set -- $(printf 'a b'); echo unquoted:$#:$1:$2; set -- "$(printf 'a b')"; echo q
 set -- $(printf ''); echo bare:$#; set -- x$(printf '')y; echo embedded:$#:$1; set -- "$(printf '')"; echo quoted:$#:${1-unset}
 set -- a b; for x; do echo $x; done; set --; for x; do echo unexpected:$x; done; echo done
 set -- a b; for x in; do echo unexpected:$x; done; echo done:$#
+set -- "a b" c; for x in "$@"; do printf "<%s>\n" "$x"; done
