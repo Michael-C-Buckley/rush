@@ -1,0 +1,175 @@
+# First-party bat completion slice.
+
+# Core display and metadata options.
+complete bat --option --short h --long help --description 'show help'
+complete bat --option --short V --long version --description 'show version'
+complete bat --option --short A --long show-all --description 'show non-printable characters'
+complete bat --option --short p --long plain --description 'only show plain file contents'
+complete bat --option --short n --long number --description 'show line numbers'
+complete bat --option --long no-config --description 'do not load bat configuration files'
+complete bat --option --long diagnostic-width --value-name columns --description 'set diagnostic message width'
+
+# Syntax, themes, styles, and decorations.
+complete bat --option --short l --long language --value-name language --description 'set syntax highlighting language'
+complete bat --option-value --short l --function __rush_complete_bat_languages
+complete bat --option-value --long language --function __rush_complete_bat_languages
+complete bat --option --long list-languages --description 'list supported languages'
+complete bat --option --long map-syntax --value-name glob:language --description 'map file globs to syntax names'
+complete bat --option-value --long map-syntax --function __rush_complete_bat_map_syntax
+complete bat --option --short H --long highlight-line --value-name ranges --description 'highlight line ranges'
+complete bat --option --long theme --value-name theme --description 'set syntax highlighting theme'
+complete bat --option-value --long theme --function __rush_complete_bat_themes
+complete bat --option --long list-themes --description 'list available themes'
+complete bat --option --long style --value-name components --description 'set output style components'
+complete bat --option-value --long style --function __rush_complete_bat_styles
+complete bat --option --long color --value-name when --description 'when to use ANSI colors'
+complete bat --option-value --long color --function __rush_complete_bat_when_modes
+complete bat --option --long decorations --value-name when --description 'when to show decorations'
+complete bat --option-value --long decorations --function __rush_complete_bat_when_modes
+complete bat --option --long italic-text --value-name when --description 'when to use italic text'
+complete bat --option-value --long italic-text --function __rush_complete_bat_when_modes
+
+# Paging, wrapping, tabs, and terminal sizing.
+complete bat --option --long paging --value-name when --description 'when to use a pager'
+complete bat --option-value --long paging --function __rush_complete_bat_paging_modes
+complete bat --option --long pager --value-name command --description 'pager command'
+complete bat --option --long wrap --value-name mode --description 'line wrapping mode'
+complete bat --option-value --long wrap --function __rush_complete_bat_wrap_modes
+complete bat --option --long terminal-width --value-name columns --description 'terminal width for wrapping'
+complete bat --option --long tabs --value-name width --description 'tab width'
+complete bat --option --long squeeze-blank --description 'squeeze repeated blank lines'
+complete bat --option --long nonprintable-notation --value-name notation --description 'notation for non-printable characters'
+complete bat --option-value --long nonprintable-notation --function __rush_complete_bat_nonprintable_notations
+
+# Line ranges, diffs, and file selection.
+complete bat --option --short r --long line-range --value-name range --description 'only print the specified line range'
+complete bat --option --long diff --description 'only show lines changed according to git'
+complete bat --option --long diff-context --value-name lines --description 'include context around diff lines'
+complete bat --option-value --long diff-context --function __rush_complete_bat_diff_contexts
+complete bat --option --long ignored --description 'show ignored files'
+complete bat --option --long hidden --description 'show hidden files'
+complete bat --option --long no-ignore --description 'do not respect ignore files'
+complete bat --option --long no-ignore-vcs --description 'do not respect VCS ignore files'
+complete bat --option --long no-ignore-global --description 'do not respect global ignore files'
+complete bat --option --long no-ignore-parent --description 'do not respect parent ignore files'
+
+# Config and cache helpers.
+complete bat --option --long config-file --value-name file --description 'use a specific configuration file'
+complete bat --option-value --long config-file --function __rush_complete_bat_files
+complete bat --option --long cache-dir --description 'show cache directory'
+complete bat --option --long config-dir --description 'show configuration directory'
+complete bat --option --long build-cache --description 'build bat cache'
+complete bat --option --long clear-cache --description 'clear bat cache'
+
+# File operands.
+complete bat --argument --function __rush_complete_bat_files
+
+__rush_complete_bat_files() {
+  completion files
+}
+
+__rush_complete_bat_languages() {
+  completion candidate Bash --kind plain
+  completion candidate C --kind plain
+  completion candidate C++ --kind plain
+  completion candidate CSS --kind plain
+  completion candidate Diff --kind plain
+  completion candidate Dockerfile --kind plain
+  completion candidate Git --kind plain
+  completion candidate Go --kind plain
+  completion candidate HTML --kind plain
+  completion candidate INI --kind plain
+  completion candidate Java --kind plain
+  completion candidate JavaScript --kind plain
+  completion candidate JSON --kind plain
+  completion candidate Julia --kind plain
+  completion candidate Lua --kind plain
+  completion candidate Makefile --kind plain
+  completion candidate Markdown --kind plain
+  completion candidate Nix --kind plain
+  completion candidate Python --kind plain
+  completion candidate Ruby --kind plain
+  completion candidate Rust --kind plain
+  completion candidate Shell --kind plain
+  completion candidate SQL --kind plain
+  completion candidate Swift --kind plain
+  completion candidate TOML --kind plain
+  completion candidate TypeScript --kind plain
+  completion candidate XML --kind plain
+  completion candidate YAML --kind plain
+  completion candidate Zig --kind plain
+}
+
+__rush_complete_bat_themes() {
+  completion candidate ansi --kind plain
+  completion candidate base16 --kind plain
+  completion candidate Coldark-Cold --kind plain
+  completion candidate Coldark-Dark --kind plain
+  completion candidate Dracula --kind plain
+  completion candidate GitHub --kind plain
+  completion candidate Monokai --kind plain
+  completion candidate 'Monokai Extended' --kind plain
+  completion candidate 'OneHalfDark' --kind plain
+  completion candidate 'OneHalfLight' --kind plain
+  completion candidate 'Solarized (dark)' --kind plain
+  completion candidate 'Solarized (light)' --kind plain
+  completion candidate 'TwoDark' --kind plain
+  completion candidate 'Visual Studio Dark+' --kind plain
+  completion candidate 'zenburn' --kind plain
+}
+
+__rush_complete_bat_styles() {
+  completion candidate auto --kind plain
+  completion candidate full --kind plain
+  completion candidate plain --kind plain
+  completion candidate changes --kind plain
+  completion candidate grid --kind plain
+  completion candidate header --kind plain
+  completion candidate header-filename --kind plain
+  completion candidate header-filesize --kind plain
+  completion candidate numbers --kind plain
+  completion candidate rule --kind plain
+  completion candidate snip --kind plain
+}
+
+__rush_complete_bat_when_modes() {
+  completion candidate auto --kind plain
+  completion candidate always --kind plain
+  completion candidate never --kind plain
+}
+
+__rush_complete_bat_paging_modes() {
+  completion candidate auto --kind plain
+  completion candidate always --kind plain
+  completion candidate never --kind plain
+}
+
+__rush_complete_bat_wrap_modes() {
+  completion candidate auto --kind plain
+  completion candidate character --kind plain
+  completion candidate never --kind plain
+}
+
+__rush_complete_bat_nonprintable_notations() {
+  completion candidate caret --kind plain
+  completion candidate unicode --kind plain
+}
+
+__rush_complete_bat_diff_contexts() {
+  completion candidate 0 --kind plain
+  completion candidate 1 --kind plain
+  completion candidate 2 --kind plain
+  completion candidate 3 --kind plain
+  completion candidate 5 --kind plain
+}
+
+__rush_complete_bat_map_syntax() {
+  completion candidate '*.build:Python' --kind plain
+  completion candidate '*.h:C++' --kind plain
+  completion candidate '*.inc:PHP' --kind plain
+  completion candidate '*.ino:C++' --kind plain
+  completion candidate '*.jenkinsfile:Groovy' --kind plain
+  completion candidate '*.lock:JSON' --kind plain
+  completion candidate '*.md:Markdown' --kind plain
+  completion candidate '*.txt:Plain Text' --kind plain
+}

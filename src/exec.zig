@@ -12237,6 +12237,41 @@ test "first-party fzf completion script loads options and static values" {
     try expectCandidate(colors, "dark", .plain);
 }
 
+test "first-party bat completion script loads options values and files" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/bat.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const file_path = "rush-bat-completion.md";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("bat --li", "bat --li".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--list-languages", .option);
+
+    const themes = try executor.collectCompletionsForInput("bat --theme Dr", "bat --theme Dr".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(themes);
+    try expectCandidate(themes, "Dracula", .plain);
+
+    const languages = try executor.collectCompletionsForInput("bat --language Z", "bat --language Z".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(languages);
+    try expectCandidate(languages, "Zig", .plain);
+
+    const files = try executor.collectCompletionsForInput("bat rush-bat", "bat rush-bat".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(files);
+    try expectCandidate(files, file_path, .file);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
