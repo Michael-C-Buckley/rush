@@ -274,3 +274,4 @@ builtin-test-negated-single-argument	builtin	behavior	test negated single argume
 builtin-option-before-terminator	builtin	behavior	common builtins accept options before option terminator
 expansion-field-splitting-literal-ifs	expansion	behavior	literal IFS delimiters adjacent to expansions are not split
 expansion-command-substitution-field-count	expansion	behavior	unquoted command substitution output is field split
+expansion-command-substitution-empty-fields	expansion	behavior	empty command substitution field behavior
