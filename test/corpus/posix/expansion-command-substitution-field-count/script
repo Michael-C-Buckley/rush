@@ -1,0 +1,4 @@
+set -- $(printf 'a b')
+echo unquoted:$#:$1:$2
+set -- "$(printf 'a b')"
+echo quoted:$#:$1
