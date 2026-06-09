@@ -12272,6 +12272,44 @@ test "first-party bat completion script loads options values and files" {
     try expectCandidate(files, file_path, .file);
 }
 
+test "first-party fd completion script loads options values and paths" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/fd.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const dir_path = "rush-fd-completion-dir";
+    std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("fd --no-ig", "fd --no-ig".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--no-ignore", .option);
+    try expectCandidate(options, "--no-ignore-vcs", .option);
+
+    const types = try executor.collectCompletionsForInput("fd --type d", "fd --type d".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(types);
+    try expectCandidate(types, "directory", .plain);
+
+    const extensions = try executor.collectCompletionsForInput("fd --extension z", "fd --extension z".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(extensions);
+    try expectCandidate(extensions, "zig", .plain);
+
+    const directories = try executor.collectCompletionsForInput("fd --search-path rush-fd", "fd --search-path rush-fd".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(directories);
+    try expectCandidate(directories, "rush-fd-completion-dir/", .directory);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();

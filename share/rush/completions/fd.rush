@@ -1,0 +1,164 @@
+# First-party fd completion slice.
+
+# Core options and matching behavior.
+complete fd --option --short h --long help --description 'show help'
+complete fd --option --short V --long version --description 'show version'
+complete fd --option --short H --long hidden --description 'search hidden files and directories'
+complete fd --option --long no-hidden --description 'do not search hidden files and directories'
+complete fd --option --short I --long no-ignore --description 'do not respect ignore files'
+complete fd --option --long no-ignore-vcs --description 'do not respect VCS ignore files'
+complete fd --option --long no-ignore-parent --description 'do not respect parent ignore files'
+complete fd --option --short u --long unrestricted --description 'unrestricted search including hidden and ignored files'
+complete fd --option --short L --long follow --description 'follow symbolic links'
+complete fd --option --short a --long absolute-path --description 'show absolute paths'
+complete fd --option --long relative-path --description 'show relative paths'
+complete fd --option --short 0 --long print0 --description 'separate results by NUL'
+
+# Pattern modes and case sensitivity.
+complete fd --option --short g --long glob --description 'treat pattern as a glob'
+complete fd --option --short F --long fixed-strings --description 'treat pattern as a literal string'
+complete fd --option --long regex --description 'treat pattern as a regular expression'
+complete fd --option --short i --long ignore-case --description 'case-insensitive search'
+complete fd --option --short s --long case-sensitive --description 'case-sensitive search'
+complete fd --option --short S --long smart-case --description 'smart case search'
+
+# Path, depth, and filtering options.
+complete fd --option --short d --long max-depth --value-name depth --description 'maximum search depth'
+complete fd --option --long min-depth --value-name depth --description 'minimum search depth'
+complete fd --option --short e --long extension --value-name extension --description 'filter by file extension'
+complete fd --option-value --short e --function __rush_complete_fd_extensions
+complete fd --option-value --long extension --function __rush_complete_fd_extensions
+complete fd --option --short E --long exclude --value-name pattern --description 'exclude path matching glob pattern'
+complete fd --option-value --short E --function __rush_complete_fd_excludes
+complete fd --option-value --long exclude --function __rush_complete_fd_excludes
+complete fd --option --short t --long type --value-name type --description 'filter by file type'
+complete fd --option-value --short t --function __rush_complete_fd_types
+complete fd --option-value --long type --function __rush_complete_fd_types
+complete fd --option --long size --value-name size --description 'filter by file size'
+complete fd --option-value --long size --function __rush_complete_fd_sizes
+complete fd --option --long changed-before --value-name date --description 'filter files changed before date'
+complete fd --option-value --long changed-before --function __rush_complete_fd_times
+complete fd --option --long changed-after --value-name date --description 'filter files changed after date'
+complete fd --option-value --long changed-after --function __rush_complete_fd_times
+complete fd --option --long owner --value-name user:group --description 'filter by file owner or group'
+complete fd --option --long search-path --value-name path --description 'search path'
+complete fd --option-value --long search-path --function __rush_complete_fd_paths
+complete fd --option --long base-directory --value-name dir --description 'change base directory before search'
+complete fd --option-value --long base-directory --function __rush_complete_fd_directories
+complete fd --option --long working-directory --value-name dir --description 'change working directory before search'
+complete fd --option-value --long working-directory --function __rush_complete_fd_directories
+
+# Output, color, and execution options.
+complete fd --option --short c --long color --value-name when --description 'when to use colors'
+complete fd --option-value --short c --function __rush_complete_fd_color_modes
+complete fd --option-value --long color --function __rush_complete_fd_color_modes
+complete fd --option --long strip-cwd-prefix --value-name when --description 'when to strip ./ from paths'
+complete fd --option-value --long strip-cwd-prefix --function __rush_complete_fd_strip_modes
+complete fd --option --long path-separator --value-name separator --description 'path separator for results'
+complete fd --option --short x --long exec --value-name command --description 'execute command for each result'
+complete fd --option-value --short x --function __rush_complete_fd_executables
+complete fd --option-value --long exec --function __rush_complete_fd_executables
+complete fd --option --short X --long exec-batch --value-name command --description 'execute command once with all results'
+complete fd --option-value --short X --function __rush_complete_fd_executables
+complete fd --option-value --long exec-batch --function __rush_complete_fd_executables
+complete fd --option --long list-details --description 'show detailed results with ls-like output'
+complete fd --option --long one-file-system --description 'do not traverse into other file systems'
+complete fd --option --long prune --description 'do not traverse into matching directories'
+complete fd --option --long show-errors --description 'show filesystem errors'
+
+# Pattern/search-path operands. `fd` searches the filesystem, so completion never
+# invokes fd itself; use normal path providers only for explicit path operands.
+complete fd --argument --function __rush_complete_fd_paths
+
+__rush_complete_fd_paths() {
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_fd_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_fd_executables() {
+  completion executables
+}
+
+__rush_complete_fd_extensions() {
+  completion candidate c --kind plain
+  completion candidate cc --kind plain
+  completion candidate cpp --kind plain
+  completion candidate css --kind plain
+  completion candidate go --kind plain
+  completion candidate h --kind plain
+  completion candidate html --kind plain
+  completion candidate java --kind plain
+  completion candidate js --kind plain
+  completion candidate json --kind plain
+  completion candidate lua --kind plain
+  completion candidate md --kind plain
+  completion candidate py --kind plain
+  completion candidate rb --kind plain
+  completion candidate rs --kind plain
+  completion candidate sh --kind plain
+  completion candidate toml --kind plain
+  completion candidate ts --kind plain
+  completion candidate txt --kind plain
+  completion candidate yaml --kind plain
+  completion candidate yml --kind plain
+  completion candidate zig --kind plain
+}
+
+__rush_complete_fd_excludes() {
+  completion candidate .git --kind directory
+  completion candidate node_modules --kind directory
+  completion candidate target --kind directory
+  completion candidate zig-out --kind directory
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_fd_types() {
+  completion candidate file --kind plain
+  completion candidate directory --kind plain
+  completion candidate symlink --kind plain
+  completion candidate executable --kind plain
+  completion candidate empty --kind plain
+  completion candidate socket --kind plain
+  completion candidate pipe --kind plain
+  completion candidate f --kind plain --description 'file'
+  completion candidate d --kind plain --description 'directory'
+  completion candidate l --kind plain --description 'symlink'
+  completion candidate x --kind plain --description 'executable'
+  completion candidate e --kind plain --description 'empty'
+  completion candidate s --kind plain --description 'socket'
+  completion candidate p --kind plain --description 'pipe'
+}
+
+__rush_complete_fd_color_modes() {
+  completion candidate auto --kind plain
+  completion candidate always --kind plain
+  completion candidate never --kind plain
+}
+
+__rush_complete_fd_strip_modes() {
+  completion candidate auto --kind plain
+  completion candidate always --kind plain
+  completion candidate never --kind plain
+}
+
+__rush_complete_fd_sizes() {
+  completion candidate +1k --kind plain
+  completion candidate -1m --kind plain
+  completion candidate +10m --kind plain
+  completion candidate -100m --kind plain
+  completion candidate +1g --kind plain
+}
+
+__rush_complete_fd_times() {
+  completion candidate 1h --kind plain
+  completion candidate 24h --kind plain
+  completion candidate 7d --kind plain
+  completion candidate 30d --kind plain
+  completion candidate 1month --kind plain
+  completion candidate 1year --kind plain
+}
