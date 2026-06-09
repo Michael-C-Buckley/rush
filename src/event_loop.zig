@@ -6,6 +6,7 @@ const builtin = @import("builtin");
 pub const Source = enum(u32) {
     tty_input,
     resize,
+    prompt_redraw,
 };
 
 pub const Event = struct {

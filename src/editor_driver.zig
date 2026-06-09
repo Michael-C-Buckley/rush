@@ -33,6 +33,7 @@ pub const TerminalEvent = union(enum) {
     focus_out,
     resize: vaxis.Winsize,
     capability: Capability,
+    prompt_redraw,
 };
 
 pub const Capability = enum {
@@ -191,6 +192,8 @@ pub const TerminalParser = struct {
 
 pub const ReadLineOptions = struct {
     prompt: []const u8,
+    prompt_context: ?*anyopaque = null,
+    refresh_prompt: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror![]const u8 = null,
     history: line_editor.HistoryView = .{},
     completion_context: ?*anyopaque = null,
     complete: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8, usize) anyerror!completion.Application = null,
@@ -222,6 +225,7 @@ pub const TerminalSession = struct {
     tty_buffer: []u8,
     tty: vaxis.tty.PosixTty,
     wake: Pipe,
+    prompt_redraw: Pipe,
     resize: ResizeSignalSource,
     loop: event_loop.EventLoop,
     reader: OneShotReader,
@@ -239,11 +243,16 @@ pub const TerminalSession = struct {
 
         var wake = try makePipe(io);
         errdefer wake.close(io);
+        var prompt_redraw = try makePipe(io);
+        errdefer prompt_redraw.close(io);
+        try setNonBlocking(prompt_redraw.read.handle);
+        try setNonBlocking(prompt_redraw.write.handle);
         var resize = try ResizeSignalSource.init(io);
         errdefer resize.deinitUnregistered(io);
         var loop = try event_loop.EventLoop.init();
         errdefer loop.deinit();
         try loop.addReadFd(wake.read.handle, .tty_input);
+        try loop.addReadFd(prompt_redraw.read.handle, .prompt_redraw);
         try loop.addReadFd(resize.readFd(), .resize);
 
         const read_fd = try rawDup(tty.fd.handle);
@@ -258,6 +267,7 @@ pub const TerminalSession = struct {
             .tty_buffer = tty_buffer,
             .tty = tty,
             .wake = wake,
+            .prompt_redraw = prompt_redraw,
             .resize = resize,
             .loop = loop,
             .reader = reader,
@@ -276,6 +286,7 @@ pub const TerminalSession = struct {
         self.reader.deinit();
         self.resize.deinit(self.io, &self.loop);
         self.loop.deinit();
+        self.prompt_redraw.close(self.io);
         self.wake.read.close(self.io);
         self.tty.deinit();
         self.allocator.free(self.tty_buffer);
@@ -312,6 +323,10 @@ pub const TerminalSession = struct {
         try writeTtyAll(&self.tty, writer.written());
     }
 
+    pub fn requestPromptRedraw(self: *TerminalSession) void {
+        rawWriteAll(self.prompt_redraw.write.handle, "p") catch {};
+    }
+
     pub fn finishSemanticCommand(self: *TerminalSession, status: u8) !void {
         const sequence = try std.fmt.allocPrint(self.allocator, "\x1b]133;D;{d}\x07", .{status});
         defer self.allocator.free(sequence);
@@ -339,6 +354,7 @@ pub const TerminalSession = struct {
                 switch (ready_event.source) {
                     .tty_input => try self.processTtyInput(),
                     .resize => try self.processResizeSignal(),
+                    .prompt_redraw => try self.processPromptRedraw(),
                 }
             }
             for (self.events.items) |event| {
@@ -381,11 +397,23 @@ pub const TerminalSession = struct {
                         render_needed = true;
                         try self.capabilities.apply(self.allocator, &self.tty, capability);
                     },
+                    .prompt_redraw => {
+                        render_needed = true;
+                        session.invalidatePrompt();
+                    },
                     .key_release, .focus_in, .focus_out => {},
                 }
             }
             if (session.state == .editing or session.state == .history_search) {
                 if (render_needed) {
+                    if (session.takePromptInvalidation() and options.refresh_prompt != null and options.prompt_context != null) {
+                        const prompt = try options.refresh_prompt.?(options.prompt_context.?, self.allocator, self.io);
+                        defer self.allocator.free(prompt);
+                        try session.replacePrompt(.{
+                            .bytes = prompt,
+                            .visible_width = line_editor.visibleWidth(prompt, self.capabilities.widthMethod()),
+                        });
+                    }
                     if (session.takeClearScreenRequest()) {
                         self.renderer.reset(self.allocator);
                         try writeTtyAll(&self.tty, "\x1b[H\x1b[2J");
@@ -437,6 +465,12 @@ pub const TerminalSession = struct {
         const winsize = self.tty.getWinsize() catch return;
         if (sameWinsize(self.winsize, winsize)) return;
         try self.events.append(self.allocator, .{ .resize = winsize });
+    }
+
+    fn processPromptRedraw(self: *TerminalSession) !void {
+        var buffer: [32]u8 = undefined;
+        _ = try rawRead(self.prompt_redraw.read.handle, &buffer);
+        try self.events.append(self.allocator, .prompt_redraw);
     }
 };
 

@@ -560,6 +560,20 @@ const InteractiveCompletionContext = struct {
     arg_zero: []const u8 = "rush",
 };
 
+fn renderInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    const fallback_prompt = completion_context.executor.getEnv("PS1") orelse "$ ";
+    return completion_context.executor.renderPrompt(.{
+        .io = io,
+        .allow_external = true,
+        .external_stdio = .inherit,
+        .arg_zero = completion_context.arg_zero,
+    }, fallback_prompt) catch |err| switch (err) {
+        error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
+        else => |e| return e,
+    };
+}
+
 const CompletionScriptLoader = struct {
     allocator: std.mem.Allocator,
     attempted: std.StringHashMapUnmanaged(void) = .empty,
@@ -1130,6 +1144,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd_buffer[0..cwd_len], .arg_zero = options.arg_zero };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
+            .prompt_context = &completion_context,
+            .refresh_prompt = renderInteractivePrompt,
             .history = .{
                 .now = unixTimestamp(io),
                 .context = &history,

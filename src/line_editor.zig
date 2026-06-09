@@ -304,6 +304,7 @@ pub const CompletionMenu = struct {
 pub const LineSession = struct {
     allocator: std.mem.Allocator,
     prompt: Prompt,
+    prompt_dirty: bool = false,
     editor: Editor,
     history: HistoryView = .{},
     history_index: ?i64 = null,
@@ -462,6 +463,26 @@ pub const LineSession = struct {
         const requested = self.clear_screen_requested;
         self.clear_screen_requested = false;
         return requested;
+    }
+
+    pub fn invalidatePrompt(self: *LineSession) void {
+        self.prompt_dirty = true;
+    }
+
+    pub fn takePromptInvalidation(self: *LineSession) bool {
+        const dirty = self.prompt_dirty;
+        self.prompt_dirty = false;
+        return dirty;
+    }
+
+    pub fn replacePrompt(self: *LineSession, prompt: Prompt) !void {
+        const bytes = try self.allocator.dupe(u8, prompt.bytes);
+        self.allocator.free(self.prompt.bytes);
+        self.prompt = .{
+            .bytes = bytes,
+            .visible_width = prompt.visible_width,
+        };
+        self.prompt_dirty = false;
     }
 
     pub fn applyCompletion(self: *LineSession, application: completion.Application) !void {
@@ -2560,6 +2581,35 @@ test "line session inserts enter literally during paste" {
 
     try std.testing.expectEqual(LineSession.State.editing, session.state);
     try std.testing.expectEqualStrings("echo\nhi", session.editor.buffer.text());
+}
+
+test "prompt invalidation preserves edit state and redraws through session" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git status" });
+    try session.handleKey(.{ .key = .word_left });
+    var candidates = [_]completion.Candidate{
+        .{ .value = "status", .kind = .subcommand, .replace_start = 4, .replace_end = 10 },
+        .{ .value = "stash", .kind = .subcommand, .replace_start = 4, .replace_end = 10 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    session.invalidatePrompt();
+    try std.testing.expect(session.takePromptInvalidation());
+    try session.replacePrompt(.{ .bytes = "\x1b[34mrush> \x1b[0m", .visible_width = 6 });
+
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 4), session.editor.buffer.cursor_byte);
+    try std.testing.expectEqual(@as(usize, 2), session.completion_menu.candidates.len);
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .semantic_prompt_marks = true });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[34mrush> \x1b[0m" ++ semanticPromptEnd ++ "git status") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "stash") != null);
+    try std.testing.expect(std.mem.endsWith(u8, rendered, "\r\x1b[10C"));
 }
 
 test "render line redraws prompt and buffer inside synchronized output" {
