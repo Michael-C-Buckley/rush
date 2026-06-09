@@ -1,0 +1,4 @@
+f() { shift; echo in:$#:$1; }
+set -- outer
+f inner extra
+echo out:$#:$1
