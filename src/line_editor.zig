@@ -384,11 +384,10 @@ pub const LineSession = struct {
             },
             .escape => {
                 self.completion_menu.clear(self.allocator);
-                self.state = .canceled;
             },
             .ctrl_c => {
                 self.completion_menu.clear(self.allocator);
-                self.state = .canceled;
+                try self.editor.buffer.replace("");
             },
             .ctrl_d => {
                 self.completion_menu.clear(self.allocator);
@@ -969,6 +968,26 @@ pub const FrameRenderer = struct {
     pub fn reset(self: *FrameRenderer, allocator: std.mem.Allocator) void {
         if (self.previous) |*previous| previous.deinit(allocator);
         self.previous = null;
+    }
+
+    pub fn clearRowsAfterFirst(self: FrameRenderer, allocator: std.mem.Allocator) ![]const u8 {
+        const previous = self.previous orelse return allocator.dupe(u8, "");
+        if (previous.lines.len <= 1) return allocator.dupe(u8, "");
+
+        var output: std.ArrayList(u8) = .empty;
+        errdefer output.deinit(allocator);
+        var current_row = previous.cursor_row;
+        for (1..previous.lines.len) |row| {
+            const move = try cursorMoveFrom(current_row, row, 0, allocator);
+            defer allocator.free(move);
+            try output.appendSlice(allocator, move);
+            try output.appendSlice(allocator, "\x1b[2K");
+            current_row = row;
+        }
+        const restore = try cursorMoveFrom(current_row, previous.cursor_row, previous.cursor_col, allocator);
+        defer allocator.free(restore);
+        try output.appendSlice(allocator, restore);
+        return output.toOwnedSlice(allocator);
     }
 };
 
@@ -2141,26 +2160,37 @@ test "line session submits an owned copy on enter" {
     try std.testing.expectEqualStrings("echo hi", line);
 }
 
-test "line session cancels on escape" {
+test "line session keeps input and clears menu on escape" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
 
     try session.handleKey(.{ .key = .text, .text = "abc" });
+    try session.applyCompletion(.{ .ambiguous = &candidates });
     try session.handleKey(.{ .key = .escape });
     try session.handleKey(.{ .key = .text, .text = "d" });
 
-    try std.testing.expectEqual(LineSession.State.canceled, session.state);
-    try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expect(!session.hasCompletionMenu());
+    try std.testing.expectEqualStrings("abcd", session.editor.buffer.text());
 }
 
-test "line session cancels on ctrl-c" {
+test "line session clears input and menu on ctrl-c" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
 
     try session.handleKey(.{ .key = .text, .text = "abc" });
+    try session.applyCompletion(.{ .ambiguous = &candidates });
     try session.handleKey(.{ .key = .ctrl_c });
 
-    try std.testing.expectEqual(LineSession.State.canceled, session.state);
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expect(!session.hasCompletionMenu());
+    try std.testing.expectEqualStrings("", session.editor.buffer.text());
     try std.testing.expect(session.takeSubmittedLine() == null);
 }
 
@@ -2787,4 +2817,68 @@ test "frame renderer diffs when frame removes lines" {
     try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[1B\r\x1b[2K") != null);
     try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, accepted_output, "\x1b[1B\r\x1b[2K"));
     try std.testing.expect(std.mem.indexOf(u8, accepted_output, "cherry-pick") == null);
+}
+
+test "frame renderer clears menu rows when escape closes completion menu" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git ch");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    var menu_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer menu_frame.deinit(std.testing.allocator);
+    const menu_output = try renderer.render(std.testing.allocator, menu_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(menu_output);
+
+    try session.handleKey(.{ .key = .escape });
+    try std.testing.expect(!session.hasCompletionMenu());
+    var closed_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer closed_frame.deinit(std.testing.allocator);
+    const clear_output = try renderer.render(std.testing.allocator, closed_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(clear_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "\x1b[J") == null);
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, clear_output, "\x1b[2K"));
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "\x1b[2K$ git ch") == null);
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "checkout") == null);
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "cherry-pick") == null);
+}
+
+test "frame renderer clears input and menu rows on ctrl-c" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git ch");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    var menu_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer menu_frame.deinit(std.testing.allocator);
+    const menu_output = try renderer.render(std.testing.allocator, menu_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(menu_output);
+
+    try session.handleKey(.{ .key = .ctrl_c });
+    try std.testing.expect(!session.hasCompletionMenu());
+    try std.testing.expectEqualStrings("", session.editor.buffer.text());
+    var cleared_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer cleared_frame.deinit(std.testing.allocator);
+    const clear_output = try renderer.render(std.testing.allocator, cleared_frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(clear_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "\x1b[J") == null);
+    try std.testing.expectEqual(@as(usize, 3), std.mem.count(u8, clear_output, "\x1b[2K"));
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "\x1b[2K$ ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "git ch") == null);
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "checkout") == null);
+    try std.testing.expect(std.mem.indexOf(u8, clear_output, "cherry-pick") == null);
 }

@@ -427,22 +427,31 @@ pub const TerminalSession = struct {
         switch (session.state) {
             .history_search => unreachable,
             .submitted => {
+                try self.clearRenderedRowsAfterFirst();
                 self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, semanticInputEnd ++ "\r\n");
                 return .{ .submitted = session.takeSubmittedLine().? };
             },
             .canceled => {
+                try self.clearRenderedRowsAfterFirst();
                 self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, semanticInputCancel ++ "^C\r\n");
                 return .canceled;
             },
             .eof => {
+                try self.clearRenderedRowsAfterFirst();
                 self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, "\r\n");
                 return .eof;
             },
             .editing => unreachable,
         }
+    }
+
+    fn clearRenderedRowsAfterFirst(self: *TerminalSession) !void {
+        const clear = try self.renderer.clearRowsAfterFirst(self.allocator);
+        defer self.allocator.free(clear);
+        try writeTtyAll(&self.tty, clear);
     }
 
     fn processTtyInput(self: *TerminalSession) !void {
