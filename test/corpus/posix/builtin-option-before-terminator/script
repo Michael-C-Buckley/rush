@@ -1,0 +1,8 @@
+cd -P -- .
+echo cd:$?
+pwd -P -- >/dev/null
+echo pwd:$?
+unset -v -- NO_SUCH_NAME
+echo unset:$?
+umask -S -- >/dev/null
+echo umask:$?

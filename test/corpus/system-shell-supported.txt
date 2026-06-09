@@ -203,3 +203,4 @@ printf -- %s ok; echo :$?
 alias ll='echo ok'; unalias -- ll; alias ll >/dev/null 2>/dev/null; echo status:$?
 test foo; echo one:$?; test ""; echo empty:$?; [ foo ]; echo bracket:$?
 test ! foo; echo not_nonempty:$?; test ! ""; echo not_empty:$?; [ ! foo ]; echo bracket:$?
+cd -P -- .; echo cd:$?; pwd -P -- >/dev/null; echo pwd:$?; unset -v -- NO_SUCH_NAME; echo unset:$?; umask -S -- >/dev/null; echo umask:$?

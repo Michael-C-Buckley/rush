@@ -1,2 +1,2 @@
-pwd -L -P
+pwd operand
 echo after

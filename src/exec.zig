@@ -5699,10 +5699,11 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
 
     var arg_index: usize = 1;
     var physical = false;
-    if (arg_index < command.argv.len) {
+    while (arg_index < command.argv.len) {
         const option = command.argv[arg_index].text;
         if (std.mem.eql(u8, option, "--")) {
             arg_index += 1;
+            break;
         } else if (std.mem.eql(u8, option, "-L")) {
             physical = false;
             arg_index += 1;
@@ -5711,6 +5712,8 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
             arg_index += 1;
         } else if (std.mem.startsWith(u8, option, "-") and !std.mem.eql(u8, option, "-")) {
             return errorResult(self.allocator, 2, "cd", "unsupported option");
+        } else {
+            break;
         }
     }
     if (command.argv.len > arg_index + 1) return errorResult(self.allocator, 2, "cd", "too many arguments");
@@ -5780,23 +5783,26 @@ fn resolveCdTarget(self: *Executor, io: std.Io, target: []const u8) !CdTarget {
 fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
-    if (command.argv.len > 2) return errorResult(self.allocator, 2, "pwd", "too many arguments");
-
+    var arg_index: usize = 1;
     var physical = false;
-    if (command.argv.len == 2) {
-        const option = command.argv[1].text;
+    while (arg_index < command.argv.len) {
+        const option = command.argv[arg_index].text;
         if (std.mem.eql(u8, option, "--")) {
-            physical = false;
+            arg_index += 1;
+            break;
         } else if (std.mem.eql(u8, option, "-L")) {
             physical = false;
+            arg_index += 1;
         } else if (std.mem.eql(u8, option, "-P")) {
             physical = true;
+            arg_index += 1;
         } else if (std.mem.startsWith(u8, option, "-")) {
             return errorResult(self.allocator, 2, "pwd", "unsupported option");
         } else {
-            return errorResult(self.allocator, 2, "pwd", "too many arguments");
+            break;
         }
     }
+    if (arg_index < command.argv.len) return errorResult(self.allocator, 2, "pwd", "too many arguments");
 
     const cwd = if (physical) try self.physicalCwd(io) else blk: {
         const logical = try self.logicalCwd(io);
@@ -6143,10 +6149,11 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     _ = options;
     var mode: enum { variable, function } = .variable;
     var index: usize = 1;
-    if (index < command.argv.len) {
+    while (index < command.argv.len) {
         const option = command.argv[index].text;
         if (std.mem.eql(u8, option, "--")) {
             index += 1;
+            break;
         } else if (std.mem.eql(u8, option, "-v")) {
             mode = .variable;
             index += 1;
@@ -6155,6 +6162,8 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
             index += 1;
         } else if (std.mem.startsWith(u8, option, "-") and !std.mem.eql(u8, option, "-")) {
             return variableBuiltinUsageError(self, "unset", "unsupported option");
+        } else {
+            break;
         }
     }
     for (command.argv[index..]) |arg| {
@@ -6266,18 +6275,33 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     _ = stdin;
     _ = options;
     var arg_index: usize = 1;
-    const option_terminated = arg_index < command.argv.len and std.mem.eql(u8, command.argv[arg_index].text, "--");
-    if (option_terminated) arg_index += 1;
+    var option_terminated = false;
+    var symbolic_output = false;
+    while (arg_index < command.argv.len) {
+        const option = command.argv[arg_index].text;
+        if (std.mem.eql(u8, option, "--")) {
+            option_terminated = true;
+            arg_index += 1;
+            break;
+        } else if (std.mem.eql(u8, option, "-S")) {
+            symbolic_output = true;
+            arg_index += 1;
+        } else if (std.mem.startsWith(u8, option, "-")) {
+            break;
+        } else {
+            break;
+        }
+    }
     if (command.argv.len > arg_index + 1) return errorResult(self.allocator, 2, "umask", "too many arguments");
     const old = shellUmask(0);
     _ = shellUmask(old);
     if (arg_index >= command.argv.len) {
+        if (symbolic_output) return symbolicUmaskResult(self.allocator, old);
         const stdout = try std.fmt.allocPrint(self.allocator, "{o:0>4}\n", .{@as(u16, @intCast(old & 0o777))});
         errdefer self.allocator.free(stdout);
         return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
     }
     const operand = command.argv[arg_index].text;
-    if (!option_terminated and std.mem.eql(u8, operand, "-S")) return symbolicUmaskResult(self.allocator, old);
     if (!option_terminated and std.mem.startsWith(u8, operand, "-")) return errorResult(self.allocator, 2, "umask", "unsupported option");
     const new_mask = std.fmt.parseInt(u16, operand, 8) catch blk: {
         break :blk parseSymbolicUmask(operand, old) orelse return errorResult(self.allocator, 2, "umask", "invalid mask");

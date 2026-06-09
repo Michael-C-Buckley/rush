@@ -271,3 +271,4 @@ builtin-printf-option-terminator	builtin	behavior	printf accepts option terminat
 builtin-unalias-option-terminator	builtin	behavior	unalias accepts option terminator before alias operands
 builtin-test-single-argument-string	builtin	behavior	test single argument string truthiness
 builtin-test-negated-single-argument	builtin	behavior	test negated single argument truthiness
+builtin-option-before-terminator	builtin	behavior	common builtins accept options before option terminator
