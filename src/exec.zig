@@ -1715,6 +1715,21 @@ pub const Executor = struct {
         self.shell_options = other.shell_options;
         self.getopts_offset = other.getopts_offset;
         self.getopts_last_optind = other.getopts_last_optind;
+        self.arg_zero = other.arg_zero;
+        self.last_status_text = other.last_status_text;
+        self.last_status_text_len = other.last_status_text_len;
+        self.lineno_text = other.lineno_text;
+        self.lineno_text_len = other.lineno_text_len;
+        self.last_command_duration_text = other.last_command_duration_text;
+        self.last_command_duration_text_len = other.last_command_duration_text_len;
+        self.pid_text = other.pid_text;
+        self.pid_text_len = other.pid_text_len;
+        self.last_background_pid_text = other.last_background_pid_text;
+        self.last_background_pid_text_len = other.last_background_pid_text_len;
+        self.completion_context = other.completion_context;
+        self.last_completion_context = other.last_completion_context;
+        self.script_stdin = other.script_stdin;
+        self.script_stdin_offset = other.script_stdin_offset;
         var env_iter = other.env.iterator();
         while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
         var exported_iter = other.exported.iterator();
@@ -3116,16 +3131,13 @@ pub const Executor = struct {
         defer program.deinit();
         var sub_options = substitution_context.options;
         sub_options.external_stdio = .capture;
-        const saved_pending_exit = substitution_context.executor.pending_exit;
-        const saved_lineno_text = substitution_context.executor.lineno_text;
-        const saved_lineno_text_len = substitution_context.executor.lineno_text_len;
-        substitution_context.executor.pending_exit = null;
-        defer {
-            substitution_context.executor.pending_exit = saved_pending_exit;
-            substitution_context.executor.lineno_text = saved_lineno_text;
-            substitution_context.executor.lineno_text_len = saved_lineno_text_len;
-        }
-        var result = try substitution_context.executor.executeProgram(program, sub_options);
+        var child = Executor.init(substitution_context.executor.allocator);
+        defer child.deinit();
+        try child.copyStateFrom(substitution_context.executor);
+        if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
+        if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
+        child.pending_exit = null;
+        var result = try child.executeProgram(program, sub_options);
         defer result.deinit();
         substitution_context.executor.command_substitution_status = result.status;
         return allocator.dupe(u8, result.stdout);

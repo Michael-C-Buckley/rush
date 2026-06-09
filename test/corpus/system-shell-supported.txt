@@ -192,3 +192,4 @@ eval 'echo before; exit 7; echo after'; echo outside
 old=$(umask); umask 077; umask u=rwx,g=rx,o=; umask; umask "$old"
 trap 'echo status:$?' EXIT; false
 A="one two"; set -- $A; echo unquoted:$#; set -- "$A"; echo quoted:$#:$1
+A=outer; echo "$(A=inner; echo $A)"; echo "$A"
