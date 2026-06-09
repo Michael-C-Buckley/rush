@@ -1,0 +1,4 @@
+{ false; }
+echo status:$?
+{ true; false; }
+echo last:$?

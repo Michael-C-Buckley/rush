@@ -281,3 +281,4 @@ grammar-for-quoted-at-words	grammar	behavior	for word lists preserve quoted at p
 grammar-loop-exit-status	grammar	behavior	while and until exit statuses follow body execution
 builtin-loop-control-status	builtin	behavior	break and continue determine loop command status
 grammar-if-exit-status	grammar	behavior	if compound command exit status
+grammar-brace-group-status	grammar	behavior	brace group exit status follows last command
