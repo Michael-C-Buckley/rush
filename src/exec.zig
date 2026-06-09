@@ -684,6 +684,7 @@ pub const Executor = struct {
     last_background_pid_text: [32]u8 = undefined,
     last_background_pid_text_len: usize = 0,
     prompt_builder: ?PromptBuilder = null,
+    prompt_repaint_handler: ?PromptRepaintHandler = null,
     completion_builder: ?CompletionBuilder = null,
     completion_context: ?CompletionEvalContext = null,
     last_completion_context: ?CompletionEvalContext = null,
@@ -699,6 +700,15 @@ pub const Executor = struct {
         executor.setLastStatus(0);
         executor.setPidText();
         return executor;
+    }
+
+    const PromptRepaintHandler = struct {
+        context: *anyopaque,
+        request: *const fn (*anyopaque) void,
+    };
+
+    pub fn setPromptRepaintHandler(self: *Executor, context: *anyopaque, request: *const fn (*anyopaque) void) void {
+        self.prompt_repaint_handler = .{ .context = context, .request = request };
     }
 
     pub fn importEnvironment(self: *Executor, environ_map: *const std.process.Environ.Map) !void {
@@ -1775,6 +1785,7 @@ pub const Executor = struct {
         self.pid_text_len = other.pid_text_len;
         self.last_background_pid_text = other.last_background_pid_text;
         self.last_background_pid_text_len = other.last_background_pid_text_len;
+        self.prompt_repaint_handler = other.prompt_repaint_handler;
         self.completion_context = other.completion_context;
         self.last_completion_context = other.last_completion_context;
         self.script_stdin = other.script_stdin;
@@ -4808,8 +4819,8 @@ fn isSpecialBuiltin(name: []const u8) bool {
 }
 
 fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
+    if (std.mem.eql(u8, name, "prompt")) return builtinPrompt;
     if (self.prompt_builder != null) {
-        if (std.mem.eql(u8, name, "prompt")) return builtinPrompt;
         if (std.mem.eql(u8, name, "prompt_pwd")) return builtinPromptPwd;
         if (std.mem.eql(u8, name, "prompt_duration")) return builtinPromptDuration;
     }
@@ -5498,10 +5509,18 @@ fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 fn builtinPrompt(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    const builder = if (self.prompt_builder) |*builder| builder else return errorResult(self.allocator, 2, "prompt", "not rendering a prompt");
     if (command.argv.len < 2) return errorResult(self.allocator, 2, "prompt", "missing subcommand");
 
     const subcommand = command.argv[1].text;
+    if (std.mem.eql(u8, subcommand, "repaint")) {
+        if (command.argv.len != 2) return errorResult(self.allocator, 2, "prompt", "too many arguments");
+        if (self.prompt_repaint_handler) |handler| {
+            handler.request(handler.context);
+        }
+        return emptyResult(self.allocator, 0);
+    }
+
+    const builder = if (self.prompt_builder) |*builder| builder else return errorResult(self.allocator, 2, "prompt", "not rendering a prompt");
     if (std.mem.eql(u8, subcommand, "text")) {
         try appendPromptArgs(self, builder, command.argv[2..]);
         return emptyResult(self.allocator, 0);
@@ -11103,6 +11122,55 @@ test "parameter prefix completion application preserves dollar" {
     try std.testing.expectEqual(@as(usize, source.len), edit.replace_end);
     try std.testing.expectEqualStrings("PATH", edit.replacement);
     try std.testing.expect(!edit.append_space);
+}
+
+test "prompt repaint requests safe redraw through handler" {
+    const Repaint = struct {
+        count: usize = 0,
+
+        fn request(context: *anyopaque) void {
+            const self: *@This() = @ptrCast(@alignCast(context));
+            self.count += 1;
+        }
+    };
+
+    var repaint: Repaint = .{};
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    executor.setPromptRepaintHandler(&repaint, Repaint.request);
+
+    var lowered = try parseAndLower(std.testing.allocator, "prompt repaint");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), repaint.count);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "prompt repaint no-ops cleanly without handler" {
+    var lowered = try parseAndLower(std.testing.allocator, "prompt repaint extra");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var too_many = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer too_many.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), too_many.status);
+    try std.testing.expectEqualStrings("prompt: too many arguments\n", too_many.stderr);
+
+    var ok_lowered = try parseAndLower(std.testing.allocator, "prompt repaint");
+    defer ok_lowered.parsed.deinit();
+    defer ok_lowered.program.deinit();
+    var ok = try executor.executeProgram(ok_lowered.program, .{ .io = std.testing.io });
+    defer ok.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), ok.status);
+    try std.testing.expectEqualStrings("", ok.stderr);
 }
 
 fn expectCandidate(candidates: []const completion.Candidate, value: []const u8, kind: completion.Kind) !void {

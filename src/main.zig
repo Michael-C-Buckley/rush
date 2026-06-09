@@ -574,6 +574,11 @@ fn renderInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io
     };
 }
 
+fn requestInteractivePromptRepaint(context: *anyopaque) void {
+    const terminal: *editor_driver.TerminalSession = @ptrCast(@alignCast(context));
+    terminal.requestPromptRedraw();
+}
+
 const CompletionScriptLoader = struct {
     allocator: std.mem.Allocator,
     attempted: std.StringHashMapUnmanaged(void) = .empty,
@@ -1124,6 +1129,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
     try syncInteractiveTerminalSize(&executor, terminal);
+    executor.setPromptRepaintHandler(&terminal, requestInteractivePromptRepaint);
 
     var completion_cache = CompletionCache.init(completion_allocator);
     defer completion_cache.deinit();
@@ -2208,16 +2214,21 @@ test "alias timing chunks keep multi-line here-doc bodies intact" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
-test "prompt DSL commands are scoped to prompt rendering" {
+test "prompt rendering subcommands are scoped while repaint is public" {
     var prompt_result = try runScript(std.testing.allocator, std.testing.io, "prompt text hi");
     defer prompt_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 127), prompt_result.status);
-    try std.testing.expectEqualStrings("prompt: command not found\n", prompt_result.stderr);
+    try std.testing.expectEqual(@as(exec.ExitStatus, 2), prompt_result.status);
+    try std.testing.expectEqualStrings("prompt: not rendering a prompt\n", prompt_result.stderr);
+
+    var repaint_result = try runScript(std.testing.allocator, std.testing.io, "prompt repaint");
+    defer repaint_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), repaint_result.status);
+    try std.testing.expectEqualStrings("", repaint_result.stderr);
 
     var command_result = try runScript(std.testing.allocator, std.testing.io, "command -v prompt");
     defer command_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 1), command_result.status);
-    try std.testing.expectEqualStrings("", command_result.stdout);
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), command_result.status);
+    try std.testing.expectEqualStrings("prompt\n", command_result.stdout);
 }
 
 test "repl uses rush_prompt function to build prompt text" {
