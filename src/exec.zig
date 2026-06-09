@@ -12610,6 +12610,50 @@ test "first-party ssh completion script loads options ssh values and hosts" {
     try expectCandidate(jump_hosts, "user@host", .plain);
 }
 
+test "first-party gh completion script loads subcommands and static values" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/gh.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const body_path = "rush-gh-completion.md";
+    var body_file = try std.Io.Dir.cwd().createFile(std.testing.io, body_path, .{ .truncate = true });
+    body_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, body_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const root = try executor.collectCompletionsForInput("gh re", "gh re".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(root);
+    try expectCandidate(root, "repo", .subcommand);
+    try expectCandidate(root, "release", .subcommand);
+
+    const pr_commands = try executor.collectCompletionsForInput("gh pr che", "gh pr che".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(pr_commands);
+    try expectCandidate(pr_commands, "checkout", .subcommand);
+
+    const repos = try executor.collectCompletionsForInput("gh repo clone rock", "gh repo clone rock".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(repos);
+    try expectCandidate(repos, "rockorager/rush", .plain);
+
+    const branches = try executor.collectCompletionsForInput("gh pr create --base ma", "gh pr create --base ma".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(branches);
+    try expectCandidate(branches, "main", .plain);
+
+    const body_files = try executor.collectCompletionsForInput("gh issue create --body-file rush-gh", "gh issue create --body-file rush-gh".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(body_files);
+    try expectCandidate(body_files, body_path, .file);
+
+    const prs = try executor.collectCompletionsForInput("gh pr view 4", "gh pr view 4".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(prs);
+    try expectCandidate(prs, "42", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
