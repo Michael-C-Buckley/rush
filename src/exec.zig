@@ -12310,6 +12310,46 @@ test "first-party fd completion script loads options values and paths" {
     try expectCandidate(directories, "rush-fd-completion-dir/", .directory);
 }
 
+test "first-party rg completion script loads options values and paths" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/rg.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const file_path = "rush-rg-completion.txt";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("rg --vim", "rg --vim".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--vimgrep", .option);
+
+    const types = try executor.collectCompletionsForInput("rg --type z", "rg --type z".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(types);
+    try expectCandidate(types, "zig", .plain);
+
+    const colors = try executor.collectCompletionsForInput("rg --color a", "rg --color a".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(colors);
+    try expectCandidate(colors, "auto", .plain);
+    try expectCandidate(colors, "always", .plain);
+
+    const sorts = try executor.collectCompletionsForInput("rg --sort p", "rg --sort p".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(sorts);
+    try expectCandidate(sorts, "path", .plain);
+
+    const paths = try executor.collectCompletionsForInput("rg needle rush-rg", "rg needle rush-rg".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(paths);
+    try expectCandidate(paths, file_path, .file);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
