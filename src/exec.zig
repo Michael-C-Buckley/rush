@@ -8,6 +8,7 @@ const expand = @import("expand.zig");
 const ir = @import("ir.zig");
 const parser = @import("parser.zig");
 const vaxis = @import("vaxis");
+const zeit = @import("zeit");
 
 extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
 extern "c" fn close(fd: c_int) c_int;
@@ -65,6 +66,7 @@ pub const CommandResult = struct {
 pub const PromptBuilder = struct {
     text: std.ArrayList(u8) = .empty,
     used: bool = false,
+    refresh_interval_ms: ?u64 = null,
 
     pub fn deinit(self: *PromptBuilder, allocator: std.mem.Allocator) void {
         self.text.deinit(allocator);
@@ -74,6 +76,7 @@ pub const PromptBuilder = struct {
     pub fn clear(self: *PromptBuilder) void {
         self.text.clearRetainingCapacity();
         self.used = false;
+        self.refresh_interval_ms = null;
     }
 
     pub fn appendText(self: *PromptBuilder, allocator: std.mem.Allocator, args: []const ir.WordRef) !void {
@@ -684,6 +687,7 @@ pub const Executor = struct {
     last_background_pid_text: [32]u8 = undefined,
     last_background_pid_text_len: usize = 0,
     prompt_builder: ?PromptBuilder = null,
+    prompt_refresh_interval_ms: ?u64 = null,
     prompt_repaint_handler: ?PromptRepaintHandler = null,
     completion_builder: ?CompletionBuilder = null,
     completion_context: ?CompletionEvalContext = null,
@@ -709,6 +713,10 @@ pub const Executor = struct {
 
     pub fn setPromptRepaintHandler(self: *Executor, context: *anyopaque, request: *const fn (*anyopaque) void) void {
         self.prompt_repaint_handler = .{ .context = context, .request = request };
+    }
+
+    pub fn promptRefreshIntervalMs(self: Executor) ?u64 {
+        return self.prompt_refresh_interval_ms;
     }
 
     pub fn importEnvironment(self: *Executor, environ_map: *const std.process.Environ.Map) !void {
@@ -1438,6 +1446,7 @@ pub const Executor = struct {
         if (!self.hasFunction("rush_prompt")) return self.allocator.dupe(u8, fallback);
 
         if (self.prompt_builder != null) return error.RecursivePrompt;
+        self.prompt_refresh_interval_ms = null;
         self.prompt_builder = .{};
         errdefer {
             self.prompt_builder.?.deinit(self.allocator);
@@ -1452,6 +1461,7 @@ pub const Executor = struct {
         var builder = self.prompt_builder.?;
         self.prompt_builder = null;
         defer builder.deinit(self.allocator);
+        self.prompt_refresh_interval_ms = builder.refresh_interval_ms;
 
         if (builder.used) return builder.text.toOwnedSlice(self.allocator);
         return self.allocator.dupe(u8, result.stdout);
@@ -1785,6 +1795,7 @@ pub const Executor = struct {
         self.pid_text_len = other.pid_text_len;
         self.last_background_pid_text = other.last_background_pid_text;
         self.last_background_pid_text_len = other.last_background_pid_text_len;
+        self.prompt_refresh_interval_ms = other.prompt_refresh_interval_ms;
         self.prompt_repaint_handler = other.prompt_repaint_handler;
         self.completion_context = other.completion_context;
         self.last_completion_context = other.last_completion_context;
@@ -4823,6 +4834,7 @@ fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
     if (self.prompt_builder != null) {
         if (std.mem.eql(u8, name, "prompt_pwd")) return builtinPromptPwd;
         if (std.mem.eql(u8, name, "prompt_duration")) return builtinPromptDuration;
+        if (std.mem.eql(u8, name, "prompt_time")) return builtinPromptTime;
     }
     if (self.completion_builder != null) {
         if (std.mem.eql(u8, name, "completion")) return builtinCompletion;
@@ -5568,6 +5580,13 @@ fn builtinPrompt(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
         builder.used = true;
         return emptyResult(self.allocator, 0);
     }
+    if (std.mem.eql(u8, subcommand, "refresh")) {
+        if (command.argv.len != 4 or !std.mem.eql(u8, command.argv[2].text, "--interval")) return errorResult(self.allocator, 2, "prompt", "usage: refresh --interval MS");
+        const interval = std.fmt.parseUnsigned(u64, command.argv[3].text, 10) catch return errorResult(self.allocator, 2, "prompt", "invalid refresh interval");
+        if (interval == 0) return errorResult(self.allocator, 2, "prompt", "invalid refresh interval");
+        builder.refresh_interval_ms = interval;
+        return emptyResult(self.allocator, 0);
+    }
     return errorResult(self.allocator, 2, "prompt", "unsupported subcommand");
 }
 
@@ -5620,6 +5639,32 @@ fn builtinPromptDuration(self: *Executor, command: ir.SimpleCommand, stdin: []co
     _ = stdin;
     _ = options;
     return stdoutLine(self.allocator, self.last_command_duration_text[0..self.last_command_duration_text_len], 0);
+}
+
+fn builtinPromptTime(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    if (command.argv.len != 2) return errorResult(self.allocator, 2, "prompt_time", "usage: prompt_time FORMAT");
+    const io = options.io orelse return error.MissingIoForBuiltin;
+
+    var local_zone = try zeit.local(self.allocator, io, .{});
+    defer local_zone.deinit();
+    const now = zeit.instant(.{ .now = io }, &local_zone);
+    const time = now.time();
+
+    var stdout: std.Io.Writer.Allocating = .init(self.allocator);
+    errdefer stdout.deinit();
+    if (std.mem.indexOfScalar(u8, command.argv[1].text, '%') != null) {
+        try time.strftime(&stdout.writer, command.argv[1].text);
+    } else {
+        try time.gofmt(&stdout.writer, command.argv[1].text);
+    }
+    try stdout.writer.writeByte('\n');
+    return .{
+        .allocator = self.allocator,
+        .status = 0,
+        .stdout = try stdout.toOwnedSlice(),
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
 }
 
 const PromptPath = struct {

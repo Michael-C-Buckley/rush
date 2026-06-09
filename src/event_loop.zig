@@ -58,8 +58,16 @@ const KqueueEventLoop = struct {
     }
 
     pub fn wait(self: *KqueueEventLoop, out: []Event) ![]Event {
+        return self.waitTimeout(out, null);
+    }
+
+    pub fn waitTimeout(self: *KqueueEventLoop, out: []Event, timeout_ms: ?u64) ![]Event {
         var events: [16]std.posix.Kevent = undefined;
-        const count = try std.Io.Kqueue.kevent(self.fd, &.{}, events[0..@min(events.len, out.len)], null);
+        const timeout: ?std.posix.timespec = if (timeout_ms) |ms| .{
+            .sec = @intCast(ms / 1000),
+            .nsec = @intCast((ms % 1000) * std.time.ns_per_ms),
+        } else null;
+        const count = try std.Io.Kqueue.kevent(self.fd, &.{}, events[0..@min(events.len, out.len)], if (timeout) |*value| value else null);
         for (events[0..count], 0..) |event, index| {
             out[index] = .{ .source = @enumFromInt(event.udata) };
         }
@@ -104,11 +112,16 @@ const EpollEventLoop = struct {
     }
 
     pub fn wait(self: *EpollEventLoop, out: []Event) ![]Event {
+        return self.waitTimeout(out, null);
+    }
+
+    pub fn waitTimeout(self: *EpollEventLoop, out: []Event, timeout_ms: ?u64) ![]Event {
         var events: [16]std.os.linux.epoll_event = undefined;
-        const count = std.os.linux.epoll_wait(self.fd, &events, @intCast(@min(events.len, out.len)), -1);
+        const timeout: i32 = if (timeout_ms) |ms| @intCast(@min(ms, @as(u64, @intCast(std.math.maxInt(i32))))) else -1;
+        const count = std.os.linux.epoll_wait(self.fd, &events, @intCast(@min(events.len, out.len)), timeout);
         switch (std.os.linux.errno(count)) {
             .SUCCESS => {},
-            .INTR => return self.wait(out),
+            .INTR => return self.waitTimeout(out, timeout_ms),
             else => return error.Unexpected,
         }
         const n: usize = @intCast(count);
@@ -135,6 +148,15 @@ test "event loop reports readable pipe fd" {
 
     var buffer: [1]u8 = undefined;
     _ = try std.posix.read(pipe.read, &buffer);
+}
+
+test "event loop timeout returns no events" {
+    var loop = try EventLoop.init();
+    defer loop.deinit();
+
+    var events: [4]Event = undefined;
+    const ready = try loop.waitTimeout(&events, 0);
+    try std.testing.expectEqual(@as(usize, 0), ready.len);
 }
 
 const TestPipe = struct {

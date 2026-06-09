@@ -192,6 +192,7 @@ pub const TerminalParser = struct {
 
 pub const ReadLineOptions = struct {
     prompt: []const u8,
+    prompt_refresh_interval_ms: ?u64 = null,
     prompt_context: ?*anyopaque = null,
     refresh_prompt: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror![]const u8 = null,
     history: line_editor.HistoryView = .{},
@@ -349,10 +350,16 @@ pub const TerminalSession = struct {
         try writeTtyAll(&self.tty, semanticCommandStart);
         try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
         try self.reader.arm();
+        var next_prompt_refresh_ms: ?u64 = if (options.prompt_refresh_interval_ms) |interval_ms| nowMs() + interval_ms else null;
         while (session.state == .editing or session.state == .history_search) {
             var render_needed = false;
             var loop_events: [8]event_loop.Event = undefined;
-            const ready = try self.loop.wait(&loop_events);
+            const ready = try self.loop.waitTimeout(&loop_events, promptRefreshWaitMs(next_prompt_refresh_ms));
+            if (ready.len == 0 and options.prompt_refresh_interval_ms != null) {
+                render_needed = true;
+                session.invalidatePrompt();
+                next_prompt_refresh_ms = nowMs() + options.prompt_refresh_interval_ms.?;
+            }
             self.events.clearRetainingCapacity();
             for (ready) |ready_event| {
                 switch (ready_event.source) {
@@ -512,6 +519,19 @@ fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
         a.cols == b.cols and
         a.x_pixel == b.x_pixel and
         a.y_pixel == b.y_pixel;
+}
+
+fn promptRefreshWaitMs(next_prompt_refresh_ms: ?u64) ?u64 {
+    const next = next_prompt_refresh_ms orelse return null;
+    const now = nowMs();
+    if (next <= now) return 0;
+    return next - now;
+}
+
+fn nowMs() u64 {
+    const nanos = std.time.nanoTimestamp();
+    if (nanos <= 0) return 0;
+    return @intCast(@divFloor(nanos, std.time.ns_per_ms));
 }
 
 fn renderSession(allocator: std.mem.Allocator, io: std.Io, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize, options: ReadLineOptions) !void {

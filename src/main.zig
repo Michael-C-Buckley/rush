@@ -1151,6 +1151,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd_buffer[0..cwd_len], .arg_zero = options.arg_zero };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
+            .prompt_refresh_interval_ms = executor.promptRefreshIntervalMs(),
             .prompt_context = &completion_context,
             .refresh_prompt = renderInteractivePrompt,
             .history = .{
@@ -2331,6 +2332,47 @@ test "prompt duration exposes previous command duration" {
     const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
     defer std.testing.allocator.free(prompt);
     try std.testing.expectEqualStrings("1234ms", prompt);
+}
+
+test "prompt refresh records requested idle redraw interval" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt refresh --interval 250; prompt text clock; }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+
+    const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("clock", prompt);
+    try std.testing.expectEqual(@as(?u64, 250), executor.promptRefreshIntervalMs());
+}
+
+test "prompt time formats strftime and go layouts" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var strftime_result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt text $(prompt_time %Y); }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer strftime_result.deinit();
+    const strftime_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(strftime_prompt);
+    try std.testing.expectEqual(@as(usize, 4), strftime_prompt.len);
+    for (strftime_prompt) |byte| try std.testing.expect(std.ascii.isDigit(byte));
+
+    var gofmt_result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt text $(prompt_time 2006); }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer gofmt_result.deinit();
+    const gofmt_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(gofmt_prompt);
+    try std.testing.expectEqual(@as(usize, 4), gofmt_prompt.len);
+    for (gofmt_prompt) |byte| try std.testing.expect(std.ascii.isDigit(byte));
 }
 
 test "omitted newline marker follows displayed output stream" {

@@ -7,6 +7,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("vaxis");
+    const zeit = b.dependency("zeit", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zeit");
     const use_system_sqlite = b.systemIntegrationOption("sqlite3", .{ .default = false });
 
     const exe = b.addExecutable(.{
@@ -18,6 +22,7 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
             .imports = &.{
                 .{ .name = "vaxis", .module = vaxis },
+                .{ .name = "zeit", .module = zeit },
             },
         }),
     });
@@ -50,6 +55,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "vaxis", .module = vaxis },
+                .{ .name = "zeit", .module = zeit },
             },
         }),
     });

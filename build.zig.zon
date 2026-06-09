@@ -12,6 +12,10 @@
             .url = "https://www.sqlite.org/2026/sqlite-amalgamation-3530200.zip",
             .hash = "N-V-__8AALc_rgC04POe18O0LKFRm4ouQpLtL3riscEmWp-Q",
         },
+        .zeit = .{
+            .url = "git+https://github.com/rockorager/zeit.git?ref=v0.9.0#b1c1c2fcbc71fd7799a316bbcf0ff88d06d80ccc",
+            .hash = "zeit-0.9.0-5I6bk2m9AgBSMH8-L6rYJkwuQAyhXplnfxnvTSGzVHUR",
+        },
     },
     .paths = .{
         "LICENSE",
