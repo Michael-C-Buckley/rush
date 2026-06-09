@@ -1,0 +1,4 @@
+f() { set -- inner; echo in:$#:$1; }
+set -- outer
+f
+echo out:$#:$1

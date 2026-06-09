@@ -6625,7 +6625,7 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
 
     if (command.argv.len == 1) return printShellOptions(self, false);
     if (command.argv.len >= 2 and std.mem.eql(u8, command.argv[1].text, "--")) {
-        try setGlobalPositionals(self, command.argv[2..]);
+        try setCurrentPositionals(self, command.argv[2..]);
         return emptyResult(self.allocator, 0);
     }
     if (command.argv.len == 2 and isSetShortOptionCluster(command.argv[1].text)) {
@@ -6730,11 +6730,11 @@ fn setUsageError(self: *Executor, message: []const u8) !CommandResult {
     return errorResult(self.allocator, 2, "set", message);
 }
 
-fn setGlobalPositionals(self: *Executor, args: []const ir.WordRef) !void {
+fn setCurrentPositionals(self: *Executor, args: []const ir.WordRef) !void {
     var values = try self.allocator.alloc([]const u8, args.len);
     defer self.allocator.free(values);
     for (args, 0..) |arg, index| values[index] = arg.text;
-    try self.global_positionals.set(self.allocator, values);
+    try self.currentPositionalsPtr().set(self.allocator, values);
 }
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
