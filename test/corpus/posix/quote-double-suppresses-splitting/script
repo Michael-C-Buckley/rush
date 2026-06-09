@@ -1,0 +1,5 @@
+A="one two"
+set -- $A
+echo unquoted:$#
+set -- "$A"
+echo quoted:$#:$1
