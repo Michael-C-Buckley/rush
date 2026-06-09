@@ -312,6 +312,10 @@ pub const TerminalSession = struct {
         try self.capabilities.sendQueries(&self.tty);
     }
 
+    pub fn currentWinsize(self: TerminalSession) vaxis.Winsize {
+        return self.winsize;
+    }
+
     pub fn reportCurrentDirectory(self: *TerminalSession, cwd: []const u8, hostname: []const u8) !void {
         const host = if (hostname.len != 0) hostname else "localhost";
         var writer: std.Io.Writer.Allocating = .init(self.allocator);

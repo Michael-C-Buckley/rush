@@ -1502,7 +1502,7 @@ pub const Executor = struct {
         return self.exported.contains(name);
     }
 
-    fn setExported(self: *Executor, name: []const u8) !void {
+    pub fn setExported(self: *Executor, name: []const u8) !void {
         if (self.exported.contains(name)) return;
         try self.exported.put(self.allocator, try self.allocator.dupe(u8, name), {});
     }

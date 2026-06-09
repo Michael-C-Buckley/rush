@@ -1123,6 +1123,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try loadInteractiveConfig(allocator, io, &executor, options);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
+    try syncInteractiveTerminalSize(&executor, terminal);
 
     var completion_cache = CompletionCache.init(completion_allocator);
     defer completion_cache.deinit();
@@ -1161,6 +1162,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .diagnose = diagnoseInteractiveLine,
         });
         allocator.free(prompt);
+        try syncInteractiveTerminalSize(&executor, terminal);
         const line = switch (read_result) {
             .submitted => |line| line,
             .canceled => continue,
@@ -1206,6 +1208,18 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     }
 
     return last_status;
+}
+
+fn syncInteractiveTerminalSize(executor: *exec.Executor, terminal: editor_driver.TerminalSession) !void {
+    const winsize = terminal.currentWinsize();
+    var rows_buffer: [32]u8 = undefined;
+    var cols_buffer: [32]u8 = undefined;
+    const rows = try std.fmt.bufPrint(&rows_buffer, "{d}", .{winsize.rows});
+    const cols = try std.fmt.bufPrint(&cols_buffer, "{d}", .{winsize.cols});
+    try executor.setEnv("LINES", rows);
+    try executor.setExported("LINES");
+    try executor.setEnv("COLUMNS", cols);
+    try executor.setExported("COLUMNS");
 }
 
 fn outputNeedsNewlineMarker(stdout: []const u8, stderr: []const u8) bool {
