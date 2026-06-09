@@ -1,0 +1,3 @@
+echo x >infile
+case $(/usr/bin/cat) in x) echo external-hit ;; *) echo external-miss ;; esac <infile
+rm -f infile

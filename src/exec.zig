@@ -3829,6 +3829,12 @@ pub const Executor = struct {
         return emptyResult(self.allocator, 0);
     }
 
+    fn remainingScriptStdin(self: Executor) ?[]const u8 {
+        const script_stdin = self.script_stdin orelse return null;
+        if (self.script_stdin_offset >= script_stdin.len) return null;
+        return script_stdin[self.script_stdin_offset..];
+    }
+
     fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
@@ -3873,6 +3879,13 @@ pub const Executor = struct {
                     },
                     else => file.close(io),
                 }
+            }
+        }
+
+        if (stdin_file == null and options.external_stdio == .capture) {
+            if (self.remainingScriptStdin()) |stdin| {
+                stdin_file = try fileFromBytes(io, stdin);
+                self.script_stdin_offset = (self.script_stdin orelse unreachable).len;
             }
         }
 
