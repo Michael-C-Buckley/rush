@@ -266,3 +266,4 @@ expansion-command-substitution-subshell-function	expansion	behavior	command subs
 redirection-command-not-found-stderr	redirection	behavior	stderr redirection applies to command-not-found diagnostics
 builtin-wait-option-terminator	builtin	behavior	wait accepts option terminator before operands
 builtin-option-terminators	builtin	behavior	common builtins accept option terminator
+builtin-command-V-builtin	builtin	behavior	command -V describes shell builtins

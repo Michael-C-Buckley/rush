@@ -1,0 +1,4 @@
+command -V echo
+echo status:$?
+command -V cd
+echo status:$?

@@ -1,0 +1,4 @@
+echo is a shell builtin
+status:0
+cd is a shell builtin
+status:0
