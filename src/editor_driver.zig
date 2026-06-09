@@ -201,6 +201,7 @@ pub const ReadLineOptions = struct {
     history: line_editor.HistoryView = .{},
     completion_context: ?*anyopaque = null,
     complete: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8, usize) anyerror!completion.Application = null,
+    expand_abbreviation: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize, bool) anyerror!?completion.Edit = null,
     diagnostic_context: ?*anyopaque = null,
     diagnose: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8) anyerror!?line_editor.DiagnosticRender = null,
 };
@@ -389,10 +390,14 @@ pub const TerminalSession = struct {
                         if (isCompletionTab(key) and session.hasCompletionMenu()) {
                             try session.handleKey(.{ .key = .tab, .modifiers = key.modifiers });
                         } else if (isCompletionTab(key) and options.complete != null and options.completion_context != null) {
+                            try expandAbbreviationBeforeAccept(&session, options, false);
                             const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                             defer application.deinit(self.allocator);
                             try session.applyCompletion(application);
-                        } else if (session.hasCompletionMenu() and shouldRefreshCompletionMenu(key) and options.complete != null and options.completion_context != null) {
+                        } else if (key.key == .enter and !session.hasCompletionMenu()) {
+                            try expandAbbreviationBeforeAccept(&session, options, false);
+                            try session.handleKey(key);
+                        } else if (isSpaceAccept(key) and try expandAbbreviationBeforeAccept(&session, options, true)) {} else if (session.hasCompletionMenu() and shouldRefreshCompletionMenu(key) and options.complete != null and options.completion_context != null) {
                             try session.handleKey(key);
                             if (session.hasCompletionMenu()) {
                                 const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
@@ -518,6 +523,10 @@ fn isCompletionTab(key: line_editor.KeyEvent) bool {
     return key.key == .tab or (key.key == .text and std.mem.eql(u8, key.text, "\t"));
 }
 
+fn isSpaceAccept(key: line_editor.KeyEvent) bool {
+    return key.key == .text and std.mem.eql(u8, key.text, " ");
+}
+
 fn shouldRefreshCompletionMenu(key: line_editor.KeyEvent) bool {
     return switch (key.key) {
         .text => key.text.len != 0,
@@ -526,6 +535,14 @@ fn shouldRefreshCompletionMenu(key: line_editor.KeyEvent) bool {
         => true,
         else => false,
     };
+}
+
+fn expandAbbreviationBeforeAccept(session: *line_editor.LineSession, options: ReadLineOptions, append_space: bool) !bool {
+    if (options.expand_abbreviation == null or options.completion_context == null) return false;
+    const edit = try options.expand_abbreviation.?(options.completion_context.?, session.allocator, session.editor.buffer.text(), session.editor.buffer.cursor_byte, append_space) orelse return false;
+    defer session.allocator.free(edit.replacement);
+    try session.applyCompletion(.{ .edit = edit });
+    return true;
 }
 
 fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
@@ -1010,6 +1027,28 @@ test "terminal parser emits enter and backspace" {
     try std.testing.expectEqual(@as(usize, 2), events.items.len);
     try std.testing.expectEqual(line_editor.Key.enter, events.items[0].key_press.key);
     try std.testing.expectEqual(line_editor.Key.backspace, events.items[1].key_press.key);
+}
+
+fn testExpandAbbreviation(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8, cursor: usize, append_space: bool) !?completion.Edit {
+    _ = context;
+    if (cursor < source.len or !std.mem.eql(u8, source, "gs")) return null;
+    return .{ .replace_start = 0, .replace_end = 2, .replacement = try allocator.dupe(u8, "git status"), .append_space = append_space };
+}
+
+test "abbreviation expansion seam rewrites the edit buffer" {
+    var session = try line_editor.LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+    try session.handleKey(.{ .key = .text, .text = "gs" });
+    var context: u8 = 0;
+
+    try std.testing.expect(try expandAbbreviationBeforeAccept(&session, .{
+        .prompt = "",
+        .completion_context = &context,
+        .expand_abbreviation = testExpandAbbreviation,
+    }, true));
+
+    try std.testing.expectEqualStrings("git status ", session.editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, "git status ".len), session.editor.buffer.cursor_byte);
 }
 
 test "terminal parser emits tab key" {

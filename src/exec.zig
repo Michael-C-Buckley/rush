@@ -715,6 +715,7 @@ pub const Executor = struct {
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged(FunctionValue) = .empty,
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
+    abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     event_hooks: std.StringHashMapUnmanaged(std.ArrayList(EventHook)) = .empty,
     interval_hooks: std.ArrayList(IntervalHook) = .empty,
@@ -1129,6 +1130,12 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.aliases.deinit(self.allocator);
+        var abbr_iter = self.abbreviations.iterator();
+        while (abbr_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.abbreviations.deinit(self.allocator);
         var trap_iter = self.traps.iterator();
         while (trap_iter.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -2141,6 +2148,8 @@ pub const Executor = struct {
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body, entry.value_ptr.redirections);
         var alias_iter = other.aliases.iterator();
         while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
+        var abbr_iter = other.abbreviations.iterator();
+        while (abbr_iter.next()) |entry| try self.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
         for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
         var trap_iter = other.traps.iterator();
         while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
@@ -2356,6 +2365,42 @@ pub const Executor = struct {
             return true;
         }
         return false;
+    }
+
+    fn setAbbreviation(self: *Executor, name: []const u8, value: []const u8) !void {
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+        const result = try self.abbreviations.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            self.allocator.free(result.value_ptr.*);
+            result.value_ptr.* = owned_value;
+        } else {
+            result.value_ptr.* = owned_value;
+        }
+    }
+
+    fn unsetAbbreviation(self: *Executor, name: []const u8) bool {
+        if (self.abbreviations.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value);
+            return true;
+        }
+        return false;
+    }
+
+    pub fn expandAbbreviationForInput(self: *Executor, allocator: std.mem.Allocator, source: []const u8, cursor: usize, append_space: bool) !?completion.Edit {
+        const span = try commandAbbreviationSpan(allocator, source, cursor) orelse return null;
+        const name = source[span.start..span.end];
+        const value = self.abbreviations.get(name) orelse return null;
+        return .{
+            .replace_start = span.start,
+            .replace_end = span.end,
+            .replacement = try allocator.dupe(u8, value),
+            .append_space = append_space,
+        };
     }
 
     fn setFunction(self: *Executor, name: []const u8, body: []const u8, redirections: []const ir.Redirection) !void {
@@ -5094,6 +5139,21 @@ fn isActiveAlias(active_aliases: []const []const u8, word: []const u8) bool {
     return false;
 }
 
+fn commandAbbreviationSpan(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !?parser.Span {
+    const clamped_cursor = @min(cursor, source.len);
+    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = clamped_cursor });
+    defer parsed.deinit();
+    const highlights = try parser.syntaxHighlights(allocator, parsed);
+    defer allocator.free(highlights);
+    var selected: ?parser.Span = null;
+    for (highlights) |highlight| {
+        if (highlight.kind != .command) continue;
+        if (clamped_cursor < highlight.span.end) return null;
+        selected = highlight.span;
+    }
+    return selected;
+}
+
 fn isReservedAliasWord(word: []const u8) bool {
     return std.mem.eql(u8, word, "if") or
         std.mem.eql(u8, word, "then") or
@@ -5179,6 +5239,7 @@ fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
 fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, ".")) return builtinSource;
     if (std.mem.eql(u8, name, ":")) return builtinTrue;
+    if (std.mem.eql(u8, name, "abbr")) return builtinAbbr;
     if (std.mem.eql(u8, name, "alias")) return builtinAlias;
     if (std.mem.eql(u8, name, "bg")) return builtinBg;
     if (std.mem.eql(u8, name, "break")) return builtinBreak;
@@ -6765,6 +6826,40 @@ fn builtinAlias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
             defer self.allocator.free(quoted);
             try stdout.print(self.allocator, "alias {s}={s}\n", .{ arg.text, quoted });
         }
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn builtinAbbr(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len == 1 or (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "--list"))) return listAbbreviations(self);
+    if (std.mem.eql(u8, command.argv[1].text, "--erase")) {
+        if (command.argv.len != 3) return errorResult(self.allocator, 2, "abbr", "usage: abbr --erase NAME");
+        if (!isShellName(command.argv[2].text)) return errorResult(self.allocator, 2, "abbr", "invalid abbreviation name");
+        if (!self.unsetAbbreviation(command.argv[2].text)) return errorResult(self.allocator, 1, "abbr", "not found");
+        return emptyResult(self.allocator, 0);
+    }
+    if (std.mem.startsWith(u8, command.argv[1].text, "--")) return errorResult(self.allocator, 2, "abbr", "unsupported option");
+    if (command.argv.len != 3) return errorResult(self.allocator, 2, "abbr", "usage: abbr NAME EXPANSION");
+    if (!isShellName(command.argv[1].text)) return errorResult(self.allocator, 2, "abbr", "invalid abbreviation name");
+    try self.setAbbreviation(command.argv[1].text, command.argv[2].text);
+    return emptyResult(self.allocator, 0);
+}
+
+fn listAbbreviations(self: *Executor) !CommandResult {
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(self.allocator);
+    var iter = self.abbreviations.iterator();
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (names.items) |name| {
+        const quoted = try singleQuote(self.allocator, self.abbreviations.get(name).?);
+        defer self.allocator.free(quoted);
+        try stdout.print(self.allocator, "abbr {s} {s}\n", .{ name, quoted });
     }
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
@@ -11338,6 +11433,77 @@ test "root command completion includes builtins functions aliases and executable
     try expectCandidate(candidates, "rush-root-tool", .command);
     const function = findCandidate(candidates, "rush_function") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqualStrings("function", function.description.?);
+}
+
+test "abbr defines lists and erases reusable abbreviations" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\abbr gs 'git status'
+        \\abbr ga 'git add'
+        \\abbr --list
+        \\abbr --erase gs
+        \\abbr --list
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqualStrings("abbr ga 'git add'\nabbr gs 'git status'\nabbr ga 'git add'\n", result.stdout);
+}
+
+test "abbr definitions do not affect script command execution" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\abbr echo 'printf nope'
+        \\echo ok
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqualStrings("ok\n", result.stdout);
+}
+
+test "abbr expansion rewrites command word for interactive editor" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setAbbreviation("gs", "git status");
+    try executor.setAlias("ga", "git add");
+
+    const edit = (try executor.expandAbbreviationForInput(std.testing.allocator, "gs --short", "gs --short".len, false)) orelse return error.MissingAbbreviationEdit;
+    defer std.testing.allocator.free(edit.replacement);
+    try std.testing.expectEqual(@as(usize, 0), edit.replace_start);
+    try std.testing.expectEqual(@as(usize, 2), edit.replace_end);
+    try std.testing.expectEqualStrings("git status", edit.replacement);
+    try std.testing.expect(!edit.append_space);
+
+    const spaced = (try executor.expandAbbreviationForInput(std.testing.allocator, " gs", " gs".len, true)) orelse return error.MissingAbbreviationEdit;
+    defer std.testing.allocator.free(spaced.replacement);
+    try std.testing.expectEqual(@as(usize, 1), spaced.replace_start);
+    try std.testing.expect(spaced.append_space);
+
+    const assigned = (try executor.expandAbbreviationForInput(std.testing.allocator, "GIT_OPTIONAL_LOCKS=0 gs", "GIT_OPTIONAL_LOCKS=0 gs".len, false)) orelse return error.MissingAbbreviationEdit;
+    defer std.testing.allocator.free(assigned.replacement);
+    try std.testing.expectEqual(@as(usize, "GIT_OPTIONAL_LOCKS=0 ".len), assigned.replace_start);
+
+    const sequenced = (try executor.expandAbbreviationForInput(std.testing.allocator, "echo ok; gs", "echo ok; gs".len, false)) orelse return error.MissingAbbreviationEdit;
+    defer std.testing.allocator.free(sequenced.replacement);
+    try std.testing.expectEqual(@as(usize, "echo ok; ".len), sequenced.replace_start);
+
+    const conditional = (try executor.expandAbbreviationForInput(std.testing.allocator, "true && gs", "true && gs".len, false)) orelse return error.MissingAbbreviationEdit;
+    defer std.testing.allocator.free(conditional.replacement);
+    try std.testing.expectEqual(@as(usize, "true && ".len), conditional.replace_start);
+
+    try std.testing.expect(try executor.expandAbbreviationForInput(std.testing.allocator, "echo gs", "echo gs".len, false) == null);
+    try std.testing.expect(try executor.expandAbbreviationForInput(std.testing.allocator, "ga", "ga".len, false) == null);
 }
 
 test "root command completion includes builtin commands" {

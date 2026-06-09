@@ -833,6 +833,11 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
+fn expandInteractiveAbbreviation(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8, cursor: usize, append_space: bool) !?completion_model.Edit {
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    return completion_context.executor.expandAbbreviationForInput(allocator, source, cursor, append_space);
+}
+
 fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8) !?line_editor.DiagnosticRender {
     if (source.len == 0) return null;
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
@@ -1182,6 +1187,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             },
             .completion_context = &completion_context,
             .complete = completeInteractiveLine,
+            .expand_abbreviation = expandInteractiveAbbreviation,
             .diagnostic_context = &completion_context,
             .diagnose = diagnoseInteractiveLine,
         });

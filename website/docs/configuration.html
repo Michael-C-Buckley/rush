@@ -71,6 +71,22 @@
 <span class="var">$HOME</span>/.config/rush/config.rush
 <span class="var">$ENV</span></pre>
 
+  <h2 id="abbreviations"><a href="#abbreviations">Abbreviations</a></h2>
+
+  <p>Use <code>abbr</code> for fish-style interactive text expansion in the line editor.</p>
+
+  <pre><span class="cmd">abbr</span> gs <span class="str">'git status'</span>
+<span class="cmd">abbr</span> ga <span class="str">'git add'</span>
+<span class="cmd">abbr</span> gc <span class="str">'git commit'</span>
+<span class="cmd">abbr</span> <span class="opt">--list</span>
+<span class="cmd">abbr</span> <span class="opt">--erase</span> gs</pre>
+
+  <p>Abbreviations expand only while editing an interactive command line. When the command word exactly matches an abbreviation, accepting the word or line with space, Enter, or Tab rewrites the buffer to the expanded command so you can inspect or edit it before execution. Tab expands first, then runs completion for the expanded command.</p>
+
+  <p><code>abbr</code> is different from <code>alias</code>. An abbreviation is editor text expansion and does not change script execution. An alias is shell command aliasing and is expanded by the shell when scripts run. Normal <code>alias</code> definitions do not expand in the editor.</p>
+
+  <p>Place <code>abbr</code> commands in your Rush configuration file to persist them across interactive sessions.</p>
+
   <h2 id="prompt"><a href="#prompt">Prompt</a></h2>
 
   <p>Define <code>rush_prompt</code> to build the interactive prompt.</p>
