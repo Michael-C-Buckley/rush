@@ -8,3 +8,8 @@ set +a
 LOCAL=no
 command -p env | grep ^LOCAL=
 echo local=$?
+set -o allexport
+OA=ok
+set +o allexport
+OB=no
+command -p env | grep -E '^O[AB]=' | sort
