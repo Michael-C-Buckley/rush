@@ -5561,11 +5561,12 @@ fn trimReadCarriageReturn(line: []const u8) []const u8 {
 }
 
 fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    const input = catInput(self, stdin);
     if (command.argv.len == 1) {
         return .{
             .allocator = self.allocator,
             .status = 0,
-            .stdout = try self.allocator.dupe(u8, stdin),
+            .stdout = try self.allocator.dupe(u8, input),
             .stderr = try self.allocator.alloc(u8, 0),
         };
     }
@@ -5575,7 +5576,7 @@ fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     errdefer stdout.deinit(self.allocator);
     for (command.argv[1..]) |arg| {
         if (std.mem.eql(u8, arg.text, "-")) {
-            try stdout.appendSlice(self.allocator, stdin);
+            try stdout.appendSlice(self.allocator, input);
             continue;
         }
         const contents = std.Io.Dir.cwd().readFileAlloc(io, arg.text, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
@@ -5593,6 +5594,15 @@ fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         .stdout = try stdout.toOwnedSlice(self.allocator),
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn catInput(self: *Executor, stdin: []const u8) []const u8 {
+    if (stdin.len != 0) return stdin;
+    const script_stdin = self.script_stdin orelse return stdin;
+    if (self.script_stdin_offset >= script_stdin.len) return stdin;
+    const remaining = script_stdin[self.script_stdin_offset..];
+    self.script_stdin_offset = script_stdin.len;
+    return remaining;
 }
 
 const PrintfSpec = struct {

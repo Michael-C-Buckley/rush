@@ -1,0 +1,3 @@
+echo x >infile
+case $(cat) in x) echo input-hit ;; *) echo input-miss ;; esac <infile
+rm -f infile
