@@ -297,3 +297,4 @@ redirection-compound-if-for-loop	redirection	behavior	if for while until compoun
 redirection-compound-case-output	redirection	behavior	case compound command output redirection
 redirection-case-input-command-substitution	redirection	behavior	case input redirection feeds command substitution stdin
 redirection-function-definition	redirection	behavior	function definition redirections apply on invocation
+redirection-compound-here-doc-input	redirection	behavior	here-doc stdin feeds if while for and case compounds
