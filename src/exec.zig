@@ -5706,7 +5706,7 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                     if (index >= format.len) {
                         try stdout.append(allocator, '\\');
                     } else {
-                        _ = try appendEscapedSequence(allocator, stdout, format, &index);
+                        _ = try appendEscapedSequence(allocator, stdout, format, &index, .format);
                     }
                 },
                 '%' => {
@@ -5848,14 +5848,16 @@ fn appendEscapedString(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8),
         index += 1;
         if (index >= text.len) {
             try stdout.append(allocator, '\\');
-        } else if (!try appendEscapedSequence(allocator, stdout, text, &index)) {
+        } else if (!try appendEscapedSequence(allocator, stdout, text, &index, .percent_b)) {
             return false;
         }
     }
     return true;
 }
 
-fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize) !bool {
+const PrintfEscapeMode = enum { format, percent_b };
+
+fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize, mode: PrintfEscapeMode) !bool {
     const byte = text[index.*];
     switch (byte) {
         'a' => try stdout.append(allocator, 0x07),
@@ -5871,7 +5873,7 @@ fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8
         'v' => try stdout.append(allocator, 0x0b),
         '\\' => try stdout.append(allocator, '\\'),
         '0'...'7' => {
-            try appendOctalEscape(allocator, stdout, text, index);
+            try appendOctalEscape(allocator, stdout, text, index, mode);
             return true;
         },
         else => {
@@ -5883,11 +5885,11 @@ fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8
     return true;
 }
 
-fn appendOctalEscape(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize) !void {
+fn appendOctalEscape(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize, mode: PrintfEscapeMode) !void {
     var value: u8 = 0;
     var count: usize = 0;
     var cursor = index.*;
-    if (cursor < text.len and text[cursor] == '0') cursor += 1;
+    if (mode == .percent_b and cursor < text.len and text[cursor] == '0') cursor += 1;
     while (cursor < text.len and count < 3 and text[cursor] >= '0' and text[cursor] <= '7') : (count += 1) {
         value = value * 8 + (text[cursor] - '0');
         cursor += 1;
@@ -8356,6 +8358,13 @@ test "executor implements read and printf builtins" {
     var octal_escape_result = try executor.executeProgram(octal_escape.program, .{});
     defer octal_escape_result.deinit();
     try std.testing.expectEqualStrings("AABAC", octal_escape_result.stdout);
+
+    var format_octal_escape = try parseAndLower(std.testing.allocator, "printf '\\0337\\0338'");
+    defer format_octal_escape.parsed.deinit();
+    defer format_octal_escape.program.deinit();
+    var format_octal_escape_result = try executor.executeProgram(format_octal_escape.program, .{});
+    defer format_octal_escape_result.deinit();
+    try std.testing.expectEqualStrings("\x1b\x37\x1b\x38", format_octal_escape_result.stdout);
 
     var unknown_escape = try parseAndLower(std.testing.allocator, "printf 'a\\ b'");
     defer unknown_escape.parsed.deinit();

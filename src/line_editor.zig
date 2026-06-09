@@ -1096,9 +1096,8 @@ fn serializeFullFrame(allocator: std.mem.Allocator, frame: Frame, synchronized_o
     if (synchronized_output) try output.appendSlice(allocator, "\x1b[?2026h");
     try output.appendSlice(allocator, "\r\x1b[2K");
     if (frame.lines.len != 0) try output.appendSlice(allocator, frame.lines[0]);
-    try output.appendSlice(allocator, "\x1b[J");
     for (frame.lines[1..]) |line| {
-        try output.appendSlice(allocator, "\r\n");
+        try output.appendSlice(allocator, "\r\n\x1b[2K");
         try output.appendSlice(allocator, line);
     }
     const cursor_sequence = try cursorMoveFrom(frame.lines.len -| 1, frame.cursor_row, frame.cursor_col, allocator);
@@ -1757,7 +1756,8 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mswitch branches") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "git che\x1b[J") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "git che") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[J") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
 }
 
@@ -1852,7 +1852,8 @@ test "accepting completion clears previously rendered menu rows" {
     try session.handleKey(.{ .key = .enter });
     const accepted_frame = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(accepted_frame);
-    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "git checkout \x1b[J") != null);
+    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "git checkout ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "\x1b[J") == null);
     try std.testing.expect(std.mem.indexOf(u8, accepted_frame, "\x1b[2A") == null);
 }
 
@@ -2165,7 +2166,7 @@ test "line session renders with its prompt" {
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2Krush> x\x1b[J\r\x1b[7C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2Krush> x\r\x1b[7C", rendered);
 }
 
 test "render line styles diagnostic spans without moving cursor" {
@@ -2181,7 +2182,7 @@ test "render line styles diagnostic spans without moving cursor" {
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4:3;58;5;1mcomit\x1b[24;59m\x1b[J\r\x1b[11C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4:3;58;5;1mcomit\x1b[24;59m\r\x1b[11C", rendered);
 }
 
 test "render line wraps styled diagnostic spans" {
@@ -2570,7 +2571,7 @@ test "render line redraws prompt and buffer inside synchronized output" {
     const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "$ " } });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\x1b[?2026h\r\x1b[2K$ abc\x1b[J\r\x1b[4C\x1b[?2026l", rendered);
+    try std.testing.expectEqualStrings("\x1b[?2026h\r\x1b[2K$ abc\r\x1b[4C\x1b[?2026l", rendered);
 }
 
 test "render line can omit synchronized output" {
@@ -2581,7 +2582,7 @@ test "render line can omit synchronized output" {
     const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "> " }, .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2K> 界\x1b[J\r\x1b[4C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2K> 界\r\x1b[4C", rendered);
 }
 
 test "render line ignores ansi prompt bytes for cursor placement" {
@@ -2592,7 +2593,7 @@ test "render line ignores ansi prompt bytes for cursor placement" {
     const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "\x1b[34mrush> \x1b[0m" }, .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2K\x1b[34mrush> \x1b[0mx\x1b[J\r\x1b[7C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2K\x1b[34mrush> \x1b[0mx\r\x1b[7C", rendered);
 }
 
 test "frame wraps long input at terminal width" {
@@ -2666,7 +2667,7 @@ test "frame renderer diffs changed input line" {
     defer first.deinit(std.testing.allocator);
     const first_output = try renderer.render(std.testing.allocator, first, .{ .synchronized_output = false });
     defer std.testing.allocator.free(first_output);
-    try std.testing.expect(std.mem.indexOf(u8, first_output, "\x1b[J") != null);
+    try std.testing.expect(std.mem.indexOf(u8, first_output, "\x1b[J") == null);
 
     var second_editor = Editor.init(std.testing.allocator);
     defer second_editor.deinit();
@@ -2703,7 +2704,8 @@ test "frame renderer redraws when frame adds lines" {
     const menu_output = try renderer.render(std.testing.allocator, menu_frame, .{ .synchronized_output = false });
     defer std.testing.allocator.free(menu_output);
 
-    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\x1b[J") != null);
+    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\x1b[J") == null);
+    try std.testing.expect(std.mem.indexOf(u8, menu_output, "\r\n\x1b[2K") != null);
     try std.testing.expect(std.mem.indexOf(u8, menu_output, "checkout") != null);
 }
 
@@ -2733,4 +2735,6 @@ test "frame renderer diffs when frame removes lines" {
     try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[J") == null);
     try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[2K$ checkout ") != null);
     try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[1B\r\x1b[2K") != null);
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, accepted_output, "\x1b[1B\r\x1b[2K"));
+    try std.testing.expect(std.mem.indexOf(u8, accepted_output, "cherry-pick") == null);
 }
