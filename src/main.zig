@@ -2375,6 +2375,62 @@ test "prompt time formats strftime and go layouts" {
     for (gofmt_prompt) |byte| try std.testing.expect(std.ascii.isDigit(byte));
 }
 
+test "prompt async returns cached stdout and requests repaint" {
+    const Repaint = struct {
+        count: usize = 0,
+
+        fn request(context: *anyopaque) void {
+            const self: *@This() = @ptrCast(@alignCast(context));
+            self.count += 1;
+        }
+    };
+
+    var repaint: Repaint = .{};
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    executor.setPromptRepaintHandler(&repaint, Repaint.request);
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt text $(prompt_async cache-key --ttl 1000 -- echo fresh); }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+    executor.setLastStatus(7);
+
+    const cold_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(cold_prompt);
+    try std.testing.expectEqualStrings("", cold_prompt);
+    try std.testing.expectEqual(@as(exec.ExitStatus, 7), executor.lastStatus());
+
+    executor.waitForPromptAsyncRefreshes();
+    try std.testing.expectEqual(@as(usize, 1), repaint.count);
+
+    const warm_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(warm_prompt);
+    try std.testing.expectEqualStrings("fresh", warm_prompt);
+    try std.testing.expectEqual(@as(exec.ExitStatus, 7), executor.lastStatus());
+}
+
+test "prompt async suppresses stderr from refresh output" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_prompt() { prompt text $(prompt_async stderr-key --ttl 1000 -- /bin/sh -c 'echo out; echo err >&2'); }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+
+    const cold_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(cold_prompt);
+    try std.testing.expectEqualStrings("", cold_prompt);
+
+    executor.waitForPromptAsyncRefreshes();
+    const warm_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(warm_prompt);
+    try std.testing.expectEqualStrings("out", warm_prompt);
+}
+
 test "omitted newline marker follows displayed output stream" {
     try std.testing.expect(!outputNeedsNewlineMarker("", ""));
     try std.testing.expect(!outputNeedsNewlineMarker("ok\n", ""));

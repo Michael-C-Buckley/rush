@@ -637,6 +637,55 @@ pub const JobState = enum {
     done,
 };
 
+const PromptAsyncEntry = struct {
+    output: []u8,
+    updated_ms: u64 = 0,
+    inflight: bool = false,
+};
+
+const PromptAsyncSchedule = struct {
+    output: []u8,
+    should_spawn: bool,
+};
+
+const PromptAsyncRefresh = struct {
+    allocator: std.mem.Allocator,
+    owner: *Executor,
+    cache_key: []const u8,
+    script: []const u8,
+    io: std.Io,
+    executor: Executor,
+    thread: std.Thread = undefined,
+    done: std.atomic.Value(bool) = .init(false),
+
+    fn run(self: *PromptAsyncRefresh) void {
+        defer self.done.store(true, .release);
+        var result = self.executor.executeScriptSlice(self.script, .{
+            .io = self.io,
+            .allow_external = true,
+            .external_stdio = .capture,
+            .suppress_errexit = true,
+            .arg_zero = self.executor.arg_zero,
+        }) catch {
+            self.owner.finishPromptAsyncRefreshFailed(self.cache_key);
+            return;
+        };
+        defer result.deinit();
+        self.owner.finishPromptAsyncRefresh(self.cache_key, result.stdout, self.io) catch {
+            self.owner.finishPromptAsyncRefreshFailed(self.cache_key);
+            return;
+        };
+        if (self.owner.prompt_repaint_handler) |handler| handler.request(handler.context);
+    }
+
+    fn deinit(self: *PromptAsyncRefresh) void {
+        self.executor.deinit();
+        self.allocator.free(self.cache_key);
+        self.allocator.free(self.script);
+        self.* = undefined;
+    }
+};
+
 pub const ArrayValue = struct {
     values: std.ArrayList([]const u8) = .empty,
 
@@ -689,6 +738,10 @@ pub const Executor = struct {
     prompt_builder: ?PromptBuilder = null,
     prompt_refresh_interval_ms: ?u64 = null,
     prompt_repaint_handler: ?PromptRepaintHandler = null,
+    prompt_async_mutex: std.atomic.Mutex = .unlocked,
+    prompt_async_entries: std.StringHashMapUnmanaged(PromptAsyncEntry) = .empty,
+    prompt_async_refreshes: std.ArrayList(*PromptAsyncRefresh) = .empty,
+    prompt_async_owner: ?*Executor = null,
     completion_builder: ?CompletionBuilder = null,
     completion_context: ?CompletionEvalContext = null,
     last_completion_context: ?CompletionEvalContext = null,
@@ -717,6 +770,129 @@ pub const Executor = struct {
 
     pub fn promptRefreshIntervalMs(self: Executor) ?u64 {
         return self.prompt_refresh_interval_ms;
+    }
+
+    pub fn waitForPromptAsyncRefreshes(self: *Executor) void {
+        self.reapPromptAsyncRefreshes(true);
+    }
+
+    fn promptAsyncCacheKey(self: *Executor, io: std.Io, key: []const u8) ![]u8 {
+        const cwd = try self.logicalCwd(io);
+        defer self.allocator.free(cwd);
+        return std.fmt.allocPrint(self.allocator, "{s}\x00{s}", .{ cwd, key });
+    }
+
+    fn promptAsyncCachedOutputOrSchedule(self: *Executor, source: *Executor, cache_key: []const u8, ttl_ms: u64, script: []const u8, io: std.Io) ![]u8 {
+        self.reapPromptAsyncRefreshes(false);
+        const now = nowMs(io);
+        var new_key: ?[]u8 = try self.allocator.dupe(u8, cache_key);
+        defer if (new_key) |key| self.allocator.free(key);
+        var new_entry_output: ?[]u8 = try self.allocator.alloc(u8, 0);
+        defer if (new_entry_output) |entry_output| self.allocator.free(entry_output);
+        var cold_output: ?[]u8 = try self.allocator.alloc(u8, 0);
+        defer if (cold_output) |output| self.allocator.free(output);
+
+        const scheduled = blk: {
+            lockExecutorMutex(&self.prompt_async_mutex);
+            defer self.prompt_async_mutex.unlock();
+
+            const entry_result = try self.prompt_async_entries.getOrPut(self.allocator, cache_key);
+            if (entry_result.found_existing) {
+                self.allocator.free(new_key.?);
+                new_key = null;
+                self.allocator.free(new_entry_output.?);
+                new_entry_output = null;
+                self.allocator.free(cold_output.?);
+                cold_output = null;
+
+                const entry = entry_result.value_ptr;
+                const output = try self.allocator.dupe(u8, entry.output);
+                errdefer self.allocator.free(output);
+                const should_spawn = !entry.inflight and (entry.updated_ms == 0 or now -| entry.updated_ms >= ttl_ms);
+                if (should_spawn) entry.inflight = true;
+                break :blk PromptAsyncSchedule{ .output = output, .should_spawn = should_spawn };
+            }
+
+            entry_result.key_ptr.* = new_key.?;
+            new_key = null;
+            entry_result.value_ptr.* = .{ .output = new_entry_output.?, .inflight = true };
+            new_entry_output = null;
+            const output = cold_output.?;
+            cold_output = null;
+            break :blk PromptAsyncSchedule{ .output = output, .should_spawn = true };
+        };
+
+        if (scheduled.should_spawn) self.startPromptAsyncRefresh(source, cache_key, script, io) catch |err| {
+            lockExecutorMutex(&self.prompt_async_mutex);
+            if (self.prompt_async_entries.getPtr(cache_key)) |entry| entry.inflight = false;
+            self.prompt_async_mutex.unlock();
+            self.allocator.free(scheduled.output);
+            return err;
+        };
+
+        return scheduled.output;
+    }
+
+    fn startPromptAsyncRefresh(self: *Executor, source: *Executor, cache_key: []const u8, script: []const u8, io: std.Io) !void {
+        const refresh = try self.allocator.create(PromptAsyncRefresh);
+        errdefer self.allocator.destroy(refresh);
+        var owned_cache_key: ?[]u8 = try self.allocator.dupe(u8, cache_key);
+        errdefer if (owned_cache_key) |key| self.allocator.free(key);
+        var owned_script: ?[]u8 = try self.allocator.dupe(u8, script);
+        errdefer if (owned_script) |owned| self.allocator.free(owned);
+        refresh.* = .{
+            .allocator = self.allocator,
+            .owner = self,
+            .cache_key = owned_cache_key.?,
+            .script = owned_script.?,
+            .io = io,
+            .executor = Executor.init(self.allocator),
+        };
+        owned_cache_key = null;
+        owned_script = null;
+        errdefer refresh.deinit();
+        try refresh.executor.copyStateFrom(source);
+        try self.prompt_async_refreshes.append(self.allocator, refresh);
+        errdefer _ = self.prompt_async_refreshes.pop();
+        refresh.thread = try std.Thread.spawn(.{}, PromptAsyncRefresh.run, .{refresh});
+    }
+
+    fn finishPromptAsyncRefresh(self: *Executor, cache_key: []const u8, output: []const u8, io: std.Io) !void {
+        const owned_output = try self.allocator.dupe(u8, output);
+        errdefer self.allocator.free(owned_output);
+        lockExecutorMutex(&self.prompt_async_mutex);
+        defer self.prompt_async_mutex.unlock();
+        const entry = self.prompt_async_entries.getPtr(cache_key) orelse return;
+        self.allocator.free(entry.output);
+        entry.output = owned_output;
+        entry.updated_ms = nowMs(io);
+        entry.inflight = false;
+    }
+
+    fn finishPromptAsyncRefreshFailed(self: *Executor, cache_key: []const u8) void {
+        lockExecutorMutex(&self.prompt_async_mutex);
+        defer self.prompt_async_mutex.unlock();
+        if (self.prompt_async_entries.getPtr(cache_key)) |entry| entry.inflight = false;
+    }
+
+    fn reapPromptAsyncRefreshes(self: *Executor, wait: bool) void {
+        var index: usize = 0;
+        while (index < self.prompt_async_refreshes.items.len) {
+            const refresh = self.prompt_async_refreshes.items[index];
+            if (!wait and !refresh.done.load(.acquire)) {
+                index += 1;
+                continue;
+            }
+            _ = self.prompt_async_refreshes.swapRemove(index);
+            refresh.thread.join();
+            if (!refresh.done.load(.acquire)) {
+                lockExecutorMutex(&self.prompt_async_mutex);
+                if (self.prompt_async_entries.getPtr(refresh.cache_key)) |entry| entry.inflight = false;
+                self.prompt_async_mutex.unlock();
+            }
+            refresh.deinit();
+            self.allocator.destroy(refresh);
+        }
     }
 
     pub fn importEnvironment(self: *Executor, environ_map: *const std.process.Environ.Map) !void {
@@ -778,7 +954,7 @@ pub const Executor = struct {
         self.last_status_text_len = text.len;
     }
 
-    fn lastStatus(self: Executor) ExitStatus {
+    pub fn lastStatus(self: Executor) ExitStatus {
         return std.fmt.parseInt(ExitStatus, self.last_status_text[0..self.last_status_text_len], 10) catch 0;
     }
 
@@ -853,6 +1029,14 @@ pub const Executor = struct {
         self.parameter_error.clear(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
+        self.waitForPromptAsyncRefreshes();
+        var prompt_async_iter = self.prompt_async_entries.iterator();
+        while (prompt_async_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.output);
+        }
+        self.prompt_async_entries.deinit(self.allocator);
+        self.prompt_async_refreshes.deinit(self.allocator);
         if (self.completion_builder) |*builder| builder.deinit(self.allocator);
         self.global_positionals.deinit(self.allocator);
         for (self.call_frames.items) |*frame| frame.deinit(self.allocator);
@@ -1446,6 +1630,15 @@ pub const Executor = struct {
         if (!self.hasFunction("rush_prompt")) return self.allocator.dupe(u8, fallback);
 
         if (self.prompt_builder != null) return error.RecursivePrompt;
+        const saved_prompt_async_owner = self.prompt_async_owner;
+        const saved_last_status_text = self.last_status_text;
+        const saved_last_status_text_len = self.last_status_text_len;
+        self.prompt_async_owner = self;
+        defer {
+            self.prompt_async_owner = saved_prompt_async_owner;
+            self.last_status_text = saved_last_status_text;
+            self.last_status_text_len = saved_last_status_text_len;
+        }
         self.prompt_refresh_interval_ms = null;
         self.prompt_builder = .{};
         errdefer {
@@ -1797,6 +1990,7 @@ pub const Executor = struct {
         self.last_background_pid_text_len = other.last_background_pid_text_len;
         self.prompt_refresh_interval_ms = other.prompt_refresh_interval_ms;
         self.prompt_repaint_handler = other.prompt_repaint_handler;
+        self.prompt_async_owner = other.prompt_async_owner orelse @constCast(other);
         self.completion_context = other.completion_context;
         self.last_completion_context = other.last_completion_context;
         self.script_stdin = other.script_stdin;
@@ -4834,6 +5028,7 @@ fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
     if (self.prompt_builder != null) {
         if (std.mem.eql(u8, name, "prompt_pwd")) return builtinPromptPwd;
         if (std.mem.eql(u8, name, "prompt_duration")) return builtinPromptDuration;
+        if (std.mem.eql(u8, name, "prompt_async")) return builtinPromptAsync;
         if (std.mem.eql(u8, name, "prompt_time")) return builtinPromptTime;
     }
     if (self.completion_builder != null) {
@@ -5594,6 +5789,38 @@ fn appendPromptArgs(self: *Executor, builder: *PromptBuilder, args: []const ir.W
     try builder.appendText(self.allocator, args);
 }
 
+fn joinPromptAsyncCommand(allocator: std.mem.Allocator, args: []const ir.WordRef) ![]u8 {
+    var script: std.ArrayList(u8) = .empty;
+    errdefer script.deinit(allocator);
+    for (args, 0..) |arg, index| {
+        if (index > 0) try script.append(allocator, ' ');
+        try appendShellQuoted(allocator, &script, arg.text);
+    }
+    return script.toOwnedSlice(allocator);
+}
+
+fn appendShellQuoted(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8) !void {
+    try out.append(allocator, '\'');
+    for (text) |byte| {
+        if (byte == '\'') {
+            try out.appendSlice(allocator, "'\\''");
+        } else {
+            try out.append(allocator, byte);
+        }
+    }
+    try out.append(allocator, '\'');
+}
+
+fn lockExecutorMutex(mutex: *std.atomic.Mutex) void {
+    while (!mutex.tryLock()) std.Thread.yield() catch {};
+}
+
+fn nowMs(io: std.Io) u64 {
+    const timestamp = std.Io.Timestamp.now(io, .real);
+    if (timestamp.nanoseconds <= 0) return 0;
+    return @intCast(@divFloor(timestamp.nanoseconds, std.time.ns_per_ms));
+}
+
 fn parsePromptColor(name: []const u8) ?vaxis.Color {
     if (std.mem.eql(u8, name, "default")) return .default;
     if (std.mem.eql(u8, name, "black")) return .{ .index = 0 };
@@ -5639,6 +5866,31 @@ fn builtinPromptDuration(self: *Executor, command: ir.SimpleCommand, stdin: []co
     _ = stdin;
     _ = options;
     return stdoutLine(self.allocator, self.last_command_duration_text[0..self.last_command_duration_text_len], 0);
+}
+
+fn builtinPromptAsync(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    if (self.prompt_builder == null) return errorResult(self.allocator, 2, "prompt_async", "not rendering a prompt");
+    if (command.argv.len < 6) return errorResult(self.allocator, 2, "prompt_async", "usage: KEY --ttl MS -- COMMAND...");
+    if (!std.mem.eql(u8, command.argv[2].text, "--ttl")) return errorResult(self.allocator, 2, "prompt_async", "usage: KEY --ttl MS -- COMMAND...");
+    const ttl_ms = std.fmt.parseUnsigned(u64, command.argv[3].text, 10) catch return errorResult(self.allocator, 2, "prompt_async", "invalid ttl");
+    if (!std.mem.eql(u8, command.argv[4].text, "--")) return errorResult(self.allocator, 2, "prompt_async", "usage: KEY --ttl MS -- COMMAND...");
+    const io = options.io orelse return error.MissingIoForBuiltin;
+
+    const owner = self.prompt_async_owner orelse self;
+    const cache_key = try owner.promptAsyncCacheKey(io, command.argv[1].text);
+    defer owner.allocator.free(cache_key);
+    const script = try joinPromptAsyncCommand(owner.allocator, command.argv[5..]);
+    defer owner.allocator.free(script);
+
+    const output = try owner.promptAsyncCachedOutputOrSchedule(self, cache_key, ttl_ms, script, io);
+    defer owner.allocator.free(output);
+    return .{
+        .allocator = self.allocator,
+        .status = self.lastStatus(),
+        .stdout = try self.allocator.dupe(u8, output),
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
 }
 
 fn builtinPromptTime(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
