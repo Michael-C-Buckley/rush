@@ -532,19 +532,59 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
         },
         .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
             const base = value orelse "";
-            const pattern = try expandWordScalar(allocator, parsed.word, options);
-            defer allocator.free(pattern);
+            var pattern = try expandPatternWord(allocator, parsed.word, options);
+            defer pattern.deinit(allocator);
             return removePattern(allocator, base, pattern, parsed.operator);
         },
     }
 }
 
-fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: []const u8, operator: ParameterOperator) ![]const u8 {
+const ExpansionPattern = struct {
+    text: []const u8,
+    special: []const bool,
+
+    fn deinit(self: *ExpansionPattern, allocator: std.mem.Allocator) void {
+        allocator.free(self.text);
+        allocator.free(self.special);
+        self.* = undefined;
+    }
+};
+
+fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPattern {
+    var parts = try parseWordParts(allocator, raw);
+    defer parts.deinit();
+
+    var text: std.ArrayList(u8) = .empty;
+    errdefer text.deinit(allocator);
+    var special: std.ArrayList(bool) = .empty;
+    errdefer special.deinit(allocator);
+
+    for (parts.parts) |part| {
+        const rendered = try renderPart(allocator, parts.raw, part, options);
+        defer allocator.free(rendered);
+        const meta_active = switch (part.kind) {
+            .unquoted, .parameter, .arithmetic, .command_substitution => true,
+            .single_quoted, .double_quoted, .escaped => false,
+        };
+        try appendPatternPart(allocator, &text, &special, rendered, meta_active);
+    }
+
+    return .{ .text = try text.toOwnedSlice(allocator), .special = try special.toOwnedSlice(allocator) };
+}
+
+fn appendPatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
+    try text.appendSlice(allocator, rendered);
+    for (rendered) |byte| {
+        try special.append(allocator, meta_active and (byte == '*' or byte == '?' or byte == '['));
+    }
+}
+
+fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, operator: ParameterOperator) ![]const u8 {
     return switch (operator) {
         .remove_small_suffix => blk: {
             var start = value.len;
             while (true) {
-                if (globMatches(pattern, value[start..])) break :blk allocator.dupe(u8, value[0..start]);
+                if (globPatternMatches(pattern, value[start..])) break :blk allocator.dupe(u8, value[0..start]);
                 if (start == 0) break;
                 start -= 1;
             }
@@ -553,21 +593,21 @@ fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: []con
         .remove_large_suffix => blk: {
             var start: usize = 0;
             while (start <= value.len) : (start += 1) {
-                if (globMatches(pattern, value[start..])) break :blk allocator.dupe(u8, value[0..start]);
+                if (globPatternMatches(pattern, value[start..])) break :blk allocator.dupe(u8, value[0..start]);
             }
             break :blk allocator.dupe(u8, value);
         },
         .remove_small_prefix => blk: {
             var end: usize = 0;
             while (end <= value.len) : (end += 1) {
-                if (globMatches(pattern, value[0..end])) break :blk allocator.dupe(u8, value[end..]);
+                if (globPatternMatches(pattern, value[0..end])) break :blk allocator.dupe(u8, value[end..]);
             }
             break :blk allocator.dupe(u8, value);
         },
         .remove_large_prefix => blk: {
             var end = value.len;
             while (true) {
-                if (globMatches(pattern, value[0..end])) break :blk allocator.dupe(u8, value[end..]);
+                if (globPatternMatches(pattern, value[0..end])) break :blk allocator.dupe(u8, value[end..]);
                 if (end == 0) break;
                 end -= 1;
             }
@@ -1246,26 +1286,38 @@ fn hasQuotedGlobSyntax(parts: WordParts) bool {
 }
 
 fn globMatches(pattern: []const u8, text: []const u8) bool {
-    return globMatchesAt(pattern, 0, text, 0);
+    return globMatchesAt(pattern, null, 0, text, 0);
 }
 
-fn globMatchesAt(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) bool {
+fn globPatternMatches(pattern: ExpansionPattern, text: []const u8) bool {
+    std.debug.assert(pattern.text.len == pattern.special.len);
+    return globMatchesAt(pattern.text, pattern.special, 0, text, 0);
+}
+
+fn isGlobSpecial(special: ?[]const bool, index: usize) bool {
+    return if (special) |mask| mask[index] else true;
+}
+
+fn globMatchesAt(pattern: []const u8, special: ?[]const bool, pattern_index: usize, text: []const u8, text_index: usize) bool {
     if (pattern_index == pattern.len) return text_index == text.len;
 
     switch (pattern[pattern_index]) {
-        '*' => {
+        '*' => if (isGlobSpecial(special, pattern_index)) {
             var next_text = text_index;
             while (true) : (next_text += 1) {
-                if (globMatchesAt(pattern, pattern_index + 1, text, next_text)) return true;
+                if (globMatchesAt(pattern, special, pattern_index + 1, text, next_text)) return true;
                 if (next_text == text.len) break;
             }
             return false;
-        },
-        '?' => return text_index < text.len and globMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
-        '[' => if (matchBracket(pattern, pattern_index, text, text_index)) |matched| {
-            return matched.ok and globMatchesAt(pattern, matched.next_pattern, text, text_index + 1);
-        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
-        else => |c| return text_index < text.len and c == text[text_index] and globMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
+        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
+        '?' => if (isGlobSpecial(special, pattern_index)) return text_index < text.len and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1) else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
+        '[' => if (isGlobSpecial(special, pattern_index)) {
+            if (matchBracket(pattern, pattern_index, text, text_index)) |matched| {
+                return matched.ok and globMatchesAt(pattern, special, matched.next_pattern, text, text_index + 1);
+            }
+            return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1);
+        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
+        else => |c| return text_index < text.len and c == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
     }
 }
 

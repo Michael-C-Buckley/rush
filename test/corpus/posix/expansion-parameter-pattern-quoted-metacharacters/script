@@ -1,0 +1,11 @@
+v=abc
+p='a*'
+echo ${v#a\*}
+echo ${v#a*}
+echo ${v#'a*'}
+echo ${v#"$p"}
+echo ${v#$p}
+echo ${v%\*c}
+echo ${v%*c}
+echo ${v#[ab]}
+echo ${v#[!ab]}
