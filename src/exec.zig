@@ -3639,7 +3639,8 @@ pub const Executor = struct {
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
         var synthetic_failure = false;
-        var external_result = self.executeExternal(expanded, io, options) catch |err| switch (err) {
+        const external_stdin = self.remainingScriptStdin();
+        var external_result = self.executeExternal(expanded, io, options, external_stdin) catch |err| switch (err) {
             error.CommandNotFound => blk: {
                 synthetic_failure = true;
                 break :blk try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found");
@@ -3973,6 +3974,10 @@ pub const Executor = struct {
         var child = Executor.init(substitution_context.executor.allocator);
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
+        if (substitution_context.executor.remainingScriptStdin()) |stdin| {
+            child.script_stdin = stdin;
+            child.script_stdin_offset = 0;
+        }
         if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
         if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
         child.pending_exit = null;
@@ -4516,7 +4521,7 @@ pub const Executor = struct {
         return script_stdin[self.script_stdin_offset..];
     }
 
-    fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
+    fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions, fallback_stdin: ?[]const u8) !CommandResult {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
         const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
@@ -4589,7 +4594,7 @@ pub const Executor = struct {
         }
 
         if (stdin_file == null and externalStdinUsesScriptInput(options.external_stdio)) {
-            if (self.remainingScriptStdin()) |stdin| {
+            if (fallback_stdin) |stdin| {
                 stdin_file = try fileFromBytes(io, stdin);
                 self.script_stdin_offset = (self.script_stdin orelse unreachable).len;
             }
@@ -10581,6 +10586,27 @@ test "command substitution captures external stdout while stderr remains pty" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("stderr:tty\ndup:nottyerr-simple\norder:errout\ngroup:nottyerr-group\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "external command substitution reads compound input redirection" {
+    const path = "rush-case-external-substitution-stdin.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "x\n" });
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\case $(/bin/cat) in x) echo external-hit ;; *) echo external-miss ;; esac <rush-case-external-substitution-stdin.tmp
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("external-hit\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
