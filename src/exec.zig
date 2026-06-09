@@ -12133,6 +12133,47 @@ test "first-party nvim completion script loads options commands and files" {
     try expectCandidate(files, file_path, .file);
 }
 
+test "first-party code completion script loads options paths and commands" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/code.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const file_path = "rush-code-completion.txt";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+    const dir_path = "rush-code-completion-dir";
+    std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("code --di", "code --di".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--diff", .option);
+
+    const directories = try executor.collectCompletionsForInput("code --user-data-dir rush-code", "code --user-data-dir rush-code".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(directories);
+    try expectCandidate(directories, "rush-code-completion-dir/", .directory);
+
+    const commands = try executor.collectCompletionsForInput("code --command workbench.action.reload", "code --command workbench.action.reload".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(commands);
+    try expectCandidate(commands, "workbench.action.reloadWindow", .plain);
+
+    const files = try executor.collectCompletionsForInput("code rush-code", "code rush-code".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(files);
+    try expectCandidate(files, file_path, .file);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();

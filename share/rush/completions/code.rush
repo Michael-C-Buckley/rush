@@ -1,0 +1,95 @@
+# First-party VS Code CLI completion slice.
+
+# Common window/opening options.
+complete code --option --short h --long help --description 'show help'
+complete code --option --short v --long version --description 'show version'
+complete code --option --short a --long add --description 'add folders to the current window'
+complete code --option --short g --long goto --description 'open file at path:line[:column]'
+complete code --option --short d --long diff --description 'compare two files'
+complete code --option --short m --long merge --description 'perform a three-way merge'
+complete code --option --short w --long wait --description 'wait for files to be closed'
+complete code --option --short r --long reuse-window --description 'force opening in the last active window'
+complete code --option --short n --long new-window --description 'force opening a new window'
+complete code --option --long folder-uri --value-name uri --description 'open folder URI'
+complete code --option --long file-uri --value-name uri --description 'open file URI'
+complete code --option --long open-url --description 'open a URL'
+
+# Extension management.
+complete code --option --long extensions-dir --value-name dir --description 'set extensions directory'
+complete code --option-value --long extensions-dir --function __rush_complete_code_directories
+complete code --option --long list-extensions --description 'list installed extensions'
+complete code --option --long show-versions --description 'show extension versions'
+complete code --option --long install-extension --value-name extension --description 'install extension by id or VSIX path'
+complete code --option-value --long install-extension --function __rush_complete_code_extension_values
+complete code --option --long uninstall-extension --value-name extension --description 'uninstall extension by id'
+complete code --option --long enable-proposed-api --value-name extension --description 'enable proposed API for extension'
+complete code --option --long disable-extension --value-name extension --description 'disable an extension'
+complete code --option --long disable-extensions --description 'disable all installed extensions'
+
+# Profiles, user data, commands, and diagnostics.
+complete code --option --long profile --value-name profile --description 'open with profile'
+complete code --option-value --long profile --function __rush_complete_code_profiles
+complete code --option --long user-data-dir --value-name dir --description 'set user data directory'
+complete code --option-value --long user-data-dir --function __rush_complete_code_directories
+complete code --option --long locale --value-name locale --description 'set display language'
+complete code --option-value --long locale --function __rush_complete_code_locales
+complete code --option --long command --value-name command --description 'run command after startup'
+complete code --option-value --long command --function __rush_complete_code_commands
+complete code --option --long verbose --description 'print verbose output'
+complete code --option --short s --long status --description 'print process usage and diagnostics'
+complete code --option --long log --value-name level --description 'set log level'
+complete code --option-value --long log --function __rush_complete_code_log_levels
+complete code --option --long telemetry --description 'show telemetry output'
+complete code --option --long disable-gpu --description 'disable GPU hardware acceleration'
+
+# File, folder, and workspace operands.
+complete code --argument --function __rush_complete_code_paths
+
+__rush_complete_code_paths() {
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_code_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_code_extension_values() {
+  completion files --extension .vsix
+}
+
+__rush_complete_code_profiles() {
+  completion candidate Default --kind plain
+}
+
+__rush_complete_code_locales() {
+  completion candidate en --kind plain
+  completion candidate en-US --kind plain
+  completion candidate de --kind plain
+  completion candidate es --kind plain
+  completion candidate fr --kind plain
+  completion candidate ja --kind plain
+  completion candidate ko --kind plain
+  completion candidate pt-BR --kind plain
+  completion candidate ru --kind plain
+  completion candidate zh-CN --kind plain
+  completion candidate zh-TW --kind plain
+}
+
+__rush_complete_code_commands() {
+  completion candidate workbench.action.files.openFile --kind plain
+  completion candidate workbench.action.files.openFolder --kind plain
+  completion candidate workbench.action.reloadWindow --kind plain
+  completion candidate workbench.action.showCommands --kind plain
+  completion candidate workbench.extensions.action.showInstalledExtensions --kind plain
+}
+
+__rush_complete_code_log_levels() {
+  completion candidate critical --kind plain
+  completion candidate error --kind plain
+  completion candidate warn --kind plain
+  completion candidate info --kind plain
+  completion candidate debug --kind plain
+  completion candidate trace --kind plain
+  completion candidate off --kind plain
+}
