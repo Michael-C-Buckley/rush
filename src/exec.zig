@@ -5925,8 +5925,11 @@ fn builtinUnalias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     _ = options;
     if (command.argv.len == 1) return errorResult(self.allocator, 2, "unalias", "missing operand");
     var index: usize = 1;
-    if (std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-a")) return errorResult(self.allocator, 2, "unalias", "unsupported option");
-    if (std.mem.eql(u8, command.argv[index].text, "-a")) {
+    const option_terminated = std.mem.eql(u8, command.argv[index].text, "--");
+    if (option_terminated) index += 1;
+    if (index >= command.argv.len) return errorResult(self.allocator, 2, "unalias", "missing operand");
+    if (!option_terminated and std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-a")) return errorResult(self.allocator, 2, "unalias", "unsupported option");
+    if (!option_terminated and std.mem.eql(u8, command.argv[index].text, "-a")) {
         var iter = self.aliases.iterator();
         while (iter.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);

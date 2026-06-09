@@ -268,3 +268,4 @@ builtin-wait-option-terminator	builtin	behavior	wait accepts option terminator b
 builtin-option-terminators	builtin	behavior	common builtins accept option terminator
 builtin-command-V-builtin	builtin	behavior	command -V describes shell builtins
 builtin-printf-option-terminator	builtin	behavior	printf accepts option terminator before format operand
+builtin-unalias-option-terminator	builtin	behavior	unalias accepts option terminator before alias operands
