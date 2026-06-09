@@ -216,3 +216,4 @@ if false; then true; fi; echo no_else:$?; if true; then false; else true; fi; ec
 { false; }; echo status:$?; { true; false; }; echo last:$?
 f(){ set -- inner; echo in:$#:$1; }; set -- outer; f; echo out:$#:$1
 f(){ shift; echo in:$#:$1; }; set -- outer; f inner extra; echo out:$#:$1
+f(){ echo in:$A; A=changed; }; A=outer; A=tmp f; echo out:$A
