@@ -3404,7 +3404,10 @@ pub const Executor = struct {
             const name = assignment.text[0..equals];
             const old_value = if (self.executor.getEnv(name)) |value| try self.executor.allocator.dupe(u8, value) else null;
             errdefer if (old_value) |value| self.executor.allocator.free(value);
-            try self.saved.append(self.executor.allocator, .{ .name = try self.executor.allocator.dupe(u8, name), .old_value = old_value, .old_exported = self.executor.isExported(name) });
+            const owned_name = try self.executor.allocator.dupe(u8, name);
+            errdefer self.executor.allocator.free(owned_name);
+            try self.saved.append(self.executor.allocator, .{ .name = owned_name, .old_value = old_value, .old_exported = self.executor.isExported(name) });
+            errdefer _ = self.saved.pop();
             try self.executor.setEnv(name, assignment.text[equals + 1 ..]);
         }
 
