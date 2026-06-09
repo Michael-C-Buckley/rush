@@ -182,3 +182,4 @@ HOME=/tmp/rush-home VALUE=~ LIST=~/bin:~ command -p env | grep -E '^(VALUE|LIST)
 u=~root; case "$u" in /*) echo user-abs ;; "~root") echo user-literal ;; *) echo user-other ;; esac; OWNER=~root command -p env | grep ^OWNER= | sed "s|=.*|=ABS|"
 PATH=/nope command -p env | grep ^PATH=
 VAR=hidden; command -p env | grep ^VAR=; echo hidden=$?; set -a; AUTO=ok; command -p env | grep ^AUTO=; set +a; LOCAL=no; command -p env | grep ^LOCAL=; echo local=$?
+export LATER; LATER=ok; command -p env | grep ^LATER=

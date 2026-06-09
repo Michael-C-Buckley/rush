@@ -248,3 +248,4 @@ expansion-assignment-prefix-context	expansion	behavior	assignment prefix expansi
 expansion-tilde-named-user	expansion	behavior	tilde expansion resolves a named user through the user database
 builtin-command-default-path-env	builtin	behavior	command -p uses default lookup path without replacing child PATH
 option-set-allexport	options	behavior	set -a marks subsequent assignments for export without exporting ordinary shell variables
+builtin-export-mark-later-assignment	builtin	behavior	export marks an unset name so later assignment enters the environment
