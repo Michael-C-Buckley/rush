@@ -1,0 +1,261 @@
+# First-party AWS CLI completion slice.
+
+# Global options.
+complete aws --option --long profile --value-name profile --description 'use a named profile'
+complete aws --option-value --long profile --function __rush_complete_aws_profiles
+complete aws --option --long region --value-name region --description 'use region'
+complete aws --option-value --long region --function __rush_complete_aws_regions
+complete aws --option --long output --value-name format --description 'output format'
+complete aws --option-value --long output --function __rush_complete_aws_outputs
+complete aws --option --long endpoint-url --value-name url --description 'override service endpoint URL'
+complete aws --option-value --long endpoint-url --function __rush_complete_aws_url_shapes
+complete aws --option --long no-cli-pager --description 'disable CLI pager'
+complete aws --option --long debug --description 'turn on debug logging'
+complete aws --option --long no-verify-ssl --description 'do not verify SSL certificates'
+complete aws --option --long ca-bundle --value-name file --description 'CA certificate bundle file'
+complete aws --option-value --long ca-bundle --function __rush_complete_aws_files
+complete aws --option --long cli-input-json --value-name file --description 'read arguments from JSON file'
+complete aws --option-value --long cli-input-json --function __rush_complete_aws_json_files
+complete aws --option --long generate-cli-skeleton --value-name mode --description 'print JSON skeleton'
+complete aws --option-value --long generate-cli-skeleton --function __rush_complete_aws_skeleton_modes
+complete aws --option --long query --value-name expression --description 'JMESPath query expression'
+complete aws --option --long color --value-name mode --description 'control color output'
+complete aws --option-value --long color --function __rush_complete_aws_color_modes
+complete aws --option --long version --description 'show version'
+complete aws --option --long help --description 'show help'
+
+# Service families.
+complete aws --subcommand s3 --description 'high-level S3 commands'
+complete aws --subcommand s3api --description 'low-level S3 API commands'
+complete aws --subcommand ec2 --description 'EC2 service commands'
+complete aws --subcommand sts --description 'Security Token Service commands'
+complete aws --subcommand iam --description 'IAM service commands'
+complete aws --subcommand logs --description 'CloudWatch Logs commands'
+complete aws --subcommand cloudformation --description 'CloudFormation commands'
+complete aws --subcommand eks --description 'Elastic Kubernetes Service commands'
+complete aws --subcommand ecr --description 'Elastic Container Registry commands'
+
+# S3 high-level commands.
+complete 'aws s3' --subcommand ls --description 'list S3 objects or buckets'
+complete 'aws s3' --subcommand cp --description 'copy local files or S3 objects'
+complete 'aws s3' --subcommand sync --description 'sync directories and S3 prefixes'
+complete 'aws s3' --subcommand mv --description 'move local files or S3 objects'
+complete 'aws s3' --subcommand rm --description 'delete S3 objects'
+complete 'aws s3' --subcommand mb --description 'make S3 bucket'
+complete 'aws s3' --subcommand rb --description 'remove S3 bucket'
+complete 'aws s3' --subcommand presign --description 'generate presigned URL'
+complete 'aws s3 ls' --argument --function __rush_complete_aws_s3_and_paths
+complete 'aws s3 cp' --argument --function __rush_complete_aws_s3_and_paths
+complete 'aws s3 sync' --argument --function __rush_complete_aws_s3_and_paths
+complete 'aws s3 mv' --argument --function __rush_complete_aws_s3_and_paths
+complete 'aws s3 rm' --argument --function __rush_complete_aws_s3_uris
+complete 'aws s3 mb' --argument --function __rush_complete_aws_s3_uris
+complete 'aws s3 rb' --argument --function __rush_complete_aws_s3_uris
+complete 'aws s3 presign' --argument --function __rush_complete_aws_s3_uris
+
+# S3 API commands.
+complete 'aws s3api' --subcommand list-buckets --description 'list buckets'
+complete 'aws s3api' --subcommand list-objects-v2 --description 'list objects in a bucket'
+complete 'aws s3api' --subcommand put-object --description 'add an object to a bucket'
+complete 'aws s3api' --subcommand get-object --description 'retrieve an object from a bucket'
+complete 'aws s3api' --subcommand delete-object --description 'delete an object from a bucket'
+complete 'aws s3api list-objects-v2' --option --long bucket --value-name bucket --description 'bucket name'
+complete 'aws s3api list-objects-v2' --option-value --long bucket --function __rush_complete_aws_bucket_names
+complete 'aws s3api put-object' --option --long bucket --value-name bucket --description 'bucket name'
+complete 'aws s3api put-object' --option-value --long bucket --function __rush_complete_aws_bucket_names
+complete 'aws s3api put-object' --option --long key --value-name key --description 'object key'
+complete 'aws s3api put-object' --option-value --long key --function __rush_complete_aws_s3_keys
+complete 'aws s3api put-object' --option --long body --value-name file --description 'local file body'
+complete 'aws s3api put-object' --option-value --long body --function __rush_complete_aws_files
+complete 'aws s3api get-object' --option --long bucket --value-name bucket --description 'bucket name'
+complete 'aws s3api get-object' --option-value --long bucket --function __rush_complete_aws_bucket_names
+complete 'aws s3api get-object' --argument --function __rush_complete_aws_files
+
+# EC2 commands.
+complete 'aws ec2' --subcommand describe-instances --description 'describe EC2 instances'
+complete 'aws ec2' --subcommand describe-images --description 'describe AMIs'
+complete 'aws ec2' --subcommand describe-security-groups --description 'describe security groups'
+complete 'aws ec2' --subcommand describe-vpcs --description 'describe VPCs'
+complete 'aws ec2' --subcommand describe-subnets --description 'describe subnets'
+complete 'aws ec2' --subcommand start-instances --description 'start EC2 instances'
+complete 'aws ec2' --subcommand stop-instances --description 'stop EC2 instances'
+complete 'aws ec2' --subcommand terminate-instances --description 'terminate EC2 instances'
+complete 'aws ec2 start-instances' --option --long instance-ids --value-name ids --description 'instance IDs'
+complete 'aws ec2 start-instances' --option-value --long instance-ids --function __rush_complete_aws_instance_ids
+complete 'aws ec2 stop-instances' --option --long instance-ids --value-name ids --description 'instance IDs'
+complete 'aws ec2 stop-instances' --option-value --long instance-ids --function __rush_complete_aws_instance_ids
+complete 'aws ec2 terminate-instances' --option --long instance-ids --value-name ids --description 'instance IDs'
+complete 'aws ec2 terminate-instances' --option-value --long instance-ids --function __rush_complete_aws_instance_ids
+
+# STS and IAM commands.
+complete 'aws sts' --subcommand get-caller-identity --description 'show caller identity'
+complete 'aws sts' --subcommand assume-role --description 'assume an IAM role'
+complete 'aws sts assume-role' --option --long role-arn --value-name arn --description 'role ARN'
+complete 'aws sts assume-role' --option-value --long role-arn --function __rush_complete_aws_role_arns
+complete 'aws sts assume-role' --option --long role-session-name --value-name name --description 'role session name'
+complete 'aws iam' --subcommand list-users --description 'list IAM users'
+complete 'aws iam' --subcommand list-roles --description 'list IAM roles'
+complete 'aws iam' --subcommand list-policies --description 'list IAM policies'
+complete 'aws iam' --subcommand get-role --description 'get an IAM role'
+complete 'aws iam get-role' --option --long role-name --value-name name --description 'role name'
+complete 'aws iam get-role' --option-value --long role-name --function __rush_complete_aws_role_names
+
+# Logs commands.
+complete 'aws logs' --subcommand describe-log-groups --description 'describe log groups'
+complete 'aws logs' --subcommand describe-log-streams --description 'describe log streams'
+complete 'aws logs' --subcommand filter-log-events --description 'filter log events'
+complete 'aws logs' --subcommand tail --description 'tail log events'
+complete 'aws logs describe-log-streams' --option --long log-group-name --value-name group --description 'log group name'
+complete 'aws logs describe-log-streams' --option-value --long log-group-name --function __rush_complete_aws_log_groups
+complete 'aws logs filter-log-events' --option --long log-group-name --value-name group --description 'log group name'
+complete 'aws logs filter-log-events' --option-value --long log-group-name --function __rush_complete_aws_log_groups
+complete 'aws logs tail' --argument --function __rush_complete_aws_log_groups
+
+# CloudFormation commands.
+complete 'aws cloudformation' --subcommand list-stacks --description 'list stacks'
+complete 'aws cloudformation' --subcommand describe-stacks --description 'describe stacks'
+complete 'aws cloudformation' --subcommand create-stack --description 'create a stack'
+complete 'aws cloudformation' --subcommand update-stack --description 'update a stack'
+complete 'aws cloudformation' --subcommand delete-stack --description 'delete a stack'
+complete 'aws cloudformation' --subcommand deploy --description 'deploy a template'
+complete 'aws cloudformation describe-stacks' --option --long stack-name --value-name name --description 'stack name'
+complete 'aws cloudformation describe-stacks' --option-value --long stack-name --function __rush_complete_aws_stack_names
+complete 'aws cloudformation deploy' --option --long template-file --value-name file --description 'template file'
+complete 'aws cloudformation deploy' --option-value --long template-file --function __rush_complete_aws_template_files
+complete 'aws cloudformation deploy' --option --long stack-name --value-name name --description 'stack name'
+complete 'aws cloudformation deploy' --option-value --long stack-name --function __rush_complete_aws_stack_names
+
+# EKS and ECR commands.
+complete 'aws eks' --subcommand list-clusters --description 'list EKS clusters'
+complete 'aws eks' --subcommand describe-cluster --description 'describe an EKS cluster'
+complete 'aws eks' --subcommand update-kubeconfig --description 'update kubeconfig for a cluster'
+complete 'aws eks describe-cluster' --option --long name --value-name cluster --description 'cluster name'
+complete 'aws eks describe-cluster' --option-value --long name --function __rush_complete_aws_cluster_names
+complete 'aws eks update-kubeconfig' --option --long name --value-name cluster --description 'cluster name'
+complete 'aws eks update-kubeconfig' --option-value --long name --function __rush_complete_aws_cluster_names
+complete 'aws eks update-kubeconfig' --option --long kubeconfig --value-name file --description 'kubeconfig path'
+complete 'aws eks update-kubeconfig' --option-value --long kubeconfig --function __rush_complete_aws_files
+complete 'aws ecr' --subcommand describe-repositories --description 'describe ECR repositories'
+complete 'aws ecr' --subcommand get-login-password --description 'retrieve authentication token password'
+complete 'aws ecr' --subcommand list-images --description 'list images in a repository'
+complete 'aws ecr list-images' --option --long repository-name --value-name repository --description 'repository name'
+complete 'aws ecr list-images' --option-value --long repository-name --function __rush_complete_aws_ecr_repositories
+
+__rush_complete_aws_profiles() {
+  completion candidate default --kind plain
+  completion candidate dev --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+}
+
+__rush_complete_aws_regions() {
+  completion candidate us-east-1 --kind plain
+  completion candidate us-east-2 --kind plain
+  completion candidate us-west-1 --kind plain
+  completion candidate us-west-2 --kind plain
+  completion candidate eu-west-1 --kind plain
+  completion candidate eu-central-1 --kind plain
+  completion candidate ap-southeast-1 --kind plain
+  completion candidate ap-northeast-1 --kind plain
+}
+
+__rush_complete_aws_outputs() {
+  completion candidate json --kind plain
+  completion candidate yaml --kind plain
+  completion candidate text --kind plain
+  completion candidate table --kind plain
+}
+
+__rush_complete_aws_color_modes() {
+  completion candidate auto --kind plain
+  completion candidate on --kind plain
+  completion candidate off --kind plain
+}
+
+__rush_complete_aws_skeleton_modes() {
+  completion candidate input --kind plain
+  completion candidate output --kind plain
+}
+
+__rush_complete_aws_url_shapes() {
+  completion candidate https:// --kind plain
+  completion candidate http://localhost:4566 --kind plain
+}
+
+__rush_complete_aws_s3_uris() {
+  completion candidate s3://bucket/ --kind plain
+  completion candidate s3://bucket/prefix/ --kind plain
+}
+
+__rush_complete_aws_s3_and_paths() {
+  __rush_complete_aws_s3_uris
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_aws_files() {
+  completion files
+}
+
+__rush_complete_aws_json_files() {
+  completion files --extension .json
+  completion files
+}
+
+__rush_complete_aws_template_files() {
+  completion files --extension .yaml
+  completion files --extension .yml
+  completion files --extension .json
+  completion files
+}
+
+__rush_complete_aws_bucket_names() {
+  completion candidate my-bucket --kind plain
+  completion candidate project-artifacts --kind plain
+  completion candidate logs-bucket --kind plain
+}
+
+__rush_complete_aws_s3_keys() {
+  completion candidate path/to/object --kind plain
+  completion candidate index.html --kind plain
+}
+
+__rush_complete_aws_instance_ids() {
+  completion candidate i-0123456789abcdef0 --kind plain
+  completion candidate i-0abcdef1234567890 --kind plain
+}
+
+__rush_complete_aws_role_arns() {
+  completion candidate arn:aws:iam::123456789012:role/Admin --kind plain
+  completion candidate arn:aws:iam::123456789012:role/Deploy --kind plain
+}
+
+__rush_complete_aws_role_names() {
+  completion candidate Admin --kind plain
+  completion candidate Deploy --kind plain
+  completion candidate ReadOnly --kind plain
+}
+
+__rush_complete_aws_log_groups() {
+  completion candidate /aws/lambda/function --kind plain
+  completion candidate /aws/ecs/service --kind plain
+  completion candidate /aws/eks/cluster --kind plain
+}
+
+__rush_complete_aws_stack_names() {
+  completion candidate app --kind plain
+  completion candidate staging --kind plain
+  completion candidate production --kind plain
+}
+
+__rush_complete_aws_cluster_names() {
+  completion candidate dev --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+}
+
+__rush_complete_aws_ecr_repositories() {
+  completion candidate app --kind plain
+  completion candidate api --kind plain
+  completion candidate worker --kind plain
+}

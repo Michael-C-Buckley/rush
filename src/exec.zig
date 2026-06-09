@@ -12654,6 +12654,54 @@ test "first-party gh completion script loads subcommands and static values" {
     try expectCandidate(prs, "42", .plain);
 }
 
+test "first-party aws completion script loads services actions and values" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/aws.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const template_path = "rush-aws-completion.yaml";
+    var template_file = try std.Io.Dir.cwd().createFile(std.testing.io, template_path, .{ .truncate = true });
+    template_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, template_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const services = try executor.collectCompletionsForInput("aws s", "aws s".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(services);
+    try expectCandidate(services, "s3", .subcommand);
+    try expectCandidate(services, "sts", .subcommand);
+
+    const s3_actions = try executor.collectCompletionsForInput("aws s3 sy", "aws s3 sy".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(s3_actions);
+    try expectCandidate(s3_actions, "sync", .subcommand);
+
+    const regions = try executor.collectCompletionsForInput("aws --region us-west", "aws --region us-west".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(regions);
+    try expectCandidate(regions, "us-west-2", .plain);
+
+    const outputs = try executor.collectCompletionsForInput("aws --output ya", "aws --output ya".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(outputs);
+    try expectCandidate(outputs, "yaml", .plain);
+
+    const s3_uris = try executor.collectCompletionsForInput("aws s3 cp s3://", "aws s3 cp s3://".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(s3_uris);
+    try expectCandidate(s3_uris, "s3://bucket/", .plain);
+
+    const templates = try executor.collectCompletionsForInput("aws cloudformation deploy --template-file rush-aws", "aws cloudformation deploy --template-file rush-aws".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(templates);
+    try expectCandidate(templates, template_path, .file);
+
+    const clusters = try executor.collectCompletionsForInput("aws eks update-kubeconfig --name pr", "aws eks update-kubeconfig --name pr".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(clusters);
+    try expectCandidate(clusters, "prod", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
