@@ -6428,16 +6428,17 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
 fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     self.refreshBackgroundJobs();
-    if (command.argv.len == 1 and self.background_jobs.items.len == 0) return emptyResult(self.allocator, 0);
+    const operand_start: usize = if (command.argv.len > 1 and std.mem.eql(u8, command.argv[1].text, "--")) 2 else 1;
+    if (operand_start >= command.argv.len and self.background_jobs.items.len == 0) return emptyResult(self.allocator, 0);
     const io = options.io orelse return error.MissingIoForBuiltin;
-    if (command.argv.len == 1) {
+    if (operand_start >= command.argv.len) {
         var status: ExitStatus = 0;
         for (self.background_jobs.items) |*job| status = try waitBackgroundJob(io, job);
         return emptyResult(self.allocator, status);
     }
 
     var status: ExitStatus = 0;
-    for (command.argv[1..]) |arg| {
+    for (command.argv[operand_start..]) |arg| {
         const pid = std.fmt.parseInt(i64, arg.text, 10) catch return errorResult(self.allocator, 127, "wait", "invalid pid");
         const job = self.findBackgroundJob(pid) orelse return errorResult(self.allocator, 127, "wait", "unknown pid");
         status = try waitBackgroundJob(io, job);

@@ -264,3 +264,4 @@ expansion-command-substitution-subshell-env	expansion	behavior	command substitut
 expansion-command-substitution-subshell-cwd	expansion	behavior	command substitution directory changes do not leak to parent shell
 expansion-command-substitution-subshell-function	expansion	behavior	command substitution function definitions do not leak to parent shell
 redirection-command-not-found-stderr	redirection	behavior	stderr redirection applies to command-not-found diagnostics
+builtin-wait-option-terminator	builtin	behavior	wait accepts option terminator before operands
