@@ -12569,6 +12569,47 @@ test "first-party scp completion script loads options ssh values and paths" {
     try expectCandidate(remotes, "user@host:", .plain);
 }
 
+test "first-party ssh completion script loads options ssh values and hosts" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/ssh.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const identity_path = "rush-ssh-completion.pem";
+    var identity_file = try std.Io.Dir.cwd().createFile(std.testing.io, identity_path, .{ .truncate = true });
+    identity_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, identity_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("ssh -", "ssh -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "-i", .option);
+    try expectCandidate(options, "-J", .option);
+
+    const identity_files = try executor.collectCompletionsForInput("ssh -i rush-ssh", "ssh -i rush-ssh".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(identity_files);
+    try expectCandidate(identity_files, identity_path, .file);
+
+    const ssh_options = try executor.collectCompletionsForInput("ssh -o Strict", "ssh -o Strict".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(ssh_options);
+    try expectCandidate(ssh_options, "StrictHostKeyChecking=yes", .plain);
+
+    const hosts = try executor.collectCompletionsForInput("ssh user", "ssh user".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(hosts);
+    try expectCandidate(hosts, "user@host", .plain);
+    try expectCandidate(hosts, "user@host.example.com", .plain);
+
+    const jump_hosts = try executor.collectCompletionsForInput("ssh -J user", "ssh -J user".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(jump_hosts);
+    try expectCandidate(jump_hosts, "user@host", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
