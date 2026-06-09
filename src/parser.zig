@@ -770,7 +770,7 @@ fn previousSignificantToken(tokens: []const Token, cursor: usize) ?usize {
     return result;
 }
 
-fn nodeKindForToken(result: ParseResult, token_index: usize) ?NodeKind {
+pub fn nodeKindForToken(result: ParseResult, token_index: usize) ?NodeKind {
     for (result.nodes) |node| {
         if (node.token_start == token_index and node.token_end == token_index + 1) {
             switch (node.kind) {

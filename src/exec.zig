@@ -1142,9 +1142,14 @@ pub const Executor = struct {
 
         var words: std.ArrayList(parser.Token) = .empty;
         defer words.deinit(self.allocator);
-        for (parsed.tokens) |token| {
+        for (parsed.tokens, 0..) |token, token_index| {
             if (token.span.start > clamped_cursor) break;
-            if (token.kind == .word) try words.append(self.allocator, token);
+            if (token.kind != .word) continue;
+            switch (parser.nodeKindForToken(parsed, token_index) orelse .word) {
+                .assignment_word => {},
+                .command_word, .word => try words.append(self.allocator, token),
+                else => {},
+            }
         }
         if (words.items.len == 0) return self.allocator.alloc(CompletionDiagnostic, 0);
 
@@ -9998,6 +10003,23 @@ test "completion diagnostics report unknown command" {
     try std.testing.expectEqual(CompletionDiagnosticSeverity.err, diagnostics[0].severity);
     try std.testing.expectEqual(@as(usize, 0), diagnostics[0].start);
     try std.testing.expectEqual(@as(usize, 3), diagnostics[0].end);
+}
+
+test "completion diagnostics ignore assignment prefixes" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const assignment_only = try executor.completionDiagnosticsForInput("rows=$(tput lines); echo $rows", "rows=$(tput lines); echo $rows".len);
+    defer std.testing.allocator.free(assignment_only);
+    try std.testing.expectEqual(@as(usize, 0), assignment_only.len);
+
+    const source = "FOO=bar gti ";
+    const diagnostics = try executor.completionDiagnosticsForInput(source, source.len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.unknown_command, diagnostics[0].kind);
+    try std.testing.expectEqual(@as(usize, 8), diagnostics[0].start);
+    try std.testing.expectEqual(@as(usize, 11), diagnostics[0].end);
 }
 
 test "completion diagnostics accept executable commands from PATH" {
