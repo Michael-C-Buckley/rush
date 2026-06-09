@@ -12174,6 +12174,38 @@ test "first-party code completion script loads options paths and commands" {
     try expectCandidate(files, file_path, .file);
 }
 
+test "first-party tmux completion script loads commands targets and files" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/tmux.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const file_path = "rush-tmux-completion.conf";
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
+    file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const commands = try executor.collectCompletionsForInput("tmux new-", "tmux new-".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(commands);
+    try expectCandidate(commands, "new-session", .subcommand);
+    try expectCandidate(commands, "new-window", .subcommand);
+
+    const target_sessions = try executor.collectCompletionsForInput("tmux attach-session -t {", "tmux attach-session -t {".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(target_sessions);
+    try expectCandidate(target_sessions, "{last}", .plain);
+
+    const source_files = try executor.collectCompletionsForInput("tmux source-file rush-tmux", "tmux source-file rush-tmux".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(source_files);
+    try expectCandidate(source_files, file_path, .file);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
