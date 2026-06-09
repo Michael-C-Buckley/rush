@@ -257,3 +257,4 @@ builtin-exit-status-modulo	builtin	behavior	exit status operands use the low 8 b
 builtin-exit-function	builtin	behavior	exit inside a function exits the shell
 builtin-eval-exit	builtin	behavior	eval executes exit in the current shell
 builtin-umask-symbolic-assignment-clauses	builtin	behavior	umask supports comma-separated symbolic assignment clauses
+builtin-trap-exit-status	builtin	behavior	EXIT trap observes the shell exit status
