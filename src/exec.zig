@@ -3382,19 +3382,30 @@ pub const Executor = struct {
         return current;
     }
 
+    const OutputSink = union(enum) {
+        stdout,
+        stderr,
+        file: FileOutputSink,
+    };
+
+    const FileOutputSink = struct {
+        redirection: ir.Redirection,
+        id: usize,
+    };
+
     fn applyOutputRedirections(self: *Executor, command: ir.SimpleCommand, result: CommandResult, options: ExecuteOptions, special_exit: bool) !CommandResult {
         var redirected = result;
         errdefer redirected.deinit();
 
+        var stdout_sink: OutputSink = .stdout;
+        var stderr_sink: OutputSink = .stderr;
+        var next_file_id: usize = 1;
+
         for (command.redirections) |redirection| {
             if (isFileOutputRedirection(redirection)) {
                 const fd = redirectionFd(redirection) orelse 1;
-                const stream = switch (fd) {
-                    1 => &redirected.stdout,
-                    2 => &redirected.stderr,
-                    else => continue,
-                };
-                self.writeRedirectedStream(stream, redirection, options) catch |err| switch (err) {
+                if (fd != 1 and fd != 2) continue;
+                self.validateOutputRedirection(redirection, options) catch |err| switch (err) {
                     error.PathAlreadyExists => {
                         redirected.deinit();
                         const failure = try errorResult(self.allocator, 1, targetName(redirection), "cannot overwrite existing file");
@@ -3409,18 +3420,72 @@ pub const Executor = struct {
                     },
                     else => return err,
                 };
+                const sink: OutputSink = .{ .file = .{ .redirection = redirection, .id = next_file_id } };
+                next_file_id += 1;
+                if (fd == 1) stdout_sink = sink else stderr_sink = sink;
                 continue;
             }
 
             if (redirection.operator == .greater_and) {
-                try self.applyDescriptorDuplication(&redirected, redirection);
+                const from_fd = redirectionFd(redirection) orelse 1;
+                const target = redirection.target orelse continue;
+                const to_fd = parseFd(target.text) orelse continue;
+                if ((from_fd == 1 or from_fd == 2) and (to_fd == 1 or to_fd == 2)) {
+                    const copied = if (to_fd == 1) stdout_sink else stderr_sink;
+                    if (from_fd == 1) stdout_sink = copied else stderr_sink = copied;
+                }
             }
         }
 
+        const original_stdout = redirected.stdout;
+        const original_stderr = redirected.stderr;
+        redirected.stdout = try self.allocator.alloc(u8, 0);
+        errdefer self.allocator.free(redirected.stdout);
+        redirected.stderr = try self.allocator.alloc(u8, 0);
+        errdefer self.allocator.free(redirected.stderr);
+
+        if (sameFileSink(stdout_sink, stderr_sink)) {
+            const file_sink = stdout_sink.file;
+            const combined = try std.mem.concat(self.allocator, u8, &.{ original_stdout, original_stderr });
+            defer self.allocator.free(combined);
+            try self.writeRedirectedBytes(combined, file_sink.redirection, options);
+        } else {
+            try self.routeCapturedStream(&redirected.stdout, &redirected.stderr, original_stdout, stdout_sink, options);
+            try self.routeCapturedStream(&redirected.stdout, &redirected.stderr, original_stderr, stderr_sink, options);
+        }
+
+        self.allocator.free(original_stdout);
+        self.allocator.free(original_stderr);
         return redirected;
     }
 
-    fn writeRedirectedStream(self: *Executor, stream: *[]u8, redirection: ir.Redirection, options: ExecuteOptions) !void {
+    fn sameFileSink(left: OutputSink, right: OutputSink) bool {
+        if (left != .file or right != .file) return false;
+        return left.file.id == right.file.id;
+    }
+
+    fn routeCapturedStream(self: *Executor, stdout: *[]u8, stderr: *[]u8, bytes: []const u8, sink: OutputSink, options: ExecuteOptions) !void {
+        switch (sink) {
+            .stdout => try appendOwnedBytes(self.allocator, stdout, bytes),
+            .stderr => try appendOwnedBytes(self.allocator, stderr, bytes),
+            .file => |file_sink| try self.writeRedirectedBytes(bytes, file_sink.redirection, options),
+        }
+    }
+
+    fn appendOwnedBytes(allocator: std.mem.Allocator, target: *[]u8, bytes: []const u8) !void {
+        const old_len = target.len;
+        target.* = try allocator.realloc(target.*, old_len + bytes.len);
+        @memcpy(target.*[old_len..], bytes);
+    }
+
+    fn validateOutputRedirection(self: *Executor, redirection: ir.Redirection, options: ExecuteOptions) !void {
+        const io = options.io orelse return error.MissingIoForRedirection;
+        const target = redirection.target orelse return;
+        var file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
+        file.close(io);
+    }
+
+    fn writeRedirectedBytes(self: *Executor, bytes: []const u8, redirection: ir.Redirection, options: ExecuteOptions) !void {
         const io = options.io orelse return error.MissingIoForRedirection;
         const target = redirection.target orelse return;
         var file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
@@ -3430,10 +3495,8 @@ pub const Executor = struct {
         if (redirection.operator == .dgreat) {
             try writer.seekTo(try file.length(io));
         }
-        try writer.interface.writeAll(stream.*);
+        try writer.interface.writeAll(bytes);
         try writer.interface.flush();
-        self.allocator.free(stream.*);
-        stream.* = try self.allocator.alloc(u8, 0);
     }
 
     fn applyExternalPostRedirections(self: *Executor, command: ir.SimpleCommand, result: CommandResult, options: ExecuteOptions) !CommandResult {

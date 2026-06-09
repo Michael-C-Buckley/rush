@@ -285,3 +285,4 @@ grammar-brace-group-status	grammar	behavior	brace group exit status follows last
 function-set-positionals-local	grammar	behavior	set positional parameters inside functions is local to the function call
 function-shift-positionals-local	grammar	behavior	shift inside functions is local to the function call
 function-assignment-prefix-scope	grammar	behavior	function assignment prefixes are temporary during the call
+redirection-command-not-found-dup-order	redirection	behavior	command-not-found diagnostics follow ordered descriptor duplication

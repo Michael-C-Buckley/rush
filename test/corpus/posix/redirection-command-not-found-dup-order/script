@@ -1,0 +1,10 @@
+rm -f ro1 ro2
+definitely-missing-rush-command >ro1 2>&1
+echo first:$?
+printf 'one:'
+cat ro1
+definitely-missing-rush-command 2>&1 >ro2
+echo second:$?
+printf 'two:'
+cat ro2
+rm -f ro1 ro2
