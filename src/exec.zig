@@ -12390,6 +12390,48 @@ test "first-party jq completion script loads options filters and files" {
     try expectCandidate(input_files, input_path, .file);
 }
 
+test "first-party curl completion script loads options values and files" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/curl.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const upload_path = "rush-curl-completion.json";
+    var upload_file = try std.Io.Dir.cwd().createFile(std.testing.io, upload_path, .{ .truncate = true });
+    upload_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, upload_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("curl --fail", "curl --fail".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--fail", .option);
+    try expectCandidate(options, "--fail-with-body", .option);
+
+    const methods = try executor.collectCompletionsForInput("curl --request P", "curl --request P".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(methods);
+    try expectCandidate(methods, "POST", .plain);
+    try expectCandidate(methods, "PATCH", .plain);
+
+    const headers = try executor.collectCompletionsForInput("curl --header Content", "curl --header Content".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(headers);
+    try expectCandidate(headers, "Content-Type: application/json", .plain);
+
+    const upload_files = try executor.collectCompletionsForInput("curl --upload-file rush-curl", "curl --upload-file rush-curl".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(upload_files);
+    try expectCandidate(upload_files, upload_path, .file);
+
+    const operands = try executor.collectCompletionsForInput("curl ht", "curl ht".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(operands);
+    try expectCandidate(operands, "https://", .plain);
+    try expectCandidate(operands, "http://", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();

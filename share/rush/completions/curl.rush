@@ -1,0 +1,211 @@
+# First-party curl completion slice.
+
+# Core help, verbosity, redirects, and failure behavior.
+complete curl --option --short h --long help --description 'show help'
+complete curl --option --short V --long version --description 'show version'
+complete curl --option --short v --long verbose --description 'make the operation more talkative'
+complete curl --option --short s --long silent --description 'silent mode'
+complete curl --option --short S --long show-error --description 'show errors when silent'
+complete curl --option --short L --long location --description 'follow redirects'
+complete curl --option --long location-trusted --description 'follow redirects and send credentials'
+complete curl --option --short f --long fail --description 'fail silently on HTTP errors'
+complete curl --option --long fail-with-body --description 'fail on HTTP errors but keep response body'
+complete curl --option --long compressed --description 'request compressed response'
+complete curl --option --short k --long insecure --description 'allow insecure server connections'
+
+# Request method, headers, body, and forms.
+complete curl --option --short X --long request --value-name method --description 'HTTP request method'
+complete curl --option-value --short X --function __rush_complete_curl_methods
+complete curl --option-value --long request --function __rush_complete_curl_methods
+complete curl --option --short H --long header --value-name header --description 'pass custom header to server'
+complete curl --option-value --short H --function __rush_complete_curl_headers
+complete curl --option-value --long header --function __rush_complete_curl_headers
+complete curl --option --short A --long user-agent --value-name name --description 'send User-Agent string'
+complete curl --option-value --short A --function __rush_complete_curl_user_agents
+complete curl --option-value --long user-agent --function __rush_complete_curl_user_agents
+complete curl --option --short e --long referer --value-name url --description 'send Referer URL'
+complete curl --option-value --short e --function __rush_complete_curl_url_schemes
+complete curl --option-value --long referer --function __rush_complete_curl_url_schemes
+complete curl --option --short d --long data --value-name data --description 'HTTP POST data'
+complete curl --option --long data-raw --value-name data --description 'HTTP POST data without special @ handling'
+complete curl --option --long data-binary --value-name data --description 'HTTP POST binary data'
+complete curl --option-value --long data-binary --function __rush_complete_curl_at_files
+complete curl --option --long data-urlencode --value-name data --description 'HTTP POST URL-encoded data'
+complete curl --option --short F --long form --value-name name=content --description 'multipart form data'
+complete curl --option-value --short F --function __rush_complete_curl_form_values
+complete curl --option-value --long form --function __rush_complete_curl_form_values
+complete curl --option --long form-string --value-name name=string --description 'multipart form string field'
+
+# Authentication, TLS, proxy, and protocol versions.
+complete curl --option --short u --long user --value-name user:password --description 'server user and password'
+complete curl --option --long oauth2-bearer --value-name token --description 'OAuth 2 bearer token'
+complete curl --option --long basic --description 'use HTTP Basic authentication'
+complete curl --option --long digest --description 'use HTTP Digest authentication'
+complete curl --option --long negotiate --description 'use HTTP Negotiate authentication'
+complete curl --option --long ntlm --description 'use HTTP NTLM authentication'
+complete curl --option --long anyauth --description 'pick any authentication method'
+complete curl --option --long proxy --value-name url --description 'use proxy URL'
+complete curl --option-value --long proxy --function __rush_complete_curl_proxy_schemes
+complete curl --option --long proxy-user --value-name user:password --description 'proxy user and password'
+complete curl --option --long proxy-anyauth --description 'pick any proxy authentication method'
+complete curl --option --long cacert --value-name file --description 'CA certificate file'
+complete curl --option-value --long cacert --function __rush_complete_curl_cert_files
+complete curl --option --short E --long cert --value-name cert --description 'client certificate file'
+complete curl --option-value --short E --function __rush_complete_curl_cert_files
+complete curl --option-value --long cert --function __rush_complete_curl_cert_files
+complete curl --option --long key --value-name key --description 'private key file'
+complete curl --option-value --long key --function __rush_complete_curl_key_files
+complete curl --option --short 0 --long http1.0 --description 'use HTTP/1.0'
+complete curl --option --long http1.1 --description 'use HTTP/1.1'
+complete curl --option --long http2 --description 'use HTTP/2'
+complete curl --option --long http2-prior-knowledge --description 'use HTTP/2 without upgrade'
+complete curl --option --long http3 --description 'use HTTP/3'
+
+# Output, upload, cookies, config, and timing.
+complete curl --option --short o --long output --value-name file --description 'write output to file'
+complete curl --option-value --short o --function __rush_complete_curl_files
+complete curl --option-value --long output --function __rush_complete_curl_files
+complete curl --option --short O --long remote-name --description 'write output to remote file name'
+complete curl --option --short J --long remote-header-name --description 'use server-provided file name'
+complete curl --option --short I --long head --description 'show document info only'
+complete curl --option --short i --long include --description 'include response headers in output'
+complete curl --option --short D --long dump-header --value-name file --description 'write received headers to file'
+complete curl --option-value --short D --function __rush_complete_curl_files
+complete curl --option-value --long dump-header --function __rush_complete_curl_files
+complete curl --option --short w --long write-out --value-name format --description 'write variables after transfer'
+complete curl --option-value --short w --function __rush_complete_curl_write_out
+complete curl --option-value --long write-out --function __rush_complete_curl_write_out
+complete curl --option --short T --long upload-file --value-name file --description 'upload file'
+complete curl --option-value --short T --function __rush_complete_curl_files
+complete curl --option-value --long upload-file --function __rush_complete_curl_files
+complete curl --option --short K --long config --value-name file --description 'read config from file'
+complete curl --option-value --short K --function __rush_complete_curl_files
+complete curl --option-value --long config --function __rush_complete_curl_files
+complete curl --option --short b --long cookie --value-name data|file --description 'send cookies from string or file'
+complete curl --option-value --short b --function __rush_complete_curl_cookie_values
+complete curl --option-value --long cookie --function __rush_complete_curl_cookie_values
+complete curl --option --short c --long cookie-jar --value-name file --description 'write cookies to file'
+complete curl --option-value --short c --function __rush_complete_curl_files
+complete curl --option-value --long cookie-jar --function __rush_complete_curl_files
+complete curl --option --long connect-timeout --value-name seconds --description 'maximum time to connect'
+complete curl --option-value --long connect-timeout --function __rush_complete_curl_times
+complete curl --option --short m --long max-time --value-name seconds --description 'maximum transfer time'
+complete curl --option-value --short m --function __rush_complete_curl_times
+complete curl --option-value --long max-time --function __rush_complete_curl_times
+complete curl --option --long retry --value-name num --description 'retry request on transient errors'
+complete curl --option-value --long retry --function __rush_complete_curl_retries
+complete curl --option --long retry-delay --value-name seconds --description 'delay between retries'
+complete curl --option-value --long retry-delay --function __rush_complete_curl_times
+
+# URL and file operands.
+complete curl --argument --function __rush_complete_curl_urls_and_files
+
+__rush_complete_curl_urls_and_files() {
+  completion candidate https:// --kind plain
+  completion candidate http:// --kind plain
+  completion candidate ftp:// --kind plain
+  completion candidate file:// --kind plain
+  completion files
+}
+
+__rush_complete_curl_files() {
+  completion files
+}
+
+__rush_complete_curl_methods() {
+  completion candidate GET --kind plain
+  completion candidate POST --kind plain
+  completion candidate PUT --kind plain
+  completion candidate PATCH --kind plain
+  completion candidate DELETE --kind plain
+  completion candidate HEAD --kind plain
+  completion candidate OPTIONS --kind plain
+}
+
+__rush_complete_curl_headers() {
+  completion candidate 'Accept: application/json' --kind plain
+  completion candidate 'Accept: text/plain' --kind plain
+  completion candidate 'Authorization: Bearer ' --kind plain
+  completion candidate 'Content-Type: application/json' --kind plain
+  completion candidate 'Content-Type: application/x-www-form-urlencoded' --kind plain
+  completion candidate 'Content-Type: multipart/form-data' --kind plain
+  completion candidate 'If-None-Match: ' --kind plain
+  completion candidate 'User-Agent: ' --kind plain
+}
+
+__rush_complete_curl_user_agents() {
+  completion candidate curl --kind plain
+  completion candidate 'Mozilla/5.0' --kind plain
+}
+
+__rush_complete_curl_url_schemes() {
+  completion candidate https:// --kind plain
+  completion candidate http:// --kind plain
+}
+
+__rush_complete_curl_proxy_schemes() {
+  completion candidate http:// --kind plain
+  completion candidate https:// --kind plain
+  completion candidate socks5:// --kind plain
+  completion candidate socks5h:// --kind plain
+}
+
+__rush_complete_curl_at_files() {
+  completion candidate @ --kind plain
+  completion files
+}
+
+__rush_complete_curl_form_values() {
+  completion candidate name=value --kind plain
+  completion candidate name=@ --kind plain
+  completion files
+}
+
+__rush_complete_curl_cookie_values() {
+  completion candidate name=value --kind plain
+  completion files
+}
+
+__rush_complete_curl_cert_files() {
+  completion files --extension .pem
+  completion files --extension .crt
+  completion files --extension .cer
+  completion files
+}
+
+__rush_complete_curl_key_files() {
+  completion files --extension .key
+  completion files --extension .pem
+  completion files
+}
+
+__rush_complete_curl_write_out() {
+  completion candidate '%{http_code}' --kind plain
+  completion candidate '%{content_type}' --kind plain
+  completion candidate '%{filename_effective}' --kind plain
+  completion candidate '%{json}' --kind plain
+  completion candidate '%{method}' --kind plain
+  completion candidate '%{remote_ip}' --kind plain
+  completion candidate '%{response_code}' --kind plain
+  completion candidate '%{size_download}' --kind plain
+  completion candidate '%{time_connect}' --kind plain
+  completion candidate '%{time_total}' --kind plain
+  completion candidate '\n' --kind plain
+}
+
+__rush_complete_curl_times() {
+  completion candidate 1 --kind plain
+  completion candidate 2 --kind plain
+  completion candidate 5 --kind plain
+  completion candidate 10 --kind plain
+  completion candidate 30 --kind plain
+  completion candidate 60 --kind plain
+}
+
+__rush_complete_curl_retries() {
+  completion candidate 0 --kind plain
+  completion candidate 1 --kind plain
+  completion candidate 2 --kind plain
+  completion candidate 3 --kind plain
+  completion candidate 5 --kind plain
+}
