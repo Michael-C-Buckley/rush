@@ -1,0 +1,11 @@
+v=abcbc
+p='a?'
+echo ${v##a*}
+echo ${v##a\*}
+echo ${v%%*c}
+echo ${v%%\*c}
+v=abc
+echo ${v#a?}
+echo ${v#a\?}
+echo ${v#"$p"}
+echo ${v#$p}

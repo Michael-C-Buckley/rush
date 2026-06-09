@@ -292,3 +292,4 @@ builtin-env-terminator-assignment-command	builtin	behavior	env option terminator
 grammar-case-quoted-pattern-metacharacters	grammar	behavior	case pattern metacharacters are literal when quoted or escaped
 grammar-case-bracket-patterns	grammar	behavior	case bracket pattern expressions
 expansion-parameter-pattern-quoted-metacharacters	expansion	behavior	parameter pattern removal quote and bracket handling
+expansion-parameter-pattern-large-quoted-metacharacters	expansion	behavior	large parameter pattern removal quoted metacharacters
