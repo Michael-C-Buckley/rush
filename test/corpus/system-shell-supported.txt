@@ -189,3 +189,4 @@ A=bad; cat <<E"O"F\n$A\nEOF
 exit 300
 f() { echo before; exit 7; echo after; }; f; echo outside
 eval 'echo before; exit 7; echo after'; echo outside
+old=$(umask); umask 077; umask u=rwx,g=rx,o=; umask; umask "$old"
