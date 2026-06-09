@@ -251,3 +251,4 @@ option-set-allexport	options	behavior	set -a marks subsequent assignments for ex
 builtin-export-mark-later-assignment	builtin	behavior	export marks an unset name so later assignment enters the environment
 builtin-command-v-function	builtin	behavior	command -v identifies shell functions by name
 builtin-readonly-p-marked-name	builtin	behavior	readonly -p lists a readonly name marked before assignment
+builtin-env-exported-only	builtin	behavior	env prints exported environment and omits local shell variables

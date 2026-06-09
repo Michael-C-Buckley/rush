@@ -184,3 +184,4 @@ PATH=/nope command -p env | grep ^PATH=
 VAR=hidden; command -p env | grep ^VAR=; echo hidden=$?; set -a; AUTO=ok; command -p env | grep ^AUTO=; set +a; LOCAL=no; command -p env | grep ^LOCAL=; echo local=$?; set -o allexport; OA=ok; set +o allexport; OB=no; command -p env | grep -E "^O[AB]=" | sort
 export LATER; LATER=ok; command -p env | grep ^LATER=
 foo() { echo function; }; command -v foo
+LOCAL=hidden; export EXPORTED=ok; env | grep -E "^(LOCAL|EXPORTED)=" | sort

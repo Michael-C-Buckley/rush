@@ -1,0 +1,3 @@
+LOCAL=hidden
+export EXPORTED=ok
+env | grep -E '^(LOCAL|EXPORTED)=' | sort
