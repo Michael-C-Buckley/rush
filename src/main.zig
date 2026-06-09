@@ -1137,6 +1137,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer completion_loader.deinit();
 
     while (true) {
+        terminal.refreshWinsize();
+        try syncInteractiveTerminalSize(&executor, terminal);
         const notifications = try executor.drainJobNotifications();
         try writeAll(io, .stderr, notifications);
         allocator.free(notifications);
