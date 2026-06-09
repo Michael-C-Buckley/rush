@@ -1,0 +1,4 @@
+read -r -- X <<EOF2
+ok
+EOF2
+echo $X:$?
