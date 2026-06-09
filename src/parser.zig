@@ -531,6 +531,7 @@ pub const Highlight = struct {
 pub const CompletionKind = enum {
     command,
     argument,
+    parameter,
     redirect_target,
     assignment_name,
     assignment_value,
@@ -617,6 +618,8 @@ pub fn syntaxHighlights(allocator: std.mem.Allocator, result: ParseResult) ![]Hi
 pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
     const clamped_cursor = @min(cursor, result.source.len);
 
+    if (parameterCompletionContext(result.source, clamped_cursor)) |context| return context;
+
     for (result.diagnostics) |diagnostic| {
         if (diagnostic.kind == .incomplete_input and diagnostic.span.touches(clamped_cursor) and diagnosticBlocksTokenCompletion(diagnostic)) {
             return .{
@@ -677,6 +680,55 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
     }
 
     return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+}
+
+fn parameterCompletionContext(source: []const u8, cursor: usize) ?CompletionContext {
+    var start = cursor;
+    while (start > 0 and isParameterNameContinue(source[start - 1])) start -= 1;
+    if (start == 0) return null;
+    const dollar = start - 1;
+    if (source[dollar] != '$') return null;
+    if (isEscaped(source, dollar) or isInsideSingleQuotes(source, dollar)) return null;
+    if (start < cursor and !isParameterNameStart(source[start])) return null;
+    return .{
+        .kind = .parameter,
+        .cursor = cursor,
+        .span = .init(start, cursor),
+    };
+}
+
+fn isParameterNameStart(byte: u8) bool {
+    return std.ascii.isAlphabetic(byte) or byte == '_';
+}
+
+fn isParameterNameContinue(byte: u8) bool {
+    return isParameterNameStart(byte) or std.ascii.isDigit(byte);
+}
+
+fn isEscaped(source: []const u8, index: usize) bool {
+    var count: usize = 0;
+    var cursor = index;
+    while (cursor > 0 and source[cursor - 1] == '\\') {
+        count += 1;
+        cursor -= 1;
+    }
+    return count % 2 == 1;
+}
+
+fn isInsideSingleQuotes(source: []const u8, index: usize) bool {
+    var single = false;
+    var double = false;
+    var cursor: usize = 0;
+    while (cursor < index) : (cursor += 1) {
+        const byte = source[cursor];
+        if (byte == '\\' and !single) {
+            if (cursor + 1 < index) cursor += 1;
+            continue;
+        }
+        if (byte == '\'' and !double) single = !single;
+        if (byte == '"' and !single) double = !double;
+    }
+    return single;
 }
 
 fn diagnosticBlocksTokenCompletion(diagnostic: Diagnostic) bool {
@@ -2159,6 +2211,37 @@ test "completion context finds assignments and quoted strings" {
     var quoted = try parse(std.testing.allocator, "echo 'unterminated", .{});
     defer quoted.deinit();
     try std.testing.expectEqual(CompletionKind.quoted_string, completionContext(quoted, 10).kind);
+}
+
+test "completion context finds parameter expansion prefixes" {
+    var empty = try parse(std.testing.allocator, "echo $", .{ .mode = .interactive, .cursor = "echo $".len });
+    defer empty.deinit();
+    const empty_context = completionContext(empty, "echo $".len);
+    try std.testing.expectEqual(CompletionKind.parameter, empty_context.kind);
+    try std.testing.expectEqual(@as(usize, "echo $".len), empty_context.span.start);
+    try std.testing.expectEqual(@as(usize, "echo $".len), empty_context.span.end);
+
+    var prefixed = try parse(std.testing.allocator, "echo $PA", .{ .mode = .interactive, .cursor = "echo $PA".len });
+    defer prefixed.deinit();
+    const prefixed_context = completionContext(prefixed, "echo $PA".len);
+    try std.testing.expectEqual(CompletionKind.parameter, prefixed_context.kind);
+    try std.testing.expectEqual(@as(usize, "echo $".len), prefixed_context.span.start);
+    try std.testing.expectEqual(@as(usize, "echo $PA".len), prefixed_context.span.end);
+
+    var quoted = try parse(std.testing.allocator, "echo \"$PA", .{ .mode = .interactive, .cursor = "echo \"$PA".len });
+    defer quoted.deinit();
+    const quoted_context = completionContext(quoted, "echo \"$PA".len);
+    try std.testing.expectEqual(CompletionKind.parameter, quoted_context.kind);
+    try std.testing.expectEqual(@as(usize, "echo \"$".len), quoted_context.span.start);
+    try std.testing.expectEqual(@as(usize, "echo \"$PA".len), quoted_context.span.end);
+
+    var single_quoted = try parse(std.testing.allocator, "echo '$PA", .{ .mode = .interactive, .cursor = "echo '$PA".len });
+    defer single_quoted.deinit();
+    try std.testing.expect(completionContext(single_quoted, "echo '$PA".len).kind != .parameter);
+
+    var escaped = try parse(std.testing.allocator, "echo \\$PA", .{ .mode = .interactive, .cursor = "echo \\$PA".len });
+    defer escaped.deinit();
+    try std.testing.expect(completionContext(escaped, "echo \\$PA".len).kind != .parameter);
 }
 
 test "parser builds a simple command node for a command word" {

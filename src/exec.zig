@@ -967,6 +967,8 @@ pub const Executor = struct {
 
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
         var context = try completionEvalContextForInput(self.allocator, source, cursor);
+        const completing_parameter = context.position == .parameter;
+        const parameter_context = context;
         if (context.command.len != 0) try self.loadCompletionScriptForRoot(context.command, options);
         var semantic = try self.analyzeCompletionsForInput(source, cursor);
         defer semantic.deinit();
@@ -987,6 +989,10 @@ pub const Executor = struct {
             };
         }
 
+        if (completing_parameter) {
+            return try self.collectParameterCompletions(parameter_context);
+        }
+
         const candidates = try self.collectCompletionsWithContext(context.command, context, options);
         if (semantic.root.len == 0 or semantic.position == .command) return candidates;
 
@@ -998,6 +1004,24 @@ pub const Executor = struct {
         self.freeCompletions(candidates);
         const merged = try builder.finish(self.allocator);
         return merged;
+    }
+
+    fn collectParameterCompletions(self: *Executor, context: CompletionEvalContext) ![]completion.Candidate {
+        var builder: CompletionBuilder = .{};
+        errdefer builder.deinit(self.allocator);
+        var iter = self.env.iterator();
+        while (iter.next()) |entry| {
+            if (std.mem.startsWith(u8, entry.key_ptr.*, context.prefix)) {
+                try builder.appendCandidate(self.allocator, .{
+                    .value = entry.key_ptr.*,
+                    .kind = .variable,
+                    .replace_start = context.replace_start,
+                    .replace_end = context.replace_end,
+                    .append_space = false,
+                });
+            }
+        }
+        return try builder.finish(self.allocator);
     }
 
     pub fn analyzeCompletionsForInput(self: *Executor, source: []const u8, cursor: usize) !CompletionSemanticContext {
@@ -5357,7 +5381,6 @@ pub fn completionEvalContextForInput(allocator: std.mem.Allocator, source: []con
 }
 
 fn completionContextPrefix(source: []const u8, context: parser.CompletionContext) []const u8 {
-    if (context.token_index == null) return "";
     const start = context.span.start;
     const end = @min(context.cursor, context.span.end);
     if (start >= end or end > source.len) return "";
@@ -10996,6 +11019,68 @@ test "completion config rules merge after lazy-loaded data scripts" {
     const user_candidates = try executor.collectCompletionsForInput("fixturetool u", "fixturetool u".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(user_candidates);
     try expectCandidate(user_candidates, "user", .subcommand);
+}
+
+test "parameter prefix completion offers variables without replacing dollar" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", "/bin");
+    try executor.setEnv("HOME", "/tmp");
+
+    const empty_source = "echo $";
+    const empty_candidates = try executor.collectCompletionsForInput(empty_source, empty_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(empty_candidates);
+    const path = findCandidate(empty_candidates, "PATH") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion.Kind.variable, path.kind);
+    try std.testing.expectEqual(@as(usize, "echo $".len), path.replace_start);
+    try std.testing.expectEqual(@as(usize, "echo $".len), path.replace_end);
+    try std.testing.expect(!path.append_space);
+
+    const prefixed_source = "echo $PA";
+    const prefixed_candidates = try executor.collectCompletionsForInput(prefixed_source, prefixed_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(prefixed_candidates);
+    const prefixed_path = findCandidate(prefixed_candidates, "PATH") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "echo $".len), prefixed_path.replace_start);
+    try std.testing.expectEqual(@as(usize, prefixed_source.len), prefixed_path.replace_end);
+    try std.testing.expect(findCandidate(prefixed_candidates, "HOME") == null);
+
+    const quoted_source = "echo \"$PA";
+    const quoted_candidates = try executor.collectCompletionsForInput(quoted_source, quoted_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(quoted_candidates);
+    const quoted_path = findCandidate(quoted_candidates, "PATH") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "echo \"$".len), quoted_path.replace_start);
+    try std.testing.expectEqual(@as(usize, quoted_source.len), quoted_path.replace_end);
+
+    const single_quoted_source = "echo '$PA";
+    const single_quoted_candidates = try executor.collectCompletionsForInput(single_quoted_source, single_quoted_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(single_quoted_candidates);
+    try std.testing.expect(findCandidate(single_quoted_candidates, "PATH") == null);
+
+    const escaped_source = "echo \\$PA";
+    const escaped_candidates = try executor.collectCompletionsForInput(escaped_source, escaped_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(escaped_candidates);
+    try std.testing.expect(findCandidate(escaped_candidates, "PATH") == null);
+}
+
+test "parameter prefix completion application preserves dollar" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", "/bin");
+
+    const source = "echo $PA";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    const application = try completion.applyCandidatesForInput(std.testing.allocator, source, candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = switch (application) {
+        .edit => |edit| edit,
+        else => return error.MissingCompletionEdit,
+    };
+    try std.testing.expectEqual(@as(usize, "echo $".len), edit.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), edit.replace_end);
+    try std.testing.expectEqualStrings("PATH", edit.replacement);
+    try std.testing.expect(!edit.append_space);
 }
 
 fn expectCandidate(candidates: []const completion.Candidate, value: []const u8, kind: completion.Kind) !void {
