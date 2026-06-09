@@ -220,3 +220,4 @@ f(){ echo in:$A; A=changed; }; A=outer; A=tmp f; echo out:$A
 echo ok | read -r -- X; echo status:$?
 trap -- 'echo bye' EXIT; trap -- - EXIT; trap --; echo status:$?
 env -- FOO=bar sh -c 'echo $FOO'
+case abc in a\*) echo bad-escaped ;; a*) echo escaped-ok ;; esac; case abc in 'a*') echo bad-quoted ;; a*) echo quoted-ok ;; esac; p='a*'; case abc in "$p") echo bad-quoted-param ;; $p) echo param-ok ;; esac; case 'a*' in "$p") echo quoted-param-ok ;; *) echo bad-literal ;; esac

@@ -2002,10 +2002,10 @@ pub const Executor = struct {
         const subject = if (subject_words.len == 0) "" else subject_words[0].text;
 
         for (command.arms) |arm| {
-            const patterns = try self.expandWords(arm.patterns, options);
-            defer self.freeWords(patterns);
-            for (patterns) |pattern| {
-                if (shellPatternMatches(pattern.text, subject)) {
+            for (arm.patterns) |word| {
+                var pattern = try self.expandCasePattern(word, options);
+                defer pattern.deinit(self.allocator);
+                if (shellCasePatternMatches(pattern, subject)) {
                     return self.executeScriptSlice(arm.body, options);
                 }
             }
@@ -3043,6 +3043,31 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
         return .{ .span = word.span, .raw = raw, .text = text };
+    }
+
+    fn expandCasePattern(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !CasePattern {
+        var parts = try expand.parseWordParts(self.allocator, word.raw);
+        defer parts.deinit();
+
+        var text: std.ArrayList(u8) = .empty;
+        errdefer text.deinit(self.allocator);
+        var special: std.ArrayList(bool) = .empty;
+        errdefer special.deinit(self.allocator);
+
+        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error };
+
+        for (parts.parts) |part| {
+            const rendered = try expand.expandWordScalar(self.allocator, part.source(parts.raw), expansion_options);
+            defer self.allocator.free(rendered);
+            const meta_active = switch (part.kind) {
+                .unquoted, .parameter, .arithmetic, .command_substitution => true,
+                .single_quoted, .double_quoted, .escaped => false,
+            };
+            try appendCasePatternPart(self.allocator, &text, &special, rendered, meta_active);
+        }
+
+        return .{ .text = try text.toOwnedSlice(self.allocator), .special = try special.toOwnedSlice(self.allocator) };
     }
 
     fn expandAssignmentWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -7229,22 +7254,49 @@ fn errorResult(allocator: std.mem.Allocator, status: ExitStatus, command: []cons
     };
 }
 
-fn shellPatternMatches(pattern: []const u8, text: []const u8) bool {
-    return shellPatternMatchesFrom(pattern, text, 0, 0);
+const CasePattern = struct {
+    text: []const u8,
+    special: []const bool,
+
+    fn deinit(self: *CasePattern, allocator: std.mem.Allocator) void {
+        allocator.free(self.text);
+        allocator.free(self.special);
+        self.* = undefined;
+    }
+};
+
+fn appendCasePatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
+    try text.appendSlice(allocator, rendered);
+    for (rendered) |byte| {
+        try special.append(allocator, meta_active and (byte == '*' or byte == '?' or byte == '['));
+    }
 }
 
-fn shellPatternMatchesFrom(pattern: []const u8, text: []const u8, pattern_index: usize, text_index: usize) bool {
+fn shellPatternMatches(pattern: []const u8, text: []const u8) bool {
+    return shellPatternMatchesFrom(pattern, null, text, 0, 0);
+}
+
+fn shellCasePatternMatches(pattern: CasePattern, text: []const u8) bool {
+    std.debug.assert(pattern.text.len == pattern.special.len);
+    return shellPatternMatchesFrom(pattern.text, pattern.special, text, 0, 0);
+}
+
+fn isSpecialPatternByte(special: ?[]const bool, index: usize) bool {
+    return if (special) |mask| mask[index] else true;
+}
+
+fn shellPatternMatchesFrom(pattern: []const u8, special: ?[]const bool, text: []const u8, pattern_index: usize, text_index: usize) bool {
     if (pattern_index == pattern.len) return text_index == text.len;
-    if (pattern[pattern_index] == '*') {
+    if (pattern[pattern_index] == '*' and isSpecialPatternByte(special, pattern_index)) {
         var next_text = text_index;
         while (next_text <= text.len) : (next_text += 1) {
-            if (shellPatternMatchesFrom(pattern, text, pattern_index + 1, next_text)) return true;
+            if (shellPatternMatchesFrom(pattern, special, text, pattern_index + 1, next_text)) return true;
         }
         return false;
     }
     if (text_index >= text.len) return false;
-    if (pattern[pattern_index] == '?' or pattern[pattern_index] == text[text_index]) {
-        return shellPatternMatchesFrom(pattern, text, pattern_index + 1, text_index + 1);
+    if ((pattern[pattern_index] == '?' and isSpecialPatternByte(special, pattern_index)) or pattern[pattern_index] == text[text_index]) {
+        return shellPatternMatchesFrom(pattern, special, text, pattern_index + 1, text_index + 1);
     }
     return false;
 }
