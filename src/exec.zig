@@ -287,6 +287,11 @@ const builtin_names = [_][]const u8{
     "[",
 };
 
+const set_options = [_][]const u8{ "-a", "+a", "-e", "+e", "-f", "+f", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
+const set_option_names = [_][]const u8{ "allexport", "errexit", "noglob", "noclobber", "nounset", "pipefail", "verbose", "xtrace" };
+const signal_names = [_][]const u8{ "EXIT", "HUP", "INT", "QUIT", "ILL", "TRAP", "ABRT", "BUS", "FPE", "KILL", "USR1", "SEGV", "USR2", "PIPE", "ALRM", "TERM", "CHLD", "CONT", "STOP", "TSTP", "TTIN", "TTOU" };
+const test_operators = [_][]const u8{ "!", "(", ")", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-n", "-p", "-r", "-S", "-s", "-t", "-u", "-w", "-x", "-z", "=", "!=", "-eq", "-ne", "-gt", "-ge", "-lt", "-le" };
+
 fn appendRootCommandCandidate(
     allocator: std.mem.Allocator,
     builder: *CompletionBuilder,
@@ -434,6 +439,14 @@ fn completionOptionPrefixMatches(rules: []const completion.Rule, root: []const u
             const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch continue;
             if (std.mem.startsWith(u8, spelling, prefix)) return true;
         }
+    }
+    return false;
+}
+
+fn builtinCompletionSawWord(context: CompletionSemanticContext, word: []const u8) bool {
+    if (std.mem.eql(u8, context.previous, word)) return true;
+    for (context.path) |segment| {
+        if (std.mem.eql(u8, segment, word)) return true;
     }
     return false;
 }
@@ -1340,6 +1353,7 @@ pub const Executor = struct {
         var builder: CompletionBuilder = .{};
         errdefer builder.deinit(self.allocator);
         for (candidates) |candidate| try builder.appendCandidateIfMissing(self.allocator, candidate);
+        try self.appendBuiltinCompletionCandidates(&builder, semantic, options);
         if (semantic.position != .option_value) try self.appendStructuredCompletionCandidates(&builder, semantic);
         try self.appendDynamicStructuredCompletionCandidates(&builder, context, semantic, options);
         self.freeCompletions(candidates);
@@ -1703,6 +1717,147 @@ pub const Executor = struct {
                 },
             }
         }
+    }
+
+    fn appendBuiltinCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
+        if (context.position == .option_value) {
+            if (std.mem.eql(u8, context.root, "set") and context.option_value != null and (std.mem.eql(u8, context.option_value.?.spelling, "-o") or std.mem.eql(u8, context.option_value.?.spelling, "+o"))) {
+                try self.appendSetOptionNameCandidates(builder, context);
+            }
+            return;
+        }
+        if (std.mem.eql(u8, context.root, "set") and (std.mem.eql(u8, context.previous, "-o") or std.mem.eql(u8, context.previous, "+o"))) {
+            try self.appendSetOptionNameCandidates(builder, context);
+            return;
+        }
+        if (context.position == .option or (std.mem.eql(u8, context.root, "set") and std.mem.startsWith(u8, context.prefix, "+"))) {
+            try self.appendBuiltinOptionCandidates(builder, context);
+        }
+        if (context.position != .subcommand and context.position != .argument) return;
+
+        if (std.mem.eql(u8, context.root, "cd")) {
+            if (options.io) |io| try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, true, true);
+        } else if (std.mem.eql(u8, context.root, ".") or std.mem.eql(u8, context.root, "source")) {
+            if (options.io) |io| try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false);
+        } else if (std.mem.eql(u8, context.root, "read") or std.mem.eql(u8, context.root, "export") or std.mem.eql(u8, context.root, "readonly")) {
+            try self.appendVariableCandidates(builder, context);
+        } else if (std.mem.eql(u8, context.root, "unset")) {
+            if (builtinCompletionSawWord(context, "-f")) try self.appendFunctionCandidates(builder, context) else try self.appendVariableCandidates(builder, context);
+        } else if (std.mem.eql(u8, context.root, "unalias")) {
+            try self.appendAliasCandidates(builder, context);
+        } else if (std.mem.eql(u8, context.root, "fg") or std.mem.eql(u8, context.root, "bg") or std.mem.eql(u8, context.root, "jobs")) {
+            try self.appendJobCandidates(builder, context);
+        } else if (std.mem.eql(u8, context.root, "wait")) {
+            try self.appendJobPidCandidates(builder, context);
+        } else if (std.mem.eql(u8, context.root, "trap")) {
+            try self.appendSignalCandidates(builder, context);
+        } else if (std.mem.eql(u8, context.root, "command") or std.mem.eql(u8, context.root, "env")) {
+            if (!std.mem.endsWith(u8, context.prefix, "=")) try self.appendCommandNameCandidates(builder, context, options);
+        } else if (std.mem.eql(u8, context.root, "test") or std.mem.eql(u8, context.root, "[")) {
+            try appendStaticValueCandidates(self, builder, context, &test_operators, .plain, false);
+        }
+    }
+
+    fn appendBuiltinOptionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        if (std.mem.eql(u8, context.root, "command")) return appendStaticValueCandidates(self, builder, context, &.{ "-p", "-v", "-V", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "cd") or std.mem.eql(u8, context.root, "pwd")) return appendStaticValueCandidates(self, builder, context, &.{ "-L", "-P", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "read")) return appendStaticValueCandidates(self, builder, context, &.{ "-r", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "export") or std.mem.eql(u8, context.root, "readonly")) return appendStaticValueCandidates(self, builder, context, &.{ "-p", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "unset")) return appendStaticValueCandidates(self, builder, context, &.{ "-f", "-v", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "env")) return appendStaticValueCandidates(self, builder, context, &.{ "-i", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "set")) return appendStaticValueCandidates(self, builder, context, &set_options, .option, true);
+        if (std.mem.eql(u8, context.root, "trap")) return appendStaticValueCandidates(self, builder, context, &.{"--"}, .option, true);
+        if (std.mem.eql(u8, context.root, "umask")) return appendStaticValueCandidates(self, builder, context, &.{ "-S", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "unalias")) return appendStaticValueCandidates(self, builder, context, &.{ "-a", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "jobs")) return appendStaticValueCandidates(self, builder, context, &.{ "-l", "-p", "--" }, .option, true);
+        if (std.mem.eql(u8, context.root, "printf") or std.mem.eql(u8, context.root, "wait")) return appendStaticValueCandidates(self, builder, context, &.{"--"}, .option, true);
+    }
+
+    fn appendVariableCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        var iter = self.env.iterator();
+        while (iter.next()) |entry| try appendCompletionValue(self, builder, context, entry.key_ptr.*, .variable, true);
+    }
+
+    fn appendFunctionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        var iter = self.functions.iterator();
+        while (iter.next()) |entry| try appendCompletionValue(self, builder, context, entry.key_ptr.*, .function, true);
+    }
+
+    fn appendAliasCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        var iter = self.aliases.iterator();
+        while (iter.next()) |entry| try appendCompletionValue(self, builder, context, entry.key_ptr.*, .command, true);
+    }
+
+    fn appendJobCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        self.refreshBackgroundJobs();
+        if (self.current_job_id != null) try appendCompletionValue(self, builder, context, "%+", .plain, true);
+        if (self.previous_job_id != null) try appendCompletionValue(self, builder, context, "%-", .plain, true);
+        for (self.background_jobs.items) |job| {
+            const spec = try std.fmt.allocPrint(self.allocator, "%{d}", .{job.id});
+            defer self.allocator.free(spec);
+            try appendCompletionValue(self, builder, context, spec, .plain, true);
+        }
+    }
+
+    fn appendJobPidCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        self.refreshBackgroundJobs();
+        for (self.background_jobs.items) |job| {
+            const pid = try std.fmt.allocPrint(self.allocator, "{d}", .{job.pid});
+            defer self.allocator.free(pid);
+            try appendCompletionValue(self, builder, context, pid, .plain, true);
+        }
+    }
+
+    fn appendSignalCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        try appendStaticValueCandidates(self, builder, context, &signal_names, .plain, true);
+    }
+
+    fn appendSetOptionNameCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        try appendStaticValueCandidates(self, builder, context, &set_option_names, .plain, true);
+    }
+
+    fn appendCommandNameCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
+        var seen: std.StringHashMapUnmanaged(void) = .empty;
+        defer deinitSeenCompletionNames(self.allocator, &seen);
+        for (builtin_names) |name| try appendSeenCommandCandidate(self, builder, &seen, context, name, .builtin, "builtin");
+        var function_iter = self.functions.iterator();
+        while (function_iter.next()) |entry| try appendSeenCommandCandidate(self, builder, &seen, context, entry.key_ptr.*, .function, "function");
+        var alias_iter = self.aliases.iterator();
+        while (alias_iter.next()) |entry| try appendSeenCommandCandidate(self, builder, &seen, context, entry.key_ptr.*, .command, "alias");
+        if (options.io) |io| try self.appendExecutableCommandCandidates(builder, &seen, context, io);
+    }
+
+    fn appendExecutableCommandCandidates(self: *Executor, builder: *CompletionBuilder, seen: *std.StringHashMapUnmanaged(void), context: CompletionSemanticContext, io: std.Io) !void {
+        const path = self.getEnv("PATH") orelse return;
+        var path_iter = std.mem.splitScalar(u8, path, ':');
+        while (path_iter.next()) |path_dir| {
+            if (path_dir.len == 0) continue;
+            var dir = std.Io.Dir.cwd().openDir(io, path_dir, .{ .iterate = true }) catch continue;
+            errdefer dir.close(io);
+            var iterator = dir.iterate();
+            while (iterator.next(io) catch null) |entry| {
+                try appendSeenCommandCandidate(self, builder, seen, context, entry.name, .command, "executable");
+            }
+            dir.close(io);
+        }
+    }
+
+    fn appendSeenCommandCandidate(self: *Executor, builder: *CompletionBuilder, seen: *std.StringHashMapUnmanaged(void), context: CompletionSemanticContext, value: []const u8, kind: completion.Kind, description: []const u8) !void {
+        if (completion.fuzzyMatchRank(value, context.prefix) == null) return;
+        if (seen.contains(value)) return;
+        const seen_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(seen_value);
+        try seen.put(self.allocator, seen_value, {});
+        try builder.appendCandidateIfMissing(self.allocator, .{ .value = value, .kind = kind, .description = description, .replace_start = context.replace_start, .replace_end = context.replace_end });
+    }
+
+    fn appendStaticValueCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, values: []const []const u8, kind: completion.Kind, append_space: bool) !void {
+        for (values) |value| try appendCompletionValue(self, builder, context, value, kind, append_space);
+    }
+
+    fn appendCompletionValue(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, value: []const u8, kind: completion.Kind, append_space: bool) !void {
+        if (completion.fuzzyMatchRank(value, context.prefix) == null) return;
+        try builder.appendCandidateIfMissing(self.allocator, .{ .value = value, .kind = kind, .replace_start = context.replace_start, .replace_end = context.replace_end, .append_space = append_space });
     }
 
     fn appendStructuredCompletionCandidate(
@@ -11516,6 +11671,92 @@ test "root command completion includes builtin commands" {
     try expectCandidate(candidates, "exec", .builtin);
     try expectCandidate(candidates, "exit", .builtin);
     try expectCandidate(candidates, "export", .builtin);
+}
+
+test "builtin completion offers options for normal user-facing builtins" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const command_candidates = try executor.collectCompletionsForInput("command -", "command -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(command_candidates);
+    try expectCandidate(command_candidates, "-p", .option);
+    try expectCandidate(command_candidates, "-v", .option);
+    try expectCandidate(command_candidates, "-V", .option);
+    try expectCandidate(command_candidates, "--", .option);
+
+    const read_candidates = try executor.collectCompletionsForInput("read -", "read -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(read_candidates);
+    try expectCandidate(read_candidates, "-r", .option);
+
+    const set_disable_candidates = try executor.collectCompletionsForInput("set +", "set +".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(set_disable_candidates);
+    try expectCandidate(set_disable_candidates, "+o", .option);
+
+    const completion_candidates = try executor.collectCompletionsForInput("complete -", "complete -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(completion_candidates);
+    try expectNoCandidate(completion_candidates, "--function");
+}
+
+test "builtin completion does not inject options into empty operand positions" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const command_operands = try executor.collectCompletionsForInput("command ", "command ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(command_operands);
+    try expectCandidate(command_operands, "echo", .builtin);
+    try expectNoCandidate(command_operands, "-p");
+    try expectNoCandidate(command_operands, "--");
+
+    const cd_operands = try executor.collectCompletionsForInput("cd ", "cd ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(cd_operands);
+    try expectNoCandidate(cd_operands, "-L");
+    try expectNoCandidate(cd_operands, "--");
+}
+
+test "builtin completion offers option values and shell-local names" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("RUSH_BUILTIN_COMPLETION_VARIABLE", "1");
+    try executor.setAlias("rush_builtin_completion_alias", "echo alias");
+    var lowered = try parseAndLower(std.testing.allocator, "rush_builtin_completion_function() { :; }");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    const set_options_candidates = try executor.collectCompletionsForInput("set -o no", "set -o no".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(set_options_candidates);
+    try expectCandidate(set_options_candidates, "noglob", .plain);
+    try expectCandidate(set_options_candidates, "noclobber", .plain);
+
+    const unset_functions = try executor.collectCompletionsForInput("unset -f rush_builtin", "unset -f rush_builtin".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(unset_functions);
+    try expectCandidate(unset_functions, "rush_builtin_completion_function", .function);
+    try expectNoCandidate(unset_functions, "RUSH_BUILTIN_COMPLETION_VARIABLE");
+
+    const unalias_candidates = try executor.collectCompletionsForInput("unalias rush_builtin", "unalias rush_builtin".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(unalias_candidates);
+    try expectCandidate(unalias_candidates, "rush_builtin_completion_alias", .command);
+}
+
+test "builtin completion offers directory and command operands" {
+    const dir_path = "rush-builtin-completion-dir";
+    std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const cd_candidates = try executor.collectCompletionsForInput("cd rush-builtin", "cd rush-builtin".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(cd_candidates);
+    try expectCandidate(cd_candidates, "rush-builtin-completion-dir/", .directory);
+
+    const command_candidates = try executor.collectCompletionsForInput("command ec", "command ec".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(command_candidates);
+    try expectCandidate(command_candidates, "echo", .builtin);
 }
 
 test "completion helper builtins append structured candidates" {
