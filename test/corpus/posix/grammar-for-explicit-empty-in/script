@@ -1,0 +1,3 @@
+set -- a b
+for x in; do echo unexpected:$x; done
+echo done:$#
