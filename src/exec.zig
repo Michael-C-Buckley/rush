@@ -12350,6 +12350,46 @@ test "first-party rg completion script loads options values and paths" {
     try expectCandidate(paths, file_path, .file);
 }
 
+test "first-party jq completion script loads options filters and files" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/jq.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const filter_path = "rush-jq-completion.jq";
+    var filter_file = try std.Io.Dir.cwd().createFile(std.testing.io, filter_path, .{ .truncate = true });
+    filter_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, filter_path) catch {};
+    const input_path = "rush-jq-completion.json";
+    var input_file = try std.Io.Dir.cwd().createFile(std.testing.io, input_path, .{ .truncate = true });
+    input_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("jq --raw", "jq --raw".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--raw-input", .option);
+    try expectCandidate(options, "--raw-output", .option);
+
+    const filter_files = try executor.collectCompletionsForInput("jq --from-file rush-jq", "jq --from-file rush-jq".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(filter_files);
+    try expectCandidate(filter_files, filter_path, .file);
+
+    const filters = try executor.collectCompletionsForInput("jq le", "jq le".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(filters);
+    try expectCandidate(filters, "length", .plain);
+
+    const input_files = try executor.collectCompletionsForInput("jq . rush-jq", "jq . rush-jq".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(input_files);
+    try expectCandidate(input_files, input_path, .file);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
