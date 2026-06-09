@@ -2849,7 +2849,17 @@ pub const Executor = struct {
         }
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
-        return try self.applyExternalPostRedirections(expanded, try self.executeExternal(expanded, io, options), options);
+        var synthetic_failure = false;
+        var external_result = self.executeExternal(expanded, io, options) catch |err| switch (err) {
+            error.CommandNotFound => blk: {
+                synthetic_failure = true;
+                break :blk try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found");
+            },
+            else => return err,
+        };
+        errdefer external_result.deinit();
+        if (synthetic_failure) return try self.applyOutputRedirections(expanded, external_result, options, false);
+        return try self.applyExternalPostRedirections(expanded, external_result, options);
     }
 
     fn redirectionErrorResult(self: *Executor, command: ir.SimpleCommand, err: anyerror, special_builtin: bool) !CommandResult {
@@ -3583,7 +3593,7 @@ pub const Executor = struct {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
         const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
-            error.CommandNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            error.CommandNotFound => return error.CommandNotFound,
             else => return err,
         };
         defer if (resolved_executable) |executable| self.allocator.free(executable);
@@ -3639,7 +3649,7 @@ pub const Executor = struct {
             .stderr = if (stderr_file) |file| .{ .file = file } else if (capture_stderr) .pipe else .inherit,
             .pgid = if (foreground_terminal != null) 0 else null,
         }) catch |err| switch (err) {
-            error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            error.FileNotFound => return error.CommandNotFound,
             else => return err,
         };
         defer child.kill(io);

@@ -263,3 +263,4 @@ redirection-bad-input-fd-duplication	redirection	negative	bad input fd duplicati
 expansion-command-substitution-subshell-env	expansion	behavior	command substitution variable assignments do not leak to parent shell
 expansion-command-substitution-subshell-cwd	expansion	behavior	command substitution directory changes do not leak to parent shell
 expansion-command-substitution-subshell-function	expansion	behavior	command substitution function definitions do not leak to parent shell
+redirection-command-not-found-stderr	redirection	behavior	stderr redirection applies to command-not-found diagnostics
