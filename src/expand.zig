@@ -153,7 +153,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
             try appendDoubleQuotedText(allocator, &fields, &current, &force_current_field, part.value(parts.raw), options, ifs);
             continue;
         }
-        const split = part.kind == .unquoted or part.kind == .parameter;
+        const split = part.kind == .parameter or part.kind == .command_substitution or part.kind == .arithmetic;
         if (part.kind == .parameter) {
             const parameter = part.value(parts.raw);
             if (std.mem.eql(u8, parameter, "@")) {
@@ -1567,6 +1567,7 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "HOME")) return "/home/rush";
     if (std.mem.eql(u8, name, "USER")) return "rush-user";
     if (std.mem.eql(u8, name, "USER_NUM")) return "3";
+    if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
     return null;
@@ -1671,13 +1672,18 @@ test "expand word returns fields through an explicit result" {
 }
 
 test "field splitting uses default IFS for unquoted expansion" {
-    var result = try expandWord(std.testing.allocator, "$USER two\tthree", .{ .env = test_env });
+    var result = try expandWord(std.testing.allocator, "$WORDS", .{ .env = test_env });
     defer result.deinit();
 
     try std.testing.expectEqual(@as(usize, 3), result.fields.len);
-    try std.testing.expectEqualStrings("rush-user", result.fields[0]);
+    try std.testing.expectEqualStrings("one", result.fields[0]);
     try std.testing.expectEqualStrings("two", result.fields[1]);
     try std.testing.expectEqualStrings("three", result.fields[2]);
+
+    var literal = try expandWord(std.testing.allocator, "$USER two\tthree", .{ .env = test_env });
+    defer literal.deinit();
+    try std.testing.expectEqual(@as(usize, 1), literal.fields.len);
+    try std.testing.expectEqualStrings("rush-user two\tthree", literal.fields[0]);
 }
 
 test "field splitting honors custom and empty IFS" {
@@ -1744,12 +1750,11 @@ test "quoted positional parameters preserve fields" {
 }
 
 test "field splitting preserves quoted expansion results" {
-    var result = try expandWord(std.testing.allocator, "\"$USER two\" 'three four'", .{ .env = test_env });
+    var result = try expandWord(std.testing.allocator, "\"$USER two\"'three four'", .{ .env = test_env });
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(usize, 2), result.fields.len);
-    try std.testing.expectEqualStrings("rush-user two", result.fields[0]);
-    try std.testing.expectEqualStrings("three four", result.fields[1]);
+    try std.testing.expectEqual(@as(usize, 1), result.fields.len);
+    try std.testing.expectEqualStrings("rush-user twothree four", result.fields[0]);
 }
 
 test "quote removal preserves non-special backslashes in double quotes" {

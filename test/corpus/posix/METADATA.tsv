@@ -272,3 +272,4 @@ builtin-unalias-option-terminator	builtin	behavior	unalias accepts option termin
 builtin-test-single-argument-string	builtin	behavior	test single argument string truthiness
 builtin-test-negated-single-argument	builtin	behavior	test negated single argument truthiness
 builtin-option-before-terminator	builtin	behavior	common builtins accept options before option terminator
+expansion-field-splitting-literal-ifs	expansion	behavior	literal IFS delimiters adjacent to expansions are not split
