@@ -12076,6 +12076,32 @@ test "first-party mise completion script loads subcommands and tool values" {
     try expectCandidate(tasks, "test", .plain);
 }
 
+test "first-party just completion script loads options recipes and variable values" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/just.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("just --li", "just --li".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "--list", .option);
+
+    const recipes = try executor.collectCompletionsForInput("just te", "just te".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(recipes);
+    try expectCandidate(recipes, "test", .plain);
+
+    const variables = try executor.collectCompletionsForInput("just --set pro", "just --set pro".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(variables);
+    try expectCandidate(variables, "profile", .variable);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
