@@ -1,0 +1,118 @@
+# First-party scp completion slice.
+
+# Core scp behavior.
+complete scp --option --short r --description 'copy directories recursively'
+complete scp --option --short p --description 'preserve modification times modes and ownership'
+complete scp --option --short C --description 'enable compression'
+complete scp --option --short v --description 'verbose mode'
+complete scp --option --short q --description 'quiet mode'
+complete scp --option --short 4 --description 'use IPv4 addresses only'
+complete scp --option --short 6 --description 'use IPv6 addresses only'
+complete scp --option --short A --description 'forward authentication agent'
+complete scp --option --short B --description 'batch mode'
+complete scp --option --short O --description 'use legacy SCP protocol'
+complete scp --option --short R --description 'perform remote-to-remote copy from origin host'
+complete scp --option --short T --description 'disable strict filename checking'
+complete scp --option --short 3 --description 'copy between two remote hosts through local host'
+
+# Connection, identity, and config options.
+complete scp --option --short c --value-name cipher --description 'select encryption cipher'
+complete scp --option-value --short c --function __rush_complete_scp_ciphers
+complete scp --option --short P --value-name port --description 'connect to port on remote host'
+complete scp --option-value --short P --function __rush_complete_scp_ports
+complete scp --option --short i --value-name identity-file --description 'select identity file'
+complete scp --option-value --short i --function __rush_complete_scp_identity_files
+complete scp --option --short F --value-name config-file --description 'use alternate SSH config file'
+complete scp --option-value --short F --function __rush_complete_scp_config_files
+complete scp --option --short J --value-name destination --description 'connect through jump host'
+complete scp --option-value --short J --function __rush_complete_scp_remote_shapes
+complete scp --option --short S --value-name program --description 'program to use for encrypted connection'
+complete scp --option-value --short S --function __rush_complete_scp_executables
+complete scp --option --short D --value-name sftp-server --description 'connect directly to local SFTP server program'
+complete scp --option-value --short D --function __rush_complete_scp_executables
+complete scp --option --short s --value-name subsystem --description 'SFTP subsystem or server path'
+complete scp --option-value --short s --function __rush_complete_scp_subsystems
+complete scp --option --short l --value-name limit --description 'limit bandwidth in Kbit/s'
+complete scp --option-value --short l --function __rush_complete_scp_limits
+
+# SSH -o option values.
+complete scp --option --short o --value-name option --description 'pass option to ssh'
+complete scp --option-value --short o --function __rush_complete_scp_ssh_options
+
+# Local and remote source/destination operands. Remote candidates are shapes
+# only; completion never invokes scp/ssh or probes hosts.
+complete scp --argument --function __rush_complete_scp_paths
+
+__rush_complete_scp_paths() {
+  completion candidate host: --kind plain
+  completion candidate user@host: --kind plain
+  completion candidate user@host:/path/ --kind plain
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_scp_identity_files() {
+  completion files --extension .pem
+  completion files --extension .key
+  completion files
+}
+
+__rush_complete_scp_config_files() {
+  completion candidate ~/.ssh/config --kind file
+  completion files
+}
+
+__rush_complete_scp_executables() {
+  completion executables
+}
+
+__rush_complete_scp_remote_shapes() {
+  completion candidate host --kind plain
+  completion candidate user@host --kind plain
+  completion candidate host:22 --kind plain
+}
+
+__rush_complete_scp_subsystems() {
+  completion candidate sftp --kind plain
+  completion candidate /usr/libexec/sftp-server --kind plain
+  completion candidate /usr/lib/ssh/sftp-server --kind plain
+}
+
+__rush_complete_scp_ssh_options() {
+  completion candidate BatchMode=yes --kind plain
+  completion candidate BatchMode=no --kind plain
+  completion candidate StrictHostKeyChecking=yes --kind plain
+  completion candidate StrictHostKeyChecking=no --kind plain
+  completion candidate StrictHostKeyChecking=accept-new --kind plain
+  completion candidate UserKnownHostsFile=~/.ssh/known_hosts --kind plain
+  completion candidate ProxyJump= --kind plain
+  completion candidate ProxyCommand= --kind plain
+  completion candidate ConnectTimeout= --kind plain
+  completion candidate IdentitiesOnly=yes --kind plain
+  completion candidate IdentityFile= --kind plain
+  completion candidate Port= --kind plain
+  completion candidate User= --kind plain
+  completion candidate Ciphers= --kind plain
+  completion candidate MACs= --kind plain
+  completion candidate KexAlgorithms= --kind plain
+}
+
+__rush_complete_scp_ciphers() {
+  completion candidate aes128-ctr --kind plain
+  completion candidate aes192-ctr --kind plain
+  completion candidate aes256-ctr --kind plain
+  completion candidate chacha20-poly1305@openssh.com --kind plain
+}
+
+__rush_complete_scp_ports() {
+  completion candidate 22 --kind plain
+  completion candidate 2222 --kind plain
+  completion candidate 2200 --kind plain
+}
+
+__rush_complete_scp_limits() {
+  completion candidate 100 --kind plain
+  completion candidate 1000 --kind plain
+  completion candidate 10000 --kind plain
+  completion candidate 100000 --kind plain
+}

@@ -12523,6 +12523,52 @@ test "first-party rsync completion script loads options filters and paths" {
     try expectCandidate(remotes, "user@host:", .plain);
 }
 
+test "first-party scp completion script loads options ssh values and paths" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/scp.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    const identity_path = "rush-scp-completion.pem";
+    var identity_file = try std.Io.Dir.cwd().createFile(std.testing.io, identity_path, .{ .truncate = true });
+    identity_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, identity_path) catch {};
+    const dir_path = "rush-scp-completion-dir";
+    std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const options = try executor.collectCompletionsForInput("scp -", "scp -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(options);
+    try expectCandidate(options, "-r", .option);
+    try expectCandidate(options, "-P", .option);
+
+    const identity_files = try executor.collectCompletionsForInput("scp -i rush-scp", "scp -i rush-scp".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(identity_files);
+    try expectCandidate(identity_files, identity_path, .file);
+
+    const ssh_options = try executor.collectCompletionsForInput("scp -o Strict", "scp -o Strict".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(ssh_options);
+    try expectCandidate(ssh_options, "StrictHostKeyChecking=yes", .plain);
+
+    const paths = try executor.collectCompletionsForInput("scp rush-scp", "scp rush-scp".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(paths);
+    try expectCandidate(paths, "rush-scp-completion-dir/", .directory);
+
+    const remotes = try executor.collectCompletionsForInput("scp user", "scp user".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(remotes);
+    try expectCandidate(remotes, "user@host:", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
