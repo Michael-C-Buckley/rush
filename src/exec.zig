@@ -2100,10 +2100,7 @@ pub const Executor = struct {
                 .while_loop => condition.status == 0,
                 .until_loop => condition.status != 0,
             };
-            if (!run_body) {
-                status = 0;
-                break;
-            }
+            if (!run_body) break;
 
             var body = try self.executeScriptSlice(command.body, options);
             defer body.deinit();
