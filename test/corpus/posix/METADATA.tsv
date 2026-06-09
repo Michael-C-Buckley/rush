@@ -255,3 +255,4 @@ builtin-env-exported-only	builtin	behavior	env prints exported environment and o
 redirection-here-doc-mixed-quoted-delimiter	redirection	behavior	here-doc delimiter quote removal disables body expansion for mixed quoted delimiters
 builtin-exit-status-modulo	builtin	behavior	exit status operands use the low 8 bits for nonnegative integers
 builtin-exit-function	builtin	behavior	exit inside a function exits the shell
+builtin-eval-exit	builtin	behavior	eval executes exit in the current shell
