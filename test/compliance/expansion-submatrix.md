@@ -140,7 +140,7 @@ Manifest rows:
 - `expansion-quote-removal`
 - `lex-quotes`
 
-Current coverage includes single quotes, double quotes, escaped spaces, escaped-newline continuation, and common quoted expansion cases.
+Current coverage includes single quotes, double quotes, escaped spaces, double-quote backslash handling for special and non-special characters, escaped-newline continuation, and common quoted expansion cases.
 
 Remaining gaps:
 
