@@ -287,3 +287,4 @@ function-shift-positionals-local	grammar	behavior	shift inside functions is loca
 function-assignment-prefix-scope	grammar	behavior	function assignment prefixes are temporary during the call
 redirection-command-not-found-dup-order	redirection	behavior	command-not-found diagnostics follow ordered descriptor duplication
 builtin-read-option-before-terminator	builtin	behavior	read accepts option before option terminator
+builtin-trap-option-terminator	builtin	behavior	trap accepts option terminator before action and listing

@@ -218,3 +218,4 @@ f(){ set -- inner; echo in:$#:$1; }; set -- outer; f; echo out:$#:$1
 f(){ shift; echo in:$#:$1; }; set -- outer; f inner extra; echo out:$#:$1
 f(){ echo in:$A; A=changed; }; A=outer; A=tmp f; echo out:$A
 echo ok | read -r -- X; echo status:$?
+trap -- 'echo bye' EXIT; trap -- - EXIT; trap --; echo status:$?
