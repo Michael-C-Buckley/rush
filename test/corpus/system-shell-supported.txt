@@ -202,3 +202,4 @@ command -V echo; echo status:$?; command -V cd; echo status:$?
 printf -- %s ok; echo :$?
 alias ll='echo ok'; unalias -- ll; alias ll >/dev/null 2>/dev/null; echo status:$?
 test foo; echo one:$?; test ""; echo empty:$?; [ foo ]; echo bracket:$?
+test ! foo; echo not_nonempty:$?; test ! ""; echo not_empty:$?; [ ! foo ]; echo bracket:$?

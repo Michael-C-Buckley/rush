@@ -1,0 +1,6 @@
+test ! foo
+echo not_nonempty:$?
+test ! ""
+echo not_empty:$?
+[ ! foo ]
+echo bracket:$?
