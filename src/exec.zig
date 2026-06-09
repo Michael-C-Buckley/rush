@@ -12050,6 +12050,32 @@ test "first-party direnv completion script loads subcommands and shell values" {
     try expectCandidate(shells, "zsh", .plain);
 }
 
+test "first-party mise completion script loads subcommands and tool values" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/mise.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const subcommands = try executor.collectCompletionsForInput("mise ins", "mise ins".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(subcommands);
+    try expectCandidate(subcommands, "install", .subcommand);
+
+    const tools = try executor.collectCompletionsForInput("mise install py", "mise install py".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(tools);
+    try expectCandidate(tools, "python", .plain);
+
+    const tasks = try executor.collectCompletionsForInput("mise run te", "mise run te".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(tasks);
+    try expectCandidate(tasks, "test", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
