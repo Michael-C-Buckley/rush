@@ -1,0 +1,2 @@
+readonly LATER
+readonly -p | grep LATER

@@ -250,3 +250,4 @@ builtin-command-default-path-env	builtin	behavior	command -p uses default lookup
 option-set-allexport	options	behavior	set -a marks subsequent assignments for export without exporting ordinary shell variables
 builtin-export-mark-later-assignment	builtin	behavior	export marks an unset name so later assignment enters the environment
 builtin-command-v-function	builtin	behavior	command -v identifies shell functions by name
+builtin-readonly-p-marked-name	builtin	behavior	readonly -p lists a readonly name marked before assignment
