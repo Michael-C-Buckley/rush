@@ -193,6 +193,9 @@ pub const TerminalParser = struct {
 pub const ReadLineOptions = struct {
     prompt: []const u8,
     prompt_refresh_interval_ms: ?u64 = null,
+    hook_context: ?*anyopaque = null,
+    run_hooks: ?*const fn (*anyopaque, std.Io) anyerror!void = null,
+    next_hook_interval_ms: ?*const fn (*anyopaque, std.Io) anyerror!?u64 = null,
     prompt_context: ?*anyopaque = null,
     refresh_prompt: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror![]const u8 = null,
     history: line_editor.HistoryView = .{},
@@ -355,11 +358,18 @@ pub const TerminalSession = struct {
         try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
         try self.reader.arm();
         var next_prompt_refresh_ms: ?u64 = if (options.prompt_refresh_interval_ms) |interval_ms| nowMs(self.io) + interval_ms else null;
+        var next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
         while (session.state == .editing or session.state == .history_search) {
             var render_needed = false;
             var loop_events: [8]event_loop.Event = undefined;
-            const ready = try self.loop.waitTimeout(&loop_events, promptRefreshWaitMs(self.io, next_prompt_refresh_ms));
-            if (ready.len == 0 and options.prompt_refresh_interval_ms != null) {
+            const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms));
+            if (ready.len == 0 and next_hook_interval_ms != null and promptRefreshWaitMs(self.io, next_hook_interval_ms) == 0) {
+                if (options.run_hooks != null and options.hook_context != null) try options.run_hooks.?(options.hook_context.?, self.io);
+                render_needed = true;
+                session.invalidatePrompt();
+                next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
+            }
+            if (ready.len == 0 and next_prompt_refresh_ms != null and promptRefreshWaitMs(self.io, next_prompt_refresh_ms) == 0) {
                 render_needed = true;
                 session.invalidatePrompt();
                 next_prompt_refresh_ms = nowMs(self.io) + options.prompt_refresh_interval_ms.?;
@@ -530,6 +540,18 @@ fn promptRefreshWaitMs(io: std.Io, next_prompt_refresh_ms: ?u64) ?u64 {
     const now = nowMs(io);
     if (next <= now) return 0;
     return next - now;
+}
+
+fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64) ?u64 {
+    const wait_a = promptRefreshWaitMs(io, a) orelse return promptRefreshWaitMs(io, b);
+    const wait_b = promptRefreshWaitMs(io, b) orelse return wait_a;
+    return @min(wait_a, wait_b);
+}
+
+fn nextHookIntervalDeadlineMs(options: ReadLineOptions, io: std.Io) !?u64 {
+    if (options.next_hook_interval_ms == null or options.hook_context == null) return null;
+    const interval_ms = try options.next_hook_interval_ms.?(options.hook_context.?, io) orelse return null;
+    return nowMs(io) + interval_ms;
 }
 
 fn nowMs(io: std.Io) u64 {

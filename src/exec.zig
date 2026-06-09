@@ -648,6 +648,17 @@ const PromptAsyncSchedule = struct {
     should_spawn: bool,
 };
 
+const EventHook = struct {
+    function: []const u8,
+};
+
+const IntervalHook = struct {
+    name: []const u8,
+    function: []const u8,
+    interval_ms: u64,
+    last_run_ms: u64 = 0,
+};
+
 const PromptAsyncRefresh = struct {
     allocator: std.mem.Allocator,
     owner: *Executor,
@@ -705,6 +716,9 @@ pub const Executor = struct {
     functions: std.StringHashMapUnmanaged(FunctionValue) = .empty,
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
+    event_hooks: std.StringHashMapUnmanaged(std.ArrayList(EventHook)) = .empty,
+    interval_hooks: std.ArrayList(IntervalHook) = .empty,
+    pending_variable_hooks: std.ArrayList([]const u8) = .empty,
     completion_rules: std.ArrayList(completion.Rule) = .empty,
     completion_generation: u64 = 0,
     loaded_completion_scripts: std.StringHashMapUnmanaged(void) = .empty,
@@ -723,6 +737,7 @@ pub const Executor = struct {
     pending_loop_control: ?LoopControl = null,
     pending_exit: ?ExitStatus = null,
     execution_depth: usize = 0,
+    hook_depth: usize = 0,
     running_exit_trap: bool = false,
     arg_zero: []const u8 = "rush",
     last_status_text: [3]u8 = .{ '0', 0, 0 },
@@ -774,6 +789,109 @@ pub const Executor = struct {
 
     pub fn waitForPromptAsyncRefreshes(self: *Executor) void {
         self.reapPromptAsyncRefreshes(true);
+    }
+
+    pub fn promptIntervalWaitMs(self: Executor, io: std.Io) ?u64 {
+        if (self.interval_hooks.items.len == 0) return null;
+        const now = nowMs(io);
+        var wait_ms: ?u64 = null;
+        for (self.interval_hooks.items) |hook| {
+            const due_at = hook.last_run_ms +| hook.interval_ms;
+            const remaining = if (due_at <= now) 0 else due_at - now;
+            wait_ms = if (wait_ms) |current| @min(current, remaining) else remaining;
+        }
+        return wait_ms;
+    }
+
+    pub fn runPromptEventHooks(self: *Executor, io: std.Io, event: []const u8, args: []const []const u8) !void {
+        try self.runEventHooks(io, event, args);
+    }
+
+    pub fn runDuePromptIntervals(self: *Executor, io: std.Io) !void {
+        const now = nowMs(io);
+        for (self.interval_hooks.items) |*hook| {
+            if (hook.last_run_ms != 0 and now -| hook.last_run_ms < hook.interval_ms) continue;
+            hook.last_run_ms = now;
+            try self.runHookFunction(io, hook.function, &.{hook.name});
+        }
+    }
+
+    pub fn runPendingVariableHooks(self: *Executor, io: std.Io) !void {
+        var pending = self.pending_variable_hooks;
+        self.pending_variable_hooks = .empty;
+        defer {
+            for (pending.items) |name| self.allocator.free(name);
+            pending.deinit(self.allocator);
+        }
+        for (pending.items) |name| try self.runEventHooks(io, "variable", &.{name});
+    }
+
+    fn queueVariableHook(self: *Executor, name: []const u8) void {
+        if (self.hook_depth != 0) return;
+        if (!self.event_hooks.contains("variable")) return;
+        self.pending_variable_hooks.append(self.allocator, self.allocator.dupe(u8, name) catch return) catch return;
+    }
+
+    fn addEventHook(self: *Executor, event: []const u8, function: []const u8) !void {
+        const owned_event = try self.allocator.dupe(u8, event);
+        errdefer self.allocator.free(owned_event);
+        const owned_function = try self.allocator.dupe(u8, function);
+        errdefer self.allocator.free(owned_function);
+        const result = try self.event_hooks.getOrPut(self.allocator, owned_event);
+        if (result.found_existing) {
+            self.allocator.free(owned_event);
+        } else {
+            result.value_ptr.* = .empty;
+        }
+        try result.value_ptr.append(self.allocator, .{ .function = owned_function });
+    }
+
+    fn addIntervalHook(self: *Executor, name: []const u8, interval_ms: u64, function: []const u8) !void {
+        for (self.interval_hooks.items) |*hook| {
+            if (std.mem.eql(u8, hook.name, name)) {
+                self.allocator.free(hook.function);
+                hook.function = try self.allocator.dupe(u8, function);
+                hook.interval_ms = interval_ms;
+                hook.last_run_ms = 0;
+                return;
+            }
+        }
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_function = try self.allocator.dupe(u8, function);
+        errdefer self.allocator.free(owned_function);
+        try self.interval_hooks.append(self.allocator, .{
+            .name = owned_name,
+            .function = owned_function,
+            .interval_ms = interval_ms,
+        });
+    }
+
+    fn runEventHooks(self: *Executor, io: std.Io, event: []const u8, args: []const []const u8) !void {
+        const hooks = self.event_hooks.get(event) orelse return;
+        for (hooks.items) |hook| try self.runHookFunction(io, hook.function, args);
+    }
+
+    fn runHookFunction(self: *Executor, io: std.Io, function: []const u8, args: []const []const u8) !void {
+        if (self.hook_depth != 0) return;
+        if (!self.hasFunction(function)) return;
+        const saved_last_status_text = self.last_status_text;
+        const saved_last_status_text_len = self.last_status_text_len;
+        self.hook_depth += 1;
+        defer {
+            self.hook_depth -= 1;
+            self.last_status_text = saved_last_status_text;
+            self.last_status_text_len = saved_last_status_text_len;
+        }
+        var script: std.ArrayList(u8) = .empty;
+        defer script.deinit(self.allocator);
+        try appendShellQuoted(self.allocator, &script, function);
+        for (args) |arg| {
+            try script.append(self.allocator, ' ');
+            try appendShellQuoted(self.allocator, &script, arg);
+        }
+        var result = try self.executeScriptSlice(script.items, .{ .io = io, .allow_external = true, .external_stdio = .capture, .suppress_errexit = true, .arg_zero = self.arg_zero });
+        defer result.deinit();
     }
 
     fn promptAsyncCacheKey(self: *Executor, io: std.Io, key: []const u8) ![]u8 {
@@ -1017,6 +1135,20 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.traps.deinit(self.allocator);
+        var hook_iter = self.event_hooks.iterator();
+        while (hook_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            for (entry.value_ptr.items) |hook| self.allocator.free(hook.function);
+            entry.value_ptr.deinit(self.allocator);
+        }
+        self.event_hooks.deinit(self.allocator);
+        for (self.interval_hooks.items) |hook| {
+            self.allocator.free(hook.name);
+            self.allocator.free(hook.function);
+        }
+        self.interval_hooks.deinit(self.allocator);
+        for (self.pending_variable_hooks.items) |name| self.allocator.free(name);
+        self.pending_variable_hooks.deinit(self.allocator);
         for (self.completion_rules.items) |rule| freeCompletionRule(self.allocator, rule);
         self.completion_rules.deinit(self.allocator);
         var loaded_completion_iter = self.loaded_completion_scripts.iterator();
@@ -1708,6 +1840,7 @@ pub const Executor = struct {
         if (self.env.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
+            self.queueVariableHook(name);
         }
     }
 
@@ -1762,6 +1895,7 @@ pub const Executor = struct {
         } else {
             result.value_ptr.* = owned_value;
         }
+        self.queueVariableHook(name);
     }
 
     pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) anyerror!CommandResult {
@@ -2010,6 +2144,11 @@ pub const Executor = struct {
         for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
         var trap_iter = other.traps.iterator();
         while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
+        var hook_iter = other.event_hooks.iterator();
+        while (hook_iter.next()) |entry| {
+            for (entry.value_ptr.items) |hook| try self.addEventHook(entry.key_ptr.*, hook.function);
+        }
+        for (other.interval_hooks.items) |hook| try self.addIntervalHook(hook.name, hook.interval_ms, hook.function);
         var array_iter = other.arrays.iterator();
         while (array_iter.next()) |entry| {
             for (entry.value_ptr.values.items, 0..) |value, index| {
@@ -5058,9 +5197,11 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "return")) return builtinReturn;
     if (std.mem.eql(u8, name, "shift")) return builtinShift;
     if (std.mem.eql(u8, name, "export")) return builtinExport;
+    if (std.mem.eql(u8, name, "event")) return builtinEvent;
     if (std.mem.eql(u8, name, "getopts")) return builtinGetopts;
     if (std.mem.eql(u8, name, "fg")) return builtinFg;
     if (std.mem.eql(u8, name, "jobs")) return builtinJobs;
+    if (std.mem.eql(u8, name, "interval")) return builtinInterval;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
     if (std.mem.eql(u8, name, "eval")) return builtinEval;
@@ -5917,6 +6058,36 @@ fn builtinPromptTime(self: *Executor, command: ir.SimpleCommand, stdin: []const 
         .stdout = try stdout.toOwnedSlice(),
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn builtinEvent(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len != 3) return errorResult(self.allocator, 2, "event", "usage: EVENT FUNCTION");
+    const event = command.argv[1].text;
+    if (!isPromptEventName(event)) return errorResult(self.allocator, 2, "event", "unsupported event");
+    const function = command.argv[2].text;
+    if (!isShellName(function)) return errorResult(self.allocator, 2, "event", "invalid function name");
+    try self.addEventHook(event, function);
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinInterval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len != 5 or !std.mem.eql(u8, command.argv[2].text, "--interval")) return errorResult(self.allocator, 2, "interval", "usage: NAME --interval MS FUNCTION");
+    const interval_ms = std.fmt.parseUnsigned(u64, command.argv[3].text, 10) catch return errorResult(self.allocator, 2, "interval", "invalid interval");
+    if (interval_ms == 0) return errorResult(self.allocator, 2, "interval", "invalid interval");
+    if (!isShellName(command.argv[4].text)) return errorResult(self.allocator, 2, "interval", "invalid function name");
+    try self.addIntervalHook(command.argv[1].text, interval_ms, command.argv[4].text);
+    return emptyResult(self.allocator, 0);
+}
+
+fn isPromptEventName(name: []const u8) bool {
+    return std.mem.eql(u8, name, "prompt") or
+        std.mem.eql(u8, name, "preexec") or
+        std.mem.eql(u8, name, "postexec") or
+        std.mem.eql(u8, name, "variable");
 }
 
 const PromptPath = struct {

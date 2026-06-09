@@ -579,6 +579,16 @@ fn requestInteractivePromptRepaint(context: *anyopaque) void {
     terminal.requestPromptRedraw();
 }
 
+fn runInteractiveIntervalHooks(context: *anyopaque, io: std.Io) !void {
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    try completion_context.executor.runDuePromptIntervals(io);
+}
+
+fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    return completion_context.executor.promptIntervalWaitMs(io);
+}
+
 const CompletionScriptLoader = struct {
     allocator: std.mem.Allocator,
     attempted: std.StringHashMapUnmanaged(void) = .empty,
@@ -1142,6 +1152,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const notifications = try executor.drainJobNotifications();
         try writeAll(io, .stderr, notifications);
         allocator.free(notifications);
+        try executor.runPendingVariableHooks(io);
+        try executor.runPromptEventHooks(io, "prompt", &.{});
         const fallback_prompt = executor.getEnv("PS1") orelse "$ ";
         const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = options.arg_zero }, fallback_prompt) catch |err| switch (err) {
             error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
@@ -1154,6 +1166,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
             .prompt_refresh_interval_ms = executor.promptRefreshIntervalMs(),
+            .hook_context = &completion_context,
+            .run_hooks = runInteractiveIntervalHooks,
+            .next_hook_interval_ms = nextInteractiveIntervalMs,
             .prompt_context = &completion_context,
             .refresh_prompt = renderInteractivePrompt,
             .history = .{
@@ -1194,6 +1209,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
+            try executor.runPromptEventHooks(io, "preexec", &.{line});
             var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = options.arg_zero });
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
             defer result.deinit();
@@ -1203,6 +1219,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             last_status = result.status;
             executor.setLastCommandDuration(command_duration_ms);
             try history.addCommand(io, line, result.status, command_started_at, command_duration_ms);
+            var status_buffer: [3]u8 = undefined;
+            const status_text = try std.fmt.bufPrint(&status_buffer, "{d}", .{result.status});
+            try executor.runPromptEventHooks(io, "postexec", &.{ line, status_text });
             try terminal.finishSemanticCommand(result.status);
             completion_cache.clear();
             if (executor.pending_exit) |status| {
@@ -2431,6 +2450,46 @@ test "prompt async suppresses stderr from refresh output" {
     const warm_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
     defer std.testing.allocator.free(warm_prompt);
     try std.testing.expectEqualStrings("out", warm_prompt);
+}
+
+test "prompt event hooks run hidden and preserve status" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\on_prompt() { PROMPT_HOOK=$?; echo hidden; }
+        \\event prompt on_prompt
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer setup.deinit();
+    executor.setLastStatus(7);
+
+    try executor.runPromptEventHooks(std.testing.io, "prompt", &.{});
+    try std.testing.expectEqualStrings("7", executor.getEnv("PROMPT_HOOK").?);
+    try std.testing.expectEqual(@as(exec.ExitStatus, 7), executor.lastStatus());
+}
+
+test "variable and interval hooks use prompt repaint primitive" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\on_variable() { VARIABLE_HOOK=$1; prompt repaint; }
+        \\on_interval() { INTERVAL_HOOK=$1; prompt repaint; }
+        \\event variable on_variable
+        \\interval clock --interval 100000 on_interval
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer setup.deinit();
+
+    try executor.setEnv("RUSH_HOOK_TEST", "value");
+    try executor.runPendingVariableHooks(std.testing.io);
+    try std.testing.expectEqualStrings("RUSH_HOOK_TEST", executor.getEnv("VARIABLE_HOOK").?);
+
+    try std.testing.expectEqual(@as(?u64, 0), executor.promptIntervalWaitMs(std.testing.io));
+    try executor.runDuePromptIntervals(std.testing.io);
+    try std.testing.expectEqualStrings("clock", executor.getEnv("INTERVAL_HOOK").?);
+    try std.testing.expect((executor.promptIntervalWaitMs(std.testing.io) orelse 0) > 0);
 }
 
 test "omitted newline marker follows displayed output stream" {
