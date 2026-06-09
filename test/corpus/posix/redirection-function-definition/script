@@ -1,0 +1,11 @@
+rm -f rf infile
+f(){ echo hi; } >rf
+echo before
+f
+f
+printf 'file:'
+cat rf
+echo ok >infile
+g(){ cat; } <infile
+g
+rm -f rf infile

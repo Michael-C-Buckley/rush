@@ -86,6 +86,7 @@ pub const FunctionDefinition = struct {
     span: parser.Span,
     name: []const u8,
     body: []const u8,
+    redirections: []Redirection,
 };
 
 pub const BashTestCommand = struct {
@@ -162,7 +163,7 @@ pub const Program = struct {
         self.allocator.free(self.for_commands);
         for (self.case_commands) |command| freeCaseCommand(self.allocator, command);
         self.allocator.free(self.case_commands);
-        for (self.function_definitions) |definition| self.allocator.free(definition.name);
+        for (self.function_definitions) |definition| freeFunctionDefinition(self.allocator, definition);
         self.allocator.free(self.function_definitions);
         for (self.bash_test_commands) |command| {
             for (command.args) |arg| freeWord(self.allocator, arg);
@@ -512,10 +513,17 @@ fn lowerFunctionDefinition(allocator: std.mem.Allocator, parsed: parser.ParseRes
     errdefer allocator.free(name);
     const body_start = if (open_brace) |index| index + 1 else node.token_end;
     const body_end = close_brace orelse node.token_end;
+    var redirections = try lowerCompoundRedirections(allocator, parsed, node);
+    errdefer {
+        for (redirections.items) |redirection| freeRedirection(allocator, redirection);
+        redirections.deinit(allocator);
+    }
+
     return .{
         .span = node.span,
         .name = name,
         .body = spanSlice(parsed, body_start, body_end),
+        .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
 
@@ -1101,6 +1109,12 @@ fn freeSubshell(allocator: std.mem.Allocator, subshell: Subshell) void {
 fn freeBraceGroup(allocator: std.mem.Allocator, group: BraceGroup) void {
     for (group.redirections) |redirection| freeRedirection(allocator, redirection);
     allocator.free(group.redirections);
+}
+
+fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: FunctionDefinition) void {
+    allocator.free(definition.name);
+    for (definition.redirections) |redirection| freeRedirection(allocator, redirection);
+    allocator.free(definition.redirections);
 }
 
 fn freeBashTestCommand(allocator: std.mem.Allocator, command: BashTestCommand) void {

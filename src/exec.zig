@@ -592,13 +592,29 @@ pub const CallFrame = struct {
 pub const FunctionValue = struct {
     body: []const u8,
     program: ir.Program,
+    redirections: []ir.Redirection,
 
     pub fn deinit(self: *FunctionValue, allocator: std.mem.Allocator) void {
         allocator.free(self.body);
         self.program.deinit();
+        freeFunctionValueRedirections(allocator, self.redirections);
         self.* = undefined;
     }
 };
+
+fn freeFunctionValueRedirections(allocator: std.mem.Allocator, redirections: []const ir.Redirection) void {
+    for (redirections) |redirection| {
+        if (redirection.io_number) |word| freeFunctionValueWord(allocator, word);
+        if (redirection.target) |word| freeFunctionValueWord(allocator, word);
+        if (redirection.here_doc) |text| allocator.free(text);
+    }
+    allocator.free(redirections);
+}
+
+fn freeFunctionValueWord(allocator: std.mem.Allocator, word: ir.WordRef) void {
+    allocator.free(word.raw);
+    allocator.free(word.text);
+}
 
 pub const BackgroundJob = struct {
     id: usize,
@@ -1708,7 +1724,7 @@ pub const Executor = struct {
     }
 
     fn executeFunctionDefinition(self: *Executor, definition: ir.FunctionDefinition) !CommandResult {
-        try self.setFunction(definition.name, definition.body);
+        try self.setFunction(definition.name, definition.body, definition.redirections);
         return emptyResult(self.allocator, 0);
     }
 
@@ -1740,7 +1756,7 @@ pub const Executor = struct {
         var open_fd_iter = other.open_fds.iterator();
         while (open_fd_iter.next()) |entry| try self.open_fds.put(self.allocator, entry.key_ptr.*, {});
         var function_iter = other.functions.iterator();
-        while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body);
+        while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body, entry.value_ptr.redirections);
         var alias_iter = other.aliases.iterator();
         while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
         for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
@@ -1955,11 +1971,13 @@ pub const Executor = struct {
         return false;
     }
 
-    fn setFunction(self: *Executor, name: []const u8, body: []const u8) !void {
+    fn setFunction(self: *Executor, name: []const u8, body: []const u8, redirections: []const ir.Redirection) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const owned_body = try self.allocator.dupe(u8, body);
         errdefer self.allocator.free(owned_body);
+        const owned_redirections = try self.cloneRedirections(redirections);
+        errdefer self.freeRedirections(owned_redirections);
         var parsed = try parser.parse(self.allocator, owned_body, .{});
         defer parsed.deinit();
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
@@ -1969,7 +1987,37 @@ pub const Executor = struct {
             self.allocator.free(owned_name);
             result.value_ptr.deinit(self.allocator);
         }
-        result.value_ptr.* = .{ .body = owned_body, .program = program };
+        result.value_ptr.* = .{ .body = owned_body, .program = program, .redirections = owned_redirections };
+    }
+
+    fn cloneRedirections(self: *Executor, redirections: []const ir.Redirection) ![]ir.Redirection {
+        const cloned = try self.allocator.alloc(ir.Redirection, redirections.len);
+        errdefer self.allocator.free(cloned);
+        var initialized: usize = 0;
+        errdefer {
+            for (cloned[0..initialized]) |redirection| self.freeRedirection(redirection);
+            self.allocator.free(cloned);
+        }
+        for (redirections, 0..) |redirection, index| {
+            cloned[index] = .{
+                .span = redirection.span,
+                .io_number = if (redirection.io_number) |word| try self.cloneWord(word) else null,
+                .operator = redirection.operator,
+                .target = if (redirection.target) |word| try self.cloneWord(word) else null,
+                .here_doc = if (redirection.here_doc) |text| try self.allocator.dupe(u8, text) else null,
+                .here_doc_quoted = redirection.here_doc_quoted,
+            };
+            initialized += 1;
+        }
+        return cloned;
+    }
+
+    fn cloneWord(self: *Executor, word: ir.WordRef) !ir.WordRef {
+        const raw = try self.allocator.dupe(u8, word.raw);
+        errdefer self.allocator.free(raw);
+        const text = try self.allocator.dupe(u8, word.text);
+        errdefer self.allocator.free(text);
+        return .{ .span = word.span, .raw = raw, .text = text };
     }
 
     fn setTrap(self: *Executor, name: []const u8, action: []const u8) !void {
@@ -2998,17 +3046,32 @@ pub const Executor = struct {
             else => return err,
         };
         defer assignment_scope.restore();
+        var owned_stdin: ?[]u8 = null;
+        defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        const prior_stdin = self.script_stdin;
+        const prior_stdin_offset = self.script_stdin_offset;
+        defer {
+            self.script_stdin = prior_stdin;
+            self.script_stdin_offset = prior_stdin_offset;
+        }
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, function_value.redirections, options, &owned_stdin);
+        if (redirected_stdin) |stdin| {
+            self.script_stdin = stdin;
+            self.script_stdin_offset = 0;
+        }
+        var execution_options = options;
+        if (function_value.redirections.len != 0) execution_options.external_stdio = .capture;
         try self.pushCallFrame(command.argv[1..]);
         defer self.popCallFrame();
         self.function_depth += 1;
         defer self.function_depth -= 1;
-        var result = try self.executeProgram(function_value.program, options);
+        var result = try self.executeProgram(function_value.program, execution_options);
         errdefer result.deinit();
         if (self.pending_return) |status| {
             self.pending_return = null;
             result.status = status;
         }
-        return result;
+        return self.applyCompoundOutputRedirections(command.span, function_value.redirections, result, options);
     }
 
     fn expandSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !ir.SimpleCommand {
@@ -7550,7 +7613,7 @@ test "executor executes POSIX subshells with isolated state" {
 
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
-    try executor.setFunction("f", "echo outer-f");
+    try executor.setFunction("f", "echo outer-f", &.{});
 
     var result = try executor.executeProgram(lowered.program, .{});
     defer result.deinit();

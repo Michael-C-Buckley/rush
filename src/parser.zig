@@ -1270,6 +1270,8 @@ const SyntaxParser = struct {
             });
         }
 
+        try self.parseTrailingRedirections(&function_children);
+
         const token_end = self.index;
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, function_children.items);

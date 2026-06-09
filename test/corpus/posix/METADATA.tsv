@@ -296,3 +296,4 @@ expansion-parameter-pattern-large-quoted-metacharacters	expansion	behavior	large
 redirection-compound-if-for-loop	redirection	behavior	if for while until compound command redirections
 redirection-compound-case-output	redirection	behavior	case compound command output redirection
 redirection-case-input-command-substitution	redirection	behavior	case input redirection feeds command substitution stdin
+redirection-function-definition	redirection	behavior	function definition redirections apply on invocation
