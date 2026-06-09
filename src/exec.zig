@@ -6263,7 +6263,8 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     _ = stdin;
     _ = options;
     var arg_index: usize = 1;
-    if (arg_index < command.argv.len and std.mem.eql(u8, command.argv[arg_index].text, "--")) arg_index += 1;
+    const option_terminated = arg_index < command.argv.len and std.mem.eql(u8, command.argv[arg_index].text, "--");
+    if (option_terminated) arg_index += 1;
     if (command.argv.len > arg_index + 1) return errorResult(self.allocator, 2, "umask", "too many arguments");
     const old = shellUmask(0);
     _ = shellUmask(old);
@@ -6273,8 +6274,8 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
     }
     const operand = command.argv[arg_index].text;
-    if (std.mem.eql(u8, operand, "-S")) return symbolicUmaskResult(self.allocator, old);
-    if (std.mem.startsWith(u8, operand, "-")) return errorResult(self.allocator, 2, "umask", "unsupported option");
+    if (!option_terminated and std.mem.eql(u8, operand, "-S")) return symbolicUmaskResult(self.allocator, old);
+    if (!option_terminated and std.mem.startsWith(u8, operand, "-")) return errorResult(self.allocator, 2, "umask", "unsupported option");
     const new_mask = std.fmt.parseInt(u16, operand, 8) catch blk: {
         break :blk parseSymbolicUmask(operand, old) orelse return errorResult(self.allocator, 2, "umask", "invalid mask");
     };
