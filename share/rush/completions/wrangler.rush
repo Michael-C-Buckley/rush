@@ -1,0 +1,179 @@
+# First-party Cloudflare Wrangler completion slice.
+
+complete wrangler --option --short h --long help --description 'show help'
+complete wrangler --option --short v --long version --description 'show version'
+complete wrangler --option --long config --value-name file --description 'path to Wrangler configuration'
+complete wrangler --option-value --long config --function __rush_complete_wrangler_config_files
+complete wrangler --option --short e --long env --value-name environment --description 'Wrangler environment'
+complete wrangler --option-value --short e --function __rush_complete_wrangler_envs
+complete wrangler --option-value --long env --function __rush_complete_wrangler_envs
+complete wrangler --option --long cwd --value-name directory --description 'run as if Wrangler was started in directory'
+complete wrangler --option-value --long cwd --function __rush_complete_wrangler_directories
+complete wrangler --subcommand dev --description 'start a local development server'
+complete wrangler --subcommand deploy --description 'deploy a Worker'
+complete wrangler --subcommand pages --description 'manage Cloudflare Pages'
+complete wrangler --subcommand kv --description 'manage Workers KV'
+complete wrangler --subcommand r2 --description 'manage R2 buckets and objects'
+complete wrangler --subcommand d1 --description 'manage D1 databases'
+complete wrangler --subcommand secret --description 'manage Worker secrets'
+complete wrangler --subcommand tail --description 'tail Worker logs'
+complete wrangler --subcommand types --description 'generate runtime types'
+complete wrangler --subcommand login --description 'log in to Cloudflare'
+complete wrangler --subcommand logout --description 'log out of Cloudflare'
+complete wrangler --subcommand whoami --description 'show current account'
+
+complete 'wrangler dev' --option --short e --long env --value-name environment --description 'environment to use'
+complete 'wrangler dev' --option-value --short e --function __rush_complete_wrangler_envs
+complete 'wrangler dev' --option-value --long env --function __rush_complete_wrangler_envs
+complete 'wrangler dev' --option --long local --description 'run locally'
+complete 'wrangler dev' --option --long remote --description 'run on Cloudflare edge preview'
+complete 'wrangler dev' --option --long port --value-name port --description 'local dev port'
+complete 'wrangler dev' --option --long ip --value-name address --description 'address to listen on'
+complete 'wrangler dev' --option --long assets --value-name directory --description 'static assets directory'
+complete 'wrangler dev' --option-value --long assets --function __rush_complete_wrangler_directories
+complete 'wrangler dev' --option --long var --value-name name:value --description 'runtime variable'
+
+complete 'wrangler deploy' --argument --function __rush_complete_wrangler_entrypoints
+complete 'wrangler deploy' --option --short e --long env --value-name environment --description 'environment to deploy'
+complete 'wrangler deploy' --option-value --short e --function __rush_complete_wrangler_envs
+complete 'wrangler deploy' --option-value --long env --function __rush_complete_wrangler_envs
+complete 'wrangler deploy' --option --long name --value-name worker --description 'Worker name'
+complete 'wrangler deploy' --option-value --long name --function __rush_complete_wrangler_workers
+complete 'wrangler deploy' --option --long compatibility-date --value-name date --description 'compatibility date'
+complete 'wrangler deploy' --option --long assets --value-name directory --description 'static assets directory'
+complete 'wrangler deploy' --option-value --long assets --function __rush_complete_wrangler_directories
+complete 'wrangler deploy' --option --long dry-run --description 'validate without uploading'
+complete 'wrangler deploy' --option --long minify --description 'minify Worker before upload'
+
+complete 'wrangler pages' --subcommand dev --description 'run Pages locally'
+complete 'wrangler pages' --subcommand deploy --description 'deploy a directory to Pages'
+complete 'wrangler pages' --subcommand project --description 'manage Pages projects'
+complete 'wrangler pages' --subcommand secret --description 'manage Pages secrets'
+complete 'wrangler pages deploy' --argument --function __rush_complete_wrangler_directories
+complete 'wrangler pages deploy' --option --long project-name --value-name project --description 'Pages project name'
+complete 'wrangler pages deploy' --option-value --long project-name --function __rush_complete_wrangler_pages_projects
+complete 'wrangler pages deploy' --option --long branch --value-name branch --description 'deployment branch'
+complete 'wrangler pages project' --subcommand list --description 'list Pages projects'
+complete 'wrangler pages project' --subcommand create --description 'create a Pages project'
+complete 'wrangler pages project' --subcommand delete --description 'delete a Pages project'
+complete 'wrangler pages project delete' --argument --function __rush_complete_wrangler_pages_projects
+complete 'wrangler pages secret' --subcommand list --description 'list Pages secrets'
+complete 'wrangler pages secret' --subcommand put --description 'create or update a Pages secret'
+complete 'wrangler pages secret' --subcommand delete --description 'delete a Pages secret'
+complete 'wrangler pages secret delete' --argument --function __rush_complete_wrangler_secrets
+
+complete 'wrangler kv' --subcommand namespace --description 'manage KV namespaces'
+complete 'wrangler kv' --subcommand key --description 'manage KV keys'
+complete 'wrangler kv' --subcommand bulk --description 'bulk import or export KV data'
+complete 'wrangler kv namespace' --subcommand list --description 'list KV namespaces'
+complete 'wrangler kv namespace' --subcommand create --description 'create a KV namespace'
+complete 'wrangler kv namespace' --subcommand delete --description 'delete a KV namespace'
+complete 'wrangler kv namespace delete' --argument --function __rush_complete_wrangler_kv_namespaces
+complete 'wrangler kv key' --subcommand get --description 'get a KV key'
+complete 'wrangler kv key' --subcommand put --description 'put a KV key'
+complete 'wrangler kv key' --subcommand delete --description 'delete a KV key'
+complete 'wrangler kv key get' --option --long namespace-id --value-name namespace --description 'KV namespace ID'
+complete 'wrangler kv key get' --option-value --long namespace-id --function __rush_complete_wrangler_kv_namespaces
+complete 'wrangler kv bulk' --subcommand put --description 'bulk write KV pairs'
+complete 'wrangler kv bulk' --subcommand delete --description 'bulk delete KV keys'
+complete 'wrangler kv bulk put' --argument --function __rush_complete_wrangler_json_files
+
+complete 'wrangler r2' --subcommand bucket --description 'manage R2 buckets'
+complete 'wrangler r2' --subcommand object --description 'manage R2 objects'
+complete 'wrangler r2 bucket' --subcommand list --description 'list buckets'
+complete 'wrangler r2 bucket' --subcommand create --description 'create a bucket'
+complete 'wrangler r2 bucket' --subcommand delete --description 'delete a bucket'
+complete 'wrangler r2 bucket delete' --argument --function __rush_complete_wrangler_r2_buckets
+complete 'wrangler r2 object' --subcommand get --description 'download an object'
+complete 'wrangler r2 object' --subcommand put --description 'upload an object'
+complete 'wrangler r2 object' --subcommand delete --description 'delete an object'
+complete 'wrangler r2 object get' --argument --function __rush_complete_wrangler_r2_objects
+complete 'wrangler r2 object put' --argument --function __rush_complete_wrangler_files
+
+complete 'wrangler d1' --subcommand list --description 'list D1 databases'
+complete 'wrangler d1' --subcommand create --description 'create a D1 database'
+complete 'wrangler d1' --subcommand delete --description 'delete a D1 database'
+complete 'wrangler d1' --subcommand execute --description 'execute SQL against a D1 database'
+complete 'wrangler d1 delete' --argument --function __rush_complete_wrangler_d1_databases
+complete 'wrangler d1 execute' --argument --function __rush_complete_wrangler_d1_databases
+complete 'wrangler d1 execute' --option --long file --value-name sql --description 'SQL file to execute'
+complete 'wrangler d1 execute' --option-value --long file --function __rush_complete_wrangler_sql_files
+complete 'wrangler d1 execute' --option --long local --description 'execute against local database'
+complete 'wrangler d1 execute' --option --long remote --description 'execute against remote database'
+
+complete 'wrangler secret' --subcommand list --description 'list secrets'
+complete 'wrangler secret' --subcommand put --description 'create or update a secret'
+complete 'wrangler secret' --subcommand delete --description 'delete a secret'
+complete 'wrangler secret delete' --argument --function __rush_complete_wrangler_secrets
+complete 'wrangler tail' --argument --function __rush_complete_wrangler_workers
+complete 'wrangler tail' --option --long format --value-name format --description 'log output format'
+complete 'wrangler tail' --option-value --long format --function __rush_complete_wrangler_tail_formats
+complete 'wrangler types' --option --long env-interface --value-name name --description 'generated environment interface name'
+complete 'wrangler types' --option --long path --value-name file --description 'output file path'
+
+__rush_complete_wrangler_envs() {
+  completion candidate production --kind plain
+  completion candidate staging --kind plain
+  completion candidate preview --kind plain
+  awk -F'[][]' '/^\[env\./ { print $2 }' wrangler.toml 2>/dev/null | sed 's/^env\.//' | while read env_name; do test -n "$env_name" && completion candidate "$env_name" --kind plain; done
+}
+
+__rush_complete_wrangler_workers() {
+  awk -F'=' '/^[[:space:]]*name[[:space:]]*=/{ gsub(/[ \042\047]/, "", $2); print $2 }' wrangler.toml 2>/dev/null | while read worker; do test -n "$worker" && completion candidate "$worker" --kind plain; done
+}
+
+__rush_complete_wrangler_pages_projects() {
+  wrangler pages project list 2>/dev/null | awk 'NR > 1 { print $1 }' | while read project; do test -n "$project" && completion candidate "$project" --kind plain; done
+}
+
+__rush_complete_wrangler_kv_namespaces() {
+  wrangler kv namespace list 2>/dev/null | awk -F'"' '/"id"|"title"/ { print $4 }' | while read namespace; do test -n "$namespace" && completion candidate "$namespace" --kind plain; done
+}
+
+__rush_complete_wrangler_r2_buckets() {
+  wrangler r2 bucket list 2>/dev/null | awk 'NR > 1 { print $1 }' | while read bucket; do test -n "$bucket" && completion candidate "$bucket" --kind plain; done
+}
+
+__rush_complete_wrangler_r2_objects() {
+  completion candidate bucket/key --kind plain
+  completion files
+}
+
+__rush_complete_wrangler_d1_databases() {
+  wrangler d1 list 2>/dev/null | awk -F'"' '/"name"|"uuid"/ { print $4 }' | while read database; do test -n "$database" && completion candidate "$database" --kind plain; done
+}
+
+__rush_complete_wrangler_secrets() {
+  wrangler secret list 2>/dev/null | awk 'NR > 1 { print $1 }' | while read secret; do test -n "$secret" && completion candidate "$secret" --kind plain; done
+}
+
+__rush_complete_wrangler_tail_formats() {
+  completion candidate pretty --kind plain
+  completion candidate json --kind plain
+}
+
+__rush_complete_wrangler_entrypoints() {
+  completion files --extension .js
+  completion files --extension .ts
+  completion files --extension .mjs
+}
+
+__rush_complete_wrangler_config_files() {
+  find . -maxdepth 4 -type f \( -name wrangler.toml -o -name wrangler.json -o -name wrangler.jsonc \) 2>/dev/null | while read file; do completion candidate "$file" --kind file; done
+}
+
+__rush_complete_wrangler_json_files() {
+  completion files --extension .json
+}
+
+__rush_complete_wrangler_sql_files() {
+  completion files --extension .sql
+}
+
+__rush_complete_wrangler_files() {
+  completion files
+}
+
+__rush_complete_wrangler_directories() {
+  completion directories --append-slash
+}

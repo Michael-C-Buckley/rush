@@ -12845,6 +12845,42 @@ test "first-party netlify completion script loads commands options and values" {
     try expectCandidate(functions, "invoke", .subcommand);
 }
 
+test "first-party wrangler completion script loads commands options and values" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/wrangler.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const root = try executor.collectCompletionsForInput("wrangler d", "wrangler d".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(root);
+    try expectCandidate(root, "dev", .subcommand);
+    try expectCandidate(root, "deploy", .subcommand);
+    try expectCandidate(root, "d1", .subcommand);
+
+    const pages = try executor.collectCompletionsForInput("wrangler pages d", "wrangler pages d".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(pages);
+    try expectCandidate(pages, "deploy", .subcommand);
+
+    const deploy_options = try executor.collectCompletionsForInput("wrangler deploy --na", "wrangler deploy --na".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(deploy_options);
+    try expectCandidate(deploy_options, "--name", .option);
+
+    const envs = try executor.collectCompletionsForInput("wrangler dev --env pro", "wrangler dev --env pro".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(envs);
+    try expectCandidate(envs, "production", .plain);
+
+    const tail_formats = try executor.collectCompletionsForInput("wrangler tail --format j", "wrangler tail --format j".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(tail_formats);
+    try expectCandidate(tail_formats, "json", .plain);
+}
+
 test "completion config rules merge after lazy-loaded data scripts" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
