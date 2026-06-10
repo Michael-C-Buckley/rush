@@ -897,6 +897,8 @@ pub const Executor = struct {
     getopts_last_optind: usize = 1,
     parameter_error: expand.ParameterError = .{},
     arithmetic_error: expand.ArithmeticError = .{},
+    had_expansion_error: bool = false,
+    command_substitution_stderr: std.ArrayList(u8) = .empty,
     command_substitution_status: ?ExitStatus = null,
     script_stdin: ?[]const u8 = null,
     script_stdin_offset: usize = 0,
@@ -1295,6 +1297,7 @@ pub const Executor = struct {
         self.pending_job_notifications.deinit(self.allocator);
         self.parameter_error.clear(self.allocator);
         self.arithmetic_error.clear(self.allocator);
+        self.command_substitution_stderr.deinit(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
         self.waitForPromptAsyncRefreshes();
@@ -2348,6 +2351,7 @@ pub const Executor = struct {
     }
 
     fn appendOrWriteResult(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), result: CommandResult) !void {
+        try self.appendOrWriteCommandSubstitutionStderr(options, stderr);
         if (options.external_stdio == .inherit) {
             if (options.io) |io| {
                 try writeInheritedResult(io, result);
@@ -2356,6 +2360,16 @@ pub const Executor = struct {
         }
         try stdout.appendSlice(self.allocator, result.stdout);
         try stderr.appendSlice(self.allocator, result.stderr);
+    }
+
+    fn appendOrWriteCommandSubstitutionStderr(self: *Executor, options: ExecuteOptions, stderr: *std.ArrayList(u8)) !void {
+        if (self.command_substitution_stderr.items.len == 0) return;
+        if (options.external_stdio == .inherit and options.io != null) {
+            try rawWriteAll(2, self.command_substitution_stderr.items);
+        } else {
+            try stderr.appendSlice(self.allocator, self.command_substitution_stderr.items);
+        }
+        self.command_substitution_stderr.clearRetainingCapacity();
     }
 
     fn executeSubshell(self: *Executor, subshell: ir.Subshell, options: ExecuteOptions) !CommandResult {
@@ -3908,6 +3922,7 @@ pub const Executor = struct {
     }
 
     fn expansionErrorResult(self: *Executor, err: anyerror) !CommandResult {
+        self.had_expansion_error = true;
         return switch (err) {
             error.NounsetParameter => blk: {
                 self.pending_exit = 1;
@@ -4281,6 +4296,10 @@ pub const Executor = struct {
         var result = try child.executeProgram(program, sub_options);
         defer result.deinit();
         substitution_context.executor.command_substitution_status = result.status;
+        if (child.had_expansion_error) {
+            substitution_context.executor.had_expansion_error = true;
+            try substitution_context.executor.command_substitution_stderr.appendSlice(substitution_context.executor.allocator, result.stderr);
+        }
         return allocator.dupe(u8, result.stdout);
     }
 
@@ -9372,6 +9391,36 @@ test "executor expands nested command substitutions and arithmetic inside them" 
     defer arithmetic_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), arithmetic_result.status);
     try std.testing.expectEqualStrings("3\n", arithmetic_result.stdout);
+}
+
+test "command substitution propagates nested expansion diagnostics" {
+    var lowered = try parseAndLower(std.testing.allocator, "echo before; echo $(echo $((2 ** ))); echo after");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("before\n\nafter\n", result.stdout);
+    try std.testing.expectEqualStrings("arithmetic: invalid arithmetic expression\n", result.stderr);
+}
+
+test "assignment command substitution keeps failure status and diagnostic" {
+    var lowered = try parseAndLower(std.testing.allocator, "value=$(echo $((2 ** ))); echo status=$?");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status=1\n", result.stdout);
+    try std.testing.expectEqualStrings("arithmetic: invalid arithmetic expression\n", result.stderr);
 }
 
 test "executor expands command substitutions inside double quotes" {

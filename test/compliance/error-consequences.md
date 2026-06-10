@@ -18,6 +18,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `expansion-parameter-error-null` | expansion | covered baseline | null parameter with `:?` diagnostic, status 1, non-interactive execution stops |
 | `expansion-parameter-error-word-spaces` | expansion | covered baseline | unquoted multi-word diagnostic, status 1, non-interactive execution stops |
 | `expansion-parameter-error-null-spaces` | expansion | covered baseline | null parameter with unquoted multi-word diagnostic, status 1, non-interactive execution stops |
+| `expansion-command-substitution-arithmetic-error` | expansion | covered baseline | nested arithmetic diagnostic is surfaced; assignment-only status follows failed substitution |
 | `redirection-bad-fd-duplication` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `redirection-bad-input-fd-duplication` | redirection | covered gap | diagnostic, command fails, following command still runs |
 | `redirection-noclobber-overwrite` | redirection | covered gap | diagnostic, command fails, following command still runs |
