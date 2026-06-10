@@ -467,7 +467,7 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
         .unquoted, .single_quoted => allocator.dupe(u8, part.value(raw)),
         .escaped => if (std.mem.eql(u8, part.value(raw), "\n")) allocator.dupe(u8, "") else allocator.dupe(u8, part.value(raw)),
         .double_quoted => renderDoubleQuotedContent(allocator, part.value(raw), options),
-        .parameter => renderParameter(allocator, part.value(raw), options),
+        .parameter => renderParameter(allocator, part.value(raw), options, false),
         .arithmetic => blk: {
             const value = try evalArithmetic(part.value(raw), options.env, options.env_set);
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
@@ -503,7 +503,7 @@ const ParameterExpression = struct {
     colon: bool = false,
 };
 
-fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror![]const u8 {
+fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
     const parsed = parseParameterExpression(expression);
     const value = options.env.get(parsed.name);
     const is_set = value != null;
@@ -522,23 +522,23 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
         },
         .default_value => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
-            return expandWordScalar(allocator, parsed.word, options);
+            return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
         },
         .assign_default => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
-            const expanded = try expandWordScalar(allocator, parsed.word, options);
+            const expanded = try expandParameterWord(allocator, parsed.word, options, in_double_quotes);
             errdefer allocator.free(expanded);
             try options.env_set.set(parsed.name, expanded);
             return expanded;
         },
         .alternate_value => {
             if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.alloc(u8, 0);
-            return expandWordScalar(allocator, parsed.word, options);
+            return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
         },
         .error_if_unset => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
             const message = if (parsed.word.len != 0)
-                try expandWordScalar(allocator, parsed.word, options)
+                try expandParameterWord(allocator, parsed.word, options, in_double_quotes)
             else
                 try allocator.dupe(u8, "parameter null or not set");
             if (options.parameter_error) |parameter_error| {
@@ -643,6 +643,15 @@ fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: Expan
 
 fn isNounsetExemptParameter(name: []const u8) bool {
     return std.mem.eql(u8, name, "@") or std.mem.eql(u8, name, "*");
+}
+
+/// Expands an operator word from ${parameter op word}. Tilde expansion only
+/// applies when the surrounding expansion is unquoted (POSIX XCU 2.6.1).
+fn expandParameterWord(allocator: std.mem.Allocator, word: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+    if (!in_double_quotes) return expandWordScalar(allocator, word, options);
+    var parts = try parseWordParts(allocator, word);
+    defer parts.deinit();
+    return renderWordParts(allocator, parts, options);
 }
 
 fn parameterHasUsableValue(is_set: bool, is_null: bool, colon: bool) bool {
@@ -1067,7 +1076,7 @@ fn appendDoubleQuotedLiteral(allocator: std.mem.Allocator, output: *std.ArrayLis
 
 fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) ![]const u8 {
     return switch (part.kind) {
-        .parameter => renderParameter(allocator, part.value(raw), options),
+        .parameter => renderParameter(allocator, part.value(raw), options, true),
         .arithmetic => blk: {
             const value = try evalArithmetic(part.value(raw), options.env, options.env_set);
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
@@ -1556,7 +1565,7 @@ fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usiz
             index.* = raw.len;
             return true;
         }
-        const rendered = try renderParameter(allocator, raw[name_start..name_end], options);
+        const rendered = try renderParameter(allocator, raw[name_start..name_end], options, false);
         defer allocator.free(rendered);
         try output.appendSlice(allocator, rendered);
         index.* = name_end + 1;
@@ -1564,7 +1573,7 @@ fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usiz
     }
 
     if (isSpecialParameterChar(raw[index.*])) {
-        const rendered = try renderParameter(allocator, raw[index.* .. index.* + 1], options);
+        const rendered = try renderParameter(allocator, raw[index.* .. index.* + 1], options, false);
         defer allocator.free(rendered);
         try output.appendSlice(allocator, rendered);
         index.* += 1;
@@ -1581,7 +1590,7 @@ fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usiz
     const name_start = index.*;
     index.* += 1;
     while (index.* < raw.len and isNameContinue(raw[index.*])) : (index.* += 1) {}
-    const rendered = try renderParameter(allocator, raw[name_start..index.*], options);
+    const rendered = try renderParameter(allocator, raw[name_start..index.*], options, false);
     defer allocator.free(rendered);
     try output.appendSlice(allocator, rendered);
     return true;
@@ -1919,6 +1928,18 @@ test "command substitution expands inside double quotes" {
 
 fn testScriptEchoSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
     return allocator.dupe(u8, script);
+}
+
+test "quoted parameter default word keeps tilde literal" {
+    var quoted = try expandWord(std.testing.allocator, "\"${UNSET_NAME:-~}\"", .{ .env = test_env });
+    defer quoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted.fields.len);
+    try std.testing.expectEqualStrings("~", quoted.fields[0]);
+
+    var unquoted = try expandWord(std.testing.allocator, "${UNSET_NAME:-~}", .{ .env = test_env });
+    defer unquoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), unquoted.fields.len);
+    try std.testing.expectEqualStrings("/home/rush", unquoted.fields[0]);
 }
 
 test "double-quoted command substitution may contain double quotes" {

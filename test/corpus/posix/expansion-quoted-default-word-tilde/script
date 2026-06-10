@@ -1,0 +1,6 @@
+unset A
+HOME=/quoted-home
+echo "${A:-~}"
+echo ${A:-~}
+B="${A:=~}"
+echo "$A"
