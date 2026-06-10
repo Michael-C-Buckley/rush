@@ -1,0 +1,4 @@
+/bin/sh -c 'printf "via-stdout\n" >&3' 3>&1
+/bin/sh -c 'printf "via-file\n" >&3' >out 3>&1
+/bin/sh -c 'printf "via-captured\n" >&3; printf "via-ordered-file\n"' 3>&1 >ordered
+/bin/cat out ordered
