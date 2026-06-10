@@ -1,0 +1,62 @@
+# First-party python completion slice.
+
+complete python --option --short h --long help --description 'show help'
+complete python --option --short V --long version --description 'show Python version'
+complete python --option --long version --description 'show Python version'
+complete python --option --short c --value-name command --description 'program passed in as string'
+complete python --option --short m --value-name module --description 'run library module as script'
+complete python --option-value --short m --function __rush_complete_python_modules
+complete python --option --short I --description 'isolate Python from user environment'
+complete python --option --short O --description 'remove assert and __debug__ code'
+complete python --option --short OO --description 'also discard docstrings'
+complete python --option --short B --description 'do not write bytecode files'
+complete python --option --short S --description 'do not imply import site on initialization'
+complete python --option --short E --description 'ignore PYTHON* environment variables'
+complete python --option --short u --description 'force unbuffered stdout and stderr'
+complete python --option --short q --description 'do not print version and copyright messages'
+complete python --option --short W --value-name action --description 'warning control'
+complete python --option-value --short W --function __rush_complete_python_warnings
+complete python --option --short X --value-name option --description 'implementation-specific option'
+complete python --option-value --short X --function __rush_complete_python_xoptions
+complete python --argument --function __rush_complete_python_files
+
+__rush_complete_python_files() {
+  completion files --extension .py
+  completion files --extension .pyw
+  completion directories --append-slash
+}
+
+__rush_complete_python_modules() {
+  python - <<'PY' 2>/dev/null
+import pkgutil
+for mod in pkgutil.iter_modules():
+    print(mod.name)
+PY
+  | while read module; do test -n "$module" && completion candidate "$module" --kind plain; done
+  completion candidate http.server --kind plain
+  completion candidate json.tool --kind plain
+  completion candidate unittest --kind plain
+  completion candidate venv --kind plain
+  completion candidate pip --kind plain
+  completion candidate pdb --kind plain
+  completion candidate profile --kind plain
+  completion candidate pydoc --kind plain
+}
+
+__rush_complete_python_warnings() {
+  completion candidate default --kind plain
+  completion candidate error --kind plain
+  completion candidate ignore --kind plain
+  completion candidate always --kind plain
+  completion candidate module --kind plain
+  completion candidate once --kind plain
+}
+
+__rush_complete_python_xoptions() {
+  completion candidate dev --kind plain
+  completion candidate faulthandler --kind plain
+  completion candidate importtime --kind plain
+  completion candidate tracemalloc --kind plain
+  completion candidate utf8 --kind plain
+  completion candidate no_debug_ranges --kind plain
+}

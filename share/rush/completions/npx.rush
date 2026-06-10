@@ -1,0 +1,46 @@
+# First-party npx completion slice.
+
+complete npx --option --short h --long help --description 'show help'
+complete npx --option --short v --long version --description 'show version'
+complete npx --option --short y --long yes --description 'skip install prompt'
+complete npx --option --short n --long no --description 'do not install missing packages'
+complete npx --option --short p --long package --value-name package --description 'package to install before running'
+complete npx --option-value --short p --function __rush_complete_npx_packages
+complete npx --option-value --long package --function __rush_complete_npx_packages
+complete npx --option --long cache --value-name dir --description 'npm cache directory'
+complete npx --option-value --long cache --function __rush_complete_npx_directories
+complete npx --option --long userconfig --value-name file --description 'user npmrc file'
+complete npx --option-value --long userconfig --function __rush_complete_npx_config_files
+complete npx --option --short w --long workspace --value-name workspace --description 'workspace to run in'
+complete npx --option-value --short w --function __rush_complete_npx_workspaces
+complete npx --option-value --long workspace --function __rush_complete_npx_workspaces
+complete npx --option --long workspaces --description 'run in all workspaces'
+complete npx --argument --function __rush_complete_npx_bins_and_packages
+
+__rush_complete_npx_bins_and_packages() {
+  find node_modules/.bin -maxdepth 1 -type f 2>/dev/null | sed 's#node_modules/.bin/##' | while read bin; do test -n "$bin" && completion candidate "$bin" --kind plain; done
+  __rush_complete_npx_packages
+}
+
+__rush_complete_npx_packages() {
+  sed -n 's/.*"\([@A-Za-z0-9_./-][@A-Za-z0-9_./-]*\)"[[:space:]]*:.*/\1/p' package.json 2>/dev/null | while read package; do test -n "$package" && completion candidate "$package" --kind plain; done
+  completion candidate typescript --kind plain
+  completion candidate vite --kind plain
+  completion candidate eslint --kind plain
+  completion candidate prettier --kind plain
+  completion candidate tsc --kind plain
+}
+
+__rush_complete_npx_workspaces() {
+  sed -n '/"workspaces"[[:space:]]*:/,/]/ s/.*"\([^"]*\)".*/\1/p' package.json 2>/dev/null | while read workspace; do test -n "$workspace" && completion candidate "$workspace" --kind directory; done
+}
+
+__rush_complete_npx_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_npx_config_files() {
+  completion candidate .npmrc --kind file
+  completion candidate ~/.npmrc --kind file
+  completion files
+}
