@@ -1,0 +1,95 @@
+# First-party Gradle completion slice.
+
+complete gradle --option --short h --long help --description 'show help'
+complete gradle --option --short v --long version --description 'show version'
+complete gradle --option --short q --long quiet --description 'log errors only'
+complete gradle --option --short i --long info --description 'set log level to info'
+complete gradle --option --short d --long debug --description 'set log level to debug'
+complete gradle --option --short s --long stacktrace --description 'print stacktrace for exceptions'
+complete gradle --option --short S --long full-stacktrace --description 'print full stacktrace'
+complete gradle --option --long scan --description 'create a build scan'
+complete gradle --option --long no-scan --description 'do not create a build scan'
+complete gradle --option --long daemon --description 'use the Gradle daemon'
+complete gradle --option --long no-daemon --description 'do not use the Gradle daemon'
+complete gradle --option --long offline --description 'execute without network access'
+complete gradle --option --long refresh-dependencies --description 'refresh dependency cache'
+complete gradle --option --long parallel --description 'build projects in parallel'
+complete gradle --option --long no-parallel --description 'disable parallel execution'
+complete gradle --option --long build-cache --description 'enable build cache'
+complete gradle --option --long no-build-cache --description 'disable build cache'
+complete gradle --option --long configuration-cache --description 'enable configuration cache'
+complete gradle --option --long no-configuration-cache --description 'disable configuration cache'
+complete gradle --option --short b --long build-file --value-name file --description 'build file'
+complete gradle --option-value --short b --function __rush_complete_gradle_build_files
+complete gradle --option-value --long build-file --function __rush_complete_gradle_build_files
+complete gradle --option --short c --long settings-file --value-name file --description 'settings file'
+complete gradle --option-value --short c --function __rush_complete_gradle_settings_files
+complete gradle --option-value --long settings-file --function __rush_complete_gradle_settings_files
+complete gradle --option --short p --long project-dir --value-name dir --description 'project directory'
+complete gradle --option-value --short p --function __rush_complete_gradle_directories
+complete gradle --option-value --long project-dir --function __rush_complete_gradle_directories
+complete gradle --option --short P --value-name property=value --description 'set project property'
+complete gradle --option-value --short P --function __rush_complete_gradle_properties
+complete gradle --option --short D --value-name property=value --description 'set system property'
+complete gradle --option-value --short D --function __rush_complete_gradle_system_properties
+complete gradle --option --short x --long exclude-task --value-name task --description 'exclude a task'
+complete gradle --option-value --short x --function __rush_complete_gradle_tasks
+complete gradle --option-value --long exclude-task --function __rush_complete_gradle_tasks
+complete gradle --option --long init-script --short I --value-name file --description 'initialization script'
+complete gradle --option-value --short I --function __rush_complete_gradle_files
+complete gradle --option-value --long init-script --function __rush_complete_gradle_files
+complete gradle --argument --function __rush_complete_gradle_tasks
+
+__rush_complete_gradle_tasks() {
+  ./gradlew tasks --all --console=plain --quiet 2>/dev/null | sed -n 's/^\([A-Za-z0-9:_-][A-Za-z0-9:_-]*\) .*/\1/p' | while read task; do test -n "$task" && completion candidate "$task" --kind plain; done
+  gradle tasks --all --console=plain --quiet 2>/dev/null | sed -n 's/^\([A-Za-z0-9:_-][A-Za-z0-9:_-]*\) .*/\1/p' | while read task; do test -n "$task" && completion candidate "$task" --kind plain; done
+  completion candidate build --kind plain
+  completion candidate test --kind plain
+  completion candidate check --kind plain
+  completion candidate clean --kind plain
+  completion candidate assemble --kind plain
+  completion candidate publish --kind plain
+  completion candidate init --kind plain
+  completion candidate wrapper --kind plain
+  completion candidate dependencies --kind plain
+  completion candidate projects --kind plain
+  completion candidate tasks --kind plain
+  completion candidate bootRun --kind plain
+  completion candidate run --kind plain
+}
+
+__rush_complete_gradle_build_files() {
+  completion candidate build.gradle --kind file
+  completion candidate build.gradle.kts --kind file
+  completion files --extension .gradle
+  completion files --extension .kts
+}
+
+__rush_complete_gradle_settings_files() {
+  completion candidate settings.gradle --kind file
+  completion candidate settings.gradle.kts --kind file
+  completion files --extension .gradle
+  completion files --extension .kts
+}
+
+__rush_complete_gradle_files() {
+  completion files
+}
+
+__rush_complete_gradle_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_gradle_properties() {
+  completion candidate org.gradle.parallel=true --kind variable
+  completion candidate org.gradle.caching=true --kind variable
+  completion candidate org.gradle.configuration-cache=true --kind variable
+  completion candidate version= --kind variable
+  completion candidate profile=dev --kind variable
+}
+
+__rush_complete_gradle_system_properties() {
+  completion candidate org.gradle.jvmargs= --kind variable
+  completion candidate file.encoding=UTF-8 --kind variable
+  completion candidate user.timezone=UTC --kind variable
+}
