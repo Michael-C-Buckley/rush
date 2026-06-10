@@ -293,3 +293,52 @@ __rush_complete_terraform_platforms() {
   completion candidate linux_arm64 --kind plain
   completion candidate windows_amd64 --kind plain
 }
+
+# Dynamic overlays for local Terraform projects.
+complete 'terraform plan' --option-value --short target --function __rush_complete_terraform_resource_addresses
+complete 'terraform apply' --option-value --short target --function __rush_complete_terraform_resource_addresses
+complete 'terraform destroy' --option-value --short target --function __rush_complete_terraform_resource_addresses
+complete 'terraform plan' --option-value --short replace --function __rush_complete_terraform_resource_addresses
+complete 'terraform apply' --option-value --short replace --function __rush_complete_terraform_resource_addresses
+complete 'terraform plan' --option-value --short var --function __rush_complete_terraform_variables
+complete 'terraform apply' --option-value --short var --function __rush_complete_terraform_variables
+complete 'terraform destroy' --option-value --short var --function __rush_complete_terraform_variables
+complete 'terraform providers lock' --option-value --short platform --function __rush_complete_terraform_platforms
+complete 'terraform providers mirror' --option-value --short platform --function __rush_complete_terraform_platforms
+
+__rush_complete_terraform_variables() {
+  sed -n 's/^variable[[:space:]]*"\([^"]*\)".*/\1=/p' *.tf 2>/dev/null | while read variable; do test -n "$variable" && completion candidate "$variable" --kind variable; done
+  completion candidate region= --kind variable
+  completion candidate environment= --kind variable
+  completion candidate project= --kind variable
+}
+
+__rush_complete_terraform_resource_addresses() {
+  terraform state list 2>/dev/null | while read address; do test -n "$address" && completion candidate "$address" --kind plain; done
+  sed -n 's/^resource[[:space:]]*"\([^"]*\)"[[:space:]]*"\([^"]*\)".*/\1.\2/p; s/^data[[:space:]]*"\([^"]*\)"[[:space:]]*"\([^"]*\)".*/data.\1.\2/p; s/^module[[:space:]]*"\([^"]*\)".*/module.\1/p' *.tf 2>/dev/null | while read address; do test -n "$address" && completion candidate "$address" --kind plain; done
+  completion candidate module. --kind plain
+  completion candidate data. --kind plain
+  completion candidate aws_instance. --kind plain
+  completion candidate aws_s3_bucket. --kind plain
+  completion candidate azurerm_resource_group. --kind plain
+  completion candidate google_compute_instance. --kind plain
+}
+
+__rush_complete_terraform_workspaces() {
+  terraform workspace list 2>/dev/null | sed 's/^[* ]*//' | while read workspace; do test -n "$workspace" && completion candidate "$workspace" --kind plain; done
+  completion candidate default --kind plain
+  completion candidate dev --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+  completion candidate production --kind plain
+}
+
+__rush_complete_terraform_output_names() {
+  terraform output -json 2>/dev/null | sed -n 's/^  "\([^"]*\)".*/\1/p' | while read output; do test -n "$output" && completion candidate "$output" --kind variable; done
+  sed -n 's/^output[[:space:]]*"\([^"]*\)".*/\1/p' *.tf 2>/dev/null | while read output; do test -n "$output" && completion candidate "$output" --kind variable; done
+  completion candidate id --kind variable
+  completion candidate name --kind variable
+  completion candidate url --kind variable
+  completion candidate endpoint --kind variable
+  completion candidate region --kind variable
+}
