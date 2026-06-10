@@ -434,14 +434,20 @@ const Lexer = struct {
         self.index += 1;
     }
 
-    fn consumeDoubleQuoted(self: *Lexer) !void {
+    // The explicit error set breaks the inferred-error-set cycle through
+    // consumeDollarExpansion; only allocation can fail in the lexer.
+    fn consumeDoubleQuoted(self: *Lexer) std.mem.Allocator.Error!void {
         const start = self.index;
         self.index += 1;
         while (!self.isAtEnd() and self.peek() != '"') {
-            if (self.peek() == '\\') {
-                self.consumeBackslash();
-            } else {
-                self.index += 1;
+            switch (self.peek()) {
+                '\\' => self.consumeBackslash(),
+                // $ and ` keep their special meaning inside double quotes
+                // (POSIX XCU 2.2.3); quotes inside the embedded expansion do
+                // not close the surrounding double-quoted string.
+                '$' => try self.consumeDollarExpansion(),
+                '`' => try self.consumeBackquoted(),
+                else => self.index += 1,
             }
         }
         if (self.isAtEnd()) {

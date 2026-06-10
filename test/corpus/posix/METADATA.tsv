@@ -113,6 +113,7 @@ expansion-nested-default-word	expansion	behavior	-
 expansion-null-colon-operators	expansion	behavior	-
 expansion-pathname-sorted	expansion	behavior	-
 expansion-quoted-backquote-substitution	expansion	behavior	-
+expansion-quoted-substitution-inner-quotes	expansion	behavior	double-quoted command substitution may contain double quotes and nested substitutions
 expansion-quoted-command-substitution	expansion	behavior	-
 fg-current-job	job_control	job	fg waits for the current background job
 for-loop	grammar	behavior	-

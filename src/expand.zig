@@ -240,21 +240,13 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
             '"' => {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 const start = index;
-                index += 1;
-                const value_start = index;
-                while (index < raw.len and raw[index] != '"') {
-                    if (raw[index] == '\\' and index + 1 < raw.len) {
-                        index += 2;
-                    } else {
-                        index += 1;
-                    }
-                }
-                const value_end = index;
-                if (index < raw.len) index += 1;
+                const end = doubleQuotedSpanEnd(raw, index) orelse raw.len;
+                const value_end = if (end > start + 1 and raw[end - 1] == '"') end - 1 else end;
+                index = end;
                 try parts.append(allocator, .{
                     .kind = .double_quoted,
-                    .span = .init(start, index),
-                    .value_span = .init(value_start, value_end),
+                    .span = .init(start, end),
+                    .value_span = .init(start + 1, value_end),
                 });
             },
             '\\' => {
@@ -356,25 +348,56 @@ fn commandSubstitutionPart(raw: []const u8, dollar: usize) ?WordPart {
     const value_start = dollar + 2;
     var index = value_start;
     var depth: usize = 1;
-    while (index < raw.len) : (index += 1) {
+    while (index < raw.len) {
         switch (raw[index]) {
-            '(' => depth += 1,
+            '(' => {
+                depth += 1;
+                index += 1;
+            },
             ')' => {
                 depth -= 1;
+                index += 1;
                 if (depth == 0) {
                     return .{
                         .kind = .command_substitution,
-                        .span = .init(dollar, index + 1),
-                        .value_span = .init(value_start, index),
+                        .span = .init(dollar, index),
+                        .value_span = .init(value_start, index - 1),
                     };
                 }
             },
-            '\'', '"' => {
-                const quote = raw[index];
+            '\\' => index += if (index + 1 < raw.len) 2 else 1,
+            '\'' => {
                 index += 1;
-                while (index < raw.len and raw[index] != quote) : (index += 1) {}
+                while (index < raw.len and raw[index] != '\'') index += 1;
+                if (index < raw.len) index += 1;
             },
-            else => {},
+            '"' => index = doubleQuotedSpanEnd(raw, index) orelse return null,
+            else => index += 1,
+        }
+    }
+    return null;
+}
+
+/// Returns the index just past the closing double quote of the
+/// double-quoted string starting at `start`, or null when unterminated.
+/// Embedded expansions keep their special meaning inside double quotes
+/// (POSIX XCU 2.2.3), so quotes inside them do not close the string.
+fn doubleQuotedSpanEnd(raw: []const u8, start: usize) ?usize {
+    std.debug.assert(raw[start] == '"');
+    var index = start + 1;
+    while (index < raw.len) {
+        switch (raw[index]) {
+            '"' => return index + 1,
+            '\\' => index += if (index + 1 < raw.len) 2 else 1,
+            '$' => {
+                const part = arithmeticPart(raw, index) orelse commandSubstitutionPart(raw, index) orelse parameterPart(raw, index);
+                index = if (part) |p| p.span.end else index + 1;
+            },
+            '`' => {
+                const part = backquoteCommandSubstitutionPart(raw, index);
+                index = if (part) |p| p.span.end else index + 1;
+            },
+            else => index += 1,
         }
     }
     return null;
@@ -1895,6 +1918,26 @@ test "command substitution expands inside double quotes" {
 
 fn testScriptEchoSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
     return allocator.dupe(u8, script);
+}
+
+test "double-quoted command substitution may contain double quotes" {
+    var parts = try parseWordParts(std.testing.allocator, "\"$(printf \"a b\")\"");
+    defer parts.deinit();
+    try std.testing.expectEqual(@as(usize, 1), parts.parts.len);
+    try std.testing.expectEqual(WordPartKind.double_quoted, parts.parts[0].kind);
+    try std.testing.expectEqualStrings("$(printf \"a b\")", parts.parts[0].value(parts.raw));
+
+    var nested = try parseWordParts(std.testing.allocator, "\"$(echo \"n $(echo \"d)p\")\")\"");
+    defer nested.deinit();
+    try std.testing.expectEqual(@as(usize, 1), nested.parts.len);
+    try std.testing.expectEqual(WordPartKind.double_quoted, nested.parts[0].kind);
+    try std.testing.expectEqualStrings("$(echo \"n $(echo \"d)p\")\")", nested.parts[0].value(nested.raw));
+
+    const echo_script: CommandSubstitution = .{ .runFn = testScriptEchoSubstitution };
+    var rendered = try expandWord(std.testing.allocator, "\"$(cmd \"x)y\")\"", .{ .command_substitution = echo_script });
+    defer rendered.deinit();
+    try std.testing.expectEqual(@as(usize, 1), rendered.fields.len);
+    try std.testing.expectEqualStrings("cmd \"x)y\"", rendered.fields[0]);
 }
 
 test "backquote escaped double-quote is unescaped only inside double quotes" {

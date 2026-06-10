@@ -68,6 +68,7 @@ echo $(printf "a b")
 LIST="a\nb c"; for x in $LIST; do echo "<$x>"; done
 echo `printf "a\\ b"`
 echo "`echo \"x  y\"`"
+echo "$(echo "a)b")"; echo "$(echo "nested $(echo "deep)x")")"
 echo one > out; echo two >> out; /bin/cat out
 printf "hello world\n" > in; read line < in; echo "$line"
 cat <<EOF\nhello\nworld\nEOF
