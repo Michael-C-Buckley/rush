@@ -1,0 +1,25 @@
+# First-party kill completion slice.
+
+complete kill --option --short h --long help --description 'show help'
+complete kill --option --short l --long list --description 'list signal names'
+complete kill --option --short s --long signal --value-name signal --description 'signal to send'
+complete kill --option-value --short s --function __rush_complete_kill_signals
+complete kill --option-value --long signal --function __rush_complete_kill_signals
+complete kill --argument --function __rush_complete_kill_args
+
+__rush_complete_kill_args() {
+  __rush_complete_kill_signals
+  ps -axo pid=,comm= 2>/dev/null | while read pid comm; do test -n "$pid" && completion candidate "$pid" --kind plain --description "$comm"; done
+}
+
+__rush_complete_kill_signals() {
+  kill -l 2>/dev/null | tr ' ' '\n' | sed 's/^SIG//' | while read sig; do test -n "$sig" && completion candidate "-$sig" --kind plain; done
+  completion candidate -TERM --kind plain
+  completion candidate -KILL --kind plain
+  completion candidate -HUP --kind plain
+  completion candidate -INT --kind plain
+  completion candidate -STOP --kind plain
+  completion candidate -CONT --kind plain
+  completion candidate -9 --kind plain
+  completion candidate -15 --kind plain
+}

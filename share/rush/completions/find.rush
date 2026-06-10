@@ -1,0 +1,104 @@
+# First-party find completion slice.
+
+complete find --option --short H --description 'follow command-line symbolic links'
+complete find --option --short L --description 'follow all symbolic links'
+complete find --option --short P --description 'never follow symbolic links'
+complete find --option --long help --description 'show help'
+complete find --option --long version --description 'show version'
+complete find --option --short name --value-name pattern --description 'base of file name matches pattern'
+complete find --option-value --short name --function __rush_complete_find_name_patterns
+complete find --option --short iname --value-name pattern --description 'case-insensitive name match'
+complete find --option-value --short iname --function __rush_complete_find_name_patterns
+complete find --option --short type --value-name type --description 'file type'
+complete find --option-value --short type --function __rush_complete_find_types
+complete find --option --short mtime --value-name days --description 'modified N days ago'
+complete find --option-value --short mtime --function __rush_complete_find_times
+complete find --option --short size --value-name size --description 'file size test'
+complete find --option-value --short size --function __rush_complete_find_sizes
+complete find --option --short perm --value-name mode --description 'permission mode test'
+complete find --option-value --short perm --function __rush_complete_find_perms
+complete find --option --short user --value-name user --description 'file owner'
+complete find --option-value --short user --function __rush_complete_find_users
+complete find --option --short group --value-name group --description 'file group'
+complete find --option-value --short group --function __rush_complete_find_groups
+complete find --option --short maxdepth --value-name levels --description 'descend at most levels'
+complete find --option-value --short maxdepth --function __rush_complete_find_depths
+complete find --option --short mindepth --value-name levels --description 'do not apply tests before levels'
+complete find --option-value --short mindepth --function __rush_complete_find_depths
+complete find --option --short print --description 'print full file name'
+complete find --option --short print0 --description 'print full file name followed by NUL'
+complete find --option --short delete --description 'delete files'
+complete find --option --short exec --value-name command --description 'execute command'
+complete find --option-value --short exec --function __rush_complete_find_commands
+complete find --argument --function __rush_complete_find_paths
+
+__rush_complete_find_paths() {
+  completion directories --append-slash
+  completion files
+}
+
+__rush_complete_find_name_patterns() {
+  completion candidate '*' --kind plain
+  completion candidate '*.zig' --kind plain
+  completion candidate '*.c' --kind plain
+  completion candidate '*.h' --kind plain
+  completion candidate '*.js' --kind plain
+  completion candidate '*.py' --kind plain
+}
+
+__rush_complete_find_types() {
+  completion candidate f --kind plain --description file
+  completion candidate d --kind plain --description directory
+  completion candidate l --kind plain --description symlink
+  completion candidate b --kind plain --description block
+  completion candidate c --kind plain --description char
+  completion candidate p --kind plain --description fifo
+  completion candidate s --kind plain --description socket
+}
+
+__rush_complete_find_times() {
+  completion candidate -1 --kind plain
+  completion candidate 0 --kind plain
+  completion candidate 1 --kind plain
+  completion candidate +7 --kind plain
+  completion candidate +30 --kind plain
+}
+
+__rush_complete_find_sizes() {
+  completion candidate +1M --kind plain
+  completion candidate +10M --kind plain
+  completion candidate +100M --kind plain
+  completion candidate -1M --kind plain
+}
+
+__rush_complete_find_perms() {
+  completion candidate 644 --kind plain
+  completion candidate 755 --kind plain
+  completion candidate -u+x --kind plain
+  completion candidate /u+w --kind plain
+}
+
+__rush_complete_find_users() {
+  id -un 2>/dev/null | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+  cut -d: -f1 /etc/passwd 2>/dev/null | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+}
+
+__rush_complete_find_groups() {
+  id -gn 2>/dev/null | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+  cut -d: -f1 /etc/group 2>/dev/null | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+}
+
+__rush_complete_find_depths() {
+  completion candidate 0 --kind plain
+  completion candidate 1 --kind plain
+  completion candidate 2 --kind plain
+  completion candidate 3 --kind plain
+  completion candidate 5 --kind plain
+}
+
+__rush_complete_find_commands() {
+  completion candidate rm --kind plain
+  completion candidate ls --kind plain
+  completion candidate grep --kind plain
+  completion candidate sh --kind plain
+}
