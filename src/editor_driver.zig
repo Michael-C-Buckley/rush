@@ -518,7 +518,7 @@ pub const TerminalSession = struct {
         try writer.writer.writeAll("\x1b]7;file://");
         try writer.writer.print("{f}", .{std.fmt.alt(std.Uri.Component{ .raw = host }, .formatHost)});
         try writer.writer.print("{f}", .{std.fmt.alt(std.Uri.Component{ .raw = cwd }, .formatPath)});
-        try writer.writer.writeAll("\x1b\\");
+        try writer.writer.writeByte(0x07);
         try writeTtyAll(&self.tty, writer.written());
     }
 
