@@ -1,0 +1,47 @@
+# First-party gpg completion slice.
+
+complete gpg --option --short h --long help --description 'show help'
+complete gpg --option --long version --description 'show version'
+complete gpg --option --short v --long verbose --description 'verbose output'
+complete gpg --option --short q --long quiet --description 'quiet output'
+complete gpg --option --short a --long armor --description 'ASCII armor output'
+complete gpg --option --short o --long output --value-name file --description 'write output to file'
+complete gpg --option --short r --long recipient --value-name name --description 'encrypt for recipient'
+complete gpg --option-value --short r --function __rush_complete_gpg_recipients
+complete gpg --option-value --long recipient --function __rush_complete_gpg_recipients
+complete gpg --option --long local-user --value-name key --description 'use local key'
+complete gpg --option-value --long local-user --function __rush_complete_gpg_secret_keys
+complete gpg --option --short u --value-name key --description 'use local key'
+complete gpg --option-value --short u --function __rush_complete_gpg_secret_keys
+complete gpg --option --short e --long encrypt --description 'encrypt data'
+complete gpg --option --short d --long decrypt --description 'decrypt data'
+complete gpg --option --short s --long sign --description 'make signature'
+complete gpg --option --short c --long symmetric --description 'symmetric encryption'
+complete gpg --option --short k --long list-keys --description 'list public keys'
+complete gpg --option --short K --long list-secret-keys --description 'list secret keys'
+complete gpg --option --long import --description 'import keys'
+complete gpg --option --long export --description 'export keys'
+complete gpg --option --long delete-key --value-name key --description 'delete public key'
+complete gpg --option-value --long delete-key --function __rush_complete_gpg_public_keys
+complete gpg --option --long delete-secret-key --value-name key --description 'delete secret key'
+complete gpg --option-value --long delete-secret-key --function __rush_complete_gpg_secret_keys
+complete gpg --option --long keyserver --value-name server --description 'keyserver to use'
+complete gpg --option-value --long keyserver --function __rush_complete_gpg_keyservers
+
+__rush_complete_gpg_public_keys() {
+  gpg --list-keys --with-colons 2>/dev/null | awk -F: '/^(uid|pub):/ { print $10 }' | while read key; do test -n "$key" && completion candidate "$key" --kind plain; done
+}
+
+__rush_complete_gpg_secret_keys() {
+  gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '/^(uid|sec):/ { print $10 }' | while read key; do test -n "$key" && completion candidate "$key" --kind plain; done
+}
+
+__rush_complete_gpg_recipients() {
+  __rush_complete_gpg_public_keys
+}
+
+__rush_complete_gpg_keyservers() {
+  completion candidate hkps://keys.openpgp.org --kind plain
+  completion candidate hkps://keyserver.ubuntu.com --kind plain
+  completion candidate hkps://pgp.mit.edu --kind plain
+}

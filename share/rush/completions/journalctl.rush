@@ -1,0 +1,78 @@
+# First-party journalctl completion slice.
+
+complete journalctl --option --short h --long help --description 'show help'
+complete journalctl --option --long version --description 'show version'
+complete journalctl --option --short f --long follow --description 'follow journal'
+complete journalctl --option --short r --long reverse --description 'show newest entries first'
+complete journalctl --option --short b --long boot --value-name boot --description 'show messages from boot'
+complete journalctl --option-value --short b --function __rush_complete_journalctl_boots
+complete journalctl --option-value --long boot --function __rush_complete_journalctl_boots
+complete journalctl --option --short u --long unit --value-name unit --description 'show logs for unit'
+complete journalctl --option-value --short u --function __rush_complete_journalctl_units
+complete journalctl --option-value --long unit --function __rush_complete_journalctl_units
+complete journalctl --option --long user-unit --value-name unit --description 'show logs for user unit'
+complete journalctl --option-value --long user-unit --function __rush_complete_journalctl_units
+complete journalctl --option --short p --long priority --value-name priority --description 'filter by priority'
+complete journalctl --option-value --short p --function __rush_complete_journalctl_priorities
+complete journalctl --option-value --long priority --function __rush_complete_journalctl_priorities
+complete journalctl --option --short n --long lines --value-name lines --description 'number of journal entries'
+complete journalctl --option-value --short n --function __rush_complete_journalctl_lines
+complete journalctl --option --short o --long output --value-name output --description 'output format'
+complete journalctl --option-value --short o --function __rush_complete_journalctl_outputs
+complete journalctl --option-value --long output --function __rush_complete_journalctl_outputs
+complete journalctl --option --long since --value-name time --description 'show entries not older than time'
+complete journalctl --option-value --long since --function __rush_complete_journalctl_times
+complete journalctl --option --long until --value-name time --description 'show entries not newer than time'
+complete journalctl --option-value --long until --function __rush_complete_journalctl_times
+complete journalctl --option --long grep --value-name pattern --description 'filter messages by pattern'
+complete journalctl --option --long no-pager --description 'do not pipe output to pager'
+
+__rush_complete_journalctl_units() {
+  systemctl list-units --all --no-legend 2>/dev/null | awk '{ print $1 }' | while read unit; do test -n "$unit" && completion candidate "$unit" --kind plain; done
+  completion candidate ssh.service --kind plain
+  completion candidate sshd.service --kind plain
+  completion candidate docker.service --kind plain
+  completion candidate NetworkManager.service --kind plain
+}
+
+__rush_complete_journalctl_boots() {
+  journalctl --list-boots 2>/dev/null | awk '{ print $1 }' | while read boot; do test -n "$boot" && completion candidate "$boot" --kind plain; done
+  completion candidate 0 --kind plain
+  completion candidate -1 --kind plain
+  completion candidate -2 --kind plain
+}
+
+__rush_complete_journalctl_priorities() {
+  completion candidate emerg --kind plain
+  completion candidate alert --kind plain
+  completion candidate crit --kind plain
+  completion candidate err --kind plain
+  completion candidate warning --kind plain
+  completion candidate notice --kind plain
+  completion candidate info --kind plain
+  completion candidate debug --kind plain
+}
+
+__rush_complete_journalctl_outputs() {
+  completion candidate short --kind plain
+  completion candidate short-iso --kind plain
+  completion candidate short-precise --kind plain
+  completion candidate verbose --kind plain
+  completion candidate json --kind plain
+  completion candidate json-pretty --kind plain
+  completion candidate cat --kind plain
+}
+
+__rush_complete_journalctl_times() {
+  completion candidate today --kind plain
+  completion candidate yesterday --kind plain
+  completion candidate '1 hour ago' --kind plain
+  completion candidate '10 minutes ago' --kind plain
+}
+
+__rush_complete_journalctl_lines() {
+  completion candidate 10 --kind plain
+  completion candidate 50 --kind plain
+  completion candidate 100 --kind plain
+  completion candidate 1000 --kind plain
+}

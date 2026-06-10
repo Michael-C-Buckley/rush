@@ -1,0 +1,56 @@
+# First-party openssl completion slice.
+
+complete openssl --option --short h --long help --description 'show help'
+complete openssl --option --long version --description 'show version'
+complete openssl --subcommand asn1parse --description 'parse ASN.1 data'
+complete openssl --subcommand ca --description 'certificate authority management'
+complete openssl --subcommand ciphers --description 'list cipher suites'
+complete openssl --subcommand cms --description 'CMS utility'
+complete openssl --subcommand dgst --description 'message digest commands'
+complete openssl --subcommand enc --description 'symmetric cipher routines'
+complete openssl --subcommand genpkey --description 'generate private key'
+complete openssl --subcommand genrsa --description 'generate RSA private key'
+complete openssl --subcommand list --description 'list algorithms and features'
+complete openssl --subcommand passwd --description 'generate password hashes'
+complete openssl --subcommand pkcs12 --description 'PKCS#12 file utility'
+complete openssl --subcommand rand --description 'generate random bytes'
+complete openssl --subcommand req --description 'PKCS#10 certificate request utility'
+complete openssl --subcommand rsa --description 'RSA key processing'
+complete openssl --subcommand s_client --description 'SSL/TLS client'
+complete openssl --subcommand s_server --description 'SSL/TLS server'
+complete openssl --subcommand x509 --description 'certificate display/signing utility'
+complete 'openssl dgst' --option --function __rush_complete_openssl_digests
+complete 'openssl enc' --option --function __rush_complete_openssl_ciphers
+complete 'openssl list' --option --function __rush_complete_openssl_list_options
+complete 'openssl req' --option --short new --description 'create new request'
+complete 'openssl req' --option --short x509 --description 'output self-signed certificate'
+complete 'openssl req' --option --short key --value-name file --description 'private key file'
+complete 'openssl req' --option --short out --value-name file --description 'output file'
+complete 'openssl req' --option --short subj --value-name subject --description 'request subject'
+complete 'openssl s_client' --option --short connect --value-name host:port --description 'connect to host and port'
+complete 'openssl s_client' --option --short servername --value-name name --description 'TLS SNI server name'
+complete 'openssl x509' --option --short in --value-name file --description 'input certificate'
+complete 'openssl x509' --option --short noout --description 'suppress certificate output'
+complete 'openssl x509' --option --short text --description 'print certificate text'
+
+__rush_complete_openssl_digests() {
+  openssl list -digest-algorithms 2>/dev/null | awk '{ print $1 }' | sed 's/^/-/' | while read alg; do test -n "$alg" && completion candidate "$alg" --kind flag; done
+  completion candidate -sha256 --kind flag
+  completion candidate -sha512 --kind flag
+  completion candidate -md5 --kind flag
+}
+
+__rush_complete_openssl_ciphers() {
+  openssl list -cipher-algorithms 2>/dev/null | awk '{ print $1 }' | sed 's/^/-/' | while read alg; do test -n "$alg" && completion candidate "$alg" --kind flag; done
+  completion candidate -aes-256-cbc --kind flag
+  completion candidate -aes-256-gcm --kind flag
+  completion candidate -chacha20 --kind flag
+}
+
+__rush_complete_openssl_list_options() {
+  completion candidate -commands --kind flag
+  completion candidate -digest-algorithms --kind flag
+  completion candidate -cipher-algorithms --kind flag
+  completion candidate -public-key-algorithms --kind flag
+  completion candidate -providers --kind flag
+}

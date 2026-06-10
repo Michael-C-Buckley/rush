@@ -1,0 +1,71 @@
+# First-party systemctl completion slice.
+
+complete systemctl --option --short h --long help --description 'show help'
+complete systemctl --option --long version --description 'show version'
+complete systemctl --option --long user --description 'operate on user service manager'
+complete systemctl --option --long system --description 'operate on system service manager'
+complete systemctl --option --long global --description 'operate on global user configuration'
+complete systemctl --option --long type --value-name type --description 'unit type'
+complete systemctl --option-value --long type --function __rush_complete_systemctl_unit_types
+complete systemctl --option --long state --value-name state --description 'unit state'
+complete systemctl --option-value --long state --function __rush_complete_systemctl_states
+complete systemctl --subcommand start --description 'start units'
+complete systemctl --subcommand stop --description 'stop units'
+complete systemctl --subcommand restart --description 'restart units'
+complete systemctl --subcommand reload --description 'reload units'
+complete systemctl --subcommand status --description 'show unit status'
+complete systemctl --subcommand enable --description 'enable units'
+complete systemctl --subcommand disable --description 'disable units'
+complete systemctl --subcommand list-units --description 'list loaded units'
+complete systemctl --subcommand list-unit-files --description 'list installed unit files'
+complete systemctl --subcommand cat --description 'show unit files'
+complete systemctl --subcommand edit --description 'edit unit files'
+complete systemctl --subcommand daemon-reload --description 'reload manager configuration'
+complete systemctl --subcommand is-active --description 'check whether units are active'
+complete systemctl --subcommand is-enabled --description 'check whether units are enabled'
+complete 'systemctl start' --argument --function __rush_complete_systemctl_units
+complete 'systemctl stop' --argument --function __rush_complete_systemctl_units
+complete 'systemctl restart' --argument --function __rush_complete_systemctl_units
+complete 'systemctl reload' --argument --function __rush_complete_systemctl_units
+complete 'systemctl status' --argument --function __rush_complete_systemctl_units
+complete 'systemctl enable' --argument --function __rush_complete_systemctl_unit_files
+complete 'systemctl disable' --argument --function __rush_complete_systemctl_unit_files
+complete 'systemctl cat' --argument --function __rush_complete_systemctl_unit_files
+complete 'systemctl edit' --argument --function __rush_complete_systemctl_unit_files
+complete 'systemctl is-active' --argument --function __rush_complete_systemctl_units
+complete 'systemctl is-enabled' --argument --function __rush_complete_systemctl_unit_files
+
+__rush_complete_systemctl_units() {
+  systemctl list-units --all --no-legend 2>/dev/null | awk '{ print $1 }' | while read unit; do test -n "$unit" && completion candidate "$unit" --kind plain; done
+  __rush_complete_systemctl_common_units
+}
+
+__rush_complete_systemctl_unit_files() {
+  systemctl list-unit-files --no-legend 2>/dev/null | awk '{ print $1 }' | while read unit; do test -n "$unit" && completion candidate "$unit" --kind plain; done
+  __rush_complete_systemctl_common_units
+}
+
+__rush_complete_systemctl_common_units() {
+  completion candidate ssh.service --kind plain
+  completion candidate sshd.service --kind plain
+  completion candidate docker.service --kind plain
+  completion candidate NetworkManager.service --kind plain
+  completion candidate cron.service --kind plain
+}
+
+__rush_complete_systemctl_unit_types() {
+  completion candidate service --kind plain
+  completion candidate socket --kind plain
+  completion candidate target --kind plain
+  completion candidate timer --kind plain
+  completion candidate mount --kind plain
+  completion candidate path --kind plain
+}
+
+__rush_complete_systemctl_states() {
+  completion candidate active --kind plain
+  completion candidate inactive --kind plain
+  completion candidate failed --kind plain
+  completion candidate running --kind plain
+  completion candidate exited --kind plain
+}

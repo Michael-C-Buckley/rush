@@ -1,0 +1,43 @@
+# First-party sudo completion slice.
+
+complete sudo --option --short h --long help --description 'show help'
+complete sudo --option --short V --long version --description 'show version'
+complete sudo --option --short u --long user --value-name user --description 'run command as user'
+complete sudo --option-value --short u --function __rush_complete_sudo_users
+complete sudo --option-value --long user --function __rush_complete_sudo_users
+complete sudo --option --short g --long group --value-name group --description 'run command as group'
+complete sudo --option-value --short g --function __rush_complete_sudo_groups
+complete sudo --option-value --long group --function __rush_complete_sudo_groups
+complete sudo --option --short E --long preserve-env --description 'preserve user environment'
+complete sudo --option --short H --long set-home --description 'set HOME to target user home'
+complete sudo --option --short i --long login --description 'run login shell as target user'
+complete sudo --option --short s --long shell --description 'run shell as target user'
+complete sudo --option --short k --long reset-timestamp --description 'invalidate cached credentials'
+complete sudo --option --short v --long validate --description 'update cached credentials'
+complete sudo --option --short l --long list --description 'list allowed commands'
+complete sudo --option --short b --long background --description 'run command in background'
+complete sudo --option --short C --long close-from --value-name fd --description 'close file descriptors from fd'
+complete sudo --argument --function __rush_complete_sudo_commands
+
+__rush_complete_sudo_commands() {
+  completion candidate su --kind command
+  completion candidate systemctl --kind command
+  completion candidate journalctl --kind command
+  completion candidate vim --kind command
+  completion candidate sh --kind command
+  completion candidate bash --kind command
+}
+
+__rush_complete_sudo_users() {
+  cut -d: -f1 /etc/passwd 2>/dev/null | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+  id -un 2>/dev/null | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+  completion candidate root --kind plain
+}
+
+__rush_complete_sudo_groups() {
+  cut -d: -f1 /etc/group 2>/dev/null | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+  id -gn 2>/dev/null | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+  completion candidate root --kind plain
+  completion candidate wheel --kind plain
+  completion candidate sudo --kind plain
+}
