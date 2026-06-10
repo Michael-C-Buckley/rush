@@ -22,6 +22,7 @@ const usage =
     \\       rush -c SCRIPT
     \\       rush --posix-strict -c SCRIPT
     \\       rush complete --debug INPUT
+    \\       rush complete validate [DIR]
     \\       rush --help
     \\
 ;
@@ -63,6 +64,11 @@ pub fn main(init: std.process.Init) !u8 {
     if (args.len == 4 and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "--debug")) {
         try debugCompletion(allocator, init.io, init.environ_map, args[3]);
         return 0;
+    }
+
+    if ((args.len == 3 or args.len == 4) and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "validate")) {
+        const dir = if (args.len == 4) args[3] else "share/rush/completions";
+        return validateCompletionScripts(allocator, init.io, dir);
     }
 
     var script_arg: ?[]const u8 = null;
@@ -1058,6 +1064,67 @@ fn debugCompletionRuleMatches(rule: completion_model.Rule, context: exec.Complet
     return true;
 }
 
+fn validateCompletionScripts(allocator: std.mem.Allocator, io: std.Io, dir_path: []const u8) !u8 {
+    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| {
+        var buf: [4096]u8 = undefined;
+        var writer = std.Io.File.stderr().writer(io, &buf);
+        defer writer.interface.flush() catch {};
+        try writer.interface.print("rush: cannot open completion directory '{s}': {s}\n", .{ dir_path, @errorName(err) });
+        return 2;
+    };
+    defer dir.close(io);
+
+    var stdout_buf: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &stdout_buf);
+    defer stdout.interface.flush() catch {};
+    var stderr_buf: [4096]u8 = undefined;
+    var stderr = std.Io.File.stderr().writer(io, &stderr_buf);
+    defer stderr.interface.flush() catch {};
+
+    const result = try validateCompletionScriptsInDir(allocator, io, dir, &stderr.interface);
+    if (result.failures == 0) {
+        try stdout.interface.print("validated {d} completion scripts in {s}\n", .{ result.checked, dir_path });
+        return 0;
+    }
+    try stderr.interface.print("{d} of {d} completion scripts failed validation in {s}\n", .{ result.failures, result.checked, dir_path });
+    return 1;
+}
+
+const CompletionValidationResult = struct {
+    checked: usize = 0,
+    failures: usize = 0,
+};
+
+fn validateCompletionScriptsInDir(allocator: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, stderr: *std.Io.Writer) !CompletionValidationResult {
+    var walker = try dir.walk(allocator);
+    defer walker.deinit();
+    var result: CompletionValidationResult = .{};
+
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".rush")) continue;
+        result.checked += 1;
+        const contents = dir.readFileAlloc(io, entry.path, allocator, .limited(1024 * 1024)) catch |err| {
+            result.failures += 1;
+            try stderr.print("invalid {s}: read failed: {s}\n", .{ entry.path, @errorName(err) });
+            continue;
+        };
+        defer allocator.free(contents);
+
+        var parsed = parser.parse(allocator, contents, .{}) catch |err| {
+            result.failures += 1;
+            try stderr.print("invalid {s}: {s}\n", .{ entry.path, @errorName(err) });
+            continue;
+        };
+        defer parsed.deinit();
+        if (parsed.diagnostics.len != 0) {
+            result.failures += 1;
+            try stderr.print("invalid {s}: parse diagnostics\n", .{entry.path});
+            continue;
+        }
+    }
+    return result;
+}
+
 fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, source: []const u8) ![]const u8 {
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
@@ -1805,6 +1872,17 @@ test "completion scripts lazy-load from XDG data home" {
     try std.testing.expectEqual(completion_model.RuleKind.dynamic_subcommands, rules[0].kind);
     try std.testing.expectEqualStrings("__rush_complete_tool", rules[0].value.?);
     try std.testing.expect(loader.attempted.contains("tool"));
+}
+
+test "supplied completion scripts validate" {
+    var dir = try std.Io.Dir.cwd().openDir(std.testing.io, "share/rush/completions", .{ .iterate = true });
+    defer dir.close(std.testing.io);
+    var stderr: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer stderr.deinit();
+    const result = try validateCompletionScriptsInDir(std.testing.allocator, std.testing.io, dir, &stderr.writer);
+    try std.testing.expectEqualStrings("", stderr.written());
+    try std.testing.expect(result.checked != 0);
+    try std.testing.expectEqual(@as(usize, 0), result.failures);
 }
 
 test "completion cache keys include completion generation" {
