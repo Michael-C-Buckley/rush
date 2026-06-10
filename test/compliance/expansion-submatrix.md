@@ -90,11 +90,11 @@ Remaining gaps:
 
 Manifest row: `expansion-arithmetic`
 
-Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, and comma operator support.
+Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, and negative diagnostics for invalid or currently unsupported arithmetic forms.
 
 Remaining gaps:
 
-- POSIX diagnostic consequences for invalid arithmetic syntax;
+- exact POSIX diagnostic wording and consequences for more arithmetic syntax failures;
 - divide-by-zero behavior;
 - integer overflow and signedness decisions;
 - nonnumeric variable behavior is Rush/Bash-like and not fully differential-safe.

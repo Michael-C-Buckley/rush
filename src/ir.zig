@@ -1099,7 +1099,7 @@ fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, to
     const raw = try allocator.dupe(u8, token.lexeme(parsed.source));
     errdefer allocator.free(raw);
     const text = expand.expandWordScalar(allocator, raw, .{}) catch |err| switch (err) {
-        error.NounsetParameter, error.ParameterExpansionFailed => try allocator.dupe(u8, raw),
+        error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => try allocator.dupe(u8, raw),
         else => return err,
     };
     errdefer allocator.free(text);

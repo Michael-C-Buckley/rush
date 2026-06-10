@@ -2489,6 +2489,25 @@ test "command string invocation shell options affect execution" {
     try std.testing.expectEqualStrings("", flags.stderr);
 }
 
+test "invalid arithmetic expansion returns a shell diagnostic" {
+    const cases = [_][]const u8{
+        "echo $((2 ** 3)); echo after",
+        "X=2; echo $(($X)); echo after",
+        "echo $(( $(echo 2) + 1 )); echo after",
+        "echo $((-(-3))); echo after",
+    };
+
+    for (cases) |script| {
+        var result = try runScript(std.testing.allocator, std.testing.io, script);
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
+        try std.testing.expectEqualStrings("", result.stdout);
+        try std.testing.expect(std.mem.indexOf(u8, result.stderr, "invalid arithmetic expression") != null);
+        try std.testing.expect(std.mem.indexOf(u8, result.stderr, "after") == null);
+    }
+}
+
 test "runScriptWithEnvironment imports initial shell variables" {
     var env = std.process.Environ.Map.init(std.testing.allocator);
     defer env.deinit();

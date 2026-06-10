@@ -896,6 +896,7 @@ pub const Executor = struct {
     getopts_offset: usize = 1,
     getopts_last_optind: usize = 1,
     parameter_error: expand.ParameterError = .{},
+    arithmetic_error: expand.ArithmeticError = .{},
     command_substitution_status: ?ExitStatus = null,
     script_stdin: ?[]const u8 = null,
     script_stdin_offset: usize = 0,
@@ -1293,6 +1294,7 @@ pub const Executor = struct {
         for (self.pending_job_notifications.items) |notification| self.allocator.free(notification);
         self.pending_job_notifications.deinit(self.allocator);
         self.parameter_error.clear(self.allocator);
+        self.arithmetic_error.clear(self.allocator);
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
         self.waitForPromptAsyncRefreshes();
@@ -2225,19 +2227,10 @@ pub const Executor = struct {
                 try checkCanceled(options);
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, statement.span.start);
-                var result = if (statement.async_after)
-                    try self.executeAsyncStatement(program, statement, options)
-                else switch (statement.kind) {
-                    .pipeline => try self.executePipeline(program, program.pipelines[statement.index], options),
-                    .if_command => try self.executeIfCommand(program.if_commands[statement.index], options),
-                    .loop_command => try self.executeLoopCommand(program.loop_commands[statement.index], options),
-                    .for_command => try self.executeForCommand(program.for_commands[statement.index], options),
-                    .case_command => try self.executeCaseCommand(program.case_commands[statement.index], options),
-                    .function_definition => try self.executeFunctionDefinition(program.function_definitions[statement.index]),
-                    .bash_test_command => try self.executeBashTestCommand(program.bash_test_commands[statement.index], options),
-                    .brace_group => try self.executeBraceGroup(program.brace_groups[statement.index], options),
-                    .subshell => try self.executeSubshell(program.subshells[statement.index], options),
-                };
+                var result = (if (statement.async_after)
+                    self.executeAsyncStatement(program, statement, options)
+                else
+                    self.executeStatementSync(program, statement, options)) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
                 defer result.deinit();
                 try self.annotateSourcedError(program.source, statement.span.start, options, &result);
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
@@ -2255,10 +2248,10 @@ pub const Executor = struct {
                 try checkCanceled(options);
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, pipeline.span.start);
-                var result = if (pipeline.async_after)
-                    try self.executeAsyncPipeline(program, pipeline, options)
+                var result = (if (pipeline.async_after)
+                    self.executeAsyncPipeline(program, pipeline, options)
                 else
-                    try self.executePipeline(program, pipeline, options);
+                    self.executePipeline(program, pipeline, options)) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
                 defer result.deinit();
                 try self.annotateSourcedError(program.source, pipeline.span.start, options, &result);
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
@@ -2274,7 +2267,7 @@ pub const Executor = struct {
         for (program.commands) |command| {
             try checkCanceled(options);
             self.setCurrentLineNumber(program.source, command.span.start);
-            var result = try self.executeSimpleCommand(command, options);
+            var result = self.executeSimpleCommand(command, options) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
             defer result.deinit();
             try self.annotateSourcedError(program.source, command.span.start, options, &result);
             try self.appendOrWriteResult(options, &stdout, &stderr, result);
@@ -2285,6 +2278,18 @@ pub const Executor = struct {
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
         return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
+    }
+
+    fn finishExpansionErrorProgram(self: *Executor, root_execution: bool, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), err: anyerror) !CommandResult {
+        var failure = switch (err) {
+            error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => try self.expansionErrorResult(err),
+            else => return err,
+        };
+        defer failure.deinit();
+        try self.appendOrWriteResult(options, stdout, stderr, failure);
+        const status = self.pending_exit orelse failure.status;
+        self.setLastStatus(status);
+        return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
     }
 
     fn annotateSourcedError(self: *Executor, source: []const u8, offset: usize, options: ExecuteOptions, result: *CommandResult) !void {
@@ -3796,11 +3801,7 @@ pub const Executor = struct {
 
     fn executeSimpleCommandWithInputInner(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         const expanded = self.expandSimpleCommand(command, options) catch |err| switch (err) {
-            error.NounsetParameter => {
-                self.pending_exit = 1;
-                return errorResult(self.allocator, 1, "parameter", "unset parameter");
-            },
-            error.ParameterExpansionFailed => return self.parameterExpansionErrorResult(),
+            error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => return self.expansionErrorResult(err),
             error.ReadonlyVariable => return self.assignmentErrorResult(),
             else => return err,
         };
@@ -3906,6 +3907,18 @@ pub const Executor = struct {
         return errorResult(self.allocator, 2, "assignment", "readonly variable");
     }
 
+    fn expansionErrorResult(self: *Executor, err: anyerror) !CommandResult {
+        return switch (err) {
+            error.NounsetParameter => blk: {
+                self.pending_exit = 1;
+                break :blk errorResult(self.allocator, 1, "parameter", "unset parameter");
+            },
+            error.ParameterExpansionFailed => self.parameterExpansionErrorResult(),
+            error.ArithmeticExpansionFailed => self.arithmeticExpansionErrorResult(),
+            else => err,
+        };
+    }
+
     fn parameterExpansionErrorResult(self: *Executor) !CommandResult {
         if (self.parameter_error.name.len == 0) return errorResult(self.allocator, 1, "parameter", "expansion failed");
         const name = self.parameter_error.name;
@@ -3914,6 +3927,15 @@ pub const Executor = struct {
         errdefer self.parameter_error.clear(self.allocator);
         const result = try errorResult(self.allocator, 1, name, message);
         self.parameter_error.clear(self.allocator);
+        return result;
+    }
+
+    fn arithmeticExpansionErrorResult(self: *Executor) !CommandResult {
+        const message = if (self.arithmetic_error.message.len != 0) self.arithmetic_error.message else "invalid arithmetic expression";
+        self.pending_exit = 1;
+        errdefer self.arithmetic_error.clear(self.allocator);
+        const result = try errorResult(self.allocator, 1, "arithmetic", message);
+        self.arithmetic_error.clear(self.allocator);
         return result;
     }
 
@@ -4015,7 +4037,7 @@ pub const Executor = struct {
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -4092,7 +4114,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
+        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -4101,7 +4123,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -4117,7 +4139,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
 
         for (parts.parts) |part| {
             const rendered = try expand.expandWordScalar(self.allocator, part.source(parts.raw), expansion_options);
@@ -4138,7 +4160,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandAssignmentWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
+        const text = try expand.expandAssignmentWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 

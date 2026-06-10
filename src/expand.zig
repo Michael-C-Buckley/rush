@@ -48,6 +48,17 @@ pub const ParameterError = struct {
     }
 };
 
+pub const ArithmeticError = struct {
+    expression: []const u8 = "",
+    message: []const u8 = "",
+
+    pub fn clear(self: *ArithmeticError, allocator: std.mem.Allocator) void {
+        if (self.expression.len != 0) allocator.free(self.expression);
+        if (self.message.len != 0) allocator.free(self.message);
+        self.* = .{};
+    }
+};
+
 pub const Options = struct {
     env: EnvLookup = .{},
     env_set: EnvSet = .{},
@@ -59,6 +70,7 @@ pub const Options = struct {
     pathname_expansion: bool = true,
     nounset: bool = false,
     parameter_error: ?*ParameterError = null,
+    arithmetic_error: ?*ArithmeticError = null,
 };
 
 pub const Phase = enum {
@@ -470,10 +482,7 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
         .escaped => if (std.mem.eql(u8, part.value(raw), "\n")) allocator.dupe(u8, "") else allocator.dupe(u8, part.value(raw)),
         .double_quoted => renderDoubleQuotedContent(allocator, part.value(raw), options),
         .parameter => renderParameter(allocator, part.value(raw), options, false),
-        .arithmetic => blk: {
-            const value = try evalArithmetic(part.value(raw), options.env, options.env_set);
-            break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
-        },
+        .arithmetic => renderArithmetic(allocator, part.source(raw), part.value(raw), options),
         .command_substitution => blk: {
             const script = try commandSubstitutionScript(allocator, raw, part, false);
             defer allocator.free(script);
@@ -483,6 +492,30 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
             break :blk allocator.dupe(u8, trimmed);
         },
     };
+}
+
+fn renderArithmetic(allocator: std.mem.Allocator, source: []const u8, expression: []const u8, options: Options) anyerror![]const u8 {
+    const value = evalArithmetic(expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, source, err, options);
+    return std.fmt.allocPrint(allocator, "{d}", .{value});
+}
+
+fn arithmeticExpansionFailed(allocator: std.mem.Allocator, source: []const u8, err: anyerror, options: Options) anyerror {
+    const message = switch (err) {
+        error.InvalidArithmetic => "invalid arithmetic expression",
+        error.DivisionByZero => "division by zero",
+        error.Overflow => "arithmetic overflow",
+        else => return err,
+    };
+
+    if (options.arithmetic_error) |arithmetic_error| {
+        const expression = try allocator.dupe(u8, source);
+        errdefer allocator.free(expression);
+        const owned_message = try allocator.dupe(u8, message);
+        arithmetic_error.clear(allocator);
+        arithmetic_error.expression = expression;
+        arithmetic_error.message = owned_message;
+    }
+    return error.ArithmeticExpansionFailed;
 }
 
 const ParameterOperator = enum {
@@ -1084,10 +1117,7 @@ fn appendDoubleQuotedLiteral(allocator: std.mem.Allocator, output: *std.ArrayLis
 fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) ![]const u8 {
     return switch (part.kind) {
         .parameter => renderParameter(allocator, part.value(raw), options, true),
-        .arithmetic => blk: {
-            const value = try evalArithmetic(part.value(raw), options.env, options.env_set);
-            break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
-        },
+        .arithmetic => renderArithmetic(allocator, part.source(raw), part.value(raw), options),
         .command_substitution => blk: {
             const script = try commandSubstitutionScript(allocator, raw, part, true);
             defer allocator.free(script);
@@ -2110,6 +2140,15 @@ test "arithmetic expansion evaluates integer expressions" {
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("value=7", result.fields[0]);
+}
+
+test "arithmetic expansion records diagnostics instead of leaking parser errors" {
+    var arithmetic_error: ArithmeticError = .{};
+    defer arithmetic_error.clear(std.testing.allocator);
+
+    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((2 ** 3))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectEqualStrings("$((2 ** 3))", arithmetic_error.expression);
+    try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
 }
 
 test "word part parser records arithmetic expansion regions" {

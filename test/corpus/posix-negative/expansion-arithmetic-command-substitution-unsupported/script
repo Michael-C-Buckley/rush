@@ -1,0 +1,1 @@
+echo $(( $(echo 2) + 1 )); echo after

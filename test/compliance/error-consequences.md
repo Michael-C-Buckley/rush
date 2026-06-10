@@ -40,7 +40,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | --- | --- | --- | --- | --- |
 | `errors-command-not-found` | supported | medium | POSIX and differential corpus | simple not-found and unknown wait pid behavior are covered |
 | `errors-syntax` | baseline | high | POSIX corpus and negative corpus | strict mode has initial diagnostics; recovery parser remains intentionally permissive for tooling |
-| `errors-expansion` | partial | high | nounset and `${parameter:?word}` coverage | ordinary and special-builtin expansion failures have baseline shell-exit coverage; more expansion classes need coverage |
+| `errors-expansion` | partial | high | nounset, `${parameter:?word}`, and arithmetic negative coverage | ordinary and special-builtin expansion failures have baseline shell-exit coverage; more expansion classes need coverage |
 | `errors-special-builtin` | partial | high | assignment persistence redirection and expansion negative coverage | additional utilities and assignment side-effect consequences need more detail |
 | `errors-nounset` | supported | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution, with default-operator and disable behavior covered separately |
 | `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | bad input/output fd, noclobber, missing input, and directory output diagnostics exist; more redirection classes need stricter modeling |
@@ -55,7 +55,7 @@ Current coverage includes a missing pipeline command, malformed case items, malf
 
 ### Expansion errors
 
-Current coverage includes nounset and `${parameter:?word}` with diagnostic word expansion for unset and null parameters, including unquoted multi-word braced words. Distinguish ordinary command failures from special builtin expansion failures because POSIX assigns different non-interactive shell consequences.
+Current coverage includes nounset and `${parameter:?word}` with diagnostic word expansion for unset and null parameters, including unquoted multi-word braced words. Arithmetic expansion syntax and unsupported semantic forms now report a shell diagnostic and stop non-interactive execution. Distinguish ordinary command failures from special builtin expansion failures because POSIX assigns different non-interactive shell consequences.
 
 ### Redirection errors
 
