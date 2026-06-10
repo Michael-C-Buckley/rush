@@ -44,6 +44,7 @@ builtin-eval	builtin	builtin	-
 builtin-eval-special-assignment	builtin	builtin	-
 builtin-exec	builtin	builtin	-
 builtin-exec-assignment-env	builtin	builtin	-
+builtin-exec-failure-exits	builtin	negative;builtin	exec command lookup failure exits non-interactive shell execution
 builtin-exec-replaces-process	builtin	builtin	-
 builtin-exit	builtin	builtin	-
 builtin-export-env	builtin	builtin	-

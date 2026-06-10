@@ -37,6 +37,7 @@ pub const ExecuteOptions = struct {
     allow_external: bool = false,
     features: compat.Features = .{},
     external_stdio: ExternalStdio = .capture,
+    interactive: bool = false,
     cancel: ?*completion.CancellationToken = null,
     arg_zero: []const u8 = "rush",
     source_path: ?[]const u8 = null,
@@ -6588,7 +6589,10 @@ fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     defer pre_expanded.deinit();
     const nested = pre_expanded.command(command.span);
     if (options.allow_external and options.external_stdio == .inherit and options.io != null and builtinForName(self.*, nested.argv[0].text) == null and self.functions.get(nested.argv[0].text) == null) {
-        return self.replaceWithExternal(nested, options.io.?, options);
+        var result = try self.replaceWithExternal(nested, options.io.?, options);
+        errdefer result.deinit();
+        if (!options.interactive) self.pending_exit = result.status;
+        return result;
     }
     var result = try self.executeSimpleCommandWithInput(nested, stdin, options);
     errdefer result.deinit();
@@ -10577,6 +10581,52 @@ test "executor reports command not found without external execution" {
 
     try std.testing.expectEqual(@as(ExitStatus, 127), result.status);
     try std.testing.expectEqualStrings("definitely-not-a-rush-builtin: command not found\n", result.stderr);
+}
+
+test "exec exits non-interactive shell when replacement command is not found" {
+    var argv = [_]ir.WordRef{
+        .{ .raw = "exec", .text = "exec", .span = .{ .start = 0, .end = 4 } },
+        .{ .raw = "definitely-not-a-rush-exec-command", .text = "definitely-not-a-rush-exec-command", .span = .{ .start = 5, .end = 39 } },
+    };
+    const command: ir.SimpleCommand = .{
+        .span = .{ .start = 0, .end = 39 },
+        .assignments = &.{},
+        .argv = argv[0..],
+        .redirections = &.{},
+    };
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try builtinExec(&executor, command, "", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 127), result.status);
+    try std.testing.expectEqual(@as(?ExitStatus, 127), executor.pending_exit);
+    try std.testing.expectEqualStrings("definitely-not-a-rush-exec-command: command not found\n", result.stderr);
+}
+
+test "exec failure does not exit interactive current shell" {
+    var argv = [_]ir.WordRef{
+        .{ .raw = "exec", .text = "exec", .span = .{ .start = 0, .end = 4 } },
+        .{ .raw = "definitely-not-a-rush-exec-command", .text = "definitely-not-a-rush-exec-command", .span = .{ .start = 5, .end = 39 } },
+    };
+    const command: ir.SimpleCommand = .{
+        .span = .{ .start = 0, .end = 39 },
+        .assignments = &.{},
+        .argv = argv[0..],
+        .redirections = &.{},
+    };
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try builtinExec(&executor, command, "", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 127), result.status);
+    try std.testing.expectEqual(@as(?ExitStatus, null), executor.pending_exit);
+    try std.testing.expectEqualStrings("definitely-not-a-rush-exec-command: command not found\n", result.stderr);
 }
 
 test "executor short-circuits AND and OR lists" {
