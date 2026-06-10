@@ -229,3 +229,5 @@ rm -f rc rn; case x in x) echo hit ;; *) echo miss ;; esac >rc; printf 'match:';
 echo x >infile; case $(cat) in x) echo input-hit ;; *) echo input-miss ;; esac <infile; rm -f infile
 rm -f rf infile; f(){ echo hi; } >rf; echo before; f; f; printf 'file:'; cat rf; echo ok >infile; g(){ cat; } <infile; g; rm -f rf infile
 echo x >infile; case $(/bin/cat) in x) echo external-hit ;; *) echo external-miss ;; esac <infile; rm -f infile
+echo $((010)) $((0x10)) $((0XFF))
+x=010; y=0x2f; echo $((x + y))

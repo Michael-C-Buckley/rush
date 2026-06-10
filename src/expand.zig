@@ -894,7 +894,7 @@ const ArithmeticParser = struct {
     fn lookupNumber(self: ArithmeticParser, name: []const u8) i64 {
         const value = self.env.get(name) orelse return 0;
         if (value.len == 0) return 0;
-        return std.fmt.parseInt(i64, value, 10) catch 0;
+        return parseIntegerConstant(value) catch 0;
     }
 
     fn setNumber(self: ArithmeticParser, name: []const u8, value: i64) !void {
@@ -906,9 +906,14 @@ const ArithmeticParser = struct {
     fn parseNumber(self: *ArithmeticParser) anyerror!i64 {
         self.skipSpace();
         const start = self.index;
-        while (self.index < self.input.len and std.ascii.isDigit(self.input[self.index])) : (self.index += 1) {}
+        if (self.startsWith("0x") or self.startsWith("0X")) {
+            self.index += 2;
+            while (self.index < self.input.len and std.ascii.isHex(self.input[self.index])) : (self.index += 1) {}
+        } else {
+            while (self.index < self.input.len and std.ascii.isDigit(self.input[self.index])) : (self.index += 1) {}
+        }
         if (start == self.index) return error.InvalidArithmetic;
-        return std.fmt.parseInt(i64, self.input[start..self.index], 10);
+        return parseIntegerConstant(self.input[start..self.index]);
     }
 
     fn skipSpace(self: *ArithmeticParser) void {
@@ -936,6 +941,29 @@ const ArithmeticParser = struct {
 
 fn shiftAmount(value: i64) u6 {
     return @intCast(@as(u64, @intCast(if (value < 0) -value else value)) & 63);
+}
+
+/// Parse a POSIX arithmetic integer constant as in C: decimal, octal with a
+/// leading 0, or hexadecimal with a leading 0x/0X, with an optional sign.
+fn parseIntegerConstant(text: []const u8) error{ InvalidArithmetic, Overflow }!i64 {
+    var rest = text;
+    var negative = false;
+    if (rest.len > 0 and (rest[0] == '+' or rest[0] == '-')) {
+        negative = rest[0] == '-';
+        rest = rest[1..];
+    }
+    if (rest.len == 0) return error.InvalidArithmetic;
+    const magnitude = blk: {
+        if (rest.len > 2 and (std.mem.startsWith(u8, rest, "0x") or std.mem.startsWith(u8, rest, "0X")) and std.ascii.isHex(rest[2])) {
+            break :blk std.fmt.parseInt(i64, rest[2..], 16);
+        }
+        if (rest.len > 1 and rest[0] == '0') break :blk std.fmt.parseInt(i64, rest, 8);
+        break :blk std.fmt.parseInt(i64, rest, 10);
+    } catch |err| switch (err) {
+        error.Overflow => return error.Overflow,
+        error.InvalidCharacter => return error.InvalidArithmetic,
+    };
+    return if (negative) -magnitude else magnitude;
 }
 
 pub fn evalArithmetic(input: []const u8, env: EnvLookup, env_set: EnvSet) anyerror!i64 {
@@ -1619,6 +1647,9 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "HOME")) return "/home/rush";
     if (std.mem.eql(u8, name, "USER")) return "rush-user";
     if (std.mem.eql(u8, name, "USER_NUM")) return "3";
+    if (std.mem.eql(u8, name, "OCTAL_NUM")) return "010";
+    if (std.mem.eql(u8, name, "HEX_NUM")) return "0x2f";
+    if (std.mem.eql(u8, name, "NEGATIVE_OCTAL_NUM")) return "-010";
     if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
@@ -1876,6 +1907,14 @@ test "arithmetic expansion evaluates integer expressions" {
     try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("0 ? 1 : 7", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("1, 2, 9", .{}, .{}));
     try std.testing.expectEqual(@as(i64, -6), try evalArithmetic("~5", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 8), try evalArithmetic("010", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 16), try evalArithmetic("0x10", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 255), try evalArithmetic("0XFF", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 24), try evalArithmetic("010 + 0x10", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, 55), try evalArithmetic("OCTAL_NUM + HEX_NUM", test_env, .{}));
+    try std.testing.expectEqual(@as(i64, -8), try evalArithmetic("NEGATIVE_OCTAL_NUM", test_env, .{}));
+    try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("08", .{}, .{}));
+    try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("0x", .{}, .{}));
 
     var variable = try expandWord(std.testing.allocator, "value=$((USER_NUM + 4))", .{ .env = test_env });
     defer variable.deinit();

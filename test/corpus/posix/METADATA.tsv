@@ -9,6 +9,7 @@ arithmetic-assignment-side-effect	expansion	behavior	-
 arithmetic-compound-assignment	expansion	behavior	-
 arithmetic-expansion	expansion	behavior	-
 arithmetic-nonnumeric-variable	expansion	behavior	-
+arithmetic-octal-hex-constants	expansion	behavior	-
 arithmetic-operator-coverage	expansion	behavior	-
 arithmetic-variable-lookup	expansion	behavior	-
 assignment-prefix-external	variables	behavior	-
