@@ -18,7 +18,7 @@ complete pnpm --subcommand update --description 'update packages'
 complete pnpm --option --short F --long filter --value-name selector --description 'filter packages'
 complete pnpm --option-value --short F --function __rush_complete_pnpm_workspaces
 complete pnpm --option-value --long filter --function __rush_complete_pnpm_workspaces
-complete 'pnpm add' --option --save-dev --short D --description 'save to devDependencies'
+complete 'pnpm add' --option --long save-dev --short D --description 'save to devDependencies'
 complete 'pnpm add' --argument --function __rush_complete_pnpm_packages
 complete 'pnpm remove' --argument --function __rush_complete_pnpm_dependencies
 complete 'pnpm update' --argument --function __rush_complete_pnpm_dependencies
