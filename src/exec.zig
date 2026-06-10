@@ -5751,8 +5751,9 @@ pub const Executor = struct {
         } else if (stdout_read_file) |file| {
             var reader_buffer: [4096]u8 = undefined;
             var reader = file.reader(io, &reader_buffer);
+            const captured = try reader.interface.allocRemaining(self.allocator, .unlimited);
             self.allocator.free(stdout);
-            stdout = try reader.interface.allocRemaining(self.allocator, .limited(1024 * 1024));
+            stdout = captured;
             if (capture_stdout_pipe) {
                 child.stdout.?.close(io);
                 child.stdout = null;
@@ -5760,8 +5761,9 @@ pub const Executor = struct {
         } else if (stderr_read_file) |file| {
             var reader_buffer: [4096]u8 = undefined;
             var reader = file.reader(io, &reader_buffer);
+            const captured = try reader.interface.allocRemaining(self.allocator, .unlimited);
             self.allocator.free(stderr);
-            stderr = try reader.interface.allocRemaining(self.allocator, .limited(1024 * 1024));
+            stderr = captured;
             if (capture_stderr_pipe) {
                 child.stderr.?.close(io);
                 child.stderr = null;
@@ -12865,6 +12867,42 @@ test "executor captures stderr and status from spawned external commands" {
     try std.testing.expectEqual(@as(ExitStatus, 7), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("err\n", result.stderr);
+}
+
+test "executor captures large single-stream external output" {
+    const input_path = "rush-large-captured-external-output.tmp";
+    const stdout_path = "rush-large-captured-external-stdout.tmp";
+    var input: std.ArrayList(u8) = .empty;
+    defer input.deinit(std.testing.allocator);
+    try input.appendNTimes(std.testing.allocator, 'x', 1024 * 1024 + 1);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = input.items });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stdout_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var substitution = try parseAndLower(std.testing.allocator,
+        \\value=$(/bin/cat < rush-large-captured-external-output.tmp)
+        \\echo ${#value}
+    );
+    defer substitution.parsed.deinit();
+    defer substitution.program.deinit();
+    var substitution_result = try executor.executeProgram(substitution.program, .{ .io = std.testing.io, .allow_external = true });
+    defer substitution_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), substitution_result.status);
+    const expected_length = try std.fmt.allocPrint(std.testing.allocator, "{}\n", .{input.items.len});
+    defer std.testing.allocator.free(expected_length);
+    try std.testing.expectEqualStrings(expected_length, substitution_result.stdout);
+
+    var stderr_only = try parseAndLower(std.testing.allocator, "/bin/sh -c 'cat rush-large-captured-external-output.tmp >&2' > rush-large-captured-external-stdout.tmp");
+    defer stderr_only.parsed.deinit();
+    defer stderr_only.program.deinit();
+    var stderr_result = try executor.executeProgram(stderr_only.program, .{ .io = std.testing.io, .allow_external = true });
+    defer stderr_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), stderr_result.status);
+    try std.testing.expectEqualStrings("", stderr_result.stdout);
+    try std.testing.expectEqualSlices(u8, input.items, stderr_result.stderr);
 }
 
 test "command substitution captures external stdout while stderr remains pty" {
