@@ -22,7 +22,7 @@ const usage =
     \\       rush -c SCRIPT
     \\       rush --posix-strict -c SCRIPT
     \\       rush complete --debug INPUT
-    \\       rush complete validate [DIR]
+    \\       rush complete validate [PATH]
     \\       rush --help
     \\
 ;
@@ -1064,16 +1064,7 @@ fn debugCompletionRuleMatches(rule: completion_model.Rule, context: exec.Complet
     return true;
 }
 
-fn validateCompletionScripts(allocator: std.mem.Allocator, io: std.Io, dir_path: []const u8) !u8 {
-    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| {
-        var buf: [4096]u8 = undefined;
-        var writer = std.Io.File.stderr().writer(io, &buf);
-        defer writer.interface.flush() catch {};
-        try writer.interface.print("rush: cannot open completion directory '{s}': {s}\n", .{ dir_path, @errorName(err) });
-        return 2;
-    };
-    defer dir.close(io);
-
+fn validateCompletionScripts(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !u8 {
     var stdout_buf: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buf);
     defer stdout.interface.flush() catch {};
@@ -1081,12 +1072,30 @@ fn validateCompletionScripts(allocator: std.mem.Allocator, io: std.Io, dir_path:
     var stderr = std.Io.File.stderr().writer(io, &stderr_buf);
     defer stderr.interface.flush() catch {};
 
+    if (std.mem.endsWith(u8, path, ".rush")) {
+        const result = try validateCompletionScriptFile(allocator, io, path, &stderr.interface);
+        if (result.failures == 0) {
+            try stdout.interface.print("validated {s}\n", .{path});
+            return 0;
+        }
+        return 1;
+    }
+
+    var dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch |err| {
+        var buf: [4096]u8 = undefined;
+        var writer = std.Io.File.stderr().writer(io, &buf);
+        defer writer.interface.flush() catch {};
+        try writer.interface.print("rush: cannot open completion path '{s}': {s}\n", .{ path, @errorName(err) });
+        return 2;
+    };
+    defer dir.close(io);
+
     const result = try validateCompletionScriptsInDir(allocator, io, dir, &stderr.interface);
     if (result.failures == 0) {
-        try stdout.interface.print("validated {d} completion scripts in {s}\n", .{ result.checked, dir_path });
+        try stdout.interface.print("validated {d} completion scripts in {s}\n", .{ result.checked, path });
         return 0;
     }
-    try stderr.interface.print("{d} of {d} completion scripts failed validation in {s}\n", .{ result.failures, result.checked, dir_path });
+    try stderr.interface.print("{d} of {d} completion scripts failed validation in {s}\n", .{ result.failures, result.checked, path });
     return 1;
 }
 
@@ -1094,6 +1103,28 @@ const CompletionValidationResult = struct {
     checked: usize = 0,
     failures: usize = 0,
 };
+
+fn validateCompletionScriptFile(allocator: std.mem.Allocator, io: std.Io, path: []const u8, stderr: *std.Io.Writer) !CompletionValidationResult {
+    var result: CompletionValidationResult = .{ .checked = 1 };
+    const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch |err| {
+        result.failures += 1;
+        try stderr.print("invalid {s}: read failed: {s}\n", .{ path, @errorName(err) });
+        return result;
+    };
+    defer allocator.free(contents);
+
+    var parsed = parser.parse(allocator, contents, .{}) catch |err| {
+        result.failures += 1;
+        try stderr.print("invalid {s}: {s}\n", .{ path, @errorName(err) });
+        return result;
+    };
+    defer parsed.deinit();
+    if (parsed.diagnostics.len != 0) {
+        result.failures += 1;
+        try stderr.print("invalid {s}: parse diagnostics\n", .{path});
+    }
+    return result;
+}
 
 fn validateCompletionScriptsInDir(allocator: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, stderr: *std.Io.Writer) !CompletionValidationResult {
     var walker = try dir.walk(allocator);

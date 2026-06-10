@@ -76,10 +76,21 @@ pub fn build(b: *std.Build) void {
     const compile_test_step = b.step("compile-test", "Compile unit tests without running them");
     compile_test_step.dependOn(&exe_tests.step);
 
+    const completion_validate_step = b.step("completion-validate", "Validate shipped Rush completion scripts");
+    const completion_validate = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        "for script in share/rush/completions/*.rush; do \"$1\" complete validate \"$script\"; done",
+        "sh",
+    });
+    completion_validate.addArtifactArg(exe);
+    completion_validate_step.dependOn(&completion_validate.step);
+
     const fmt_step = b.step("fmt", "Check code formatting");
     const fmt_check = b.addFmt(.{ .paths = &.{ "src", "build.zig", "build.zig.zon" }, .check = true });
     fmt_step.dependOn(&fmt_check.step);
     test_step.dependOn(fmt_step);
+    test_step.dependOn(&completion_validate.step);
 
     const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
     const cross_check = b.addSystemCommand(&.{ "sh", "scripts/check-cross-targets.sh" });
