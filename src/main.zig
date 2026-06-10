@@ -546,11 +546,24 @@ fn initHistorySchema(db: *sqlite.sqlite3) !void {
         \\end;
         \\create index if not exists history_started_idx on history(started_at);
         \\create index if not exists history_command_started_idx on history(command, started_at);
+        \\create table if not exists history_meta (
+        \\  key text primary key,
+        \\  value text not null
+        \\);
     );
-    try sqliteExec(db, "insert into history_fts(history_fts) values('rebuild');");
     addHistoryColumn(db, "exit_signal", "integer") catch {};
     addHistoryColumn(db, "duration_ms", "integer") catch {};
     addHistoryColumn(db, "hostname", "text not null default ''") catch {};
+    if (try historyFtsNeedsRebuild(db)) {
+        try sqliteExec(db, "insert into history_fts(history_fts) values('rebuild');");
+    }
+}
+
+fn historyFtsNeedsRebuild(db: *sqlite.sqlite3) !bool {
+    const migration_done = try sqliteScalarInt(db, "select count(*) from history_meta where key = 'history_fts_rebuilt'");
+    if (migration_done != 0) return false;
+    try sqliteExec(db, "insert or replace into history_meta(key, value) values ('history_fts_rebuilt', '1');");
+    return (try sqliteScalarInt(db, "select count(*) from history")) != 0;
 }
 
 fn addHistoryColumn(db: *sqlite.sqlite3, comptime name: []const u8, comptime column_type: []const u8) !void {
@@ -595,6 +608,15 @@ fn sqliteCheck(rc: c_int, db: ?*sqlite.sqlite3) !void {
             return error.SqliteError;
         },
     }
+}
+
+fn sqliteScalarInt(db: *sqlite.sqlite3, sql: [:0]const u8) !i64 {
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(db, sql.ptr, -1, &stmt, null), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+    const rc = sqlite.sqlite3_step(stmt);
+    if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+    return sqlite.sqlite3_column_int64(stmt, 0);
 }
 
 fn historyFtsMatchCount(db: *sqlite.sqlite3, query: []const u8) !c_int {
