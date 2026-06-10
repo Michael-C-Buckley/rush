@@ -6280,6 +6280,9 @@ fn setLoopControlBuiltin(self: *Executor, command: ir.SimpleCommand, kind: LoopC
         if (parsed == 0) return loopControlUsageError(self, name, "loop count must be positive");
         break :blk parsed;
     } else 1;
+    // POSIX.1-2024: break/continue outside any enclosing loop exit with
+    // status 0 and the shell keeps running; dash and bash agree. Operand
+    // errors above still stop the shell like other special builtins.
     if (self.loop_depth == 0) return emptyResult(self.allocator, 0);
     self.pending_loop_control = .{ .kind = kind, .levels = levels };
     return emptyResult(self.allocator, 0);
@@ -8889,12 +8892,15 @@ test "executor supports break and continue builtins in loops" {
     try std.testing.expectEqual(@as(ExitStatus, 0), continue_result.status);
     try std.testing.expectEqualStrings("", continue_result.stdout);
 
-    var outside = try parseAndLower(std.testing.allocator, "break");
+    // POSIX.1-2024: break outside any enclosing loop is a silent no-op
+    // with status 0 and the shell keeps running.
+    var outside = try parseAndLower(std.testing.allocator, "break; echo after");
     defer outside.parsed.deinit();
     defer outside.program.deinit();
     var outside_result = try executor.executeProgram(outside.program, .{});
     defer outside_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), outside_result.status);
+    try std.testing.expectEqualStrings("after\n", outside_result.stdout);
     try std.testing.expectEqualStrings("", outside_result.stderr);
 }
 
