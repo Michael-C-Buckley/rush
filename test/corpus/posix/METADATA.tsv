@@ -241,6 +241,7 @@ builtin-eval-arguments	builtin	behavior	eval concatenates arguments and empty ev
 expansion-tilde-home	expansion	behavior	tilde expansion uses HOME for ~ and ~/path
 expansion-field-splitting-adjacent-nonwhitespace	expansion	behavior	adjacent non-whitespace IFS delimiters produce empty fields
 expansion-field-splitting-ifs-whitespace-trim	expansion	behavior	IFS whitespace trims leading and trailing delimiters
+expansion-field-splitting-mixed-ifs-whitespace	expansion	behavior	IFS whitespace adjacent to a non-whitespace IFS delimiter is part of one delimiter
 expansion-field-splitting-generated-empty	expansion	behavior	unquoted generated empty fields are removed while quoted empty fields remain
 lex-double-quote-backslash-specials	lexing	behavior	double-quote backslash handling preserves non-special backslashes and removes special escapes
 lex-escaped-newline-continuation	lexing	behavior	backslash-newline joins physical lines before token interpretation

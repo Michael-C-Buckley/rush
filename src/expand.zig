@@ -1173,10 +1173,14 @@ fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const 
         }
 
         if (isIfsWhitespace(ifs, c)) {
+            while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
+            // IFS white space adjacent to a non-whitespace IFS character is
+            // part of that single delimiter (POSIX XCU 2.6.5), handled by the
+            // non-whitespace branch below.
+            if (index < text.len and isIfsChar(ifs, text[index])) continue;
             if (current.items.len != 0) {
                 try fields.append(allocator, try current.toOwnedSlice(allocator));
             }
-            while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
             continue;
         }
 
@@ -1788,6 +1792,24 @@ test "field splitting honors custom and empty IFS" {
 
     try std.testing.expectEqual(@as(usize, 1), empty.fields.len);
     try std.testing.expectEqualStrings("a b c", empty.fields[0]);
+}
+
+fn testMixedIfsLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, name, "IFS")) return " :";
+    if (std.mem.eql(u8, name, "LIST")) return "a : b::c";
+    return testLookup(null, name);
+}
+
+test "field splitting absorbs whitespace adjacent to non-whitespace delimiters" {
+    const mixed_ifs_env: EnvLookup = .{ .lookupFn = testMixedIfsLookup };
+    var result = try expandWord(std.testing.allocator, "$LIST", .{ .env = mixed_ifs_env });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 4), result.fields.len);
+    try std.testing.expectEqualStrings("a", result.fields[0]);
+    try std.testing.expectEqualStrings("b", result.fields[1]);
+    try std.testing.expectEqualStrings("", result.fields[2]);
+    try std.testing.expectEqualStrings("c", result.fields[3]);
 }
 
 test "unquoted positional parameters split field-aware values" {
