@@ -9116,6 +9116,26 @@ test "executor executes POSIX if compound commands" {
     try std.testing.expectEqualStrings("elif\n", elif_result.stdout);
 }
 
+test "executor executes multi-line if compound commands" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\if true; then
+        \\  echo yes
+        \\else
+        \\  echo no
+        \\fi
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("yes\n", result.stdout);
+}
+
 test "executor expands nested command substitutions and arithmetic inside them" {
     var nested = try parseAndLower(std.testing.allocator, "echo $(echo $(echo hi))");
     defer nested.parsed.deinit();

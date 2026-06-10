@@ -783,8 +783,10 @@ fn isReservedPosition(parsed: parser.ParseResult, start: usize, token_index: usi
     while (index > start) {
         index -= 1;
         const token = parsed.tokens[index];
-        if (token.kind.isTrivia()) continue;
+        // Newlines are both trivia and list separators; check separators
+        // first so a reserved word at the start of a line is recognized.
         if (isListSeparatorToken(token.kind)) return true;
+        if (token.kind.isTrivia()) continue;
         const lexeme = if (token.kind == .word) token.lexeme(parsed.source) else "";
         return std.mem.eql(u8, lexeme, "then") or std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif") or std.mem.eql(u8, lexeme, "do") or std.mem.eql(u8, lexeme, "in");
     }
