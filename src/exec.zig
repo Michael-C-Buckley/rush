@@ -25,6 +25,10 @@ pub const ExitStatus = u8;
 pub const ExternalStdio = enum {
     capture,
     capture_stdout,
+    /// Externals write to the shell's stdout and stderr but read script
+    /// input, not the terminal. Used for the last stage of an interactive
+    /// pipeline, where stdin is the pipe but output belongs to the tty.
+    inherit_output,
     inherit,
 };
 
@@ -3442,6 +3446,7 @@ pub const Executor = struct {
         stdout_file: ?std.Io.File,
         stderr_file: ?std.Io.File,
         stage_index: usize,
+        stage_stdio: ExternalStdio = .capture,
         status: ExitStatus = 0,
         err: ?anyerror = null,
     };
@@ -3487,9 +3492,13 @@ pub const Executor = struct {
             try checkCanceled(options);
             const command = program.commands[command_index];
             const is_last = index + 1 == pipeline.command_indexes.len;
-            var stdin_file = if (index == 0) null else takeRead(&pipes[index - 1]);
-            var stdout_file = if (is_last) takeWrite(&capture_stdout) else takeWrite(&pipes[index]);
-            var stderr_file = if (is_last) takeWrite(&capture_stderr) else null;
+            // With inherited stdio the last stage writes to the shell's own
+            // stdout and stderr like other shells, so output streams and the
+            // stage sees a tty; capture only when the shell consumes it.
+            const inherit_output = options.external_stdio == .inherit;
+            var stdin_file: ?std.Io.File = if (index == 0) null else takeRead(&pipes[index - 1]);
+            var stdout_file: ?std.Io.File = if (!is_last) takeWrite(&pipes[index]) else if (inherit_output) try dupStdioFile(1) else takeWrite(&capture_stdout);
+            var stderr_file: ?std.Io.File = if (!is_last) null else if (inherit_output) try dupStdioFile(2) else takeWrite(&capture_stderr);
             self.applyPipelineStageRedirections(io, command, options, &stdin_file, &stdout_file, &stderr_file) catch |err| {
                 // A redirection error fails this stage with a diagnostic
                 // while the other pipeline stages still run (POSIX 2.8.1
@@ -3521,6 +3530,10 @@ pub const Executor = struct {
                     .stdout_file = stdout_file,
                     .stderr_file = stderr_file,
                     .stage_index = index,
+                    // The last interactive stage lets nested externals write
+                    // to the terminal directly so they see a tty, unless a
+                    // redirection retargeted the stage's output.
+                    .stage_stdio = if (is_last and inherit_output and command.redirections.len == 0) .inherit_output else .capture,
                 };
                 const thread = try std.Thread.spawn(.{}, runBuiltinPipelineStage, .{context});
                 try threads.append(self.allocator, thread);
@@ -3690,10 +3703,12 @@ pub const Executor = struct {
 
         // The stage's output must flow into its pipe or redirection target,
         // so externals nested under functions or the command builtin have
-        // to be captured rather than inherit the terminal. Routing the pipe
-        // input through script_stdin lets those nested commands read it.
+        // to be captured rather than inherit the terminal — except for the
+        // last interactive stage, where they write to the terminal directly.
+        // Routing the pipe input through script_stdin lets those nested
+        // commands read it in either mode.
         var stage_options = context.options;
-        stage_options.external_stdio = .capture;
+        stage_options.external_stdio = context.stage_stdio;
         const executor = context.executor;
         const prior_stdin = executor.script_stdin;
         const prior_stdin_offset = executor.script_stdin_offset;
@@ -3747,13 +3762,18 @@ pub const Executor = struct {
             var child_env = try self.buildProcessEnv(command.assignments);
             defer child_env.deinit();
 
+            // With inherited stdio the last stage owns the shell's stdout
+            // and stderr like other shells: output streams to the terminal
+            // and the stage sees a tty. Capture only when the shell consumes
+            // the output (command substitution, hidden refreshes, tests).
+            const inherit_output = options.external_stdio == .inherit;
             const is_last = index + 1 == pipeline.command_indexes.len;
             children[index] = std.process.spawn(io, .{
                 .argv = argv,
                 .environ_map = &child_env,
                 .stdin = if (previous_stdout) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
-                .stdout = .pipe,
-                .stderr = if (is_last) .pipe else .inherit,
+                .stdout = if (is_last and inherit_output) .inherit else .pipe,
+                .stderr = if (is_last and !inherit_output) .pipe else .inherit,
                 .pgid = if (foreground_terminal != null) (pipeline_pgrp orelse 0) else null,
             }) catch |err| switch (err) {
                 error.FileNotFound => {
@@ -3778,17 +3798,28 @@ pub const Executor = struct {
 
         if (pipeline_pgrp) |pgrp| try giveTerminalToForegroundPgrp(pgrp, foreground_terminal);
 
-        const last_child = &children[pipeline.command_indexes.len - 1];
-        var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
-        var multi_reader: std.Io.File.MultiReader = undefined;
-        multi_reader.init(self.allocator, io, multi_reader_buffer.toStreams(), &.{ last_child.stdout.?, last_child.stderr.? });
-        defer multi_reader.deinit();
+        var stdout_bytes: []u8 = try self.allocator.alloc(u8, 0);
+        errdefer self.allocator.free(stdout_bytes);
+        var stderr_bytes: []u8 = try self.allocator.alloc(u8, 0);
+        errdefer self.allocator.free(stderr_bytes);
 
-        while (multi_reader.fill(64, .none)) |_| {} else |err| switch (err) {
-            error.EndOfStream => {},
-            else => |e| return e,
+        const last_child = &children[pipeline.command_indexes.len - 1];
+        if (options.external_stdio != .inherit) {
+            var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+            var multi_reader: std.Io.File.MultiReader = undefined;
+            multi_reader.init(self.allocator, io, multi_reader_buffer.toStreams(), &.{ last_child.stdout.?, last_child.stderr.? });
+            defer multi_reader.deinit();
+
+            while (multi_reader.fill(64, .none)) |_| {} else |err| switch (err) {
+                error.EndOfStream => {},
+                else => |e| return e,
+            }
+            try multi_reader.checkAnyError();
+            self.allocator.free(stdout_bytes);
+            stdout_bytes = try multi_reader.toOwnedSlice(0);
+            self.allocator.free(stderr_bytes);
+            stderr_bytes = try multi_reader.toOwnedSlice(1);
         }
-        try multi_reader.checkAnyError();
 
         const statuses = try self.allocator.alloc(ExitStatus, spawned);
         defer self.allocator.free(statuses);
@@ -3800,8 +3831,8 @@ pub const Executor = struct {
         return .{
             .allocator = self.allocator,
             .status = self.pipelineStatus(pipeline, statuses),
-            .stdout = try multi_reader.toOwnedSlice(0),
-            .stderr = try multi_reader.toOwnedSlice(1),
+            .stdout = stdout_bytes,
+            .stderr = stderr_bytes,
         };
     }
 
@@ -5414,6 +5445,12 @@ fn filesFromPipeFds(fds: [2]std.posix.fd_t) Executor.PipelinePipe {
         .read = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
         .write = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
     };
+}
+
+/// Duplicates one of the shell's own stdio descriptors so a pipeline
+/// stage can write to it and close it independently.
+fn dupStdioFile(fd: std.posix.fd_t) !std.Io.File {
+    return .{ .handle = try rawDup(fd), .flags = .{ .nonblocking = false } };
 }
 
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
@@ -8821,7 +8858,7 @@ fn externalStdioCapturesStderr(stdio: ExternalStdio) bool {
 }
 
 fn externalStdinUsesScriptInput(stdio: ExternalStdio) bool {
-    return stdio == .capture or stdio == .capture_stdout;
+    return stdio == .capture or stdio == .capture_stdout or stdio == .inherit_output;
 }
 
 fn externalStdioInheritsStdin(stdio: ExternalStdio) bool {
@@ -9493,6 +9530,25 @@ test "mixed pipeline routes stdin and stdout through function and command stages
     defer command_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), command_result.status);
     try std.testing.expectEqualStrings("hi\n", command_result.stdout);
+}
+
+test "inherited pipeline applies last-stage redirection and returns no captured output" {
+    const path = "rush-inherit-pipe-redirect.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\f() { /bin/sh -c 'echo data'; }
+        \\f | command /bin/cat > rush-inherit-pipe-redirect.tmp
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("data\n", contents);
 }
 
 test "mixed pipeline applies output redirection on builtin and function stages" {
