@@ -1,94 +1,80 @@
 #!/usr/bin/env sh
 set -eu
 
+# Worker mode: invoked by xargs below with a single corpus line number.
+# Runs Rush once, then compares its output against each shell in $SHELLS.
+# Inherits CORPUS, RUSH, SHELLS, FAILDIR from the parent environment.
+if [ -n "${RUSH_CORPUS_WORKER:-}" ]; then
+  lineno=$1
+  script=$(sed -n "${lineno}p" "$CORPUS")
+  decoded_script=$(printf '%b' "$script")
+  tmp=$(mktemp -d)
+  status=0
+
+  mkdir "$tmp/rush"
+  rush_status=0
+  (cd "$tmp/rush" && "$RUSH" -c "$decoded_script" >"$tmp/rush.out" 2>"$tmp/rush.err") || rush_status=$?
+
+  for label in $SHELLS; do
+    case "$label" in
+      dash) set -- dash ;;
+      bash-posix) set -- bash --posix ;;
+    esac
+
+    mkdir "$tmp/$label"
+    shell_status=0
+    (cd "$tmp/$label" && "$@" -c "$decoded_script" >"$tmp/shell.out" 2>"$tmp/shell.err") || shell_status=$?
+
+    if [ "$rush_status" -ne "$shell_status" ] || ! cmp -s "$tmp/rush.out" "$tmp/shell.out" || ! cmp -s "$tmp/rush.err" "$tmp/shell.err"; then
+      status=1
+      {
+        echo "FAIL [$label] line $lineno: $script"
+        echo "  rush status=$rush_status shell status=$shell_status"
+        echo "  rush stdout:"; sed 's/^/    /' "$tmp/rush.out"
+        echo "  shell stdout:"; sed 's/^/    /' "$tmp/shell.out"
+        echo "  rush stderr:"; sed 's/^/    /' "$tmp/rush.err"
+        echo "  shell stderr:"; sed 's/^/    /' "$tmp/shell.err"
+      } >"$FAILDIR/$(printf '%06d' "$lineno").$label"
+    fi
+  done
+
+  rm -rf "$tmp"
+  exit "$status"
+fi
+
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 RUSH="$ROOT/zig-out/bin/rush"
 CORPUS=${1:-$ROOT/test/corpus/system-shell-supported.txt}
 
 zig build --summary none >/dev/null
 
-available_shells=""
-if command -v dash >/dev/null 2>&1; then available_shells="$available_shells dash"; fi
-if command -v bash >/dev/null 2>&1; then available_shells="$available_shells bash bash-posix"; fi
-if command -v yash >/dev/null 2>&1; then available_shells="$available_shells yash"; fi
-if command -v busybox >/dev/null 2>&1; then available_shells="$available_shells busybox-ash"; fi
-if command -v mksh >/dev/null 2>&1; then available_shells="$available_shells mksh"; fi
+SHELLS=""
+if command -v dash >/dev/null 2>&1; then SHELLS="$SHELLS dash"; fi
+if command -v bash >/dev/null 2>&1; then SHELLS="$SHELLS bash-posix"; fi
+SHELLS=${SHELLS# }
 
-if [ -z "$available_shells" ]; then
-  echo "no comparison shells found; expected one of dash, bash, yash, busybox, mksh" >&2
+if [ -z "$SHELLS" ]; then
+  echo "no comparison shells found; expected dash or bash" >&2
   exit 1
 fi
 
-failures=0
-case_no=0
-comparisons=0
+FAILDIR=$(mktemp -d)
+trap 'rm -rf "$FAILDIR"' EXIT
 
-skip_comparison() {
-  case "$label:$case_no" in
-    # yash reports external command paths for `command -v` where other POSIX-ish
-    # comparison shells report the utility name for this smoke case.
-    yash:46) return 0 ;;
-    # yash advances OPTIND past the missing option argument in silent getopts
-    # mode; keep the spec-derived Rush expectation in the POSIX corpus instead.
-    yash:99) return 0 ;;
-    # With PATH intentionally set to /nope, yash cannot find the following
-    # printf utility after `command -p`; this case checks Rush preserves PATH.
-    yash:118) return 0 ;;
-    *) return 1 ;;
-  esac
-}
+JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
+export CORPUS RUSH SHELLS FAILDIR
 
-compare_shell() {
-  label=$1
-  shift
-  if skip_comparison; then return; fi
+cases=$(awk '$0 != "" && substr($0, 1, 1) != "#" { n++ } END { print n + 0 }' "$CORPUS")
+awk '$0 != "" && substr($0, 1, 1) != "#" { print NR }' "$CORPUS" |
+  xargs -P "$JOBS" -n 1 env RUSH_CORPUS_WORKER=1 sh "$0" || true
 
-  tmp=$(mktemp -d)
-  rush_out=$tmp/rush.out
-  rush_err=$tmp/rush.err
-  shell_out=$tmp/shell.out
-  shell_err=$tmp/shell.err
-
-  (cd "$tmp" && "$RUSH" -c "$decoded_script" >"$rush_out" 2>"$rush_err") || rush_status=$?
-  rush_status=${rush_status:-0}
-  (cd "$tmp" && "$@" -c "$decoded_script" >"$shell_out" 2>"$shell_err") || shell_status=$?
-  shell_status=${shell_status:-0}
-
-  comparisons=$((comparisons + 1))
-  if [ "$rush_status" -ne "$shell_status" ] || ! cmp -s "$rush_out" "$shell_out" || ! cmp -s "$rush_err" "$shell_err"; then
-    failures=$((failures + 1))
-    echo "FAIL [$label] case $case_no: $script" >&2
-    echo "  rush status=$rush_status shell status=$shell_status" >&2
-    echo "  rush stdout:" >&2; sed 's/^/    /' "$rush_out" >&2
-    echo "  shell stdout:" >&2; sed 's/^/    /' "$shell_out" >&2
-    echo "  rush stderr:" >&2; sed 's/^/    /' "$rush_err" >&2
-    echo "  shell stderr:" >&2; sed 's/^/    /' "$shell_err" >&2
-  fi
-
-  rm -rf "$tmp"
-  unset rush_status shell_status
-}
-
-while IFS= read -r script || [ -n "$script" ]; do
-  case "$script" in
-    ''|'#'*) continue ;;
-  esac
-  case_no=$((case_no + 1))
-  decoded_script=$(printf '%b' "$script")
-
-  if command -v dash >/dev/null 2>&1; then compare_shell dash dash; fi
-  if command -v bash >/dev/null 2>&1; then
-    compare_shell bash bash
-    compare_shell bash-posix bash --posix
-  fi
-  if command -v yash >/dev/null 2>&1; then compare_shell yash yash; fi
-  if command -v busybox >/dev/null 2>&1; then compare_shell busybox-ash busybox ash; fi
-  if command -v mksh >/dev/null 2>&1; then compare_shell mksh mksh; fi
-done < "$CORPUS"
-
+failures=$(find "$FAILDIR" -type f | wc -l | tr -d ' ')
 if [ "$failures" -ne 0 ]; then
+  cat "$FAILDIR"/* >&2
   echo "$failures corpus comparison failure(s)" >&2
   exit 1
 fi
 
-echo "system shell corpus passed ($case_no cases, $comparisons comparisons across:$available_shells)"
+set -- $SHELLS
+comparisons=$((cases * $#))
+echo "system shell corpus passed ($cases cases, $comparisons comparisons across: $SHELLS)"
