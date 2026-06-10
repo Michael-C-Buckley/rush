@@ -5103,6 +5103,8 @@ pub const Executor = struct {
         defer if (stdout_file) |file| file.close(io);
         var stderr_file: ?std.Io.File = null;
         defer if (stderr_file) |file| file.close(io);
+        var stdout_closed = false;
+        var stderr_closed = false;
         var inherited_redirections = try FdRedirectionGuard.init(self.allocator, io);
         defer inherited_redirections.restore(self, io);
         var stdin_redirected = false;
@@ -5141,10 +5143,12 @@ pub const Executor = struct {
                     1 => {
                         if (stdout_file) |old| old.close(io);
                         stdout_file = file;
+                        stdout_closed = false;
                     },
                     2 => {
                         if (stderr_file) |old| old.close(io);
                         stderr_file = file;
+                        stderr_closed = false;
                     },
                     else => file.close(io),
                 }
@@ -5161,13 +5165,20 @@ pub const Executor = struct {
                     if (from_fd == 1) {
                         if (stdout_file) |old| old.close(io);
                         stdout_file = null;
+                        stdout_closed = true;
                     } else if (from_fd == 2) {
                         if (stderr_file) |old| old.close(io);
                         stderr_file = null;
+                        stderr_closed = true;
                     }
                     continue;
                 }
                 const to_fd = parseFd(target.text) orelse continue;
+                switch (from_fd) {
+                    1 => stdout_closed = false,
+                    2 => stderr_closed = false,
+                    else => {},
+                }
                 if (try duplicateExternalStdioFromFd(&stdout_file, &stderr_file, io, from_fd, to_fd)) continue;
                 if (from_fd == 2 and to_fd == 1 and stdout_file != null) {
                     if (stderr_file) |old| old.close(io);
@@ -5187,8 +5198,8 @@ pub const Executor = struct {
             .argv = argv,
             .environ_map = &child_env,
             .stdin = if (stdin_redirected or options.external_stdio == .inherit) .inherit else .close,
-            .stdout = if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
-            .stderr = if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+            .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+            .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             else => return err,
@@ -5276,6 +5287,8 @@ pub const Executor = struct {
         defer if (stdout_file) |file| file.close(io);
         var stderr_file: ?std.Io.File = null;
         defer if (stderr_file) |file| file.close(io);
+        var stdout_closed = false;
+        var stderr_closed = false;
         var inherited_redirections = try FdRedirectionGuard.init(self.allocator, io);
         defer inherited_redirections.restore(self, io);
         var manual_stdout_capture: ?PipelinePipe = null;
@@ -5313,10 +5326,12 @@ pub const Executor = struct {
                     1 => {
                         if (stdout_file) |old| old.close(io);
                         stdout_file = file;
+                        stdout_closed = false;
                     },
                     2 => {
                         if (stderr_file) |old| old.close(io);
                         stderr_file = file;
+                        stderr_closed = false;
                     },
                     else => file.close(io),
                 }
@@ -5333,22 +5348,42 @@ pub const Executor = struct {
                     if (from_fd == 1) {
                         if (stdout_file) |old| old.close(io);
                         stdout_file = null;
+                        stdout_closed = true;
                     } else if (from_fd == 2) {
                         if (stderr_file) |old| old.close(io);
                         stderr_file = null;
+                        stderr_closed = true;
                     }
                     continue;
                 }
                 const to_fd = parseFd(target.text) orelse continue;
+                switch (from_fd) {
+                    1 => stdout_closed = false,
+                    2 => stderr_closed = false,
+                    else => {},
+                }
                 if (try duplicateExternalStdioFromFd(&stdout_file, &stderr_file, io, from_fd, to_fd)) continue;
+                if (from_fd == 2 and to_fd == 1 and stdout_file == null and !stdout_closed and externalStdioCapturesStdout(options.external_stdio) and manual_stdout_capture == null) {
+                    manual_stdout_capture = try makePipelinePipe(io);
+                } else if (from_fd == 1 and to_fd == 2 and stderr_file == null and !stderr_closed and externalStdioCapturesStderr(options.external_stdio) and manual_stderr_capture == null) {
+                    manual_stderr_capture = try makePipelinePipe(io);
+                }
                 if (from_fd == 2 and to_fd == 1 and stdout_file != null) {
                     if (stderr_file) |old| old.close(io);
                     const duped = try rawDup(stdout_file.?.handle);
                     stderr_file = .{ .handle = duped, .flags = stdout_file.?.flags };
+                } else if (from_fd == 2 and to_fd == 1 and manual_stdout_capture != null) {
+                    if (stderr_file) |old| old.close(io);
+                    const duped = try rawDup(manual_stdout_capture.?.write.?.handle);
+                    stderr_file = .{ .handle = duped, .flags = manual_stdout_capture.?.write.?.flags };
                 } else if (from_fd == 1 and to_fd == 2 and stderr_file != null) {
                     if (stdout_file) |old| old.close(io);
                     const duped = try rawDup(stderr_file.?.handle);
                     stdout_file = .{ .handle = duped, .flags = stderr_file.?.flags };
+                } else if (from_fd == 1 and to_fd == 2 and manual_stderr_capture != null) {
+                    if (stdout_file) |old| old.close(io);
+                    const duped = try rawDup(manual_stderr_capture.?.write.?.handle);
+                    stdout_file = .{ .handle = duped, .flags = manual_stderr_capture.?.write.?.flags };
                 }
             }
         }
@@ -5362,10 +5397,10 @@ pub const Executor = struct {
 
         var child_env = try self.buildProcessEnv(command.assignments);
         defer child_env.deinit();
-        const final_stdout_captured = externalStdioCapturesStdout(options.external_stdio) and stdout_file == null;
+        const final_stdout_captured = !stdout_closed and externalStdioCapturesStdout(options.external_stdio) and stdout_file == null;
         const duplicate_stderr_to_stdout = final_stdout_captured and stderr_file == null and commandDuplicatesStderrToStdout(command.redirections);
         const capture_stdout_pipe = final_stdout_captured and manual_stdout_capture == null and !duplicate_stderr_to_stdout;
-        const final_stderr_captured = stderr_file == null and externalStdioCapturesStderr(options.external_stdio);
+        const final_stderr_captured = !stderr_closed and stderr_file == null and externalStdioCapturesStderr(options.external_stdio);
         const capture_stderr_pipe = final_stderr_captured and manual_stderr_capture == null and !duplicate_stderr_to_stdout;
         var merged_capture: ?PipelinePipe = if (duplicate_stderr_to_stdout and manual_stdout_capture == null) try makePipelinePipe(io) else null;
         defer if (merged_capture) |*pipe| pipe.close(io);
@@ -5376,8 +5411,8 @@ pub const Executor = struct {
             .argv = argv,
             .environ_map = &child_env,
             .stdin = if (stdin_redirected) .inherit else if (stdin_file) |file| .{ .file = file } else if (externalStdioInheritsStdin(options.external_stdio)) .inherit else .close,
-            .stdout = if (stdout_file) |file| .{ .file = file } else if (merged_capture) |pipe| .{ .file = pipe.write.? } else if (manual_stdout_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stdout_pipe) .pipe else .inherit,
-            .stderr = if (stderr_file) |file| .{ .file = file } else if (merged_stderr_write) |file| .{ .file = file } else if (duplicate_stderr_to_stdout) .{ .file = manual_stdout_capture.?.write.? } else if (manual_stderr_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stderr_pipe) .pipe else .inherit,
+            .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (merged_capture) |pipe| .{ .file = pipe.write.? } else if (manual_stdout_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stdout_pipe) .pipe else .inherit,
+            .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (merged_stderr_write) |file| .{ .file = file } else if (duplicate_stderr_to_stdout) .{ .file = manual_stdout_capture.?.write.? } else if (manual_stderr_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stderr_pipe) .pipe else .inherit,
             .pgid = if (foreground_terminal != null) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return error.CommandNotFound,
@@ -11328,6 +11363,66 @@ test "external command duplicates same-command arbitrary output fd to stdio" {
     const ordered_fd_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, ordered_fd_path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(ordered_fd_output);
     try std.testing.expectEqualStrings("fd3", ordered_fd_output);
+}
+
+test "captured external command close redirections close child stdio" {
+    const stdout_path = "rush-test-external-close-stdout.tmp";
+    const stderr_path = "rush-test-external-close-stderr.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stdout_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var stdout_closed = try executor.executeScriptSlice(
+        \\/bin/sh -c 'printf hidden 2>/dev/null' 1>&-
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer stdout_closed.deinit();
+
+    try std.testing.expect(stdout_closed.status != 0);
+    try std.testing.expectEqualStrings("", stdout_closed.stdout);
+    try std.testing.expectEqualStrings("", stdout_closed.stderr);
+
+    var stderr_closed = try executor.executeScriptSlice(
+        \\/bin/sh -c 'printf hidden >&2' 2>&-
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer stderr_closed.deinit();
+
+    try std.testing.expect(stderr_closed.status != 0);
+    try std.testing.expectEqualStrings("", stderr_closed.stdout);
+    try std.testing.expectEqualStrings("", stderr_closed.stderr);
+
+    var duplicated_before_close = try executor.executeScriptSlice(
+        \\/bin/sh -c 'printf err >&2' 2>&1 1>&-
+        \\/bin/sh -c 'printf out' 1>&2 2>&-
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer duplicated_before_close.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), duplicated_before_close.status);
+    try std.testing.expectEqualStrings("err", duplicated_before_close.stdout);
+    try std.testing.expectEqualStrings("out", duplicated_before_close.stderr);
+
+    var ordered = try executor.executeScriptSlice(
+        \\/bin/sh -c 'printf hidden 2>/dev/null' 1>rush-test-external-close-stdout.tmp 1>&-
+        \\/bin/sh -c 'printf file' 1>&- 1>rush-test-external-close-stdout.tmp
+        \\/bin/sh -c 'printf hidden >&2' 2>rush-test-external-close-stderr.tmp 2>&-
+        \\/bin/sh -c 'printf errfile >&2' 2>&- 2>rush-test-external-close-stderr.tmp
+        \\/usr/bin/printf visible
+        \\/bin/sh -c 'printf err >&2'
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer ordered.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), ordered.status);
+    try std.testing.expectEqualStrings("visible", ordered.stdout);
+    try std.testing.expectEqualStrings("err", ordered.stderr);
+
+    const stdout_file = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stdout_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(stdout_file);
+    try std.testing.expectEqualStrings("file", stdout_file);
+
+    const stderr_file = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(stderr_file);
+    try std.testing.expectEqualStrings("errfile", stderr_file);
 }
 
 test "executor short-circuits AND and OR lists" {

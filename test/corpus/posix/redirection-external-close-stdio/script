@@ -1,0 +1,7 @@
+/bin/sh -c 'printf hidden 2>/dev/null' 1>&-
+/bin/sh -c 'printf hidden >&2' 2>&-
+/bin/sh -c 'printf "file\n"' 1>&- 1>out
+/bin/sh -c 'printf "errfile\n" >&2' 2>&- 2>err
+printf 'after\n'
+/bin/cat out err
+printf 'err\n' >&2
