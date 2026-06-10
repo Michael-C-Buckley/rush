@@ -1,0 +1,90 @@
+# First-party Azure CLI completion slice.
+
+complete az --option --short h --long help --description 'show help'
+complete az --option --short v --long version --description 'show version'
+complete az --option --long subscription --value-name subscription --description 'Azure subscription'
+complete az --option-value --long subscription --function __rush_complete_az_subscriptions
+complete az --option --short o --long output --value-name format --description 'output format'
+complete az --option-value --short o --function __rush_complete_az_outputs
+complete az --option-value --long output --function __rush_complete_az_outputs
+complete az --subcommand account --description 'manage accounts'
+complete az --subcommand acr --description 'manage container registries'
+complete az --subcommand ad --description 'manage Entra ID resources'
+complete az --subcommand aks --description 'manage Kubernetes clusters'
+complete az --subcommand appservice --description 'manage app services'
+complete az --subcommand configure --description 'configure Azure CLI'
+complete az --subcommand group --description 'manage resource groups'
+complete az --subcommand keyvault --description 'manage key vaults'
+complete az --subcommand login --description 'log in to Azure'
+complete az --subcommand logout --description 'log out of Azure'
+complete az --subcommand storage --description 'manage storage'
+complete az --subcommand vm --description 'manage virtual machines'
+complete 'az account' --subcommand list --description 'list subscriptions'
+complete 'az account' --subcommand set --description 'set active subscription'
+complete 'az account set' --option --short s --long subscription --value-name subscription --description 'subscription name or id'
+complete 'az account set' --option-value --short s --function __rush_complete_az_subscriptions
+complete 'az account set' --option-value --long subscription --function __rush_complete_az_subscriptions
+complete 'az group' --subcommand create --description 'create resource group'
+complete 'az group' --subcommand delete --description 'delete resource group'
+complete 'az group' --subcommand list --description 'list resource groups'
+complete 'az group' --subcommand show --description 'show resource group'
+complete 'az group show' --option --short n --long name --value-name group --description 'resource group name'
+complete 'az group show' --option-value --short n --function __rush_complete_az_groups
+complete 'az group show' --option-value --long name --function __rush_complete_az_groups
+complete 'az group delete' --option --short n --long name --value-name group --description 'resource group name'
+complete 'az group delete' --option-value --short n --function __rush_complete_az_groups
+complete 'az group delete' --option-value --long name --function __rush_complete_az_groups
+complete 'az vm' --subcommand list --description 'list VMs'
+complete 'az vm' --subcommand show --description 'show VM'
+complete 'az vm' --subcommand start --description 'start VM'
+complete 'az vm' --subcommand stop --description 'stop VM'
+complete 'az vm' --subcommand deallocate --description 'deallocate VM'
+complete 'az vm' --subcommand ssh --description 'SSH to VM'
+complete 'az vm show' --option --short n --long name --value-name vm --description 'VM name'
+complete 'az vm show' --option-value --short n --function __rush_complete_az_vms
+complete 'az vm show' --option-value --long name --function __rush_complete_az_vms
+complete 'az vm start' --argument --function __rush_complete_az_vms
+complete 'az vm stop' --argument --function __rush_complete_az_vms
+complete 'az vm ssh' --argument --function __rush_complete_az_vms
+complete 'az aks' --subcommand get-credentials --description 'get cluster credentials'
+complete 'az aks' --subcommand list --description 'list AKS clusters'
+complete 'az aks' --subcommand show --description 'show AKS cluster'
+complete 'az aks get-credentials' --option --short n --long name --value-name cluster --description 'cluster name'
+complete 'az aks get-credentials' --option-value --short n --function __rush_complete_az_aks_clusters
+complete 'az aks get-credentials' --option-value --long name --function __rush_complete_az_aks_clusters
+complete 'az storage' --subcommand account --description 'manage storage accounts'
+complete 'az storage account' --subcommand list --description 'list storage accounts'
+complete 'az storage account' --subcommand show --description 'show storage account'
+complete 'az storage account show' --option --short n --long name --value-name account --description 'storage account name'
+complete 'az storage account show' --option-value --short n --function __rush_complete_az_storage_accounts
+complete 'az storage account show' --option-value --long name --function __rush_complete_az_storage_accounts
+
+__rush_complete_az_subscriptions() {
+  az account list --query '[].{name:name,id:id}' -o tsv 2>/dev/null | awk '{ print $1 "\n" $2 }' | while read sub; do test -n "$sub" && completion candidate "$sub" --kind plain; done
+}
+
+__rush_complete_az_groups() {
+  az group list --query '[].name' -o tsv 2>/dev/null | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+}
+
+__rush_complete_az_vms() {
+  az vm list --query '[].name' -o tsv 2>/dev/null | while read vm; do test -n "$vm" && completion candidate "$vm" --kind plain; done
+}
+
+__rush_complete_az_aks_clusters() {
+  az aks list --query '[].name' -o tsv 2>/dev/null | while read cluster; do test -n "$cluster" && completion candidate "$cluster" --kind plain; done
+}
+
+__rush_complete_az_storage_accounts() {
+  az storage account list --query '[].name' -o tsv 2>/dev/null | while read acct; do test -n "$acct" && completion candidate "$acct" --kind plain; done
+}
+
+__rush_complete_az_outputs() {
+  completion candidate json --kind plain
+  completion candidate jsonc --kind plain
+  completion candidate yaml --kind plain
+  completion candidate yamlc --kind plain
+  completion candidate table --kind plain
+  completion candidate tsv --kind plain
+  completion candidate none --kind plain
+}
