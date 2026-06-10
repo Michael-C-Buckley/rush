@@ -268,6 +268,7 @@ redirection-command-not-found-stderr	redirection	behavior	stderr redirection app
 builtin-wait-option-terminator	builtin	behavior	wait accepts option terminator before operands
 builtin-option-terminators	builtin	behavior	common builtins accept option terminator
 builtin-command-V-builtin	builtin	behavior	command -V describes shell builtins
+builtin-command-multiple-lookup	builtin	behavior	command -v and -V accept multiple command names
 builtin-printf-option-terminator	builtin	behavior	printf accepts option terminator before format operand
 builtin-unalias-option-terminator	builtin	behavior	unalias accepts option terminator before alias operands
 builtin-test-single-argument-string	builtin	behavior	test single argument string truthiness

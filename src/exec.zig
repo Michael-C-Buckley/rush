@@ -5519,6 +5519,7 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     if (command.argv.len > 2) return sourceUsageError(self, command.argv[0].text, 2, "arguments are not implemented yet");
     const contents = self.readSourceFile(io, command.argv[1].text) catch |err| switch (err) {
         error.FileNotFound => return sourceUsageError(self, command.argv[0].text, 1, "file not found"),
+        error.AccessDenied, error.PermissionDenied => return sourceUsageError(self, command.argv[0].text, 1, "permission denied"),
         else => |e| return e,
     };
     defer self.allocator.free(contents);
@@ -5553,8 +5554,7 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     }
     if (lookup_mode != .none) {
         if (index >= command.argv.len) return errorResult(self.allocator, 2, "command", "missing command name");
-        if (index + 1 != command.argv.len) return errorResult(self.allocator, 2, "command", "unsupported arguments");
-        return commandLookup(self, options, command.argv[index].text, use_default_path, lookup_mode);
+        return commandLookupMany(self, options, command.argv[index..], use_default_path, lookup_mode);
     }
     if (index >= command.argv.len) return emptyResult(self.allocator, 0);
     const nested = simpleCommandFromArgs(command, index);
@@ -5565,6 +5565,33 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
 }
 
 const CommandLookupMode = enum { none, terse, verbose };
+
+fn commandLookupMany(self: *Executor, options: ExecuteOptions, args: []const ir.WordRef, use_default_path: bool, mode: CommandLookupMode) !CommandResult {
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(self.allocator);
+
+    var status: ExitStatus = 0;
+    for (args) |arg| {
+        var result = try commandLookup(self, options, arg.text, use_default_path, mode);
+        defer result.deinit();
+        try stdout.appendSlice(self.allocator, result.stdout);
+        try stderr.appendSlice(self.allocator, result.stderr);
+        if (result.status != 0) status = result.status;
+    }
+
+    const stdout_slice = try stdout.toOwnedSlice(self.allocator);
+    errdefer self.allocator.free(stdout_slice);
+
+    return .{
+        .allocator = self.allocator,
+        .status = status,
+        .stdout = stdout_slice,
+        .stderr = try stderr.toOwnedSlice(self.allocator),
+    };
+}
 
 fn commandLookup(self: *Executor, options: ExecuteOptions, name: []const u8, use_default_path: bool, mode: CommandLookupMode) !CommandResult {
     if (builtinForName(self.*, name) != null) {
