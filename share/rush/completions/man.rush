@@ -1,0 +1,32 @@
+# First-party man completion slice.
+
+complete man --option --short h --long help --description 'show help'
+complete man --option --short V --long version --description 'show version'
+complete man --option --short k --long apropos --description 'search short descriptions'
+complete man --option --short f --long whatis --description 'show short descriptions'
+complete man --option --short a --long all --description 'show all matching pages'
+complete man --option --short w --long where --description 'print file locations'
+complete man --option --short M --long manpath --value-name path --description 'set manual search path'
+complete man --option-value --short M --function __rush_complete_man_directories
+complete man --option --short P --long pager --value-name pager --description 'pager program'
+complete man --option-value --short P --function __rush_complete_man_pagers
+complete man --argument --function __rush_complete_man_pages
+
+__rush_complete_man_pages() {
+  apropos . 2>/dev/null | sed 's/ .*//' | sort -u | while read page; do test -n "$page" && completion candidate "$page" --kind plain; done
+  completion candidate 1 --kind plain --description 'user commands section'
+  completion candidate 2 --kind plain --description 'system calls section'
+  completion candidate 3 --kind plain --description 'library calls section'
+  completion candidate 5 --kind plain --description 'file formats section'
+  completion candidate 8 --kind plain --description 'admin commands section'
+}
+
+__rush_complete_man_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_man_pagers() {
+  completion candidate less --kind plain
+  completion candidate more --kind plain
+  completion candidate bat --kind plain
+}

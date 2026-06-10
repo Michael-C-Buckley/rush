@@ -1,0 +1,33 @@
+# First-party pkill completion slice.
+
+complete pkill --option --short h --long help --description 'show help'
+complete pkill --option --short V --long version --description 'show version'
+complete pkill --option --short signal --value-name signal --description 'signal to send'
+complete pkill --option-value --short signal --function __rush_complete_pkill_signals
+complete pkill --option --short f --long full --description 'match full command line'
+complete pkill --option --short i --long ignore-case --description 'match case-insensitively'
+complete pkill --option --short n --long newest --description 'select newest matching process'
+complete pkill --option --short o --long oldest --description 'select oldest matching process'
+complete pkill --option --short u --long euid --value-name user --description 'match effective user'
+complete pkill --option-value --short u --function __rush_complete_pkill_users
+complete pkill --option-value --long euid --function __rush_complete_pkill_users
+complete pkill --option --short U --long uid --value-name user --description 'match real user'
+complete pkill --option-value --short U --function __rush_complete_pkill_users
+complete pkill --argument --function __rush_complete_pkill_processes
+
+__rush_complete_pkill_processes() {
+  ps -axo comm= 2>/dev/null | sort -u | while read comm; do test -n "$comm" && completion candidate "$comm" --kind plain; done
+}
+
+__rush_complete_pkill_users() {
+  ps -axo user= 2>/dev/null | sort -u | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+  id -un 2>/dev/null | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+}
+
+__rush_complete_pkill_signals() {
+  kill -l 2>/dev/null | tr ' ' '\n' | sed 's/^SIG//' | while read sig; do test -n "$sig" && completion candidate "$sig" --kind plain; done
+  completion candidate TERM --kind plain
+  completion candidate KILL --kind plain
+  completion candidate HUP --kind plain
+  completion candidate INT --kind plain
+}

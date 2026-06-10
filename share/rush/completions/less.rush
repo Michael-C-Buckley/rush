@@ -1,0 +1,21 @@
+# First-party less completion slice.
+
+complete less --option --short h --long help --description 'show help'
+complete less --option --short V --long version --description 'show version'
+complete less --option --short N --long LINE-NUMBERS --description 'show line numbers'
+complete less --option --short S --long chop-long-lines --description 'chop long lines'
+complete less --option --short R --long RAW-CONTROL-CHARS --description 'output raw ANSI color escape sequences'
+complete less --option --short F --long quit-if-one-screen --description 'quit if content fits on one screen'
+complete less --option --short X --long no-init --description 'do not use terminal init/deinit strings'
+complete less --option --short i --long ignore-case --description 'ignore case in searches'
+complete less --option --short I --long IGNORE-CASE --description 'ignore case even if pattern has uppercase'
+complete less --option --short m --long long-prompt --description 'show verbose prompt'
+complete less --option --short M --long LONG-PROMPT --description 'show more verbose prompt'
+complete less --option --short j --long jump-target --value-name line --description 'target line for searches'
+complete less --option --short P --long prompt --value-name prompt --description 'set prompt'
+complete less --argument --function __rush_complete_less_files
+
+__rush_complete_less_files() {
+  completion files
+  completion directories --append-slash
+}

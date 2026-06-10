@@ -1,0 +1,55 @@
+# First-party ps completion slice.
+
+complete ps --option --short h --long help --description 'show help'
+complete ps --option --long version --description 'show version'
+complete ps --option --short A --long everyone --description 'select all processes'
+complete ps --option --short e --description 'select all processes'
+complete ps --option --short a --description 'select processes with a terminal'
+complete ps --option --short x --description 'select processes without controlling terminals'
+complete ps --option --short u --description 'user-oriented format'
+complete ps --option --short f --description 'full-format listing'
+complete ps --option --short l --description 'long format'
+complete ps --option --short p --long pid --value-name pid --description 'select by process ID'
+complete ps --option-value --short p --function __rush_complete_ps_pids
+complete ps --option-value --long pid --function __rush_complete_ps_pids
+complete ps --option --short U --long User --value-name user --description 'select by real user ID or name'
+complete ps --option-value --short U --function __rush_complete_ps_users
+complete ps --option --short u --long user --value-name user --description 'select by effective user ID or name'
+complete ps --option-value --long user --function __rush_complete_ps_users
+complete ps --option --short o --long format --value-name format --description 'user-defined output format'
+complete ps --option-value --short o --function __rush_complete_ps_formats
+complete ps --option-value --long format --function __rush_complete_ps_formats
+complete ps --option --long sort --value-name spec --description 'sort by field'
+complete ps --option-value --long sort --function __rush_complete_ps_sort_fields
+
+__rush_complete_ps_pids() {
+  ps -axo pid=,comm= 2>/dev/null | while read pid comm; do test -n "$pid" && completion candidate "$pid" --kind plain --description "$comm"; done
+}
+
+__rush_complete_ps_users() {
+  ps -axo user= 2>/dev/null | sort -u | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+  id -un 2>/dev/null | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+}
+
+__rush_complete_ps_formats() {
+  completion candidate pid --kind plain
+  completion candidate ppid --kind plain
+  completion candidate user --kind plain
+  completion candidate comm --kind plain
+  completion candidate command --kind plain
+  completion candidate pcpu --kind plain
+  completion candidate pmem --kind plain
+  completion candidate stat --kind plain
+  completion candidate start --kind plain
+  completion candidate time --kind plain
+}
+
+__rush_complete_ps_sort_fields() {
+  completion candidate pid --kind plain
+  completion candidate -pid --kind plain
+  completion candidate pcpu --kind plain
+  completion candidate -pcpu --kind plain
+  completion candidate pmem --kind plain
+  completion candidate -pmem --kind plain
+  completion candidate start --kind plain
+}

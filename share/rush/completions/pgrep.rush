@@ -1,0 +1,25 @@
+# First-party pgrep completion slice.
+
+complete pgrep --option --short h --long help --description 'show help'
+complete pgrep --option --short V --long version --description 'show version'
+complete pgrep --option --short f --long full --description 'match full command line'
+complete pgrep --option --short i --long ignore-case --description 'match case-insensitively'
+complete pgrep --option --short l --long list-name --description 'list PID and process name'
+complete pgrep --option --short a --long list-full --description 'list PID and full command line'
+complete pgrep --option --short n --long newest --description 'select newest matching process'
+complete pgrep --option --short o --long oldest --description 'select oldest matching process'
+complete pgrep --option --short u --long euid --value-name user --description 'match effective user'
+complete pgrep --option-value --short u --function __rush_complete_pgrep_users
+complete pgrep --option-value --long euid --function __rush_complete_pgrep_users
+complete pgrep --option --short U --long uid --value-name user --description 'match real user'
+complete pgrep --option-value --short U --function __rush_complete_pgrep_users
+complete pgrep --argument --function __rush_complete_pgrep_processes
+
+__rush_complete_pgrep_processes() {
+  ps -axo comm= 2>/dev/null | sort -u | while read comm; do test -n "$comm" && completion candidate "$comm" --kind plain; done
+}
+
+__rush_complete_pgrep_users() {
+  ps -axo user= 2>/dev/null | sort -u | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+  id -un 2>/dev/null | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+}
