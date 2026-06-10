@@ -543,7 +543,7 @@ pub const TerminalSession = struct {
 
         try writeTtyAll(&self.tty, semanticCommandStart);
         try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
-        try self.reader.arm();
+        self.reader.arm();
         var next_prompt_refresh_ms: ?u64 = if (options.prompt_refresh_interval_ms) |interval_ms| nowMs(self.io) + interval_ms else null;
         var next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
         while (session.state == .editing or session.state == .history_search) {
@@ -649,7 +649,7 @@ pub const TerminalSession = struct {
                     }
                     try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
                 }
-                try self.reader.arm();
+                self.reader.arm();
             }
         }
 
@@ -1011,10 +1011,13 @@ pub const OneShotReader = struct {
         self.* = undefined;
     }
 
-    pub fn arm(self: *OneShotReader) !void {
+    /// Ensure a read is pending. A no-op when a read is already armed,
+    /// in flight, or has produced data that has not been taken yet, so
+    /// callers woken by unrelated events can arm unconditionally.
+    pub fn arm(self: *OneShotReader) void {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        if (self.state != .idle) return error.ReadAlreadyPending;
+        if (self.state != .idle) return;
         self.bytes.clearRetainingCapacity();
         self.err = null;
         self.state = .armed;
@@ -1397,7 +1400,7 @@ test "one-shot reader reads only after it is armed" {
     defer reader.deinit();
     try reader.start();
 
-    try reader.arm();
+    reader.arm();
     try rawWriteAll(input.write.handle, "abc");
 
     var wake_buffer: [8]u8 = undefined;
@@ -1408,7 +1411,7 @@ test "one-shot reader reads only after it is armed" {
     try std.testing.expectEqualStrings("abc", bytes);
 }
 
-test "one-shot reader rejects overlapping arms" {
+test "one-shot reader treats overlapping arms as no-ops" {
     var input = try makePipe(std.testing.io);
     defer input.write.close(std.testing.io);
     var wake = try makePipe(std.testing.io);
@@ -1418,10 +1421,11 @@ test "one-shot reader rejects overlapping arms" {
     defer reader.deinit();
     try reader.start();
 
-    try reader.arm();
-    try std.testing.expectError(error.ReadAlreadyPending, reader.arm());
+    reader.arm();
+    reader.arm();
     try rawWriteAll(input.write.handle, "x");
     var wake_buffer: [8]u8 = undefined;
     _ = try readAllFromFile(std.testing.io, wake.read, &wake_buffer);
-    _ = try reader.takeReady();
+    const bytes = try reader.takeReady();
+    try std.testing.expectEqualStrings("x", bytes);
 }
