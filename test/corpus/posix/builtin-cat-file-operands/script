@@ -1,3 +1,0 @@
-echo one > one
-echo two > two
-echo stdin | cat one - two

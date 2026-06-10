@@ -275,7 +275,6 @@ const builtin_names = [_][]const u8{
     "true",
     "false",
     "echo",
-    "cat",
     "command",
     "complete",
     "continue",
@@ -5498,7 +5497,6 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "true")) return builtinTrue;
     if (std.mem.eql(u8, name, "false")) return builtinFalse;
     if (std.mem.eql(u8, name, "echo")) return builtinEcho;
-    if (std.mem.eql(u8, name, "cat")) return builtinCat;
     if (std.mem.eql(u8, name, "command")) return builtinCommand;
     if (std.mem.eql(u8, name, "complete")) return builtinComplete;
     if (std.mem.eql(u8, name, "continue")) return builtinContinue;
@@ -6566,51 +6564,6 @@ fn readInputFromSlice(stdin: []const u8) ReadInput {
 fn trimReadCarriageReturn(line: []const u8) []const u8 {
     if (line.len > 0 and line[line.len - 1] == '\r') return line[0 .. line.len - 1];
     return line;
-}
-
-fn builtinCat(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    const input = catInput(self, stdin);
-    if (command.argv.len == 1) {
-        return .{
-            .allocator = self.allocator,
-            .status = 0,
-            .stdout = try self.allocator.dupe(u8, input),
-            .stderr = try self.allocator.alloc(u8, 0),
-        };
-    }
-
-    const io = options.io orelse return error.MissingIoForBuiltin;
-    var stdout: std.ArrayList(u8) = .empty;
-    errdefer stdout.deinit(self.allocator);
-    for (command.argv[1..]) |arg| {
-        if (std.mem.eql(u8, arg.text, "-")) {
-            try stdout.appendSlice(self.allocator, input);
-            continue;
-        }
-        const contents = std.Io.Dir.cwd().readFileAlloc(io, arg.text, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
-            error.FileNotFound => return errorResult(self.allocator, 1, arg.text, "not found"),
-            error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 1, arg.text, "permission denied"),
-            error.IsDir => return errorResult(self.allocator, 1, arg.text, "is a directory"),
-            else => return err,
-        };
-        defer self.allocator.free(contents);
-        try stdout.appendSlice(self.allocator, contents);
-    }
-    return .{
-        .allocator = self.allocator,
-        .status = 0,
-        .stdout = try stdout.toOwnedSlice(self.allocator),
-        .stderr = try self.allocator.alloc(u8, 0),
-    };
-}
-
-fn catInput(self: *Executor, stdin: []const u8) []const u8 {
-    if (stdin.len != 0) return stdin;
-    const script_stdin = self.script_stdin orelse return stdin;
-    if (self.script_stdin_offset >= script_stdin.len) return stdin;
-    const remaining = script_stdin[self.script_stdin_offset..];
-    self.script_stdin_offset = script_stdin.len;
-    return remaining;
 }
 
 const PrintfSpec = struct {
@@ -9757,7 +9710,7 @@ test "executor short-circuits AND and OR lists" {
 }
 
 test "executor pipes stdout into stdin-consuming builtins" {
-    var lowered = try parseAndLower(std.testing.allocator, "echo hello | cat");
+    var lowered = try parseAndLower(std.testing.allocator, "echo hello | read x; echo \"got:$x\"");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -9768,29 +9721,7 @@ test "executor pipes stdout into stdin-consuming builtins" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("hello\n", result.stdout);
-}
-
-test "executor reads cat file operands" {
-    const first_path = "rush-cat-first.tmp";
-    const second_path = "rush-cat-second.tmp";
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = first_path, .data = "one\n" });
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = second_path, .data = "two\n" });
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, first_path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, second_path) catch {};
-
-    var lowered = try parseAndLower(std.testing.allocator, "echo stdin | cat rush-cat-first.tmp - rush-cat-second.tmp");
-    defer lowered.parsed.deinit();
-    defer lowered.program.deinit();
-
-    var executor = Executor.init(std.testing.allocator);
-    defer executor.deinit();
-
-    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
-    defer result.deinit();
-
-    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("one\nstdin\ntwo\n", result.stdout);
+    try std.testing.expectEqualStrings("got:hello\n", result.stdout);
 }
 
 test "executor redirects stdin from files for builtins" {
@@ -9798,7 +9729,7 @@ test "executor redirects stdin from files for builtins" {
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "from file" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
-    var lowered = try parseAndLower(std.testing.allocator, "cat < rush-test-stdin-redirection.tmp");
+    var lowered = try parseAndLower(std.testing.allocator, "read x < rush-test-stdin-redirection.tmp; echo \"$x\"");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -9809,7 +9740,7 @@ test "executor redirects stdin from files for builtins" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("from file", result.stdout);
+    try std.testing.expectEqualStrings("from file\n", result.stdout);
 }
 
 test "executor redirects stdout to files" {
@@ -10143,7 +10074,7 @@ test "executor reports parameter error expansion diagnostics" {
 test "executor runs builtin async jobs as waitable children" {
     const path = "rush-builtin-async-job.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    var lowered = try parseAndLower(std.testing.allocator, "echo bg > rush-builtin-async-job.tmp & wait $!; cat < rush-builtin-async-job.tmp");
+    var lowered = try parseAndLower(std.testing.allocator, "echo bg > rush-builtin-async-job.tmp & wait $!; /bin/cat < rush-builtin-async-job.tmp");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -10159,7 +10090,7 @@ test "executor runs builtin async jobs as waitable children" {
 test "executor runs compound async jobs as waitable children" {
     const path = "rush-compound-async-job.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    var lowered = try parseAndLower(std.testing.allocator, "{ echo compound > rush-compound-async-job.tmp; } & wait $!; cat < rush-compound-async-job.tmp");
+    var lowered = try parseAndLower(std.testing.allocator, "{ echo compound > rush-compound-async-job.tmp; } & wait $!; /bin/cat < rush-compound-async-job.tmp");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -10408,9 +10339,10 @@ test "executor materializes here-docs without fixed temp filename" {
     try writeBytesToFile(std.testing.io, sentinel, "sentinel");
 
     var lowered = try parseAndLower(std.testing.allocator,
-        \\cat <<EOF
+        \\read x <<EOF
         \\body
         \\EOF
+        \\echo "$x"
     );
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
@@ -10427,9 +10359,10 @@ test "executor materializes here-docs without fixed temp filename" {
 
 test "executor supports here-doc stdin redirections" {
     var simple = try parseAndLower(std.testing.allocator,
-        \\cat <<EOF
+        \\read x <<EOF
         \\hello
         \\EOF
+        \\echo "$x"
     );
     defer simple.parsed.deinit();
     defer simple.program.deinit();
@@ -10442,7 +10375,7 @@ test "executor supports here-doc stdin redirections" {
     try std.testing.expectEqual(@as(ExitStatus, 0), simple_result.status);
     try std.testing.expectEqualStrings("hello\n", simple_result.stdout);
 
-    var stripped = try parseAndLower(std.testing.allocator, "cat <<-EOF\n\tstripped\n\tEOF\n");
+    var stripped = try parseAndLower(std.testing.allocator, "read x <<-EOF\n\tstripped\n\tEOF\necho \"$x\"\n");
     defer stripped.parsed.deinit();
     defer stripped.program.deinit();
     var stripped_result = try executor.executeProgram(stripped.program, .{ .io = std.testing.io });
@@ -10450,7 +10383,7 @@ test "executor supports here-doc stdin redirections" {
     try std.testing.expectEqualStrings("stripped\n", stripped_result.stdout);
 
     var piped = try parseAndLower(std.testing.allocator,
-        \\cat <<EOF | /bin/cat
+        \\/bin/cat <<EOF | /bin/cat
         \\pipe
         \\EOF
     );
@@ -10461,11 +10394,12 @@ test "executor supports here-doc stdin redirections" {
     try std.testing.expectEqualStrings("pipe\n", piped_result.stdout);
 
     var multiple = try parseAndLower(std.testing.allocator,
-        \\cat <<FIRST <<SECOND
+        \\read x <<FIRST <<SECOND
         \\first body
         \\FIRST
         \\second body
         \\SECOND
+        \\echo "$x"
     );
     defer multiple.parsed.deinit();
     defer multiple.program.deinit();
@@ -10474,11 +10408,12 @@ test "executor supports here-doc stdin redirections" {
     try std.testing.expectEqualStrings("second body\n", multiple_result.stdout);
 
     var pipeline_multiple = try parseAndLower(std.testing.allocator,
-        \\cat <<LEFT | cat <<RIGHT
+        \\read x <<LEFT | read y <<RIGHT
         \\left body
         \\LEFT
         \\right body
         \\RIGHT
+        \\echo "$y"
     );
     defer pipeline_multiple.parsed.deinit();
     defer pipeline_multiple.program.deinit();
@@ -10488,9 +10423,10 @@ test "executor supports here-doc stdin redirections" {
 
     try executor.setEnv("HD_VALUE", "expanded");
     var expanded = try parseAndLower(std.testing.allocator,
-        \\cat <<EOF
+        \\read x <<EOF
         \\$HD_VALUE $(echo command) $((1 + 2))
         \\EOF
+        \\echo "$x"
     );
     defer expanded.parsed.deinit();
     defer expanded.program.deinit();
@@ -10499,9 +10435,10 @@ test "executor supports here-doc stdin redirections" {
     try std.testing.expectEqualStrings("expanded command 3\n", expanded_result.stdout);
 
     var quoted = try parseAndLower(std.testing.allocator,
-        \\cat <<'EOF'
+        \\read -r x <<'EOF'
         \\$HD_VALUE $(echo command) $((1 + 2))
         \\EOF
+        \\echo "$x"
     );
     defer quoted.parsed.deinit();
     defer quoted.program.deinit();
@@ -10511,7 +10448,7 @@ test "executor supports here-doc stdin redirections" {
 }
 
 test "executor cleans up pipelines when a stage command is missing" {
-    var mixed_first = try parseAndLower(std.testing.allocator, "hi | cat");
+    var mixed_first = try parseAndLower(std.testing.allocator, "hi | true");
     defer mixed_first.parsed.deinit();
     defer mixed_first.program.deinit();
     var executor = Executor.init(std.testing.allocator);
@@ -10541,7 +10478,7 @@ test "executor cleans up pipelines when a stage command is missing" {
 test "executor supports real redirections on pipeline stages" {
     const first_path = "rush-pipeline-stage-first.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, first_path) catch {};
-    var first = try parseAndLower(std.testing.allocator, "echo hidden > rush-pipeline-stage-first.tmp | cat");
+    var first = try parseAndLower(std.testing.allocator, "echo hidden > rush-pipeline-stage-first.tmp | /bin/cat");
     defer first.parsed.deinit();
     defer first.program.deinit();
 
@@ -10558,7 +10495,7 @@ test "executor supports real redirections on pipeline stages" {
 
     const last_path = "rush-pipeline-stage-last.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, last_path) catch {};
-    var last = try parseAndLower(std.testing.allocator, "/usr/bin/printf visible | cat > rush-pipeline-stage-last.tmp");
+    var last = try parseAndLower(std.testing.allocator, "/usr/bin/printf visible | /bin/cat > rush-pipeline-stage-last.tmp");
     defer last.parsed.deinit();
     defer last.program.deinit();
     var last_result = try executor.executeProgram(last.program, .{ .io = std.testing.io, .allow_external = true });
@@ -10571,7 +10508,7 @@ test "executor supports real redirections on pipeline stages" {
     const input_path = "rush-pipeline-stage-input.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = "from-input" });
-    var input = try parseAndLower(std.testing.allocator, "cat < rush-pipeline-stage-input.tmp | /bin/cat");
+    var input = try parseAndLower(std.testing.allocator, "/bin/cat < rush-pipeline-stage-input.tmp | /bin/cat");
     defer input.parsed.deinit();
     defer input.program.deinit();
     var input_result = try executor.executeProgram(input.program, .{ .io = std.testing.io, .allow_external = true });
@@ -10592,14 +10529,14 @@ test "executor supports mixed builtin and external pipeline stages" {
     try std.testing.expectEqual(@as(ExitStatus, 0), builtin_to_external_result.status);
     try std.testing.expectEqualStrings("hello\n", builtin_to_external_result.stdout);
 
-    var external_to_builtin = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | cat");
+    var external_to_builtin = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | read x; echo \"got:$x\"");
     defer external_to_builtin.parsed.deinit();
     defer external_to_builtin.program.deinit();
 
     var external_to_builtin_result = try executor.executeProgram(external_to_builtin.program, .{ .io = std.testing.io, .allow_external = true });
     defer external_to_builtin_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), external_to_builtin_result.status);
-    try std.testing.expectEqualStrings("hello", external_to_builtin_result.stdout);
+    try std.testing.expectEqualStrings("got:hello\n", external_to_builtin_result.stdout);
 
     var external_status = try parseAndLower(std.testing.allocator, "true | /bin/sh -c 'exit 7'");
     defer external_status.parsed.deinit();

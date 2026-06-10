@@ -28,7 +28,6 @@ bg-current-job	job_control	job	bg reports the current tracked background job
 brace-group-current-env	grammar	behavior	-
 brace-group-real-fd-redirection	grammar	behavior	-
 builtin-alias-list	builtin	builtin	-
-builtin-cat-file-operands	builtin	builtin	-
 builtin-colon-special-assignment	builtin	builtin	-
 builtin-command	builtin	builtin	-
 builtin-command-default-path	builtin	builtin	-

@@ -266,7 +266,6 @@ Implemented or partially implemented:
 - `pwd`
 - `return`
 - `echo`
-- `cat` baseline helper
 - `false`
 - `true`
 - `export`
@@ -302,7 +301,6 @@ Implemented or partially implemented:
 - `exec` is not a true process replacement.
 - `trap` does not yet install real signal handlers beyond `EXIT` execution.
 - `alias`/`unalias` have baseline parser integration but not full POSIX recursive/timing edge cases.
-- `cat` is a helper builtin for tests/pipelines, not a POSIX shell builtin requirement.
 
 ## 7. Shell options and modes
 

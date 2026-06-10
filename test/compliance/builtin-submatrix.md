@@ -46,7 +46,6 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
 | `alias`, `unalias` | `builtin-alias`, `builtin-unalias-all`, `builtin-alias-usage-errors`, alias lexing rows | list, remove, unalias -a, invalid-name/not-found diagnostics, reserved-word/function-name protection | recursive substitution timing, trailing-space rules |
-| `cat` | `builtin-cat-helper` | stdin, `-`, file operands | POSIX utility options are intentionally not a shell-conformance focus |
 | `cd`, `pwd` | `builtin-cd-pwd`, `builtin-cd-logical-physical`, `builtin-cd-logical-dotdot`, `builtin-cd-usage-errors`, `builtin-pwd-logical-physical`, `builtin-pwd-usage-errors`, `vars-pwd` | logical PWD/OLDPWD, CDPATH, cd -, cd -L/-P, logical symlink dot-dot, pwd -L/-P, and cd/pwd usage diagnostics | deeper cd path diagnostics |
 | `command` | `builtin-command`, `builtin-command-multiple-lookup`, `builtin-command-function-suppression`, `builtin-command-option-terminator`, `builtin-command-usage-errors` | `-p`, `-v`, `-V`, multiple lookup operands, `--`, function lookup suppression, option and lookup operand diagnostics | edge cases around special builtins, utilities, PATH errors |
 | `env` | `builtin-env`, `builtin-env-option-terminator`, `builtin-env-usage-errors` | `-i`, `--`, assignments, command execution, printing, invalid option and command-not-found diagnostics | additional command propagation edge cases |
