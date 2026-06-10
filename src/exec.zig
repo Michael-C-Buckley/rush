@@ -5060,9 +5060,12 @@ pub const Executor = struct {
     }
 
     fn resolveExternalArgv0(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !?[]const u8 {
-        if (!options.default_path_lookup) return null;
         if (std.mem.indexOfScalar(u8, command.argv[0].text, '/') != null) return null;
-        return try self.findExecutableInDefaultPath(io, command.argv[0].text) orelse return error.CommandNotFound;
+        const executable = if (options.default_path_lookup)
+            try self.findExecutableInDefaultPath(io, command.argv[0].text)
+        else
+            try self.findExecutableInPath(io, command.argv[0].text);
+        return executable orelse error.CommandNotFound;
     }
 };
 
@@ -10516,6 +10519,26 @@ test "executor passes shell environment and command assignments to external comm
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("FOO=inner\n", result.stdout);
     try std.testing.expectEqualStrings("outer", executor.getEnv("FOO").?);
+}
+
+test "executor resolves external commands from shell PATH" {
+    const root = "rush-external-path-command-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
+    try std.Io.Dir.cwd().symLink(std.testing.io, "/bin/sh", "rush-external-path-command-test/rush-path-shell", .{});
+
+    var lowered = try parseAndLower(std.testing.allocator, "rush-path-shell -c 'printf %s ok'");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", root);
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("ok", result.stdout);
 }
 
 test "executor applies assignment-only commands to shell environment" {
