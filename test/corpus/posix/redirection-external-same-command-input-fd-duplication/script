@@ -1,0 +1,2 @@
+printf 'via3\n' >in
+/bin/cat 3<in 0<&3

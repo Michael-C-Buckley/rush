@@ -2557,14 +2557,33 @@ pub const Executor = struct {
 
     // POSIX 2.7.5/2.7.6: [n]<&word and [n]>&word must fail when word names a
     // file descriptor that is not open, for external commands as well as
-    // builtins.
+    // builtins. Redirections are processed left-to-right, so validation must
+    // include earlier redirections from this same command.
     fn validateFdDuplicationTargets(self: Executor, redirections: []const ir.Redirection) !void {
+        var open_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, void) = .empty;
+        defer open_fds.deinit(self.allocator);
+
+        try open_fds.put(self.allocator, 0, {});
+        try open_fds.put(self.allocator, 1, {});
+        try open_fds.put(self.allocator, 2, {});
+        var shell_fd_iter = self.open_fds.iterator();
+        while (shell_fd_iter.next()) |entry| try open_fds.put(self.allocator, entry.key_ptr.*, {});
+
         for (redirections) |redirection| {
-            if (redirection.operator != .greater_and and redirection.operator != .less_and) continue;
-            const target = redirection.target orelse continue;
-            if (std.mem.eql(u8, target.text, "-")) continue;
-            const to_fd = parseFd(target.text) orelse continue;
-            if (!self.isShellFdOpen(to_fd)) return error.BadFileDescriptor;
+            if (redirection.operator == .greater_and or redirection.operator == .less_and) {
+                const default_fd: std.posix.fd_t = if (redirection.operator == .less_and) 0 else 1;
+                const from_fd = redirectionFd(redirection) orelse default_fd;
+                const target = redirection.target orelse continue;
+                if (std.mem.eql(u8, target.text, "-")) {
+                    _ = open_fds.remove(from_fd);
+                    continue;
+                }
+                const to_fd = parseFd(target.text) orelse continue;
+                if (!open_fds.contains(to_fd)) return error.BadFileDescriptor;
+                try open_fds.put(self.allocator, from_fd, {});
+                continue;
+            }
+            if (redirectionOpensFd(redirection)) |fd| try open_fds.put(self.allocator, fd, {});
         }
     }
 
@@ -4801,28 +4820,25 @@ pub const Executor = struct {
         defer if (resolved_executable) |executable| self.allocator.free(executable);
         if (resolved_executable) |executable| argv[0] = executable;
 
-        var stdin_file: ?std.Io.File = null;
-        defer if (stdin_file) |file| file.close(io);
         var stdout_file: ?std.Io.File = null;
         defer if (stdout_file) |file| file.close(io);
         var stderr_file: ?std.Io.File = null;
         defer if (stderr_file) |file| file.close(io);
+        var inherited_redirections = try FdRedirectionGuard.init(self.allocator, io);
+        defer inherited_redirections.restore(self, io);
+        var stdin_redirected = false;
 
         // The diagnostic is reported but the async command itself still
         // yields status 0, matching the status of a successful spawn.
-        self.validateFdDuplicationTargets(command.redirections) catch {
-            return errorResult(self.allocator, 0, badFdTargetName(command), "bad file descriptor");
+        self.validateFdDuplicationTargets(command.redirections) catch |err| switch (err) {
+            error.BadFileDescriptor => return errorResult(self.allocator, 0, badFdTargetName(command), "bad file descriptor"),
+            else => return err,
         };
         for (command.redirections) |redirection| {
-            if (isHereDocRedirection(redirection)) {
-                if (stdin_file) |file| file.close(io);
-                stdin_file = try fileFromBytes(io, redirection.here_doc orelse "");
-                continue;
-            }
-            if (isStdinFileRedirection(redirection)) {
-                const target = redirection.target orelse continue;
-                if (stdin_file) |file| file.close(io);
-                stdin_file = try std.Io.Dir.cwd().openFile(io, target.text, .{});
+            if (isInputFdRedirection(redirection)) {
+                const fd = redirectionFd(redirection) orelse 0;
+                try inherited_redirections.apply(self, io, redirection);
+                if (fd == 0) stdin_redirected = true;
                 continue;
             }
             if (isFileOutputRedirection(redirection)) {
@@ -4873,13 +4889,14 @@ pub const Executor = struct {
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
+            .stdin = if (stdin_redirected or options.external_stdio == .inherit) .inherit else .close,
             .stdout = if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stderr = if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             else => return err,
         };
+        inherited_redirections.restore(self, io);
         errdefer child.kill(io);
         _ = registerCancelableChild(options, child);
         if (child.id) |pid| {
@@ -4918,18 +4935,16 @@ pub const Executor = struct {
         defer if (stdout_file) |file| file.close(io);
         var stderr_file: ?std.Io.File = null;
         defer if (stderr_file) |file| file.close(io);
+        var inherited_redirections = try FdRedirectionGuard.init(self.allocator, io);
+        defer inherited_redirections.restore(self, io);
+        var stdin_redirected = false;
 
         try self.validateFdDuplicationTargets(command.redirections);
         for (command.redirections) |redirection| {
-            if (isHereDocRedirection(redirection)) {
-                if (stdin_file) |file| file.close(io);
-                stdin_file = try fileFromBytes(io, redirection.here_doc orelse "");
-                continue;
-            }
-            if (isStdinFileRedirection(redirection)) {
-                const target = redirection.target orelse continue;
-                if (stdin_file) |file| file.close(io);
-                stdin_file = try std.Io.Dir.cwd().openFile(io, target.text, .{});
+            if (isInputFdRedirection(redirection)) {
+                const fd = redirectionFd(redirection) orelse 0;
+                try inherited_redirections.apply(self, io, redirection);
+                if (fd == 0) stdin_redirected = true;
                 continue;
             }
             if (isFileOutputRedirection(redirection)) {
@@ -4975,7 +4990,7 @@ pub const Executor = struct {
             }
         }
 
-        if (stdin_file == null and externalStdinUsesScriptInput(options.external_stdio)) {
+        if (stdin_file == null and !stdin_redirected and externalStdinUsesScriptInput(options.external_stdio)) {
             if (fallback_stdin) |stdin| {
                 stdin_file = try fileFromBytes(io, stdin);
                 self.script_stdin_offset = (self.script_stdin orelse unreachable).len;
@@ -4990,12 +5005,12 @@ pub const Executor = struct {
         var merged_capture: ?PipelinePipe = if (duplicate_stderr_to_stdout) try makePipelinePipe(io) else null;
         defer if (merged_capture) |*pipe| pipe.close(io);
         const merged_stderr_write: ?std.Io.File = if (merged_capture) |pipe| .{ .handle = try rawDup(pipe.write.?.handle), .flags = pipe.write.?.flags } else null;
-        const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit and stdin_file == null);
+        const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit and stdin_file == null and !stdin_redirected);
         try checkCanceled(options);
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_file) |file| .{ .file = file } else if (externalStdioInheritsStdin(options.external_stdio)) .inherit else .close,
+            .stdin = if (stdin_redirected) .inherit else if (stdin_file) |file| .{ .file = file } else if (externalStdioInheritsStdin(options.external_stdio)) .inherit else .close,
             .stdout = if (stdout_file) |file| .{ .file = file } else if (merged_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stdout) .pipe else .inherit,
             .stderr = if (stderr_file) |file| .{ .file = file } else if (merged_stderr_write) |file| .{ .file = file } else if (capture_stderr) .pipe else .inherit,
             .pgid = if (foreground_terminal != null) 0 else null,
@@ -5003,6 +5018,7 @@ pub const Executor = struct {
             error.FileNotFound => return error.CommandNotFound,
             else => return err,
         };
+        inherited_redirections.restore(self, io);
         const cancel_pid = registerCancelableChild(options, child);
         defer unregisterCancelableChild(options, cancel_pid);
         defer child.kill(io);
@@ -8862,6 +8878,13 @@ fn isHereDocRedirection(redirection: ir.Redirection) bool {
     return fd == 0 and (redirection.operator == .dless or redirection.operator == .dless_dash);
 }
 
+fn isInputFdRedirection(redirection: ir.Redirection) bool {
+    return switch (redirection.operator) {
+        .less, .less_great, .dless, .dless_dash, .less_and => true,
+        else => false,
+    };
+}
+
 fn externalStdioCapturesStdout(stdio: ExternalStdio) bool {
     return stdio == .capture or stdio == .capture_stdout;
 }
@@ -8898,6 +8921,14 @@ fn commandDuplicatesStderrToStdout(redirections: []const ir.Redirection) bool {
 fn isStdinFileRedirection(redirection: ir.Redirection) bool {
     const fd = redirectionFd(redirection) orelse 0;
     return fd == 0 and (redirection.operator == .less or redirection.operator == .less_great);
+}
+
+fn redirectionOpensFd(redirection: ir.Redirection) ?std.posix.fd_t {
+    return switch (redirection.operator) {
+        .less, .less_great, .dless, .dless_dash => redirectionFd(redirection) orelse 0,
+        .greater, .dgreat, .clobber => redirectionFd(redirection) orelse 1,
+        else => null,
+    };
 }
 
 fn isFileOutputRedirection(redirection: ir.Redirection) bool {
@@ -10707,6 +10738,35 @@ test "redirection-only exec tracks arbitrary input fds" {
     var buffer: [16]u8 = undefined;
     const read_len = try std.posix.read(duplicated_fd, &buffer);
     try std.testing.expectEqualStrings("via3\n", buffer[0..read_len]);
+}
+
+test "external command duplicates same-command arbitrary input fd" {
+    const input_path = "rush-test-external-input-fd.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = "via19\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
+
+    const input_fd: std.posix.fd_t = 19;
+    const saved_input_fd: ?std.posix.fd_t = rawDup(input_fd) catch |err| switch (err) {
+        error.BadFileDescriptor => null,
+        else => return err,
+    };
+    defer if (saved_input_fd) |saved_fd| {
+        rawDup2(saved_fd, input_fd) catch {};
+        closeRawFd(std.testing.io, saved_fd);
+    } else closeRawFd(std.testing.io, input_fd);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\/bin/cat 19<rush-test-external-input-fd.tmp 0<&19
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("via19\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(!executor.isShellFdOpen(input_fd));
 }
 
 test "executor short-circuits AND and OR lists" {
