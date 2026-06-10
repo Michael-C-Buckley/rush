@@ -2253,6 +2253,8 @@ pub const Executor = struct {
         var child = Executor.init(self.allocator);
         defer child.deinit();
         try child.copyStateFrom(self);
+        var owned_stdin: ?[]u8 = null;
+        defer if (owned_stdin) |bytes| self.allocator.free(bytes);
         const redirections = try self.expandRedirections(subshell.redirections, options);
         defer self.freeRedirections(redirections);
         const wrapper: ir.SimpleCommand = .{
@@ -2261,6 +2263,11 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = redirections,
         };
+        const redirected_stdin = try self.applyInputRedirections(wrapper, "", options, &owned_stdin);
+        if (redirected_stdin.len != 0 or hasInputRedirection(redirections)) {
+            child.script_stdin = redirected_stdin;
+            child.script_stdin_offset = 0;
+        }
         if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
             error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
             error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(wrapper), "bad file descriptor"),
