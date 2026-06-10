@@ -146,11 +146,12 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
     var current: std.ArrayList(u8) = .empty;
     defer current.deinit(allocator);
     var force_current_field = false;
+    var quoted_expansion_glob = false;
 
     const ifs = options.env.get("IFS") orelse " \t\n";
     for (parts.parts) |part| {
         if (part.kind == .double_quoted) {
-            try appendDoubleQuotedText(allocator, &fields, &current, &force_current_field, part.value(parts.raw), options, ifs);
+            try appendDoubleQuotedText(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, part.value(parts.raw), options, ifs);
             continue;
         }
         const split = part.kind == .parameter or part.kind == .command_substitution or part.kind == .arithmetic;
@@ -178,7 +179,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
         try fields.append(allocator, try current.toOwnedSlice(allocator));
     }
 
-    if (options.pathname_expansion and pathname_expansion_safe) {
+    if (options.pathname_expansion and pathname_expansion_safe and !quoted_expansion_glob) {
         if (options.io) |io| {
             try applyPathnameExpansion(allocator, io, &fields);
         }
@@ -1093,7 +1094,7 @@ fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, pa
     };
 }
 
-fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, text: []const u8, options: Options, ifs: []const u8) !void {
+fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, text: []const u8, options: Options, ifs: []const u8) !void {
     force_current_field.* = true;
     var index: usize = 0;
     var segment_start: usize = 0;
@@ -1103,10 +1104,10 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
             continue;
         }
         if (quotedPositionalAt(text, index)) |special| {
-            try appendQuotedSegment(allocator, current, text[segment_start..index], options);
+            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
             switch (special.kind) {
-                .at => try appendQuotedAt(allocator, fields, current, force_current_field, options.positionals),
-                .star => try appendQuotedStar(allocator, current, options.positionals, ifs),
+                .at => try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, options.positionals),
+                .star => try appendQuotedStar(allocator, current, quoted_glob, options.positionals, ifs),
             }
             index = special.end;
             segment_start = index;
@@ -1114,7 +1115,7 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
         }
         index += 1;
     }
-    try appendQuotedSegment(allocator, current, text[segment_start..], options);
+    try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..], options);
 }
 
 const QuotedPositionalKind = enum { at, star };
@@ -1135,9 +1136,12 @@ fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
     };
 }
 
-fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8), text: []const u8, options: Options) !void {
+fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8), quoted_glob: *bool, text: []const u8, options: Options) !void {
     const rendered = try renderDoubleQuotedContent(allocator, text, options);
     defer allocator.free(rendered);
+    // Glob characters produced inside double quotes must not trigger
+    // pathname expansion (POSIX XCU 2.13.3).
+    if (hasGlobSyntax(rendered)) quoted_glob.* = true;
     try current.appendSlice(allocator, rendered);
 }
 
@@ -1167,12 +1171,13 @@ fn joinPositionalsWithIfs(allocator: std.mem.Allocator, positionals: []const []c
     return joined.toOwnedSlice(allocator);
 }
 
-fn appendQuotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, positionals: []const []const u8) !void {
+fn appendQuotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, positionals: []const []const u8) !void {
     if (positionals.len == 0) {
         force_current_field.* = false;
         return;
     }
     for (positionals, 0..) |param, index| {
+        if (hasGlobSyntax(param)) quoted_glob.* = true;
         try current.appendSlice(allocator, param);
         force_current_field.* = true;
         if (index + 1 < positionals.len) {
@@ -1182,9 +1187,10 @@ fn appendQuotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u
     }
 }
 
-fn appendQuotedStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), positionals: []const []const u8, ifs: []const u8) !void {
+fn appendQuotedStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), quoted_glob: *bool, positionals: []const []const u8, ifs: []const u8) !void {
     const separator = if (ifs.len == 0) "" else ifs[0..1];
     for (positionals, 0..) |param, index| {
+        if (hasGlobSyntax(param)) quoted_glob.* = true;
         if (index > 0) try current.appendSlice(allocator, separator);
         try current.appendSlice(allocator, param);
     }
@@ -1744,6 +1750,7 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
+    if (std.mem.eql(u8, name, "GLOBBY")) return "rush-quoted-glob-?.tmp";
     return null;
 }
 
@@ -2183,6 +2190,26 @@ test "pathname expansion bracket expressions treat leading right bracket as lite
     defer negated.deinit();
     try std.testing.expectEqual(@as(usize, 1), negated.fields.len);
     try std.testing.expectEqualStrings(open, negated.fields[0]);
+}
+
+test "quoted parameter expansion is not subject to pathname expansion" {
+    const a = "rush-quoted-glob-a.tmp";
+    const b = "rush-quoted-glob-b.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = a, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = b, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, a) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, b) catch {};
+
+    var quoted = try expandWord(std.testing.allocator, "\"$GLOBBY\"", .{ .env = test_env, .io = std.testing.io });
+    defer quoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted.fields.len);
+    try std.testing.expectEqualStrings("rush-quoted-glob-?.tmp", quoted.fields[0]);
+
+    var unquoted = try expandWord(std.testing.allocator, "$GLOBBY", .{ .env = test_env, .io = std.testing.io });
+    defer unquoted.deinit();
+    try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
+    try std.testing.expectEqualStrings(a, unquoted.fields[0]);
+    try std.testing.expectEqualStrings(b, unquoted.fields[1]);
 }
 
 test "pathname expansion preserves unmatched patterns" {
