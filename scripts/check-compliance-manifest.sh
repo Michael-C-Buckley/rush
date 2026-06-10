@@ -10,84 +10,65 @@ if [ ! -f "$MANIFEST" ]; then
   exit 1
 fi
 
-expected_header='id	area	posix_ref	feature	status	posix_corpus	differential_corpus	granularity	risk	notes'
-actual_header=$(sed -n '1p' "$MANIFEST")
-if [ "$actual_header" != "$(printf '%b' "$expected_header")" ]; then
-  echo "invalid compliance manifest header" >&2
-  echo "got:  $actual_header" >&2
-  echo "want: $(printf '%b' "$expected_header")" >&2
-  exit 1
-fi
+# Single awk pass validates row shape and enums, and emits the corpus case
+# references (which need directory checks the shell does below) as
+# CASE<tab>line<tab>name records alongside ERR<tab>message records.
+findings=$(mktemp)
+trap 'rm -f "$findings"' EXIT
+
+awk -F '\t' '
+  function err(msg) { printf "ERR\t%s\n", msg }
+  NR == 1 {
+    if ($0 != "id\tarea\tposix_ref\tfeature\tstatus\tposix_corpus\tdifferential_corpus\tgranularity\trisk\tnotes") {
+      err("invalid compliance manifest header")
+      err("got:  " $0)
+      err("want: id\tarea\tposix_ref\tfeature\tstatus\tposix_corpus\tdifferential_corpus\tgranularity\trisk\tnotes")
+      exit
+    }
+    next
+  }
+  NF > 10 { err(sprintf("line %d: too many columns", NR)); next }
+  {
+    for (i = 1; i <= 10; i++) {
+      if ($i == "") { err(sprintf("line %d: empty required column", NR)); next }
+    }
+  }
+  seen[$1]++ { err(sprintf("line %d: duplicate id: %s", NR, $1)) }
+  $5 !~ /^(supported|baseline|partial|missing|out_of_scope)$/ { err(sprintf("line %d: invalid status: %s", NR, $5)) }
+  $8 !~ /^(coarse|detailed|spec_clause)$/ { err(sprintf("line %d: invalid granularity: %s", NR, $8)) }
+  $9 !~ /^(low|medium|high)$/ { err(sprintf("line %d: invalid risk: %s", NR, $9)) }
+  $6 != "-" {
+    n = split($6, cases, ";")
+    for (i = 1; i <= n; i++) printf "CASE\t%d\t%s\n", NR, cases[i]
+  }
+' "$MANIFEST" >"$findings"
 
 failures=0
-seen_ids=$(mktemp)
-trap 'rm -f "$seen_ids"' EXIT
-line_no=0
 tab=$(printf '\t')
-while IFS="$tab" read -r id area posix_ref feature status posix_corpus differential_corpus granularity risk notes extra; do
-  line_no=$((line_no + 1))
-  [ "$line_no" -eq 1 ] && continue
-
-  if [ -n "${extra:-}" ]; then
-    echo "line $line_no: too many columns" >&2
-    failures=$((failures + 1))
-    continue
-  fi
-  if [ -z "${id:-}" ] || [ -z "${area:-}" ] || [ -z "${posix_ref:-}" ] || [ -z "${feature:-}" ] || [ -z "${status:-}" ] || [ -z "${posix_corpus:-}" ] || [ -z "${differential_corpus:-}" ] || [ -z "${granularity:-}" ] || [ -z "${risk:-}" ] || [ -z "${notes:-}" ]; then
-    echo "line $line_no: empty required column" >&2
-    failures=$((failures + 1))
-    continue
-  fi
-
-  if grep -Fx -- "$id" "$seen_ids" >/dev/null; then
-    echo "line $line_no: duplicate id: $id" >&2
-    failures=$((failures + 1))
-  fi
-  printf '%s\n' "$id" >>"$seen_ids"
-
-  case "$status" in
-    supported|baseline|partial|missing|out_of_scope) ;;
-    *)
-      echo "line $line_no: invalid status: $status" >&2
+while IFS="$tab" read -r kind field1 field2; do
+  case "$kind" in
+    ERR)
+      # field2 is non-empty only when the message itself contains tabs.
+      if [ -n "${field2:-}" ]; then
+        printf '%s\t%s\n' "$field1" "$field2" >&2
+      else
+        echo "$field1" >&2
+      fi
       failures=$((failures + 1))
       ;;
-  esac
-
-  case "$granularity" in
-    coarse|detailed|spec_clause) ;;
-    *)
-      echo "line $line_no: invalid granularity: $granularity" >&2
-      failures=$((failures + 1))
-      ;;
-  esac
-
-  case "$risk" in
-    low|medium|high) ;;
-    *)
-      echo "line $line_no: invalid risk: $risk" >&2
-      failures=$((failures + 1))
-      ;;
-  esac
-
-  if [ "$posix_corpus" != "-" ]; then
-    old_ifs=$IFS
-    IFS=';'
-    for case_name in $posix_corpus; do
-      IFS=$old_ifs
-      if [ ! -d "$CORPUS_DIR/$case_name" ]; then
-        echo "line $line_no: missing POSIX corpus case: $case_name" >&2
+    CASE)
+      if [ ! -d "$CORPUS_DIR/$field2" ]; then
+        echo "line $field1: missing POSIX corpus case: $field2" >&2
         failures=$((failures + 1))
       fi
-      IFS=';'
-    done
-    IFS=$old_ifs
-  fi
-done <"$MANIFEST"
+      ;;
+  esac
+done <"$findings"
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures compliance manifest failure(s)" >&2
   exit 1
 fi
 
-rows=$((line_no - 1))
+rows=$(($(wc -l <"$MANIFEST") - 1))
 echo "compliance manifest valid ($rows rows)"
