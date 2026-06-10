@@ -84,3 +84,19 @@ __rush_complete_npm_config_keys() {
   completion candidate init-author-name --kind plain
   completion candidate save-exact --kind plain
 }
+
+# Working-directory/workspace overlays.
+complete npm --option --long prefix --value-name dir --description 'operate in a different project prefix'
+complete npm --option-value --long prefix --function __rush_complete_npm_directories
+complete npm --option --short w --long workspace --value-name workspace --description 'workspace to operate on'
+complete npm --option-value --short w --function __rush_complete_npm_workspaces
+complete npm --option-value --long workspace --function __rush_complete_npm_workspaces
+complete npm --option --long workspaces --description 'operate on all configured workspaces'
+
+__rush_complete_npm_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_npm_workspaces() {
+  node -e 'let p=require("./package.json"); for (let w of (p.workspaces||[])) console.log(w)' 2>/dev/null | while read workspace; do test -n "$workspace" && completion candidate "$workspace" --kind plain; done
+}

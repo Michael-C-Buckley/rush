@@ -81,3 +81,18 @@ __rush_complete_bun_test_files() {
   completion files --extension .spec.js
   completion directories --append-slash
 }
+
+# Working-directory/workspace overlays.
+complete bun --option --long cwd --value-name dir --description 'set working directory'
+complete bun --option-value --long cwd --function __rush_complete_bun_directories
+complete bun --option --short F --long filter --value-name pattern --description 'run script in matching workspace packages'
+complete bun --option-value --short F --function __rush_complete_bun_workspaces
+complete bun --option-value --long filter --function __rush_complete_bun_workspaces
+
+__rush_complete_bun_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_bun_workspaces() {
+  node -e 'let p=require("./package.json"); for (let w of (p.workspaces||[])) console.log(w)' 2>/dev/null | while read workspace; do test -n "$workspace" && completion candidate "$workspace" --kind plain; done
+}

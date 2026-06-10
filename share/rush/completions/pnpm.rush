@@ -63,3 +63,12 @@ __rush_complete_pnpm_workspaces() {
   node -e 'let p=require("./package.json"); for (let w of (p.workspaces||[])) console.log(w)' 2>/dev/null | while read workspace; do test -n "$workspace" && completion candidate "$workspace" --kind plain; done
   completion candidate . --kind directory
 }
+
+# Working-directory overlays.
+complete pnpm --option --short C --long dir --value-name dir --description 'change to directory before running command'
+complete pnpm --option-value --short C --function __rush_complete_pnpm_directories
+complete pnpm --option-value --long dir --function __rush_complete_pnpm_directories
+
+__rush_complete_pnpm_directories() {
+  completion directories --append-slash
+}
