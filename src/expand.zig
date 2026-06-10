@@ -55,6 +55,7 @@ pub const Options = struct {
     features: compat.Features = .{},
     command_substitution: CommandSubstitution = .{},
     positionals: []const []const u8 = &.{},
+    option_flags: []const u8 = "",
     pathname_expansion: bool = true,
     nounset: bool = false,
     parameter_error: ?*ParameterError = null,
@@ -506,7 +507,7 @@ const ParameterExpression = struct {
 
 fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
     const parsed = parseParameterExpression(expression);
-    const value = options.env.get(parsed.name);
+    const value = specialParameterValue(parsed.name, options) orelse options.env.get(parsed.name);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
 
@@ -562,6 +563,11 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
             return removePattern(allocator, base, pattern, parsed.operator);
         },
     }
+}
+
+fn specialParameterValue(name: []const u8, options: Options) ?[]const u8 {
+    if (std.mem.eql(u8, name, "-")) return options.option_flags;
+    return null;
 }
 
 const ExpansionPattern = struct {
@@ -1720,7 +1726,7 @@ pub fn quoteRemove(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
 }
 
 fn isSpecialParameterChar(c: u8) bool {
-    return std.ascii.isDigit(c) or c == '#' or c == '@' or c == '*' or c == '?' or c == '$' or c == '!';
+    return std.ascii.isDigit(c) or c == '#' or c == '@' or c == '*' or c == '?' or c == '$' or c == '!' or c == '-';
 }
 
 fn isNameStart(c: u8) bool {

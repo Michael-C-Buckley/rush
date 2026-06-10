@@ -1,0 +1,10 @@
+printf '<%s>\n' "$-"
+set -e
+case $- in *e*) echo set-e ;; *) echo missing-e ;; esac
+set +e
+case $- in *e*) echo stale-e ;; *) echo cleared-e ;; esac
+set -o nounset
+case $- in *u*) echo set-u ;; *) echo missing-u ;; esac
+set -fC
+case $- in *f*) echo set-f ;; *) echo missing-f ;; esac
+case $- in *C*) echo set-C ;; *) echo missing-C ;; esac

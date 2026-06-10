@@ -198,6 +198,7 @@ set-xtrace	options	option	-
 simple-echo	lexing	behavior	-
 special-builtin-assignment-prefix	variables	behavior	-
 special-last-background	job_control	behavior	-
+special-option-flags	variables	behavior	$- reflects current short shell option flags
 special-pid	variables	behavior	-
 special-status	variables	behavior	-
 startup-maintained-variables	variables	behavior	startup IFS PPID and PWD shell-maintained variables

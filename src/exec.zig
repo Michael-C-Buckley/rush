@@ -69,6 +69,41 @@ pub const ShellOptions = struct {
     allexport: bool = false,
 };
 
+const shell_option_flags_max = 7;
+
+fn shellOptionFlags(options: ShellOptions, buffer: *[shell_option_flags_max]u8) []const u8 {
+    var len: usize = 0;
+    if (options.allexport) {
+        buffer[len] = 'a';
+        len += 1;
+    }
+    if (options.errexit) {
+        buffer[len] = 'e';
+        len += 1;
+    }
+    if (options.noclobber) {
+        buffer[len] = 'C';
+        len += 1;
+    }
+    if (options.noglob) {
+        buffer[len] = 'f';
+        len += 1;
+    }
+    if (options.nounset) {
+        buffer[len] = 'u';
+        len += 1;
+    }
+    if (options.verbose) {
+        buffer[len] = 'v';
+        len += 1;
+    }
+    if (options.xtrace) {
+        buffer[len] = 'x';
+        len += 1;
+    }
+    return buffer[0..len];
+}
+
 pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool {
     if (spelling.len < 2) return false;
     if (spelling[0] != '-' and spelling[0] != '+') return false;
@@ -3977,8 +4012,10 @@ pub const Executor = struct {
 
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         const positionals: []const []const u8 = self.currentPositionals().params;
+        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -4053,14 +4090,18 @@ pub const Executor = struct {
     fn expandHereDoc(self: *Executor, text: []const u8, quoted: bool, options: ExecuteOptions) ![]const u8 {
         if (quoted) return self.allocator.dupe(u8, text);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .positionals = self.currentPositionals().params });
+        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
+        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
         const raw = try self.allocator.dupe(u8, word.raw);
         errdefer self.allocator.free(raw);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
+        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -4074,7 +4115,9 @@ pub const Executor = struct {
         errdefer special.deinit(self.allocator);
 
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error };
+        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error };
 
         for (parts.parts) |part| {
             const rendered = try expand.expandWordScalar(self.allocator, part.source(parts.raw), expansion_options);
@@ -4093,7 +4136,9 @@ pub const Executor = struct {
         const raw = try self.allocator.dupe(u8, word.raw);
         errdefer self.allocator.free(raw);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        const text = try expand.expandAssignmentWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
+        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
+        const text = try expand.expandAssignmentWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -9972,6 +10017,23 @@ test "executor expands core POSIX special parameters" {
     var names_result = try executor.executeProgram(names_lowered.program, .{});
     defer names_result.deinit();
     try std.testing.expectEqualStrings("rush-test\n\n", names_result.stdout);
+
+    var option_flags_lowered = try parseAndLower(std.testing.allocator,
+        \\printf '<%s>\n' "$-"
+        \\set -e
+        \\printf '<%s>\n' "$-"
+        \\set +e
+        \\set -o nounset
+        \\printf '<%s>\n' "$-"
+        \\set +o nounset
+        \\set -fC
+        \\printf '<%s>\n' "$-"
+    );
+    defer option_flags_lowered.parsed.deinit();
+    defer option_flags_lowered.program.deinit();
+    var option_flags_result = try executor.executeProgram(option_flags_lowered.program, .{});
+    defer option_flags_result.deinit();
+    try std.testing.expectEqualStrings("<>\n<e>\n<u>\n<Cf>\n", option_flags_result.stdout);
 
     var pid_lowered = try parseAndLower(std.testing.allocator, "test -n $$");
     defer pid_lowered.parsed.deinit();

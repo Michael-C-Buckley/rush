@@ -2470,6 +2470,23 @@ test "command string invocation shell options affect execution" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 1), nounset.status);
     try std.testing.expectEqualStrings("", nounset.stdout);
     try std.testing.expect(std.mem.indexOf(u8, nounset.stderr, "unset parameter") != null);
+
+    const flags_invocation = parseCommandStringInvocation(&.{ "rush", "-e", "-o", "nounset", "-c", "printf '<%s>\\n' \"$-\"" }) orelse return error.ExpectedInvocation;
+    var flags = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        flags_invocation.source,
+        .{ .io = std.testing.io, .arg_zero = flags_invocation.arg_zero },
+        null,
+        flags_invocation.positionals,
+        null,
+        flags_invocation.shell_options,
+    );
+    defer flags.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), flags.status);
+    try std.testing.expectEqualStrings("<eu>\n", flags.stdout);
+    try std.testing.expectEqualStrings("", flags.stderr);
 }
 
 test "runScriptWithEnvironment imports initial shell variables" {
