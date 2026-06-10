@@ -1,6 +1,62 @@
 #!/usr/bin/env sh
 set -eu
 
+# Worker mode: invoked by xargs below with a single corpus case name.
+# Runs the case against Rush and compares status/stdout/stderr.
+# Inherits CORPUS_DIR, RUSH, FAILDIR from the parent environment.
+if [ -n "${RUSH_CORPUS_WORKER:-}" ]; then
+  name=$1
+  case_dir=$CORPUS_DIR/$name
+
+  times_stdout_matches() {
+    [ "$(wc -l <"$1" | tr -d ' ')" -eq 2 ] || return 1
+    grep -Eq '^[0-9]+m[0-9]+\.[0-9][0-9]s [0-9]+m[0-9]+\.[0-9][0-9]s$' "$1"
+  }
+
+  for required in script status stdout stderr; do
+    if [ ! -f "$case_dir/$required" ]; then
+      echo "FAIL [$name]: missing $required" >"$FAILDIR/$name"
+      exit 1
+    fi
+  done
+
+  tmp=$(mktemp -d)
+  actual_stdout=$tmp/stdout
+  actual_stderr=$tmp/stderr
+
+  rush_args=
+  if [ -f "$case_dir/args" ]; then
+    rush_args=$(cat "$case_dir/args")
+  fi
+  actual_status=0
+  # shellcheck disable=SC2086 # corpus args are controlled one-word CLI flags
+  (cd "$tmp" && "$RUSH" $rush_args -c "$(cat "$case_dir/script")" >"$actual_stdout" 2>"$actual_stderr") || actual_status=$?
+  want_status=$(cat "$case_dir/status")
+
+  stdout_ok=false
+  if cmp -s "$case_dir/stdout" "$actual_stdout"; then
+    stdout_ok=true
+  elif [ "$name" = builtin-times ] && times_stdout_matches "$actual_stdout"; then
+    stdout_ok=true
+  fi
+
+  status=0
+  if [ "$actual_status" -ne "$want_status" ] || [ "$stdout_ok" != true ] || ! cmp -s "$case_dir/stderr" "$actual_stderr"; then
+    status=1
+    {
+      echo "FAIL [$name]"
+      echo "  status: got $actual_status want $want_status"
+      echo "  expected stdout:"; sed 's/^/    /' "$case_dir/stdout"
+      echo "  actual stdout:"; sed 's/^/    /' "$actual_stdout"
+      echo "  expected stderr:"; sed 's/^/    /' "$case_dir/stderr"
+      echo "  actual stderr:"; sed 's/^/    /' "$actual_stderr"
+    } >"$FAILDIR/$name"
+  fi
+
+  rm -rf "$tmp"
+  exit "$status"
+fi
+
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 RUSH="$ROOT/zig-out/bin/rush"
 CORPUS_DIR=${1:-$ROOT/test/corpus/posix}
@@ -13,114 +69,72 @@ if [ ! -d "$CORPUS_DIR" ]; then
   exit 1
 fi
 
+workdir=$(mktemp -d)
+FAILDIR=$workdir/failures
+mkdir "$FAILDIR"
+trap 'rm -rf "$workdir"' EXIT
+
 metadata=$CORPUS_DIR/METADATA.tsv
 metadata_seen=
 if [ -f "$metadata" ]; then
-  expected_header='case	area	tags	notes'
-  actual_header=$(sed -n '1p' "$metadata")
-  if [ "$actual_header" != "$(printf '%b' "$expected_header")" ]; then
-    echo "invalid POSIX corpus metadata header" >&2
-    exit 1
-  fi
-  metadata_seen=$(mktemp)
-  line_no=0
-  tab=$(printf '\t')
-  while IFS="$tab" read -r case_name area tags notes extra; do
-    line_no=$((line_no + 1))
-    [ "$line_no" -eq 1 ] && continue
-    if [ -n "${extra:-}" ]; then
-      echo "metadata line $line_no: too many columns" >&2
-      exit 1
-    fi
-    if [ -z "${case_name:-}" ] || [ -z "${area:-}" ] || [ -z "${tags:-}" ] || [ -z "${notes:-}" ]; then
-      echo "metadata line $line_no: empty required column" >&2
-      exit 1
-    fi
-    case "$area" in
-      lexing|grammar|expansion|redirection|builtin|job_control|signals|options|errors|variables|portability|extensions) ;;
-      *) echo "metadata line $line_no: invalid area: $area" >&2; exit 1 ;;
-    esac
-    if grep -Fx -- "$case_name" "$metadata_seen" >/dev/null; then
-      echo "metadata line $line_no: duplicate case: $case_name" >&2
-      exit 1
-    fi
+  metadata_seen=$workdir/metadata-names
+  awk -F '\t' '
+    NR == 1 {
+      if ($0 != "case\tarea\ttags\tnotes") {
+        print "invalid POSIX corpus metadata header" > "/dev/stderr"
+        bad = 1
+        exit 1
+      }
+      next
+    }
+    NF > 4 { printf "metadata line %d: too many columns\n", NR > "/dev/stderr"; bad = 1; next }
+    $1 == "" || $2 == "" || $3 == "" || $4 == "" {
+      printf "metadata line %d: empty required column\n", NR > "/dev/stderr"; bad = 1; next
+    }
+    $2 !~ /^(lexing|grammar|expansion|redirection|builtin|job_control|signals|options|errors|variables|portability|extensions)$/ {
+      printf "metadata line %d: invalid area: %s\n", NR, $2 > "/dev/stderr"; bad = 1; next
+    }
+    seen[$1]++ { printf "metadata line %d: duplicate case: %s\n", NR, $1 > "/dev/stderr"; bad = 1; next }
+    { print $1 }
+    END { exit bad }
+  ' "$metadata" >"$metadata_seen"
+  while IFS= read -r case_name; do
     if [ ! -d "$CORPUS_DIR/$case_name" ]; then
-      echo "metadata line $line_no: missing case directory: $case_name" >&2
+      echo "missing case directory: $case_name" >&2
       exit 1
     fi
-    printf '%s\n' "$case_name" >>"$metadata_seen"
-  done <"$metadata"
+  done <"$metadata_seen"
 fi
-
-failures=0
-cases=0
-times_stdout_matches() {
-  [ "$(wc -l <"$1" | tr -d ' ')" -eq 2 ] || return 1
-  grep -Eq '^[0-9]+m[0-9]+\.[0-9][0-9]s [0-9]+m[0-9]+\.[0-9][0-9]s$' "$1"
-}
 
 for case_dir in "$CORPUS_DIR"/*; do
   [ -d "$case_dir" ] || continue
-  name=$(basename "$case_dir")
-  script=$case_dir/script
-  expected_status=$case_dir/status
-  expected_stdout=$case_dir/stdout
-  expected_stderr=$case_dir/stderr
+  printf '%s\n' "${case_dir##*/}"
+done >"$workdir/all-cases"
 
-  for required in "$script" "$expected_status" "$expected_stdout" "$expected_stderr"; do
-    if [ ! -f "$required" ]; then
-      echo "FAIL [$name]: missing $(basename "$required")" >&2
-      failures=$((failures + 1))
-      continue 2
-    fi
+if [ -n "$metadata_seen" ]; then
+  sort "$metadata_seen" >"$workdir/meta-sorted"
+  sort "$workdir/all-cases" >"$workdir/cases-sorted"
+  comm -23 "$workdir/cases-sorted" "$workdir/meta-sorted" | while IFS= read -r name; do
+    echo "FAIL [$name]: missing metadata row" >"$FAILDIR/$name"
   done
+  comm -12 "$workdir/cases-sorted" "$workdir/meta-sorted" >"$workdir/case-names"
+else
+  cp "$workdir/all-cases" "$workdir/case-names"
+fi
+cases=$(wc -l <"$workdir/case-names" | tr -d ' ')
 
-  if [ -n "$metadata_seen" ] && ! grep -Fx -- "$name" "$metadata_seen" >/dev/null; then
-    echo "FAIL [$name]: missing metadata row" >&2
-    failures=$((failures + 1))
-    continue
-  fi
+JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
+export CORPUS_DIR RUSH FAILDIR
 
-  cases=$((cases + 1))
-  tmp=$(mktemp -d)
-  actual_stdout=$tmp/stdout
-  actual_stderr=$tmp/stderr
+if [ "$cases" -gt 0 ]; then
+  xargs -P "$JOBS" -n 1 env RUSH_CORPUS_WORKER=1 sh "$0" <"$workdir/case-names" || true
+fi
 
-  rush_args=
-  if [ -f "$case_dir/args" ]; then
-    rush_args=$(cat "$case_dir/args")
-  fi
-  # shellcheck disable=SC2086 # corpus args are controlled one-word CLI flags
-  (cd "$tmp" && "$RUSH" $rush_args -c "$(cat "$script")" >"$actual_stdout" 2>"$actual_stderr") || actual_status=$?
-  actual_status=${actual_status:-0}
-  want_status=$(cat "$expected_status")
-
-  stdout_ok=false
-  if cmp -s "$expected_stdout" "$actual_stdout"; then
-    stdout_ok=true
-  elif [ "$name" = builtin-times ] && times_stdout_matches "$actual_stdout"; then
-    stdout_ok=true
-  fi
-
-  if [ "$actual_status" -ne "$want_status" ] || [ "$stdout_ok" != true ] || ! cmp -s "$expected_stderr" "$actual_stderr"; then
-    failures=$((failures + 1))
-    echo "FAIL [$name]" >&2
-    echo "  status: got $actual_status want $want_status" >&2
-    echo "  expected stdout:" >&2; sed 's/^/    /' "$expected_stdout" >&2
-    echo "  actual stdout:" >&2; sed 's/^/    /' "$actual_stdout" >&2
-    echo "  expected stderr:" >&2; sed 's/^/    /' "$expected_stderr" >&2
-    echo "  actual stderr:" >&2; sed 's/^/    /' "$actual_stderr" >&2
-  fi
-
-  rm -rf "$tmp"
-  unset actual_status
-done
-
+failures=$(find "$FAILDIR" -type f | wc -l | tr -d ' ')
 if [ "$failures" -ne 0 ]; then
+  cat "$FAILDIR"/* >&2
   echo "$failures POSIX corpus failure(s)" >&2
   exit 1
 fi
-
-if [ -n "$metadata_seen" ]; then rm -f "$metadata_seen"; fi
 
 echo "$CORPUS_LABEL passed ($cases cases)"
