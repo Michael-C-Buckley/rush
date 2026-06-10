@@ -3841,12 +3841,20 @@ pub const Executor = struct {
         errdefer for (expanded[0..initialized]) |redirection| self.freeRedirection(redirection);
 
         for (redirections, 0..) |redirection, index| {
+            // Expand into locals with cleanup so a failing later field does
+            // not leak the earlier ones; only complete elements are counted
+            // in `initialized`.
+            const io_number = if (redirection.io_number) |word| try self.expandWord(word, options) else null;
+            errdefer if (io_number) |word| self.freeWord(word);
+            const target = if (redirection.target) |word| try self.expandWord(word, options) else null;
+            errdefer if (target) |word| self.freeWord(word);
+            const here_doc = if (redirection.here_doc) |text| try self.expandHereDoc(text, redirection.here_doc_quoted, options) else null;
             expanded[index] = .{
                 .span = redirection.span,
-                .io_number = if (redirection.io_number) |word| try self.expandWord(word, options) else null,
+                .io_number = io_number,
                 .operator = redirection.operator,
-                .target = if (redirection.target) |word| try self.expandWord(word, options) else null,
-                .here_doc = if (redirection.here_doc) |text| try self.expandHereDoc(text, redirection.here_doc_quoted, options) else null,
+                .target = target,
+                .here_doc = here_doc,
                 .here_doc_quoted = redirection.here_doc_quoted,
             };
             initialized += 1;
