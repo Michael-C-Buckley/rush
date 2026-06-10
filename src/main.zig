@@ -28,6 +28,8 @@ const usage =
 
 const system_profile_path = build_config.sysconfdir ++ "/rush/profile.rush";
 const system_config_path = build_config.sysconfdir ++ "/rush/config.rush";
+const embedded_config = @embedFile("default_config");
+const embedded_config_path = "embedded:config.rush";
 const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 
 pub fn main(init: std.process.Init) !u8 {
@@ -1214,7 +1216,6 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer executor.deinit();
     try executor.importEnvironment(environ_map);
     try executor.initializeShellVariables(io);
-    try executor.initializeInteractiveVariables();
     executor.arg_zero = options.arg_zero;
     try loadInteractiveConfig(allocator, io, &executor, options);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
@@ -1350,7 +1351,12 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     var last_status: exec.ExitStatus = 0;
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
-    try executor.initializeInteractiveVariables();
+    {
+        var result = try runScriptWithExecutor(allocator, &executor, embedded_config, .{ .io = io, .allow_external = true, .arg_zero = "rush", .source_path = embedded_config_path });
+        defer result.deinit();
+        try stdout.appendSlice(allocator, result.stdout);
+        try stderr.appendSlice(allocator, result.stderr);
+    }
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
@@ -1422,6 +1428,8 @@ fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executo
 }
 
 fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, options: InteractiveOptions) !void {
+    try sourceConfigScript(allocator, io, executor, embedded_config, embedded_config_path, options.arg_zero);
+
     if (executor.getEnv("ENV")) |env_path| {
         if (env_path.len != 0) try sourceOptionalConfig(allocator, io, executor, env_path, options.arg_zero);
     }
@@ -1446,7 +1454,11 @@ fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exe
     };
     defer allocator.free(contents);
 
-    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = arg_zero, .source_path = path });
+    try sourceConfigScript(allocator, io, executor, contents, path, arg_zero);
+}
+
+fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
+    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = arg_zero, .source_path = source_path });
     defer result.deinit();
     if (result.stdout.len != 0) try writeAll(io, .stdout, result.stdout);
     if (result.stderr.len != 0) try writeAll(io, .stderr, result.stderr);
@@ -2369,13 +2381,22 @@ test "interactive startup initializes prompt variables and sources ENV" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
     try executor.setEnv("ENV", env_path);
-    try executor.initializeInteractiveVariables();
-    try std.testing.expectEqualStrings("$ ", executor.getEnv("PS1").?);
-    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
 
     try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
     try std.testing.expectEqualStrings("ok", executor.getEnv("ENV_LOADED").?);
+    // Embedded default config provides PS2; $ENV overrides the embedded PS1 default.
+    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
     try std.testing.expectEqualStrings("env> ", executor.getEnv("PS1").?);
+}
+
+test "embedded default config sets prompt defaults without clobbering inherited values" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PS1", "inherited> ");
+
+    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("inherited> ", executor.getEnv("PS1").?);
+    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
 }
 
 test "prompt segment supports foreground and background colors" {

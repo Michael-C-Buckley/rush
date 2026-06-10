@@ -34,6 +34,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     exe.root_module.addOptions("build_config", build_config);
+    exe.root_module.addAnonymousImport("default_config", .{ .root_source_file = b.path("share/rush/config.rush") });
     linkSqlite(b, exe.root_module, use_system_sqlite);
 
     b.installArtifact(exe);
@@ -68,6 +69,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     exe_tests.root_module.addOptions("build_config", build_config);
+    exe_tests.root_module.addAnonymousImport("default_config", .{ .root_source_file = b.path("share/rush/config.rush") });
     linkSqlite(b, exe_tests.root_module, use_system_sqlite);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 

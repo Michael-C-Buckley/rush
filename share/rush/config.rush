@@ -1,0 +1,7 @@
+# Default configuration embedded in the rush binary at build time.
+# It runs first at interactive startup, so $ENV, profiles, and system
+# ($sysconfdir/rush) and user (~/.config/rush) config can override it.
+
+# Prompt defaults; assigned only when unset so inherited values win.
+: "${PS1=$ }"
+: "${PS2=> }"
