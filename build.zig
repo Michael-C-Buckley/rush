@@ -13,6 +13,13 @@ pub fn build(b: *std.Build) void {
     }).module("zeit");
     const use_system_sqlite = b.systemIntegrationOption("sqlite3", .{ .default = false });
 
+    // System config dir, GNU sysconfdir convention: defaults to <prefix>/etc
+    // so non-root installs stay self-contained; packagers pass -Dsysconfdir=/etc.
+    const sysconfdir = b.option([]const u8, "sysconfdir", "Directory for system-wide configuration (default: <prefix>/etc)") orelse
+        b.getInstallPath(.prefix, "etc");
+    const build_config = b.addOptions();
+    build_config.addOption([]const u8, "sysconfdir", sysconfdir);
+
     const exe = b.addExecutable(.{
         .name = "rush",
         .root_module = b.createModule(.{
@@ -26,6 +33,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe.root_module.addOptions("build_config", build_config);
     linkSqlite(b, exe.root_module, use_system_sqlite);
 
     b.installArtifact(exe);
@@ -59,6 +67,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe_tests.root_module.addOptions("build_config", build_config);
     linkSqlite(b, exe_tests.root_module, use_system_sqlite);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 

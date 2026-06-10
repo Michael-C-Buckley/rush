@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const build_options = @import("builtin");
+const build_config = @import("build_config");
 const sqlite = @cImport({
     @cInclude("sqlite3.h");
 });
@@ -25,8 +26,8 @@ const usage =
     \\
 ;
 
-const system_profile_path = "/etc/rush/profile.rush";
-const system_config_path = "/etc/rush/config.rush";
+const system_profile_path = build_config.sysconfdir ++ "/rush/profile.rush";
+const system_config_path = build_config.sysconfdir ++ "/rush/config.rush";
 const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 
 pub fn main(init: std.process.Init) !u8 {
