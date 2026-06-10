@@ -1,0 +1,2 @@
+printf '%s\n' alpha > in
+{ read line; echo "$line"; } < in

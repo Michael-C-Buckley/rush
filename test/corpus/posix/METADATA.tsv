@@ -294,6 +294,7 @@ builtin-trap-invalid-signal	builtin	behavior	trap rejects invalid signal specifi
 builtin-wait-job-spec	builtin	behavior	wait accepts a job-control job ID operand
 option-set-hyphen	options	behavior	set - disables xtrace and verbose without changing positional parameters
 option-set-variable-listing	options	behavior	set without operands lists shell variables
+redirection-brace-group-input	redirection	behavior	input redirection on a brace group feeds commands in the group
 builtin-env-terminator-assignment-command	builtin	behavior	env option terminator before assignment and command
 grammar-case-quoted-pattern-metacharacters	grammar	behavior	case pattern metacharacters are literal when quoted or escaped
 grammar-case-bracket-patterns	grammar	behavior	case bracket pattern expressions

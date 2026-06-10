@@ -2282,6 +2282,14 @@ pub const Executor = struct {
     }
 
     fn executeBraceGroup(self: *Executor, group: ir.BraceGroup, options: ExecuteOptions) !CommandResult {
+        var owned_stdin: ?[]u8 = null;
+        defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        const prior_stdin = self.script_stdin;
+        const prior_stdin_offset = self.script_stdin_offset;
+        defer {
+            self.script_stdin = prior_stdin;
+            self.script_stdin_offset = prior_stdin_offset;
+        }
         const redirections = try self.expandRedirections(group.redirections, options);
         defer self.freeRedirections(redirections);
         const wrapper: ir.SimpleCommand = .{
@@ -2290,6 +2298,11 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = redirections,
         };
+        const redirected_stdin = try self.applyInputRedirections(wrapper, "", options, &owned_stdin);
+        if (redirected_stdin.len != 0 or hasInputRedirection(redirections)) {
+            self.script_stdin = redirected_stdin;
+            self.script_stdin_offset = 0;
+        }
         if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
             error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
             error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(wrapper), "bad file descriptor"),
