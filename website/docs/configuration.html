@@ -64,12 +64,16 @@
 
   <h2 id="files"><a href="#files">Files</a></h2>
 
-  <p>Rush loads system and user configuration, then sources the file named by <code>ENV</code> for interactive startup.</p>
+  <p>Interactive startup sources configuration in the order below. Defaults embedded in the rush binary load first, so every later file can override them. Missing files are skipped silently.</p>
 
-  <pre>/etc/rush/config.rush
-<span class="var">$XDG_CONFIG_HOME</span>/rush/config.rush
-<span class="var">$HOME</span>/.config/rush/config.rush
-<span class="var">$ENV</span></pre>
+  <pre>embedded default configuration   (ships inside the rush binary)
+<span class="var">$ENV</span>
+<span class="var">$sysconfdir</span>/rush/profile.rush      (login shells only)
+<span class="var">$XDG_CONFIG_HOME</span>/rush/profile.rush  (login shells only)
+<span class="var">$sysconfdir</span>/rush/config.rush
+<span class="var">$XDG_CONFIG_HOME</span>/rush/config.rush</pre>
+
+  <p>User paths fall back to <span class="var">$HOME</span><code>/.config/rush/</code> when <span class="var">$XDG_CONFIG_HOME</span> is unset. <span class="var">$sysconfdir</span> is fixed at build time: it defaults to <code>etc</code> inside the install prefix, and packagers set it to <code>/etc</code> with <code>zig build -Dsysconfdir=/etc</code>.</p>
 
   <h2 id="abbreviations"><a href="#abbreviations">Abbreviations</a></h2>
 
