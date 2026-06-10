@@ -1,0 +1,108 @@
+# First-party uv completion slice.
+
+complete uv --option --short h --long help --description 'show help'
+complete uv --option --short V --long version --description 'show version'
+complete uv --subcommand run --description 'run a command or script'
+complete uv --subcommand init --description 'create a new project'
+complete uv --subcommand add --description 'add dependencies'
+complete uv --subcommand remove --description 'remove dependencies'
+complete uv --subcommand sync --description 'sync project environment'
+complete uv --subcommand lock --description 'update lockfile'
+complete uv --subcommand export --description 'export lockfile'
+complete uv --subcommand tool --description 'run and install commands from Python packages'
+complete uv --subcommand venv --description 'create a virtual environment'
+complete uv --subcommand python --description 'manage Python versions'
+complete uv --subcommand pip --description 'pip-compatible interface'
+
+complete 'uv run' --option --long with --value-name requirement --description 'run with additional package installed'
+complete 'uv run' --option-value --long with --function __rush_complete_uv_packages
+complete 'uv run' --option --long python --value-name python --description 'Python interpreter or version'
+complete 'uv run' --option-value --long python --function __rush_complete_uv_pythons
+complete 'uv run' --argument --function __rush_complete_uv_scripts
+complete 'uv init' --option --long name --value-name name --description 'project name'
+complete 'uv init' --option --long package --description 'set up as package project'
+complete 'uv init' --option --long app --description 'set up as application project'
+complete 'uv init' --option --long lib --description 'set up as library project'
+complete 'uv init' --argument --function __rush_complete_uv_directories
+complete 'uv add' --option --long dev --description 'add as development dependency'
+complete 'uv add' --option --long optional --value-name extra --description 'add to optional dependency extra'
+complete 'uv add' --argument --function __rush_complete_uv_packages
+complete 'uv remove' --argument --function __rush_complete_uv_dependencies
+complete 'uv sync' --option --long all-extras --description 'enable all optional extras'
+complete 'uv sync' --option --long extra --value-name extra --description 'enable optional extra'
+complete 'uv sync' --option-value --long extra --function __rush_complete_uv_extras
+complete 'uv export' --option --long format --value-name format --description 'export format'
+complete 'uv export' --option-value --long format --function __rush_complete_uv_export_formats
+complete 'uv tool' --subcommand run --description 'run a tool'
+complete 'uv tool' --subcommand install --description 'install a tool'
+complete 'uv tool' --subcommand uninstall --description 'uninstall a tool'
+complete 'uv tool' --subcommand list --description 'list installed tools'
+complete 'uv tool run' --argument --function __rush_complete_uv_tools
+complete 'uv tool install' --argument --function __rush_complete_uv_tools
+complete 'uv tool uninstall' --argument --function __rush_complete_uv_installed_tools
+complete 'uv venv' --argument --function __rush_complete_uv_directories
+complete 'uv python' --subcommand install --description 'install Python versions'
+complete 'uv python' --subcommand list --description 'list Python versions'
+complete 'uv python' --subcommand pin --description 'pin project Python version'
+complete 'uv python install' --argument --function __rush_complete_uv_pythons
+complete 'uv python pin' --argument --function __rush_complete_uv_pythons
+complete 'uv pip' --subcommand install --description 'install packages'
+complete 'uv pip' --subcommand uninstall --description 'uninstall packages'
+complete 'uv pip' --subcommand list --description 'list packages'
+complete 'uv pip install' --argument --function __rush_complete_uv_packages
+complete 'uv pip uninstall' --argument --function __rush_complete_uv_dependencies
+
+__rush_complete_uv_scripts() {
+  sed -n '/\[project.scripts\]/,/\[/ s/^\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\)[[:space:]]*=.*/\1/p' pyproject.toml 2>/dev/null | while read script; do test -n "$script" && completion candidate "$script" --kind plain; done
+  completion files --extension .py
+}
+
+__rush_complete_uv_packages() {
+  completion candidate pytest --kind plain
+  completion candidate ruff --kind plain
+  completion candidate mypy --kind plain
+  completion candidate requests --kind plain
+  completion candidate pydantic --kind plain
+}
+
+__rush_complete_uv_dependencies() {
+  sed -n '/dependencies[[:space:]]*=/,/]/ s/.*"\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\).*/\1/p' pyproject.toml 2>/dev/null | while read dep; do test -n "$dep" && completion candidate "$dep" --kind plain; done
+  __rush_complete_uv_packages
+}
+
+__rush_complete_uv_extras() {
+  sed -n '/\[project.optional-dependencies\]/,/\[/ s/^\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\)[[:space:]]*=.*/\1/p' pyproject.toml 2>/dev/null | while read extra; do test -n "$extra" && completion candidate "$extra" --kind plain; done
+  completion candidate dev --kind plain
+  completion candidate test --kind plain
+  completion candidate docs --kind plain
+}
+
+__rush_complete_uv_tools() {
+  completion candidate ruff --kind plain
+  completion candidate black --kind plain
+  completion candidate mypy --kind plain
+  completion candidate pytest --kind plain
+  completion candidate pre-commit --kind plain
+}
+
+__rush_complete_uv_installed_tools() {
+  uv tool list 2>/dev/null | awk '{ print $1 }' | while read tool; do test -n "$tool" && completion candidate "$tool" --kind plain; done
+  __rush_complete_uv_tools
+}
+
+__rush_complete_uv_pythons() {
+  uv python list 2>/dev/null | awk '{ print $1 }' | while read py; do test -n "$py" && completion candidate "$py" --kind plain; done
+  completion candidate 3.14 --kind plain
+  completion candidate 3.13 --kind plain
+  completion candidate 3.12 --kind plain
+  completion candidate 3.11 --kind plain
+}
+
+__rush_complete_uv_export_formats() {
+  completion candidate requirements-txt --kind plain
+  completion candidate pylock.toml --kind plain
+}
+
+__rush_complete_uv_directories() {
+  completion directories --append-slash
+}
