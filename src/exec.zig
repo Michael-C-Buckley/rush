@@ -4811,7 +4811,7 @@ pub const Executor = struct {
 
     fn readSourceFile(self: *Executor, io: std.Io, name: []const u8) ![]const u8 {
         if (std.mem.indexOfScalar(u8, name, '/') != null) {
-            return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .limited(1024 * 1024));
+            return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .unlimited);
         }
 
         if (self.getEnv("PATH")) |path_value| {
@@ -4820,14 +4820,14 @@ pub const Executor = struct {
                 const prefix = if (dir.len == 0) "." else dir;
                 const candidate = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ prefix, name });
                 defer self.allocator.free(candidate);
-                return std.Io.Dir.cwd().readFileAlloc(io, candidate, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+                return std.Io.Dir.cwd().readFileAlloc(io, candidate, self.allocator, .unlimited) catch |err| switch (err) {
                     error.FileNotFound => continue,
                     else => |e| return e,
                 };
             }
         }
 
-        return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .limited(1024 * 1024));
+        return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .unlimited);
     }
 
     fn pushCallFrame(self: *Executor, args: []const ir.WordRef) !void {

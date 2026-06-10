@@ -1639,7 +1639,7 @@ fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, i
     const script = switch (invocation.kind) {
         .command_string => invocation.source,
         .script_file => script: {
-            owned_script = try std.Io.Dir.cwd().readFileAlloc(io, invocation.source, allocator, .limited(1024 * 1024));
+            owned_script = try std.Io.Dir.cwd().readFileAlloc(io, invocation.source, allocator, .unlimited);
             options.source_path = invocation.source;
             break :script owned_script.?;
         },
@@ -1655,7 +1655,7 @@ fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, i
 fn readStandardInputScript(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
     var buffer: [4096]u8 = undefined;
     var reader = std.Io.File.stdin().reader(io, &buffer);
-    return reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
+    return reader.interface.allocRemaining(allocator, .unlimited);
 }
 
 fn stdinIsTty(io: std.Io) bool {
@@ -2452,6 +2452,26 @@ test "script file invocation sets command name and positional parameters" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("rush-script-invocation-test.rush:2:arg one:two words\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "script file invocation accepts sources larger than one mib" {
+    const path = "rush-large-script-invocation-test.rush";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var contents: std.ArrayList(u8) = .empty;
+    defer contents.deinit(std.testing.allocator);
+    try contents.appendNTimes(std.testing.allocator, '#', 1024 * 1024 + 1);
+    try contents.appendSlice(std.testing.allocator, "\necho ok\n");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = contents.items });
+
+    const invocation = parseShellInvocation(&.{ "rush", path }) orelse return error.ExpectedInvocation;
+    var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
