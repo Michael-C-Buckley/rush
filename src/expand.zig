@@ -1565,7 +1565,9 @@ pub fn expandHereDocBody(allocator: std.mem.Allocator, text: []const u8, options
         // the first IFS character like "$*" and $@ joins with spaces.
         if (part.kind == .parameter and std.mem.eql(u8, part.value(text), "*")) {
             const ifs = options.env.get("IFS") orelse " \t\n";
-            try appendQuotedStar(allocator, &output, options.positionals, ifs);
+            // Here-doc bodies never undergo pathname expansion.
+            var quoted_glob = false;
+            try appendQuotedStar(allocator, &output, &quoted_glob, options.positionals, ifs);
             index = part.span.end;
             continue;
         }
