@@ -7719,8 +7719,12 @@ fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 
     var status: ExitStatus = 0;
     for (command.argv[operand_start..]) |arg| {
-        const pid = std.fmt.parseInt(i64, arg.text, 10) catch return errorResult(self.allocator, 127, "wait", "invalid pid");
-        const job = self.findBackgroundJob(pid) orelse return errorResult(self.allocator, 127, "wait", "unknown pid");
+        const job = if (std.mem.startsWith(u8, arg.text, "%"))
+            self.findBackgroundJobBySpec(arg.text) orelse return errorResult(self.allocator, 127, "wait", "unknown job")
+        else blk: {
+            const pid = std.fmt.parseInt(i64, arg.text, 10) catch return errorResult(self.allocator, 127, "wait", "invalid pid");
+            break :blk self.findBackgroundJob(pid) orelse return errorResult(self.allocator, 127, "wait", "unknown pid");
+        };
         status = try waitBackgroundJob(io, job);
     }
     return emptyResult(self.allocator, status);
