@@ -167,6 +167,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
             try appendDoubleQuotedText(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, part.value(parts.raw), options, ifs);
             continue;
         }
+        if (part.kind == .single_quoted) force_current_field = true;
         const split = part.kind == .parameter or part.kind == .command_substitution or part.kind == .arithmetic;
         if (part.kind == .parameter) {
             const parameter = part.value(parts.raw);
@@ -1888,6 +1889,27 @@ test "expand word returns fields through an explicit result" {
 
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("hello world", result.fields[0]);
+}
+
+test "empty quoted word parts preserve fields" {
+    var single = try expandWord(std.testing.allocator, "''", .{});
+    defer single.deinit();
+    try std.testing.expectEqual(@as(usize, 1), single.fields.len);
+    try std.testing.expectEqualStrings("", single.fields[0]);
+
+    var embedded = try expandWord(std.testing.allocator, "pre''post", .{});
+    defer embedded.deinit();
+    try std.testing.expectEqual(@as(usize, 1), embedded.fields.len);
+    try std.testing.expectEqualStrings("prepost", embedded.fields[0]);
+
+    var unquoted_empty = try expandWord(std.testing.allocator, "$EMPTY", .{ .env = test_env });
+    defer unquoted_empty.deinit();
+    try std.testing.expectEqual(@as(usize, 0), unquoted_empty.fields.len);
+
+    var quoted_generated_empty = try expandWord(std.testing.allocator, "''$EMPTY", .{ .env = test_env });
+    defer quoted_generated_empty.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_generated_empty.fields.len);
+    try std.testing.expectEqualStrings("", quoted_generated_empty.fields[0]);
 }
 
 test "field splitting uses default IFS for unquoted expansion" {

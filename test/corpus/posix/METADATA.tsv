@@ -158,6 +158,7 @@ pipeline-negation-false	grammar	behavior	-
 pipeline-negation-pipeline	grammar	behavior	-
 pipeline-negation-true	grammar	behavior	-
 quote-double-expands	expansion	behavior	-
+quote-removal-quoted-empty-fields	expansion	behavior	quoted empty literals preserve argv fields
 quote-single-literal	expansion	behavior	-
 quoted-at-positionals	expansion	behavior	-
 quoted-at-embedded-positionals	expansion	behavior	embedded quoted $@ preserves first and last fields with surrounding text

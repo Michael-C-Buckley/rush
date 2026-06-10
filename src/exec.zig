@@ -9073,6 +9073,21 @@ test "executor uses quote-removed argv text" {
     try std.testing.expectEqualStrings("hello world\n", result.stdout);
 }
 
+test "executor preserves quoted empty argv operands" {
+    var lowered = try parseAndLower(std.testing.allocator, "printf ''; echo status=$?");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status=0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor runs true false and echo builtins" {
     var lowered = try parseAndLower(std.testing.allocator, "true");
     defer lowered.parsed.deinit();

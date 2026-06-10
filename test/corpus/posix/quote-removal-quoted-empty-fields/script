@@ -1,0 +1,4 @@
+set -- '' "" a''b ''$missing
+echo count:$#
+printf '<%s>\n' "$1" "$2" "$3" "$4"
+printf ''; echo status:$?

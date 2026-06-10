@@ -108,7 +108,7 @@ Manifest rows:
 - `expansion-field-splitting-ifs-nonwhitespace`
 - `expansion-field-splitting-empty-ifs`
 
-Current corpus covers newline splitting, leading/trailing IFS whitespace trimming, comma/colon splitting, adjacent non-whitespace delimiters producing empty fields, generated empty field removal, quoted empty preservation, and empty IFS disabling splitting.
+Current corpus covers newline splitting, leading/trailing IFS whitespace trimming, comma/colon splitting, adjacent non-whitespace delimiters producing empty fields, generated empty field removal, quoted generated/literal empty preservation, and empty IFS disabling splitting.
 
 Remaining gaps:
 
@@ -140,7 +140,7 @@ Manifest rows:
 - `expansion-quote-removal`
 - `lex-quotes`
 
-Current coverage includes single quotes, double quotes, escaped spaces, double-quote backslash handling for special and non-special characters, escaped-newline continuation, and common quoted expansion cases.
+Current coverage includes single quotes, double quotes, escaped spaces, explicit quoted empty fields, double-quote backslash handling for special and non-special characters, escaped-newline continuation, and common quoted expansion cases.
 
 Remaining gaps:
 
