@@ -3964,6 +3964,29 @@ pub const Executor = struct {
         }
     }
 
+    fn duplicateExternalStdioFromInheritedTarget(
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        io: std.Io,
+        from_fd: std.posix.fd_t,
+        to_fd: std.posix.fd_t,
+        stdout_closed: bool,
+        stderr_closed: bool,
+        stdio: ExternalStdio,
+    ) !bool {
+        if (from_fd == 2 and to_fd == 1 and stdout_file.* == null and !stdout_closed and !externalStdioCapturesStdout(stdio)) {
+            if (stderr_file.*) |old| old.close(io);
+            stderr_file.* = try dupStdioFile(1);
+            return true;
+        }
+        if (from_fd == 1 and to_fd == 2 and stderr_file.* == null and !stderr_closed and !externalStdioCapturesStderr(stdio)) {
+            if (stdout_file.*) |old| old.close(io);
+            stdout_file.* = try dupStdioFile(2);
+            return true;
+        }
+        return false;
+    }
+
     fn pipelineInputSourceFile(
         self: Executor,
         input_fds: *const std.AutoHashMapUnmanaged(std.posix.fd_t, std.Io.File),
@@ -5180,6 +5203,7 @@ pub const Executor = struct {
                     else => {},
                 }
                 if (try duplicateExternalStdioFromFd(&stdout_file, &stderr_file, io, from_fd, to_fd)) continue;
+                if (try duplicateExternalStdioFromInheritedTarget(&stdout_file, &stderr_file, io, from_fd, to_fd, stdout_closed, stderr_closed, options.external_stdio)) continue;
                 if (from_fd == 2 and to_fd == 1 and stdout_file != null) {
                     if (stderr_file) |old| old.close(io);
                     const duped = try rawDup(stdout_file.?.handle);
@@ -5363,6 +5387,7 @@ pub const Executor = struct {
                     else => {},
                 }
                 if (try duplicateExternalStdioFromFd(&stdout_file, &stderr_file, io, from_fd, to_fd)) continue;
+                if (try duplicateExternalStdioFromInheritedTarget(&stdout_file, &stderr_file, io, from_fd, to_fd, stdout_closed, stderr_closed, options.external_stdio)) continue;
                 if (from_fd == 2 and to_fd == 1 and stdout_file == null and !stdout_closed and externalStdioCapturesStdout(options.external_stdio) and manual_stdout_capture == null) {
                     manual_stdout_capture = try makePipelinePipe(io);
                 } else if (from_fd == 1 and to_fd == 2 and stderr_file == null and !stderr_closed and externalStdioCapturesStderr(options.external_stdio) and manual_stderr_capture == null) {
@@ -11425,6 +11450,60 @@ test "captured external command close redirections close child stdio" {
     try std.testing.expectEqualStrings("errfile", stderr_file);
 }
 
+test "inherited external stdio duplications copy the target stream" {
+    const stdout_path = "rush-test-external-inherited-stdio-dup.out";
+    const stderr_path = "rush-test-external-inherited-stdio-dup.err";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stdout_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch {};
+
+    const saved_stdout = try rawDup(std.Io.File.stdout().handle);
+    defer closeRawFd(std.testing.io, saved_stdout);
+    const saved_stderr = try rawDup(std.Io.File.stderr().handle);
+    defer closeRawFd(std.testing.io, saved_stderr);
+
+    var stdout_file = try std.Io.Dir.cwd().createFile(std.testing.io, stdout_path, .{ .truncate = true });
+    defer stdout_file.close(std.testing.io);
+    var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{ .truncate = true });
+    defer stderr_file.close(std.testing.io);
+
+    try rawDup2(stdout_file.handle, std.Io.File.stdout().handle);
+    try rawDup2(stderr_file.handle, std.Io.File.stderr().handle);
+    var redirected_stdio = true;
+    defer if (redirected_stdio) {
+        rawDup2(saved_stdout, std.Io.File.stdout().handle) catch {};
+        rawDup2(saved_stderr, std.Io.File.stderr().handle) catch {};
+    };
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\/bin/sh -c 'printf sync-err >&2' 2>&1
+        \\/bin/sh -c 'printf sync-out' 1>&2
+        \\/bin/sh -c 'printf async-err >&2' 2>&1 &
+        \\wait
+        \\/bin/sh -c 'printf async-out' 1>&2 &
+        \\wait
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer result.deinit();
+
+    try rawDup2(saved_stdout, std.Io.File.stdout().handle);
+    try rawDup2(saved_stderr, std.Io.File.stderr().handle);
+    redirected_stdio = false;
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+
+    const stdout_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stdout_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(stdout_output);
+    try std.testing.expectEqualStrings("sync-errasync-err", stdout_output);
+
+    const stderr_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(stderr_output);
+    try std.testing.expectEqualStrings("sync-outasync-out", stderr_output);
+}
+
 test "executor short-circuits AND and OR lists" {
     var and_lowered = try parseAndLower(std.testing.allocator, "false && echo nope");
     defer and_lowered.parsed.deinit();
@@ -12408,6 +12487,8 @@ test "command substitution captures external stdout while stderr remains pty" {
         \\echo stderr:$value
         \\value=$(/bin/sh -c 'if test -t 2; then printf tty; else printf notty; fi; printf err-simple >&2' 2>&1)
         \\echo dup:$value
+        \\value=$(/bin/sh -c 'printf out-to-stderr' 1>&2)
+        \\echo stdout-dup:$value
         \\value=$(/bin/sh -c 'printf err >&2; printf out' 2>&1)
         \\echo order:$value
         \\value=$({ /bin/sh -c 'if test -t 2; then printf tty; else printf notty; fi; printf err-group >&2'; } 2>&1)
@@ -12423,7 +12504,7 @@ test "command substitution captures external stdout while stderr remains pty" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("stderr:tty\ndup:nottyerr-simple\norder:errout\ngroup:nottyerr-group\n", result.stdout);
+    try std.testing.expectEqualStrings("stderr:tty\ndup:nottyerr-simple\nstdout-dup:\norder:errout\ngroup:nottyerr-group\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
