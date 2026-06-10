@@ -516,8 +516,9 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
             return allocator.alloc(u8, 0);
         },
         .length => {
-            const len = if (value) |text| text.len else 0;
-            return std.fmt.allocPrint(allocator, "{d}", .{len});
+            if (value) |text| return std.fmt.allocPrint(allocator, "{d}", .{text.len});
+            if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
+            return allocator.dupe(u8, "0");
         },
         .default_value => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);

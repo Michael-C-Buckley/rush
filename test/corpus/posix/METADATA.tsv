@@ -110,6 +110,7 @@ expansion-command-substitution-splitting	expansion	behavior	-
 expansion-field-splitting-newline	expansion	behavior	-
 expansion-length-operator	expansion	behavior	-
 expansion-nested-default-word	expansion	behavior	-
+expansion-nounset-length-unset-parameter	expansion	negative	string length expansion of an unset parameter fails under set -u
 expansion-null-colon-operators	expansion	behavior	-
 expansion-pathname-sorted	expansion	behavior	-
 expansion-quoted-backquote-substitution	expansion	behavior	-
