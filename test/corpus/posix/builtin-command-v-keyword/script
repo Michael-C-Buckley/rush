@@ -1,0 +1,4 @@
+command -v if
+command -V while
+command -V rush-missing-command-name
+echo st=$?

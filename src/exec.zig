@@ -5684,6 +5684,12 @@ fn commandLookupMany(self: *Executor, options: ExecuteOptions, args: []const ir.
 }
 
 fn commandLookup(self: *Executor, options: ExecuteOptions, name: []const u8, use_default_path: bool, mode: CommandLookupMode) !CommandResult {
+    if (isReservedAliasWord(name)) {
+        return if (mode == .terse)
+            stdoutLine(self.allocator, name, 0)
+        else
+            stdoutLineFmt(self.allocator, "{s} is a shell keyword", .{name}, 0);
+    }
     if (builtinForName(self.*, name) != null) {
         return if (mode == .terse)
             stdoutLine(self.allocator, name, 0)
@@ -5706,7 +5712,10 @@ fn commandLookup(self: *Executor, options: ExecuteOptions, name: []const u8, use
                 stdoutLineFmt(self.allocator, "{s} is {s}", .{ name, path }, 0);
         }
     }
-    return emptyResult(self.allocator, 1);
+    // POSIX command: a name that could not be found exits 127; -V also
+    // writes a diagnostic while -v stays silent.
+    if (mode == .verbose) return errorResult(self.allocator, 127, name, "not found");
+    return emptyResult(self.allocator, 127);
 }
 
 fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
