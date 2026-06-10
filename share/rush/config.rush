@@ -6,7 +6,7 @@
 : "${PS1=$ }"
 : "${PS2=> }"
 
-# Git portion of the default prompt: branch, a * marker when the
+# Git portion of the default prompt: branch, a • marker when the
 # worktree is dirty, and arrows with commit counts against the
 # upstream. Runs in a hidden async refresh so git never blocks
 # the prompt.
@@ -15,7 +15,7 @@ rush_prompt_git() {
   test -n "$branch" || return 0
 
   marker=''
-  test -z "$(git status --porcelain 2>/dev/null)" || marker='*'
+  test -z "$(git status --porcelain 2>/dev/null)" || marker='•'
 
   arrows=''
   counts="$(git rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)"
