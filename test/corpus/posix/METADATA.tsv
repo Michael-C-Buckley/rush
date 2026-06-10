@@ -310,6 +310,7 @@ function-set-positionals-local	grammar	behavior	set positional parameters inside
 function-shift-positionals-local	grammar	behavior	shift inside functions is local to the function call
 function-assignment-prefix-scope	grammar	behavior	function assignment prefixes are temporary during the call
 redirection-command-not-found-dup-order	redirection	behavior	command-not-found diagnostics follow ordered descriptor duplication
+redirection-pipeline-stage-input-fd-duplication	redirection	behavior	pipeline stage external command can duplicate an arbitrary input fd opened earlier in the same command
 builtin-read-option-before-terminator	builtin	behavior	read accepts option before option terminator
 builtin-trap-option-terminator	builtin	behavior	trap accepts option terminator before action and listing
 builtin-trap-subshell-reset	signals	behavior	Subshell environments reset caught parent EXIT traps instead of running them on subshell exit

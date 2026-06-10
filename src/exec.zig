@@ -3677,16 +3677,61 @@ pub const Executor = struct {
         const redirections = try self.expandRedirections(command.redirections, options);
         defer self.freeRedirections(redirections);
         try self.validateFdDuplicationTargets(redirections);
+
+        var input_fds: std.AutoHashMapUnmanaged(std.posix.fd_t, std.Io.File) = .empty;
+        defer {
+            var iter = input_fds.valueIterator();
+            while (iter.next()) |file| file.close(io);
+            input_fds.deinit(self.allocator);
+        }
+
         for (redirections) |redirection| {
-            if (isHereDocRedirection(redirection)) {
-                if (stdin_file.*) |file| file.close(io);
-                stdin_file.* = try fileFromBytes(io, redirection.here_doc orelse "");
+            if (redirection.operator == .dless or redirection.operator == .dless_dash) {
+                const fd = redirectionFd(redirection) orelse 0;
+                const file = try fileFromBytes(io, redirection.here_doc orelse "");
+                if (fd == 0) {
+                    if (stdin_file.*) |old| old.close(io);
+                    stdin_file.* = file;
+                } else {
+                    try self.putPipelineInputFd(&input_fds, io, fd, file);
+                }
                 continue;
             }
-            if (isStdinFileRedirection(redirection)) {
+            if (redirection.operator == .less or redirection.operator == .less_great) {
                 const target = redirection.target orelse continue;
-                if (stdin_file.*) |file| file.close(io);
-                stdin_file.* = try std.Io.Dir.cwd().openFile(io, target.text, .{});
+                const fd = redirectionFd(redirection) orelse 0;
+                const file = if (redirection.operator == .less_great)
+                    try openReadWriteRedirectionFile(io, target.text)
+                else
+                    try std.Io.Dir.cwd().openFile(io, target.text, .{});
+                if (fd == 0) {
+                    if (stdin_file.*) |old| old.close(io);
+                    stdin_file.* = file;
+                } else {
+                    try self.putPipelineInputFd(&input_fds, io, fd, file);
+                }
+                continue;
+            }
+            if (redirection.operator == .less_and) {
+                const from_fd = redirectionFd(redirection) orelse 0;
+                const target = redirection.target orelse continue;
+                if (std.mem.eql(u8, target.text, "-")) {
+                    if (from_fd == 0) {
+                        if (stdin_file.*) |file| file.close(io);
+                        stdin_file.* = null;
+                    } else if (input_fds.fetchRemove(from_fd)) |entry| {
+                        entry.value.close(io);
+                    }
+                    continue;
+                }
+                const to_fd = parseFd(target.text) orelse continue;
+                const file = try self.pipelineInputSourceFile(&input_fds, stdin_file.*, stdout_file.*, stderr_file.*, to_fd);
+                if (from_fd == 0) {
+                    if (stdin_file.*) |old| old.close(io);
+                    stdin_file.* = file;
+                } else {
+                    try self.putPipelineInputFd(&input_fds, io, from_fd, file);
+                }
                 continue;
             }
             if (isFileOutputRedirection(redirection)) {
@@ -3706,6 +3751,29 @@ pub const Executor = struct {
                 }
             }
         }
+    }
+
+    fn pipelineInputSourceFile(
+        self: Executor,
+        input_fds: *const std.AutoHashMapUnmanaged(std.posix.fd_t, std.Io.File),
+        stdin_file: ?std.Io.File,
+        stdout_file: ?std.Io.File,
+        stderr_file: ?std.Io.File,
+        fd: std.posix.fd_t,
+    ) !std.Io.File {
+        if (fd == 0) if (stdin_file) |file| return dupFile(file);
+        if (fd == 1) if (stdout_file) |file| return dupFile(file);
+        if (fd == 2) if (stderr_file) |file| return dupFile(file);
+        if (input_fds.get(fd)) |file| return dupFile(file);
+        if (!self.isShellFdOpen(fd)) return error.BadFileDescriptor;
+        return .{ .handle = try rawDup(fd), .flags = .{ .nonblocking = false } };
+    }
+
+    fn putPipelineInputFd(self: *Executor, input_fds: *std.AutoHashMapUnmanaged(std.posix.fd_t, std.Io.File), io: std.Io, fd: std.posix.fd_t, file: std.Io.File) !void {
+        errdefer file.close(io);
+        const entry = try input_fds.getOrPut(self.allocator, fd);
+        if (entry.found_existing) entry.value_ptr.close(io);
+        entry.value_ptr.* = file;
     }
 
     fn runBuiltinPipelineStage(context: *BuiltinPipelineContext) void {
@@ -5471,6 +5539,10 @@ fn filesFromPipeFds(fds: [2]std.posix.fd_t) Executor.PipelinePipe {
         .read = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
         .write = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
     };
+}
+
+fn dupFile(file: std.Io.File) !std.Io.File {
+    return .{ .handle = try rawDup(file.handle), .flags = file.flags };
 }
 
 /// Duplicates one of the shell's own stdio descriptors so a pipeline
@@ -11604,6 +11676,17 @@ test "executor supports real redirections on pipeline stages" {
     var input_result = try executor.executeProgram(input.program, .{ .io = std.testing.io, .allow_external = true });
     defer input_result.deinit();
     try std.testing.expectEqualStrings("from-input", input_result.stdout);
+
+    const input_fd_path = "rush-pipeline-stage-input-fd.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_fd_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_fd_path, .data = "from-input-fd" });
+    var input_fd = try parseAndLower(std.testing.allocator, "/bin/cat 3<rush-pipeline-stage-input-fd.tmp 0<&3 | /bin/cat");
+    defer input_fd.parsed.deinit();
+    defer input_fd.program.deinit();
+    var input_fd_result = try executor.executeProgram(input_fd.program, .{ .io = std.testing.io, .allow_external = true });
+    defer input_fd_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), input_fd_result.status);
+    try std.testing.expectEqualStrings("from-input-fd", input_fd_result.stdout);
 }
 
 test "executor supports mixed builtin and external pipeline stages" {
