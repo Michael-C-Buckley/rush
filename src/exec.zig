@@ -6582,6 +6582,14 @@ fn normalizeLogicalPath(allocator: std.mem.Allocator, base: []const u8, target: 
         try std.mem.concat(allocator, u8, &.{ base, "/", target });
     defer allocator.free(combined);
 
+    // A pathname beginning with exactly two slashes keeps its
+    // implementation-defined // root, while three or more leading slashes
+    // collapse to one (POSIX XBD 4.13). dash and bash preserve // the same
+    // way.
+    const source_root = if (target.len > 0 and target[0] == '/') target else base;
+    const double_slash_root = source_root.len >= 2 and source_root[0] == '/' and source_root[1] == '/' and
+        (source_root.len == 2 or source_root[2] != '/');
+
     var parts: std.ArrayList([]const u8) = .empty;
     defer parts.deinit(allocator);
     var iter = std.mem.splitScalar(u8, combined, '/');
@@ -6594,9 +6602,10 @@ fn normalizeLogicalPath(allocator: std.mem.Allocator, base: []const u8, target: 
         try parts.append(allocator, part);
     }
 
-    if (parts.items.len == 0) return allocator.dupe(u8, "/");
+    if (parts.items.len == 0) return allocator.dupe(u8, if (double_slash_root) "//" else "/");
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
+    if (double_slash_root) try out.append(allocator, '/');
     for (parts.items) |part| {
         try out.append(allocator, '/');
         try out.appendSlice(allocator, part);
