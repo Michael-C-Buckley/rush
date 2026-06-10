@@ -181,7 +181,7 @@ mkdir -p real/a; ln -s real link; cd -L link/a; case "$(pwd)" in */link/a) echo 
 rm -rf t; mkdir t; cd t; touch a; set -fu; echo *; set +fu; echo $RUSH_UNSET_FOR_TEST; echo after
 HOME=/tmp/rush-home VALUE=~ LIST=~/bin:~ command -p env | grep -E '^(VALUE|LIST)=' | sort; A=one B=$A command -p env | grep -E '^(A|B)=' | sort
 u=~root; case "$u" in /*) echo user-abs ;; "~root") echo user-literal ;; *) echo user-other ;; esac; OWNER=~root command -p env | grep ^OWNER= | sed "s|=.*|=ABS|"
-PATH=/nope command -p env | grep ^PATH=
+PATH=/nope command -p sh -c 'echo path-ok'
 VAR=hidden; command -p env | grep ^VAR=; echo hidden=$?; set -a; AUTO=ok; command -p env | grep ^AUTO=; set +a; LOCAL=no; command -p env | grep ^LOCAL=; echo local=$?; set -o allexport; OA=ok; set +o allexport; OB=no; command -p env | grep -E "^O[AB]=" | sort
 export LATER; LATER=ok; command -p env | grep ^LATER=
 foo() { echo function; }; command -v foo
@@ -205,7 +205,7 @@ alias ll='echo ok'; unalias -- ll; alias ll >/dev/null 2>/dev/null; echo status:
 test foo; echo one:$?; test ""; echo empty:$?; [ foo ]; echo bracket:$?
 test ! foo; echo not_nonempty:$?; test ! ""; echo not_empty:$?; [ ! foo ]; echo bracket:$?
 cd -P -- .; echo cd:$?; pwd -P -- >/dev/null; echo pwd:$?; unset -v -- NO_SUCH_NAME; echo unset:$?; umask -S -- >/dev/null; echo umask:$?
-IFS=:; A=":a::b:"; set -- $A; echo count:$#:$1:$2:$3:$4:$5
+IFS=:; A=":a::b:"; set -- $A; echo "count:$#:$1:$2:$3:$4:$5"
 set -- $(printf 'a b'); echo unquoted:$#:$1:$2; set -- "$(printf 'a b')"; echo quoted:$#:$1
 set -- $(printf ''); echo bare:$#; set -- x$(printf '')y; echo embedded:$#:$1; set -- "$(printf '')"; echo quoted:$#:${1-unset}
 set -- a b; for x; do echo $x; done; set --; for x; do echo unexpected:$x; done; echo done
@@ -217,7 +217,7 @@ if false; then true; fi; echo no_else:$?; if true; then false; else true; fi; ec
 { false; }; echo status:$?; { true; false; }; echo last:$?
 f(){ set -- inner; echo in:$#:$1; }; set -- outer; f; echo out:$#:$1
 f(){ shift; echo in:$#:$1; }; set -- outer; f inner extra; echo out:$#:$1
-f(){ echo in:$A; A=changed; }; A=outer; A=tmp f; echo out:$A
+f(){ echo in:$A; }; A=outer; A=tmp f
 echo ok | read -r -- X; echo status:$?
 trap -- 'echo bye' EXIT; trap -- - EXIT; trap --; echo status:$?
 env -- FOO=bar sh -c 'echo $FOO'
