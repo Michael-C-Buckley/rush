@@ -7842,6 +7842,11 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         try setCurrentPositionals(self, command.argv[2..]);
         return emptyResult(self.allocator, 0);
     }
+    if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-")) {
+        self.shell_options.xtrace = false;
+        self.shell_options.verbose = false;
+        return emptyResult(self.allocator, 0);
+    }
     if (command.argv.len == 2 and isSetShortOptionCluster(command.argv[1].text)) {
         try applySetShortOptionCluster(self, command.argv[1].text);
         return emptyResult(self.allocator, 0);

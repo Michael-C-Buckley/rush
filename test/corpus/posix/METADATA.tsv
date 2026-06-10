@@ -292,6 +292,7 @@ builtin-read-option-before-terminator	builtin	behavior	read accepts option befor
 builtin-trap-option-terminator	builtin	behavior	trap accepts option terminator before action and listing
 builtin-trap-invalid-signal	builtin	behavior	trap rejects invalid signal specifications with a non-zero status
 builtin-wait-job-spec	builtin	behavior	wait accepts a job-control job ID operand
+option-set-hyphen	options	behavior	set - disables xtrace and verbose without changing positional parameters
 builtin-env-terminator-assignment-command	builtin	behavior	env option terminator before assignment and command
 grammar-case-quoted-pattern-metacharacters	grammar	behavior	case pattern metacharacters are literal when quoted or escaped
 grammar-case-bracket-patterns	grammar	behavior	case bracket pattern expressions
