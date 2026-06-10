@@ -1,0 +1,517 @@
+# First-party kubectl completion slice.
+
+# Global options.
+complete kubectl --option --short h --long help --description 'show help'
+complete kubectl --option --long kubeconfig --value-name file --description 'path to the kubeconfig file'
+complete kubectl --option-value --long kubeconfig --function __rush_complete_kubectl_files
+complete kubectl --option --long context --value-name context --description 'name of the kubeconfig context to use'
+complete kubectl --option-value --long context --function __rush_complete_kubectl_contexts
+complete kubectl --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete kubectl --option-value --short n --function __rush_complete_kubectl_namespaces
+complete kubectl --option-value --long namespace --function __rush_complete_kubectl_namespaces
+complete kubectl --option --short A --long all-namespaces --description 'list across all namespaces'
+complete kubectl --option --long cluster --value-name cluster --description 'name of the kubeconfig cluster to use'
+complete kubectl --option-value --long cluster --function __rush_complete_kubectl_clusters
+complete kubectl --option --long user --value-name user --description 'name of the kubeconfig user to use'
+complete kubectl --option-value --long user --function __rush_complete_kubectl_users
+complete kubectl --option --short o --long output --value-name format --description 'output format'
+complete kubectl --option-value --short o --function __rush_complete_kubectl_output_formats
+complete kubectl --option-value --long output --function __rush_complete_kubectl_output_formats
+complete kubectl --option --long request-timeout --value-name duration --description 'request timeout duration'
+complete kubectl --option-value --long request-timeout --function __rush_complete_kubectl_durations
+complete kubectl --option --long server --value-name url --description 'API server address'
+complete kubectl --option --long token --value-name token --description 'bearer token for authentication'
+complete kubectl --option --long certificate-authority --value-name file --description 'path to a certificate authority file'
+complete kubectl --option-value --long certificate-authority --function __rush_complete_kubectl_files
+complete kubectl --option --long insecure-skip-tls-verify --description 'skip server certificate validation'
+complete kubectl --option --long dry-run --value-name strategy --description 'dry-run strategy'
+complete kubectl --option-value --long dry-run --function __rush_complete_kubectl_dry_run_modes
+complete kubectl --option --long field-manager --value-name name --description 'field manager name for server-side apply'
+complete kubectl --option --long v --value-name level --description 'log level verbosity'
+
+# Common root subcommands.
+complete kubectl --subcommand get --description 'display one or many resources'
+complete kubectl --subcommand describe --description 'show details of a resource'
+complete kubectl --subcommand apply --description 'apply a configuration to a resource'
+complete kubectl --subcommand delete --description 'delete resources'
+complete kubectl --subcommand logs --description 'print logs for a container'
+complete kubectl --subcommand exec --description 'execute a command in a container'
+complete kubectl --subcommand port-forward --description 'forward local ports to a resource'
+complete kubectl --subcommand config --description 'modify kubeconfig files'
+complete kubectl --subcommand context --description 'manage and switch contexts'
+complete kubectl --subcommand api-resources --description 'print supported API resources'
+complete kubectl --subcommand api-versions --description 'print supported API versions'
+complete kubectl --subcommand cluster-info --description 'display cluster information'
+complete kubectl --subcommand create --description 'create a resource'
+complete kubectl --subcommand edit --description 'edit a resource on the server'
+complete kubectl --subcommand explain --description 'show resource documentation'
+complete kubectl --subcommand rollout --description 'manage rollout of a resource'
+complete kubectl --subcommand scale --description 'set a new size for a resource'
+complete kubectl --subcommand top --description 'display resource usage'
+complete kubectl --subcommand wait --description 'wait for a condition on resources'
+
+# get / describe / explain.
+complete 'kubectl get' --option --short h --long help --description 'show help'
+complete 'kubectl get' --option --short A --long all-namespaces --description 'list across all namespaces'
+complete 'kubectl get' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'kubectl get' --option-value --short n --function __rush_complete_kubectl_namespaces
+complete 'kubectl get' --option-value --long namespace --function __rush_complete_kubectl_namespaces
+complete 'kubectl get' --option --short o --long output --value-name format --description 'output format'
+complete 'kubectl get' --option-value --short o --function __rush_complete_kubectl_output_formats
+complete 'kubectl get' --option-value --long output --function __rush_complete_kubectl_output_formats
+complete 'kubectl get' --option --short l --long selector --value-name selector --description 'selector to filter resources'
+complete 'kubectl get' --option-value --short l --function __rush_complete_kubectl_label_selectors
+complete 'kubectl get' --option-value --long selector --function __rush_complete_kubectl_label_selectors
+complete 'kubectl get' --option --long field-selector --value-name selector --description 'field selector to filter resources'
+complete 'kubectl get' --option-value --long field-selector --function __rush_complete_kubectl_field_selectors
+complete 'kubectl get' --option --long sort-by --value-name jsonpath --description 'sort list by a JSONPath expression'
+complete 'kubectl get' --option-value --long sort-by --function __rush_complete_kubectl_sort_fields
+complete 'kubectl get' --option --short w --long watch --description 'watch for changes'
+complete 'kubectl get' --option --long show-labels --description 'show labels as the last column'
+complete 'kubectl get' --argument --function __rush_complete_kubectl_resource_args
+
+complete 'kubectl describe' --option --short h --long help --description 'show help'
+complete 'kubectl describe' --option --short A --long all-namespaces --description 'describe across all namespaces'
+complete 'kubectl describe' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'kubectl describe' --option-value --short n --function __rush_complete_kubectl_namespaces
+complete 'kubectl describe' --option-value --long namespace --function __rush_complete_kubectl_namespaces
+complete 'kubectl describe' --option --short l --long selector --value-name selector --description 'selector to filter resources'
+complete 'kubectl describe' --option-value --short l --function __rush_complete_kubectl_label_selectors
+complete 'kubectl describe' --option-value --long selector --function __rush_complete_kubectl_label_selectors
+complete 'kubectl describe' --argument --function __rush_complete_kubectl_resource_args
+
+complete 'kubectl explain' --option --short h --long help --description 'show help'
+complete 'kubectl explain' --option --long api-version --value-name version --description 'resource API version'
+complete 'kubectl explain' --option-value --long api-version --function __rush_complete_kubectl_api_versions
+complete 'kubectl explain' --option --long recursive --description 'print fields recursively'
+complete 'kubectl explain' --argument --function __rush_complete_kubectl_resources
+
+# apply / delete.
+complete 'kubectl apply' --option --short h --long help --description 'show help'
+complete 'kubectl apply' --option --short f --long filename --value-name file --description 'file, directory, or URL to apply'
+complete 'kubectl apply' --option-value --short f --function __rush_complete_kubectl_manifest_paths
+complete 'kubectl apply' --option-value --long filename --function __rush_complete_kubectl_manifest_paths
+complete 'kubectl apply' --option --short k --long kustomize --value-name dir --description 'kustomization directory'
+complete 'kubectl apply' --option-value --short k --function __rush_complete_kubectl_directories
+complete 'kubectl apply' --option-value --long kustomize --function __rush_complete_kubectl_directories
+complete 'kubectl apply' --option --short R --long recursive --description 'process directories recursively'
+complete 'kubectl apply' --option --long server-side --description 'use server-side apply'
+complete 'kubectl apply' --option --long force-conflicts --description 'force conflicts with server-side apply'
+complete 'kubectl apply' --option --long prune --description 'delete previously applied objects not in current set'
+complete 'kubectl apply' --option --short l --long selector --value-name selector --description 'selector to filter resources'
+complete 'kubectl apply' --option-value --short l --function __rush_complete_kubectl_label_selectors
+complete 'kubectl apply' --option-value --long selector --function __rush_complete_kubectl_label_selectors
+complete 'kubectl apply' --argument --function __rush_complete_kubectl_manifest_paths
+
+complete 'kubectl delete' --option --short h --long help --description 'show help'
+complete 'kubectl delete' --option --short f --long filename --value-name file --description 'file, directory, or URL containing resources to delete'
+complete 'kubectl delete' --option-value --short f --function __rush_complete_kubectl_manifest_paths
+complete 'kubectl delete' --option-value --long filename --function __rush_complete_kubectl_manifest_paths
+complete 'kubectl delete' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'kubectl delete' --option-value --short n --function __rush_complete_kubectl_namespaces
+complete 'kubectl delete' --option-value --long namespace --function __rush_complete_kubectl_namespaces
+complete 'kubectl delete' --option --short A --long all-namespaces --description 'delete across all namespaces'
+complete 'kubectl delete' --option --short l --long selector --value-name selector --description 'selector to filter resources'
+complete 'kubectl delete' --option-value --short l --function __rush_complete_kubectl_label_selectors
+complete 'kubectl delete' --option-value --long selector --function __rush_complete_kubectl_label_selectors
+complete 'kubectl delete' --option --long all --description 'delete all selected resources'
+complete 'kubectl delete' --option --long force --description 'force immediate deletion'
+complete 'kubectl delete' --option --long grace-period --value-name seconds --description 'termination grace period'
+complete 'kubectl delete' --option-value --long grace-period --function __rush_complete_kubectl_grace_periods
+complete 'kubectl delete' --option --long ignore-not-found --description 'treat not found as success'
+complete 'kubectl delete' --option --long wait --value-name bool --description 'wait for resources to be gone'
+complete 'kubectl delete' --option-value --long wait --function __rush_complete_kubectl_booleans
+complete 'kubectl delete' --argument --function __rush_complete_kubectl_resource_args
+
+# logs / exec / port-forward.
+complete 'kubectl logs' --option --short h --long help --description 'show help'
+complete 'kubectl logs' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'kubectl logs' --option-value --short n --function __rush_complete_kubectl_namespaces
+complete 'kubectl logs' --option-value --long namespace --function __rush_complete_kubectl_namespaces
+complete 'kubectl logs' --option --short c --long container --value-name container --description 'container name'
+complete 'kubectl logs' --option-value --short c --function __rush_complete_kubectl_containers
+complete 'kubectl logs' --option-value --long container --function __rush_complete_kubectl_containers
+complete 'kubectl logs' --option --short f --long follow --description 'follow log output'
+complete 'kubectl logs' --option --long all-containers --description 'get logs from all containers'
+complete 'kubectl logs' --option --long previous --description 'print previous terminated container logs'
+complete 'kubectl logs' --option --long since --value-name duration --description 'only return logs newer than duration'
+complete 'kubectl logs' --option-value --long since --function __rush_complete_kubectl_durations
+complete 'kubectl logs' --option --long since-time --value-name time --description 'only return logs after RFC3339 time'
+complete 'kubectl logs' --option --long tail --value-name lines --description 'number of lines to show'
+complete 'kubectl logs' --option --long timestamps --description 'include timestamps'
+complete 'kubectl logs' --argument --function __rush_complete_kubectl_pods
+
+complete 'kubectl exec' --option --short h --long help --description 'show help'
+complete 'kubectl exec' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'kubectl exec' --option-value --short n --function __rush_complete_kubectl_namespaces
+complete 'kubectl exec' --option-value --long namespace --function __rush_complete_kubectl_namespaces
+complete 'kubectl exec' --option --short c --long container --value-name container --description 'container name'
+complete 'kubectl exec' --option-value --short c --function __rush_complete_kubectl_containers
+complete 'kubectl exec' --option-value --long container --function __rush_complete_kubectl_containers
+complete 'kubectl exec' --option --short i --long stdin --description 'pass stdin to the container'
+complete 'kubectl exec' --option --short t --long tty --description 'allocate a TTY'
+complete 'kubectl exec' --argument --function __rush_complete_kubectl_exec_args
+
+complete 'kubectl port-forward' --option --short h --long help --description 'show help'
+complete 'kubectl port-forward' --option --short n --long namespace --value-name namespace --description 'namespace scope for this request'
+complete 'kubectl port-forward' --option-value --short n --function __rush_complete_kubectl_namespaces
+complete 'kubectl port-forward' --option-value --long namespace --function __rush_complete_kubectl_namespaces
+complete 'kubectl port-forward' --option --address --value-name address --description 'local address to listen on'
+complete 'kubectl port-forward' --option-value --long address --function __rush_complete_kubectl_addresses
+complete 'kubectl port-forward' --argument --function __rush_complete_kubectl_port_forward_args
+
+# config and context workflows.
+complete 'kubectl config' --option --short h --long help --description 'show help'
+complete 'kubectl config' --subcommand current-context --description 'display the current context'
+complete 'kubectl config' --subcommand get-contexts --description 'describe available contexts'
+complete 'kubectl config' --subcommand use-context --description 'set the current context'
+complete 'kubectl config' --subcommand set-context --description 'set a context entry'
+complete 'kubectl config' --subcommand delete-context --description 'delete a context entry'
+complete 'kubectl config' --subcommand rename-context --description 'rename a context entry'
+complete 'kubectl config' --subcommand view --description 'display merged kubeconfig settings'
+complete 'kubectl config' --subcommand set-cluster --description 'set a cluster entry'
+complete 'kubectl config' --subcommand set-credentials --description 'set a user entry'
+complete 'kubectl config get-contexts' --option --short h --long help --description 'show help'
+complete 'kubectl config get-contexts' --option --long no-headers --description 'do not print headers'
+complete 'kubectl config get-contexts' --argument --function __rush_complete_kubectl_contexts
+complete 'kubectl config use-context' --option --short h --long help --description 'show help'
+complete 'kubectl config use-context' --argument --function __rush_complete_kubectl_contexts
+complete 'kubectl config set-context' --option --short h --long help --description 'show help'
+complete 'kubectl config set-context' --option --long cluster --value-name cluster --description 'cluster name'
+complete 'kubectl config set-context' --option-value --long cluster --function __rush_complete_kubectl_clusters
+complete 'kubectl config set-context' --option --long user --value-name user --description 'user name'
+complete 'kubectl config set-context' --option-value --long user --function __rush_complete_kubectl_users
+complete 'kubectl config set-context' --option --long namespace --value-name namespace --description 'default namespace'
+complete 'kubectl config set-context' --option-value --long namespace --function __rush_complete_kubectl_namespaces
+complete 'kubectl config set-context' --argument --function __rush_complete_kubectl_contexts
+complete 'kubectl config delete-context' --argument --function __rush_complete_kubectl_contexts
+complete 'kubectl config rename-context' --argument --function __rush_complete_kubectl_contexts
+complete 'kubectl config view' --option --short h --long help --description 'show help'
+complete 'kubectl config view' --option --short o --long output --value-name format --description 'output format'
+complete 'kubectl config view' --option-value --short o --function __rush_complete_kubectl_config_output_formats
+complete 'kubectl config view' --option-value --long output --function __rush_complete_kubectl_config_output_formats
+complete 'kubectl config set-cluster' --argument --function __rush_complete_kubectl_clusters
+complete 'kubectl config set-credentials' --argument --function __rush_complete_kubectl_users
+
+complete 'kubectl context' --option --short h --long help --description 'show help'
+complete 'kubectl context' --argument --function __rush_complete_kubectl_contexts
+
+# Additional common resource workflows.
+complete 'kubectl create' --option --short h --long help --description 'show help'
+complete 'kubectl create' --option --short f --long filename --value-name file --description 'file or directory to create from'
+complete 'kubectl create' --option-value --short f --function __rush_complete_kubectl_manifest_paths
+complete 'kubectl create' --option-value --long filename --function __rush_complete_kubectl_manifest_paths
+complete 'kubectl create' --subcommand configmap --description 'create a config map'
+complete 'kubectl create' --subcommand deployment --description 'create a deployment'
+complete 'kubectl create' --subcommand job --description 'create a job'
+complete 'kubectl create' --subcommand namespace --description 'create a namespace'
+complete 'kubectl create' --subcommand secret --description 'create a secret'
+complete 'kubectl create' --subcommand service --description 'create a service'
+complete 'kubectl edit' --argument --function __rush_complete_kubectl_resource_args
+complete 'kubectl rollout' --subcommand status --description 'show rollout status'
+complete 'kubectl rollout' --subcommand history --description 'show rollout history'
+complete 'kubectl rollout' --subcommand restart --description 'restart a resource'
+complete 'kubectl rollout' --subcommand undo --description 'undo a rollout'
+complete 'kubectl rollout status' --argument --function __rush_complete_kubectl_workloads
+complete 'kubectl rollout history' --argument --function __rush_complete_kubectl_workloads
+complete 'kubectl rollout restart' --argument --function __rush_complete_kubectl_workloads
+complete 'kubectl rollout undo' --argument --function __rush_complete_kubectl_workloads
+complete 'kubectl scale' --option --long replicas --value-name count --description 'new replica count'
+complete 'kubectl scale' --argument --function __rush_complete_kubectl_workloads
+complete 'kubectl wait' --option --long for --value-name condition --description 'condition to wait for'
+complete 'kubectl wait' --option-value --long for --function __rush_complete_kubectl_wait_conditions
+complete 'kubectl wait' --argument --function __rush_complete_kubectl_resource_args
+complete 'kubectl top' --subcommand pod --description 'show pod metrics'
+complete 'kubectl top' --subcommand pods --description 'show pod metrics'
+complete 'kubectl top' --subcommand node --description 'show node metrics'
+complete 'kubectl top' --subcommand nodes --description 'show node metrics'
+complete 'kubectl top pod' --argument --function __rush_complete_kubectl_pods
+complete 'kubectl top pods' --argument --function __rush_complete_kubectl_pods
+complete 'kubectl top node' --argument --function __rush_complete_kubectl_nodes
+complete 'kubectl top nodes' --argument --function __rush_complete_kubectl_nodes
+
+__rush_complete_kubectl_resource_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_kubectl_resources
+  else
+    __rush_complete_kubectl_resource_names
+  fi
+}
+
+__rush_complete_kubectl_exec_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_kubectl_pods
+  else
+    __rush_complete_kubectl_commands
+  fi
+}
+
+__rush_complete_kubectl_port_forward_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_kubectl_port_forward_resources
+  else
+    __rush_complete_kubectl_ports
+  fi
+}
+
+__rush_complete_kubectl_manifest_paths() {
+  completion candidate deployment.yaml --kind file
+  completion candidate service.yaml --kind file
+  completion candidate kustomization.yaml --kind file
+  completion candidate manifests/ --kind directory
+  completion candidate https:// --kind plain
+  completion files --extension .yaml
+  completion files --extension .yml
+  completion files --extension .json
+  completion directories --append-slash
+}
+
+__rush_complete_kubectl_files() {
+  completion files
+}
+
+__rush_complete_kubectl_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_kubectl_resources() {
+  completion candidate pod --kind plain
+  completion candidate pods --kind plain
+  completion candidate po --kind plain
+  completion candidate deployment --kind plain
+  completion candidate deployments --kind plain
+  completion candidate deploy --kind plain
+  completion candidate service --kind plain
+  completion candidate services --kind plain
+  completion candidate svc --kind plain
+  completion candidate namespace --kind plain
+  completion candidate namespaces --kind plain
+  completion candidate ns --kind plain
+  completion candidate configmap --kind plain
+  completion candidate configmaps --kind plain
+  completion candidate cm --kind plain
+  completion candidate secret --kind plain
+  completion candidate secrets --kind plain
+  completion candidate ingress --kind plain
+  completion candidate ingresses --kind plain
+  completion candidate ing --kind plain
+  completion candidate job --kind plain
+  completion candidate jobs --kind plain
+  completion candidate cronjob --kind plain
+  completion candidate cronjobs --kind plain
+  completion candidate node --kind plain
+  completion candidate nodes --kind plain
+  completion candidate no --kind plain
+  completion candidate statefulset --kind plain
+  completion candidate statefulsets --kind plain
+  completion candidate sts --kind plain
+  completion candidate daemonset --kind plain
+  completion candidate daemonsets --kind plain
+  completion candidate ds --kind plain
+  completion candidate persistentvolumeclaim --kind plain
+  completion candidate persistentvolumeclaims --kind plain
+  completion candidate pvc --kind plain
+  completion candidate persistentvolume --kind plain
+  completion candidate persistentvolumes --kind plain
+  completion candidate pv --kind plain
+}
+
+__rush_complete_kubectl_resource_names() {
+  __rush_complete_kubectl_pods
+  __rush_complete_kubectl_workloads
+  __rush_complete_kubectl_services
+  __rush_complete_kubectl_namespaces
+  __rush_complete_kubectl_nodes
+  completion candidate config/app --kind plain
+  completion candidate secret/app --kind plain
+  completion candidate ingress/web --kind plain
+  completion candidate pvc/data --kind plain
+}
+
+__rush_complete_kubectl_port_forward_resources() {
+  completion candidate pod/app --kind plain
+  completion candidate pod/web --kind plain
+  completion candidate deployment/app --kind plain
+  completion candidate service/web --kind plain
+  completion candidate service/api --kind plain
+  __rush_complete_kubectl_pods
+}
+
+__rush_complete_kubectl_pods() {
+  completion candidate pod/app --kind plain
+  completion candidate pod/api --kind plain
+  completion candidate pod/web --kind plain
+  completion candidate app --kind plain
+  completion candidate api --kind plain
+  completion candidate web --kind plain
+}
+
+__rush_complete_kubectl_workloads() {
+  completion candidate deployment/app --kind plain
+  completion candidate deployment/api --kind plain
+  completion candidate deployment/web --kind plain
+  completion candidate statefulset/postgres --kind plain
+  completion candidate daemonset/node-agent --kind plain
+}
+
+__rush_complete_kubectl_services() {
+  completion candidate service/app --kind plain
+  completion candidate service/api --kind plain
+  completion candidate service/web --kind plain
+  completion candidate svc/app --kind plain
+  completion candidate svc/api --kind plain
+  completion candidate svc/web --kind plain
+}
+
+__rush_complete_kubectl_namespaces() {
+  completion candidate default --kind plain
+  completion candidate kube-system --kind plain
+  completion candidate kube-public --kind plain
+  completion candidate kube-node-lease --kind plain
+  completion candidate cert-manager --kind plain
+  completion candidate ingress-nginx --kind plain
+  completion candidate monitoring --kind plain
+  completion candidate production --kind plain
+  completion candidate staging --kind plain
+  completion candidate dev --kind plain
+}
+
+__rush_complete_kubectl_contexts() {
+  completion candidate docker-desktop --kind plain
+  completion candidate kind-kind --kind plain
+  completion candidate minikube --kind plain
+  completion candidate dev --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+  completion candidate production --kind plain
+}
+
+__rush_complete_kubectl_clusters() {
+  completion candidate docker-desktop --kind plain
+  completion candidate kind-kind --kind plain
+  completion candidate minikube --kind plain
+  completion candidate dev --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+}
+
+__rush_complete_kubectl_users() {
+  completion candidate docker-desktop --kind plain
+  completion candidate kind-kind --kind plain
+  completion candidate minikube --kind plain
+  completion candidate dev-user --kind plain
+  completion candidate staging-user --kind plain
+  completion candidate prod-user --kind plain
+}
+
+__rush_complete_kubectl_nodes() {
+  completion candidate node-1 --kind plain
+  completion candidate node-2 --kind plain
+  completion candidate worker-1 --kind plain
+  completion candidate control-plane --kind plain
+}
+
+__rush_complete_kubectl_containers() {
+  completion candidate app --kind plain
+  completion candidate api --kind plain
+  completion candidate web --kind plain
+  completion candidate sidecar --kind plain
+  completion candidate istio-proxy --kind plain
+}
+
+__rush_complete_kubectl_commands() {
+  completion candidate -- --kind plain
+  completion candidate sh --kind plain
+  completion candidate bash --kind plain
+  completion candidate /bin/sh --kind plain
+  completion candidate /bin/bash --kind plain
+  completion candidate env --kind plain
+}
+
+__rush_complete_kubectl_ports() {
+  completion candidate 8080:80 --kind plain
+  completion candidate 8443:443 --kind plain
+  completion candidate 5432:5432 --kind plain
+  completion candidate 6379:6379 --kind plain
+}
+
+__rush_complete_kubectl_addresses() {
+  completion candidate localhost --kind plain
+  completion candidate 127.0.0.1 --kind plain
+  completion candidate 0.0.0.0 --kind plain
+}
+
+__rush_complete_kubectl_output_formats() {
+  completion candidate wide --kind plain
+  completion candidate json --kind plain
+  completion candidate yaml --kind plain
+  completion candidate name --kind plain
+  completion candidate go-template= --kind plain
+  completion candidate jsonpath= --kind plain
+  completion candidate custom-columns= --kind plain
+}
+
+__rush_complete_kubectl_config_output_formats() {
+  completion candidate json --kind plain
+  completion candidate yaml --kind plain
+  completion candidate jsonpath= --kind plain
+}
+
+__rush_complete_kubectl_dry_run_modes() {
+  completion candidate none --kind plain
+  completion candidate client --kind plain
+  completion candidate server --kind plain
+}
+
+__rush_complete_kubectl_booleans() {
+  completion candidate true --kind plain
+  completion candidate false --kind plain
+}
+
+__rush_complete_kubectl_durations() {
+  completion candidate 10s --kind plain
+  completion candidate 30s --kind plain
+  completion candidate 1m --kind plain
+  completion candidate 5m --kind plain
+}
+
+__rush_complete_kubectl_grace_periods() {
+  completion candidate 0 --kind plain
+  completion candidate 30 --kind plain
+  completion candidate 60 --kind plain
+}
+
+__rush_complete_kubectl_label_selectors() {
+  completion candidate app= --kind variable
+  completion candidate app.kubernetes.io/name= --kind variable
+  completion candidate component= --kind variable
+  completion candidate environment= --kind variable
+  completion candidate tier= --kind variable
+}
+
+__rush_complete_kubectl_field_selectors() {
+  completion candidate metadata.name= --kind variable
+  completion candidate metadata.namespace= --kind variable
+  completion candidate status.phase=Running --kind variable
+  completion candidate spec.nodeName= --kind variable
+}
+
+__rush_complete_kubectl_sort_fields() {
+  completion candidate .metadata.name --kind plain
+  completion candidate .metadata.creationTimestamp --kind plain
+  completion candidate .status.startTime --kind plain
+}
+
+__rush_complete_kubectl_api_versions() {
+  completion candidate v1 --kind plain
+  completion candidate apps/v1 --kind plain
+  completion candidate batch/v1 --kind plain
+  completion candidate networking.k8s.io/v1 --kind plain
+}
+
+__rush_complete_kubectl_wait_conditions() {
+  completion candidate condition=available --kind plain
+  completion candidate condition=complete --kind plain
+  completion candidate condition=Ready --kind plain
+  completion candidate delete --kind plain
+}
