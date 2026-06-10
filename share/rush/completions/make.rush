@@ -1,0 +1,63 @@
+# First-party make completion slice.
+
+complete make --option --short h --long help --description 'show help'
+complete make --option --short v --long version --description 'show version'
+complete make --option --short f --long file --value-name file --description 'read file as a makefile'
+complete make --option-value --short f --function __rush_complete_make_makefiles
+complete make --option-value --long file --function __rush_complete_make_makefiles
+complete make --option --short C --long directory --value-name dir --description 'change to directory before reading makefiles'
+complete make --option-value --short C --function __rush_complete_make_directories
+complete make --option-value --long directory --function __rush_complete_make_directories
+complete make --option --short j --long jobs --value-name jobs --description 'number of jobs to run simultaneously'
+complete make --option-value --short j --function __rush_complete_make_job_counts
+complete make --option-value --long jobs --function __rush_complete_make_job_counts
+complete make --option --short k --long keep-going --description 'keep going after errors'
+complete make --option --short n --long just-print --description 'print commands without executing'
+complete make --option --long dry-run --description 'print commands without executing'
+complete make --option --short B --long always-make --description 'unconditionally make all targets'
+complete make --option --short s --long silent --description 'do not echo recipes'
+complete make --option --short q --long question --description 'run no recipes and report if target is up to date'
+complete make --option --short t --long touch --description 'touch targets instead of remaking them'
+complete make --option --short e --long environment-overrides --description 'environment variables override makefiles'
+complete make --option --short i --long ignore-errors --description 'ignore recipe errors'
+complete make --option --short r --long no-builtin-rules --description 'disable built-in implicit rules'
+complete make --option --short R --long no-builtin-variables --description 'disable built-in variables'
+complete make --option --short p --long print-data-base --description 'print make database'
+complete make --option --short W --long what-if --value-name file --description 'pretend file was modified'
+complete make --option-value --short W --function __rush_complete_make_paths
+complete make --option-value --long what-if --function __rush_complete_make_paths
+complete make --argument --function __rush_complete_make_targets
+
+__rush_complete_make_targets() {
+  make -qp 2>/dev/null | sed -n 's/^\([^.#[:space:]][^$#:=]*\):.*/\1/p' | tr ' ' '\n' | sed '/^$/d' | while read target; do completion candidate "$target" --kind plain; done
+  sed -n 's/^\([A-Za-z0-9_.%/@-][A-Za-z0-9_.%/@-]*\):.*/\1/p' GNUmakefile makefile Makefile 2>/dev/null | while read target; do test -n "$target" && completion candidate "$target" --kind plain; done
+  completion candidate all --kind plain
+  completion candidate build --kind plain
+  completion candidate check --kind plain
+  completion candidate clean --kind plain
+  completion candidate install --kind plain
+  completion candidate test --kind plain
+}
+
+__rush_complete_make_makefiles() {
+  completion candidate GNUmakefile --kind file
+  completion candidate makefile --kind file
+  completion candidate Makefile --kind file
+  completion files
+}
+
+__rush_complete_make_paths() {
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_make_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_make_job_counts() {
+  completion candidate 2 --kind plain
+  completion candidate 4 --kind plain
+  completion candidate 8 --kind plain
+  completion candidate 16 --kind plain
+}

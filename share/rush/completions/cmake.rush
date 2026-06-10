@@ -1,0 +1,97 @@
+# First-party cmake completion slice.
+
+complete cmake --option --short h --long help --description 'show help'
+complete cmake --option --long version --description 'show version'
+complete cmake --option --short S --value-name dir --description 'source directory'
+complete cmake --option-value --short S --function __rush_complete_cmake_directories
+complete cmake --option --short B --value-name dir --description 'build directory'
+complete cmake --option-value --short B --function __rush_complete_cmake_build_dirs
+complete cmake --option --short G --value-name generator --description 'build system generator'
+complete cmake --option-value --short G --function __rush_complete_cmake_generators
+complete cmake --option --short D --value-name var=value --description 'create or update cache entry'
+complete cmake --option-value --short D --function __rush_complete_cmake_cache_vars
+complete cmake --option --short C --value-name file --description 'pre-load script to populate cache'
+complete cmake --option-value --short C --function __rush_complete_cmake_files
+complete cmake --option --long preset --value-name preset --description 'configure preset'
+complete cmake --option-value --long preset --function __rush_complete_cmake_configure_presets
+complete cmake --option --long build --value-name dir --description 'build a CMake-generated project'
+complete cmake --option-value --long build --function __rush_complete_cmake_build_dirs
+complete cmake --option --long install --value-name dir --description 'install a CMake-generated project'
+complete cmake --option-value --long install --function __rush_complete_cmake_build_dirs
+complete cmake --option --long workflow --value-name preset --description 'run workflow preset'
+complete cmake --option-value --long workflow --function __rush_complete_cmake_workflow_presets
+complete cmake --option --long list-presets --value-name type --description 'list available presets'
+complete cmake --option-value --long list-presets --function __rush_complete_cmake_preset_types
+complete cmake --argument --function __rush_complete_cmake_directories
+
+complete 'cmake --build' --option --long target --value-name target --description 'build target'
+complete 'cmake --build' --option-value --long target --function __rush_complete_cmake_targets
+complete 'cmake --build' --option --long config --value-name config --description 'build configuration'
+complete 'cmake --build' --option-value --long config --function __rush_complete_cmake_configs
+complete 'cmake --build' --option --parallel --value-name jobs --description 'build in parallel'
+complete 'cmake --install' --option --long config --value-name config --description 'install configuration'
+complete 'cmake --install' --option-value --long config --function __rush_complete_cmake_configs
+complete 'cmake --install' --option --long prefix --value-name dir --description 'installation prefix'
+complete 'cmake --install' --option-value --long prefix --function __rush_complete_cmake_directories
+
+__rush_complete_cmake_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_cmake_files() {
+  completion files
+}
+
+__rush_complete_cmake_build_dirs() {
+  completion candidate build/ --kind directory
+  completion candidate cmake-build-debug/ --kind directory
+  completion candidate cmake-build-release/ --kind directory
+  completion directories --append-slash
+}
+
+__rush_complete_cmake_generators() {
+  cmake --help 2>/dev/null | sed -n '/Generators/,$ s/^ *\*\? *\([^=]*\) =.*/\1/p' | while read gen; do test -n "$gen" && completion candidate "$gen" --kind plain; done
+  completion candidate Ninja --kind plain
+  completion candidate 'Unix Makefiles' --kind plain
+  completion candidate Xcode --kind plain
+}
+
+__rush_complete_cmake_cache_vars() {
+  completion candidate CMAKE_BUILD_TYPE=Debug --kind variable
+  completion candidate CMAKE_BUILD_TYPE=Release --kind variable
+  completion candidate CMAKE_INSTALL_PREFIX= --kind variable
+  completion candidate BUILD_SHARED_LIBS=ON --kind variable
+  completion candidate CMAKE_EXPORT_COMPILE_COMMANDS=ON --kind variable
+}
+
+__rush_complete_cmake_configure_presets() {
+  sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' CMakePresets.json CMakeUserPresets.json 2>/dev/null | while read preset; do test -n "$preset" && completion candidate "$preset" --kind plain; done
+}
+
+__rush_complete_cmake_workflow_presets() {
+  __rush_complete_cmake_configure_presets
+}
+
+__rush_complete_cmake_preset_types() {
+  completion candidate configure --kind plain
+  completion candidate build --kind plain
+  completion candidate test --kind plain
+  completion candidate package --kind plain
+  completion candidate workflow --kind plain
+  completion candidate all --kind plain
+}
+
+__rush_complete_cmake_targets() {
+  cmake --build build --target help 2>/dev/null | sed -n 's/^\.\.\. \([^ ]*\).*/\1/p' | while read target; do test -n "$target" && completion candidate "$target" --kind plain; done
+  completion candidate all --kind plain
+  completion candidate clean --kind plain
+  completion candidate install --kind plain
+  completion candidate test --kind plain
+}
+
+__rush_complete_cmake_configs() {
+  completion candidate Debug --kind plain
+  completion candidate Release --kind plain
+  completion candidate RelWithDebInfo --kind plain
+  completion candidate MinSizeRel --kind plain
+}

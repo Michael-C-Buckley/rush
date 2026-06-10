@@ -1,0 +1,111 @@
+# First-party go completion slice.
+
+complete go --option --short h --long help --description 'show help'
+complete go --subcommand build --description 'compile packages and dependencies'
+complete go --subcommand test --description 'test packages'
+complete go --subcommand run --description 'compile and run Go program'
+complete go --subcommand mod --description 'module maintenance'
+complete go --subcommand work --description 'workspace maintenance'
+complete go --subcommand env --description 'print Go environment information'
+complete go --subcommand install --description 'compile and install packages'
+complete go --subcommand list --description 'list packages or modules'
+complete go --subcommand fmt --description 'format packages'
+complete go --subcommand vet --description 'report likely mistakes'
+complete go --subcommand generate --description 'generate Go files by processing source'
+complete go --subcommand tool --description 'run a specified Go tool'
+complete go --subcommand get --description 'add dependencies to current module'
+complete go --subcommand clean --description 'remove object files and cached files'
+complete go --subcommand version --description 'print Go version'
+
+complete 'go build' --option --short o --value-name file --description 'write output to file'
+complete 'go build' --option --short tags --value-name tags --description 'build tags'
+complete 'go build' --option-value --short tags --function __rush_complete_go_tags
+complete 'go build' --option --short race --description 'enable data race detector'
+complete 'go build' --option --short trimpath --description 'remove filesystem paths from executable'
+complete 'go build' --argument --function __rush_complete_go_packages_and_files
+complete 'go test' --option --short run --value-name regexp --description 'run tests matching regexp'
+complete 'go test' --option-value --short run --function __rush_complete_go_tests
+complete 'go test' --option --short bench --value-name regexp --description 'run benchmarks matching regexp'
+complete 'go test' --option-value --short bench --function __rush_complete_go_benchmarks
+complete 'go test' --option --short cover --description 'enable coverage analysis'
+complete 'go test' --option --short race --description 'enable data race detector'
+complete 'go test' --option --short count --value-name n --description 'run each test n times'
+complete 'go test' --argument --function __rush_complete_go_packages
+complete 'go run' --argument --function __rush_complete_go_packages_and_files
+complete 'go install' --argument --function __rush_complete_go_packages
+complete 'go list' --option --short m --description 'list modules instead of packages'
+complete 'go list' --argument --function __rush_complete_go_packages
+complete 'go fmt' --argument --function __rush_complete_go_packages
+complete 'go vet' --argument --function __rush_complete_go_packages
+complete 'go generate' --argument --function __rush_complete_go_packages
+
+complete 'go mod' --subcommand init --description 'initialize a module'
+complete 'go mod' --subcommand tidy --description 'add missing and remove unused modules'
+complete 'go mod' --subcommand download --description 'download modules'
+complete 'go mod' --subcommand edit --description 'edit go.mod'
+complete 'go mod' --subcommand graph --description 'print module requirement graph'
+complete 'go mod' --subcommand vendor --description 'make vendored copy of dependencies'
+complete 'go mod' --subcommand verify --description 'verify dependencies'
+complete 'go mod' --subcommand why --description 'explain why packages are needed'
+complete 'go mod download' --argument --function __rush_complete_go_modules
+complete 'go mod why' --argument --function __rush_complete_go_packages
+
+complete 'go work' --subcommand init --description 'initialize workspace file'
+complete 'go work' --subcommand use --description 'add modules to workspace'
+complete 'go work' --subcommand edit --description 'edit go.work'
+complete 'go work' --subcommand sync --description 'sync workspace build list'
+complete 'go work use' --argument --function __rush_complete_go_module_dirs
+complete 'go env' --argument --function __rush_complete_go_env_vars
+complete 'go tool' --argument --function __rush_complete_go_tools
+
+__rush_complete_go_packages() {
+  go list ./... 2>/dev/null | while read pkg; do test -n "$pkg" && completion candidate "$pkg" --kind plain; done
+  completion candidate ./... --kind plain
+  completion candidate . --kind directory
+  completion directories --append-slash
+}
+
+__rush_complete_go_packages_and_files() {
+  __rush_complete_go_packages
+  completion files --extension .go
+}
+
+__rush_complete_go_modules() {
+  go list -m all 2>/dev/null | awk '{ print $1 }' | while read mod; do test -n "$mod" && completion candidate "$mod" --kind plain; done
+}
+
+__rush_complete_go_module_dirs() {
+  find . -name go.mod -maxdepth 4 2>/dev/null | sed 's#/go.mod$#/#' | while read dir; do completion candidate "$dir" --kind directory; done
+  completion directories --append-slash
+}
+
+__rush_complete_go_tests() {
+  rg '^func Test[A-Za-z0-9_]+' -o -N --replace '$0' --glob '*.go' 2>/dev/null | sed 's/^func //' | while read test; do test -n "$test" && completion candidate "$test" --kind plain; done
+}
+
+__rush_complete_go_benchmarks() {
+  rg '^func Benchmark[A-Za-z0-9_]+' -o -N --replace '$0' --glob '*.go' 2>/dev/null | sed 's/^func //' | while read bench; do test -n "$bench" && completion candidate "$bench" --kind plain; done
+}
+
+__rush_complete_go_tags() {
+  completion candidate dev --kind plain
+  completion candidate test --kind plain
+  completion candidate integration --kind plain
+  completion candidate cgo --kind plain
+}
+
+__rush_complete_go_env_vars() {
+  go env 2>/dev/null | sed 's/=.*//' | while read var; do test -n "$var" && completion candidate "$var" --kind variable; done
+  completion candidate GOOS --kind variable
+  completion candidate GOARCH --kind variable
+  completion candidate GOPATH --kind variable
+  completion candidate GOPROXY --kind variable
+}
+
+__rush_complete_go_tools() {
+  go tool 2>/dev/null | sed '1,/^$/d' | while read tool; do test -n "$tool" && completion candidate "$tool" --kind plain; done
+  completion candidate compile --kind plain
+  completion candidate cover --kind plain
+  completion candidate pprof --kind plain
+  completion candidate trace --kind plain
+}
