@@ -7837,7 +7837,7 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     _ = stdin;
     _ = options;
 
-    if (command.argv.len == 1) return printShellOptions(self, false);
+    if (command.argv.len == 1) return printShellVariables(self);
     if (command.argv.len >= 2 and std.mem.eql(u8, command.argv[1].text, "--")) {
         try setCurrentPositionals(self, command.argv[2..]);
         return emptyResult(self.allocator, 0);
@@ -7954,6 +7954,26 @@ fn setCurrentPositionals(self: *Executor, args: []const ir.WordRef) !void {
     defer self.allocator.free(values);
     for (args, 0..) |arg, index| values[index] = arg.text;
     try self.currentPositionalsPtr().set(self.allocator, values);
+}
+
+fn printShellVariables(self: *Executor) !CommandResult {
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(self.allocator);
+    var iter = self.env.iterator();
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (names.items) |name| {
+        try stdout.appendSlice(self.allocator, name);
+        try stdout.append(self.allocator, '=');
+        try appendShellSingleQuoted(self.allocator, &stdout, self.env.get(name).?);
+        try stdout.append(self.allocator, '\n');
+    }
+    const stdout_slice = try stdout.toOwnedSlice(self.allocator);
+    errdefer self.allocator.free(stdout_slice);
+    return .{ .allocator = self.allocator, .status = 0, .stdout = stdout_slice, .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
