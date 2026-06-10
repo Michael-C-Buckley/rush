@@ -1379,6 +1379,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer if (history_path) |path| allocator.free(path);
     if (history_path) |path| history.load(io, path) catch {};
     defer if (history_path) |path| history.save(io, path) catch {};
+    const terminal_hostname = try localHostname(allocator);
+    defer allocator.free(terminal_hostname);
 
     var last_status: exec.ExitStatus = 0;
     var executor = exec.Executor.init(allocator);
@@ -1413,7 +1415,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer allocator.free(prompt);
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
-        try terminal.reportCurrentDirectory(cwd_buffer[0..cwd_len], history.hostname);
+        try terminal.reportCurrentDirectory(cwd_buffer[0..cwd_len], terminal_hostname);
+        try terminal.reportWindowTitle(cwd_buffer[0..cwd_len]);
         var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd_buffer[0..cwd_len], .arg_zero = options.arg_zero };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,

@@ -518,7 +518,16 @@ pub const TerminalSession = struct {
         try writer.writer.writeAll("\x1b]7;file://");
         try writer.writer.print("{f}", .{std.fmt.alt(std.Uri.Component{ .raw = host }, .formatHost)});
         try writer.writer.print("{f}", .{std.fmt.alt(std.Uri.Component{ .raw = cwd }, .formatPath)});
-        try writer.writer.writeByte(0x07);
+        try writer.writer.writeAll("\x1b\\");
+        try writeTtyAll(&self.tty, writer.written());
+    }
+
+    pub fn reportWindowTitle(self: *TerminalSession, title: []const u8) !void {
+        var writer: std.Io.Writer.Allocating = .init(self.allocator);
+        defer writer.deinit();
+        try writer.writer.writeAll("\x1b]0;");
+        try appendOscText(&writer.writer, title);
+        try writer.writer.writeAll("\x1b\\");
         try writeTtyAll(&self.tty, writer.written());
     }
 
@@ -851,6 +860,13 @@ fn renderSession(allocator: std.mem.Allocator, io: std.Io, tty: *vaxis.tty.Posix
     const rendered = try renderer.render(allocator, frame, .{ .synchronized_output = capabilities.synchronized_output });
     defer allocator.free(rendered);
     try writeTtyAll(tty, rendered);
+}
+
+fn appendOscText(writer: *std.Io.Writer, text: []const u8) !void {
+    for (text) |byte| switch (byte) {
+        0x00...0x1f, 0x7f => try writer.writeByte(' '),
+        else => try writer.writeByte(byte),
+    };
 }
 
 fn writeTtyAll(tty: *vaxis.tty.PosixTty, bytes: []const u8) !void {
