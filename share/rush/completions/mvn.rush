@@ -1,0 +1,93 @@
+# First-party Maven completion slice.
+
+complete mvn --option --short h --long help --description 'show help'
+complete mvn --option --short v --long version --description 'show version'
+complete mvn --option --short B --long batch-mode --description 'run in non-interactive mode'
+complete mvn --option --short U --long update-snapshots --description 'force snapshot updates'
+complete mvn --option --short o --long offline --description 'work offline'
+complete mvn --option --short q --long quiet --description 'quiet output'
+complete mvn --option --short X --long debug --description 'produce execution debug output'
+complete mvn --option --short e --long errors --description 'produce execution error messages'
+complete mvn --option --short f --long file --value-name file --description 'alternate POM file'
+complete mvn --option-value --short f --function __rush_complete_mvn_poms
+complete mvn --option-value --long file --function __rush_complete_mvn_poms
+complete mvn --option --short P --long activate-profiles --value-name profiles --description 'comma-delimited profiles'
+complete mvn --option-value --short P --function __rush_complete_mvn_profiles
+complete mvn --option-value --long activate-profiles --function __rush_complete_mvn_profiles
+complete mvn --option --short D --define --value-name name=value --description 'define a system property'
+complete mvn --option-value --short D --function __rush_complete_mvn_properties
+complete mvn --option-value --long define --function __rush_complete_mvn_properties
+complete mvn --option --short s --long settings --value-name file --description 'alternate user settings file'
+complete mvn --option-value --short s --function __rush_complete_mvn_settings
+complete mvn --option-value --long settings --function __rush_complete_mvn_settings
+complete mvn --option --short gs --long global-settings --value-name file --description 'alternate global settings file'
+complete mvn --option-value --short gs --function __rush_complete_mvn_settings
+complete mvn --option --short pl --long projects --value-name projects --description 'reactor projects to build'
+complete mvn --option-value --short pl --function __rush_complete_mvn_modules
+complete mvn --option-value --long projects --function __rush_complete_mvn_modules
+complete mvn --option --short am --long also-make --description 'also build required projects'
+complete mvn --option --short amd --long also-make-dependents --description 'also build dependent projects'
+complete mvn --option --short rf --long resume-from --value-name project --description 'resume reactor from project'
+complete mvn --option-value --short rf --function __rush_complete_mvn_modules
+complete mvn --option --short T --long threads --value-name count --description 'thread count'
+complete mvn --argument --function __rush_complete_mvn_goals
+
+__rush_complete_mvn_goals() {
+  completion candidate validate --kind plain
+  completion candidate compile --kind plain
+  completion candidate test --kind plain
+  completion candidate package --kind plain
+  completion candidate verify --kind plain
+  completion candidate install --kind plain
+  completion candidate deploy --kind plain
+  completion candidate clean --kind plain
+  completion candidate site --kind plain
+  completion candidate dependency:tree --kind plain
+  completion candidate dependency:analyze --kind plain
+  completion candidate dependency:copy-dependencies --kind plain
+  completion candidate exec:java --kind plain
+  completion candidate exec:exec --kind plain
+  completion candidate spring-boot:run --kind plain
+  completion candidate versions:display-dependency-updates --kind plain
+  completion candidate versions:set --kind plain
+  completion candidate help:effective-pom --kind plain
+  completion candidate help:effective-settings --kind plain
+  completion candidate archetype:generate --kind plain
+  completion candidate surefire:test --kind plain
+  completion candidate failsafe:integration-test --kind plain
+}
+
+__rush_complete_mvn_poms() {
+  completion candidate pom.xml --kind file
+  completion files --extension .xml
+}
+
+__rush_complete_mvn_settings() {
+  completion candidate settings.xml --kind file
+  completion candidate ~/.m2/settings.xml --kind file
+  completion files --extension .xml
+}
+
+__rush_complete_mvn_profiles() {
+  sed -n 's/.*<id>\([^<]*\)<\/id>.*/\1/p' pom.xml 2>/dev/null | while read profile; do test -n "$profile" && completion candidate "$profile" --kind plain; done
+  completion candidate dev --kind plain
+  completion candidate test --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+  completion candidate release --kind plain
+}
+
+__rush_complete_mvn_modules() {
+  sed -n 's/.*<module>\([^<]*\)<\/module>.*/\1/p' pom.xml 2>/dev/null | while read module; do test -n "$module" && completion candidate "$module" --kind plain; done
+  completion directories --append-slash
+}
+
+__rush_complete_mvn_properties() {
+  completion candidate skipTests=true --kind variable
+  completion candidate maven.test.skip=true --kind variable
+  completion candidate test= --kind variable
+  completion candidate groups= --kind variable
+  completion candidate spring.profiles.active=dev --kind variable
+  completion candidate revision= --kind variable
+  completion candidate altDeploymentRepository= --kind variable
+}
