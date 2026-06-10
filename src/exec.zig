@@ -2749,6 +2749,23 @@ pub const Executor = struct {
         return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
+    /// Assigns the for-loop variable. A readonly target is a variable
+    /// assignment error, so the diagnostic is recorded and the
+    /// non-interactive shell stops (POSIX XCU 2.8.1). Returns false when the
+    /// loop must stop.
+    fn setForLoopVariable(self: *Executor, name: []const u8, value: []const u8, stderr: *std.ArrayList(u8), status: *ExitStatus) !bool {
+        self.setEnv(name, value) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try stderr.print(self.allocator, "{s}: readonly variable\n", .{name});
+                self.pending_exit = 2;
+                status.* = 2;
+                return false;
+            },
+            else => return err,
+        };
+        return true;
+    }
+
     fn executeForCommand(self: *Executor, command: ir.ForCommand, options: ExecuteOptions) !CommandResult {
         self.loop_depth += 1;
         defer self.loop_depth -= 1;
@@ -2778,7 +2795,7 @@ pub const Executor = struct {
 
         if (command.use_positionals) {
             for (self.currentPositionals().params) |param| {
-                try self.setEnv(command.name, param);
+                if (!try self.setForLoopVariable(command.name, param, &stderr, &status)) break;
                 var body = try self.executeScriptSlice(command.body, execution_options);
                 defer body.deinit();
                 try stdout.appendSlice(self.allocator, body.stdout);
@@ -2793,7 +2810,7 @@ pub const Executor = struct {
             }
         } else {
             for (expanded_words) |word| {
-                try self.setEnv(command.name, word.text);
+                if (!try self.setForLoopVariable(command.name, word.text, &stderr, &status)) break;
                 var body = try self.executeScriptSlice(command.body, execution_options);
                 defer body.deinit();
                 try stdout.appendSlice(self.allocator, body.stdout);
@@ -3714,14 +3731,28 @@ pub const Executor = struct {
                 error.ReadonlyVariable => return self.assignmentErrorResult(),
                 else => return err,
             };
-            return builtin(self, command, stdin, options);
+            return self.runBuiltin(builtin, command, stdin, options);
         }
         var assignment_scope = self.pushTemporaryAssignments(command.assignments) catch |err| switch (err) {
             error.ReadonlyVariable => return self.assignmentErrorResult(),
             else => return err,
         };
         defer assignment_scope.restore();
-        return builtin(self, command, stdin, options);
+        return self.runBuiltin(builtin, command, stdin, options);
+    }
+
+    // Builtins that assign variables (read, getopts, cd, ...) diagnose a
+    // readonly target as a utility error: the builtin fails but, unlike a
+    // variable assignment error, a non-special builtin does not stop the
+    // shell (POSIX XCU 2.8.1).
+    fn runBuiltin(self: *Executor, builtin: BuiltinFn, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+        return builtin(self, command, stdin, options) catch |err| switch (err) {
+            error.ReadonlyVariable => blk: {
+                if (isSpecialBuiltin(command.argv[0].text)) self.pending_exit = 2;
+                break :blk try errorResult(self.allocator, 2, command.argv[0].text, "readonly variable");
+            },
+            else => err,
+        };
     }
 
     fn executeFunctionBody(self: *Executor, command: ir.SimpleCommand, function_value: *const FunctionValue, options: ExecuteOptions) anyerror!CommandResult {

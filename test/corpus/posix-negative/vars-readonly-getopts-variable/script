@@ -1,0 +1,1 @@
+readonly R=v; getopts a R -a; echo st=$?
