@@ -1,0 +1,2 @@
+/bin/echo hi | /bin/cat <&9
+echo st=$?

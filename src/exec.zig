@@ -3304,6 +3304,12 @@ pub const Executor = struct {
         errdefer {
             for (contexts.items) |context| self.allocator.destroy(context);
         }
+        const StageFailure = struct { index: usize, diagnostic: []u8 };
+        var stage_failures: std.ArrayList(StageFailure) = .empty;
+        defer {
+            for (stage_failures.items) |failure| self.allocator.free(failure.diagnostic);
+            stage_failures.deinit(self.allocator);
+        }
 
         for (pipeline.command_indexes, 0..) |command_index, index| {
             try checkCanceled(options);
@@ -3312,7 +3318,18 @@ pub const Executor = struct {
             var stdin_file = if (index == 0) null else takeRead(&pipes[index - 1]);
             var stdout_file = if (is_last) takeWrite(&capture_stdout) else takeWrite(&pipes[index]);
             var stderr_file = if (is_last) takeWrite(&capture_stderr) else null;
-            try self.applyPipelineStageRedirections(io, command, options, &stdin_file, &stdout_file, &stderr_file);
+            self.applyPipelineStageRedirections(io, command, options, &stdin_file, &stdout_file, &stderr_file) catch |err| {
+                // A redirection error fails this stage with a diagnostic
+                // while the other pipeline stages still run (POSIX 2.8.1
+                // treats it as a utility redirection error).
+                const diagnostic = (try self.redirectionFailureDiagnostic(command, err)) orelse return err;
+                errdefer self.allocator.free(diagnostic);
+                if (stdin_file) |file| file.close(io);
+                if (stdout_file) |file| file.close(io);
+                if (stderr_file) |file| file.close(io);
+                try stage_failures.append(self.allocator, .{ .index = index, .diagnostic = diagnostic });
+                continue;
+            };
             const command_without_redirs: ir.SimpleCommand = .{
                 .span = command.span,
                 .assignments = command.assignments,
@@ -3399,12 +3416,32 @@ pub const Executor = struct {
             statuses[context.stage_index] = context.status;
         }
 
+        var stderr_output = try multi_reader.toOwnedSlice(1);
+        errdefer self.allocator.free(stderr_output);
+        for (stage_failures.items) |failure| {
+            statuses[failure.index] = 2;
+            const combined = try std.mem.concat(self.allocator, u8, &.{ failure.diagnostic, stderr_output });
+            self.allocator.free(stderr_output);
+            stderr_output = combined;
+        }
+
         return .{
             .allocator = self.allocator,
             .status = self.pipelineStatus(pipeline, statuses),
             .stdout = try multi_reader.toOwnedSlice(0),
-            .stderr = try multi_reader.toOwnedSlice(1),
+            .stderr = stderr_output,
         };
+    }
+
+    fn redirectionFailureDiagnostic(self: *Executor, command: ir.SimpleCommand, err: anyerror) !?[]u8 {
+        const name, const message = switch (err) {
+            error.BadFileDescriptor => .{ badFdTargetName(command), "bad file descriptor" },
+            error.FileNotFound => .{ inputTargetName(command), "no such file or directory" },
+            error.IsDir => .{ redirectionTargetName(command), "is a directory" },
+            error.PathAlreadyExists => .{ noclobberTargetName(command), "cannot overwrite existing file" },
+            else => return null,
+        };
+        return try std.fmt.allocPrint(self.allocator, "{s}: {s}\n", .{ name, message });
     }
 
     fn pipelineSpawnFailureResult(self: *Executor, io: std.Io, name: []const u8, children: []std.process.Child, threads: *std.ArrayList(std.Thread), contexts: []const *BuiltinPipelineContext) !CommandResult {
@@ -3426,6 +3463,7 @@ pub const Executor = struct {
     ) !void {
         const redirections = try self.expandRedirections(command.redirections, options);
         defer self.freeRedirections(redirections);
+        try self.validateFdDuplicationTargets(redirections);
         for (redirections) |redirection| {
             if (isHereDocRedirection(redirection)) {
                 if (stdin_file.*) |file| file.close(io);
@@ -4505,6 +4543,11 @@ pub const Executor = struct {
         var stderr_file: ?std.Io.File = null;
         defer if (stderr_file) |file| file.close(io);
 
+        // The diagnostic is reported but the async command itself still
+        // yields status 0, matching the status of a successful spawn.
+        self.validateFdDuplicationTargets(command.redirections) catch {
+            return errorResult(self.allocator, 0, badFdTargetName(command), "bad file descriptor");
+        };
         for (command.redirections) |redirection| {
             if (isHereDocRedirection(redirection)) {
                 if (stdin_file) |file| file.close(io);

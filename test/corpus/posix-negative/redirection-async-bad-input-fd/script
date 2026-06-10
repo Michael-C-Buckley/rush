@@ -1,0 +1,3 @@
+/bin/cat <&9 &
+echo st=$?
+wait
