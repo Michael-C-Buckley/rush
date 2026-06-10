@@ -6,74 +6,27 @@ Rush has two POSIX-oriented corpus workflows:
   - Runs Rush against spec-derived expected-output cases in `test/corpus/posix/`.
   - Does not require any other shell.
 - `zig build corpus`
-  - Differentially compares Rush with whatever comparison shells are installed.
+  - Differentially compares Rush with the comparison shells installed on the system.
   - The harness is intentionally tolerant of missing shells.
 
-## Supported comparison matrix
+## Comparison matrix
 
 `scripts/check-system-shell-corpus.sh` checks for these shells:
 
 | Label | Command used | Notes |
 | --- | --- | --- |
-| `dash` | `dash -c SCRIPT` | Small POSIX `/bin/sh` implementation; excellent baseline. |
-| `bash` | `bash -c SCRIPT` | Useful compatibility reference, but not strict POSIX by default. |
-| `bash-posix` | `bash --posix -c SCRIPT` | Bash in POSIX mode; useful but still Bash. |
-| `yash` | `yash -c SCRIPT` | Strong POSIX conformance reference when available. |
-| `busybox-ash` | `busybox ash -c SCRIPT` | BusyBox ash; useful embedded/POSIX-ish reference. |
-| `mksh` | `mksh -c SCRIPT` | Not POSIX-pure, but useful for cross-shell behavior checks. |
+| `dash` | `dash -c SCRIPT` | Small POSIX `/bin/sh` implementation; the strictest single oracle. |
+| `bash-posix` | `bash --posix -c SCRIPT` | Bash in POSIX mode; useful second opinion, but still Bash. |
 
-On a minimal system, only Bash may be installed. That is fine: the differential corpus will report how many comparisons it ran.
+Both shells ship preinstalled on macOS and virtually every Linux
+distribution, so no provisioning is needed. The matrix is intentionally
+small: a wider matrix (yash, busybox ash, mksh) mostly re-confirmed the
+same results while multiplying runtime and accumulating per-shell skip
+lists for legitimate divergences.
 
-## Provisioning helper
-
-Run:
-
-```sh
-scripts/provision-posix-shells.sh --check
-```
-
-To print detected/missing shells.
-
-Run:
-
-```sh
-scripts/provision-posix-shells.sh --install
-```
-
-To install optional shells using a supported package manager.
-
-The script currently knows about:
-
-- Arch Linux: `pacman`
-- Debian/Ubuntu: `apt-get`
-- Alpine: `apk`
-- Fedora/RHEL-ish: `dnf`
-- macOS/Homebrew: `brew`
-
-Package availability varies by platform. The helper is best-effort; missing packages should not block Rush development.
-
-## Recommended local setup
-
-For Linux development, the most valuable matrix is:
-
-```sh
-dash bash yash busybox mksh
-```
-
-After installing, run:
-
-```sh
-zig build corpus --summary all
-zig build posix-corpus --summary all
-```
-
-Expected differential output should look like:
-
-```text
-system shell corpus passed (N cases, M comparisons across: dash bash bash-posix yash busybox-ash mksh)
-```
-
-The exact shell list depends on what is installed.
+Known divergences where the system bash disagrees with Rush and dash are
+tracked as tasks rather than skip lists; see the corpus failure output
+for the current set.
 
 ## Adding new comparison shells
 
