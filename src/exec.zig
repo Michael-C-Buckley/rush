@@ -8322,6 +8322,9 @@ fn evalBashTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []c
 }
 
 fn evalTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []const ir.WordRef) !bool {
+    if (args.len == 3 and isBinaryTestOperator(args[1].text)) {
+        return evalBinaryTest(allocator, options, args[0].text, args[1].text, args[2].text);
+    }
     if (hasTestExpressionOperator(args)) {
         var test_parser: TestExpressionParser = .{ .allocator = allocator, .options = options, .args = args };
         const result = try test_parser.parseOr();
@@ -8336,10 +8339,12 @@ fn evalSimpleTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: [
         0 => false,
         1 => args[0].text.len != 0,
         2 => try evalUnaryTest(allocator, options, args[0].text, args[1].text),
-        3 => if (std.mem.eql(u8, args[0].text, "!"))
+        3 => if (isBinaryTestOperator(args[1].text))
+            try evalBinaryTest(allocator, options, args[0].text, args[1].text, args[2].text)
+        else if (std.mem.eql(u8, args[0].text, "!"))
             !(try evalSimpleTest(allocator, options, args[1..]))
         else
-            try evalBinaryTest(allocator, options, args[0].text, args[1].text, args[2].text),
+            error.InvalidTestExpression,
         4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalSimpleTest(allocator, options, args[1..])) else error.InvalidTestExpression,
         else => error.InvalidTestExpression,
     };
@@ -9335,6 +9340,7 @@ test "executor implements test and bracket builtins" {
         .{ .script = "test 3 -le 2", .status = 1 },
         .{ .script = "test a '<' b", .status = 0 },
         .{ .script = "test b '>' a", .status = 0 },
+        .{ .script = "test ! = !", .status = 0 },
         .{ .script = "test -e rush-test-builtin-file.tmp", .status = 0 },
         .{ .script = "test -f rush-test-builtin-file.tmp", .status = 0 },
         .{ .script = "test -s rush-test-builtin-file.tmp", .status = 0 },
@@ -9348,6 +9354,7 @@ test "executor implements test and bracket builtins" {
         .{ .script = "test rush-test-missing.tmp -ot rush-test-builtin-newer.tmp", .status = 0 },
         .{ .script = "[ a = a ]", .status = 0 },
         .{ .script = "[ a = b ]", .status = 1 },
+        .{ .script = "[ '(' = '(' ]", .status = 0 },
         .{ .script = "[ rush-test-builtin-older.tmp -ot rush-test-builtin-newer.tmp ]", .status = 0 },
     };
 

@@ -3,3 +3,5 @@ and-ok
 or-ok
 group-ok
 bracket-ok
+paren-binary=0
+bang-binary=0
