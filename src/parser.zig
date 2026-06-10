@@ -398,26 +398,12 @@ const Lexer = struct {
 
     fn consumeCommandSubstitution(self: *Lexer) !void {
         const start = self.index;
-        self.index += 2;
-        var depth: usize = 1;
-        while (!self.isAtEnd()) {
-            switch (self.peek()) {
-                '(' => {
-                    depth += 1;
-                    self.index += 1;
-                },
-                ')' => {
-                    depth -= 1;
-                    self.index += 1;
-                    if (depth == 0) return;
-                },
-                '\'' => try self.consumeQuoted('\'', "unterminated single quote in command substitution"),
-                '"' => try self.consumeDoubleQuoted(),
-                '\\' => self.consumeBackslash(),
-                else => self.index += 1,
-            }
+        if (try commandSubstitutionEnd(self.allocator, self.source, self.source.len, start)) |end| {
+            self.index = end;
+            return;
         }
 
+        self.index = self.source.len;
         try self.addIncomplete(.init(start, self.source.len), "unterminated command substitution");
     }
 
@@ -798,7 +784,7 @@ fn commandSubstitutionSpans(allocator: std.mem.Allocator, source: []const u8, sp
             '\'' => skipQuoted(source, span.end, &index, '\''),
             '$' => {
                 if (index + 1 < span.end and source[index + 1] == '(' and !(index + 2 < span.end and source[index + 2] == '(')) {
-                    if (commandSubstitutionEnd(source, span.end, index)) |end| {
+                    if (try commandSubstitutionEnd(allocator, source, span.end, index)) |end| {
                         try spans.append(allocator, .init(index, end));
                         index = end;
                     } else {
@@ -815,29 +801,327 @@ fn commandSubstitutionSpans(allocator: std.mem.Allocator, source: []const u8, sp
     return spans;
 }
 
-fn commandSubstitutionEnd(source: []const u8, limit: usize, start: usize) ?usize {
-    var index = start + 2;
-    var depth: usize = 1;
-    while (index < limit) {
-        switch (source[index]) {
-            '(' => {
+pub fn commandSubstitutionEnd(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!?usize {
+    std.debug.assert(start + 1 < limit);
+    std.debug.assert(source[start] == '$');
+    std.debug.assert(source[start + 1] == '(');
+
+    var scanner: CommandSubstitutionScanner = .{
+        .allocator = allocator,
+        .source = source,
+        .limit = limit,
+        .index = start + 2,
+    };
+    defer scanner.deinit();
+    return scanner.scan();
+}
+
+const CasePhase = enum {
+    subject,
+    pattern,
+    body,
+};
+
+const CaseContext = struct {
+    phase: CasePhase = .subject,
+    saw_subject: bool = false,
+};
+
+const CommandSubstitutionScanner = struct {
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    limit: usize,
+    index: usize,
+    paren_depth: usize = 1,
+    command_position: bool = true,
+    cases: std.ArrayList(CaseContext) = .empty,
+
+    fn deinit(self: *CommandSubstitutionScanner) void {
+        self.cases.deinit(self.allocator);
+    }
+
+    fn scan(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!?usize {
+        while (self.index < self.limit) {
+            const c = self.source[self.index];
+            switch (c) {
+                ' ', '\t', '\r' => self.index += 1,
+                '\n' => {
+                    self.command_position = true;
+                    self.index += 1;
+                },
+                '#' => if (self.command_position) {
+                    self.skipComment();
+                } else {
+                    try self.scanWord();
+                },
+                '(' => {
+                    if (self.topCasePhase() == .pattern) {
+                        self.index += 1;
+                    } else {
+                        self.paren_depth += 1;
+                        self.command_position = true;
+                        self.index += 1;
+                    }
+                },
+                ')' => {
+                    if (self.topCasePhase() == .pattern) {
+                        self.setTopCasePhase(.body);
+                        self.command_position = true;
+                        self.index += 1;
+                    } else {
+                        self.paren_depth -= 1;
+                        self.index += 1;
+                        if (self.paren_depth == 0) return self.index;
+                        self.command_position = false;
+                    }
+                },
+                ';' => {
+                    if (self.index + 1 < self.limit and self.source[self.index + 1] == ';') {
+                        if (self.topCasePhase() == .body) self.setTopCasePhase(.pattern);
+                        self.command_position = true;
+                        self.index += 2;
+                    } else {
+                        self.command_position = true;
+                        self.index += 1;
+                    }
+                },
+                '|' => {
+                    if (self.topCasePhase() == .pattern) {
+                        self.index += 1;
+                    } else {
+                        self.command_position = true;
+                        self.index += if (self.index + 1 < self.limit and self.source[self.index + 1] == '|') 2 else 1;
+                    }
+                },
+                '&' => {
+                    self.command_position = true;
+                    self.index += if (self.index + 1 < self.limit and self.source[self.index + 1] == '&') 2 else 1;
+                },
+                '<', '>' => {
+                    self.command_position = false;
+                    self.index += self.operatorLen();
+                },
+                else => try self.scanWord(),
+            }
+        }
+        return null;
+    }
+
+    fn scanWord(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
+        const start = self.index;
+        var keyword_possible = true;
+        while (self.index < self.limit and !isCommandSubstitutionWordBoundary(self.source[self.index])) {
+            switch (self.source[self.index]) {
+                '\\' => {
+                    keyword_possible = false;
+                    self.skipBackslash();
+                },
+                '\'' => {
+                    keyword_possible = false;
+                    skipQuoted(self.source, self.limit, &self.index, '\'');
+                },
+                '"' => {
+                    keyword_possible = false;
+                    try self.skipDoubleQuoted();
+                },
+                '`' => {
+                    keyword_possible = false;
+                    self.skipBackquoted();
+                },
+                '$' => {
+                    keyword_possible = false;
+                    if (!try self.skipDollarExpansion()) self.index += 1;
+                },
+                else => self.index += 1,
+            }
+        }
+
+        const word: ?[]const u8 = if (keyword_possible) self.source[start..self.index] else null;
+        try self.observeWord(word);
+    }
+
+    fn observeWord(self: *CommandSubstitutionScanner, maybe_word: ?[]const u8) std.mem.Allocator.Error!void {
+        if (self.topCase()) |case_context| {
+            switch (case_context.phase) {
+                .subject => {
+                    if (maybe_word) |word| {
+                        if (case_context.saw_subject and std.mem.eql(u8, word, "in")) {
+                            case_context.phase = .pattern;
+                            self.command_position = true;
+                            return;
+                        }
+                    }
+                    case_context.saw_subject = true;
+                    self.command_position = false;
+                    return;
+                },
+                .pattern => {
+                    if (maybe_word) |word| {
+                        if (std.mem.eql(u8, word, "esac")) {
+                            _ = self.cases.pop();
+                            self.command_position = false;
+                            return;
+                        }
+                    }
+                    self.command_position = false;
+                    return;
+                },
+                .body => {
+                    if (maybe_word) |word| {
+                        if (self.command_position and std.mem.eql(u8, word, "esac")) {
+                            _ = self.cases.pop();
+                            self.command_position = false;
+                            return;
+                        }
+                        if (self.command_position and std.mem.eql(u8, word, "case")) {
+                            try self.cases.append(self.allocator, .{});
+                            self.command_position = false;
+                            return;
+                        }
+                    }
+                },
+            }
+        }
+
+        if (maybe_word) |word| {
+            if (self.command_position and std.mem.eql(u8, word, "case")) {
+                try self.cases.append(self.allocator, .{});
+                self.command_position = false;
+                return;
+            }
+            if (std.mem.eql(u8, word, "then") or std.mem.eql(u8, word, "do") or
+                std.mem.eql(u8, word, "else") or std.mem.eql(u8, word, "elif"))
+            {
+                self.command_position = true;
+                return;
+            }
+        }
+
+        self.command_position = false;
+    }
+
+    fn skipDollarExpansion(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!bool {
+        if (self.index + 1 >= self.limit or self.source[self.index] != '$') return false;
+        if (self.source[self.index + 1] == '{') {
+            try self.skipParameterExpansion();
+            return true;
+        }
+        if (self.source[self.index + 1] == '(' and self.index + 2 < self.limit and self.source[self.index + 2] == '(') {
+            self.skipArithmeticExpansion();
+            return true;
+        }
+        if (self.source[self.index + 1] == '(') {
+            self.index = (try commandSubstitutionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
+            return true;
+        }
+        self.index += 1;
+        return true;
+    }
+
+    fn skipParameterExpansion(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
+        self.index += 2;
+        var depth: usize = 1;
+        while (self.index < self.limit) {
+            if (self.source[self.index] == '$' and self.index + 1 < self.limit and self.source[self.index + 1] == '{') {
                 depth += 1;
-                index += 1;
-            },
-            ')' => {
+                self.index += 2;
+                continue;
+            }
+            if (self.source[self.index] == '}') {
                 depth -= 1;
-                index += 1;
-                if (depth == 0) return index;
-            },
-            '\'', '"' => skipQuoted(source, limit, &index, source[index]),
-            '\\' => {
-                index += 1;
-                if (index < limit) index += 1;
-            },
-            else => index += 1,
+                self.index += 1;
+                if (depth == 0) return;
+                continue;
+            }
+            switch (self.source[self.index]) {
+                '\\' => self.skipBackslash(),
+                '\'' => skipQuoted(self.source, self.limit, &self.index, '\''),
+                '"' => try self.skipDoubleQuoted(),
+                else => self.index += 1,
+            }
         }
     }
-    return null;
+
+    fn skipArithmeticExpansion(self: *CommandSubstitutionScanner) void {
+        self.index += 3;
+        while (self.index + 1 < self.limit) : (self.index += 1) {
+            if (self.source[self.index] == ')' and self.source[self.index + 1] == ')') {
+                self.index += 2;
+                return;
+            }
+        }
+        self.index = self.limit;
+    }
+
+    fn skipDoubleQuoted(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
+        std.debug.assert(self.source[self.index] == '"');
+        self.index += 1;
+        while (self.index < self.limit and self.source[self.index] != '"') {
+            switch (self.source[self.index]) {
+                '\\' => self.skipBackslash(),
+                '$' => {
+                    if (!try self.skipDollarExpansion()) self.index += 1;
+                },
+                '`' => self.skipBackquoted(),
+                else => self.index += 1,
+            }
+        }
+        if (self.index < self.limit) self.index += 1;
+    }
+
+    fn skipBackquoted(self: *CommandSubstitutionScanner) void {
+        self.index += 1;
+        while (self.index < self.limit) {
+            switch (self.source[self.index]) {
+                '\\' => self.skipBackslash(),
+                '`' => {
+                    self.index += 1;
+                    return;
+                },
+                else => self.index += 1,
+            }
+        }
+    }
+
+    fn skipBackslash(self: *CommandSubstitutionScanner) void {
+        self.index += 1;
+        if (self.index < self.limit) self.index += 1;
+    }
+
+    fn skipComment(self: *CommandSubstitutionScanner) void {
+        while (self.index < self.limit and self.source[self.index] != '\n') self.index += 1;
+    }
+
+    fn operatorLen(self: CommandSubstitutionScanner) usize {
+        if (self.index + 1 >= self.limit) return 1;
+        return switch (self.source[self.index]) {
+            '<' => if (self.source[self.index + 1] == '<' or self.source[self.index + 1] == '&' or self.source[self.index + 1] == '>') 2 else 1,
+            '>' => if (self.source[self.index + 1] == '>' or self.source[self.index + 1] == '&' or self.source[self.index + 1] == '|') 2 else 1,
+            else => 1,
+        };
+    }
+
+    fn topCase(self: *CommandSubstitutionScanner) ?*CaseContext {
+        if (self.cases.items.len == 0) return null;
+        return &self.cases.items[self.cases.items.len - 1];
+    }
+
+    fn topCasePhase(self: *CommandSubstitutionScanner) ?CasePhase {
+        if (self.topCase()) |case_context| return case_context.phase;
+        return null;
+    }
+
+    fn setTopCasePhase(self: *CommandSubstitutionScanner, phase: CasePhase) void {
+        const case_context = self.topCase() orelse return;
+        case_context.phase = phase;
+    }
+};
+
+fn isCommandSubstitutionWordBoundary(c: u8) bool {
+    return switch (c) {
+        ' ', '\t', '\r', '\n', '|', '&', ';', '(', ')', '<', '>' => true,
+        else => false,
+    };
 }
 
 fn skipQuoted(source: []const u8, limit: usize, index: *usize, quote: u8) void {
@@ -3012,6 +3296,29 @@ test "parser nests command substitution CST nodes" {
     const outer_children = result.nodeChildren(outer);
     try std.testing.expectEqual(@as(usize, 1), outer_children.len);
     try std.testing.expectEqual(inner_id.?, outer_children[0].node);
+}
+
+test "parser scans case pattern parens inside command substitution" {
+    const script = "echo \"$(case x in x) echo case-in-subst ;; esac)\"";
+    var result = try parse(std.testing.allocator, script, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try std.testing.expectEqual(TokenKind.word, result.tokens[2].kind);
+    try expectSpan(.init(5, 49), result.tokens[2].span);
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .command_substitution) {
+            found = true;
+            try expectSpan(.init(6, 48), node.span);
+        }
+    }
+    try std.testing.expect(found);
+
+    var optional = try parse(std.testing.allocator, "echo \"$(case x in (x) echo optional ;; esac)\"", .{});
+    defer optional.deinit();
+    try std.testing.expectEqual(@as(usize, 0), optional.diagnostics.len);
 }
 
 test "lexer command substitution handles quoted parens arithmetic and incomplete input" {

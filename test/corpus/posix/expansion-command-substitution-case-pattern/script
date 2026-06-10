@@ -1,0 +1,2 @@
+echo "$(case x in x) echo case-in-subst ;; esac)"
+echo "$(case x in (x) echo optional-case-in-subst ;; esac)"

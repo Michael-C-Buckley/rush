@@ -78,7 +78,7 @@ Manifest rows:
 - `lex-command-substitution`
 - `lex-backquote`
 
-Current coverage includes `$()`, splitting of command substitution output, quoted command substitution, quoted backquotes, a backquote backslash fix, and propagation of nested expansion diagnostics/status from command substitutions.
+Current coverage includes `$()`, splitting of command substitution output, quoted command substitution, quoted backquotes, case-pattern parens inside `$()`, a backquote backslash fix, and propagation of nested expansion diagnostics/status from command substitutions.
 
 Remaining gaps:
 

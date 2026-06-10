@@ -109,6 +109,7 @@ errexit-and-or-suppression	options	option	errexit is suppressed before AND-OR li
 errexit-assignment-command-substitution	options	option	assignment-only command substitution failure triggers errexit
 errexit-negation-suppression	options	option	errexit is suppressed for negated pipelines
 expansion-arithmetic-precedence	expansion	behavior	-
+expansion-command-substitution-case-pattern	expansion	behavior	command substitution spans include POSIX case patterns with unbalanced closing parens
 expansion-command-substitution-splitting	expansion	behavior	-
 expansion-field-splitting-newline	expansion	behavior	-
 expansion-length-operator	expansion	behavior	-

@@ -6,6 +6,7 @@
 const std = @import("std");
 const zig_builtin = @import("builtin");
 const compat = @import("compat.zig");
+const parser = @import("parser.zig");
 
 pub const EnvLookup = struct {
     context: ?*const anyopaque = null,
@@ -255,7 +256,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
             '"' => {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 const start = index;
-                const end = doubleQuotedSpanEnd(raw, index) orelse raw.len;
+                const end = (try doubleQuotedSpanEnd(allocator, raw, index)) orelse raw.len;
                 const value_end = if (end > start + 1 and raw[end - 1] == '"') end - 1 else end;
                 index = end;
                 try parts.append(allocator, .{
@@ -276,7 +277,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                     .value_span = .init(value_start, index),
                 });
             },
-            '$' => if (arithmeticPart(raw, index) orelse commandSubstitutionPart(raw, index) orelse parameterPart(raw, index)) |part| {
+            '$' => if (arithmeticPart(raw, index) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse parameterPart(raw, index)) |part| {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 try parts.append(allocator, part);
                 index = part.span.end;
@@ -355,49 +356,25 @@ fn backquoteCommandSubstitutionPart(raw: []const u8, start: usize) ?WordPart {
     return null;
 }
 
-fn commandSubstitutionPart(raw: []const u8, dollar: usize) ?WordPart {
+fn commandSubstitutionPart(allocator: std.mem.Allocator, raw: []const u8, dollar: usize) !?WordPart {
     if (dollar + 1 >= raw.len or raw[dollar] != '$' or raw[dollar + 1] != '(') return null;
     // Arithmetic expansion is handled before this function.
     if (dollar + 2 < raw.len and raw[dollar + 2] == '(') return null;
 
     const value_start = dollar + 2;
-    var index = value_start;
-    var depth: usize = 1;
-    while (index < raw.len) {
-        switch (raw[index]) {
-            '(' => {
-                depth += 1;
-                index += 1;
-            },
-            ')' => {
-                depth -= 1;
-                index += 1;
-                if (depth == 0) {
-                    return .{
-                        .kind = .command_substitution,
-                        .span = .init(dollar, index),
-                        .value_span = .init(value_start, index - 1),
-                    };
-                }
-            },
-            '\\' => index += if (index + 1 < raw.len) 2 else 1,
-            '\'' => {
-                index += 1;
-                while (index < raw.len and raw[index] != '\'') index += 1;
-                if (index < raw.len) index += 1;
-            },
-            '"' => index = doubleQuotedSpanEnd(raw, index) orelse return null,
-            else => index += 1,
-        }
-    }
-    return null;
+    const end = (try parser.commandSubstitutionEnd(allocator, raw, raw.len, dollar)) orelse return null;
+    return .{
+        .kind = .command_substitution,
+        .span = .init(dollar, end),
+        .value_span = .init(value_start, end - 1),
+    };
 }
 
 /// Returns the index just past the closing double quote of the
 /// double-quoted string starting at `start`, or null when unterminated.
 /// Embedded expansions keep their special meaning inside double quotes
 /// (POSIX XCU 2.2.3), so quotes inside them do not close the string.
-fn doubleQuotedSpanEnd(raw: []const u8, start: usize) ?usize {
+fn doubleQuotedSpanEnd(allocator: std.mem.Allocator, raw: []const u8, start: usize) !?usize {
     std.debug.assert(raw[start] == '"');
     var index = start + 1;
     while (index < raw.len) {
@@ -405,7 +382,7 @@ fn doubleQuotedSpanEnd(raw: []const u8, start: usize) ?usize {
             '"' => return index + 1,
             '\\' => index += if (index + 1 < raw.len) 2 else 1,
             '$' => {
-                const part = arithmeticPart(raw, index) orelse commandSubstitutionPart(raw, index) orelse parameterPart(raw, index);
+                const part = arithmeticPart(raw, index) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse parameterPart(raw, index);
                 index = if (part) |p| p.span.end else index + 1;
             },
             '`' => {
@@ -1090,7 +1067,7 @@ fn renderDoubleQuotedContent(allocator: std.mem.Allocator, text: []const u8, opt
         }
 
         const part = switch (text[index]) {
-            '$' => arithmeticPart(text, index) orelse commandSubstitutionPart(text, index) orelse parameterPart(text, index),
+            '$' => arithmeticPart(text, index) orelse (try commandSubstitutionPart(allocator, text, index)) orelse parameterPart(text, index),
             '`' => backquoteCommandSubstitutionPart(text, index),
             else => null,
         } orelse {
@@ -1590,7 +1567,7 @@ pub fn expandHereDocBody(allocator: std.mem.Allocator, text: []const u8, options
             continue;
         }
         const part = switch (c) {
-            '$' => arithmeticPart(text, index) orelse commandSubstitutionPart(text, index) orelse parameterPart(text, index),
+            '$' => arithmeticPart(text, index) orelse (try commandSubstitutionPart(allocator, text, index)) orelse parameterPart(text, index),
             '`' => backquoteCommandSubstitutionPart(text, index),
             else => null,
         } orelse {
@@ -2087,6 +2064,20 @@ test "double-quoted command substitution may contain double quotes" {
     defer rendered.deinit();
     try std.testing.expectEqual(@as(usize, 1), rendered.fields.len);
     try std.testing.expectEqualStrings("cmd \"x)y\"", rendered.fields[0]);
+}
+
+test "command substitution parses case pattern parens" {
+    const echo_script: CommandSubstitution = .{ .runFn = testScriptEchoSubstitution };
+
+    var rendered = try expandWord(std.testing.allocator, "\"$(case x in x) echo case-in-subst ;; esac)\"", .{ .command_substitution = echo_script });
+    defer rendered.deinit();
+    try std.testing.expectEqual(@as(usize, 1), rendered.fields.len);
+    try std.testing.expectEqualStrings("case x in x) echo case-in-subst ;; esac", rendered.fields[0]);
+
+    var optional = try expandWord(std.testing.allocator, "\"$(case x in (x) echo optional ;; esac)\"", .{ .command_substitution = echo_script });
+    defer optional.deinit();
+    try std.testing.expectEqual(@as(usize, 1), optional.fields.len);
+    try std.testing.expectEqualStrings("case x in (x) echo optional ;; esac", optional.fields[0]);
 }
 
 test "backquote escaped double-quote is unescaped only inside double quotes" {
