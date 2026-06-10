@@ -2073,6 +2073,7 @@ pub const Executor = struct {
         switch (context.position) {
             .redirect_target => try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false),
             .subcommand, .argument => {
+                if (std.mem.eql(u8, context.root, "cd")) return;
                 if (self.hasExplicitCompletionRuleForContext(context)) return;
                 try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false);
             },
@@ -14344,6 +14345,40 @@ test "builtin completion offers directory and command operands" {
     const command_candidates = try executor.collectCompletionsForInput("command ec", "command ec".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(command_candidates);
     try expectCandidate(command_candidates, "echo", .builtin);
+}
+
+test "builtin cd completion stays directory-only after path slash" {
+    const parent_path = "rush-builtin-completion-parent";
+    const child_dir_path = parent_path ++ "/child-dir";
+    const child_file_path = parent_path ++ "/child-file";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, parent_path) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, child_dir_path);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = child_file_path, .data = "" });
+
+    const file_only_path = "rush-builtin-completion-file-only";
+    const nested_file_path = file_only_path ++ "/child-file";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, file_only_path) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, file_only_path, .default_dir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = nested_file_path, .data = "" });
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const source = "cd " ++ parent_path ++ "/";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, child_dir_path ++ "/", .directory);
+    try expectNoCandidate(candidates, child_file_path);
+    const child_dir = findCandidate(candidates, child_dir_path ++ "/") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "cd ".len), child_dir.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), child_dir.replace_end);
+    try std.testing.expect(!child_dir.append_space);
+
+    const file_only_source = "cd " ++ file_only_path ++ "/";
+    const file_only_candidates = try executor.collectCompletionsForInput(file_only_source, file_only_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(file_only_candidates);
+    try expectNoCandidate(file_only_candidates, nested_file_path);
+    try std.testing.expectEqual(@as(usize, 0), file_only_candidates.len);
 }
 
 test "default completion falls back to paths for unmatched arguments" {
