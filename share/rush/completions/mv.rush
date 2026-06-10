@@ -1,0 +1,35 @@
+# First-party mv completion slice.
+
+complete mv --option --short h --long help --description 'show help'
+complete mv --option --long version --description 'show version'
+complete mv --option --short f --long force --description 'do not prompt before overwrite'
+complete mv --option --short i --long interactive --description 'prompt before overwrite'
+complete mv --option --short n --long no-clobber --description 'do not overwrite existing files'
+complete mv --option --short v --long verbose --description 'explain what is being done'
+complete mv --option --short u --long update --description 'move only when source is newer or destination missing'
+complete mv --option --short t --long target-directory --value-name dir --description 'move all sources into directory'
+complete mv --option-value --short t --function __rush_complete_mv_directories
+complete mv --option-value --long target-directory --function __rush_complete_mv_directories
+complete mv --option --short T --long no-target-directory --description 'treat destination as a normal file'
+complete mv --option --short b --long backup --value-name control --description 'make a backup of existing destination files'
+complete mv --option-value --long backup --function __rush_complete_mv_backup_modes
+complete mv --option --short S --long suffix --value-name suffix --description 'override backup suffix'
+complete mv --option --long strip-trailing-slashes --description 'remove trailing slashes from source operands'
+complete mv --argument --function __rush_complete_mv_paths
+
+__rush_complete_mv_paths() {
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_mv_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_mv_backup_modes() {
+  completion candidate none --kind plain
+  completion candidate off --kind plain
+  completion candidate numbered --kind plain
+  completion candidate existing --kind plain
+  completion candidate simple --kind plain
+}

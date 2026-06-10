@@ -1,0 +1,40 @@
+# First-party chmod completion slice.
+
+complete chmod --option --short h --long help --description 'show help'
+complete chmod --option --long version --description 'show version'
+complete chmod --option --short R --long recursive --description 'change files and directories recursively'
+complete chmod --option --short f --long silent --description 'suppress most error messages'
+complete chmod --option --long quiet --description 'suppress most error messages'
+complete chmod --option --short v --long verbose --description 'output a diagnostic for every processed file'
+complete chmod --option --short c --long changes --description 'report only when a change is made'
+complete chmod --option --long reference --value-name file --description 'use mode from reference file'
+complete chmod --option-value --long reference --function __rush_complete_chmod_paths
+complete chmod --option --long preserve-root --description 'fail to operate recursively on root'
+complete chmod --option --long no-preserve-root --description 'do not treat root specially'
+complete chmod --argument --function __rush_complete_chmod_args
+
+__rush_complete_chmod_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_chmod_modes
+  else
+    __rush_complete_chmod_paths
+  fi
+}
+
+__rush_complete_chmod_modes() {
+  completion candidate 644 --kind plain
+  completion candidate 600 --kind plain
+  completion candidate 755 --kind plain
+  completion candidate 700 --kind plain
+  completion candidate +x --kind plain
+  completion candidate -x --kind plain
+  completion candidate u+x --kind plain
+  completion candidate u=rw,go=r --kind plain
+  completion candidate a+r --kind plain
+  completion candidate go-w --kind plain
+}
+
+__rush_complete_chmod_paths() {
+  completion files
+  completion directories --append-slash
+}

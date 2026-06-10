@@ -1,0 +1,36 @@
+# First-party chgrp completion slice.
+
+complete chgrp --option --short h --long help --description 'show help'
+complete chgrp --option --long version --description 'show version'
+complete chgrp --option --short R --long recursive --description 'operate on files and directories recursively'
+complete chgrp --option --short f --long silent --description 'suppress most error messages'
+complete chgrp --option --long quiet --description 'suppress most error messages'
+complete chgrp --option --short v --long verbose --description 'output a diagnostic for every processed file'
+complete chgrp --option --short c --long changes --description 'report only when a change is made'
+complete chgrp --option --long reference --value-name file --description 'use group from reference file'
+complete chgrp --option-value --long reference --function __rush_complete_chgrp_paths
+complete chgrp --option --long preserve-root --description 'fail to operate recursively on root'
+complete chgrp --option --long no-preserve-root --description 'do not treat root specially'
+complete chgrp --argument --function __rush_complete_chgrp_args
+
+__rush_complete_chgrp_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_chgrp_groups
+  else
+    __rush_complete_chgrp_paths
+  fi
+}
+
+__rush_complete_chgrp_groups() {
+  id -gn 2>/dev/null | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+  getent group 2>/dev/null | sed 's/:.*//' | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+  cut -d: -f1 /etc/group 2>/dev/null | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+  completion candidate root --kind plain
+  completion candidate staff --kind plain
+  completion candidate users --kind plain
+}
+
+__rush_complete_chgrp_paths() {
+  completion files
+  completion directories --append-slash
+}

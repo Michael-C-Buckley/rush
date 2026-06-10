@@ -1,0 +1,33 @@
+# First-party rm completion slice.
+
+complete rm --option --short h --long help --description 'show help'
+complete rm --option --long version --description 'show version'
+complete rm --option --short f --long force --description 'ignore nonexistent files and arguments'
+complete rm --option --short i --description 'prompt before every removal'
+complete rm --option --short I --description 'prompt once before removing many files'
+complete rm --option --long interactive --value-name when --description 'prompt according to when'
+complete rm --option-value --long interactive --function __rush_complete_rm_interactive_modes
+complete rm --option --short r --long recursive --description 'remove directories and contents recursively'
+complete rm --option --short R --description 'remove directories and contents recursively'
+complete rm --option --short d --long dir --description 'remove empty directories'
+complete rm --option --short v --long verbose --description 'explain what is being done'
+complete rm --option --long one-file-system --description 'stay on one filesystem when removing recursively'
+complete rm --option --long preserve-root --value-name mode --description 'do not remove root recursively'
+complete rm --option-value --long preserve-root --function __rush_complete_rm_root_modes
+complete rm --option --long no-preserve-root --description 'do not treat root specially'
+complete rm --argument --function __rush_complete_rm_paths
+
+__rush_complete_rm_paths() {
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_rm_interactive_modes() {
+  completion candidate never --kind plain
+  completion candidate once --kind plain
+  completion candidate always --kind plain
+}
+
+__rush_complete_rm_root_modes() {
+  completion candidate all --kind plain
+}
