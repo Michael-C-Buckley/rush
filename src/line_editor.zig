@@ -558,12 +558,16 @@ pub const LineSession = struct {
             render_options.completion_selection = self.history_search_selected;
             render_options.completion_window_start = 0;
             return frameFromLine(allocator, self.editor, render_options);
-        } else if (try self.currentAutosuggestion(allocator)) |suggestion| {
-            defer suggestion.deinit(allocator);
-            const text = self.editor.buffer.text();
-            if (std.mem.startsWith(u8, suggestion.text, text) and renderableInlineText(suggestion.text)) {
-                suggestion_suffix = try allocator.dupe(u8, suggestion.text[text.len..]);
-                render_options.suggestion = suggestion_suffix.?;
+        } else if (self.state == .editing) {
+            // Ghost suggestions are editing aids; an accepted line must show
+            // only the text that actually runs.
+            if (try self.currentAutosuggestion(allocator)) |suggestion| {
+                defer suggestion.deinit(allocator);
+                const text = self.editor.buffer.text();
+                if (std.mem.startsWith(u8, suggestion.text, text) and renderableInlineText(suggestion.text)) {
+                    suggestion_suffix = try allocator.dupe(u8, suggestion.text[text.len..]);
+                    render_options.suggestion = suggestion_suffix.?;
+                }
             }
         }
         return frameFromLine(allocator, self.editor, render_options);
