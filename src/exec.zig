@@ -7021,6 +7021,11 @@ fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     for (command.argv[action_index + 1 ..]) |signal_word| {
         const name = try normalizeTrapName(self.allocator, signal_word.text);
         defer self.allocator.free(name);
+        if (!validTrapName(name)) {
+            const message = try std.fmt.allocPrint(self.allocator, "{s}: invalid signal specification", .{signal_word.text});
+            defer self.allocator.free(message);
+            return errorResult(self.allocator, 1, "trap", message);
+        }
         if (std.mem.eql(u8, action, "-")) {
             self.clearTrap(name);
         } else {
@@ -7049,11 +7054,23 @@ fn listTraps(self: *Executor) !CommandResult {
 
 fn normalizeTrapName(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
     if (std.mem.eql(u8, raw, "0")) return allocator.dupe(u8, "EXIT");
+    if (parseTrapSignalNumber(raw)) |name| return allocator.dupe(u8, name);
     const start: usize = if (std.ascii.startsWithIgnoreCase(raw, "SIG") and raw.len > 3) 3 else 0;
     if (start >= raw.len) return allocator.dupe(u8, raw);
     const name = try allocator.alloc(u8, raw.len - start);
     for (raw[start..], 0..) |byte, index| name[index] = std.ascii.toUpper(byte);
     return name;
+}
+
+fn validTrapName(name: []const u8) bool {
+    return std.mem.eql(u8, name, "EXIT") or signalFromTrapName(name) != null;
+}
+
+fn parseTrapSignalNumber(raw: []const u8) ?[]const u8 {
+    if (raw.len == 0) return null;
+    for (raw) |byte| if (!std.ascii.isDigit(byte)) return null;
+    const number = std.fmt.parseInt(u8, raw, 10) catch return null;
+    return signalNameFromNumber(number);
 }
 
 fn singleQuote(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {

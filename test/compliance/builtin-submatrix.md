@@ -29,7 +29,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | `set` | `option-set`, `option-set-short-clusters`, `option-set-allexport`, `builtin-set-positionals`, `option-set-usage-errors`, option rows | shell option, allexport, clustered short option, and set -- positional parameter corpus; invalid option diagnostics | many POSIX flags and broader operand forms |
 | `shift` | `builtin-shift-operands`, `builtin-shift-too-far`, `builtin-shift-usage-errors` | default and explicit count operands, too-far status, invalid operand, and too-many diagnostics | additional function/top-level interaction edge cases |
 | `times` | `builtin-times` | `builtin-times` | portability/runtime precision is baseline only |
-| `trap` | `builtin-trap`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus | signal semantics, ignored signals, invalid names, inheritance |
+| `trap` | `builtin-trap`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus, invalid signal diagnostics | signal semantics, ignored signals, inheritance |
 | `unset` | `builtin-export-unset`, `builtin-unset-default-variable`, `builtin-unset-variable-function`, `builtin-variable-usage-errors` | default variable mode, unset -v, unset -f, invalid-name, readonly-variable, and unsupported-option coverage | remaining special-builtin edge cases |
 
 High-risk rows:
