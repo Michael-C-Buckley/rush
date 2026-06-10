@@ -450,7 +450,7 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
         },
         .command_substitution => blk: {
-            const script = try commandSubstitutionScript(allocator, raw, part);
+            const script = try commandSubstitutionScript(allocator, raw, part, false);
             defer allocator.free(script);
             const output = (try options.command_substitution.run(allocator, script)) orelse try allocator.alloc(u8, 0);
             defer allocator.free(output);
@@ -971,7 +971,7 @@ pub fn evalArithmetic(input: []const u8, env: EnvLookup, env_set: EnvSet) anyerr
     return arithmetic_parser.parse();
 }
 
-fn commandSubstitutionScript(allocator: std.mem.Allocator, raw: []const u8, part: WordPart) ![]const u8 {
+fn commandSubstitutionScript(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, in_double_quotes: bool) ![]const u8 {
     const source = part.source(raw);
     if (source.len == 0 or source[0] != '`') return allocator.dupe(u8, part.value(raw));
 
@@ -982,7 +982,11 @@ fn commandSubstitutionScript(allocator: std.mem.Allocator, raw: []const u8, part
     while (index < value.len) {
         if (value[index] == '\\' and index + 1 < value.len) {
             const next = value[index + 1];
-            if (next == '`' or next == '$' or next == '\\' or next == '\n') {
+            // Inside "`...`" the backslash also escapes the surrounding
+            // double-quote (POSIX XCU 2.2.3), so it is removed here.
+            if (next == '`' or next == '$' or next == '\\' or next == '\n' or
+                (in_double_quotes and next == '"'))
+            {
                 try output.append(allocator, next);
                 index += 2;
                 continue;
@@ -1045,7 +1049,7 @@ fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, pa
             break :blk std.fmt.allocPrint(allocator, "{d}", .{value});
         },
         .command_substitution => blk: {
-            const script = try commandSubstitutionScript(allocator, raw, part);
+            const script = try commandSubstitutionScript(allocator, raw, part, true);
             defer allocator.free(script);
             const output = (try options.command_substitution.run(allocator, script)) orelse try allocator.alloc(u8, 0);
             defer allocator.free(output);
@@ -1865,6 +1869,25 @@ test "command substitution expands inside double quotes" {
     defer backquote.deinit();
     try std.testing.expectEqual(@as(usize, 1), backquote.fields.len);
     try std.testing.expectEqualStrings("before-hi-after", backquote.fields[0]);
+}
+
+fn testScriptEchoSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
+    return allocator.dupe(u8, script);
+}
+
+test "backquote escaped double-quote is unescaped only inside double quotes" {
+    const echo_script: CommandSubstitution = .{ .runFn = testScriptEchoSubstitution };
+
+    var quoted = try expandWord(std.testing.allocator, "\"`cmd \\\"x y\\\"`\"", .{ .command_substitution = echo_script });
+    defer quoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted.fields.len);
+    try std.testing.expectEqualStrings("cmd \"x y\"", quoted.fields[0]);
+
+    var unquoted = try expandWord(std.testing.allocator, "`cmd \\\"xy\\\"`", .{ .command_substitution = echo_script });
+    defer unquoted.deinit();
+    try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
+    try std.testing.expectEqualStrings("cmd", unquoted.fields[0]);
+    try std.testing.expectEqualStrings("\\\"xy\\\"", unquoted.fields[1]);
 }
 
 test "command substitution parses and trims callback output" {
