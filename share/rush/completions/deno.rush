@@ -1,0 +1,61 @@
+# First-party deno completion slice.
+
+complete deno --option --short h --long help --description 'show help'
+complete deno --option --short V --long version --description 'show version'
+complete deno --subcommand run --description 'run a JavaScript or TypeScript program'
+complete deno --subcommand test --description 'run tests'
+complete deno --subcommand task --description 'run a task from deno.json'
+complete deno --subcommand fmt --description 'format source files'
+complete deno --subcommand lint --description 'lint source files'
+complete deno --subcommand check --description 'type-check source files'
+complete deno --subcommand compile --description 'compile an executable'
+complete deno --subcommand cache --description 'cache dependencies'
+complete deno --subcommand doc --description 'show documentation'
+complete deno --subcommand info --description 'show info about cache or source file'
+complete deno --subcommand repl --description 'start REPL'
+
+complete 'deno run' --option --long allow-read --value-name paths --description 'allow filesystem read access'
+complete 'deno run' --option-value --long allow-read --function __rush_complete_deno_paths
+complete 'deno run' --option --long allow-write --value-name paths --description 'allow filesystem write access'
+complete 'deno run' --option-value --long allow-write --function __rush_complete_deno_paths
+complete 'deno run' --option --long allow-net --value-name hosts --description 'allow network access'
+complete 'deno run' --option --long allow-env --value-name vars --description 'allow environment access'
+complete 'deno run' --option --long allow-run --value-name commands --description 'allow subprocess execution'
+complete 'deno run' --option --short A --long allow-all --description 'allow all permissions'
+complete 'deno run' --option --long watch --description 'watch for file changes'
+complete 'deno run' --argument --function __rush_complete_deno_files
+complete 'deno test' --option --long filter --value-name pattern --description 'run tests matching pattern'
+complete 'deno test' --option --long watch --description 'watch for file changes'
+complete 'deno test' --argument --function __rush_complete_deno_files
+complete 'deno task' --argument --function __rush_complete_deno_tasks
+complete 'deno fmt' --argument --function __rush_complete_deno_paths
+complete 'deno lint' --argument --function __rush_complete_deno_paths
+complete 'deno check' --argument --function __rush_complete_deno_files
+complete 'deno compile' --argument --function __rush_complete_deno_files
+complete 'deno cache' --argument --function __rush_complete_deno_files
+complete 'deno doc' --argument --function __rush_complete_deno_files
+complete 'deno info' --argument --function __rush_complete_deno_files
+
+__rush_complete_deno_tasks() {
+  deno task 2>/dev/null | sed -n 's/^\([A-Za-z0-9_.:-][A-Za-z0-9_.:-]*\)[[:space:]].*/\1/p' | while read task; do test -n "$task" && completion candidate "$task" --kind plain; done
+  node -e 'let p=require("./deno.json"); for (let k of Object.keys(p.tasks||{})) console.log(k)' 2>/dev/null | while read task; do test -n "$task" && completion candidate "$task" --kind plain; done
+  completion candidate dev --kind plain
+  completion candidate test --kind plain
+  completion candidate fmt --kind plain
+  completion candidate lint --kind plain
+}
+
+__rush_complete_deno_files() {
+  completion files --extension .ts
+  completion files --extension .tsx
+  completion files --extension .js
+  completion files --extension .jsx
+  completion files --extension .mjs
+  completion files --extension .json
+  completion directories --append-slash
+}
+
+__rush_complete_deno_paths() {
+  completion files
+  completion directories --append-slash
+}

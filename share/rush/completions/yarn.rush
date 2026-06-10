@@ -1,0 +1,83 @@
+# First-party yarn completion slice.
+
+complete yarn --option --short h --long help --description 'show help'
+complete yarn --option --short v --long version --description 'show version'
+complete yarn --option --long cwd --value-name dir --description 'working directory'
+complete yarn --option-value --long cwd --function __rush_complete_yarn_directories
+complete yarn --subcommand install --description 'install dependencies'
+complete yarn --subcommand add --description 'add dependencies'
+complete yarn --subcommand remove --description 'remove dependencies'
+complete yarn --subcommand run --description 'run package script'
+complete yarn --subcommand test --description 'run test script'
+complete yarn --subcommand workspace --description 'run command in a workspace'
+complete yarn --subcommand workspaces --description 'workspace commands'
+complete yarn --subcommand config --description 'manage configuration'
+complete yarn --subcommand cache --description 'manage cache'
+complete yarn --subcommand dlx --description 'run a package in a temporary environment'
+complete yarn --subcommand up --description 'upgrade dependencies'
+complete yarn --subcommand why --description 'explain why a package is installed'
+complete yarn --subcommand init --description 'initialize a package'
+
+complete 'yarn add' --option --short D --long dev --description 'add to devDependencies'
+complete 'yarn add' --option --short E --long exact --description 'save exact version'
+complete 'yarn add' --argument --function __rush_complete_yarn_packages
+complete 'yarn remove' --argument --function __rush_complete_yarn_dependencies
+complete 'yarn up' --argument --function __rush_complete_yarn_dependencies
+complete 'yarn why' --argument --function __rush_complete_yarn_dependencies
+complete 'yarn run' --argument --function __rush_complete_yarn_scripts
+complete 'yarn test' --argument --function __rush_complete_yarn_scripts
+complete 'yarn workspace' --argument --function __rush_complete_yarn_workspace_args
+complete 'yarn workspaces' --subcommand foreach --description 'run command on all workspaces'
+complete 'yarn workspaces' --subcommand list --description 'list workspaces'
+complete 'yarn config' --subcommand get --description 'get config value'
+complete 'yarn config' --subcommand set --description 'set config value'
+complete 'yarn config' --subcommand unset --description 'unset config value'
+complete 'yarn config get' --argument --function __rush_complete_yarn_config_keys
+complete 'yarn config set' --argument --function __rush_complete_yarn_config_keys
+complete 'yarn cache' --subcommand clean --description 'clean cache'
+complete 'yarn dlx' --argument --function __rush_complete_yarn_packages
+
+__rush_complete_yarn_workspace_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_yarn_workspaces
+  else
+    __rush_complete_yarn_scripts
+  fi
+}
+
+__rush_complete_yarn_scripts() {
+  node -e 'let p=require("./package.json"); for (let k of Object.keys(p.scripts||{})) console.log(k)' 2>/dev/null | while read script; do test -n "$script" && completion candidate "$script" --kind plain; done
+  completion candidate build --kind plain
+  completion candidate dev --kind plain
+  completion candidate lint --kind plain
+  completion candidate test --kind plain
+  completion candidate start --kind plain
+}
+
+__rush_complete_yarn_dependencies() {
+  node -e 'let p=require("./package.json"); for (let o of [p.dependencies,p.devDependencies,p.peerDependencies,p.optionalDependencies]) for (let k of Object.keys(o||{})) console.log(k)' 2>/dev/null | while read dep; do test -n "$dep" && completion candidate "$dep" --kind plain; done
+}
+
+__rush_complete_yarn_packages() {
+  __rush_complete_yarn_dependencies
+  completion candidate typescript --kind plain
+  completion candidate vite --kind plain
+  completion candidate eslint --kind plain
+  completion candidate prettier --kind plain
+  completion candidate react --kind plain
+}
+
+__rush_complete_yarn_workspaces() {
+  node -e 'let p=require("./package.json"); for (let w of (p.workspaces||[])) console.log(w)' 2>/dev/null | while read workspace; do test -n "$workspace" && completion candidate "$workspace" --kind plain; done
+}
+
+__rush_complete_yarn_config_keys() {
+  completion candidate npmRegistryServer --kind plain
+  completion candidate cacheFolder --kind plain
+  completion candidate nodeLinker --kind plain
+  completion candidate enableGlobalCache --kind plain
+}
+
+__rush_complete_yarn_directories() {
+  completion directories --append-slash
+}
