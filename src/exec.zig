@@ -7978,7 +7978,7 @@ fn readInputFromSlice(allocator: std.mem.Allocator, stdin: []const u8, raw_mode:
         const line_end = newline orelse remaining.len;
         const consumed = cursor + @min(line_end + 1, remaining.len);
         const physical_line = trimReadCarriageReturn(remaining[0..line_end]);
-        if (!raw_mode and readLineContinues(physical_line)) {
+        if (newline != null and !raw_mode and readLineContinues(physical_line)) {
             continued = true;
             try logical.appendSlice(allocator, physical_line[0 .. physical_line.len - 1]);
             cursor = consumed;
@@ -8248,8 +8248,9 @@ fn unescapeReadLine(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
     errdefer out.deinit(allocator);
     var index: usize = 0;
     while (index < raw.len) {
-        if (raw[index] == '\\' and index + 1 < raw.len) {
+        if (raw[index] == '\\') {
             index += 1;
+            if (index >= raw.len) break;
         }
         try out.append(allocator, raw[index]);
         index += 1;
@@ -11955,6 +11956,20 @@ test "executor redirects stdin from files for builtins" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("from file\n", result.stdout);
+
+    const trailing_backslash_path = "rush-test-read-trailing-backslash.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = trailing_backslash_path, .data = "trail\\" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, trailing_backslash_path) catch {};
+
+    var trailing_backslash_lowered = try parseAndLower(std.testing.allocator, "read cooked < rush-test-read-trailing-backslash.tmp; cooked_status=$?; read -r raw < rush-test-read-trailing-backslash.tmp; raw_status=$?; printf '<%s>:%s|<%s>:%s\\n' \"$cooked\" \"$cooked_status\" \"$raw\" \"$raw_status\"");
+    defer trailing_backslash_lowered.parsed.deinit();
+    defer trailing_backslash_lowered.program.deinit();
+
+    var trailing_backslash_result = try executor.executeProgram(trailing_backslash_lowered.program, .{ .io = std.testing.io });
+    defer trailing_backslash_result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), trailing_backslash_result.status);
+    try std.testing.expectEqualStrings("<trail>:1|<trail\\>:1\n", trailing_backslash_result.stdout);
 }
 
 test "executor streams large stdin redirections for builtins and compound commands" {
