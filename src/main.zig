@@ -19,7 +19,7 @@ pub const event_loop = @import("event_loop.zig");
 
 const usage =
     \\usage: rush [--login]
-    \\       rush [-i] [--posix-strict] -c SCRIPT [NAME [ARGS...]]
+    \\       rush [-i] [--posix-strict] [set-options] -c SCRIPT [NAME [ARGS...]]
     \\       rush complete --debug INPUT
     \\       rush complete validate [PATH]
     \\       rush --help
@@ -35,6 +35,7 @@ const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 const CommandStringInvocation = struct {
     script: []const u8,
     features: compat.Features = .{},
+    shell_options: exec.ShellOptions = .{},
     arg_zero: []const u8,
     positionals: []const []const u8 = &.{},
     interactive: bool = false,
@@ -86,7 +87,7 @@ pub fn main(init: std.process.Init) !u8 {
     };
 
     const interactive_options: ?InteractiveOptions = if (invocation.interactive) .{ .arg_zero = invocation.arg_zero, .login = login_shell } else null;
-    var result = try runCommandStringWithEnvironment(allocator, init.io, invocation.script, .{ .io = init.io, .allow_external = true, .features = invocation.features, .external_stdio = .inherit, .arg_zero = invocation.arg_zero }, init.environ_map, invocation.positionals, interactive_options);
+    var result = try runCommandStringWithEnvironment(allocator, init.io, invocation.script, .{ .io = init.io, .allow_external = true, .features = invocation.features, .external_stdio = .inherit, .arg_zero = invocation.arg_zero }, init.environ_map, invocation.positionals, interactive_options, invocation.shell_options);
     defer result.deinit();
 
     try writeAll(init.io, .stdout, result.stdout);
@@ -98,6 +99,7 @@ fn parseCommandStringInvocation(args: []const []const u8) ?CommandStringInvocati
     std.debug.assert(args.len != 0);
 
     var features: compat.Features = .{};
+    var shell_options: exec.ShellOptions = .{};
     var interactive = false;
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
@@ -106,13 +108,17 @@ fn parseCommandStringInvocation(args: []const []const u8) ?CommandStringInvocati
             if (index + 1 >= args.len) return null;
             const arg_zero = if (index + 2 < args.len) args[index + 2] else args[0];
             const positionals = if (index + 3 < args.len) args[index + 3 ..] else &.{};
-            return .{ .script = args[index + 1], .features = features, .arg_zero = arg_zero, .positionals = positionals, .interactive = interactive };
+            return .{ .script = args[index + 1], .features = features, .shell_options = shell_options, .arg_zero = arg_zero, .positionals = positionals, .interactive = interactive };
         }
         if (std.mem.eql(u8, arg, "--posix-strict")) {
             features = .strictPosix();
         } else if (std.mem.eql(u8, arg, "-i")) {
             interactive = true;
-        } else {
+        } else if (std.mem.eql(u8, arg, "-o") or std.mem.eql(u8, arg, "+o")) {
+            if (index + 1 >= args.len) return null;
+            index += 1;
+            if (!exec.applyShellOptionName(&shell_options, args[index], arg[0] == '-')) return null;
+        } else if (!exec.applyShellOptionShort(&shell_options, arg)) {
             return null;
         }
     }
@@ -1531,15 +1537,16 @@ pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []
 }
 
 pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map) !exec.CommandResult {
-    return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, &.{}, null);
+    return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, &.{}, null, .{});
 }
 
-fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions) !exec.CommandResult {
+fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: exec.ShellOptions) !exec.CommandResult {
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     if (environ_map) |map| try executor.importEnvironment(map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
+    executor.shell_options = shell_options;
     if (positionals.len != 0) try executor.global_positionals.set(allocator, positionals);
     if (interactive_options) |startup_options| try loadInteractiveConfig(allocator, io, &executor, startup_options);
 
@@ -2259,12 +2266,49 @@ test "command string operands set the command name and positional parameters" {
         null,
         &.{ "a", "b c" },
         null,
+        .{},
     );
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("myname:2:a:b c\na b c\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "command string invocation shell options affect execution" {
+    const errexit_invocation = parseCommandStringInvocation(&.{ "rush", "-e", "-c", "false; echo unreached" }) orelse return error.ExpectedInvocation;
+    var errexit = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        errexit_invocation.script,
+        .{ .io = std.testing.io, .arg_zero = errexit_invocation.arg_zero },
+        null,
+        errexit_invocation.positionals,
+        null,
+        errexit_invocation.shell_options,
+    );
+    defer errexit.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 1), errexit.status);
+    try std.testing.expectEqualStrings("", errexit.stdout);
+    try std.testing.expectEqualStrings("", errexit.stderr);
+
+    const nounset_invocation = parseCommandStringInvocation(&.{ "rush", "-o", "nounset", "-c", "echo $RUSH_INVOCATION_UNSET_FOR_TEST_416; echo unreached" }) orelse return error.ExpectedInvocation;
+    var nounset = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        nounset_invocation.script,
+        .{ .io = std.testing.io, .arg_zero = nounset_invocation.arg_zero },
+        null,
+        nounset_invocation.positionals,
+        null,
+        nounset_invocation.shell_options,
+    );
+    defer nounset.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 1), nounset.status);
+    try std.testing.expectEqualStrings("", nounset.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, nounset.stderr, "unset parameter") != null);
 }
 
 test "runScriptWithEnvironment imports initial shell variables" {
@@ -2573,6 +2617,7 @@ test "interactive command string invocation sources ENV before script" {
         &env,
         &.{},
         .{ .arg_zero = "rush" },
+        .{},
     );
     defer result.deinit();
 
@@ -2905,6 +2950,27 @@ test "command string invocation accepts posix strict with interactive flag befor
         try std.testing.expect(invocation.interactive);
         try std.testing.expect(invocation.features.strict_diagnostics);
     }
+}
+
+test "command string invocation accepts set option flags before -c" {
+    const invocation = parseCommandStringInvocation(
+        &.{ "rush", "-eu", "-o", "pipefail", "-c", "echo positional", "name", "-o", "nounset" },
+    ) orelse return error.ExpectedInvocation;
+
+    try std.testing.expectEqualStrings("echo positional", invocation.script);
+    try std.testing.expectEqualStrings("name", invocation.arg_zero);
+    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
+    try std.testing.expectEqualStrings("-o", invocation.positionals[0]);
+    try std.testing.expectEqualStrings("nounset", invocation.positionals[1]);
+    try std.testing.expect(invocation.shell_options.errexit);
+    try std.testing.expect(invocation.shell_options.nounset);
+    try std.testing.expect(invocation.shell_options.pipefail);
+}
+
+test "command string invocation rejects invalid set option flags" {
+    try std.testing.expect(parseCommandStringInvocation(&.{ "rush", "-z", "-c", "echo bad" }) == null);
+    try std.testing.expect(parseCommandStringInvocation(&.{ "rush", "-o", "-c", "echo bad" }) == null);
+    try std.testing.expect(parseCommandStringInvocation(&.{ "rush", "-o", "unknown", "-c", "echo bad" }) == null);
 }
 
 test "command string invocation still requires -c" {

@@ -69,6 +69,64 @@ pub const ShellOptions = struct {
     allexport: bool = false,
 };
 
+pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool {
+    if (spelling.len < 2) return false;
+    if (spelling[0] != '-' and spelling[0] != '+') return false;
+    for (spelling[1..]) |option| switch (option) {
+        'a', 'e', 'f', 'u', 'x', 'v', 'C' => {},
+        else => return false,
+    };
+
+    const enabled = spelling[0] == '-';
+    for (spelling[1..]) |option| switch (option) {
+        'a' => options.allexport = enabled,
+        'e' => options.errexit = enabled,
+        'f' => options.noglob = enabled,
+        'u' => options.nounset = enabled,
+        'x' => options.xtrace = enabled,
+        'v' => options.verbose = enabled,
+        'C' => options.noclobber = enabled,
+        else => unreachable,
+    };
+    return true;
+}
+
+pub fn applyShellOptionName(options: *ShellOptions, name: []const u8, enabled: bool) bool {
+    if (std.mem.eql(u8, name, "pipefail")) {
+        options.pipefail = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "allexport")) {
+        options.allexport = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "noglob")) {
+        options.noglob = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "noclobber")) {
+        options.noclobber = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "nounset")) {
+        options.nounset = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "errexit")) {
+        options.errexit = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "xtrace")) {
+        options.xtrace = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "verbose")) {
+        options.verbose = enabled;
+        return true;
+    }
+    return false;
+}
+
 pub const CommandResult = struct {
     allocator: std.mem.Allocator,
     status: ExitStatus,
@@ -8109,101 +8167,19 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         self.shell_options.verbose = false;
         return emptyResult(self.allocator, 0);
     }
-    if (command.argv.len == 2 and isSetShortOptionCluster(command.argv[1].text)) {
-        try applySetShortOptionCluster(self, command.argv[1].text);
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-a") or std.mem.eql(u8, command.argv[1].text, "+a"))) {
-        self.shell_options.allexport = command.argv[1].text[0] == '-';
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-f") or std.mem.eql(u8, command.argv[1].text, "+f"))) {
-        self.shell_options.noglob = command.argv[1].text[0] == '-';
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-C") or std.mem.eql(u8, command.argv[1].text, "+C"))) {
-        self.shell_options.noclobber = command.argv[1].text[0] == '-';
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-u") or std.mem.eql(u8, command.argv[1].text, "+u"))) {
-        self.shell_options.nounset = command.argv[1].text[0] == '-';
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-e") or std.mem.eql(u8, command.argv[1].text, "+e"))) {
-        self.shell_options.errexit = command.argv[1].text[0] == '-';
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-x") or std.mem.eql(u8, command.argv[1].text, "+x"))) {
-        self.shell_options.xtrace = command.argv[1].text[0] == '-';
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and (std.mem.eql(u8, command.argv[1].text, "-v") or std.mem.eql(u8, command.argv[1].text, "+v"))) {
-        self.shell_options.verbose = command.argv[1].text[0] == '-';
+    if (command.argv.len == 2 and applyShellOptionShort(&self.shell_options, command.argv[1].text)) {
         return emptyResult(self.allocator, 0);
     }
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
     if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
         const enabled = command.argv[1].text[0] == '-';
-        if (std.mem.eql(u8, command.argv[2].text, "pipefail")) {
-            self.shell_options.pipefail = enabled;
-            return emptyResult(self.allocator, 0);
-        }
-        if (std.mem.eql(u8, command.argv[2].text, "allexport")) {
-            self.shell_options.allexport = enabled;
-            return emptyResult(self.allocator, 0);
-        }
-        if (std.mem.eql(u8, command.argv[2].text, "noglob")) {
-            self.shell_options.noglob = enabled;
-            return emptyResult(self.allocator, 0);
-        }
-        if (std.mem.eql(u8, command.argv[2].text, "noclobber")) {
-            self.shell_options.noclobber = enabled;
-            return emptyResult(self.allocator, 0);
-        }
-        if (std.mem.eql(u8, command.argv[2].text, "nounset")) {
-            self.shell_options.nounset = enabled;
-            return emptyResult(self.allocator, 0);
-        }
-        if (std.mem.eql(u8, command.argv[2].text, "errexit")) {
-            self.shell_options.errexit = enabled;
-            return emptyResult(self.allocator, 0);
-        }
-        if (std.mem.eql(u8, command.argv[2].text, "xtrace")) {
-            self.shell_options.xtrace = enabled;
-            return emptyResult(self.allocator, 0);
-        }
-        if (std.mem.eql(u8, command.argv[2].text, "verbose")) {
-            self.shell_options.verbose = enabled;
+        if (applyShellOptionName(&self.shell_options, command.argv[2].text, enabled)) {
             return emptyResult(self.allocator, 0);
         }
         return setUsageError(self, "unknown option name");
     }
     return setUsageError(self, "unsupported arguments");
-}
-
-fn isSetShortOptionCluster(text: []const u8) bool {
-    if (text.len <= 2) return false;
-    if (text[0] != '-' and text[0] != '+') return false;
-    for (text[1..]) |option| switch (option) {
-        'a', 'e', 'f', 'u', 'x', 'v', 'C' => {},
-        else => return false,
-    };
-    return true;
-}
-
-fn applySetShortOptionCluster(self: *Executor, text: []const u8) !void {
-    const enabled = text[0] == '-';
-    for (text[1..]) |option| switch (option) {
-        'a' => self.shell_options.allexport = enabled,
-        'e' => self.shell_options.errexit = enabled,
-        'f' => self.shell_options.noglob = enabled,
-        'u' => self.shell_options.nounset = enabled,
-        'x' => self.shell_options.xtrace = enabled,
-        'v' => self.shell_options.verbose = enabled,
-        'C' => self.shell_options.noclobber = enabled,
-        else => unreachable,
-    };
 }
 
 fn setUsageError(self: *Executor, message: []const u8) !CommandResult {
