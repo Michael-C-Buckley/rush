@@ -93,7 +93,9 @@
 
   <h2 id="prompt"><a href="#prompt">Prompt</a></h2>
 
-  <p>Define <code>rush_prompt</code> to build the interactive prompt.</p>
+  <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>*</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>$</code> that turns red when the previous command failed.</p>
+
+  <p>Define <code>rush_prompt</code> in your configuration to replace it.</p>
 
   <pre><span class="cmd">rush_prompt</span>() {
   <span class="cmd">prompt</span> segment <span class="opt">--fg</span> blue <span class="str">"$(prompt_pwd)"</span>
@@ -221,9 +223,10 @@ index:236
 
   <h2 id="ps1"><a href="#ps1">PS1 fallback</a></h2>
 
-  <p>If <code>rush_prompt</code> is not defined, Rush uses <code>PS1</code>. Rush initializes <code>PS1</code> to <code>$ </code> and <code>PS2</code> to <code>&gt; </code> for interactive shells.</p>
+  <p>If <code>rush_prompt</code> is not defined, Rush uses <code>PS1</code>. Rush initializes <code>PS1</code> to <code>$ </code> and <code>PS2</code> to <code>&gt; </code> for interactive shells. The default prompt is a <code>rush_prompt</code> function, so unset it to use a plain <code>PS1</code> prompt.</p>
 
-  <pre><span class="var">PS1</span>=<span class="str">'rush$ '</span>
+  <pre><span class="cmd">unset</span> <span class="opt">-f</span> rush_prompt
+<span class="var">PS1</span>=<span class="str">'rush$ '</span>
 <span class="var">PS2</span>=<span class="str">'&gt; '</span></pre>
 
   <h2 id="example"><a href="#example">Example</a></h2>

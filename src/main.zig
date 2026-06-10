@@ -1467,6 +1467,13 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
     }
+    {
+        // Drop the embedded default rush_prompt so prompts fall back to PS1;
+        // the default prompt depends on the cwd and Git state, which would
+        // make REPL transcripts nondeterministic.
+        var result = try runScriptWithExecutor(allocator, &executor, "unset -f rush_prompt", .{ .io = io, .allow_external = true, .arg_zero = "rush" });
+        defer result.deinit();
+    }
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
@@ -2539,6 +2546,22 @@ test "embedded default config sets prompt defaults without clobbering inherited 
     try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
     try std.testing.expectEqualStrings("inherited> ", executor.getEnv("PS1").?);
     try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
+}
+
+test "embedded config default prompt renders cwd and dollar sign" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor, embedded_config, .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush", .source_path = embedded_config_path });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+
+    const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(prompt);
+    // The cwd segment is blue and the prompt ends with a dollar sign; the
+    // exact text depends on the cwd and Git state, so only check structure.
+    try std.testing.expect(std.mem.indexOf(u8, prompt, "\x1b[38;5;4m") != null);
+    try std.testing.expect(std.mem.endsWith(u8, prompt, " $ "));
 }
 
 test "prompt_pwd supports fish-style dir length flags" {
