@@ -18,6 +18,7 @@ extern "c" fn fork() std.c.pid_t;
 extern "c" fn pause() c_int;
 
 var pending_trap_signal: std.atomic.Value(u8) = .init(0);
+var test_term_signal_count: std.atomic.Value(u8) = .init(0);
 
 pub const ExitStatus = u8;
 
@@ -624,6 +625,11 @@ pub const CallFrame = struct {
     }
 };
 
+const TrapSignalAction = struct {
+    signal: std.posix.SIG,
+    previous: std.posix.Sigaction,
+};
+
 pub const FunctionValue = struct {
     body: []const u8,
     program: ir.Program,
@@ -748,6 +754,7 @@ pub const Executor = struct {
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
     abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
+    trap_signal_actions: std.ArrayList(TrapSignalAction) = .empty,
     event_hooks: std.StringHashMapUnmanaged(std.ArrayList(EventHook)) = .empty,
     interval_hooks: std.ArrayList(IntervalHook) = .empty,
     pending_variable_hooks: std.ArrayList([]const u8) = .empty,
@@ -1196,6 +1203,8 @@ pub const Executor = struct {
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
         self.waitForPromptAsyncRefreshes();
+        self.restoreTrapSignalActions();
+        self.trap_signal_actions.deinit(self.allocator);
         var prompt_async_iter = self.prompt_async_entries.iterator();
         while (prompt_async_iter.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -2698,11 +2707,15 @@ pub const Executor = struct {
     }
 
     fn setTrap(self: *Executor, name: []const u8, action: []const u8) !void {
-        if (signalFromTrapName(name)) |signal| installTrapSignal(signal);
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const owned_action = try self.allocator.dupe(u8, action);
         errdefer self.allocator.free(owned_action);
+
+        const signal = signalFromTrapName(name);
+        const installed_signal = if (signal) |value| try self.ensureTrapSignalInstalled(value) else false;
+        errdefer if (installed_signal) self.restoreTrapSignal(signal.?);
+
         const result = try self.traps.getOrPut(self.allocator, owned_name);
         if (result.found_existing) {
             self.allocator.free(owned_name);
@@ -2714,10 +2727,38 @@ pub const Executor = struct {
     }
 
     fn clearTrap(self: *Executor, name: []const u8) void {
-        if (signalFromTrapName(name)) |signal| restoreDefaultSignal(signal);
         if (self.traps.fetchRemove(name)) |entry| {
+            if (signalFromTrapName(name)) |signal| self.restoreTrapSignal(signal);
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
+        }
+    }
+
+    fn ensureTrapSignalInstalled(self: *Executor, signal: std.posix.SIG) !bool {
+        if (self.trapSignalActionIndex(signal) != null) return false;
+        const previous = installTrapSignal(signal);
+        errdefer std.posix.sigaction(signal, &previous, null);
+        try self.trap_signal_actions.append(self.allocator, .{ .signal = signal, .previous = previous });
+        return true;
+    }
+
+    fn trapSignalActionIndex(self: Executor, signal: std.posix.SIG) ?usize {
+        for (self.trap_signal_actions.items, 0..) |action, index| {
+            if (action.signal == signal) return index;
+        }
+        return null;
+    }
+
+    fn restoreTrapSignal(self: *Executor, signal: std.posix.SIG) void {
+        const index = self.trapSignalActionIndex(signal) orelse return;
+        const action = self.trap_signal_actions.swapRemove(index);
+        std.posix.sigaction(action.signal, &action.previous, null);
+    }
+
+    fn restoreTrapSignalActions(self: *Executor) void {
+        while (self.trap_signal_actions.items.len != 0) {
+            const action = self.trap_signal_actions.pop().?;
+            std.posix.sigaction(action.signal, &action.previous, null);
         }
     }
 
@@ -5279,22 +5320,26 @@ fn trapSignalHandler(signal: std.posix.SIG) callconv(.c) void {
     pending_trap_signal.store(@intCast(@intFromEnum(signal)), .seq_cst);
 }
 
-fn installTrapSignal(signal: std.posix.SIG) void {
+fn testTermSignalHandler(signal: std.posix.SIG) callconv(.c) void {
+    if (signal == .TERM) _ = test_term_signal_count.fetchAdd(1, .seq_cst);
+}
+
+fn expectTestTermSignalHandlerInstalled() !void {
+    var current: std.posix.Sigaction = undefined;
+    std.posix.sigaction(.TERM, null, &current);
+    try std.testing.expect(current.handler.handler != null);
+    try std.testing.expect(current.handler.handler.? == testTermSignalHandler);
+}
+
+fn installTrapSignal(signal: std.posix.SIG) std.posix.Sigaction {
     const action: std.posix.Sigaction = .{
         .handler = .{ .handler = trapSignalHandler },
         .mask = std.posix.sigemptyset(),
         .flags = 0,
     };
-    std.posix.sigaction(signal, &action, null);
-}
-
-fn restoreDefaultSignal(signal: std.posix.SIG) void {
-    const action: std.posix.Sigaction = .{
-        .handler = .{ .handler = std.posix.SIG.DFL },
-        .mask = std.posix.sigemptyset(),
-        .flags = 0,
-    };
-    std.posix.sigaction(signal, &action, null);
+    var previous: std.posix.Sigaction = undefined;
+    std.posix.sigaction(signal, &action, &previous);
+    return previous;
 }
 
 fn signalFromTrapName(name: []const u8) ?std.posix.SIG {
@@ -9446,6 +9491,57 @@ test "executor implements trap builtin baseline" {
     var zero_result = try zero_executor.executeProgram(zero.program, .{});
     defer zero_result.deinit();
     try std.testing.expectEqualStrings("body\nzero\n", zero_result.stdout);
+}
+
+test "executor restores trap signal handlers on clear and deinit" {
+    test_term_signal_count.store(0, .seq_cst);
+    pending_trap_signal.store(0, .seq_cst);
+    defer pending_trap_signal.store(0, .seq_cst);
+
+    const action: std.posix.Sigaction = .{
+        .handler = .{ .handler = testTermSignalHandler },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    var previous: std.posix.Sigaction = undefined;
+    std.posix.sigaction(.TERM, &action, &previous);
+    var guard: SignalActionGuard = .{ .signal = .TERM, .previous = previous };
+    defer guard.restore();
+
+    var clear = try parseAndLower(std.testing.allocator, "trap 'echo term' TERM; trap - TERM");
+    defer clear.parsed.deinit();
+    defer clear.program.deinit();
+    {
+        var clear_executor = Executor.init(std.testing.allocator);
+        defer clear_executor.deinit();
+        var clear_result = try clear_executor.executeProgram(clear.program, .{});
+        defer clear_result.deinit();
+        try std.testing.expectEqual(@as(ExitStatus, 0), clear_result.status);
+        try expectTestTermSignalHandlerInstalled();
+    }
+
+    var deinit_trap = try parseAndLower(std.testing.allocator, "trap 'echo term' TERM");
+    defer deinit_trap.parsed.deinit();
+    defer deinit_trap.program.deinit();
+    {
+        var deinit_executor = Executor.init(std.testing.allocator);
+        defer deinit_executor.deinit();
+        var deinit_result = try deinit_executor.executeProgram(deinit_trap.program, .{});
+        defer deinit_result.deinit();
+        try std.testing.expectEqual(@as(ExitStatus, 0), deinit_result.status);
+    }
+    try expectTestTermSignalHandlerInstalled();
+
+    var later = try parseAndLower(std.testing.allocator, "/bin/kill -TERM $$; echo after");
+    defer later.parsed.deinit();
+    defer later.program.deinit();
+    var later_executor = Executor.init(std.testing.allocator);
+    defer later_executor.deinit();
+    var later_result = try later_executor.executeProgram(later.program, .{ .io = std.testing.io, .allow_external = true });
+    defer later_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), later_result.status);
+    try std.testing.expectEqualStrings("after\n", later_result.stdout);
+    try std.testing.expectEqual(@as(u8, 1), test_term_signal_count.load(.seq_cst));
 }
 
 test "executor implements getopts builtin" {
