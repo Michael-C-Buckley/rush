@@ -1,0 +1,8 @@
+printf 'via3\n' >in
+exec 9<&0
+exec 3<in
+exec 0<&3
+/bin/cat
+exec 0<&9
+exec 3<&-
+exec 9<&-

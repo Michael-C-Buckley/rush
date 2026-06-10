@@ -179,6 +179,7 @@ IFS=,; v=a,,b,; for x in $v; do echo "<$x>"; done
 IFS=" "; v="  a  b  "; for x in $v; do echo "<$x>"; done
 empty=; set -- $empty ${unset-}; echo count:$#; set -- "$empty" "${unset-}"; echo "quoted:$#:<$1>:<$2>"
 exec 3>&1; exec >out; echo hi; exec 1>&3; cat out
+printf 'via3\n' >in; exec 9<&0; exec 3<in; exec 0<&3; cat; exec 0<&9; exec 3<&-; exec 9<&-
 mkdir -p real/a; ln -s real link; cd -L link/a; case "$(pwd)" in */link/a) echo logical-a ;; *) echo bad-a ;; esac; cd ..; case "$(pwd)" in */link) echo logical-parent ;; *) echo bad-parent ;; esac; cd -P ../link/a; case "$(pwd)" in */real/a) echo physical-a ;; *) echo bad-physical ;; esac
 rm -rf t; mkdir t; cd t; touch a; set -fu; echo *; set +fu; echo $RUSH_UNSET_FOR_TEST; echo after
 HOME=/tmp/rush-home VALUE=~ LIST=~/bin:~ command -p env | grep -E '^(VALUE|LIST)=' | sort; A=one B=$A command -p env | grep -E '^(A|B)=' | sort

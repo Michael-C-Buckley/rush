@@ -5145,29 +5145,23 @@ const FdRedirectionGuard = struct {
     }
 
     fn apply(self: *FdRedirectionGuard, executor: *Executor, io: std.Io, redirection: ir.Redirection) !void {
-        if (isHereDocRedirection(redirection)) {
-            try self.saveFd(executor, 0);
+        if (redirection.operator == .dless or redirection.operator == .dless_dash) {
+            const fd = redirectionFd(redirection) orelse 0;
+            try self.saveFd(executor, fd);
             var file = try fileFromBytes(io, redirection.here_doc orelse "");
-            defer if (file.handle != 0) file.close(io);
-            try rawDup2(file.handle, 0);
+            defer if (file.handle != fd) file.close(io);
+            try rawDup2(file.handle, fd);
+            try executor.markShellFdOpen(fd);
             return;
         }
-        if (isStdinFileRedirection(redirection)) {
+        if (redirection.operator == .less or redirection.operator == .less_great) {
             const target = redirection.target orelse return;
-            try self.saveFd(executor, 0);
+            const fd = redirectionFd(redirection) orelse 0;
+            try self.saveFd(executor, fd);
             var file = if (redirection.operator == .less_great)
                 try openReadWriteRedirectionFile(io, target.text)
             else
                 try std.Io.Dir.cwd().openFile(io, target.text, .{});
-            defer if (file.handle != 0) file.close(io);
-            try rawDup2(file.handle, 0);
-            return;
-        }
-        if (redirection.operator == .less_great) {
-            const target = redirection.target orelse return;
-            const fd = redirectionFd(redirection) orelse 0;
-            try self.saveFd(executor, fd);
-            var file = try openReadWriteRedirectionFile(io, target.text);
             defer if (file.handle != fd) file.close(io);
             try rawDup2(file.handle, fd);
             try executor.markShellFdOpen(fd);
@@ -10670,6 +10664,49 @@ test "interactive exec failure preserves successful redirections" {
     const redirected_stderr = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(redirected_stderr);
     try std.testing.expectEqualStrings("definitely-not-a-rush-exec-command: command not found\n", redirected_stderr);
+}
+
+test "redirection-only exec tracks arbitrary input fds" {
+    const input_path = "rush-test-exec-input-fd.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = "via3\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
+
+    const duplicated_fd: std.posix.fd_t = 18;
+    const input_fd: std.posix.fd_t = 19;
+    const saved_duplicated_fd: ?std.posix.fd_t = rawDup(duplicated_fd) catch |err| switch (err) {
+        error.BadFileDescriptor => null,
+        else => return err,
+    };
+    defer if (saved_duplicated_fd) |saved_fd| {
+        rawDup2(saved_fd, duplicated_fd) catch {};
+        closeRawFd(std.testing.io, saved_fd);
+    } else closeRawFd(std.testing.io, duplicated_fd);
+    const saved_input_fd: ?std.posix.fd_t = rawDup(input_fd) catch |err| switch (err) {
+        error.BadFileDescriptor => null,
+        else => return err,
+    };
+    defer if (saved_input_fd) |saved_fd| {
+        rawDup2(saved_fd, input_fd) catch {};
+        closeRawFd(std.testing.io, saved_fd);
+    } else closeRawFd(std.testing.io, input_fd);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\exec 19<rush-test-exec-input-fd.tmp
+        \\exec 18<&19
+        \\exec 19<&-
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expect(executor.isShellFdOpen(duplicated_fd));
+    try std.testing.expect(!executor.isShellFdOpen(input_fd));
+
+    var buffer: [16]u8 = undefined;
+    const read_len = try std.posix.read(duplicated_fd, &buffer);
+    try std.testing.expectEqualStrings("via3\n", buffer[0..read_len]);
 }
 
 test "executor short-circuits AND and OR lists" {
