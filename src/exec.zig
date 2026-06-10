@@ -8315,7 +8315,7 @@ fn evalBashTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []c
         else if (std.mem.eql(u8, args[1].text, "!="))
             !shellPatternMatches(args[2].text, args[0].text)
         else
-            try evalBinaryTest(args[0].text, args[1].text, args[2].text),
+            try evalBinaryTest(allocator, options, args[0].text, args[1].text, args[2].text),
         4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalBashTest(allocator, options, args[1..])) else error.InvalidTestExpression,
         else => error.InvalidTestExpression,
     };
@@ -8339,7 +8339,7 @@ fn evalSimpleTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: [
         3 => if (std.mem.eql(u8, args[0].text, "!"))
             !(try evalSimpleTest(allocator, options, args[1..]))
         else
-            try evalBinaryTest(args[0].text, args[1].text, args[2].text),
+            try evalBinaryTest(allocator, options, args[0].text, args[1].text, args[2].text),
         4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalSimpleTest(allocator, options, args[1..])) else error.InvalidTestExpression,
         else => error.InvalidTestExpression,
     };
@@ -8395,7 +8395,7 @@ const TestExpressionParser = struct {
             const op = self.args[self.index + 1].text;
             const right = self.args[self.index + 2].text;
             self.index += 3;
-            return evalBinaryTest(left, op, right);
+            return evalBinaryTest(self.allocator, self.options, left, op, right);
         }
         if (self.index + 1 < self.args.len and isUnaryTestOperator(self.args[self.index].text)) {
             const op = self.args[self.index].text;
@@ -8427,7 +8427,8 @@ fn isUnaryTestOperator(op: []const u8) bool {
 fn isBinaryTestOperator(op: []const u8) bool {
     return std.mem.eql(u8, op, "=") or std.mem.eql(u8, op, "==") or std.mem.eql(u8, op, "!=") or
         std.mem.eql(u8, op, "<") or std.mem.eql(u8, op, ">") or std.mem.eql(u8, op, "-eq") or std.mem.eql(u8, op, "-ne") or
-        std.mem.eql(u8, op, "-gt") or std.mem.eql(u8, op, "-ge") or std.mem.eql(u8, op, "-lt") or std.mem.eql(u8, op, "-le");
+        std.mem.eql(u8, op, "-gt") or std.mem.eql(u8, op, "-ge") or std.mem.eql(u8, op, "-lt") or std.mem.eql(u8, op, "-le") or
+        std.mem.eql(u8, op, "-ef") or std.mem.eql(u8, op, "-nt") or std.mem.eql(u8, op, "-ot");
 }
 
 fn evalUnaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, op: []const u8, operand: []const u8) !bool {
@@ -8475,11 +8476,15 @@ fn evalUnaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, op: []co
     return error.InvalidTestExpression;
 }
 
-fn evalBinaryTest(left: []const u8, op: []const u8, right: []const u8) !bool {
+fn evalBinaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, left: []const u8, op: []const u8, right: []const u8) !bool {
     if (std.mem.eql(u8, op, "=") or std.mem.eql(u8, op, "==")) return std.mem.eql(u8, left, right);
     if (std.mem.eql(u8, op, "!=")) return !std.mem.eql(u8, left, right);
     if (std.mem.eql(u8, op, "<")) return std.mem.lessThan(u8, left, right);
     if (std.mem.eql(u8, op, ">")) return std.mem.lessThan(u8, right, left);
+
+    if (std.mem.eql(u8, op, "-ef") or std.mem.eql(u8, op, "-nt") or std.mem.eql(u8, op, "-ot")) {
+        return evalFileComparisonTest(allocator, options, left, op, right);
+    }
 
     const lhs = std.fmt.parseInt(i64, left, 10) catch return error.InvalidTestExpression;
     const rhs = std.fmt.parseInt(i64, right, 10) catch return error.InvalidTestExpression;
@@ -8490,6 +8495,29 @@ fn evalBinaryTest(left: []const u8, op: []const u8, right: []const u8) !bool {
     if (std.mem.eql(u8, op, "-lt")) return lhs < rhs;
     if (std.mem.eql(u8, op, "-le")) return lhs <= rhs;
     return error.InvalidTestExpression;
+}
+
+fn evalFileComparisonTest(allocator: std.mem.Allocator, options: ExecuteOptions, left: []const u8, op: []const u8, right: []const u8) bool {
+    const io = options.io orelse return false;
+    const left_stat: ?std.Io.File.Stat = statPath(allocator, io, left) catch null;
+    const right_stat: ?std.Io.File.Stat = statPath(allocator, io, right) catch null;
+
+    if (std.mem.eql(u8, op, "-ef")) {
+        const lhs = left_stat orelse return false;
+        const rhs = right_stat orelse return false;
+        return lhs.inode == rhs.inode;
+    }
+    if (std.mem.eql(u8, op, "-nt")) {
+        const lhs = left_stat orelse return false;
+        const rhs = right_stat orelse return true;
+        return lhs.mtime.nanoseconds > rhs.mtime.nanoseconds;
+    }
+    if (std.mem.eql(u8, op, "-ot")) {
+        const rhs = right_stat orelse return false;
+        const lhs = left_stat orelse return true;
+        return lhs.mtime.nanoseconds < rhs.mtime.nanoseconds;
+    }
+    unreachable;
 }
 
 fn statPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !std.Io.File.Stat {
@@ -9280,8 +9308,22 @@ test "executor stores Bash array runtime data" {
 
 test "executor implements test and bracket builtins" {
     const path = "rush-test-builtin-file.tmp";
+    const hard_link_path = "rush-test-builtin-file-hard-link.tmp";
+    const older_path = "rush-test-builtin-older.tmp";
+    const newer_path = "rush-test-builtin-newer.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, hard_link_path) catch {};
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "x" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = older_path, .data = "old" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = newer_path, .data = "new" });
+    try std.Io.Dir.cwd().hardLink(path, std.Io.Dir.cwd(), hard_link_path, std.testing.io, .{});
+    const older_time: std.Io.Timestamp = .{ .nanoseconds = 1_000_000_000 };
+    const newer_time: std.Io.Timestamp = .{ .nanoseconds = 2_000_000_000 };
+    try std.Io.Dir.cwd().setTimestamps(std.testing.io, older_path, .{ .modify_timestamp = .{ .new = older_time } });
+    try std.Io.Dir.cwd().setTimestamps(std.testing.io, newer_path, .{ .modify_timestamp = .{ .new = newer_time } });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, hard_link_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, older_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, newer_path) catch {};
 
     const Case = struct { script: []const u8, status: ExitStatus };
     const cases = [_]Case{
@@ -9298,8 +9340,15 @@ test "executor implements test and bracket builtins" {
         .{ .script = "test -s rush-test-builtin-file.tmp", .status = 0 },
         .{ .script = "test -r rush-test-builtin-file.tmp", .status = 0 },
         .{ .script = "test ! -e rush-test-missing.tmp", .status = 0 },
+        .{ .script = "test rush-test-builtin-file.tmp -ef rush-test-builtin-file-hard-link.tmp", .status = 0 },
+        .{ .script = "test rush-test-builtin-file.tmp -ef rush-test-builtin-older.tmp", .status = 1 },
+        .{ .script = "test rush-test-builtin-newer.tmp -nt rush-test-builtin-older.tmp", .status = 0 },
+        .{ .script = "test rush-test-builtin-older.tmp -ot rush-test-builtin-newer.tmp", .status = 0 },
+        .{ .script = "test rush-test-builtin-newer.tmp -nt rush-test-missing.tmp", .status = 0 },
+        .{ .script = "test rush-test-missing.tmp -ot rush-test-builtin-newer.tmp", .status = 0 },
         .{ .script = "[ a = a ]", .status = 0 },
         .{ .script = "[ a = b ]", .status = 1 },
+        .{ .script = "[ rush-test-builtin-older.tmp -ot rush-test-builtin-newer.tmp ]", .status = 0 },
     };
 
     for (cases) |case| {

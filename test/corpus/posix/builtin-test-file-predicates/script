@@ -2,3 +2,15 @@ printf x > file
 test -s file; echo size=$?
 test -r file; echo read=$?
 test -x file; echo exec=$?
+: > old
+: > new
+touch -t 202001010000 old
+touch -t 202101010000 new
+ln old hard
+test old -ef hard; echo same-file=$?
+test old -ef new; echo different-file=$?
+test new -nt old; echo newer=$?
+test old -ot new; echo older=$?
+test new -nt missing; echo newer-missing=$?
+test missing -ot new; echo missing-older=$?
+test missing -ef new; echo missing-same=$?

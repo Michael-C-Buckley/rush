@@ -1,3 +1,10 @@
 size=0
 read=0
 exec=1
+same-file=0
+different-file=1
+newer=0
+older=0
+newer-missing=0
+missing-older=0
+missing-same=1
