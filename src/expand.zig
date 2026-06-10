@@ -1555,6 +1555,14 @@ pub fn expandHereDocBody(allocator: std.mem.Allocator, text: []const u8, options
             index += 1;
             continue;
         };
+        // No field splitting happens in a here-doc body, so $* joins with
+        // the first IFS character like "$*" and $@ joins with spaces.
+        if (part.kind == .parameter and std.mem.eql(u8, part.value(text), "*")) {
+            const ifs = options.env.get("IFS") orelse " \t\n";
+            try appendQuotedStar(allocator, &output, options.positionals, ifs);
+            index = part.span.end;
+            continue;
+        }
         const rendered = try renderDoubleQuotedExpansion(allocator, text, part, options);
         defer allocator.free(rendered);
         try output.appendSlice(allocator, rendered);

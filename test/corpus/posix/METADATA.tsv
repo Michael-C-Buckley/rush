@@ -129,6 +129,7 @@ function-return-status	grammar	behavior	-
 here-doc-expanded	redirection	here-doc	-
 here-doc-quoted	redirection	here-doc	-
 heredoc-body-literal-quoting	redirection	here-doc	here-doc bodies keep quotes and non-special backslashes literal while expanding parameters and substitutions
+heredoc-positional-star-ifs	redirection	here-doc	$* in a here-doc body joins positional parameters with the first IFS character
 heredoc-body-not-syntax	redirection	here-doc	-
 if-elif	grammar	behavior	-
 if-else	grammar	behavior	-

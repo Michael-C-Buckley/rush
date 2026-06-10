@@ -1,0 +1,5 @@
+set -- a "b c"
+IFS=:
+cat <<EOF
+[$*]
+EOF
