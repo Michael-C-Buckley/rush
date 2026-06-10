@@ -5651,6 +5651,82 @@ fn simpleCommandFromArgs(command: ir.SimpleCommand, start: usize) ir.SimpleComma
     };
 }
 
+/// A nested command built from already-expanded words. Builtins like
+/// command and exec receive expanded argv but re-execute it through the
+/// normal path, which expands again from each word's raw text; that
+/// double-expands "$@" and re-runs command substitutions. Quoting the
+/// expanded text as the raw word makes re-expansion the identity.
+const PreExpandedCommand = struct {
+    allocator: std.mem.Allocator,
+    assignments: []ir.WordRef,
+    argv: []ir.WordRef,
+
+    fn command(self: PreExpandedCommand, span: parser.Span) ir.SimpleCommand {
+        return .{
+            .span = span,
+            .assignments = self.assignments,
+            .argv = self.argv,
+            .redirections = &.{},
+        };
+    }
+
+    fn deinit(self: *PreExpandedCommand) void {
+        for (self.assignments) |word| {
+            self.allocator.free(word.raw);
+            self.allocator.free(word.text);
+        }
+        self.allocator.free(self.assignments);
+        for (self.argv) |word| {
+            self.allocator.free(word.raw);
+            self.allocator.free(word.text);
+        }
+        self.allocator.free(self.argv);
+        self.* = undefined;
+    }
+};
+
+fn quotedWordFromExpanded(allocator: std.mem.Allocator, word: ir.WordRef, value_start: usize) !ir.WordRef {
+    std.debug.assert(value_start <= word.text.len);
+    var raw: std.ArrayList(u8) = .empty;
+    errdefer raw.deinit(allocator);
+    try raw.appendSlice(allocator, word.text[0..value_start]);
+    try appendShellQuoted(allocator, &raw, word.text[value_start..]);
+    const text = try allocator.dupe(u8, word.text);
+    errdefer allocator.free(text);
+    return .{ .span = word.span, .raw = try raw.toOwnedSlice(allocator), .text = text };
+}
+
+fn preExpandedCommandFromArgs(allocator: std.mem.Allocator, command: ir.SimpleCommand, start: usize) !PreExpandedCommand {
+    var assignments: std.ArrayList(ir.WordRef) = .empty;
+    var argv: std.ArrayList(ir.WordRef) = .empty;
+    errdefer {
+        for (assignments.items) |word| {
+            allocator.free(word.raw);
+            allocator.free(word.text);
+        }
+        assignments.deinit(allocator);
+        for (argv.items) |word| {
+            allocator.free(word.raw);
+            allocator.free(word.text);
+        }
+        argv.deinit(allocator);
+    }
+    for (command.assignments) |word| {
+        // Keep "name=" literal so the word still parses as an assignment;
+        // only the expanded value needs quoting.
+        const value_start = if (std.mem.indexOfScalar(u8, word.text, '=')) |eq| eq + 1 else word.text.len;
+        try assignments.append(allocator, try quotedWordFromExpanded(allocator, word, value_start));
+    }
+    for (command.argv[start..]) |word| {
+        try argv.append(allocator, try quotedWordFromExpanded(allocator, word, 0));
+    }
+    return .{
+        .allocator = allocator,
+        .assignments = try assignments.toOwnedSlice(allocator),
+        .argv = try argv.toOwnedSlice(allocator),
+    };
+}
+
 fn stdoutLine(allocator: std.mem.Allocator, text: []const u8, status: ExitStatus) !CommandResult {
     const stdout = try std.fmt.allocPrint(allocator, "{s}\n", .{text});
     errdefer allocator.free(stdout);
@@ -5915,11 +5991,12 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
         return commandLookupMany(self, options, command.argv[index..], use_default_path, lookup_mode);
     }
     if (index >= command.argv.len) return emptyResult(self.allocator, 0);
-    const nested = simpleCommandFromArgs(command, index);
+    var pre_expanded = try preExpandedCommandFromArgs(self.allocator, command, index);
+    defer pre_expanded.deinit();
     var nested_options = options;
     nested_options.suppress_functions = true;
     if (use_default_path) nested_options.default_path_lookup = true;
-    return self.executeSimpleCommandWithInput(nested, stdin, nested_options);
+    return self.executeSimpleCommandWithInput(pre_expanded.command(command.span), stdin, nested_options);
 }
 
 const CommandLookupMode = enum { none, terse, verbose };
@@ -6459,7 +6536,9 @@ fn builtinEval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 
 fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     if (command.argv.len == 1) return emptyResult(self.allocator, 0);
-    const nested = simpleCommandFromArgs(command, 1);
+    var pre_expanded = try preExpandedCommandFromArgs(self.allocator, command, 1);
+    defer pre_expanded.deinit();
+    const nested = pre_expanded.command(command.span);
     if (options.allow_external and options.external_stdio == .inherit and options.io != null and builtinForName(self.*, nested.argv[0].text) == null and self.functions.get(nested.argv[0].text) == null) {
         return self.replaceWithExternal(nested, options.io.?, options);
     }
@@ -9364,6 +9443,36 @@ test "executor executes POSIX if compound commands" {
     defer elif_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), elif_result.status);
     try std.testing.expectEqualStrings("elif\n", elif_result.stdout);
+}
+
+test "command and exec builtins do not re-expand expanded arguments" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    // "$@" must expand exactly once: two positionals stay two arguments.
+    var at_result = try executor.executeScriptSlice(
+        \\f() { command /bin/sh -c 'printf "[%s]" "$@"' argv0 "$@"; }
+        \\f one two
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer at_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), at_result.status);
+    try std.testing.expectEqualStrings("[one][two]", at_result.stdout);
+
+    // Expanded text must not be re-interpreted as shell syntax.
+    var literal_result = try executor.executeScriptSlice(
+        \\v='$(echo injected)'
+        \\command echo "$v"
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer literal_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), literal_result.status);
+    try std.testing.expectEqualStrings("$(echo injected)\n", literal_result.stdout);
+
+    var exec_result = try executor.executeScriptSlice(
+        \\g() { exec /bin/sh -c 'printf "[%s]" "$@"' argv0 "$@"; }
+        \\g a 'b c'
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer exec_result.deinit();
+    try std.testing.expectEqualStrings("[a][b c]", exec_result.stdout);
 }
 
 test "mixed pipeline routes stdin and stdout through function and command stages" {
