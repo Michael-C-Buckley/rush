@@ -1,27 +1,87 @@
-# Small first-party Zig completion slice.
+# First-party Zig completion slice.
 
+complete zig --option --short h --long help --description 'show help'
 complete zig --subcommand build --description 'build project from build.zig'
 complete zig --subcommand test --description 'create and run a test build'
 complete zig --subcommand run --description 'create and run an executable build'
 complete zig --subcommand fmt --description 'format Zig source files'
 complete zig --subcommand version --description 'print Zig version'
 complete zig --subcommand env --description 'print Zig environment'
+complete zig --subcommand init --description 'initialize a Zig package'
+complete zig --subcommand build-exe --description 'create executable from source'
+complete zig --subcommand build-lib --description 'create library from source'
+complete zig --subcommand build-obj --description 'create object from source'
+complete zig --subcommand translate-c --description 'convert C code to Zig'
+complete zig --subcommand targets --description 'list available compilation targets'
 
 complete 'zig build' --option --long summary --value-name mode --description 'control build summary output'
+complete 'zig build' --option-value --long summary --function __rush_complete_zig_summary_modes
 complete 'zig build' --option --long prefix --value-name path --description 'install prefix'
+complete 'zig build' --option-value --long prefix --function __rush_complete_zig_directories
+complete 'zig build' --option --long prefix-exe-dir --value-name dir --description 'install executable directory'
+complete 'zig build' --option-value --long prefix-exe-dir --function __rush_complete_zig_directories
+complete 'zig build' --option --long prefix-lib-dir --value-name dir --description 'install library directory'
+complete 'zig build' --option-value --long prefix-lib-dir --function __rush_complete_zig_directories
 complete 'zig build' --option --long help --description 'show build help'
+complete 'zig build' --option --long verbose --description 'print commands before executing'
+complete 'zig build' --option --long verbose-link --description 'print linker invocation'
+complete 'zig build' --option --long verbose-cc --description 'print C compiler invocation'
+complete 'zig build' --option --long cache-dir --value-name dir --description 'override local cache directory'
+complete 'zig build' --option-value --long cache-dir --function __rush_complete_zig_directories
+complete 'zig build' --option --long global-cache-dir --value-name dir --description 'override global cache directory'
+complete 'zig build' --option-value --long global-cache-dir --function __rush_complete_zig_directories
 complete 'zig build' --option --short D --value-name option --description 'set a project build option'
+complete 'zig build' --option-value --short D --function __rush_complete_zig_build_options
 complete 'zig build' --argument --function __rush_complete_zig_build_steps
 
+complete 'zig test' --option --long test-filter --value-name text --description 'skip tests that do not match filter'
+complete 'zig test' --option-value --long test-filter --function __rush_complete_zig_test_names
+complete 'zig test' --option --long name --value-name name --description 'override output name'
+complete 'zig test' --argument --function __rush_complete_zig_files
+complete 'zig run' --argument --function __rush_complete_zig_files
 complete 'zig fmt' --option --long check --description 'check formatting without writing files'
 complete 'zig fmt' --argument --function __rush_complete_zig_files
+complete 'zig build-exe' --argument --function __rush_complete_zig_files
+complete 'zig build-lib' --argument --function __rush_complete_zig_files
+complete 'zig build-obj' --argument --function __rush_complete_zig_files
+complete 'zig translate-c' --argument --function __rush_complete_zig_c_files
 
 __rush_complete_zig_build_steps() {
+  zig build --help 2>/dev/null | sed -n '/^  [A-Za-z0-9_-][A-Za-z0-9_-]*/ s/^  \([A-Za-z0-9_-][A-Za-z0-9_-]*\).*/\1/p' | while read step; do test -n "$step" && completion candidate "$step" --kind plain; done
   completion candidate install --kind plain --description 'copy build artifacts to prefix path'
   completion candidate uninstall --kind plain --description 'remove build artifacts from prefix path'
   completion candidate test --kind plain --description 'run project tests'
 }
 
+__rush_complete_zig_build_options() {
+  zig build --help 2>/dev/null | sed -n 's/^  -D\([^= ]*\).*/\1=/p' | while read option; do test -n "$option" && completion candidate "$option" --kind variable; done
+  completion candidate optimize=Debug --kind variable
+  completion candidate target= --kind variable
+  completion candidate cpu= --kind variable
+}
+
 __rush_complete_zig_files() {
+  completion files --extension .zig
+  completion directories --append-slash
+}
+
+__rush_complete_zig_c_files() {
+  completion files --extension .h
+  completion files --extension .c
   completion files
+}
+
+__rush_complete_zig_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_zig_summary_modes() {
+  completion candidate all --kind plain
+  completion candidate new --kind plain
+  completion candidate failures --kind plain
+  completion candidate none --kind plain
+}
+
+__rush_complete_zig_test_names() {
+  rg '^test "([^"]+)"' -o -r '$1' --glob '*.zig' 2>/dev/null | while read test_name; do test -n "$test_name" && completion candidate "$test_name" --kind plain; done
 }
