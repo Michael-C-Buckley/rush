@@ -1,0 +1,71 @@
+# First-party pipx completion slice.
+
+complete pipx --option --short h --long help --description 'show help'
+complete pipx --option --long version --description 'show version'
+complete pipx --subcommand install --description 'install an application'
+complete pipx --subcommand run --description 'run an application in a temporary environment'
+complete pipx --subcommand inject --description 'install packages into an app environment'
+complete pipx --subcommand upgrade --description 'upgrade an installed app'
+complete pipx --subcommand uninstall --description 'uninstall an app'
+complete pipx --subcommand list --description 'list installed apps'
+complete pipx --subcommand reinstall --description 'reinstall an app'
+complete pipx --subcommand runpip --description 'run pip in an app environment'
+complete pipx --subcommand ensurepath --description 'ensure app directory is on PATH'
+complete pipx --subcommand upgrade-all --description 'upgrade all apps'
+complete pipx --subcommand reinstall-all --description 'reinstall all apps'
+
+complete 'pipx install' --option --long python --value-name python --description 'Python interpreter to use'
+complete 'pipx install' --option-value --long python --function __rush_complete_pipx_pythons
+complete 'pipx install' --option --long include-deps --description 'include dependency apps'
+complete 'pipx install' --option --long suffix --value-name suffix --description 'suffix for generated app names'
+complete 'pipx install' --argument --function __rush_complete_pipx_packages
+complete 'pipx run' --option --long python --value-name python --description 'Python interpreter to use'
+complete 'pipx run' --option-value --long python --function __rush_complete_pipx_pythons
+complete 'pipx run' --argument --function __rush_complete_pipx_packages
+complete 'pipx inject' --argument --function __rush_complete_pipx_inject_args
+complete 'pipx upgrade' --argument --function __rush_complete_pipx_installed_apps
+complete 'pipx uninstall' --argument --function __rush_complete_pipx_installed_apps
+complete 'pipx reinstall' --argument --function __rush_complete_pipx_installed_apps
+complete 'pipx runpip' --argument --function __rush_complete_pipx_runpip_args
+
+__rush_complete_pipx_inject_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_pipx_installed_apps
+  else
+    __rush_complete_pipx_packages
+  fi
+}
+
+__rush_complete_pipx_runpip_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_pipx_installed_apps
+  else
+    completion candidate install --kind plain
+    completion candidate uninstall --kind plain
+    completion candidate list --kind plain
+    completion candidate show --kind plain
+  fi
+}
+
+__rush_complete_pipx_installed_apps() {
+  pipx list --short 2>/dev/null | awk '{ print $1 }' | while read app; do test -n "$app" && completion candidate "$app" --kind plain; done
+  completion candidate ruff --kind plain
+  completion candidate black --kind plain
+  completion candidate mypy --kind plain
+  completion candidate poetry --kind plain
+}
+
+__rush_complete_pipx_packages() {
+  __rush_complete_pipx_installed_apps
+  completion candidate ipython --kind plain
+  completion candidate pre-commit --kind plain
+  completion candidate tox --kind plain
+  completion candidate uv --kind plain
+}
+
+__rush_complete_pipx_pythons() {
+  completion candidate python3 --kind plain
+  completion candidate python3.13 --kind plain
+  completion candidate python3.12 --kind plain
+  completion candidate python3.11 --kind plain
+}

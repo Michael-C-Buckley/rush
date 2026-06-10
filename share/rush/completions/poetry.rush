@@ -1,0 +1,106 @@
+# First-party poetry completion slice.
+
+complete poetry --option --short h --long help --description 'show help'
+complete poetry --option --long version --description 'show version'
+complete poetry --subcommand install --description 'install project dependencies'
+complete poetry --subcommand add --description 'add dependencies'
+complete poetry --subcommand remove --description 'remove dependencies'
+complete poetry --subcommand update --description 'update dependencies'
+complete poetry --subcommand run --description 'run a command in the project environment'
+complete poetry --subcommand shell --description 'spawn a shell in the project environment'
+complete poetry --subcommand env --description 'manage environments'
+complete poetry --subcommand build --description 'build package'
+complete poetry --subcommand publish --description 'publish package'
+complete poetry --subcommand config --description 'manage configuration'
+complete poetry --subcommand source --description 'manage package sources'
+complete poetry --subcommand self --description 'manage Poetry installation'
+complete poetry --subcommand lock --description 'lock dependencies'
+
+complete 'poetry install' --option --long with --value-name groups --description 'include dependency groups'
+complete 'poetry install' --option-value --long with --function __rush_complete_poetry_groups
+complete 'poetry install' --option --long without --value-name groups --description 'exclude dependency groups'
+complete 'poetry install' --option-value --long without --function __rush_complete_poetry_groups
+complete 'poetry install' --option --long only --value-name groups --description 'only install dependency groups'
+complete 'poetry install' --option-value --long only --function __rush_complete_poetry_groups
+complete 'poetry add' --option --short G --long group --value-name group --description 'dependency group'
+complete 'poetry add' --option-value --short G --function __rush_complete_poetry_groups
+complete 'poetry add' --option-value --long group --function __rush_complete_poetry_groups
+complete 'poetry add' --option --short D --long dev --description 'add as development dependency'
+complete 'poetry add' --argument --function __rush_complete_poetry_packages
+complete 'poetry remove' --option --short G --long group --value-name group --description 'dependency group'
+complete 'poetry remove' --option-value --short G --function __rush_complete_poetry_groups
+complete 'poetry remove' --argument --function __rush_complete_poetry_dependencies
+complete 'poetry update' --argument --function __rush_complete_poetry_dependencies
+complete 'poetry run' --argument --function __rush_complete_poetry_scripts
+complete 'poetry env' --subcommand info --description 'show environment information'
+complete 'poetry env' --subcommand list --description 'list environments'
+complete 'poetry env' --subcommand remove --description 'remove environments'
+complete 'poetry env' --subcommand use --description 'activate or create environment'
+complete 'poetry env remove' --argument --function __rush_complete_poetry_envs
+complete 'poetry env use' --argument --function __rush_complete_poetry_pythons
+complete 'poetry build' --option --short f --long format --value-name format --description 'build format'
+complete 'poetry build' --option-value --short f --function __rush_complete_poetry_build_formats
+complete 'poetry publish' --option --short r --long repository --value-name repo --description 'repository name'
+complete 'poetry publish' --option-value --short r --function __rush_complete_poetry_sources
+complete 'poetry config' --argument --function __rush_complete_poetry_config_keys
+complete 'poetry source' --subcommand add --description 'add source'
+complete 'poetry source' --subcommand remove --description 'remove source'
+complete 'poetry source' --subcommand show --description 'show sources'
+complete 'poetry source remove' --argument --function __rush_complete_poetry_sources
+complete 'poetry self' --subcommand add --description 'add Poetry plugin'
+complete 'poetry self' --subcommand remove --description 'remove Poetry plugin'
+complete 'poetry self' --subcommand update --description 'update Poetry'
+
+__rush_complete_poetry_scripts() {
+  sed -n '/\[tool.poetry.scripts\]/,/\[/ s/^\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\)[[:space:]]*=.*/\1/p; /\[project.scripts\]/,/\[/ s/^\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\)[[:space:]]*=.*/\1/p' pyproject.toml 2>/dev/null | while read script; do test -n "$script" && completion candidate "$script" --kind plain; done
+  completion candidate python --kind plain
+  completion candidate pytest --kind plain
+}
+
+__rush_complete_poetry_groups() {
+  sed -n 's/^\[tool.poetry.group.\([^].]*\).*/\1/p; s/^\[dependency-groups\]/dev/p' pyproject.toml 2>/dev/null | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+  completion candidate dev --kind plain
+  completion candidate test --kind plain
+  completion candidate docs --kind plain
+}
+
+__rush_complete_poetry_dependencies() {
+  sed -n '/\[tool.poetry.dependencies\]/,/\[/ s/^\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\)[[:space:]]*=.*/\1/p; /dependencies[[:space:]]*=/,/]/ s/.*"\([A-Za-z0-9_.-][A-Za-z0-9_.-]*\).*/\1/p' pyproject.toml 2>/dev/null | while read dep; do test -n "$dep" && completion candidate "$dep" --kind plain; done
+}
+
+__rush_complete_poetry_packages() {
+  __rush_complete_poetry_dependencies
+  completion candidate pytest --kind plain
+  completion candidate ruff --kind plain
+  completion candidate requests --kind plain
+  completion candidate pydantic --kind plain
+}
+
+__rush_complete_poetry_envs() {
+  poetry env list --full-path 2>/dev/null | awk '{ print $1 }' | while read env; do test -n "$env" && completion candidate "$env" --kind plain; done
+}
+
+__rush_complete_poetry_pythons() {
+  completion candidate python3 --kind plain
+  completion candidate python3.13 --kind plain
+  completion candidate python3.12 --kind plain
+  completion candidate python3.11 --kind plain
+}
+
+__rush_complete_poetry_build_formats() {
+  completion candidate sdist --kind plain
+  completion candidate wheel --kind plain
+}
+
+__rush_complete_poetry_sources() {
+  poetry source show 2>/dev/null | sed -n 's/^name[[:space:]]*:[[:space:]]*//p' | while read source; do test -n "$source" && completion candidate "$source" --kind plain; done
+  completion candidate pypi --kind plain
+  completion candidate testpypi --kind plain
+}
+
+__rush_complete_poetry_config_keys() {
+  completion candidate virtualenvs.create --kind plain
+  completion candidate virtualenvs.in-project --kind plain
+  completion candidate repositories.pypi.url --kind plain
+  completion candidate pypi-token.pypi --kind plain
+}

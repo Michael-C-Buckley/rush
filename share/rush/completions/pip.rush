@@ -1,0 +1,101 @@
+# First-party pip completion slice.
+
+complete pip --option --short h --long help --description 'show help'
+complete pip --option --long version --description 'show version'
+complete pip --subcommand install --description 'install packages'
+complete pip --subcommand uninstall --description 'uninstall packages'
+complete pip --subcommand list --description 'list installed packages'
+complete pip --subcommand show --description 'show package information'
+complete pip --subcommand freeze --description 'output installed packages'
+complete pip --subcommand search --description 'search package index'
+complete pip --subcommand check --description 'verify installed packages'
+complete pip --subcommand config --description 'manage local and global configuration'
+complete pip --subcommand cache --description 'inspect and manage cache'
+complete pip --subcommand download --description 'download packages'
+complete pip --subcommand wheel --description 'build wheels'
+
+complete 'pip install' --option --short r --long requirement --value-name file --description 'install from requirements file'
+complete 'pip install' --option-value --short r --function __rush_complete_pip_requirements
+complete 'pip install' --option-value --long requirement --function __rush_complete_pip_requirements
+complete 'pip install' --option --short c --long constraint --value-name file --description 'constraints file'
+complete 'pip install' --option-value --short c --function __rush_complete_pip_requirements
+complete 'pip install' --option-value --long constraint --function __rush_complete_pip_requirements
+complete 'pip install' --option --short e --long editable --value-name path --description 'install editable project'
+complete 'pip install' --option-value --short e --function __rush_complete_pip_paths
+complete 'pip install' --option-value --long editable --function __rush_complete_pip_paths
+complete 'pip install' --option --long upgrade --short U --description 'upgrade packages'
+complete 'pip install' --option --long user --description 'install to user site-packages'
+complete 'pip install' --option --long index-url --short i --value-name url --description 'package index URL'
+complete 'pip install' --option-value --long index-url --function __rush_complete_pip_indexes
+complete 'pip install' --argument --function __rush_complete_pip_packages
+complete 'pip uninstall' --option --short r --long requirement --value-name file --description 'uninstall from requirements file'
+complete 'pip uninstall' --option-value --short r --function __rush_complete_pip_requirements
+complete 'pip uninstall' --option --short y --long yes --description 'do not ask for confirmation'
+complete 'pip uninstall' --argument --function __rush_complete_pip_installed
+complete 'pip show' --argument --function __rush_complete_pip_installed
+complete 'pip list' --option --long format --value-name format --description 'output format'
+complete 'pip list' --option-value --long format --function __rush_complete_pip_formats
+complete 'pip freeze' --option --short r --long requirement --value-name file --description 'requirements file to use comments from'
+complete 'pip freeze' --option-value --short r --function __rush_complete_pip_requirements
+complete 'pip config' --subcommand list --description 'list config values'
+complete 'pip config' --subcommand get --description 'get config value'
+complete 'pip config' --subcommand set --description 'set config value'
+complete 'pip config' --subcommand unset --description 'unset config value'
+complete 'pip config get' --argument --function __rush_complete_pip_config_keys
+complete 'pip config set' --argument --function __rush_complete_pip_config_keys
+complete 'pip config unset' --argument --function __rush_complete_pip_config_keys
+complete 'pip cache' --subcommand dir --description 'show cache directory'
+complete 'pip cache' --subcommand info --description 'show cache information'
+complete 'pip cache' --subcommand list --description 'list cached files'
+complete 'pip cache' --subcommand purge --description 'remove all cache items'
+complete 'pip cache' --subcommand remove --description 'remove one or more packages from cache'
+complete 'pip cache remove' --argument --function __rush_complete_pip_packages
+complete 'pip download' --argument --function __rush_complete_pip_packages
+complete 'pip wheel' --argument --function __rush_complete_pip_packages
+
+__rush_complete_pip_packages() {
+  completion candidate pytest --kind plain
+  completion candidate ruff --kind plain
+  completion candidate requests --kind plain
+  completion candidate pydantic --kind plain
+  completion candidate django --kind plain
+  completion candidate flask --kind plain
+  completion candidate numpy --kind plain
+}
+
+__rush_complete_pip_installed() {
+  python -m pip list --format=freeze 2>/dev/null | sed 's/[<=>].*//' | while read package; do test -n "$package" && completion candidate "$package" --kind plain; done
+  __rush_complete_pip_packages
+}
+
+__rush_complete_pip_requirements() {
+  completion candidate requirements.txt --kind file
+  completion candidate requirements-dev.txt --kind file
+  completion candidate constraints.txt --kind file
+  completion files --extension .txt
+  completion files --extension .in
+}
+
+__rush_complete_pip_paths() {
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_pip_indexes() {
+  completion candidate https://pypi.org/simple --kind plain
+  completion candidate https://test.pypi.org/simple --kind plain
+}
+
+__rush_complete_pip_formats() {
+  completion candidate columns --kind plain
+  completion candidate freeze --kind plain
+  completion candidate json --kind plain
+}
+
+__rush_complete_pip_config_keys() {
+  completion candidate global.index-url --kind plain
+  completion candidate global.extra-index-url --kind plain
+  completion candidate global.trusted-host --kind plain
+  completion candidate install.user --kind plain
+  completion candidate list.format --kind plain
+}
