@@ -534,6 +534,13 @@ fn completionContextHasSubcommands(rules: []const completion.Rule, root: []const
     return false;
 }
 
+fn completionContextHasOptions(rules: []const completion.Rule, root: []const u8, path: []const []const u8) bool {
+    for (rules) |rule| {
+        if ((rule.kind == .option or rule.kind == .dynamic_option_value) and completionRuleContextAppliesToPath(rule, root, path)) return true;
+    }
+    return false;
+}
+
 fn completionSubcommandPrefixMatches(rules: []const completion.Rule, root: []const u8, path: []const []const u8, prefix: []const u8) bool {
     for (rules) |rule| {
         if (rule.kind != .subcommand or !completionRuleContextMatches(rule, root, path)) continue;
@@ -1661,6 +1668,7 @@ pub const Executor = struct {
             if (token.span.end > clamped_cursor) break;
             const word = token.lexeme(source);
             const word_complete = token.span.end < clamped_cursor;
+            const has_option_rules = completionContextHasOptions(self.completion_rules.items, root, path.items);
             if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
                 if (matched.takes_value and !matched.attached_value) {
                     if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
@@ -1675,7 +1683,7 @@ pub const Executor = struct {
                         index += 1;
                     }
                 }
-            } else if (analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word)) |cluster| {
+            } else if (if (has_option_rules) analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word) else null) |cluster| {
                 if (!cluster.valid) {
                     if (word_complete) {
                         try diagnostics.append(self.allocator, .{
@@ -1700,7 +1708,7 @@ pub const Executor = struct {
                     }
                 }
             } else if (isOptionLike(word)) {
-                if (word_complete and !completionOptionPrefixMatches(self.completion_rules.items, root, path.items, word)) {
+                if (has_option_rules and word_complete and !completionOptionPrefixMatches(self.completion_rules.items, root, path.items, word)) {
                     try diagnostics.append(self.allocator, .{
                         .kind = .unknown_option,
                         .severity = .err,
@@ -11796,6 +11804,10 @@ test "completion diagnostics accept executable commands from PATH" {
     const available = try executor.completionDiagnosticsForInputOptions("rush-path-command ", "rush-path-command ".len, .{ .io = std.testing.io });
     defer std.testing.allocator.free(available);
     try std.testing.expectEqual(@as(usize, 0), available.len);
+
+    const unknown_option = try executor.completionDiagnosticsForInputOptions("rush-path-command --unknown ", "rush-path-command --unknown ".len, .{ .io = std.testing.io });
+    defer std.testing.allocator.free(unknown_option);
+    try std.testing.expectEqual(@as(usize, 0), unknown_option.len);
 
     const missing = try executor.completionDiagnosticsForInputOptions("rush-missing-command ", "rush-missing-command ".len, .{ .io = std.testing.io });
     defer std.testing.allocator.free(missing);
