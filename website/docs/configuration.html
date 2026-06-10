@@ -131,8 +131,14 @@ index:236
 
   <h2 id="helpers"><a href="#helpers">Helpers</a></h2>
 
-  <pre><span class="cmd">prompt_pwd</span>       <span class="comment"># current directory, with $HOME shortened to ~</span>
-<span class="cmd">prompt_duration</span>  <span class="comment"># previous command duration</span></pre>
+  <pre><span class="cmd">prompt_pwd</span> [<span class="opt">-d</span> N] [<span class="opt">-D</span> N]   <span class="comment"># current directory, with $HOME shortened to ~</span>
+<span class="cmd">prompt_duration</span>             <span class="comment"># previous command duration</span></pre>
+
+  <p><code>prompt_pwd</code> optionally shortens path components like fish. <code>-d</code>/<code>--dir-length</code> keeps the first N characters of each component (0, the default, disables shortening; a leading dot is preserved). <code>-D</code>/<code>--full-length-dirs</code> keeps the last N components at full length (default 1).</p>
+
+  <pre><span class="cmd">prompt_pwd</span>                  <span class="comment"># ~/repos/rush</span>
+<span class="cmd">prompt_pwd</span> <span class="opt">-d</span> 1             <span class="comment"># ~/r/rush</span>
+<span class="cmd">prompt_pwd</span> <span class="opt">-d</span> 1 <span class="opt">-D</span> 2        <span class="comment"># ~/repos/rush</span></pre>
 
   <h2 id="async-prompt"><a href="#async-prompt">Async prompt updates</a></h2>
 

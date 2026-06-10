@@ -2541,6 +2541,26 @@ test "embedded default config sets prompt defaults without clobbering inherited 
     try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
 }
 
+test "prompt_pwd supports fish-style dir length flags" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\cd /usr/bin
+        \\rush_prompt() { prompt text "$(prompt_pwd -d 1)|$(prompt_pwd)"; }
+        \\:
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer result.deinit();
+
+    const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("/u/bin|/usr/bin", prompt);
+}
+
 test "prompt segment supports foreground and background colors" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();

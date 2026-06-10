@@ -6465,14 +6465,88 @@ fn parsePromptColor(name: []const u8) ?vaxis.Color {
 }
 
 fn builtinPromptPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    _ = command;
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
+
+    // Follows the shape of fish's prompt_pwd: --dir-length 0 disables
+    // shortening, --full-length-dirs keeps trailing components full.
+    var dir_length: usize = 0;
+    var full_dirs: usize = 1;
+    var index: usize = 1;
+    while (index < command.argv.len) : (index += 1) {
+        const arg = command.argv[index].text;
+        const is_dir_length = std.mem.eql(u8, arg, "-d") or std.mem.eql(u8, arg, "--dir-length");
+        const is_full_dirs = std.mem.eql(u8, arg, "-D") or std.mem.eql(u8, arg, "--full-length-dirs");
+        if (!is_dir_length and !is_full_dirs) return errorResult(self.allocator, 2, "prompt_pwd", "usage: prompt_pwd [-d N] [-D N]");
+        index += 1;
+        if (index == command.argv.len) return errorResult(self.allocator, 2, "prompt_pwd", "usage: prompt_pwd [-d N] [-D N]");
+        const value = std.fmt.parseUnsigned(usize, command.argv[index].text, 10) catch return errorResult(self.allocator, 2, "prompt_pwd", "invalid number");
+        if (is_dir_length) dir_length = value else full_dirs = value;
+    }
+
     const cwd = try self.logicalCwd(io);
     defer self.allocator.free(cwd);
     const display = try homeRelativePath(self.allocator, cwd, self.getEnv("HOME"));
     defer if (display.owned) self.allocator.free(display.text);
-    return stdoutLine(self.allocator, display.text, 0);
+    if (dir_length == 0) return stdoutLine(self.allocator, display.text, 0);
+    const shortened = try shortenPromptPath(self.allocator, display.text, dir_length, full_dirs);
+    defer self.allocator.free(shortened);
+    return stdoutLine(self.allocator, shortened, 0);
+}
+
+/// Shortens all but the trailing `full_dirs` path components to their
+/// first `dir_length` characters, keeping a leading dot (".config" with
+/// length 1 becomes ".c"), like fish's prompt_pwd.
+fn shortenPromptPath(allocator: std.mem.Allocator, path: []const u8, dir_length: usize, full_dirs: usize) ![]const u8 {
+    std.debug.assert(dir_length > 0);
+    var component_count: usize = 0;
+    {
+        var iter = std.mem.splitScalar(u8, path, '/');
+        while (iter.next()) |_| component_count += 1;
+    }
+
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    var iter = std.mem.splitScalar(u8, path, '/');
+    var index: usize = 0;
+    while (iter.next()) |component| : (index += 1) {
+        if (index > 0) try out.append(allocator, '/');
+        if (index + @min(full_dirs, component_count) >= component_count) {
+            try out.appendSlice(allocator, component);
+        } else {
+            try out.appendSlice(allocator, shortenPathComponent(component, dir_length));
+        }
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn shortenPathComponent(component: []const u8, dir_length: usize) []const u8 {
+    std.debug.assert(dir_length > 0);
+    const start: usize = if (std.mem.startsWith(u8, component, ".")) 1 else 0;
+    var end = start;
+    var count: usize = 0;
+    while (end < component.len and count < dir_length) : (count += 1) {
+        end += std.unicode.utf8ByteSequenceLength(component[end]) catch 1;
+    }
+    return component[0..@min(end, component.len)];
+}
+
+test "shortenPromptPath shortens components like fish prompt_pwd" {
+    const cases = [_]struct { path: []const u8, dir_length: usize, full_dirs: usize, expected: []const u8 }{
+        .{ .path = "~/repos/rush2", .dir_length = 1, .full_dirs = 1, .expected = "~/r/rush2" },
+        .{ .path = "/usr/local/share", .dir_length = 1, .full_dirs = 1, .expected = "/u/l/share" },
+        .{ .path = "/usr/local/share", .dir_length = 2, .full_dirs = 1, .expected = "/us/lo/share" },
+        .{ .path = "/usr/local/share", .dir_length = 1, .full_dirs = 2, .expected = "/u/local/share" },
+        .{ .path = "/usr/local/share", .dir_length = 1, .full_dirs = 0, .expected = "/u/l/s" },
+        .{ .path = "~/.config/rush", .dir_length = 1, .full_dirs = 1, .expected = "~/.c/rush" },
+        .{ .path = "~", .dir_length = 1, .full_dirs = 1, .expected = "~" },
+        .{ .path = "/", .dir_length = 1, .full_dirs = 1, .expected = "/" },
+    };
+    for (cases) |case| {
+        const shortened = try shortenPromptPath(std.testing.allocator, case.path, case.dir_length, case.full_dirs);
+        defer std.testing.allocator.free(shortened);
+        try std.testing.expectEqualStrings(case.expected, shortened);
+    }
 }
 
 fn builtinPromptDuration(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
