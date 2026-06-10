@@ -167,6 +167,7 @@ pub const History = struct {
     records: std.ArrayList(HistoryRecord) = .empty,
     entries: std.ArrayList([]const u8) = .empty,
     hostname: []const u8 = "",
+    current_cwd: []const u8 = "",
     db: ?*sqlite.sqlite3 = null,
 
     pub const HistoryRecord = struct {
@@ -337,14 +338,14 @@ pub const History = struct {
         return queryHistoryEntry(db, allocator, prefix, after, .next);
     }
 
-    pub fn searchEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
+    pub fn searchEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, cwd: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
         const db = self.db orelse return null;
-        return queryHistorySearchEntry(db, allocator, query, before, .previous);
+        return queryHistorySearchEntry(db, allocator, query, cwd, before, .previous);
     }
 
-    pub fn searchNextEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, after: ?i64) !?line_editor.HistoryView.HistoryEntry {
+    pub fn searchNextEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, cwd: []const u8, after: ?i64) !?line_editor.HistoryView.HistoryEntry {
         const db = self.db orelse return null;
-        return queryHistorySearchEntry(db, allocator, query, after, .next);
+        return queryHistorySearchEntry(db, allocator, query, cwd, after, .next);
     }
 
     pub fn suggestEntry(self: *History, allocator: std.mem.Allocator, prefix: []const u8) !?line_editor.HistoryView.HistoryEntry {
@@ -365,12 +366,12 @@ fn nextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: [
 
 fn searchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
     const history: *History = @ptrCast(@alignCast(context));
-    return history.searchEntry(allocator, query, before);
+    return history.searchEntry(allocator, query, history.current_cwd, before);
 }
 
 fn searchNextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, after: ?i64) !?line_editor.HistoryView.HistoryEntry {
     const history: *History = @ptrCast(@alignCast(context));
-    return history.searchNextEntry(allocator, query, after);
+    return history.searchNextEntry(allocator, query, history.current_cwd, after);
 }
 
 fn suggestHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8) !?line_editor.HistoryView.HistoryEntry {
@@ -436,7 +437,7 @@ fn appendSqlLikePrefix(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8)
     try pattern.append(allocator, '%');
 }
 
-fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, query: []const u8, cursor: ?i64, direction: HistoryDirection) !?line_editor.HistoryView.HistoryEntry {
+fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, query: []const u8, cwd: []const u8, cursor: ?i64, direction: HistoryDirection) !?line_editor.HistoryView.HistoryEntry {
     var fts_query: std.ArrayList(u8) = .empty;
     defer fts_query.deinit(allocator);
     try appendHistoryFtsQuery(allocator, &fts_query, query);
@@ -452,10 +453,11 @@ fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, qu
         \\where history_fts match ?1
         \\  and not exists (
         \\    select 1 from history newer
-        \\    where newer.id > h.id and newer.command = h.command
+        \\    where newer.command = h.command
+        \\      and ((newer.cwd = ?2 and h.cwd <> ?2) or ((newer.cwd = ?2) = (h.cwd = ?2) and newer.id > h.id))
         \\  )
-        \\order by bm25(history_fts), h.id desc
-        \\limit 1 offset ?2
+        \\order by (h.cwd = ?2) desc, bm25(history_fts), h.id desc
+        \\limit 1 offset ?3
         ,
         .next =>
         \\select h.id, h.command, h.started_at
@@ -464,16 +466,18 @@ fn queryHistorySearchEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, qu
         \\where history_fts match ?1
         \\  and not exists (
         \\    select 1 from history newer
-        \\    where newer.id > h.id and newer.command = h.command
+        \\    where newer.command = h.command
+        \\      and ((newer.cwd = ?2 and h.cwd <> ?2) or ((newer.cwd = ?2) = (h.cwd = ?2) and newer.id > h.id))
         \\  )
-        \\order by bm25(history_fts) desc, h.id asc
-        \\limit 1 offset ?2
+        \\order by (h.cwd = ?2) asc, bm25(history_fts) desc, h.id asc
+        \\limit 1 offset ?3
         ,
     };
     try sqliteCheck(sqlite.sqlite3_prepare_v2(db, sql, -1, &stmt, null), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
     try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 1, fts_query.items.ptr, @intCast(fts_query.items.len), null), db);
-    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 2, offset), db);
+    try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 2, cwd.ptr, @intCast(cwd.len), null), db);
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 3, offset), db);
     const rc = sqlite.sqlite3_step(stmt);
     if (rc == sqlite.SQLITE_DONE) return null;
     if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
@@ -1438,6 +1442,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
         const cwd = if (executor.getEnv("PWD")) |pwd| if (pwd.len != 0) pwd else cwd_buffer[0..cwd_len] else cwd_buffer[0..cwd_len];
+        history.current_cwd = cwd;
         try terminal.reportCurrentDirectory(cwd, terminal_hostname);
         const title = try terminalTitlePath(allocator, cwd, executor.getEnv("HOME"));
         defer if (title.owned) allocator.free(title.text);
@@ -1922,17 +1927,45 @@ test "history search uses fts ranking and hides older duplicates" {
     try history.addCommand(std.testing.io, "git status", 0, 30, 1);
     try history.addCommand(std.testing.io, "echo git status", 0, 40, 1);
 
-    const first = (try history.searchEntry(std.testing.allocator, "git sta", null)).?;
+    const first = (try history.searchEntry(std.testing.allocator, "git sta", "", null)).?;
     defer first.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("git status", first.text);
     try std.testing.expectEqual(@as(i64, 30), first.when);
 
-    const second = (try history.searchEntry(std.testing.allocator, "git sta", first.id)).?;
+    const second = (try history.searchEntry(std.testing.allocator, "git sta", "", first.id)).?;
     defer second.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo git status", second.text);
     try std.testing.expectEqual(@as(i64, 40), second.when);
 
-    try std.testing.expect(try history.searchEntry(std.testing.allocator, "gco", null) == null);
+    try std.testing.expect(try history.searchEntry(std.testing.allocator, "gco", "", null) == null);
+}
+
+test "history search ranks current cwd first while deduping commands globally" {
+    const path = "rush-history-fts-cwd-search-test.sqlite";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try insertHistoryRecord(history.db.?, .{ .cmd = "git status", .cwd = "/repo", .when = 10 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "git switch feature", .cwd = "/repo", .when = 20 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "git status", .cwd = "/other", .when = 30 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "echo git status", .cwd = "/other", .when = 40 });
+
+    const first = (try history.searchEntry(std.testing.allocator, "git sta", "/repo", null)).?;
+    defer first.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("git status", first.text);
+    try std.testing.expectEqual(@as(i64, 10), first.when);
+
+    const second = (try history.searchEntry(std.testing.allocator, "git sta", "/repo", first.id)).?;
+    defer second.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo git status", second.text);
+    try std.testing.expectEqual(@as(i64, 40), second.when);
 }
 
 test "history load rebuilds fts for existing history rows" {
@@ -1967,7 +2000,7 @@ test "history load rebuilds fts for existing history rows" {
     var history = History.init(std.testing.allocator);
     defer history.deinit();
     try history.load(std.testing.io, path);
-    const entry = (try history.searchEntry(std.testing.allocator, "checkout", null)).?;
+    const entry = (try history.searchEntry(std.testing.allocator, "checkout", "", null)).?;
     defer entry.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("git checkout main", entry.text);
 }

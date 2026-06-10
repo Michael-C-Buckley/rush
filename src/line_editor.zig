@@ -519,6 +519,7 @@ pub const LineSession = struct {
             var history_candidates: std.ArrayList(completion.Candidate) = .empty;
             defer history_candidates.deinit(allocator);
             var styled_labels: std.ArrayList([]const u8) = .empty;
+            var history_label_width: usize = 0;
             defer {
                 for (styled_labels.items) |label| allocator.free(label);
                 styled_labels.deinit(allocator);
@@ -527,6 +528,7 @@ pub const LineSession = struct {
                 for (self.history_search_matches.items) |entry| {
                     const label = try styledHistorySearchLabel(allocator, entry.text, self.history_search_query.items);
                     try styled_labels.append(allocator, label);
+                    history_label_width = @max(history_label_width, visibleWidth(label, render_options.width_method));
                     const description = try historySearchDescription(allocator, self.history.now, entry.when);
                     history_candidates.append(allocator, .{
                         .value = entry.text,
@@ -536,19 +538,21 @@ pub const LineSession = struct {
                         .replace_start = 0,
                         .replace_end = self.editor.buffer.text().len,
                     }) catch |err| {
-                        allocator.free(description);
+                        if (description) |owned| allocator.free(owned);
                         return err;
                     };
-                    styled_labels.append(allocator, description) catch |err| {
-                        allocator.free(description);
-                        return err;
-                    };
+                    if (description) |owned| {
+                        styled_labels.append(allocator, owned) catch |err| {
+                            allocator.free(owned);
+                            return err;
+                        };
+                    }
                 }
             } else {
+                history_label_width = visibleWidth("No history matches", render_options.width_method);
                 try history_candidates.append(allocator, .{
                     .value = self.history_search_query.items,
                     .display = "No history matches",
-                    .description = self.history_search_query.items,
                     .kind = .plain,
                     .replace_start = 0,
                     .replace_end = self.editor.buffer.text().len,
@@ -557,6 +561,7 @@ pub const LineSession = struct {
             render_options.completion_menu = history_candidates.items;
             render_options.completion_selection = self.history_search_selected;
             render_options.completion_window_start = 0;
+            render_options.completion_label_width = @min(history_label_width, @as(usize, @intCast(render_options.width)) -| 3);
             return frameFromLine(allocator, self.editor, render_options);
         } else if (self.state == .editing) {
             // Ghost suggestions are editing aids; an accepted line must show
@@ -884,11 +889,11 @@ fn cloneHistoryEntry(allocator: std.mem.Allocator, entry: HistoryView.HistoryEnt
     return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text), .when = entry.when };
 }
 
-fn historySearchDescription(allocator: std.mem.Allocator, now: i64, when: i64) ![]const u8 {
-    if (now <= 0 or when <= 0) return allocator.dupe(u8, "history");
+fn historySearchDescription(allocator: std.mem.Allocator, now: i64, when: i64) !?[]const u8 {
+    if (now <= 0 or when <= 0) return null;
     var age_buffer: [16]u8 = undefined;
     const age = relativeAge(&age_buffer, now, when);
-    return std.fmt.allocPrint(allocator, "history · {s}", .{age});
+    return try allocator.dupe(u8, age);
 }
 
 pub fn relativeAge(buffer: *[16]u8, now: i64, when: i64) []const u8 {
@@ -1027,6 +1032,7 @@ pub const RenderOptions = struct {
     completion_menu: []const completion.Candidate = &.{},
     completion_selection: usize = 0,
     completion_window_start: usize = 0,
+    completion_label_width: ?usize = null,
     suggestion: []const u8 = "",
     status_line: []const u8 = "",
     diagnostic_line: []const u8 = "",
@@ -1103,7 +1109,7 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     const input_line_count = lines.items.len;
     if (options.status_line.len != 0) try appendWrappedLine(allocator, &lines, options.status_line, wrap_width, options.width_method);
     if (options.diagnostic_line.len != 0) try appendWrappedLine(allocator, &lines, options.diagnostic_line, wrap_width, options.width_method);
-    try appendCompletionMenuLines(allocator, &lines, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height);
+    try appendCompletionMenuLines(allocator, &lines, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height, options.completion_label_width);
 
     return .{
         .lines = try lines.toOwnedSlice(allocator),
@@ -1298,11 +1304,11 @@ fn escapeSequenceEnd(bytes: []const u8, index: usize) ?usize {
     return index + 2;
 }
 
-fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList([]const u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16) !void {
+fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList([]const u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16, label_width_override: ?usize) !void {
     if (candidates.len == 0) return;
     const max_rows = @min(@max(@as(usize, @intCast(height)) -| 2, 1), max_menu_candidate_rows);
     const window = completionMenuWindow(candidates.len, selected, window_start, max_rows);
-    const label_width = @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
+    const label_width = label_width_override orelse @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
     const fixed_width = 2 + label_width + 1;
     const description_width = @as(usize, @intCast(width)) -| fixed_width;
     for (candidates[window.start..window.end], window.start..) |candidate, index| {
@@ -2378,7 +2384,8 @@ test "history search seeds query from current buffer and renders menu-style matc
     try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mhistory · 30s") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90m30s") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "history") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
 }
 
@@ -2398,7 +2405,7 @@ test "history search renders clean no-match menu state" {
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "No history matches") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mmissing") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mmissing") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
 }
 
