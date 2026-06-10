@@ -2140,7 +2140,7 @@ pub const Executor = struct {
                 try self.annotateSourcedError(program.source, statement.span.start, options, &result);
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
-                last_status = result.status;
+                last_status = self.pending_exit orelse result.status;
                 self.setLastStatus(last_status);
                 self.applyErrexit(last_status, options, isFollowedByAndOrListOp(program.statements, statement_index));
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
@@ -2161,7 +2161,7 @@ pub const Executor = struct {
                 try self.annotateSourcedError(program.source, pipeline.span.start, options, &result);
                 try self.appendOrWriteResult(options, &stdout, &stderr, result);
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
-                last_status = result.status;
+                last_status = self.pending_exit orelse result.status;
                 self.setLastStatus(last_status);
                 self.applyErrexit(last_status, options, isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index));
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
@@ -2177,7 +2177,7 @@ pub const Executor = struct {
             try self.annotateSourcedError(program.source, command.span.start, options, &result);
             try self.appendOrWriteResult(options, &stdout, &stderr, result);
             try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
-            last_status = result.status;
+            last_status = self.pending_exit orelse result.status;
             self.setLastStatus(last_status);
             self.applyErrexit(last_status, options, false);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
@@ -2213,8 +2213,15 @@ pub const Executor = struct {
         errdefer final.deinit();
         self.running_exit_trap = true;
         defer self.running_exit_trap = false;
-        var trap_result = try self.executeScriptSlice(action, options);
+        const prior_pending_exit = self.pending_exit;
+        self.pending_exit = null;
+        var trap_result = self.executeScriptSlice(action, options) catch |err| {
+            self.pending_exit = prior_pending_exit;
+            return err;
+        };
         defer trap_result.deinit();
+        const trap_pending_exit = self.pending_exit;
+        if (trap_pending_exit == null) self.pending_exit = prior_pending_exit;
         const stdout = try std.mem.concat(self.allocator, u8, &.{ final.stdout, trap_result.stdout });
         errdefer self.allocator.free(stdout);
         const stderr = try std.mem.concat(self.allocator, u8, &.{ final.stderr, trap_result.stderr });
@@ -2223,7 +2230,7 @@ pub const Executor = struct {
         self.allocator.free(final.stderr);
         final.stdout = stdout;
         final.stderr = stderr;
-        if (self.pending_exit) |status| final.status = status;
+        if (trap_pending_exit) |status| final.status = status else if (prior_pending_exit) |status| final.status = status;
         return final;
     }
 
@@ -9410,6 +9417,26 @@ test "executor implements trap builtin baseline" {
     defer signal_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), signal_result.status);
     try std.testing.expectEqualStrings("int\nafter\n", signal_result.stdout);
+
+    var signal_exit = try parseAndLower(std.testing.allocator, "trap 'exit 9' INT; /bin/kill -INT $$; echo unreached");
+    defer signal_exit.parsed.deinit();
+    defer signal_exit.program.deinit();
+    var signal_exit_executor = Executor.init(std.testing.allocator);
+    defer signal_exit_executor.deinit();
+    var signal_exit_result = try signal_exit_executor.executeProgram(signal_exit.program, .{ .io = std.testing.io, .allow_external = true });
+    defer signal_exit_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 9), signal_exit_result.status);
+    try std.testing.expectEqualStrings("", signal_exit_result.stdout);
+
+    var exit_override = try parseAndLower(std.testing.allocator, "trap 'echo et; exit 5' EXIT; exit 2");
+    defer exit_override.parsed.deinit();
+    defer exit_override.program.deinit();
+    var exit_override_executor = Executor.init(std.testing.allocator);
+    defer exit_override_executor.deinit();
+    var exit_override_result = try exit_override_executor.executeProgram(exit_override.program, .{});
+    defer exit_override_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 5), exit_override_result.status);
+    try std.testing.expectEqualStrings("et\n", exit_override_result.stdout);
 
     var zero = try parseAndLower(std.testing.allocator, "trap 'echo zero' 0; echo body");
     defer zero.parsed.deinit();

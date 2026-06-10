@@ -323,3 +323,5 @@ redirection-case-input-command-substitution	redirection	behavior	case input redi
 redirection-function-definition	redirection	behavior	function definition redirections apply on invocation
 redirection-compound-here-doc-input	redirection	behavior	here-doc stdin feeds if while for and case compounds
 redirection-case-input-external-command-substitution	redirection	behavior	case input redirection feeds external command substitution stdin
+builtin-trap-signal-exit	signals	behavior	exit in a signal trap action stops the script with that status
+builtin-trap-exit-overrides-status	builtin	behavior	exit in an EXIT trap action overrides the prior shell status
