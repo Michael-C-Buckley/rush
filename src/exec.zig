@@ -46,6 +46,33 @@ pub const ExecuteOptions = struct {
     default_path_lookup: bool = false,
 };
 
+const PipelineStageStdin = struct {
+    active: bool = false,
+    file: ?std.Io.File = null,
+};
+
+threadlocal var pipeline_stage_stdin: PipelineStageStdin = .{};
+
+const PipelineStageStdinGuard = struct {
+    prior: PipelineStageStdin,
+
+    fn restore(self: PipelineStageStdinGuard) void {
+        pipeline_stage_stdin = self.prior;
+    }
+};
+
+fn pushPipelineStageStdin(file: ?std.Io.File) PipelineStageStdinGuard {
+    const guard: PipelineStageStdinGuard = .{ .prior = pipeline_stage_stdin };
+    pipeline_stage_stdin = .{ .active = true, .file = file };
+    return guard;
+}
+
+fn suspendPipelineStageStdin() PipelineStageStdinGuard {
+    const guard: PipelineStageStdinGuard = .{ .prior = pipeline_stage_stdin };
+    pipeline_stage_stdin = .{};
+    return guard;
+}
+
 fn checkCanceled(options: ExecuteOptions) !void {
     if (options.cancel) |cancel| if (cancel.isCanceled()) return error.Canceled;
 }
@@ -3187,11 +3214,13 @@ pub const Executor = struct {
         prior_stdin: ?[]const u8,
         prior_stdin_offset: usize,
         prior_stdin_file: ?std.Io.File,
+        prior_pipeline_stdin: PipelineStageStdin,
 
         fn restore(self: ScriptStdinGuard) void {
             self.executor.script_stdin = self.prior_stdin;
             self.executor.script_stdin_offset = self.prior_stdin_offset;
             self.executor.script_stdin_file = self.prior_stdin_file;
+            pipeline_stage_stdin = self.prior_pipeline_stdin;
         }
     };
 
@@ -3202,10 +3231,12 @@ pub const Executor = struct {
             .prior_stdin = self.script_stdin,
             .prior_stdin_offset = self.script_stdin_offset,
             .prior_stdin_file = self.script_stdin_file,
+            .prior_pipeline_stdin = pipeline_stage_stdin,
         };
         self.script_stdin = if (stdin_file == null) stdin else null;
         self.script_stdin_offset = 0;
         self.script_stdin_file = stdin_file;
+        pipeline_stage_stdin = .{};
         return guard;
     }
 
@@ -4187,37 +4218,18 @@ pub const Executor = struct {
         defer if (context.stdout_file) |file| file.close(context.io);
         defer if (context.stderr_file) |file| file.close(context.io);
 
-        var stdin_bytes: []u8 = try context.executor.allocator.alloc(u8, 0);
-        defer context.executor.allocator.free(stdin_bytes);
-        if (context.stdin_file) |file| {
-            context.executor.allocator.free(stdin_bytes);
-            var reader_buffer: [4096]u8 = undefined;
-            var reader = file.reader(context.io, &reader_buffer);
-            stdin_bytes = try reader.interface.allocRemaining(context.executor.allocator, .limited(1024 * 1024));
-        }
-
         // The stage's output must flow into its pipe or redirection target,
         // so externals nested under functions or the command builtin have
         // to be captured rather than inherit the terminal — except for the
         // last interactive stage, where they write to the terminal directly.
-        // Routing the pipe input through script_stdin lets those nested
+        // Routing the pipe input through stage-local stdin lets those nested
         // commands read it in either mode.
         var stage_options = context.options;
         stage_options.external_stdio = context.stage_stdio;
-        const executor = context.executor;
-        const prior_stdin = executor.script_stdin;
-        const prior_stdin_offset = executor.script_stdin_offset;
-        const prior_stdin_file = executor.script_stdin_file;
-        executor.script_stdin = stdin_bytes;
-        executor.script_stdin_offset = 0;
-        executor.script_stdin_file = null;
-        defer {
-            executor.script_stdin = prior_stdin;
-            executor.script_stdin_offset = prior_stdin_offset;
-            executor.script_stdin_file = prior_stdin_file;
-        }
+        const stdin_guard = pushPipelineStageStdin(context.stdin_file);
+        defer stdin_guard.restore();
 
-        var result = try context.executor.executeSimpleCommandWithInput(context.command, stdin_bytes, stage_options);
+        var result = try context.executor.executeSimpleCommandWithInput(context.command, "", stage_options);
         defer result.deinit();
         context.status = result.status;
         if (context.stdout_file != null and context.stderr_file != null and context.stdout_sink_id != null and context.stderr_sink_id != null and context.stdout_sink_id.? == context.stderr_sink_id.?) {
@@ -4562,6 +4574,8 @@ pub const Executor = struct {
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
         var stdin_file: ?std.Io.File = null;
         defer if (stdin_file) |file| file.close(options.io.?);
+        var pipeline_stdin_guard: ?PipelineStageStdinGuard = null;
+        defer if (pipeline_stdin_guard) |guard| guard.restore();
         const prior_stdin = self.script_stdin;
         const prior_stdin_offset = self.script_stdin_offset;
         const prior_stdin_file = self.script_stdin_file;
@@ -4572,20 +4586,24 @@ pub const Executor = struct {
         }
         const call_stdin = try self.applyInputRedirections(command, "", options, &owned_stdin, &stdin_file);
         if (stdin_file) |file| {
+            if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
             self.script_stdin = null;
             self.script_stdin_offset = 0;
             self.script_stdin_file = file;
         } else if (call_stdin.len != 0 or hasInputRedirection(command.redirections)) {
+            if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
             self.script_stdin = call_stdin;
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
         const redirected_stdin = try self.applyCompoundInputRedirections(command.span, function_value.redirections, options, &owned_stdin, &stdin_file);
         if (stdin_file) |file| {
+            if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
             self.script_stdin = null;
             self.script_stdin_offset = 0;
             self.script_stdin_file = file;
         } else if (redirected_stdin) |stdin| {
+            if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
             self.script_stdin = stdin;
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
@@ -4872,6 +4890,10 @@ pub const Executor = struct {
             child.script_stdin = stdin;
             child.script_stdin_offset = 0;
             child.script_stdin_file = null;
+        } else if (substitution_context.executor.remainingScriptStdinFile()) |file| {
+            child.script_stdin = null;
+            child.script_stdin_offset = 0;
+            child.script_stdin_file = file;
         }
         if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
         if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
@@ -5633,6 +5655,8 @@ pub const Executor = struct {
             if (fallback_stdin) |stdin| {
                 stdin_file = try fileFromBytes(io, stdin);
                 self.script_stdin_offset = (self.script_stdin orelse unreachable).len;
+            } else if (pipeline_stage_stdin.active) {
+                if (pipeline_stage_stdin.file) |file| stdin_file = try dupFile(file);
             } else if (self.remainingScriptStdinFile()) |file| {
                 stdin_file = try dupFile(file);
             }
@@ -7882,6 +7906,10 @@ const ReadInput = struct {
 
 fn nextReadInput(self: *Executor, stdin: []const u8) !ReadInput {
     if (stdin.len != 0) return readInputFromSlice(stdin);
+    if (pipeline_stage_stdin.active) {
+        if (pipeline_stage_stdin.file) |file| return try readInputFromFile(self, file);
+        return .{ .line = "", .status = 1 };
+    }
     if (self.script_stdin_file) |file| return try readInputFromFile(self, file);
     const script_stdin = self.script_stdin orelse return .{ .line = "", .status = 1 };
     if (self.script_stdin_offset >= script_stdin.len) return .{ .line = "", .status = 1 };
@@ -12758,6 +12786,54 @@ test "executor supports mixed builtin and external pipeline stages" {
     var builtin_status_result = try executor.executeProgram(builtin_status.program, .{ .io = std.testing.io, .allow_external = true });
     defer builtin_status_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 1), builtin_status_result.status);
+}
+
+test "executor streams large pipeline input into builtin stages" {
+    const path = "rush-large-pipeline-builtin-stdin.tmp";
+    var input: std.ArrayList(u8) = .empty;
+    defer input.deinit(std.testing.allocator);
+    try input.appendSlice(std.testing.allocator, "first line\n");
+    try input.appendNTimes(std.testing.allocator, 'x', 1024 * 1024 + 1);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = input.items });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var read_lowered = try parseAndLower(std.testing.allocator, "/bin/cat < rush-large-pipeline-builtin-stdin.tmp | read x; echo \"$x\"");
+    defer read_lowered.parsed.deinit();
+    defer read_lowered.program.deinit();
+
+    var read_result = try executor.executeProgram(read_lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer read_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), read_result.status);
+    try std.testing.expectEqualStrings("first line\n", read_result.stdout);
+
+    var command_lowered = try parseAndLower(std.testing.allocator, "/bin/cat < rush-large-pipeline-builtin-stdin.tmp | command /bin/cat | /usr/bin/wc -c");
+    defer command_lowered.parsed.deinit();
+    defer command_lowered.program.deinit();
+
+    var command_result = try executor.executeProgram(command_lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer command_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), command_result.status);
+    const byte_count = std.mem.trim(u8, command_result.stdout, " \t\r\n");
+    const expected_count = try std.fmt.allocPrint(std.testing.allocator, "{}", .{input.items.len});
+    defer std.testing.allocator.free(expected_count);
+    try std.testing.expectEqualStrings(expected_count, byte_count);
+}
+
+test "executor gives builtin pipeline command substitutions streamed stdin" {
+    var lowered = try parseAndLower(std.testing.allocator, "/usr/bin/printf subst | echo \"$(/bin/cat)\"");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("subst\n", result.stdout);
 }
 
 test "executor wires external pipelines with real process pipes" {
