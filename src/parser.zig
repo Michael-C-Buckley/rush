@@ -1317,6 +1317,27 @@ const SyntaxParser = struct {
         const token_start = self.index;
         var function_children: std.ArrayList(SyntaxChild) = .empty;
         defer function_children.deinit(self.allocator);
+
+        try self.appendCurrentTokenChildTo(&function_children);
+        try self.appendCurrentTokenChildTo(&function_children);
+        try self.appendCurrentTokenChildTo(&function_children);
+
+        while (self.current().kind.isTrivia()) {
+            try self.appendCurrentTokenChildTo(&function_children);
+        }
+
+        if (!self.startsBraceGroup() and self.startsFunctionBodyCompoundCommand()) {
+            const body = try self.parseFunctionBodyCompoundCommand();
+            try function_children.append(self.allocator, .{ .node = body });
+            try self.parseTrailingRedirections(&function_children);
+
+            const token_end = self.index;
+            const child_start = self.children.items.len;
+            try self.children.appendSlice(self.allocator, function_children.items);
+            const span = spanForTokenRange(self.tokens, token_start, token_end);
+            return self.addNode(.function_definition, span, token_start, token_end, child_start, self.children.items.len);
+        }
+
         var saw_open_brace = false;
         var closed = false;
 
@@ -1355,6 +1376,20 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, function_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.function_definition, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn startsFunctionBodyCompoundCommand(self: SyntaxParser) bool {
+        return self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand();
+    }
+
+    fn parseFunctionBodyCompoundCommand(self: *SyntaxParser) !NodeId {
+        if (self.startsSubshell()) return self.parseSubshell();
+        if (self.startsBashTestCommand()) return self.parseBashTestCommand();
+        if (self.startsIfCommand()) return self.parseIfCommand();
+        if (self.startsLoopCommand()) return self.parseLoopCommand();
+        if (self.startsForCommand()) return self.parseForCommand();
+        std.debug.assert(self.startsCaseCommand());
+        return self.parseCaseCommand();
     }
 
     fn parseCaseCommand(self: *SyntaxParser) anyerror!NodeId {
@@ -2420,6 +2455,34 @@ test "parser builds POSIX function definition nodes" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "parser accepts compound commands as POSIX function bodies" {
+    var result = try parse(std.testing.allocator, "f() ( echo hi ); g() if true; then echo yes; fi; h() for i in 1 2; do echo $i; done", .{});
+    defer result.deinit();
+
+    var definitions: usize = 0;
+    var saw_subshell_body = false;
+    var saw_if_body = false;
+    var saw_for_body = false;
+    for (result.nodes) |node| {
+        if (node.kind != .function_definition) continue;
+        definitions += 1;
+        for (result.nodeChildren(node)) |child| switch (child) {
+            .node => |node_id| switch (result.nodes[node_id.index()].kind) {
+                .subshell => saw_subshell_body = true,
+                .if_command => saw_if_body = true,
+                .for_command => saw_for_body = true,
+                else => {},
+            },
+            .token => {},
+        };
+    }
+
+    try std.testing.expectEqual(@as(usize, 3), definitions);
+    try std.testing.expect(saw_subshell_body);
+    try std.testing.expect(saw_if_body);
+    try std.testing.expect(saw_for_body);
 }
 
 test "parser reports incomplete POSIX function definitions" {

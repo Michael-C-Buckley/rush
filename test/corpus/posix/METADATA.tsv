@@ -123,6 +123,7 @@ expansion-quoted-command-substitution	expansion	behavior	-
 fg-current-job	job_control	job	fg waits for the current background job
 for-loop	grammar	behavior	-
 for-nested-if	grammar	behavior	-
+grammar-function-compound-body	grammar	behavior	function definitions accept subshell, if, and for compound-command bodies
 function-local-positionals	grammar	behavior	-
 function-positionals	grammar	behavior	-
 function-return-status	grammar	behavior	-

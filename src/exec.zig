@@ -9371,6 +9371,24 @@ test "executor parses and executes POSIX shell functions" {
     try std.testing.expectEqualStrings("two\n", redefine_result.stdout);
 }
 
+test "executor accepts compound commands as POSIX function bodies" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\f() ( echo subshell-fn ); f
+        \\g() if true; then echo if-body-fn; fi; g
+        \\h() for i in 1 2; do echo f$i; done; h
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("subshell-fn\nif-body-fn\nf1\nf2\n", result.stdout);
+}
+
 test "executor executes POSIX case statements" {
     var lowered = try parseAndLower(std.testing.allocator, "case foo in bar) echo no ;; f*) echo yes ;; *) echo fallback ;; esac");
     defer lowered.parsed.deinit();

@@ -334,6 +334,7 @@ fn collectNestedBodyRanges(allocator: std.mem.Allocator, parsed: parser.ParseRes
         for (parsed.nodeChildren(node)) |child| switch (child) {
             .node => |node_id| {
                 const child_node = parsed.nodes[node_id.index()];
+                if (node.kind == .function_definition and isFunctionBodyNode(child_node.kind)) try ranges.append(allocator, child_node.span);
                 if (child_node.kind == .list) try ranges.append(allocator, child_node.span);
             },
             .token => {},
@@ -349,6 +350,20 @@ fn isCompoundNode(kind: parser.NodeKind) bool {
         .for_command,
         .case_command,
         .function_definition,
+        .bash_test_command,
+        .brace_group,
+        .subshell,
+        => true,
+        else => false,
+    };
+}
+
+fn isFunctionBodyNode(kind: parser.NodeKind) bool {
+    return switch (kind) {
+        .if_command,
+        .loop_command,
+        .for_command,
+        .case_command,
         .bash_test_command,
         .brace_group,
         .subshell,
@@ -497,8 +512,16 @@ fn lowerBashTestCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult
 
 fn lowerFunctionDefinition(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !FunctionDefinition {
     std.debug.assert(node.kind == .function_definition);
+    var body_node: ?parser.Node = null;
     var open_brace: ?usize = null;
     var close_brace: ?usize = null;
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .node => |node_id| {
+            const child_node = parsed.nodes[node_id.index()];
+            if (body_node == null and isFunctionBodyNode(child_node.kind)) body_node = child_node;
+        },
+        .token => {},
+    };
     for (node.token_start..node.token_end) |token_index| {
         const token = parsed.tokens[token_index];
         if (token.kind != .word) continue;
@@ -511,8 +534,8 @@ fn lowerFunctionDefinition(allocator: std.mem.Allocator, parsed: parser.ParseRes
     }
     const name = try allocator.dupe(u8, parsed.tokens[node.token_start].lexeme(parsed.source));
     errdefer allocator.free(name);
-    const body_start = if (open_brace) |index| index + 1 else node.token_end;
-    const body_end = close_brace orelse node.token_end;
+    const body_start = if (body_node) |body| body.token_start else if (open_brace) |index| index + 1 else node.token_end;
+    const body_end = if (body_node) |body| body.token_end else close_brace orelse node.token_end;
     var redirections = try lowerCompoundRedirections(allocator, parsed, node);
     errdefer {
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);
