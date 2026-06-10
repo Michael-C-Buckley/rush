@@ -26,8 +26,10 @@ ls() {
   fi
 }
 
-ll() { ls -lh "$@"; }
-la() { ls -lAh "$@"; }
+# Editor abbreviations: typing ll or la expands to the real command so
+# the executed line and history show the actual flags.
+abbr ll 'ls -lh'
+abbr la 'ls -lAh'
 
 # Colorized grep and diff, probed and cached like ls; --color=auto
 # only emits color when stdout is a terminal.
