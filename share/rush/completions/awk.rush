@@ -1,0 +1,47 @@
+# First-party awk completion slice.
+
+complete awk --option --short h --long help --description 'show help'
+complete awk --option --long version --description 'show version'
+complete awk --option --short F --long field-separator --value-name fs --description 'input field separator'
+complete awk --option-value --short F --function __rush_complete_awk_field_separators
+complete awk --option-value --long field-separator --function __rush_complete_awk_field_separators
+complete awk --option --short f --long file --value-name program --description 'read program from file'
+complete awk --option-value --short f --function __rush_complete_awk_program_files
+complete awk --option-value --long file --function __rush_complete_awk_program_files
+complete awk --option --short v --long assign --value-name var=value --description 'assign variable'
+complete awk --option-value --short v --function __rush_complete_awk_variables
+complete awk --option-value --long assign --function __rush_complete_awk_variables
+complete awk --option --short W --value-name option --description 'implementation option'
+complete awk --option-value --short W --function __rush_complete_awk_warnings
+complete awk --argument --function __rush_complete_awk_args
+
+__rush_complete_awk_args() {
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_awk_program_files() {
+  completion files --extension .awk
+  completion files
+}
+
+__rush_complete_awk_field_separators() {
+  completion candidate , --kind plain
+  completion candidate : --kind plain
+  completion candidate '\t' --kind plain
+  completion candidate '[[:space:]]+' --kind plain
+}
+
+__rush_complete_awk_variables() {
+  completion candidate OFS= --kind variable
+  completion candidate ORS= --kind variable
+  completion candidate FS= --kind variable
+  completion candidate RS= --kind variable
+}
+
+__rush_complete_awk_warnings() {
+  completion candidate compat --kind plain
+  completion candidate lint --kind plain
+  completion candidate posix --kind plain
+  completion candidate version --kind plain
+}

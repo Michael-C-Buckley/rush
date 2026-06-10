@@ -1,0 +1,73 @@
+# First-party grep completion slice.
+
+complete grep --option --short h --long help --description 'show help'
+complete grep --option --short V --long version --description 'show version'
+complete grep --option --short E --long extended-regexp --description 'use extended regular expressions'
+complete grep --option --short F --long fixed-strings --description 'interpret patterns as fixed strings'
+complete grep --option --short G --long basic-regexp --description 'use basic regular expressions'
+complete grep --option --short P --long perl-regexp --description 'use Perl-compatible regular expressions'
+complete grep --option --short i --long ignore-case --description 'ignore case distinctions'
+complete grep --option --short v --long invert-match --description 'select non-matching lines'
+complete grep --option --short n --long line-number --description 'print line numbers'
+complete grep --option --short H --long with-filename --description 'print file names'
+complete grep --option --short h --long no-filename --description 'suppress file names'
+complete grep --option --short r --long recursive --description 'read files recursively'
+complete grep --option --short R --long dereference-recursive --description 'read files recursively following symlinks'
+complete grep --option --short l --long files-with-matches --description 'print only matching file names'
+complete grep --option --short L --long files-without-match --description 'print only non-matching file names'
+complete grep --option --short c --long count --description 'print only a count of matches'
+complete grep --option --short q --long quiet --description 'suppress normal output'
+complete grep --option --short s --long no-messages --description 'suppress error messages'
+complete grep --option --short A --long after-context --value-name num --description 'print trailing context'
+complete grep --option-value --short A --function __rush_complete_grep_counts
+complete grep --option-value --long after-context --function __rush_complete_grep_counts
+complete grep --option --short B --long before-context --value-name num --description 'print leading context'
+complete grep --option-value --short B --function __rush_complete_grep_counts
+complete grep --option-value --long before-context --function __rush_complete_grep_counts
+complete grep --option --short C --long context --value-name num --description 'print context'
+complete grep --option-value --short C --function __rush_complete_grep_counts
+complete grep --option-value --long context --function __rush_complete_grep_counts
+complete grep --option --long color --value-name when --description 'colorize matches'
+complete grep --option-value --long color --function __rush_complete_grep_when
+complete grep --option --long include --value-name glob --description 'search only matching files'
+complete grep --option-value --long include --function __rush_complete_grep_globs
+complete grep --option --long exclude --value-name glob --description 'skip matching files'
+complete grep --option-value --long exclude --function __rush_complete_grep_globs
+complete grep --option --long exclude-dir --value-name glob --description 'skip matching directories'
+complete grep --option-value --long exclude-dir --function __rush_complete_grep_dirs
+complete grep --argument --function __rush_complete_grep_args
+
+__rush_complete_grep_args() {
+  completion files
+  completion directories --append-slash
+}
+
+__rush_complete_grep_counts() {
+  completion candidate 1 --kind plain
+  completion candidate 2 --kind plain
+  completion candidate 3 --kind plain
+  completion candidate 5 --kind plain
+  completion candidate 10 --kind plain
+}
+
+__rush_complete_grep_when() {
+  completion candidate always --kind plain
+  completion candidate auto --kind plain
+  completion candidate never --kind plain
+}
+
+__rush_complete_grep_globs() {
+  completion candidate '*.c' --kind plain
+  completion candidate '*.h' --kind plain
+  completion candidate '*.js' --kind plain
+  completion candidate '*.py' --kind plain
+  completion candidate '*.zig' --kind plain
+}
+
+__rush_complete_grep_dirs() {
+  completion candidate .git --kind directory
+  completion candidate node_modules --kind directory
+  completion candidate target --kind directory
+  completion candidate zig-out --kind directory
+  completion directories --append-slash
+}
