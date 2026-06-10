@@ -3925,12 +3925,16 @@ pub const Executor = struct {
         }
 
         if (builtinForName(self.*, expanded.argv[0].text)) |builtin| {
-            const special_builtin = isSpecialBuiltin(expanded.argv[0].text);
+            const builtin_name = expanded.argv[0].text;
+            const special_builtin = isSpecialBuiltin(builtin_name);
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, special_builtin)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
                 var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
                 defer result.deinit();
+                if (options.interactive and std.mem.eql(u8, builtin_name, "exec") and result.status != 0 and self.pending_exit == null) {
+                    guard.commit(options.io.?);
+                }
                 writeInheritedResult(options.io.?, result) catch |err| switch (err) {
                     error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
                     else => return err,
@@ -10627,6 +10631,45 @@ test "exec failure does not exit interactive current shell" {
     try std.testing.expectEqual(@as(ExitStatus, 127), result.status);
     try std.testing.expectEqual(@as(?ExitStatus, null), executor.pending_exit);
     try std.testing.expectEqualStrings("definitely-not-a-rush-exec-command: command not found\n", result.stderr);
+}
+
+test "interactive exec failure preserves successful redirections" {
+    const output_path = "rush-test-interactive-exec-redirection.tmp";
+    const stderr_path = "rush-test-interactive-exec-redirection.err";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\exec 4>&2
+        \\exec definitely-not-a-rush-exec-command 3>rush-test-interactive-exec-redirection.tmp 2>rush-test-interactive-exec-redirection.err
+        \\printf ok >&3
+        \\exec 3>&-
+        \\exec 2>&4
+        \\exec 4>&-
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(?ExitStatus, null), executor.pending_exit);
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, output_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(output);
+    try std.testing.expectEqualStrings("ok", output);
+
+    const redirected_stderr = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(redirected_stderr);
+    try std.testing.expectEqualStrings("definitely-not-a-rush-exec-command: command not found\n", redirected_stderr);
 }
 
 test "executor short-circuits AND and OR lists" {
