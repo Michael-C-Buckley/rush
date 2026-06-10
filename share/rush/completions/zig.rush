@@ -16,6 +16,16 @@ complete zig --subcommand targets --description 'list available compilation targ
 
 complete 'zig build' --option --long summary --value-name mode --description 'control build summary output'
 complete 'zig build' --option-value --long summary --function __rush_complete_zig_summary_modes
+complete 'zig build' --option --long color --value-name mode --description 'control colored error messages'
+complete 'zig build' --option-value --long color --function __rush_complete_zig_color_modes
+complete 'zig build' --option --long error-style --value-name style --description 'control build error display'
+complete 'zig build' --option-value --long error-style --function __rush_complete_zig_error_styles
+complete 'zig build' --option --long multiline-errors --value-name style --description 'control multi-line error display'
+complete 'zig build' --option-value --long multiline-errors --function __rush_complete_zig_multiline_error_styles
+complete 'zig build' --option --long fetch --value-name mode --description 'fetch dependency tree and exit'
+complete 'zig build' --option-value --long fetch --function __rush_complete_zig_fetch_modes
+complete 'zig build' --option --long release --value-name mode --description 'request release mode'
+complete 'zig build' --option-value --long release --function __rush_complete_zig_release_modes
 complete 'zig build' --option --long prefix --value-name path --description 'install prefix'
 complete 'zig build' --option-value --long prefix --function __rush_complete_zig_directories
 complete 'zig build' --option --long prefix-exe-dir --value-name dir --description 'install executable directory'
@@ -79,7 +89,38 @@ __rush_complete_zig_summary_modes() {
   completion candidate all --kind plain
   completion candidate new --kind plain
   completion candidate failures --kind plain
+  completion candidate line --kind plain
   completion candidate none --kind plain
+}
+
+__rush_complete_zig_color_modes() {
+  completion candidate auto --kind plain
+  completion candidate off --kind plain
+  completion candidate on --kind plain
+}
+
+__rush_complete_zig_error_styles() {
+  completion candidate verbose --kind plain
+  completion candidate minimal --kind plain
+  completion candidate verbose_clear --kind plain
+  completion candidate minimal_clear --kind plain
+}
+
+__rush_complete_zig_multiline_error_styles() {
+  completion candidate indent --kind plain
+  completion candidate newline --kind plain
+  completion candidate none --kind plain
+}
+
+__rush_complete_zig_fetch_modes() {
+  completion candidate needed --kind plain
+  completion candidate all --kind plain
+}
+
+__rush_complete_zig_release_modes() {
+  completion candidate fast --kind plain
+  completion candidate safe --kind plain
+  completion candidate small --kind plain
 }
 
 __rush_complete_zig_test_names() {
