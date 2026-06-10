@@ -3730,6 +3730,11 @@ pub const Executor = struct {
             self.script_stdin = prior_stdin;
             self.script_stdin_offset = prior_stdin_offset;
         }
+        const call_stdin = try self.applyInputRedirections(command, "", options, &owned_stdin);
+        if (call_stdin.len != 0 or hasInputRedirection(command.redirections)) {
+            self.script_stdin = call_stdin;
+            self.script_stdin_offset = 0;
+        }
         const redirected_stdin = try self.applyCompoundInputRedirections(command.span, function_value.redirections, options, &owned_stdin);
         if (redirected_stdin) |stdin| {
             self.script_stdin = stdin;
