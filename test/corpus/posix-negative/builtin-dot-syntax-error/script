@@ -1,0 +1,3 @@
+echo "(" > bad.sh
+. ./bad.sh
+echo after

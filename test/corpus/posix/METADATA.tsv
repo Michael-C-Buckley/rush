@@ -23,6 +23,7 @@ async-wait-last-pid	job_control	job	-
 async-wait-unknown-pid	job_control	negative;job	-
 backquote-command-substitution	expansion	behavior	-
 backquote-double-quote-escaped-quote	expansion	behavior	Backslash before double-quote is removed inside a double-quoted backquote substitution
+builtin-dot-return	builtin	behavior	return in a dot script stops the script and supplies the dot exit status
 backquote-preserves-nonspecial-backslash	expansion	behavior	-
 backslash-escaped-space	expansion	behavior	-
 basic-colon	builtin	behavior	-

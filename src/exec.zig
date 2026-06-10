@@ -764,6 +764,7 @@ pub const Executor = struct {
     global_positionals: PositionalParams = .{},
     call_frames: std.ArrayList(CallFrame) = .empty,
     function_depth: usize = 0,
+    source_depth: usize = 0,
     pending_return: ?ExitStatus = null,
     loop_depth: usize = 0,
     pending_loop_control: ?LoopControl = null,
@@ -5601,7 +5602,20 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     defer self.allocator.free(contents);
     var source_options = options;
     source_options.source_path = command.argv[1].text;
-    return self.executeScriptSlice(contents, source_options);
+    self.source_depth += 1;
+    defer self.source_depth -= 1;
+    var result = self.executeScriptSlice(contents, source_options) catch |err| switch (err) {
+        error.ParseError => return sourceUsageError(self, command.argv[0].text, 2, "syntax error"),
+        else => return err,
+    };
+    errdefer result.deinit();
+    // return inside a dot script stops the script and supplies the dot
+    // utility's exit status (POSIX XCU return).
+    if (self.pending_return) |status| {
+        self.pending_return = null;
+        result.status = status;
+    }
+    return result;
 }
 
 fn sourceUsageError(self: *Executor, name: []const u8, status: ExitStatus, message: []const u8) !CommandResult {
@@ -6155,7 +6169,15 @@ fn builtinEval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         if (index > 0) try script.append(self.allocator, ' ');
         try script.appendSlice(self.allocator, arg.text);
     }
-    return self.executeScriptSlice(script.items, options);
+    return self.executeScriptSlice(script.items, options) catch |err| switch (err) {
+        error.ParseError => blk: {
+            // eval is a special builtin: a syntax error in the constructed
+            // command stops the non-interactive shell (POSIX XCU 2.8.1).
+            self.pending_exit = 2;
+            break :blk try errorResult(self.allocator, 2, "eval", "syntax error");
+        },
+        else => err,
+    };
 }
 
 fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -7855,7 +7877,7 @@ fn formatCpuTime(allocator: std.mem.Allocator, centiseconds: u64) ![]u8 {
 fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (self.function_depth == 0) return returnUsageError(self, "not in a function");
+    if (self.function_depth == 0 and self.source_depth == 0) return returnUsageError(self, "not in a function or dot script");
     if (command.argv.len > 2) return returnUsageError(self, "too many arguments");
     const status: ExitStatus = if (command.argv.len == 2) blk: {
         const parsed = std.fmt.parseInt(u8, command.argv[1].text, 10) catch return returnUsageError(self, "numeric argument required");
