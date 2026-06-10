@@ -914,6 +914,7 @@ pub const Executor = struct {
     command_substitution_status: ?ExitStatus = null,
     script_stdin: ?[]const u8 = null,
     script_stdin_offset: usize = 0,
+    script_stdin_file: ?std.Io.File = null,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         var executor: Executor = .{ .allocator = allocator };
@@ -2392,6 +2393,8 @@ pub const Executor = struct {
         try child.resetCaughtTrapsForSubshell();
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(options.io.?);
         const redirections = try self.expandRedirections(subshell.redirections, options);
         defer self.freeRedirections(redirections);
         const wrapper: ir.SimpleCommand = .{
@@ -2400,10 +2403,15 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = redirections,
         };
-        const redirected_stdin = try self.applyInputRedirections(wrapper, "", options, &owned_stdin);
-        if (redirected_stdin.len != 0 or hasInputRedirection(redirections)) {
+        const redirected_stdin = try self.applyInputRedirections(wrapper, "", options, &owned_stdin, &stdin_file);
+        if (stdin_file) |file| {
+            child.script_stdin = null;
+            child.script_stdin_offset = 0;
+            child.script_stdin_file = file;
+        } else if (redirected_stdin.len != 0 or hasInputRedirection(redirections)) {
             child.script_stdin = redirected_stdin;
             child.script_stdin_offset = 0;
+            child.script_stdin_file = null;
         }
         if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
             error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
@@ -2428,11 +2436,15 @@ pub const Executor = struct {
     fn executeBraceGroup(self: *Executor, group: ir.BraceGroup, options: ExecuteOptions) !CommandResult {
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(options.io.?);
         const prior_stdin = self.script_stdin;
         const prior_stdin_offset = self.script_stdin_offset;
+        const prior_stdin_file = self.script_stdin_file;
         defer {
             self.script_stdin = prior_stdin;
             self.script_stdin_offset = prior_stdin_offset;
+            self.script_stdin_file = prior_stdin_file;
         }
         const redirections = try self.expandRedirections(group.redirections, options);
         defer self.freeRedirections(redirections);
@@ -2442,10 +2454,15 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = redirections,
         };
-        const redirected_stdin = try self.applyInputRedirections(wrapper, "", options, &owned_stdin);
-        if (redirected_stdin.len != 0 or hasInputRedirection(redirections)) {
+        const redirected_stdin = try self.applyInputRedirections(wrapper, "", options, &owned_stdin, &stdin_file);
+        if (stdin_file) |file| {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = file;
+        } else if (redirected_stdin.len != 0 or hasInputRedirection(redirections)) {
             self.script_stdin = redirected_stdin;
             self.script_stdin_offset = 0;
+            self.script_stdin_file = null;
         }
         if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
             error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
@@ -2503,6 +2520,7 @@ pub const Executor = struct {
         self.last_completion_context = other.last_completion_context;
         self.script_stdin = other.script_stdin;
         self.script_stdin_offset = other.script_stdin_offset;
+        self.script_stdin_file = other.script_stdin_file;
         var env_iter = other.env.iterator();
         while (env_iter.next()) |entry| try self.setEnv(entry.key_ptr.*, entry.value_ptr.*);
         var exported_iter = other.exported.iterator();
@@ -2921,16 +2939,25 @@ pub const Executor = struct {
     fn executeCaseCommand(self: *Executor, command: ir.CaseCommand, options: ExecuteOptions) !CommandResult {
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(options.io.?);
         const prior_stdin = self.script_stdin;
         const prior_stdin_offset = self.script_stdin_offset;
+        const prior_stdin_file = self.script_stdin_file;
         defer {
             self.script_stdin = prior_stdin;
             self.script_stdin_offset = prior_stdin_offset;
+            self.script_stdin_file = prior_stdin_file;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin);
-        if (redirected_stdin) |stdin| {
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file);
+        if (stdin_file) |file| {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = file;
+        } else if (redirected_stdin) |stdin| {
             self.script_stdin = stdin;
             self.script_stdin_offset = 0;
+            self.script_stdin_file = null;
         }
         var execution_options = options;
         if (command.redirections.len != 0) execution_options.external_stdio = .capture;
@@ -2976,16 +3003,25 @@ pub const Executor = struct {
         defer self.loop_depth -= 1;
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(options.io.?);
         const prior_stdin = self.script_stdin;
         const prior_stdin_offset = self.script_stdin_offset;
+        const prior_stdin_file = self.script_stdin_file;
         defer {
             self.script_stdin = prior_stdin;
             self.script_stdin_offset = prior_stdin_offset;
+            self.script_stdin_file = prior_stdin_file;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin);
-        if (redirected_stdin) |stdin| {
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file);
+        if (stdin_file) |file| {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = file;
+        } else if (redirected_stdin) |stdin| {
             self.script_stdin = stdin;
             self.script_stdin_offset = 0;
+            self.script_stdin_file = null;
         }
         var execution_options = options;
         if (command.redirections.len != 0) execution_options.external_stdio = .capture;
@@ -3044,16 +3080,25 @@ pub const Executor = struct {
         defer self.loop_depth -= 1;
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(options.io.?);
         const prior_stdin = self.script_stdin;
         const prior_stdin_offset = self.script_stdin_offset;
+        const prior_stdin_file = self.script_stdin_file;
         defer {
             self.script_stdin = prior_stdin;
             self.script_stdin_offset = prior_stdin_offset;
+            self.script_stdin_file = prior_stdin_file;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin);
-        if (redirected_stdin) |stdin| {
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file);
+        if (stdin_file) |file| {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = file;
+        } else if (redirected_stdin) |stdin| {
             self.script_stdin = stdin;
             self.script_stdin_offset = 0;
+            self.script_stdin_file = null;
         }
         var execution_options = options;
         if (command.redirections.len != 0) execution_options.external_stdio = .capture;
@@ -3099,7 +3144,7 @@ pub const Executor = struct {
         return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
-    fn applyCompoundInputRedirections(self: *Executor, span: parser.Span, redirections: []const ir.Redirection, options: ExecuteOptions, owned_stdin: *?[]u8) !?[]const u8 {
+    fn applyCompoundInputRedirections(self: *Executor, span: parser.Span, redirections: []const ir.Redirection, options: ExecuteOptions, owned_stdin: *?[]u8, stdin_file: *?std.Io.File) !?[]const u8 {
         if (redirections.len == 0) return null;
         if (!hasInputRedirection(redirections)) return null;
         const expanded_redirections = try self.expandRedirections(redirections, options);
@@ -3110,7 +3155,7 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = expanded_redirections,
         };
-        return try self.applyInputRedirections(wrapper, "", options, owned_stdin);
+        return try self.applyInputRedirections(wrapper, "", options, owned_stdin, stdin_file);
     }
 
     fn applyCompoundOutputRedirections(self: *Executor, span: parser.Span, redirections: []const ir.Redirection, result: CommandResult, options: ExecuteOptions) !CommandResult {
@@ -3137,6 +3182,33 @@ pub const Executor = struct {
         return false;
     }
 
+    const ScriptStdinGuard = struct {
+        executor: *Executor,
+        prior_stdin: ?[]const u8,
+        prior_stdin_offset: usize,
+        prior_stdin_file: ?std.Io.File,
+
+        fn restore(self: ScriptStdinGuard) void {
+            self.executor.script_stdin = self.prior_stdin;
+            self.executor.script_stdin_offset = self.prior_stdin_offset;
+            self.executor.script_stdin_file = self.prior_stdin_file;
+        }
+    };
+
+    fn pushScriptStdin(self: *Executor, stdin: []const u8, stdin_file: ?std.Io.File, force_bytes: bool) ?ScriptStdinGuard {
+        if (stdin_file == null and stdin.len == 0 and !force_bytes) return null;
+        const guard: ScriptStdinGuard = .{
+            .executor = self,
+            .prior_stdin = self.script_stdin,
+            .prior_stdin_offset = self.script_stdin_offset,
+            .prior_stdin_file = self.script_stdin_file,
+        };
+        self.script_stdin = if (stdin_file == null) stdin else null;
+        self.script_stdin_offset = 0;
+        self.script_stdin_file = stdin_file;
+        return guard;
+    }
+
     fn consumeLoopControl(self: *Executor) ?LoopControlKind {
         const control = self.pending_loop_control orelse return null;
         if (control.levels <= 1) {
@@ -3150,16 +3222,25 @@ pub const Executor = struct {
     fn executeIfCommand(self: *Executor, command: ir.IfCommand, options: ExecuteOptions) !CommandResult {
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(options.io.?);
         const prior_stdin = self.script_stdin;
         const prior_stdin_offset = self.script_stdin_offset;
+        const prior_stdin_file = self.script_stdin_file;
         defer {
             self.script_stdin = prior_stdin;
             self.script_stdin_offset = prior_stdin_offset;
+            self.script_stdin_file = prior_stdin_file;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin);
-        if (redirected_stdin) |stdin| {
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file);
+        if (stdin_file) |file| {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = file;
+        } else if (redirected_stdin) |stdin| {
             self.script_stdin = stdin;
             self.script_stdin_offset = 0;
+            self.script_stdin_file = null;
         }
         var execution_options = options;
         if (command.redirections.len != 0) execution_options.external_stdio = .capture;
@@ -4126,11 +4207,14 @@ pub const Executor = struct {
         const executor = context.executor;
         const prior_stdin = executor.script_stdin;
         const prior_stdin_offset = executor.script_stdin_offset;
+        const prior_stdin_file = executor.script_stdin_file;
         executor.script_stdin = stdin_bytes;
         executor.script_stdin_offset = 0;
+        executor.script_stdin_file = null;
         defer {
             executor.script_stdin = prior_stdin;
             executor.script_stdin_offset = prior_stdin_offset;
+            executor.script_stdin_file = prior_stdin_file;
         }
 
         var result = try context.executor.executeSimpleCommandWithInput(context.command, stdin_bytes, stage_options);
@@ -4306,8 +4390,10 @@ pub const Executor = struct {
 
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(options.io.?);
         const input_special_builtin = expanded.argv.len > 0 and isSpecialBuiltin(expanded.argv[0].text);
-        const effective_stdin = self.applyInputRedirections(expanded, stdin, options, &owned_stdin) catch |err| return self.redirectionErrorResult(expanded, err, input_special_builtin);
+        const effective_stdin = self.applyInputRedirections(expanded, stdin, options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(expanded, err, input_special_builtin);
 
         if (expanded.argv.len == 0) {
             self.applyAssignments(expanded.assignments) catch |err| switch (err) {
@@ -4347,7 +4433,10 @@ pub const Executor = struct {
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, special_builtin)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
-                var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
+                const redirected_stdin_file: ?std.Io.File = if (hasInputRedirection(expanded.redirections)) std.Io.File.stdin() else stdin_file;
+                const stdin_guard = self.pushScriptStdin(effective_stdin, redirected_stdin_file, hasInputRedirection(expanded.redirections) or stdin.len != 0);
+                defer if (stdin_guard) |script_guard| script_guard.restore();
+                var result = try self.executeBuiltinWithAssignments(builtin, expanded, "", options);
                 defer result.deinit();
                 if (options.interactive and std.mem.eql(u8, builtin_name, "exec") and result.status != 0 and self.pending_exit == null) {
                     guard.commit(options.io.?);
@@ -4358,7 +4447,9 @@ pub const Executor = struct {
                 };
                 return emptyResult(self.allocator, result.status);
             }
-            return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options), options, special_builtin);
+            const stdin_guard = self.pushScriptStdin(effective_stdin, stdin_file, hasInputRedirection(expanded.redirections) or stdin.len != 0);
+            defer if (stdin_guard) |script_guard| script_guard.restore();
+            return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, "", options), options, special_builtin);
         }
 
         if (!options.allow_external) {
@@ -4469,21 +4560,35 @@ pub const Executor = struct {
         defer assignment_scope.restore();
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(options.io.?);
         const prior_stdin = self.script_stdin;
         const prior_stdin_offset = self.script_stdin_offset;
+        const prior_stdin_file = self.script_stdin_file;
         defer {
             self.script_stdin = prior_stdin;
             self.script_stdin_offset = prior_stdin_offset;
+            self.script_stdin_file = prior_stdin_file;
         }
-        const call_stdin = try self.applyInputRedirections(command, "", options, &owned_stdin);
-        if (call_stdin.len != 0 or hasInputRedirection(command.redirections)) {
+        const call_stdin = try self.applyInputRedirections(command, "", options, &owned_stdin, &stdin_file);
+        if (stdin_file) |file| {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = file;
+        } else if (call_stdin.len != 0 or hasInputRedirection(command.redirections)) {
             self.script_stdin = call_stdin;
             self.script_stdin_offset = 0;
+            self.script_stdin_file = null;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, function_value.redirections, options, &owned_stdin);
-        if (redirected_stdin) |stdin| {
+        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, function_value.redirections, options, &owned_stdin, &stdin_file);
+        if (stdin_file) |file| {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = file;
+        } else if (redirected_stdin) |stdin| {
             self.script_stdin = stdin;
             self.script_stdin_offset = 0;
+            self.script_stdin_file = null;
         }
         var execution_options = options;
         if (function_value.redirections.len != 0) execution_options.external_stdio = .capture;
@@ -4766,6 +4871,7 @@ pub const Executor = struct {
         if (substitution_context.executor.remainingScriptStdin()) |stdin| {
             child.script_stdin = stdin;
             child.script_stdin_offset = 0;
+            child.script_stdin_file = null;
         }
         if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
         if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
@@ -4974,11 +5080,18 @@ pub const Executor = struct {
         return true;
     }
 
-    fn applyInputRedirections(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, owned_stdin: *?[]u8) ![]const u8 {
+    fn applyInputRedirections(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, owned_stdin: *?[]u8, stdin_file: *?std.Io.File) ![]const u8 {
         var current = stdin;
         for (command.redirections) |redirection| {
             if (isHereDocRedirection(redirection)) {
-                if (owned_stdin.*) |bytes| self.allocator.free(bytes);
+                if (stdin_file.*) |file| {
+                    file.close(options.io orelse return error.MissingIoForRedirection);
+                    stdin_file.* = null;
+                }
+                if (owned_stdin.*) |bytes| {
+                    self.allocator.free(bytes);
+                    owned_stdin.* = null;
+                }
                 owned_stdin.* = try self.allocator.dupe(u8, redirection.here_doc orelse "");
                 current = owned_stdin.*.?;
                 continue;
@@ -4986,13 +5099,16 @@ pub const Executor = struct {
             if (!isStdinFileRedirection(redirection)) continue;
             const io = options.io orelse return error.MissingIoForRedirection;
             const target = redirection.target orelse continue;
-            if (owned_stdin.*) |bytes| self.allocator.free(bytes);
-            if (redirection.operator == .less_great) {
-                var file = try openReadWriteRedirectionFile(io, target.text);
-                file.close(io);
+            if (owned_stdin.*) |bytes| {
+                self.allocator.free(bytes);
+                owned_stdin.* = null;
             }
-            owned_stdin.* = try std.Io.Dir.cwd().readFileAlloc(io, target.text, self.allocator, .limited(1024 * 1024));
-            current = owned_stdin.*.?;
+            if (stdin_file.*) |file| file.close(io);
+            stdin_file.* = if (redirection.operator == .less_great)
+                try openReadWriteRedirectionFile(io, target.text)
+            else
+                try std.Io.Dir.cwd().openFile(io, target.text, .{});
+            current = "";
         }
         return current;
     }
@@ -5391,6 +5507,10 @@ pub const Executor = struct {
         return script_stdin[self.script_stdin_offset..];
     }
 
+    fn remainingScriptStdinFile(self: Executor) ?std.Io.File {
+        return self.script_stdin_file;
+    }
+
     fn executeExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions, fallback_stdin: ?[]const u8) !CommandResult {
         const argv = try argvForCommand(self.allocator, command);
         defer self.allocator.free(argv);
@@ -5513,6 +5633,8 @@ pub const Executor = struct {
             if (fallback_stdin) |stdin| {
                 stdin_file = try fileFromBytes(io, stdin);
                 self.script_stdin_offset = (self.script_stdin orelse unreachable).len;
+            } else if (self.remainingScriptStdinFile()) |file| {
+                stdin_file = try dupFile(file);
             }
         }
 
@@ -7720,7 +7842,8 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     }
 
     const names = command.argv[arg_start..];
-    const read_input = nextReadInput(self, stdin);
+    const read_input = try nextReadInput(self, stdin);
+    defer read_input.deinit(self.allocator);
     const status = read_input.status;
     const raw_line = read_input.line;
     const line = if (raw_mode) try self.allocator.dupe(u8, raw_line) else try unescapeReadLine(self.allocator, raw_line);
@@ -7749,10 +7872,17 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 const ReadInput = struct {
     line: []const u8,
     status: ExitStatus,
+
+    owned: ?[]u8 = null,
+
+    fn deinit(self: ReadInput, allocator: std.mem.Allocator) void {
+        if (self.owned) |bytes| allocator.free(bytes);
+    }
 };
 
-fn nextReadInput(self: *Executor, stdin: []const u8) ReadInput {
+fn nextReadInput(self: *Executor, stdin: []const u8) !ReadInput {
     if (stdin.len != 0) return readInputFromSlice(stdin);
+    if (self.script_stdin_file) |file| return try readInputFromFile(self, file);
     const script_stdin = self.script_stdin orelse return .{ .line = "", .status = 1 };
     if (self.script_stdin_offset >= script_stdin.len) return .{ .line = "", .status = 1 };
     const remaining = script_stdin[self.script_stdin_offset..];
@@ -7760,6 +7890,24 @@ fn nextReadInput(self: *Executor, stdin: []const u8) ReadInput {
     const status: ExitStatus = if (line_end < remaining.len) 0 else 1;
     self.script_stdin_offset += @min(line_end + 1, remaining.len);
     return .{ .line = trimReadCarriageReturn(remaining[0..line_end]), .status = status };
+}
+
+fn readInputFromFile(self: *Executor, file: std.Io.File) !ReadInput {
+    var line: std.ArrayList(u8) = .empty;
+    errdefer line.deinit(self.allocator);
+    var byte: [1]u8 = undefined;
+    while (true) {
+        const read_len = try std.posix.read(file.handle, &byte);
+        if (read_len == 0) {
+            const owned = try line.toOwnedSlice(self.allocator);
+            return .{ .line = trimReadCarriageReturn(owned), .status = 1, .owned = owned };
+        }
+        if (byte[0] == '\n') {
+            const owned = try line.toOwnedSlice(self.allocator);
+            return .{ .line = trimReadCarriageReturn(owned), .status = 0, .owned = owned };
+        }
+        try line.append(self.allocator, byte[0]);
+    }
 }
 
 fn readInputFromSlice(stdin: []const u8) ReadInput {
@@ -11662,6 +11810,35 @@ test "executor redirects stdin from files for builtins" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("from file\n", result.stdout);
+}
+
+test "executor streams large stdin redirections for builtins and compound commands" {
+    const path = "rush-test-large-stdin-redirection.tmp";
+    var input: std.ArrayList(u8) = .empty;
+    defer input.deinit(std.testing.allocator);
+    try input.appendSlice(std.testing.allocator, "first line\n");
+    try input.appendNTimes(std.testing.allocator, 'x', 1024 * 1024 + 1);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = input.items });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\read builtin < rush-test-large-stdin-redirection.tmp
+        \\f() { read function; echo "function:$function"; }
+        \\echo "builtin:$builtin"
+        \\f < rush-test-large-stdin-redirection.tmp
+        \\{ read group; echo "group:$group"; } < rush-test-large-stdin-redirection.tmp
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("builtin:first line\nfunction:first line\ngroup:first line\n", result.stdout);
 }
 
 test "executor redirects stdout to files" {
