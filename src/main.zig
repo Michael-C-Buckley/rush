@@ -1241,6 +1241,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
             else => |e| return e,
         };
+        defer allocator.free(prompt);
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
         try terminal.reportCurrentDirectory(cwd_buffer[0..cwd_len], history.hostname);
@@ -1270,7 +1271,6 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .diagnostic_context = &completion_context,
             .diagnose = diagnoseInteractiveLine,
         });
-        allocator.free(prompt);
         try syncInteractiveTerminalSize(&executor, terminal);
         const line = switch (read_result) {
             .submitted => |line| line,
