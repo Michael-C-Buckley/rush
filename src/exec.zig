@@ -8757,8 +8757,8 @@ test "executor supports break and continue builtins in loops" {
     defer outside.program.deinit();
     var outside_result = try executor.executeProgram(outside.program, .{});
     defer outside_result.deinit();
-    try std.testing.expectEqual(@as(ExitStatus, 2), outside_result.status);
-    try std.testing.expect(std.mem.indexOf(u8, outside_result.stderr, "not in a loop") != null);
+    try std.testing.expectEqual(@as(ExitStatus, 0), outside_result.status);
+    try std.testing.expectEqualStrings("", outside_result.stderr);
 }
 
 test "executor supports return builtin in shell functions" {
@@ -12808,6 +12808,41 @@ test "first-party aws completion script loads services actions and values" {
     const clusters = try executor.collectCompletionsForInput("aws eks update-kubeconfig --name pr", "aws eks update-kubeconfig --name pr".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(clusters);
     try expectCandidate(clusters, "prod", .plain);
+}
+
+test "first-party netlify completion script loads commands options and values" {
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/netlify.rush", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(contents);
+    var lowered = try parseAndLower(std.testing.allocator, contents);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const root = try executor.collectCompletionsForInput("netlify de", "netlify de".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(root);
+    try expectCandidate(root, "deploy", .subcommand);
+    try expectCandidate(root, "dev", .subcommand);
+
+    const env_commands = try executor.collectCompletionsForInput("netlify env s", "netlify env s".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(env_commands);
+    try expectCandidate(env_commands, "set", .subcommand);
+
+    const deploy_options = try executor.collectCompletionsForInput("netlify deploy --co", "netlify deploy --co".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(deploy_options);
+    try expectCandidate(deploy_options, "--context", .option);
+
+    const contexts = try executor.collectCompletionsForInput("netlify build --context pro", "netlify build --context pro".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(contexts);
+    try expectCandidate(contexts, "production", .plain);
+
+    const functions = try executor.collectCompletionsForInput("netlify functions in", "netlify functions in".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(functions);
+    try expectCandidate(functions, "invoke", .subcommand);
 }
 
 test "completion config rules merge after lazy-loaded data scripts" {

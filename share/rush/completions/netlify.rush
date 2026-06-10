@@ -1,0 +1,114 @@
+# First-party Netlify CLI completion slice.
+
+complete netlify --option --short h --long help --description 'show help'
+complete netlify --option --short v --long version --description 'show version'
+complete netlify --option --short d --long debug --description 'print debugging information'
+complete netlify --option --long auth --value-name token --description 'Netlify auth token'
+complete netlify --option --long site --value-name site --description 'site ID or name'
+complete netlify --option-value --long site --function __rush_complete_netlify_sites
+complete netlify --option --long context --value-name context --description 'deploy context'
+complete netlify --option-value --long context --function __rush_complete_netlify_contexts
+complete netlify --subcommand deploy --description 'deploy the site'
+complete netlify --subcommand dev --description 'run local development server'
+complete netlify --subcommand build --description 'run a Netlify build locally'
+complete netlify --subcommand open --description 'open Netlify pages in a browser'
+complete netlify --subcommand link --description 'link a local directory to a site'
+complete netlify --subcommand env --description 'manage environment variables'
+complete netlify --subcommand sites --description 'manage sites'
+complete netlify --subcommand functions --description 'manage functions'
+complete netlify --subcommand status --description 'show account and site status'
+complete netlify --subcommand login --description 'log in to Netlify'
+complete netlify --subcommand logout --description 'log out of Netlify'
+
+complete 'netlify deploy' --option --long prod --description 'deploy to production'
+complete 'netlify deploy' --option --long alias --value-name alias --description 'deploy alias'
+complete 'netlify deploy' --option --long dir --value-name directory --description 'directory to deploy'
+complete 'netlify deploy' --option-value --long dir --function __rush_complete_netlify_directories
+complete 'netlify deploy' --option --long functions --value-name directory --description 'functions directory'
+complete 'netlify deploy' --option-value --long functions --function __rush_complete_netlify_directories
+complete 'netlify deploy' --option --long message --value-name message --description 'deploy message'
+complete 'netlify deploy' --option --long site --value-name site --description 'site ID or name'
+complete 'netlify deploy' --option-value --long site --function __rush_complete_netlify_sites
+complete 'netlify deploy' --option --long context --value-name context --description 'deploy context'
+complete 'netlify deploy' --option-value --long context --function __rush_complete_netlify_contexts
+
+complete 'netlify dev' --option --long command --value-name command --description 'framework dev command'
+complete 'netlify dev' --option --long port --value-name port --description 'local server port'
+complete 'netlify dev' --option --long target-port --value-name port --description 'target app server port'
+complete 'netlify dev' --option --long dir --value-name directory --description 'project directory'
+complete 'netlify dev' --option-value --long dir --function __rush_complete_netlify_directories
+complete 'netlify dev' --option --long functions --value-name directory --description 'functions directory'
+complete 'netlify dev' --option-value --long functions --function __rush_complete_netlify_directories
+complete 'netlify dev' --option --long live --description 'share local dev server'
+
+complete 'netlify build' --option --long context --value-name context --description 'build context'
+complete 'netlify build' --option-value --long context --function __rush_complete_netlify_contexts
+complete 'netlify build' --option --long offline --description 'run build without network calls'
+complete 'netlify build' --option --long dry --description 'dry run build'
+
+complete 'netlify open' --subcommand admin --description 'open site admin'
+complete 'netlify open' --subcommand site --description 'open published site'
+complete 'netlify open' --subcommand deploy --description 'open deploy details'
+complete 'netlify open' --subcommand functions --description 'open functions page'
+
+complete 'netlify link' --option --long id --value-name site --description 'site ID'
+complete 'netlify link' --option-value --long id --function __rush_complete_netlify_sites
+complete 'netlify link' --option --long name --value-name site --description 'site name'
+complete 'netlify link' --option-value --long name --function __rush_complete_netlify_sites
+
+complete 'netlify env' --subcommand get --description 'get an environment variable'
+complete 'netlify env' --subcommand set --description 'set an environment variable'
+complete 'netlify env' --subcommand unset --description 'unset an environment variable'
+complete 'netlify env' --subcommand list --description 'list environment variables'
+complete 'netlify env' --subcommand import --description 'import variables from a file'
+complete 'netlify env get' --argument --function __rush_complete_netlify_env_vars
+complete 'netlify env set' --argument --function __rush_complete_netlify_env_vars
+complete 'netlify env unset' --argument --function __rush_complete_netlify_env_vars
+complete 'netlify env import' --argument --function __rush_complete_netlify_env_files
+
+complete 'netlify sites' --subcommand list --description 'list sites'
+complete 'netlify sites' --subcommand create --description 'create a site'
+complete 'netlify sites' --subcommand delete --description 'delete a site'
+complete 'netlify sites' --subcommand open --description 'open a site'
+complete 'netlify sites delete' --argument --function __rush_complete_netlify_sites
+complete 'netlify sites open' --argument --function __rush_complete_netlify_sites
+
+complete 'netlify functions' --subcommand list --description 'list functions'
+complete 'netlify functions' --subcommand invoke --description 'invoke a function'
+complete 'netlify functions' --subcommand serve --description 'serve functions locally'
+complete 'netlify functions' --subcommand build --description 'build functions'
+complete 'netlify functions invoke' --argument --function __rush_complete_netlify_functions
+complete 'netlify functions serve' --option --long port --value-name port --description 'functions server port'
+complete 'netlify functions build' --option --long src --value-name directory --description 'source directory'
+complete 'netlify functions build' --option-value --long src --function __rush_complete_netlify_directories
+
+__rush_complete_netlify_sites() {
+  netlify sites:list --json 2>/dev/null | awk -F'"' '/"name"|"id"/ { print $4 }' | while read site; do test -n "$site" && completion candidate "$site" --kind plain; done
+  awk -F'=' '/^[[:space:]]*site_id[[:space:]]*=/{ gsub(/[ \042\047]/, "", $2); print $2 }' .netlify/state.json netlify.toml 2>/dev/null | while read site; do test -n "$site" && completion candidate "$site" --kind plain; done
+}
+
+__rush_complete_netlify_contexts() {
+  completion candidate production --kind plain
+  completion candidate deploy-preview --kind plain
+  completion candidate branch-deploy --kind plain
+  completion candidate dev --kind plain
+  awk -F'[][]' '/^\[context\./ { print $2 }' netlify.toml 2>/dev/null | sed 's/^context\.//' | while read context; do test -n "$context" && completion candidate "$context" --kind plain; done
+}
+
+__rush_complete_netlify_functions() {
+  find netlify/functions functions -maxdepth 1 -type f 2>/dev/null | sed 's#.*/##; s/\.[^.]*$//' | while read function_name; do test -n "$function_name" && completion candidate "$function_name" --kind plain; done
+}
+
+__rush_complete_netlify_env_vars() {
+  netlify env:list --plain 2>/dev/null | awk -F'=' '{ print $1 }' | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+  awk -F'=' '/^[A-Za-z_][A-Za-z0-9_]*=/{ print $1 }' .env .env.local .env.development .env.production 2>/dev/null | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+}
+
+__rush_complete_netlify_env_files() {
+  completion files --extension .env
+  find . -maxdepth 2 -type f -name '.env*' 2>/dev/null | while read file; do completion candidate "$file" --kind file; done
+}
+
+__rush_complete_netlify_directories() {
+  completion directories --append-slash
+}
