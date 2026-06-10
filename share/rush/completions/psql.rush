@@ -1,0 +1,70 @@
+# First-party psql completion slice.
+
+complete psql --option --short '?' --long help --description 'show help'
+complete psql --option --short V --long version --description 'show version'
+complete psql --option --short h --long host --value-name host --description 'database server host'
+complete psql --option-value --short h --function __rush_complete_psql_hosts
+complete psql --option-value --long host --function __rush_complete_psql_hosts
+complete psql --option --short p --long port --value-name port --description 'database server port'
+complete psql --option-value --short p --function __rush_complete_psql_ports
+complete psql --option-value --long port --function __rush_complete_psql_ports
+complete psql --option --short U --long username --value-name user --description 'database user name'
+complete psql --option-value --short U --function __rush_complete_psql_users
+complete psql --option-value --long username --function __rush_complete_psql_users
+complete psql --option --short d --long dbname --value-name database --description 'database name'
+complete psql --option-value --short d --function __rush_complete_psql_databases
+complete psql --option-value --long dbname --function __rush_complete_psql_databases
+complete psql --option --short c --long command --value-name command --description 'run SQL command'
+complete psql --option --short f --long file --value-name file --description 'execute SQL file'
+complete psql --option-value --short f --function __rush_complete_psql_sql_files
+complete psql --option-value --long file --function __rush_complete_psql_sql_files
+complete psql --option --short A --long no-align --description 'unaligned table output mode'
+complete psql --option --short t --long tuples-only --description 'print rows only'
+complete psql --option --short x --long expanded --description 'turn on expanded output'
+complete psql --option --short q --long quiet --description 'run quietly'
+complete psql --option --short X --long no-psqlrc --description 'do not read startup file'
+complete psql --option --short 1 --long single-transaction --description 'execute as single transaction'
+complete psql --option --short v --long set --value-name name=value --description 'set psql variable'
+complete psql --option --short P --long pset --value-name name=value --description 'set printing option'
+complete psql --option-value --short P --function __rush_complete_psql_pset
+complete psql --option-value --long pset --function __rush_complete_psql_pset
+complete psql --argument --function __rush_complete_psql_databases
+
+__rush_complete_psql_hosts() {
+  completion candidate localhost --kind plain
+  completion candidate 127.0.0.1 --kind plain
+  completion candidate ::1 --kind plain
+  awk '/^[[:space:]]*host[[:space:]]*=/{ print $3 }' "$HOME/.pg_service.conf" 2>/dev/null | while read host; do test -n "$host" && completion candidate "$host" --kind plain; done
+}
+
+__rush_complete_psql_ports() {
+  completion candidate 5432 --kind plain
+  completion candidate 5433 --kind plain
+}
+
+__rush_complete_psql_users() {
+  psql -Atqc 'select rolname from pg_catalog.pg_roles' postgres 2>/dev/null | while read role; do test -n "$role" && completion candidate "$role" --kind plain; done
+  id -un 2>/dev/null | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+  completion candidate postgres --kind plain
+}
+
+__rush_complete_psql_databases() {
+  psql -Atqc 'select datname from pg_catalog.pg_database where datallowconn order by datname' postgres 2>/dev/null | while read db; do test -n "$db" && completion candidate "$db" --kind plain; done
+  completion candidate postgres --kind plain
+  completion candidate template1 --kind plain
+}
+
+__rush_complete_psql_sql_files() {
+  find . -maxdepth 3 -type f \( -name '*.sql' -o -name '*.psql' \) 2>/dev/null | while read file; do completion candidate "$file" --kind file; done
+}
+
+__rush_complete_psql_pset() {
+  completion candidate format=aligned --kind plain
+  completion candidate format=csv --kind plain
+  completion candidate format=html --kind plain
+  completion candidate format=latex --kind plain
+  completion candidate border=0 --kind plain
+  completion candidate border=1 --kind plain
+  completion candidate pager=off --kind plain
+  completion candidate null=NULL --kind plain
+}

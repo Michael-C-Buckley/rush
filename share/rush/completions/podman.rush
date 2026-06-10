@@ -1,0 +1,100 @@
+# First-party podman completion slice.
+
+complete podman --option --short h --long help --description 'show help'
+complete podman --option --short v --long version --description 'show version'
+complete podman --option --long log-level --value-name level --description 'log level'
+complete podman --option-value --long log-level --function __rush_complete_podman_log_levels
+complete podman --option --long connection --value-name name --description 'remote connection name'
+complete podman --option-value --long connection --function __rush_complete_podman_connections
+complete podman --subcommand build --description 'build an image'
+complete podman --subcommand compose --description 'run Compose workloads'
+complete podman --subcommand container --description 'manage containers'
+complete podman --subcommand exec --description 'run command in a container'
+complete podman --subcommand images --description 'list images'
+complete podman --subcommand image --description 'manage images'
+complete podman --subcommand inspect --description 'inspect object'
+complete podman --subcommand logs --description 'fetch container logs'
+complete podman --subcommand network --description 'manage networks'
+complete podman --subcommand pod --description 'manage pods'
+complete podman --subcommand ps --description 'list containers'
+complete podman --subcommand pull --description 'pull image'
+complete podman --subcommand push --description 'push image'
+complete podman --subcommand rm --description 'remove containers'
+complete podman --subcommand rmi --description 'remove images'
+complete podman --subcommand run --description 'run container'
+complete podman --subcommand start --description 'start containers'
+complete podman --subcommand stop --description 'stop containers'
+complete podman --subcommand volume --description 'manage volumes'
+complete 'podman build' --option --short f --long file --value-name file --description 'containerfile path'
+complete 'podman build' --option --short t --long tag --value-name name --description 'image tag'
+complete 'podman build' --option --long build-arg --value-name name=value --description 'build argument'
+complete 'podman build' --argument --function __rush_complete_podman_build_contexts
+complete 'podman run' --option --short d --long detach --description 'run in background'
+complete 'podman run' --option --short i --long interactive --description 'keep STDIN open'
+complete 'podman run' --option --short t --long tty --description 'allocate TTY'
+complete 'podman run' --option --short e --long env --value-name name=value --description 'set environment variable'
+complete 'podman run' --option --short p --long publish --value-name port --description 'publish port'
+complete 'podman run' --option --short v --long volume --value-name volume --description 'bind mount or volume'
+complete 'podman run' --option --long name --value-name name --description 'assign container name'
+complete 'podman run' --option --long rm --description 'remove after exit'
+complete 'podman run' --argument --function __rush_complete_podman_images
+complete 'podman exec' --option --short i --long interactive --description 'keep STDIN open'
+complete 'podman exec' --option --short t --long tty --description 'allocate TTY'
+complete 'podman exec' --argument --function __rush_complete_podman_running_containers
+complete 'podman logs' --option --short f --long follow --description 'follow logs'
+complete 'podman logs' --option --long tail --value-name lines --description 'number of lines'
+complete 'podman logs' --argument --function __rush_complete_podman_containers
+complete 'podman start' --argument --function __rush_complete_podman_stopped_containers
+complete 'podman stop' --argument --function __rush_complete_podman_running_containers
+complete 'podman rm' --argument --function __rush_complete_podman_containers
+complete 'podman rmi' --argument --function __rush_complete_podman_images
+complete 'podman inspect' --argument --function __rush_complete_podman_objects
+complete 'podman pull' --argument --function __rush_complete_podman_image_names
+
+__rush_complete_podman_containers() {
+  podman ps -a --format '{{.Names}}' 2>/dev/null | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+}
+
+__rush_complete_podman_running_containers() {
+  podman ps --format '{{.Names}}' 2>/dev/null | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+}
+
+__rush_complete_podman_stopped_containers() {
+  podman ps -a --filter status=exited --format '{{.Names}}' 2>/dev/null | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+}
+
+__rush_complete_podman_images() {
+  podman images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -v '<none>' | while read image; do test -n "$image" && completion candidate "$image" --kind plain; done
+}
+
+__rush_complete_podman_objects() {
+  __rush_complete_podman_containers
+  __rush_complete_podman_images
+}
+
+__rush_complete_podman_image_names() {
+  completion candidate alpine --kind plain
+  completion candidate debian --kind plain
+  completion candidate ubuntu --kind plain
+  completion candidate docker.io/library/alpine --kind plain
+  completion candidate quay.io/podman/hello --kind plain
+}
+
+__rush_complete_podman_build_contexts() {
+  find . -maxdepth 3 -type f \( -name Containerfile -o -name Dockerfile \) 2>/dev/null | while read file; do dirname "$file"; done | sort -u | while read dir; do completion candidate "$dir" --kind directory; done
+  completion candidate . --kind directory
+}
+
+__rush_complete_podman_connections() {
+  podman system connection list --format '{{.Name}}' 2>/dev/null | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+}
+
+__rush_complete_podman_log_levels() {
+  completion candidate panic --kind plain
+  completion candidate fatal --kind plain
+  completion candidate error --kind plain
+  completion candidate warn --kind plain
+  completion candidate info --kind plain
+  completion candidate debug --kind plain
+  completion candidate trace --kind plain
+}

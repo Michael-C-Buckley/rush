@@ -1,0 +1,193 @@
+# First-party 1Password CLI completion slice.
+
+complete op --option --short h --long help --description 'show help'
+complete op --option --long version --description 'show version'
+complete op --option --long account --value-name account --description '1Password account shorthand or sign-in address'
+complete op --option-value --long account --function __rush_complete_op_accounts
+complete op --subcommand account --description 'manage accounts'
+complete op --subcommand connect --description 'manage Connect servers'
+complete op --subcommand document --description 'manage documents'
+complete op --subcommand events-api --description 'manage Events API integrations'
+complete op --subcommand group --description 'manage groups'
+complete op --subcommand item --description 'manage items'
+complete op --subcommand plugin --description 'manage shell plugins'
+complete op --subcommand read --description 'read a secret reference'
+complete op --subcommand run --description 'run command with secrets injected'
+complete op --subcommand service-account --description 'manage service accounts'
+complete op --subcommand signin --description 'sign in to an account'
+complete op --subcommand signout --description 'sign out of accounts'
+complete op --subcommand user --description 'manage users'
+complete op --subcommand vault --description 'manage vaults'
+complete op --subcommand whoami --description 'show signed-in account details'
+
+complete 'op account' --subcommand add --description 'add account'
+complete 'op account' --subcommand forget --description 'forget account'
+complete 'op account' --subcommand get --description 'get account details'
+complete 'op account' --subcommand list --description 'list accounts'
+complete 'op account forget' --argument --function __rush_complete_op_accounts
+complete 'op account get' --argument --function __rush_complete_op_accounts
+
+complete 'op item' --subcommand create --description 'create item'
+complete 'op item' --subcommand delete --description 'delete item'
+complete 'op item' --subcommand edit --description 'edit item'
+complete 'op item' --subcommand get --description 'get item'
+complete 'op item' --subcommand list --description 'list items'
+complete 'op item' --subcommand move --description 'move item'
+complete 'op item' --subcommand share --description 'share item'
+complete 'op item create' --option --long category --value-name category --description 'item category'
+complete 'op item create' --option-value --long category --function __rush_complete_op_item_categories
+complete 'op item create' --option --long template --value-name template --description 'item template'
+complete 'op item create' --option-value --long template --function __rush_complete_op_templates
+complete 'op item create' --option --long vault --value-name vault --description 'target vault'
+complete 'op item create' --option-value --long vault --function __rush_complete_op_vaults
+complete 'op item get' --option --long vault --value-name vault --description 'vault containing item'
+complete 'op item get' --option-value --long vault --function __rush_complete_op_vaults
+complete 'op item get' --option --long format --value-name format --description 'output format'
+complete 'op item get' --option-value --long format --function __rush_complete_op_formats
+complete 'op item get' --argument --function __rush_complete_op_items
+complete 'op item edit' --option --long vault --value-name vault --description 'vault containing item'
+complete 'op item edit' --option-value --long vault --function __rush_complete_op_vaults
+complete 'op item edit' --argument --function __rush_complete_op_items
+complete 'op item delete' --option --long vault --value-name vault --description 'vault containing item'
+complete 'op item delete' --option-value --long vault --function __rush_complete_op_vaults
+complete 'op item delete' --argument --function __rush_complete_op_items
+complete 'op item list' --option --long vault --value-name vault --description 'filter by vault'
+complete 'op item list' --option-value --long vault --function __rush_complete_op_vaults
+complete 'op item list' --option --long categories --value-name categories --description 'filter by category'
+complete 'op item list' --option-value --long categories --function __rush_complete_op_item_categories
+
+complete 'op vault' --subcommand create --description 'create vault'
+complete 'op vault' --subcommand delete --description 'delete vault'
+complete 'op vault' --subcommand edit --description 'edit vault'
+complete 'op vault' --subcommand get --description 'get vault'
+complete 'op vault' --subcommand list --description 'list vaults'
+complete 'op vault get' --argument --function __rush_complete_op_vaults
+complete 'op vault edit' --argument --function __rush_complete_op_vaults
+complete 'op vault delete' --argument --function __rush_complete_op_vaults
+
+complete 'op user' --subcommand confirm --description 'confirm user'
+complete 'op user' --subcommand delete --description 'delete user'
+complete 'op user' --subcommand edit --description 'edit user'
+complete 'op user' --subcommand get --description 'get user'
+complete 'op user' --subcommand list --description 'list users'
+complete 'op user' --subcommand provision --description 'provision user'
+complete 'op user get' --argument --function __rush_complete_op_users
+complete 'op user edit' --argument --function __rush_complete_op_users
+complete 'op user delete' --argument --function __rush_complete_op_users
+complete 'op user confirm' --argument --function __rush_complete_op_users
+
+complete 'op group' --subcommand create --description 'create group'
+complete 'op group' --subcommand delete --description 'delete group'
+complete 'op group' --subcommand edit --description 'edit group'
+complete 'op group' --subcommand get --description 'get group'
+complete 'op group' --subcommand list --description 'list groups'
+complete 'op group' --subcommand user --description 'manage group users'
+complete 'op group get' --argument --function __rush_complete_op_groups
+complete 'op group edit' --argument --function __rush_complete_op_groups
+complete 'op group delete' --argument --function __rush_complete_op_groups
+complete 'op group user' --subcommand grant --description 'grant group access to user'
+complete 'op group user' --subcommand revoke --description 'revoke group access from user'
+complete 'op group user grant' --option --long user --value-name user --description 'target user'
+complete 'op group user grant' --option-value --long user --function __rush_complete_op_users
+complete 'op group user grant' --argument --function __rush_complete_op_groups
+complete 'op group user revoke' --option --long user --value-name user --description 'target user'
+complete 'op group user revoke' --option-value --long user --function __rush_complete_op_users
+complete 'op group user revoke' --argument --function __rush_complete_op_groups
+
+complete 'op document' --subcommand create --description 'create document'
+complete 'op document' --subcommand delete --description 'delete document'
+complete 'op document' --subcommand edit --description 'edit document'
+complete 'op document' --subcommand get --description 'get document'
+complete 'op document' --subcommand list --description 'list documents'
+complete 'op document create' --option --long vault --value-name vault --description 'target vault'
+complete 'op document create' --option-value --long vault --function __rush_complete_op_vaults
+complete 'op document create' --argument --function __rush_complete_op_local_files
+complete 'op document get' --option --long vault --value-name vault --description 'vault containing document'
+complete 'op document get' --option-value --long vault --function __rush_complete_op_vaults
+complete 'op document get' --argument --function __rush_complete_op_documents
+complete 'op document edit' --argument --function __rush_complete_op_documents
+complete 'op document delete' --argument --function __rush_complete_op_documents
+
+complete 'op read' --argument --function __rush_complete_op_secret_refs
+complete 'op run' --option --long env-file --value-name file --description 'load environment file'
+complete 'op run' --option-value --long env-file --function __rush_complete_op_env_files
+complete 'op run' --option --long no-masking --description 'do not mask secrets in output'
+complete 'op signin' --argument --function __rush_complete_op_accounts
+complete 'op signout' --argument --function __rush_complete_op_accounts
+
+complete 'op plugin' --subcommand init --description 'initialize shell plugin'
+complete 'op plugin' --subcommand inspect --description 'inspect shell plugin'
+complete 'op plugin' --subcommand list --description 'list shell plugins'
+complete 'op plugin' --subcommand run --description 'run shell plugin command'
+complete 'op plugin' --subcommand set --description 'set plugin credential'
+complete 'op plugin' --subcommand unset --description 'unset plugin credential'
+complete 'op plugin inspect' --argument --function __rush_complete_op_plugins
+complete 'op plugin run' --argument --function __rush_complete_op_plugins
+complete 'op plugin set' --argument --function __rush_complete_op_plugins
+complete 'op plugin unset' --argument --function __rush_complete_op_plugins
+
+__rush_complete_op_accounts() {
+  op account list --format json 2>/dev/null | awk -F'"' '/"shorthand"/ { print $4 } /"url"/ { print $4 }' | while read account; do test -n "$account" && completion candidate "$account" --kind plain; done
+}
+
+__rush_complete_op_vaults() {
+  op vault list --format json 2>/dev/null | awk -F'"' '/"name"/ { print $4 }' | while read vault; do test -n "$vault" && completion candidate "$vault" --kind plain; done
+  completion candidate Private --kind plain
+  completion candidate Shared --kind plain
+}
+
+__rush_complete_op_items() {
+  op item list --format json 2>/dev/null | awk -F'"' '/"title"/ { print $4 }' | while read item; do test -n "$item" && completion candidate "$item" --kind plain; done
+}
+
+__rush_complete_op_documents() {
+  op document list --format json 2>/dev/null | awk -F'"' '/"title"/ { print $4 }' | while read doc; do test -n "$doc" && completion candidate "$doc" --kind plain; done
+}
+
+__rush_complete_op_users() {
+  op user list --format json 2>/dev/null | awk -F'"' '/"email"/ { print $4 } /"name"/ { print $4 }' | while read user; do test -n "$user" && completion candidate "$user" --kind plain; done
+}
+
+__rush_complete_op_groups() {
+  op group list --format json 2>/dev/null | awk -F'"' '/"name"/ { print $4 }' | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+}
+
+__rush_complete_op_templates() {
+  op item template list --format json 2>/dev/null | awk -F'"' '/"name"/ { print $4 }' | while read template; do test -n "$template" && completion candidate "$template" --kind plain; done
+}
+
+__rush_complete_op_plugins() {
+  op plugin list 2>/dev/null | awk 'NR > 1 { print $1 }' | while read plugin; do test -n "$plugin" && completion candidate "$plugin" --kind plain; done
+}
+
+__rush_complete_op_secret_refs() {
+  op item list --format json 2>/dev/null | awk -F'"' '/"title"/ { print "op://Private/" $4 "/password" }' | while read ref; do test -n "$ref" && completion candidate "$ref" --kind plain; done
+  completion candidate op://Private/item/field --kind plain
+  completion candidate op://Shared/item/field --kind plain
+}
+
+__rush_complete_op_local_files() {
+  find . -maxdepth 3 -type f 2>/dev/null | while read file; do completion candidate "$file" --kind file; done
+}
+
+__rush_complete_op_env_files() {
+  find . -maxdepth 3 -type f \( -name '.env' -o -name '.env.*' -o -name '*.env' \) 2>/dev/null | while read file; do completion candidate "$file" --kind file; done
+}
+
+__rush_complete_op_item_categories() {
+  completion candidate login --kind plain
+  completion candidate secure-note --kind plain
+  completion candidate credit-card --kind plain
+  completion candidate identity --kind plain
+  completion candidate password --kind plain
+  completion candidate document --kind plain
+  completion candidate api-credential --kind plain
+  completion candidate ssh-key --kind plain
+  completion candidate database --kind plain
+  completion candidate server --kind plain
+}
+
+__rush_complete_op_formats() {
+  completion candidate human-readable --kind plain
+  completion candidate json --kind plain
+}
