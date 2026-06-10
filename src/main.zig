@@ -2661,18 +2661,18 @@ test "aliases do not replace reserved words or function definition names" {
 
 test "repl expands aliases defined on previous input lines" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
-        \\alias ll='echo alias-ok'
-        \\ll
-        \\alias ll
-        \\unalias ll
-        \\ll
+        \\alias lsx='echo alias-ok'
+        \\lsx
+        \\alias lsx
+        \\unalias lsx
+        \\lsx
         \\exit
     );
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
-    try std.testing.expectEqualStrings("$ $ alias-ok\n$ alias ll='echo alias-ok'\n$ $ $ ", result.stdout);
-    try std.testing.expectEqualStrings("ll: command not found\n", result.stderr);
+    try std.testing.expectEqualStrings("$ $ alias-ok\n$ alias lsx='echo alias-ok'\n$ $ $ ", result.stdout);
+    try std.testing.expectEqualStrings("lsx: command not found\n", result.stderr);
 }
 
 test "aliases recursively expand and trailing blanks keep command position" {

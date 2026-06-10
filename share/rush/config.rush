@@ -26,6 +26,41 @@ ls() {
   fi
 }
 
+ll() { ls -lh "$@"; }
+la() { ls -lAh "$@"; }
+
+# Colorized grep and diff, probed and cached like ls; --color=auto
+# only emits color when stdout is a terminal.
+grep() {
+  if test -z "$rush_grep_color_opt"; then
+    if echo x | command grep --color=auto x >/dev/null 2>&1; then
+      rush_grep_color_opt='--color=auto'
+    else
+      rush_grep_color_opt='none'
+    fi
+  fi
+  if test "$rush_grep_color_opt" = none; then
+    command grep "$@"
+  else
+    command grep "$rush_grep_color_opt" "$@"
+  fi
+}
+
+diff() {
+  if test -z "$rush_diff_color_opt"; then
+    if command diff --color=auto /dev/null /dev/null >/dev/null 2>&1; then
+      rush_diff_color_opt='--color=auto'
+    else
+      rush_diff_color_opt='none'
+    fi
+  fi
+  if test "$rush_diff_color_opt" = none; then
+    command diff "$@"
+  else
+    command diff "$rush_diff_color_opt" "$@"
+  fi
+}
+
 # Git portion of the default prompt: branch, a • marker when the
 # worktree is dirty, and arrows with commit counts against the
 # upstream. Runs in a hidden async refresh so git never blocks

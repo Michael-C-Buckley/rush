@@ -75,7 +75,7 @@
 
   <p>User paths fall back to <span class="var">$HOME</span><code>/.config/rush/</code> when <span class="var">$XDG_CONFIG_HOME</span> is unset. <span class="var">$sysconfdir</span> is fixed at build time: it defaults to <code>etc</code> inside the install prefix, and packagers set it to <code>/etc</code> with <code>zig build -Dsysconfdir=/etc</code>.</p>
 
-  <p>The embedded defaults define the <a href="#prompt">default prompt</a> and an <code>ls</code> function that adds a color flag (<code>--color=auto</code> or <code>-G</code>, probed once per session) when the system <code>ls</code> supports one. Redefine or <code>unset -f</code> either in a later file to opt out.</p>
+  <p>The embedded defaults define the <a href="#prompt">default prompt</a>, colorized <code>ls</code>, <code>grep</code>, and <code>diff</code> functions (color flags are probed once per session and only colorize terminals), and <code>ll</code> and <code>la</code> listing shortcuts. Redefine or <code>unset -f</code> any of them in a later file to opt out.</p>
 
   <h2 id="abbreviations"><a href="#abbreviations">Abbreviations</a></h2>
 
