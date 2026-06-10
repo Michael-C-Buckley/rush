@@ -69,7 +69,10 @@ diff() {
 # the prompt.
 rush_prompt_git() {
   branch="$(git branch --show-current 2>/dev/null)"
-  test -n "$branch" || return 0
+  if test -z "$branch"; then
+    branch="$(git rev-parse --short HEAD 2>/dev/null)"
+    test -n "$branch" || return 0
+  fi
 
   marker=''
   test -z "$(git status --porcelain 2>/dev/null)" || marker='•'
