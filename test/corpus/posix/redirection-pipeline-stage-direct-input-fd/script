@@ -1,0 +1,2 @@
+printf 'via-direct-pipe3\n' >in
+/bin/sh -c 'cat <&3' 3<in | /bin/cat

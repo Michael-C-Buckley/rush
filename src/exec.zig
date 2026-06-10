@@ -3465,6 +3465,30 @@ pub const Executor = struct {
         }
     };
 
+    fn movePipelineReservedFdHandles(redirections: []const ir.Redirection, pipes: []PipelinePipe, capture_stdout: *PipelinePipe, capture_stderr: *PipelinePipe, io: std.Io) !void {
+        for (redirections) |redirection| {
+            const fd = redirectionChildFd(redirection) orelse continue;
+            if (fd <= 2) continue;
+            for (pipes) |*pipe| try movePipelinePipeFdHandle(pipe, io, fd);
+            try movePipelinePipeFdHandle(capture_stdout, io, fd);
+            try movePipelinePipeFdHandle(capture_stderr, io, fd);
+        }
+    }
+
+    fn redirectionChildFd(redirection: ir.Redirection) ?std.posix.fd_t {
+        if (redirectionOpensFd(redirection)) |fd| return fd;
+        return switch (redirection.operator) {
+            .less_and => redirectionFd(redirection) orelse 0,
+            .greater_and => redirectionFd(redirection) orelse 1,
+            else => null,
+        };
+    }
+
+    fn movePipelinePipeFdHandle(pipe: *PipelinePipe, io: std.Io, fd: std.posix.fd_t) !void {
+        try movePipelineStageFileHandle(&pipe.read, io, fd);
+        try movePipelineStageFileHandle(&pipe.write, io, fd);
+    }
+
     const BuiltinPipelineContext = struct {
         executor: *Executor,
         command: ir.SimpleCommand,
@@ -3520,6 +3544,7 @@ pub const Executor = struct {
             try checkCanceled(options);
             const command = program.commands[command_index];
             const is_last = index + 1 == pipeline.command_indexes.len;
+            const is_builtin_stage = builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null;
             // With inherited stdio the last stage writes to the shell's own
             // stdout and stderr like other shells, so output streams and the
             // stage sees a tty; capture only when the shell consumes it.
@@ -3527,7 +3552,10 @@ pub const Executor = struct {
             var stdin_file: ?std.Io.File = if (index == 0) null else takeRead(&pipes[index - 1]);
             var stdout_file: ?std.Io.File = if (!is_last) takeWrite(&pipes[index]) else if (inherit_output) try dupStdioFile(1) else takeWrite(&capture_stdout);
             var stderr_file: ?std.Io.File = if (!is_last) null else if (inherit_output) try dupStdioFile(2) else takeWrite(&capture_stderr);
-            self.applyPipelineStageRedirections(io, command, options, &stdin_file, &stdout_file, &stderr_file) catch |err| {
+            var inherited_redirections = if (is_builtin_stage) null else try FdRedirectionGuard.init(self.allocator, io);
+            defer if (inherited_redirections) |*guard| guard.restore(self, io);
+            if (!is_builtin_stage) try movePipelineReservedFdHandles(command.redirections, pipes, &capture_stdout, &capture_stderr, io);
+            self.applyPipelineStageRedirections(io, command, options, &stdin_file, &stdout_file, &stderr_file, if (inherited_redirections) |*guard| guard else null) catch |err| {
                 // A redirection error fails this stage with a diagnostic
                 // while the other pipeline stages still run (POSIX 2.8.1
                 // treats it as a utility redirection error).
@@ -3546,7 +3574,7 @@ pub const Executor = struct {
                 .redirections = &.{},
             };
 
-            if (builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
+            if (is_builtin_stage) {
                 const context = try self.allocator.create(BuiltinPipelineContext);
                 errdefer self.allocator.destroy(context);
                 context.* = .{
@@ -3589,6 +3617,7 @@ pub const Executor = struct {
                     },
                     else => return err,
                 };
+                inherited_redirections.?.restore(self, io);
                 cancel_pids[spawned] = registerCancelableChild(options, children[spawned]);
                 child_stage_indexes[spawned] = index;
                 spawned += 1;
@@ -3673,6 +3702,7 @@ pub const Executor = struct {
         stdin_file: *?std.Io.File,
         stdout_file: *?std.Io.File,
         stderr_file: *?std.Io.File,
+        inherited_redirections: ?*FdRedirectionGuard,
     ) !void {
         const redirections = try self.expandRedirections(command.redirections, options);
         defer self.freeRedirections(redirections);
@@ -3688,6 +3718,18 @@ pub const Executor = struct {
         for (redirections) |redirection| {
             if (redirection.operator == .dless or redirection.operator == .dless_dash) {
                 const fd = redirectionFd(redirection) orelse 0;
+                if (fd > 2) if (inherited_redirections) |guard| {
+                    var inherited_file = try fileFromBytes(io, redirection.here_doc orelse "");
+                    var close_inherited_file = true;
+                    errdefer if (close_inherited_file) inherited_file.close(io);
+                    const guard_owns_file = try self.applyPipelineInheritedFile(&input_fds, stdin_file, stdout_file, stderr_file, guard, io, fd, inherited_file);
+                    if (guard_owns_file) {
+                        close_inherited_file = false;
+                    } else {
+                        inherited_file.close(io);
+                        close_inherited_file = false;
+                    }
+                };
                 const file = try fileFromBytes(io, redirection.here_doc orelse "");
                 if (fd == 0) {
                     if (stdin_file.*) |old| old.close(io);
@@ -3700,6 +3742,21 @@ pub const Executor = struct {
             if (redirection.operator == .less or redirection.operator == .less_great) {
                 const target = redirection.target orelse continue;
                 const fd = redirectionFd(redirection) orelse 0;
+                if (fd > 2) if (inherited_redirections) |guard| {
+                    var inherited_file = if (redirection.operator == .less_great)
+                        try openReadWriteRedirectionFile(io, target.text)
+                    else
+                        try std.Io.Dir.cwd().openFile(io, target.text, .{});
+                    var close_inherited_file = true;
+                    errdefer if (close_inherited_file) inherited_file.close(io);
+                    const guard_owns_file = try self.applyPipelineInheritedFile(&input_fds, stdin_file, stdout_file, stderr_file, guard, io, fd, inherited_file);
+                    if (guard_owns_file) {
+                        close_inherited_file = false;
+                    } else {
+                        inherited_file.close(io);
+                        close_inherited_file = false;
+                    }
+                };
                 const file = if (redirection.operator == .less_great)
                     try openReadWriteRedirectionFile(io, target.text)
                 else
@@ -3716,6 +3773,7 @@ pub const Executor = struct {
                 const from_fd = redirectionFd(redirection) orelse 0;
                 const target = redirection.target orelse continue;
                 if (std.mem.eql(u8, target.text, "-")) {
+                    if (from_fd > 2) if (inherited_redirections) |guard| try self.closePipelineInheritedFd(&input_fds, stdin_file, stdout_file, stderr_file, guard, io, from_fd);
                     if (from_fd == 0) {
                         if (stdin_file.*) |file| file.close(io);
                         stdin_file.* = null;
@@ -3730,13 +3788,39 @@ pub const Executor = struct {
                     if (stdin_file.*) |old| old.close(io);
                     stdin_file.* = file;
                 } else {
-                    try self.putPipelineInputFd(&input_fds, io, from_fd, file);
+                    if (from_fd > 2) if (inherited_redirections) |guard| {
+                        var close_file = true;
+                        errdefer if (close_file) file.close(io);
+                        const guard_owns_file = try self.applyPipelineInheritedFile(&input_fds, stdin_file, stdout_file, stderr_file, guard, io, from_fd, file);
+                        if (guard_owns_file) close_file = false;
+                        const stored_file = try dupFileExcept(file, from_fd);
+                        if (!guard_owns_file) {
+                            file.close(io);
+                            close_file = false;
+                        }
+                        try self.putPipelineInputFd(&input_fds, io, from_fd, stored_file);
+                    } else {
+                        try self.putPipelineInputFd(&input_fds, io, from_fd, file);
+                    };
                 }
                 continue;
             }
             if (isFileOutputRedirection(redirection)) {
                 const target = redirection.target orelse continue;
                 const fd = redirectionFd(redirection) orelse 1;
+                if (fd > 2) if (inherited_redirections) |guard| {
+                    var inherited_file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
+                    var close_inherited_file = true;
+                    errdefer if (close_inherited_file) inherited_file.close(io);
+                    const guard_owns_file = try self.applyPipelineInheritedFile(&input_fds, stdin_file, stdout_file, stderr_file, guard, io, fd, inherited_file);
+                    if (guard_owns_file) {
+                        close_inherited_file = false;
+                    } else {
+                        inherited_file.close(io);
+                        close_inherited_file = false;
+                    }
+                    continue;
+                };
                 const file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
                 switch (fd) {
                     1 => {
@@ -3750,6 +3834,76 @@ pub const Executor = struct {
                     else => file.close(io),
                 }
             }
+        }
+    }
+
+    fn applyPipelineInheritedFile(
+        self: *Executor,
+        input_fds: *std.AutoHashMapUnmanaged(std.posix.fd_t, std.Io.File),
+        stdin_file: *?std.Io.File,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        guard: *FdRedirectionGuard,
+        io: std.Io,
+        fd: std.posix.fd_t,
+        file: std.Io.File,
+    ) !bool {
+        try movePipelineStageFdHandles(input_fds, stdin_file, stdout_file, stderr_file, io, fd);
+        try guard.saveFd(self, fd);
+        if (file.handle == fd) {
+            const duplicate = try rawDup(file.handle);
+            defer closeRawFd(io, duplicate);
+            try rawDup2(duplicate, fd);
+            try self.markShellFdOpen(fd);
+            return true;
+        }
+        try rawDup2(file.handle, fd);
+        try self.markShellFdOpen(fd);
+        return false;
+    }
+
+    fn closePipelineInheritedFd(
+        self: *Executor,
+        input_fds: *std.AutoHashMapUnmanaged(std.posix.fd_t, std.Io.File),
+        stdin_file: *?std.Io.File,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        guard: *FdRedirectionGuard,
+        io: std.Io,
+        fd: std.posix.fd_t,
+    ) !void {
+        try movePipelineStageFdHandles(input_fds, stdin_file, stdout_file, stderr_file, io, fd);
+        try guard.saveFd(self, fd);
+        closeRawFd(io, fd);
+        self.markShellFdClosed(fd);
+    }
+
+    fn movePipelineStageFdHandles(
+        input_fds: *std.AutoHashMapUnmanaged(std.posix.fd_t, std.Io.File),
+        stdin_file: *?std.Io.File,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        io: std.Io,
+        fd: std.posix.fd_t,
+    ) !void {
+        try movePipelineStageFileHandle(stdin_file, io, fd);
+        try movePipelineStageFileHandle(stdout_file, io, fd);
+        try movePipelineStageFileHandle(stderr_file, io, fd);
+        var iter = input_fds.valueIterator();
+        while (iter.next()) |file| {
+            if (file.handle != fd) continue;
+            const moved = try dupFile(file.*);
+            file.close(io);
+            file.* = moved;
+        }
+    }
+
+    fn movePipelineStageFileHandle(file: *?std.Io.File, io: std.Io, fd: std.posix.fd_t) !void {
+        if (file.*) |current| {
+            if (current.handle != fd) return;
+            const moved = try dupFile(current);
+            current.close(io);
+            file.* = moved;
         }
     }
 
@@ -5543,6 +5697,17 @@ fn filesFromPipeFds(fds: [2]std.posix.fd_t) Executor.PipelinePipe {
 
 fn dupFile(file: std.Io.File) !std.Io.File {
     return .{ .handle = try rawDup(file.handle), .flags = file.flags };
+}
+
+fn dupFileExcept(file: std.Io.File, excluded_fd: std.posix.fd_t) !std.Io.File {
+    const first = try rawDup(file.handle);
+    if (first != excluded_fd) return .{ .handle = first, .flags = file.flags };
+    const second = rawDup(first) catch |err| {
+        rawClose(first) catch {};
+        return err;
+    };
+    rawClose(first) catch {};
+    return .{ .handle = second, .flags = file.flags };
 }
 
 /// Duplicates one of the shell's own stdio descriptors so a pipeline
@@ -11687,6 +11852,17 @@ test "executor supports real redirections on pipeline stages" {
     defer input_fd_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), input_fd_result.status);
     try std.testing.expectEqualStrings("from-input-fd", input_fd_result.stdout);
+
+    const direct_input_fd_path = "rush-pipeline-stage-direct-input-fd.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, direct_input_fd_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = direct_input_fd_path, .data = "from-direct-input-fd" });
+    var direct_input_fd = try parseAndLower(std.testing.allocator, "/bin/sh -c 'cat <&3' 3<rush-pipeline-stage-direct-input-fd.tmp | /bin/cat");
+    defer direct_input_fd.parsed.deinit();
+    defer direct_input_fd.program.deinit();
+    var direct_input_fd_result = try executor.executeProgram(direct_input_fd.program, .{ .io = std.testing.io, .allow_external = true });
+    defer direct_input_fd_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), direct_input_fd_result.status);
+    try std.testing.expectEqualStrings("from-direct-input-fd", direct_input_fd_result.stdout);
 }
 
 test "executor supports mixed builtin and external pipeline stages" {
