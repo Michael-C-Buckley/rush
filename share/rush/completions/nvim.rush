@@ -85,3 +85,22 @@ __rush_complete_nvim_servers() {
   completion candidate 127.0.0.1:6666 --kind plain --description 'TCP localhost example'
   completion files
 }
+
+# Dynamic overlays for local Neovim command/socket state.
+__rush_complete_nvim_commands() {
+  nvim --headless '+redir! => g:rush_cmds | silent command | redir END | put=g:rush_cmds | %print | qall!' 2>/dev/null | awk 'NF { print $1 }' | while read command; do test -n "$command" && completion candidate "$command" --kind plain; done
+  completion candidate edit --kind plain
+  completion candidate help --kind plain
+  completion candidate qall --kind plain
+  completion candidate quit --kind plain
+  completion candidate source --kind plain
+  completion candidate tabedit --kind plain
+  completion candidate terminal --kind plain
+  completion candidate write --kind plain
+}
+
+__rush_complete_nvim_servers() {
+  find /tmp /var/folders -type s -name 'nvim*' 2>/dev/null | while read server; do test -n "$server" && completion candidate "$server" --kind plain; done
+  completion candidate 127.0.0.1:6666 --kind plain --description 'TCP localhost example'
+  completion files
+}

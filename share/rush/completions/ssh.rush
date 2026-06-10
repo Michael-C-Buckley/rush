@@ -143,3 +143,13 @@ __rush_complete_ssh_macs() {
   completion candidate hmac-sha2-256 --kind plain
   completion candidate hmac-sha2-512 --kind plain
 }
+
+# Dynamic overlays from local SSH configuration and known_hosts.
+__rush_complete_ssh_hosts() {
+  sed -n 's/^[Hh][Oo][Ss][Tt][[:space:]]\{1,\}\([^*? !][^ ]*\).*/\1/p' ~/.ssh/config 2>/dev/null | while read host; do test -n "$host" && completion candidate "$host" --kind plain; done
+  sed 's/[, ].*//' ~/.ssh/known_hosts 2>/dev/null | sed 's/^\[//; s/\]:[0-9]*$//' | while read host; do test -n "$host" && completion candidate "$host" --kind plain; done
+  completion candidate host --kind plain
+  completion candidate host.example.com --kind plain
+  completion candidate user@host --kind plain
+  completion candidate user@host.example.com --kind plain
+}

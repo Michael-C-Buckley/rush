@@ -90,3 +90,24 @@ __rush_complete_just_directories() {
 __rush_complete_just_executables() {
   completion executables
 }
+
+# Dynamic overlays from the current justfile.
+__rush_complete_just_recipes() {
+  just --summary 2>/dev/null | tr ' ' '\n' | while read recipe; do test -n "$recipe" && completion candidate "$recipe" --kind plain; done
+  sed -n 's/^\([A-Za-z0-9_-][A-Za-z0-9_-]*\)[[:space:]]*:.*/\1/p' justfile Justfile .justfile 2>/dev/null | while read recipe; do test -n "$recipe" && completion candidate "$recipe" --kind plain; done
+  completion candidate build --kind plain
+  completion candidate check --kind plain
+  completion candidate clean --kind plain
+  completion candidate default --kind plain
+  completion candidate deploy --kind plain
+  completion candidate dev --kind plain
+  completion candidate fmt --kind plain
+  completion candidate format --kind plain
+  completion candidate install --kind plain
+  completion candidate lint --kind plain
+  completion candidate release --kind plain
+  completion candidate run --kind plain
+  completion candidate start --kind plain
+  completion candidate test --kind plain
+  completion candidate update --kind plain
+}

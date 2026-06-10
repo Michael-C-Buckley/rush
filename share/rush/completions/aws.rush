@@ -259,3 +259,78 @@ __rush_complete_aws_ecr_repositories() {
   completion candidate api --kind plain
   completion candidate worker --kind plain
 }
+
+# Dynamic overlays for AWS state. These are safe read-only AWS CLI calls and run asynchronously.
+__rush_complete_aws_profiles() {
+  aws configure list-profiles 2>/dev/null | while read profile; do test -n "$profile" && completion candidate "$profile" --kind plain; done
+  completion candidate default --kind plain
+  completion candidate dev --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+}
+
+__rush_complete_aws_regions() {
+  aws ec2 describe-regions --query 'Regions[].RegionName' --output text 2>/dev/null | tr ' 	' '\n' | while read region; do test -n "$region" && completion candidate "$region" --kind plain; done
+  completion candidate us-east-1 --kind plain
+  completion candidate us-east-2 --kind plain
+  completion candidate us-west-1 --kind plain
+  completion candidate us-west-2 --kind plain
+  completion candidate eu-west-1 --kind plain
+  completion candidate eu-central-1 --kind plain
+  completion candidate ap-southeast-1 --kind plain
+  completion candidate ap-northeast-1 --kind plain
+}
+
+__rush_complete_aws_bucket_names() {
+  aws s3api list-buckets --query 'Buckets[].Name' --output text 2>/dev/null | tr ' 	' '\n' | while read bucket; do test -n "$bucket" && completion candidate "$bucket" --kind plain; done
+  completion candidate my-bucket --kind plain
+  completion candidate project-artifacts --kind plain
+  completion candidate logs-bucket --kind plain
+}
+
+__rush_complete_aws_instance_ids() {
+  aws ec2 describe-instances --query 'Reservations[].Instances[].InstanceId' --output text 2>/dev/null | tr ' 	' '\n' | while read instance; do test -n "$instance" && completion candidate "$instance" --kind plain; done
+  completion candidate i-0123456789abcdef0 --kind plain
+  completion candidate i-0abcdef1234567890 --kind plain
+}
+
+__rush_complete_aws_role_names() {
+  aws iam list-roles --query 'Roles[].RoleName' --output text 2>/dev/null | tr ' 	' '\n' | while read role; do test -n "$role" && completion candidate "$role" --kind plain; done
+  completion candidate Admin --kind plain
+  completion candidate Deploy --kind plain
+  completion candidate ReadOnly --kind plain
+}
+
+__rush_complete_aws_role_arns() {
+  aws iam list-roles --query 'Roles[].Arn' --output text 2>/dev/null | tr ' 	' '\n' | while read arn; do test -n "$arn" && completion candidate "$arn" --kind plain; done
+  completion candidate arn:aws:iam::123456789012:role/Admin --kind plain
+  completion candidate arn:aws:iam::123456789012:role/Deploy --kind plain
+}
+
+__rush_complete_aws_log_groups() {
+  aws logs describe-log-groups --query 'logGroups[].logGroupName' --output text 2>/dev/null | tr ' 	' '\n' | while read group; do test -n "$group" && completion candidate "$group" --kind plain; done
+  completion candidate /aws/lambda/app --kind plain
+  completion candidate /ecs/app --kind plain
+  completion candidate /eks/cluster --kind plain
+}
+
+__rush_complete_aws_stack_names() {
+  aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE UPDATE_ROLLBACK_COMPLETE --query 'StackSummaries[].StackName' --output text 2>/dev/null | tr ' 	' '\n' | while read stack; do test -n "$stack" && completion candidate "$stack" --kind plain; done
+  completion candidate app --kind plain
+  completion candidate network --kind plain
+  completion candidate database --kind plain
+}
+
+__rush_complete_aws_cluster_names() {
+  aws eks list-clusters --query 'clusters[]' --output text 2>/dev/null | tr ' 	' '\n' | while read cluster; do test -n "$cluster" && completion candidate "$cluster" --kind plain; done
+  completion candidate dev --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+}
+
+__rush_complete_aws_ecr_repositories() {
+  aws ecr describe-repositories --query 'repositories[].repositoryName' --output text 2>/dev/null | tr ' 	' '\n' | while read repo; do test -n "$repo" && completion candidate "$repo" --kind plain; done
+  completion candidate app --kind plain
+  completion candidate api --kind plain
+  completion candidate worker --kind plain
+}

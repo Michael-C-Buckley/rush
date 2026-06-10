@@ -1030,3 +1030,87 @@ __rush_complete_git_maintenance_tasks() {
   completion candidate pack-refs --kind plain
   completion candidate prefetch --kind plain
 }
+
+# Async-friendly dynamic overlays for repository-aware path and ref completion.
+complete 'git add' --argument --function __rush_complete_git_changed_paths
+complete 'git commit' --argument --function __rush_complete_git_changed_paths
+complete 'git diff' --argument --function __rush_complete_git_diff_args
+complete 'git restore' --argument --function __rush_complete_git_changed_paths
+complete 'git rm' --argument --function __rush_complete_git_tracked_paths
+complete 'git reset' --argument --function __rush_complete_git_reset_args
+complete 'git checkout' --argument --function __rush_complete_git_checkout_args
+complete 'git switch' --argument --function __rush_complete_git_branches
+complete 'git push' --argument --function __rush_complete_git_push_args
+complete 'git remote set-url' --argument --function __rush_complete_git_remote_url_args
+complete 'git remote get-url' --argument --function __rush_complete_git_remotes
+complete 'git remote remove' --argument --function __rush_complete_git_remotes
+complete 'git remote rm' --argument --function __rush_complete_git_remotes
+complete 'git remote rename' --argument --function __rush_complete_git_remotes
+complete 'git branch' --option-value --long sort --function __rush_complete_git_sort_keys
+complete 'git log' --option-value --long author --function __rush_complete_git_authors
+complete 'git log' --option-value --long committer --function __rush_complete_git_authors
+complete 'git commit' --option-value --long author --function __rush_complete_git_authors
+
+__rush_complete_git_changed_paths() {
+  git status --porcelain=v1 -z 2>/dev/null | tr '\0' '\n' | sed 's/^...//' | while read path; do test -n "$path" && completion candidate "$path" --kind file; done
+  completion files
+}
+
+__rush_complete_git_tracked_paths() {
+  git ls-files 2>/dev/null | while read path; do test -n "$path" && completion candidate "$path" --kind file; done
+  completion files
+}
+
+__rush_complete_git_untracked_paths() {
+  git ls-files --others --exclude-standard 2>/dev/null | while read path; do test -n "$path" && completion candidate "$path" --kind file; done
+  completion files
+}
+
+__rush_complete_git_diff_args() {
+  __rush_complete_git_refs
+  git diff --name-only 2>/dev/null | while read path; do test -n "$path" && completion candidate "$path" --kind file; done
+  git diff --cached --name-only 2>/dev/null | while read path; do test -n "$path" && completion candidate "$path" --kind file; done
+}
+
+__rush_complete_git_reset_args() {
+  __rush_complete_git_refs
+  git diff --cached --name-only 2>/dev/null | while read path; do test -n "$path" && completion candidate "$path" --kind file; done
+}
+
+__rush_complete_git_checkout_args() {
+  __rush_complete_git_refs
+  __rush_complete_git_remote_branches
+  __rush_complete_git_changed_paths
+}
+
+__rush_complete_git_push_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_git_remotes
+  else
+    __rush_complete_git_branches
+    __rush_complete_git_tags
+  fi
+}
+
+__rush_complete_git_remote_url_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_git_remotes
+  else
+    git remote -v 2>/dev/null | awk '{ print $2 }' | while read url; do test -n "$url" && completion candidate "$url" --kind plain; done
+    completion candidate git@github.com: --kind plain
+    completion candidate https://github.com/ --kind plain
+  fi
+}
+
+__rush_complete_git_authors() {
+  git log --format='%aN <%aE>' --all 2>/dev/null | sort -u | while read author; do test -n "$author" && completion candidate "$author" --kind plain; done
+}
+
+__rush_complete_git_sort_keys() {
+  completion candidate refname --kind plain
+  completion candidate -committerdate --kind plain
+  completion candidate committerdate --kind plain
+  completion candidate authordate --kind plain
+  completion candidate -authordate --kind plain
+  completion candidate upstream --kind plain
+}
