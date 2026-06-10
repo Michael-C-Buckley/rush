@@ -1,0 +1,120 @@
+# First-party meson completion slice.
+
+complete meson --option --short h --long help --description 'show help'
+complete meson --option --long version --description 'show version'
+complete meson --subcommand setup --description 'configure a build directory'
+complete meson --subcommand compile --description 'build targets'
+complete meson --subcommand test --description 'run tests'
+complete meson --subcommand install --description 'install build outputs'
+complete meson --subcommand configure --description 'configure project options'
+complete meson --subcommand wrap --description 'manage wrap dependencies'
+complete meson --subcommand subprojects --description 'manage subprojects'
+complete meson --subcommand introspect --description 'display project information'
+complete meson --subcommand rewrite --description 'modify project definitions'
+
+complete 'meson setup' --option --long reconfigure --description 'reconfigure an existing build directory'
+complete 'meson setup' --option --long wipe --description 'wipe build directory before configuring'
+complete 'meson setup' --option --long buildtype --value-name type --description 'build type'
+complete 'meson setup' --option-value --long buildtype --function __rush_complete_meson_buildtypes
+complete 'meson setup' --option --long prefix --value-name dir --description 'installation prefix'
+complete 'meson setup' --option-value --long prefix --function __rush_complete_meson_directories
+complete 'meson setup' --option --long backend --value-name backend --description 'backend to use'
+complete 'meson setup' --option-value --long backend --function __rush_complete_meson_backends
+complete 'meson setup' --option --short D --value-name option=value --description 'set project option'
+complete 'meson setup' --option-value --short D --function __rush_complete_meson_options
+complete 'meson setup' --argument --function __rush_complete_meson_setup_args
+
+complete 'meson compile' --option --short C --value-name builddir --description 'build directory'
+complete 'meson compile' --option-value --short C --function __rush_complete_meson_builddirs
+complete 'meson compile' --option --short j --value-name jobs --description 'number of parallel jobs'
+complete 'meson compile' --option --long clean --description 'clean before building'
+complete 'meson compile' --option --long verbose --short v --description 'show commands'
+complete 'meson compile' --argument --function __rush_complete_meson_targets
+complete 'meson test' --option --short C --value-name builddir --description 'build directory'
+complete 'meson test' --option-value --short C --function __rush_complete_meson_builddirs
+complete 'meson test' --option --long suite --value-name suite --description 'test suite'
+complete 'meson test' --option-value --long suite --function __rush_complete_meson_suites
+complete 'meson test' --option --long repeat --value-name n --description 'repeat tests'
+complete 'meson test' --option --long gdb --description 'run tests under gdb'
+complete 'meson test' --argument --function __rush_complete_meson_tests
+complete 'meson install' --option --short C --value-name builddir --description 'build directory'
+complete 'meson install' --option-value --short C --function __rush_complete_meson_builddirs
+complete 'meson configure' --argument --function __rush_complete_meson_builddirs
+
+complete 'meson wrap' --subcommand install --description 'install wrap dependency'
+complete 'meson wrap' --subcommand update --description 'update wrap dependency'
+complete 'meson wrap' --subcommand list --description 'list wrap dependencies'
+complete 'meson wrap' --subcommand search --description 'search wrapdb'
+complete 'meson wrap' --subcommand promote --description 'promote subproject'
+complete 'meson subprojects' --subcommand download --description 'download subprojects'
+complete 'meson subprojects' --subcommand update --description 'update subprojects'
+complete 'meson subprojects' --subcommand foreach --description 'run command in each subproject'
+complete 'meson introspect' --argument --function __rush_complete_meson_introspection
+complete 'meson rewrite' --subcommand target --description 'modify a target'
+complete 'meson rewrite' --subcommand kwargs --description 'modify keyword arguments'
+complete 'meson rewrite' --subcommand default-options --description 'modify default options'
+
+__rush_complete_meson_setup_args() {
+  completion candidate build/ --kind directory
+  completion candidate . --kind directory
+  completion directories --append-slash
+}
+
+__rush_complete_meson_builddirs() {
+  completion candidate build/ --kind directory
+  completion candidate builddir/ --kind directory
+  completion directories --append-slash
+}
+
+__rush_complete_meson_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_meson_targets() {
+  meson introspect --targets build 2>/dev/null | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | while read target; do test -n "$target" && completion candidate "$target" --kind plain; done
+  completion candidate all --kind plain
+  completion candidate clean --kind plain
+  completion candidate install --kind plain
+}
+
+__rush_complete_meson_tests() {
+  meson introspect --tests build 2>/dev/null | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | while read test; do test -n "$test" && completion candidate "$test" --kind plain; done
+}
+
+__rush_complete_meson_suites() {
+  completion candidate project --kind plain
+  completion candidate unit --kind plain
+  completion candidate integration --kind plain
+}
+
+__rush_complete_meson_buildtypes() {
+  completion candidate plain --kind plain
+  completion candidate debug --kind plain
+  completion candidate debugoptimized --kind plain
+  completion candidate release --kind plain
+  completion candidate minsize --kind plain
+  completion candidate custom --kind plain
+}
+
+__rush_complete_meson_backends() {
+  completion candidate ninja --kind plain
+  completion candidate vs --kind plain
+  completion candidate vs2022 --kind plain
+  completion candidate xcode --kind plain
+}
+
+__rush_complete_meson_options() {
+  meson configure build 2>/dev/null | sed -n 's/^  \([A-Za-z0-9_-][A-Za-z0-9_-]*\) .*/\1=/p' | while read option; do test -n "$option" && completion candidate "$option" --kind variable; done
+  completion candidate warning_level= --kind variable
+  completion candidate werror=true --kind variable
+  completion candidate default_library=shared --kind variable
+}
+
+__rush_complete_meson_introspection() {
+  completion candidate --targets --kind plain
+  completion candidate --tests --kind plain
+  completion candidate --benchmarks --kind plain
+  completion candidate --dependencies --kind plain
+  completion candidate --projectinfo --kind plain
+  completion candidate --buildoptions --kind plain
+}

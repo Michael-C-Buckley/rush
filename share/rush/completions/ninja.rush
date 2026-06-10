@@ -1,0 +1,81 @@
+# First-party ninja completion slice.
+
+complete ninja --option --short h --long help --description 'show help'
+complete ninja --option --short version --description 'show version'
+complete ninja --option --short C --value-name dir --description 'change to directory before doing anything else'
+complete ninja --option-value --short C --function __rush_complete_ninja_directories
+complete ninja --option --short f --value-name file --description 'specify input build file'
+complete ninja --option-value --short f --function __rush_complete_ninja_build_files
+complete ninja --option --short j --value-name jobs --description 'run N jobs in parallel'
+complete ninja --option-value --short j --function __rush_complete_ninja_job_counts
+complete ninja --option --short k --value-name n --description 'keep going until N jobs fail'
+complete ninja --option-value --short k --function __rush_complete_ninja_fail_counts
+complete ninja --option --short l --value-name load --description 'do not start jobs if load average is greater than N'
+complete ninja --option --short n --description 'dry run'
+complete ninja --option --short v --description 'show all command lines'
+complete ninja --option --short d --value-name mode --description 'enable debugging mode'
+complete ninja --option-value --short d --function __rush_complete_ninja_debug_modes
+complete ninja --option --short t --value-name tool --description 'run a subtool'
+complete ninja --option-value --short t --function __rush_complete_ninja_tools
+complete ninja --option --short w --value-name warning --description 'adjust warning settings'
+complete ninja --option-value --short w --function __rush_complete_ninja_warnings
+complete ninja --argument --function __rush_complete_ninja_targets
+
+__rush_complete_ninja_targets() {
+  ninja -t targets all 2>/dev/null | sed 's/:.*//' | while read target; do test -n "$target" && completion candidate "$target" --kind plain; done
+  sed -n 's/^build \([^:]*\):.*/\1/p' build.ninja 2>/dev/null | tr ' ' '\n' | while read target; do test -n "$target" && completion candidate "$target" --kind plain; done
+  completion candidate all --kind plain
+  completion candidate clean --kind plain
+  completion candidate install --kind plain
+  completion candidate test --kind plain
+}
+
+__rush_complete_ninja_directories() {
+  completion candidate build/ --kind directory
+  completion candidate out/ --kind directory
+  completion directories --append-slash
+}
+
+__rush_complete_ninja_build_files() {
+  completion candidate build.ninja --kind file
+  completion files
+}
+
+__rush_complete_ninja_job_counts() {
+  completion candidate 2 --kind plain
+  completion candidate 4 --kind plain
+  completion candidate 8 --kind plain
+  completion candidate 16 --kind plain
+}
+
+__rush_complete_ninja_fail_counts() {
+  completion candidate 0 --kind plain
+  completion candidate 1 --kind plain
+  completion candidate 10 --kind plain
+}
+
+__rush_complete_ninja_tools() {
+  ninja -t list 2>/dev/null | awk '{ print $1 }' | while read tool; do test -n "$tool" && completion candidate "$tool" --kind plain; done
+  completion candidate browse --kind plain
+  completion candidate clean --kind plain
+  completion candidate commands --kind plain
+  completion candidate compdb --kind plain
+  completion candidate deps --kind plain
+  completion candidate graph --kind plain
+  completion candidate query --kind plain
+  completion candidate targets --kind plain
+}
+
+__rush_complete_ninja_debug_modes() {
+  completion candidate explain --kind plain
+  completion candidate keepdepfile --kind plain
+  completion candidate keeprsp --kind plain
+  completion candidate stats --kind plain
+}
+
+__rush_complete_ninja_warnings() {
+  completion candidate dupbuild=err --kind plain
+  completion candidate dupbuild=warn --kind plain
+  completion candidate phonycycle=err --kind plain
+  completion candidate phonycycle=warn --kind plain
+}
