@@ -1,0 +1,9 @@
+read first rest <<'EOF1'
+one\
+two three
+EOF1
+read -r raw <<'EOF2'
+one\
+two three
+EOF2
+printf '<%s><%s>|<%s>\n' "$first" "$rest" "$raw"

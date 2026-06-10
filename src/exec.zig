@@ -7868,7 +7868,7 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     }
 
     const names = command.argv[arg_start..];
-    const read_input = try nextReadInput(self, stdin);
+    const read_input = try nextReadInput(self, stdin, raw_mode);
     defer read_input.deinit(self.allocator);
     const status = read_input.status;
     const raw_line = read_input.line;
@@ -7905,55 +7905,99 @@ const ReadInput = struct {
     status: ExitStatus,
 
     owned: ?[]u8 = null,
+    consumed: usize = 0,
 
     fn deinit(self: ReadInput, allocator: std.mem.Allocator) void {
         if (self.owned) |bytes| allocator.free(bytes);
     }
 };
 
-fn nextReadInput(self: *Executor, stdin: []const u8) !ReadInput {
-    if (stdin.len != 0) return readInputFromSlice(stdin);
+fn nextReadInput(self: *Executor, stdin: []const u8, raw_mode: bool) !ReadInput {
+    if (stdin.len != 0) return try readInputFromSlice(self.allocator, stdin, raw_mode);
     if (pipeline_stage_stdin.active) {
-        if (pipeline_stage_stdin.file) |file| return try readInputFromFile(self, file);
+        if (pipeline_stage_stdin.file) |file| return try readInputFromFile(self, file, raw_mode);
         return .{ .line = "", .status = 1 };
     }
-    if (self.script_stdin_file) |file| return try readInputFromFile(self, file);
+    if (self.script_stdin_file) |file| return try readInputFromFile(self, file, raw_mode);
     const script_stdin = self.script_stdin orelse return .{ .line = "", .status = 1 };
     if (self.script_stdin_offset >= script_stdin.len) return .{ .line = "", .status = 1 };
     const remaining = script_stdin[self.script_stdin_offset..];
-    const line_end = std.mem.indexOfScalar(u8, remaining, '\n') orelse remaining.len;
-    const status: ExitStatus = if (line_end < remaining.len) 0 else 1;
-    self.script_stdin_offset += @min(line_end + 1, remaining.len);
-    return .{ .line = trimReadCarriageReturn(remaining[0..line_end]), .status = status };
+    const input = try readInputFromSlice(self.allocator, remaining, raw_mode);
+    self.script_stdin_offset += input.consumed;
+    return input;
 }
 
-fn readInputFromFile(self: *Executor, file: std.Io.File) !ReadInput {
+fn readInputFromFile(self: *Executor, file: std.Io.File, raw_mode: bool) !ReadInput {
     var line: std.ArrayList(u8) = .empty;
     errdefer line.deinit(self.allocator);
     var byte: [1]u8 = undefined;
     while (true) {
         const read_len = try std.posix.read(file.handle, &byte);
         if (read_len == 0) {
+            trimReadCarriageReturnInPlace(&line);
             const owned = try line.toOwnedSlice(self.allocator);
             return .{ .line = trimReadCarriageReturn(owned), .status = 1, .owned = owned };
         }
         if (byte[0] == '\n') {
+            trimReadCarriageReturnInPlace(&line);
+            if (!raw_mode and readLineContinues(line.items)) {
+                line.items.len -= 1;
+                continue;
+            }
             const owned = try line.toOwnedSlice(self.allocator);
-            return .{ .line = trimReadCarriageReturn(owned), .status = 0, .owned = owned };
+            return .{ .line = owned, .status = 0, .owned = owned };
         }
         try line.append(self.allocator, byte[0]);
     }
 }
 
-fn readInputFromSlice(stdin: []const u8) ReadInput {
-    const line_end = std.mem.indexOfScalar(u8, stdin, '\n') orelse stdin.len;
-    const status: ExitStatus = if (line_end < stdin.len) 0 else 1;
-    return .{ .line = trimReadCarriageReturn(stdin[0..line_end]), .status = status };
+fn readInputFromSlice(allocator: std.mem.Allocator, stdin: []const u8, raw_mode: bool) !ReadInput {
+    var cursor: usize = 0;
+    var logical: std.ArrayList(u8) = .empty;
+    errdefer logical.deinit(allocator);
+    var continued = false;
+    while (true) {
+        const remaining = stdin[cursor..];
+        const newline = std.mem.indexOfScalar(u8, remaining, '\n');
+        const line_end = newline orelse remaining.len;
+        const consumed = cursor + @min(line_end + 1, remaining.len);
+        const physical_line = trimReadCarriageReturn(remaining[0..line_end]);
+        if (!raw_mode and readLineContinues(physical_line)) {
+            continued = true;
+            try logical.appendSlice(allocator, physical_line[0 .. physical_line.len - 1]);
+            cursor = consumed;
+            if (cursor >= stdin.len) {
+                const owned = try logical.toOwnedSlice(allocator);
+                return .{ .line = owned, .status = 1, .owned = owned, .consumed = consumed };
+            }
+            continue;
+        }
+        const status: ExitStatus = if (newline != null) 0 else 1;
+        if (continued) {
+            try logical.appendSlice(allocator, physical_line);
+            const owned = try logical.toOwnedSlice(allocator);
+            return .{ .line = owned, .status = status, .owned = owned, .consumed = consumed };
+        }
+        return .{ .line = physical_line, .status = status, .consumed = consumed };
+    }
 }
 
 fn trimReadCarriageReturn(line: []const u8) []const u8 {
     if (line.len > 0 and line[line.len - 1] == '\r') return line[0 .. line.len - 1];
     return line;
+}
+
+fn trimReadCarriageReturnInPlace(line: *std.ArrayList(u8)) void {
+    if (line.items.len > 0 and line.items[line.items.len - 1] == '\r') line.items.len -= 1;
+}
+
+fn readLineContinues(line: []const u8) bool {
+    var backslashes: usize = 0;
+    var index = line.len;
+    while (index > 0 and line[index - 1] == '\\') : (index -= 1) {
+        backslashes += 1;
+    }
+    return backslashes % 2 == 1;
 }
 
 const PrintfSpec = struct {
@@ -11113,6 +11157,21 @@ test "executor implements read and printf builtins" {
     var backslash_result = try executor.executeProgram(backslash_lowered.program, .{});
     defer backslash_result.deinit();
     try std.testing.expectEqualStrings("a b/a\\ b\n", backslash_result.stdout);
+
+    var continuation_lowered = try parseAndLower(std.testing.allocator,
+        \\read first rest <<'EOF1'; read -r raw <<'EOF2'; printf '<%s><%s>|<%s>\n' "$first" "$rest" "$raw"
+        \\one\
+        \\two three
+        \\EOF1
+        \\one\
+        \\two three
+        \\EOF2
+    );
+    defer continuation_lowered.parsed.deinit();
+    defer continuation_lowered.program.deinit();
+    var continuation_result = try executor.executeProgram(continuation_lowered.program, .{});
+    defer continuation_result.deinit();
+    try std.testing.expectEqualStrings("<onetwo><three>|<one\\>\n", continuation_result.stdout);
 
     var escaped_ifs_lowered = try parseAndLower(std.testing.allocator,
         \\IFS=: read cooked_a cooked_b <<'EOF1'; IFS=: read -r raw_a raw_b <<'EOF2'; read leading rest <<'EOF3'; printf '<%s><%s>|<%s><%s>|<%s><%s>\n' "$cooked_a" "$cooked_b" "$raw_a" "$raw_b" "$leading" "$rest"

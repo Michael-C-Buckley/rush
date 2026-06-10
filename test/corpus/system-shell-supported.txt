@@ -243,3 +243,4 @@ unset A; HOME=/qh; echo "${A:-~}" ${A:-~}; B="${A:=~}"; echo "$A"
 cat <<EOF\nline1 \\\nEOF\nreal\nEOF\necho st=$?
 /bin/sh -c 'printf "via-stdout\n" >&3' 3>&1
 /bin/sh -c 'printf "via-async-fd\n" >&3' >out 3>&1 & wait $!; /bin/cat out; rm -f out
+read first rest <<'EOF1'\none\\\ntwo three\nEOF1\nread -r raw <<'EOF2'\none\\\ntwo three\nEOF2\nprintf '<%s><%s>|<%s>\n' "$first" "$rest" "$raw"
