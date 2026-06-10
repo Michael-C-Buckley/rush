@@ -1,0 +1,83 @@
+# First-party bun completion slice.
+
+complete bun --option --short h --long help --description 'show help'
+complete bun --option --short v --long version --description 'show version'
+complete bun --subcommand run --description 'run a script or package binary'
+complete bun --subcommand test --description 'run tests'
+complete bun --subcommand install --description 'install dependencies'
+complete bun --subcommand add --description 'add dependencies'
+complete bun --subcommand remove --description 'remove dependencies'
+complete bun --subcommand update --description 'update dependencies'
+complete bun --subcommand pm --description 'package manager utilities'
+complete bun --subcommand x --description 'execute package binary'
+complete bun --subcommand create --description 'create a project from template'
+complete bun --subcommand build --description 'bundle source files'
+complete bun --subcommand init --description 'initialize a project'
+
+complete 'bun run' --argument --function __rush_complete_bun_scripts_and_bins
+complete 'bun test' --option --long watch --description 'watch and rerun tests'
+complete 'bun test' --argument --function __rush_complete_bun_test_files
+complete 'bun add' --option --short d --long dev --description 'add to devDependencies'
+complete 'bun add' --option --short g --long global --description 'install globally'
+complete 'bun add' --argument --function __rush_complete_bun_packages
+complete 'bun remove' --argument --function __rush_complete_bun_dependencies
+complete 'bun update' --argument --function __rush_complete_bun_dependencies
+complete 'bun x' --argument --function __rush_complete_bun_bins_and_packages
+complete 'bun create' --argument --function __rush_complete_bun_templates
+complete 'bun build' --argument --function __rush_complete_bun_files
+complete 'bun pm' --subcommand ls --description 'list installed packages'
+complete 'bun pm' --subcommand cache --description 'print cache path'
+complete 'bun pm' --subcommand bin --description 'print bin path'
+
+__rush_complete_bun_scripts_and_bins() {
+  __rush_complete_bun_scripts
+  __rush_complete_bun_bins_and_packages
+}
+
+__rush_complete_bun_scripts() {
+  node -e 'let p=require("./package.json"); for (let k of Object.keys(p.scripts||{})) console.log(k)' 2>/dev/null | while read script; do test -n "$script" && completion candidate "$script" --kind plain; done
+  completion candidate dev --kind plain
+  completion candidate build --kind plain
+  completion candidate test --kind plain
+}
+
+__rush_complete_bun_bins_and_packages() {
+  find node_modules/.bin -maxdepth 1 -type f 2>/dev/null | sed 's#node_modules/.bin/##' | while read bin; do test -n "$bin" && completion candidate "$bin" --kind plain; done
+  __rush_complete_bun_packages
+}
+
+__rush_complete_bun_dependencies() {
+  node -e 'let p=require("./package.json"); for (let o of [p.dependencies,p.devDependencies,p.peerDependencies,p.optionalDependencies]) for (let k of Object.keys(o||{})) console.log(k)' 2>/dev/null | while read dep; do test -n "$dep" && completion candidate "$dep" --kind plain; done
+}
+
+__rush_complete_bun_packages() {
+  __rush_complete_bun_dependencies
+  completion candidate typescript --kind plain
+  completion candidate vite --kind plain
+  completion candidate eslint --kind plain
+  completion candidate react --kind plain
+}
+
+__rush_complete_bun_templates() {
+  completion candidate react --kind plain
+  completion candidate vue --kind plain
+  completion candidate svelte --kind plain
+  completion candidate hono --kind plain
+  completion candidate next --kind plain
+}
+
+__rush_complete_bun_files() {
+  completion files --extension .js
+  completion files --extension .ts
+  completion files --extension .tsx
+  completion files --extension .jsx
+  completion directories --append-slash
+}
+
+__rush_complete_bun_test_files() {
+  completion files --extension .test.ts
+  completion files --extension .test.js
+  completion files --extension .spec.ts
+  completion files --extension .spec.js
+  completion directories --append-slash
+}
