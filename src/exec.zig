@@ -5519,7 +5519,11 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     if (command.argv.len > 2) return sourceUsageError(self, command.argv[0].text, 2, "arguments are not implemented yet");
     const contents = self.readSourceFile(io, command.argv[1].text) catch |err| switch (err) {
         error.FileNotFound => return sourceUsageError(self, command.argv[0].text, 1, "file not found"),
-        error.AccessDenied, error.PermissionDenied => return sourceUsageError(self, command.argv[0].text, 1, "permission denied"),
+        error.AccessDenied, error.PermissionDenied => {
+            const message = try std.fmt.allocPrint(self.allocator, "{s}: permission denied", .{command.argv[1].text});
+            defer self.allocator.free(message);
+            return sourceUsageError(self, command.argv[0].text, 1, message);
+        },
         else => |e| return e,
     };
     defer self.allocator.free(contents);

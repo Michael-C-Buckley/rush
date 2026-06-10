@@ -18,7 +18,7 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
 | `:` | `builtin-colon` | `basic-colon`, `builtin-colon-special-assignment` | redirection failure consequences need negative coverage |
-| `.` | `builtin-dot`, `builtin-dot-current-env`, `builtin-dot-path-search`, `builtin-dot-usage-errors` | current-shell effects, PATH search, missing/nonexistent file diagnostics and unit coverage | non-readable file behavior |
+| `.` | `builtin-dot`, `builtin-dot-current-env`, `builtin-dot-path-search`, `builtin-dot-usage-errors` | current-shell effects, PATH search, missing/nonexistent/non-readable file diagnostics and unit coverage | broader file loading edge cases |
 | `break`, `continue` | `builtin-break-continue`, `builtin-loop-control-nested-levels`, `builtin-loop-control-outside-loop`, `builtin-loop-control-usage-errors` | basic loop control, nested levels, outside-loop and operand diagnostic negative corpus | deeper mixed compound-command edge cases |
 | `eval` | `builtin-eval`, `builtin-eval-arguments` | basic eval, argument concatenation, empty eval status, special assignment persistence | parse/expansion failure consequences |
 | `exec` | `builtin-exec`, `builtin-exec-redirection-only` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-replaces-process`, current-shell redirection-only exec | failure status details, no-return contexts |

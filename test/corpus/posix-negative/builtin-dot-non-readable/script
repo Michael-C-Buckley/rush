@@ -1,0 +1,4 @@
+printf 'echo bad\n' > no-read
+chmod 000 no-read
+. ./no-read
+echo after
