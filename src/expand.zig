@@ -1521,6 +1521,48 @@ fn lookupTildeHome(allocator: std.mem.Allocator, user: []const u8, env: EnvLooku
     return @as(?[]const u8, try allocator.dupe(u8, std.mem.span(dir)));
 }
 
+/// Expands a here-document body (POSIX XCU 2.7.4): parameter expansion,
+/// command substitution, and arithmetic expansion apply; quote characters are
+/// not special except inside embedded expansions; backslash escapes only $,
+/// backquote, backslash, and newline.
+pub fn expandHereDocBody(allocator: std.mem.Allocator, text: []const u8, options: Options) anyerror![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    var index: usize = 0;
+    while (index < text.len) {
+        const c = text[index];
+        if (c == '\\' and index + 1 < text.len) {
+            const next = text[index + 1];
+            switch (next) {
+                '$', '`', '\\' => {
+                    try output.append(allocator, next);
+                    index += 2;
+                },
+                '\n' => index += 2,
+                else => {
+                    try output.append(allocator, c);
+                    index += 1;
+                },
+            }
+            continue;
+        }
+        const part = switch (c) {
+            '$' => arithmeticPart(text, index) orelse commandSubstitutionPart(text, index) orelse parameterPart(text, index),
+            '`' => backquoteCommandSubstitutionPart(text, index),
+            else => null,
+        } orelse {
+            try output.append(allocator, c);
+            index += 1;
+            continue;
+        };
+        const rendered = try renderDoubleQuotedExpansion(allocator, text, part, options);
+        defer allocator.free(rendered);
+        try output.appendSlice(allocator, rendered);
+        index = part.span.end;
+    }
+    return output.toOwnedSlice(allocator);
+}
+
 pub fn expandParameters(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
@@ -1928,6 +1970,16 @@ test "command substitution expands inside double quotes" {
 
 fn testScriptEchoSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
     return allocator.dupe(u8, script);
+}
+
+test "here-doc body keeps quotes and non-special backslashes literal" {
+    const literal = try expandHereDocBody(std.testing.allocator, "\"q\" 'one' \\\"x\\\" a\\tb \\$lit \\\\ ${UNSET_NAME:-~}", .{ .env = test_env });
+    defer std.testing.allocator.free(literal);
+    try std.testing.expectEqualStrings("\"q\" 'one' \\\"x\\\" a\\tb $lit \\ ~", literal);
+
+    const expanded = try expandHereDocBody(std.testing.allocator, "$USER $((1 + 2)) line\\\njoined", .{ .env = test_env });
+    defer std.testing.allocator.free(expanded);
+    try std.testing.expectEqualStrings("rush-user 3 linejoined", expanded);
 }
 
 test "quoted parameter default word keeps tilde literal" {

@@ -3857,7 +3857,7 @@ pub const Executor = struct {
     fn expandHereDoc(self: *Executor, text: []const u8, quoted: bool, options: ExecuteOptions) ![]const u8 {
         if (quoted) return self.allocator.dupe(u8, text);
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        return expand.expandWordScalar(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
+        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {

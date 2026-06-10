@@ -1,0 +1,7 @@
+unset B
+HOME=/quoted-home
+A=v
+cat <<EOF
+"q" 'one' \"$A\" a\tb ${B:-~}
+esc \$A and \\ and `echo \"x\"`
+EOF
