@@ -3688,7 +3688,23 @@ pub const Executor = struct {
             stdin_bytes = try reader.interface.allocRemaining(context.executor.allocator, .limited(1024 * 1024));
         }
 
-        var result = try context.executor.executeSimpleCommandWithInput(context.command, stdin_bytes, context.options);
+        // The stage's output must flow into its pipe or redirection target,
+        // so externals nested under functions or the command builtin have
+        // to be captured rather than inherit the terminal. Routing the pipe
+        // input through script_stdin lets those nested commands read it.
+        var stage_options = context.options;
+        stage_options.external_stdio = .capture;
+        const executor = context.executor;
+        const prior_stdin = executor.script_stdin;
+        const prior_stdin_offset = executor.script_stdin_offset;
+        executor.script_stdin = stdin_bytes;
+        executor.script_stdin_offset = 0;
+        defer {
+            executor.script_stdin = prior_stdin;
+            executor.script_stdin_offset = prior_stdin_offset;
+        }
+
+        var result = try context.executor.executeSimpleCommandWithInput(context.command, stdin_bytes, stage_options);
         defer result.deinit();
         context.status = result.status;
         if (context.stdout_file) |file| try writeBytesToFile(context.io, file, result.stdout);
@@ -9348,6 +9364,46 @@ test "executor executes POSIX if compound commands" {
     defer elif_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), elif_result.status);
     try std.testing.expectEqualStrings("elif\n", elif_result.stdout);
+}
+
+test "mixed pipeline routes stdin and stdout through function and command stages" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    // Function stage running a nested external must read the pipe and
+    // write to the next stage instead of the shell's own stdio.
+    var fn_result = try executor.executeScriptSlice(
+        \\g() { /bin/cat; }
+        \\echo hi | g | /bin/cat
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer fn_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), fn_result.status);
+    try std.testing.expectEqualStrings("hi\n", fn_result.stdout);
+
+    var command_result = try executor.executeScriptSlice("echo hi | command /bin/cat", .{ .io = std.testing.io, .allow_external = true });
+    defer command_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), command_result.status);
+    try std.testing.expectEqualStrings("hi\n", command_result.stdout);
+}
+
+test "mixed pipeline applies output redirection on builtin and function stages" {
+    const path = "rush-mixed-pipe-redirect.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\f() { /bin/sh -c 'echo data'; }
+        \\f | command /bin/cat > rush-mixed-pipe-redirect.tmp
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("data\n", contents);
 }
 
 test "executor executes multi-line if compound commands" {
