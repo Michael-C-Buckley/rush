@@ -1,0 +1,10 @@
+IFS=: read cooked_a cooked_b <<'EOF1'
+one\:two:three
+EOF1
+IFS=: read -r raw_a raw_b <<'EOF2'
+one\:two:three
+EOF2
+read leading rest <<'EOF3'
+\ a b
+EOF3
+printf '<%s><%s>|<%s><%s>|<%s><%s>\n' "$cooked_a" "$cooked_b" "$raw_a" "$raw_b" "$leading" "$rest"

@@ -58,6 +58,7 @@ builtin-printf-format-reuse	builtin	builtin	printf reuses the format operand unt
 builtin-printf-octal-hex	builtin	builtin	-
 builtin-printf-width-precision	builtin	builtin	-
 builtin-read-backslash	builtin	builtin	-
+builtin-read-escaped-ifs	builtin	behavior	Backslash escapes IFS delimiters before read field splitting unless -r is used
 builtin-read-custom-ifs	builtin	builtin	-
 builtin-read-unsupported-option	builtin	negative;builtin	-
 builtin-readonly	builtin	builtin	-

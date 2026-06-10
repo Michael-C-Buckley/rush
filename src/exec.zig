@@ -7872,27 +7872,32 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     defer read_input.deinit(self.allocator);
     const status = read_input.status;
     const raw_line = read_input.line;
-    const line = if (raw_mode) try self.allocator.dupe(u8, raw_line) else try unescapeReadLine(self.allocator, raw_line);
-    defer self.allocator.free(line);
     if (names.len == 0) {
-        try self.setEnv("REPLY", line);
+        try setReadValue(self, "REPLY", raw_line, raw_mode);
         return emptyResult(self.allocator, status);
     }
 
     const ifs = self.getEnv("IFS") orelse " \t\n";
-    var cursor = skipReadIfsWhitespace(line, 0, ifs);
+    var cursor = skipReadIfsWhitespace(raw_line, 0, ifs, !raw_mode);
     for (names, 0..) |name_word, index| {
         if (!isShellName(name_word.text)) return errorResult(self.allocator, 2, "read", "invalid variable name");
         if (index == names.len - 1) {
-            const value_end = trimTrailingReadIfsWhitespace(line, line.len, ifs);
-            const value = if (cursor <= value_end) line[cursor..value_end] else "";
-            try self.setEnv(name_word.text, value);
+            const value_end = trimTrailingReadIfsWhitespace(raw_line, raw_line.len, ifs, !raw_mode);
+            const value = if (cursor <= value_end) raw_line[cursor..value_end] else "";
+            try setReadValue(self, name_word.text, value, raw_mode);
             break;
         }
-        const field = nextReadField(line, &cursor, ifs);
-        try self.setEnv(name_word.text, field);
+        const field = nextReadField(raw_line, &cursor, ifs, !raw_mode);
+        try setReadValue(self, name_word.text, field, raw_mode);
     }
     return emptyResult(self.allocator, status);
+}
+
+fn setReadValue(self: *Executor, name: []const u8, raw_value: []const u8, raw_mode: bool) !void {
+    if (raw_mode) return self.setEnv(name, raw_value);
+    const value = try unescapeReadLine(self.allocator, raw_value);
+    defer self.allocator.free(value);
+    try self.setEnv(name, value);
 }
 
 const ReadInput = struct {
@@ -8192,32 +8197,52 @@ fn unescapeReadLine(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
     return out.toOwnedSlice(allocator);
 }
 
-fn nextReadField(text: []const u8, cursor: *usize, ifs: []const u8) []const u8 {
-    cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs);
+fn nextReadField(text: []const u8, cursor: *usize, ifs: []const u8, honor_escapes: bool) []const u8 {
+    cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs, honor_escapes);
     if (cursor.* >= text.len) return "";
     if (isReadIfsNonWhitespace(text[cursor.*], ifs)) {
         cursor.* += 1;
-        cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs);
+        cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs, honor_escapes);
         return "";
     }
     const start = cursor.*;
-    while (cursor.* < text.len and !isReadIfs(text[cursor.*], ifs)) : (cursor.* += 1) {}
+    while (cursor.* < text.len) {
+        if (honor_escapes and text[cursor.*] == '\\' and cursor.* + 1 < text.len) {
+            cursor.* += 2;
+            continue;
+        }
+        if (isReadIfs(text[cursor.*], ifs)) break;
+        cursor.* += 1;
+    }
     const end = cursor.*;
     if (cursor.* < text.len and isReadIfsNonWhitespace(text[cursor.*], ifs)) cursor.* += 1;
-    cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs);
+    cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs, honor_escapes);
     return text[start..end];
 }
 
-fn skipReadIfsWhitespace(text: []const u8, start: usize, ifs: []const u8) usize {
+fn skipReadIfsWhitespace(text: []const u8, start: usize, ifs: []const u8, honor_escapes: bool) usize {
     var index = start;
-    while (index < text.len and isReadIfsWhitespace(text[index], ifs)) : (index += 1) {}
+    while (index < text.len) {
+        if (honor_escapes and text[index] == '\\' and index + 1 < text.len) break;
+        if (!isReadIfsWhitespace(text[index], ifs)) break;
+        index += 1;
+    }
     return index;
 }
 
-fn trimTrailingReadIfsWhitespace(text: []const u8, end: usize, ifs: []const u8) usize {
+fn trimTrailingReadIfsWhitespace(text: []const u8, end: usize, ifs: []const u8, honor_escapes: bool) usize {
     var index = end;
-    while (index > 0 and isReadIfsWhitespace(text[index - 1], ifs)) : (index -= 1) {}
+    while (index > 0 and isReadIfsWhitespace(text[index - 1], ifs) and !(honor_escapes and isEscapedReadByte(text, index - 1))) : (index -= 1) {}
     return index;
+}
+
+fn isEscapedReadByte(text: []const u8, index: usize) bool {
+    var backslashes: usize = 0;
+    var cursor = index;
+    while (cursor > 0 and text[cursor - 1] == '\\') : (cursor -= 1) {
+        backslashes += 1;
+    }
+    return backslashes % 2 == 1;
 }
 
 fn isReadIfs(byte: u8, ifs: []const u8) bool {
@@ -11088,6 +11113,21 @@ test "executor implements read and printf builtins" {
     var backslash_result = try executor.executeProgram(backslash_lowered.program, .{});
     defer backslash_result.deinit();
     try std.testing.expectEqualStrings("a b/a\\ b\n", backslash_result.stdout);
+
+    var escaped_ifs_lowered = try parseAndLower(std.testing.allocator,
+        \\IFS=: read cooked_a cooked_b <<'EOF1'; IFS=: read -r raw_a raw_b <<'EOF2'; read leading rest <<'EOF3'; printf '<%s><%s>|<%s><%s>|<%s><%s>\n' "$cooked_a" "$cooked_b" "$raw_a" "$raw_b" "$leading" "$rest"
+        \\one\:two:three
+        \\EOF1
+        \\one\:two:three
+        \\EOF2
+        \\\ a b
+        \\EOF3
+    );
+    defer escaped_ifs_lowered.parsed.deinit();
+    defer escaped_ifs_lowered.program.deinit();
+    var escaped_ifs_result = try executor.executeProgram(escaped_ifs_lowered.program, .{});
+    defer escaped_ifs_result.deinit();
+    try std.testing.expectEqualStrings("<one:two><three>|<one\\><two:three>|< a><b>\n", escaped_ifs_result.stdout);
 
     var ifs_lowered = try parseAndLower(std.testing.allocator,
         \\IFS=: read a b c <<EOF; printf '%s/%s/%s\n' "$a" "$b" "$c"

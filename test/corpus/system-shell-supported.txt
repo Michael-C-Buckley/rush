@@ -115,6 +115,7 @@ exec /bin/sh -c 'printf exec-ok'; echo nope
 VAR=ok exec /bin/sh -c 'printf "$VAR"'
 read cooked <<'EOF1'; read -r raw <<'EOF2'; echo "$cooked/$raw"\na\ b\nEOF1\na\ b\nEOF2
 IFS=: read a b c <<EOF\none::three\nEOF\necho "$a/$b/$c"
+IFS=: read cooked_a cooked_b <<'EOF1'\none\:two:three\nEOF1\nIFS=: read -r raw_a raw_b <<'EOF2'\none\:two:three\nEOF2\nread leading rest <<'EOF3'\n\ a b\nEOF3\nprintf '<%s><%s>|<%s><%s>|<%s><%s>\n' "$cooked_a" "$cooked_b" "$raw_a" "$raw_b" "$leading" "$rest"
 printf '[%5s][%-5s][%.3s][%04d]' a b abcdef 7
 printf '[%o][%x][%X]' 10 255 255
 printf x > file; test -s file; echo size=$?; test -r file; echo read=$?; test -x file; echo exec=$?
