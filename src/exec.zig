@@ -2264,6 +2264,7 @@ pub const Executor = struct {
         var child = Executor.init(self.allocator);
         defer child.deinit();
         try child.copyStateFrom(self);
+        try child.resetCaughtTrapsForSubshell();
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
         const redirections = try self.expandRedirections(subshell.redirections, options);
@@ -2412,6 +2413,17 @@ pub const Executor = struct {
             try copied.positionals.set(self.allocator, frame.positionals.params);
             try self.call_frames.append(self.allocator, copied);
         }
+    }
+
+    fn resetCaughtTrapsForSubshell(self: *Executor) !void {
+        var caught: std.ArrayList([]const u8) = .empty;
+        defer caught.deinit(self.allocator);
+
+        var trap_iter = self.traps.iterator();
+        while (trap_iter.next()) |entry| {
+            if (entry.value_ptr.*.len != 0) try caught.append(self.allocator, entry.key_ptr.*);
+        }
+        for (caught.items) |name| self.clearTrap(name);
     }
 
     fn isShellFdOpen(self: Executor, fd: std.posix.fd_t) bool {
@@ -4133,6 +4145,7 @@ pub const Executor = struct {
         var child = Executor.init(substitution_context.executor.allocator);
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
+        try child.resetCaughtTrapsForSubshell();
         if (substitution_context.executor.remainingScriptStdin()) |stdin| {
             child.script_stdin = stdin;
             child.script_stdin_offset = 0;
@@ -9491,6 +9504,28 @@ test "executor implements trap builtin baseline" {
     var zero_result = try zero_executor.executeProgram(zero.program, .{});
     defer zero_result.deinit();
     try std.testing.expectEqualStrings("body\nzero\n", zero_result.stdout);
+}
+
+test "executor resets caught traps for subshell environments" {
+    var subshell = try parseAndLower(std.testing.allocator, "trap 'echo inner-exit' EXIT; (exit 1); echo after");
+    defer subshell.parsed.deinit();
+    defer subshell.program.deinit();
+    var subshell_executor = Executor.init(std.testing.allocator);
+    defer subshell_executor.deinit();
+    var subshell_result = try subshell_executor.executeProgram(subshell.program, .{});
+    defer subshell_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), subshell_result.status);
+    try std.testing.expectEqualStrings("after\ninner-exit\n", subshell_result.stdout);
+
+    var command_substitution = try parseAndLower(std.testing.allocator, "trap 'echo outer-exit' EXIT; value=$(exit 1); printf '<%s>\n' \"$value\"");
+    defer command_substitution.parsed.deinit();
+    defer command_substitution.program.deinit();
+    var command_substitution_executor = Executor.init(std.testing.allocator);
+    defer command_substitution_executor.deinit();
+    var command_substitution_result = try command_substitution_executor.executeProgram(command_substitution.program, .{});
+    defer command_substitution_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), command_substitution_result.status);
+    try std.testing.expectEqualStrings("<>\nouter-exit\n", command_substitution_result.stdout);
 }
 
 test "executor restores trap signal handlers on clear and deinit" {
