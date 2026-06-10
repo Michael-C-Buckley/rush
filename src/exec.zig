@@ -6886,7 +6886,7 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     defer cd_target.deinit(self.allocator);
 
     std.process.setCurrentPath(io, cd_target.path) catch |err| {
-        const message = try std.fmt.allocPrint(self.allocator, "{s}: {t}", .{ cd_target.path, err });
+        const message = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ cd_target.path, cdErrorMessage(err) });
         defer self.allocator.free(message);
         return errorResult(self.allocator, 1, "cd", message);
     };
@@ -6905,6 +6905,16 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
         .status = 0,
         .stdout = stdout,
         .stderr = try self.allocator.alloc(u8, 0),
+    };
+}
+
+fn cdErrorMessage(err: anyerror) []const u8 {
+    return switch (err) {
+        error.FileNotFound => "no such file or directory",
+        error.NotDir => "not a directory",
+        error.AccessDenied, error.PermissionDenied => "permission denied",
+        error.NameTooLong => "file name too long",
+        else => @errorName(err),
     };
 }
 
