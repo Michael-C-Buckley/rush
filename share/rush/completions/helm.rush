@@ -308,3 +308,67 @@ __rush_complete_helm_set_values() {
   completion candidate resources.requests.cpu= --kind variable
   completion candidate resources.requests.memory= --kind variable
 }
+
+# Dynamic overlays for local Helm/Kubernetes state.
+complete helm --option-value --long kube-context --function __rush_complete_helm_contexts
+complete 'helm install' --option-value --long version --function __rush_complete_helm_chart_versions
+complete 'helm upgrade' --option-value --long version --function __rush_complete_helm_chart_versions
+complete 'helm repo list' --option --short o --long output --value-name format --description 'output format'
+complete 'helm repo list' --option-value --short o --function __rush_complete_helm_output_formats
+complete 'helm repo list' --option-value --long output --function __rush_complete_helm_output_formats
+
+__rush_complete_helm_contexts() {
+  kubectl config get-contexts -o name 2>/dev/null | while read context; do test -n "$context" && completion candidate "$context" --kind plain; done
+  completion candidate docker-desktop --kind plain
+  completion candidate kind-kind --kind plain
+  completion candidate minikube --kind plain
+  completion candidate dev --kind plain
+  completion candidate staging --kind plain
+  completion candidate prod --kind plain
+}
+
+__rush_complete_helm_releases() {
+  helm list --all-namespaces --short 2>/dev/null | while read release; do test -n "$release" && completion candidate "$release" --kind plain; done
+  __rush_complete_helm_release_names
+}
+
+__rush_complete_helm_repos() {
+  helm repo list 2>/dev/null | tail -n +2 | while read name url rest; do test -n "$name" && completion candidate "$name" --kind plain; done
+  completion candidate bitnami --kind plain
+  completion candidate ingress-nginx --kind plain
+  completion candidate jetstack --kind plain
+  completion candidate prometheus-community --kind plain
+  completion candidate stable --kind plain
+}
+
+__rush_complete_helm_charts() {
+  helm search repo 2>/dev/null | tail -n +2 | while read chart rest; do test -n "$chart" && completion candidate "$chart" --kind plain; done
+  completion candidate bitnami/nginx --kind plain
+  completion candidate bitnami/postgresql --kind plain
+  completion candidate bitnami/redis --kind plain
+  completion candidate ingress-nginx/ingress-nginx --kind plain
+  completion candidate jetstack/cert-manager --kind plain
+  completion candidate prometheus-community/kube-prometheus-stack --kind plain
+  completion candidate ./chart --kind directory
+  completion candidate ./charts/ --kind directory
+}
+
+__rush_complete_helm_chart_versions() {
+  completion candidate 1.0.0 --kind plain
+  completion candidate 0.1.0 --kind plain
+  completion candidate latest --kind plain
+}
+
+__rush_complete_helm_namespaces() {
+  kubectl get namespaces -o name 2>/dev/null | sed 's#^namespace/##' | while read namespace; do test -n "$namespace" && completion candidate "$namespace" --kind plain; done
+  completion candidate default --kind plain
+  completion candidate kube-system --kind plain
+  completion candidate kube-public --kind plain
+  completion candidate kube-node-lease --kind plain
+  completion candidate cert-manager --kind plain
+  completion candidate ingress-nginx --kind plain
+  completion candidate monitoring --kind plain
+  completion candidate production --kind plain
+  completion candidate staging --kind plain
+  completion candidate dev --kind plain
+}
