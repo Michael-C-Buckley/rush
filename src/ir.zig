@@ -423,13 +423,7 @@ fn lessThanStatementRef(_: void, a: LoweredStatementRef, b: LoweredStatementRef)
 
 fn lowerSubshell(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !Subshell {
     std.debug.assert(node.kind == .subshell);
-    var close_paren: ?usize = null;
-    for (node.token_start..node.token_end) |token_index| {
-        if (parsed.tokens[token_index].kind == .right_paren) {
-            close_paren = token_index;
-            break;
-        }
-    }
+    const close_paren = directTokenChildMatching(parsed, node, .right_paren, null);
 
     var redirections = try lowerCompoundRedirections(allocator, parsed, node);
     errdefer {
@@ -447,14 +441,7 @@ fn lowerSubshell(allocator: std.mem.Allocator, parsed: parser.ParseResult, node:
 
 fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !BraceGroup {
     std.debug.assert(node.kind == .brace_group);
-    var close_brace: ?usize = null;
-    for (node.token_start..node.token_end) |token_index| {
-        const token = parsed.tokens[token_index];
-        if (token.kind == .word and std.mem.eql(u8, token.lexeme(parsed.source), "}")) {
-            close_brace = token_index;
-            break;
-        }
-    }
+    const close_brace = directTokenChildMatching(parsed, node, .word, "}");
 
     var redirections = try lowerCompoundRedirections(allocator, parsed, node);
     errdefer {
@@ -468,6 +455,22 @@ fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
         .body = spanSlice(parsed, @min(node.token_start + 1, node.token_end), body_end),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
+}
+
+fn directTokenChildMatching(parsed: parser.ParseResult, node: parser.Node, kind: parser.TokenKind, lexeme: ?[]const u8) ?usize {
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .token => |token_id| {
+            const token_index = token_id.index();
+            const token = parsed.tokens[token_index];
+            if (token.kind != kind) continue;
+            if (lexeme) |expected| {
+                if (!std.mem.eql(u8, token.lexeme(parsed.source), expected)) continue;
+            }
+            return token_index;
+        },
+        .node => {},
+    };
+    return null;
 }
 
 fn lowerCompoundRedirections(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !std.ArrayList(Redirection) {

@@ -1,3 +1,4 @@
 f() ( echo subshell-fn ); f
 g() if true; then echo if-body-fn; fi; g
 h() for i in 1 2; do echo f$i; done; h
+n() { { echo nested-inner; }; echo nested-outer; }; n

@@ -1338,15 +1338,27 @@ const SyntaxParser = struct {
             return self.addNode(.function_definition, span, token_start, token_end, child_start, self.children.items.len);
         }
 
+        var brace_depth: usize = 0;
         var saw_open_brace = false;
         var closed = false;
+        var command_position = true;
 
         while (!self.at(.eof)) {
             const token = self.current();
             if (token.kind == .word) {
                 const lexeme = token.lexeme(self.source);
-                if (std.mem.eql(u8, lexeme, "{")) saw_open_brace = true;
-                if (std.mem.eql(u8, lexeme, "}")) closed = true;
+                if (command_position and std.mem.eql(u8, lexeme, "{")) {
+                    saw_open_brace = true;
+                    brace_depth += 1;
+                } else if (command_position and saw_open_brace and std.mem.eql(u8, lexeme, "}")) {
+                    if (brace_depth > 0) brace_depth -= 1;
+                    closed = brace_depth == 0;
+                    command_position = false;
+                } else {
+                    command_position = command_position and functionBodyWordContinuesCommandPosition(lexeme);
+                }
+            } else if (token.kind != .whitespace and token.kind != .comment) {
+                command_position = isSimpleCommandSeparator(token.kind) or token.kind == .left_paren or token.kind == .right_paren;
             }
             try self.appendCurrentTokenChildTo(&function_children);
             if (closed) break;
@@ -1989,6 +2001,18 @@ fn isListSeparator(kind: TokenKind) bool {
     };
 }
 
+fn functionBodyWordContinuesCommandPosition(word: []const u8) bool {
+    return std.mem.eql(u8, word, "if") or
+        std.mem.eql(u8, word, "then") or
+        std.mem.eql(u8, word, "elif") or
+        std.mem.eql(u8, word, "else") or
+        std.mem.eql(u8, word, "while") or
+        std.mem.eql(u8, word, "until") or
+        std.mem.eql(u8, word, "do") or
+        std.mem.eql(u8, word, "case") or
+        std.mem.eql(u8, word, "in");
+}
+
 fn isAssignmentWord(word: []const u8) bool {
     const equals = std.mem.indexOfScalar(u8, word, '=') orelse return false;
     if (equals == 0) return false;
@@ -2452,6 +2476,20 @@ test "parser builds POSIX function definition nodes" {
         if (node.kind == .function_definition) {
             found = true;
             try expectSpan(.init(0, 20), node.span);
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "parser keeps nested brace groups inside POSIX function definitions" {
+    var result = try parse(std.testing.allocator, "f() { { echo inner; }; echo outer; }; f", .{});
+    defer result.deinit();
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .function_definition) {
+            found = true;
+            try expectSpan(.init(0, 36), node.span);
         }
     }
     try std.testing.expect(found);

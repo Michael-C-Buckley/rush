@@ -9175,6 +9175,14 @@ test "executor executes POSIX subshells with isolated state" {
     const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(contents);
     try std.testing.expectEqualStrings("one\ntwo\n", contents);
+
+    var nested = try parseAndLower(std.testing.allocator, "( ( echo inner ); echo outer )");
+    defer nested.parsed.deinit();
+    defer nested.program.deinit();
+    var nested_result = try executor.executeProgram(nested.program, .{});
+    defer nested_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), nested_result.status);
+    try std.testing.expectEqualStrings("inner\nouter\n", nested_result.stdout);
 }
 
 test "executor executes POSIX brace groups in current shell" {
@@ -9201,6 +9209,14 @@ test "executor executes POSIX brace groups in current shell" {
     const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(contents);
     try std.testing.expectEqualStrings("one\ntwo\n", contents);
+
+    var nested = try parseAndLower(std.testing.allocator, "{ { echo inner; }; echo outer; }");
+    defer nested.parsed.deinit();
+    defer nested.program.deinit();
+    var nested_result = try executor.executeProgram(nested.program, .{});
+    defer nested_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), nested_result.status);
+    try std.testing.expectEqualStrings("inner\nouter\n", nested_result.stdout);
 }
 
 test "executor implements source and dot builtins" {
@@ -9369,6 +9385,35 @@ test "executor parses and executes POSIX shell functions" {
     defer redefine_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), redefine_result.status);
     try std.testing.expectEqualStrings("two\n", redefine_result.stdout);
+
+    var nested_brace = try parseAndLower(std.testing.allocator, "f() { { echo inner; }; echo outer; }; f");
+    defer nested_brace.parsed.deinit();
+    defer nested_brace.program.deinit();
+    var nested_brace_result = try executor.executeProgram(nested_brace.program, .{});
+    defer nested_brace_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), nested_brace_result.status);
+    try std.testing.expectEqualStrings("inner\nouter\n", nested_brace_result.stdout);
+
+    var literal_brace = try parseAndLower(std.testing.allocator, "literal() { echo {; }; literal");
+    defer literal_brace.parsed.deinit();
+    defer literal_brace.program.deinit();
+    var literal_brace_result = try executor.executeProgram(literal_brace.program, .{});
+    defer literal_brace_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), literal_brace_result.status);
+    try std.testing.expectEqualStrings("{\n", literal_brace_result.stdout);
+
+    const path = "rush-function-nested-brace-redirection.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    var redirected = try parseAndLower(std.testing.allocator, "f() { { echo inner; }; echo outer; } > rush-function-nested-brace-redirection.tmp; echo before; f");
+    defer redirected.parsed.deinit();
+    defer redirected.program.deinit();
+    var redirected_result = try executor.executeProgram(redirected.program, .{ .io = std.testing.io });
+    defer redirected_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), redirected_result.status);
+    try std.testing.expectEqualStrings("before\n", redirected_result.stdout);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("inner\nouter\n", contents);
 }
 
 test "executor accepts compound commands as POSIX function bodies" {
