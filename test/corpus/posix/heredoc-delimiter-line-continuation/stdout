@@ -1,0 +1,5 @@
+line1 EOF
+real end
+st=0
+indent 	TAB
+done

@@ -236,3 +236,4 @@ echo x >infile; case $(/bin/cat) in x) echo external-hit ;; *) echo external-mis
 echo $((010)) $((0x10)) $((0XFF))
 x=010; y=0x2f; echo $((x + y))
 unset A; HOME=/qh; echo "${A:-~}" ${A:-~}; B="${A:=~}"; echo "$A"
+cat <<EOF\nline1 \\\nEOF\nreal\nEOF\necho st=$?

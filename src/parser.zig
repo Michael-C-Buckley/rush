@@ -913,7 +913,12 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
 const PendingHereDoc = struct {
     delimiter: []const u8,
     strip_tabs: bool,
+    quoted: bool,
 };
+
+fn hereDocDelimiterIsQuoted(raw: []const u8) bool {
+    return std.mem.indexOfAny(u8, raw, "'\"\\") != null;
+}
 
 fn hereDocDelimiterFromRaw(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
@@ -948,8 +953,9 @@ const HereDocBodyParse = struct {
     found_delimiter: bool,
 };
 
-fn parseHereDocBodySpan(source: []const u8, start: usize, delimiter: []const u8, strip_tabs: bool) HereDocBodyParse {
+fn parseHereDocBodySpan(source: []const u8, start: usize, delimiter: []const u8, strip_tabs: bool, allow_continuation: bool) HereDocBodyParse {
     var index = @min(start, source.len);
+    var continued = false;
     while (index <= source.len) {
         const raw_line_start = index;
         while (index < source.len and source[index] != '\n') : (index += 1) {}
@@ -959,15 +965,29 @@ fn parseHereDocBodySpan(source: []const u8, start: usize, delimiter: []const u8,
             while (line_start < raw_line_end and source[line_start] == '\t') : (line_start += 1) {}
             break :blk line_start;
         } else raw_line_start;
-        if (std.mem.eql(u8, source[line_start_no_tabs..raw_line_end], delimiter)) {
+        // A physical line joined to the previous one by backslash-newline
+        // is body text and cannot be the delimiter (POSIX XCU 2.7.4 gives
+        // unquoted bodies double-quote backslash semantics).
+        if (!continued and std.mem.eql(u8, source[line_start_no_tabs..raw_line_end], delimiter)) {
             const end = if (index < source.len and source[index] == '\n') index + 1 else index;
             return .{ .span = .init(start, end), .found_delimiter = true };
         }
+        continued = allow_continuation and hasTrailingLineContinuation(source[raw_line_start..raw_line_end]);
         if (index < source.len and source[index] == '\n') {
             index += 1;
         } else break;
     }
     return .{ .span = .init(start, source.len), .found_delimiter = false };
+}
+
+pub fn hasTrailingLineContinuation(line: []const u8) bool {
+    var backslashes: usize = 0;
+    var index = line.len;
+    while (index > 0 and line[index - 1] == '\\') {
+        backslashes += 1;
+        index -= 1;
+    }
+    return backslashes % 2 == 1;
 }
 
 const SyntaxParser = struct {
@@ -1706,6 +1726,7 @@ const SyntaxParser = struct {
                 try self.pending_here_docs.append(self.allocator, .{
                     .delimiter = try hereDocDelimiterFromRaw(self.allocator, raw_target),
                     .strip_tabs = operator == .dless_dash,
+                    .quoted = hereDocDelimiterIsQuoted(raw_target),
                 });
             }
         } else {
@@ -1729,7 +1750,7 @@ const SyntaxParser = struct {
             const doc = self.pending_here_docs.orderedRemove(0);
             defer self.allocator.free(doc.delimiter);
             const body_start = if (self.index < self.tokens.len) self.tokens[self.index].span.start else self.source.len;
-            const body = parseHereDocBodySpan(self.source, body_start, doc.delimiter, doc.strip_tabs);
+            const body = parseHereDocBodySpan(self.source, body_start, doc.delimiter, doc.strip_tabs, !doc.quoted);
             const token_start = self.index;
             while (!self.at(.eof) and self.current().span.start < body.span.end) : (self.index += 1) {}
             const token_end = self.index;

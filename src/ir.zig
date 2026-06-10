@@ -374,7 +374,7 @@ fn collectHereDocRanges(allocator: std.mem.Allocator, parsed: parser.ParseResult
         defer freePendingHereDocs(allocator, pending.items);
         var body_start = hereDocBodyStartFromLine(parsed.source, line) orelse continue;
         for (pending.items) |doc| {
-            const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs);
+            const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs, !doc.quoted);
             defer allocator.free(extraction.body);
             try ranges.append(allocator, extraction.range);
             body_start = extraction.range.end;
@@ -957,7 +957,7 @@ fn extractOrderedHereDocForRedirection(allocator: std.mem.Allocator, parsed: par
 
     var body_start = hereDocBodyStartFromLine(parsed.source, line) orelse return null;
     for (pending.items) |doc| {
-        const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs);
+        const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs, !doc.quoted);
         body_start = extraction.range.end;
         if (doc.redirection_start == node.span.start) return .{ .body = extraction.body, .quoted = doc.quoted };
         allocator.free(extraction.body);
@@ -1035,24 +1035,31 @@ fn isHereDocRedirectionNode(parsed: parser.ParseResult, node: parser.Node) bool 
     return false;
 }
 
-fn extractHereDocFromBodyStart(allocator: std.mem.Allocator, source: []const u8, range_start: usize, delimiter: []const u8, strip_tabs: bool) !HereDocExtraction {
+fn extractHereDocFromBodyStart(allocator: std.mem.Allocator, source: []const u8, range_start: usize, delimiter: []const u8, strip_tabs: bool, allow_continuation: bool) !HereDocExtraction {
     var body: std.ArrayList(u8) = .empty;
     errdefer body.deinit(allocator);
     var index = range_start;
+    var continued = false;
     while (index <= source.len) {
         const raw_line_start = index;
         while (index < source.len and source[index] != '\n') : (index += 1) {}
         const raw_line_end = index;
-        const line_start_no_tabs = if (strip_tabs) blk: {
+        // Leading tabs are stripped only at the start of an input line; a
+        // physical line joined by backslash-newline continues the previous
+        // line, so its tabs are body text.
+        const line_start_no_tabs = if (strip_tabs and !continued) blk: {
             var start = raw_line_start;
             while (start < raw_line_end and source[start] == '\t') : (start += 1) {}
             break :blk start;
         } else raw_line_start;
         const line = source[line_start_no_tabs..raw_line_end];
-        if (std.mem.eql(u8, line, delimiter)) {
+        // A physical line joined to the previous one by backslash-newline
+        // is body text and cannot be the delimiter (POSIX XCU 2.7.4).
+        if (!continued and std.mem.eql(u8, line, delimiter)) {
             const range_end = if (index < source.len and source[index] == '\n') index + 1 else index;
             return .{ .body = try body.toOwnedSlice(allocator), .range = .init(range_start, range_end) };
         }
+        continued = allow_continuation and parser.hasTrailingLineContinuation(line);
         try body.appendSlice(allocator, line);
         if (index < source.len and source[index] == '\n') {
             try body.append(allocator, '\n');

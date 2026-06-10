@@ -1,0 +1,11 @@
+cat <<EOF
+line1 \
+EOF
+real end
+EOF
+echo st=$?
+cat <<-TAB
+	indent \
+	TAB
+	done
+	TAB
