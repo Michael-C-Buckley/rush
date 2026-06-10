@@ -19,8 +19,8 @@ pub const event_loop = @import("event_loop.zig");
 
 const usage =
     \\usage: rush [--login]
-    \\       rush -c SCRIPT
-    \\       rush --posix-strict -c SCRIPT
+    \\       rush -c SCRIPT [NAME [ARGS...]]
+    \\       rush --posix-strict -c SCRIPT [NAME [ARGS...]]
     \\       rush complete --debug INPUT
     \\       rush complete validate [PATH]
     \\       rush --help
@@ -71,19 +71,31 @@ pub fn main(init: std.process.Init) !u8 {
         return validateCompletionScripts(allocator, init.io, dir);
     }
 
+    // POSIX sh -c: operands after the command string become the command
+    // name ($0) and the positional parameters.
     var script_arg: ?[]const u8 = null;
     var features: compat.Features = .{};
-    if (args.len == 3 and std.mem.eql(u8, args[1], "-c")) {
+    var arg_zero: []const u8 = args[0];
+    var positionals: []const []const u8 = &.{};
+    if (args.len >= 3 and std.mem.eql(u8, args[1], "-c")) {
         script_arg = args[2];
-    } else if (args.len == 4 and std.mem.eql(u8, args[1], "--posix-strict") and std.mem.eql(u8, args[2], "-c")) {
+        if (args.len >= 4) {
+            arg_zero = args[3];
+            positionals = args[4..];
+        }
+    } else if (args.len >= 4 and std.mem.eql(u8, args[1], "--posix-strict") and std.mem.eql(u8, args[2], "-c")) {
         script_arg = args[3];
         features = .strictPosix();
+        if (args.len >= 5) {
+            arg_zero = args[4];
+            positionals = args[5..];
+        }
     } else {
         try writeAll(init.io, .stderr, usage);
         return 2;
     }
 
-    var result = try runScriptWithEnvironment(allocator, init.io, script_arg.?, .{ .io = init.io, .allow_external = true, .features = features, .external_stdio = .inherit, .arg_zero = args[0] }, init.environ_map);
+    var result = try runCommandStringWithEnvironment(allocator, init.io, script_arg.?, .{ .io = init.io, .allow_external = true, .features = features, .external_stdio = .inherit, .arg_zero = arg_zero }, init.environ_map, positionals);
     defer result.deinit();
 
     try writeAll(init.io, .stdout, result.stdout);
@@ -1496,11 +1508,16 @@ pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []
 }
 
 pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map) !exec.CommandResult {
+    return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, &.{});
+}
+
+fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8) !exec.CommandResult {
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     if (environ_map) |map| try executor.importEnvironment(map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
+    if (positionals.len != 0) try executor.global_positionals.set(allocator, positionals);
 
     return runScriptWithExecutor(allocator, &executor, script, options);
 }
@@ -2206,6 +2223,22 @@ test "runReplInput stops when exit builtin requests shell exit" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 7), result.status);
     try std.testing.expectEqualStrings("$ before\n$ ", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "command string operands set the command name and positional parameters" {
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "echo $0:$#:$1:$2; echo \"$@\"",
+        .{ .io = std.testing.io, .arg_zero = "myname" },
+        null,
+        &.{ "a", "b c" },
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("myname:2:a:b c\na b c\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
