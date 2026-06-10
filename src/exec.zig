@@ -2401,6 +2401,19 @@ pub const Executor = struct {
         return fd <= 2 or self.open_fds.contains(fd);
     }
 
+    // POSIX 2.7.5/2.7.6: [n]<&word and [n]>&word must fail when word names a
+    // file descriptor that is not open, for external commands as well as
+    // builtins.
+    fn validateFdDuplicationTargets(self: Executor, redirections: []const ir.Redirection) !void {
+        for (redirections) |redirection| {
+            if (redirection.operator != .greater_and and redirection.operator != .less_and) continue;
+            const target = redirection.target orelse continue;
+            if (std.mem.eql(u8, target.text, "-")) continue;
+            const to_fd = parseFd(target.text) orelse continue;
+            if (!self.isShellFdOpen(to_fd)) return error.BadFileDescriptor;
+        }
+    }
+
     fn markShellFdOpen(self: *Executor, fd: std.posix.fd_t) !void {
         if (fd <= 2) return;
         try self.open_fds.put(self.allocator, fd, {});
@@ -3659,6 +3672,7 @@ pub const Executor = struct {
                 synthetic_failure = true;
                 break :blk try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found");
             },
+            error.BadFileDescriptor => return self.redirectionErrorResult(expanded, err, false),
             else => return err,
         };
         errdefer external_result.deinit();
@@ -4557,6 +4571,7 @@ pub const Executor = struct {
         var stderr_file: ?std.Io.File = null;
         defer if (stderr_file) |file| file.close(io);
 
+        try self.validateFdDuplicationTargets(command.redirections);
         for (command.redirections) |redirection| {
             if (isHereDocRedirection(redirection)) {
                 if (stdin_file) |file| file.close(io);

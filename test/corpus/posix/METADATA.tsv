@@ -264,6 +264,7 @@ builtin-umask-symbolic-assignment-clauses	builtin	behavior	umask supports comma-
 builtin-trap-exit-status	builtin	behavior	EXIT trap observes the shell exit status
 quote-double-suppresses-splitting	lexing	behavior	double quotes suppress field splitting after parameter expansion
 redirection-bad-input-fd-duplication	redirection	negative	bad input fd duplication reports a diagnostic and command failure
+redirection-bad-input-fd-duplication-external	redirection	negative	bad input fd duplication on an external command reports a diagnostic and command failure
 expansion-command-substitution-subshell-env	expansion	behavior	command substitution variable assignments do not leak to parent shell
 expansion-command-substitution-subshell-cwd	expansion	behavior	command substitution directory changes do not leak to parent shell
 expansion-command-substitution-subshell-function	expansion	behavior	command substitution function definitions do not leak to parent shell
