@@ -656,6 +656,10 @@ pub const TerminalSession = struct {
         switch (session.state) {
             .history_search => unreachable,
             .submitted => {
+                // Accepting the line may have rewritten the buffer (e.g.
+                // abbreviation expansion on Enter); paint the final text so
+                // the scrollback shows the command that actually runs.
+                try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
                 try self.handoffSubmittedInput();
                 self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, semanticInputEnd ++ "\r\n");
