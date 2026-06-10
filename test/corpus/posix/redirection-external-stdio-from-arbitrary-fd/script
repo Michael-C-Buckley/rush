@@ -1,0 +1,4 @@
+/bin/sh -c 'printf "stdout-file\n"; printf "stderr-file\n" >&2' 3>combined 1>&3 2>&3
+printf "after\n"
+/bin/sh -c 'printf "first\n"; printf "second\n" >&3' 3>first 1>&3 3>second
+cat combined first second

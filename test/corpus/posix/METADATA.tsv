@@ -180,6 +180,7 @@ redirection-close-stdout	redirection	behavior	-
 redirection-external-direct-input-fd	redirection	behavior	external command can read an arbitrary input fd opened earlier in the same command
 redirection-external-output-fd-duplication	redirection	behavior	external command can write an arbitrary fd duplicated from stdout in the same command
 redirection-external-same-command-input-fd-duplication	redirection	behavior	external command can duplicate an arbitrary input fd opened earlier in the same command
+redirection-external-stdio-from-arbitrary-fd	redirection	behavior	external command can duplicate an arbitrary output fd opened earlier in the same command back to stdout and stderr
 redirection-function-output	redirection	behavior	-
 redirection-here-doc-basic	redirection	here-doc	-
 redirection-here-doc-tab-strip	redirection	here-doc	-

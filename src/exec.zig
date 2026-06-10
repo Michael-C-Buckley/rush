@@ -3937,6 +3937,33 @@ pub const Executor = struct {
         }
     }
 
+    fn duplicateExternalStdioFromFd(
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        io: std.Io,
+        from_fd: std.posix.fd_t,
+        to_fd: std.posix.fd_t,
+    ) !bool {
+        if (to_fd <= 2) return false;
+        if (from_fd != 1 and from_fd != 2) return false;
+
+        const duplicate: std.Io.File = .{ .handle = try rawDup(to_fd), .flags = .{ .nonblocking = false } };
+        errdefer duplicate.close(io);
+        switch (from_fd) {
+            1 => {
+                if (stdout_file.*) |old| old.close(io);
+                stdout_file.* = duplicate;
+                return true;
+            },
+            2 => {
+                if (stderr_file.*) |old| old.close(io);
+                stderr_file.* = duplicate;
+                return true;
+            },
+            else => unreachable,
+        }
+    }
+
     fn pipelineInputSourceFile(
         self: Executor,
         input_fds: *const std.AutoHashMapUnmanaged(std.posix.fd_t, std.Io.File),
@@ -5141,6 +5168,7 @@ pub const Executor = struct {
                     continue;
                 }
                 const to_fd = parseFd(target.text) orelse continue;
+                if (try duplicateExternalStdioFromFd(&stdout_file, &stderr_file, io, from_fd, to_fd)) continue;
                 if (from_fd == 2 and to_fd == 1 and stdout_file != null) {
                     if (stderr_file) |old| old.close(io);
                     const duped = try rawDup(stdout_file.?.handle);
@@ -5166,6 +5194,14 @@ pub const Executor = struct {
             else => return err,
         };
         inherited_redirections.restore(self, io);
+        if (stdout_file) |file| {
+            file.close(io);
+            stdout_file = null;
+        }
+        if (stderr_file) |file| {
+            file.close(io);
+            stderr_file = null;
+        }
         errdefer child.kill(io);
         _ = registerCancelableChild(options, child);
         if (child.id) |pid| {
@@ -5304,6 +5340,7 @@ pub const Executor = struct {
                     continue;
                 }
                 const to_fd = parseFd(target.text) orelse continue;
+                if (try duplicateExternalStdioFromFd(&stdout_file, &stderr_file, io, from_fd, to_fd)) continue;
                 if (from_fd == 2 and to_fd == 1 and stdout_file != null) {
                     if (stderr_file) |old| old.close(io);
                     const duped = try rawDup(stdout_file.?.handle);
@@ -5347,6 +5384,18 @@ pub const Executor = struct {
             else => return err,
         };
         inherited_redirections.restore(self, io);
+        if (stdin_file) |file| {
+            file.close(io);
+            stdin_file = null;
+        }
+        if (stdout_file) |file| {
+            file.close(io);
+            stdout_file = null;
+        }
+        if (stderr_file) |file| {
+            file.close(io);
+            stderr_file = null;
+        }
         const cancel_pid = registerCancelableChild(options, child);
         defer unregisterCancelableChild(options, cancel_pid);
         defer child.kill(io);
@@ -11243,6 +11292,42 @@ test "external command inherits arbitrary descriptor duplications" {
     const ordered_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, ordered_path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(ordered_output);
     try std.testing.expectEqualStrings("via-ordered-file", ordered_output);
+}
+
+test "external command duplicates same-command arbitrary output fd to stdio" {
+    const combined_path = "rush-test-external-stdio-from-fd.tmp";
+    const ordered_stdout_path = "rush-test-external-stdio-from-fd-stdout.tmp";
+    const ordered_fd_path = "rush-test-external-stdio-from-fd-fd.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, combined_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, ordered_stdout_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, ordered_fd_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\/bin/sh -c 'printf out; printf err >&2' 3>rush-test-external-stdio-from-fd.tmp 1>&3 2>&3
+        \\/usr/bin/printf after
+        \\/bin/sh -c 'printf stdout; printf fd3 >&3' 3>rush-test-external-stdio-from-fd-stdout.tmp 1>&3 3>rush-test-external-stdio-from-fd-fd.tmp
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("after", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(!executor.isShellFdOpen(3));
+
+    const combined_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, combined_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(combined_output);
+    try std.testing.expectEqualStrings("outerr", combined_output);
+
+    const ordered_stdout_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, ordered_stdout_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(ordered_stdout_output);
+    try std.testing.expectEqualStrings("stdout", ordered_stdout_output);
+
+    const ordered_fd_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, ordered_fd_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(ordered_fd_output);
+    try std.testing.expectEqualStrings("fd3", ordered_fd_output);
 }
 
 test "executor short-circuits AND and OR lists" {
