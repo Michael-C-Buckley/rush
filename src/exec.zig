@@ -5066,6 +5066,10 @@ pub const Executor = struct {
             if (isFileOutputRedirection(redirection)) {
                 const target = redirection.target orelse continue;
                 const fd = redirectionFd(redirection) orelse 1;
+                if (fd > 2) {
+                    try inherited_redirections.apply(self, io, redirection);
+                    continue;
+                }
                 var file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
                 switch (fd) {
                     1 => {
@@ -5172,6 +5176,10 @@ pub const Executor = struct {
             if (isFileOutputRedirection(redirection)) {
                 const target = redirection.target orelse continue;
                 const fd = redirectionFd(redirection) orelse 1;
+                if (fd > 2) {
+                    try inherited_redirections.apply(self, io, redirection);
+                    continue;
+                }
                 var file = try openOutputRedirectionFile(io, target.text, redirection.operator, self.shell_options.noclobber);
                 switch (fd) {
                     1 => {
@@ -5388,7 +5396,7 @@ const FdRedirectionGuard = struct {
             try self.saveFd(executor, fd);
             var file = try fileFromBytes(io, redirection.here_doc orelse "");
             defer if (file.handle != fd) file.close(io);
-            try rawDup2(file.handle, fd);
+            try installRedirectionFile(file, fd);
             try executor.markShellFdOpen(fd);
             return;
         }
@@ -5401,7 +5409,7 @@ const FdRedirectionGuard = struct {
             else
                 try std.Io.Dir.cwd().openFile(io, target.text, .{});
             defer if (file.handle != fd) file.close(io);
-            try rawDup2(file.handle, fd);
+            try installRedirectionFile(file, fd);
             try executor.markShellFdOpen(fd);
             return;
         }
@@ -5411,7 +5419,7 @@ const FdRedirectionGuard = struct {
             try self.saveFd(executor, fd);
             var file = try openOutputRedirectionFile(io, target.text, redirection.operator, executor.shell_options.noclobber);
             defer if (file.handle != fd) file.close(io);
-            try rawDup2(file.handle, fd);
+            try installRedirectionFile(file, fd);
             try executor.markShellFdOpen(fd);
             return;
         }
@@ -5708,6 +5716,16 @@ fn dupFileExcept(file: std.Io.File, excluded_fd: std.posix.fd_t) !std.Io.File {
     };
     rawClose(first) catch {};
     return .{ .handle = second, .flags = file.flags };
+}
+
+fn installRedirectionFile(file: std.Io.File, fd: std.posix.fd_t) !void {
+    if (file.handle == fd) {
+        const duplicate = try rawDup(file.handle);
+        defer rawClose(duplicate) catch {};
+        try rawDup2(duplicate, fd);
+        return;
+    }
+    try rawDup2(file.handle, fd);
 }
 
 /// Duplicates one of the shell's own stdio descriptors so a pipeline
@@ -11004,6 +11022,32 @@ test "external command duplicates same-command arbitrary input fd" {
     try std.testing.expectEqualStrings("via19\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
     try std.testing.expect(!executor.isShellFdOpen(input_fd));
+}
+
+test "external command inherits direct arbitrary redirection fds" {
+    const input_path = "rush-test-external-direct-input-fd.tmp";
+    const output_path = "rush-test-external-direct-output-fd.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = "via-direct3\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\/bin/sh -c 'cat <&3' 3<rush-test-external-direct-input-fd.tmp
+        \\/bin/sh -c 'printf via-output3 >&3' 3>rush-test-external-direct-output-fd.tmp
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("via-direct3\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(!executor.isShellFdOpen(3));
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, output_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(output);
+    try std.testing.expectEqualStrings("via-output3", output);
 }
 
 test "executor short-circuits AND and OR lists" {

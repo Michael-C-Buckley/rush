@@ -176,6 +176,7 @@ redirection-bad-fd-duplication	redirection	negative	-
 redirection-builtin-stderr-file	redirection	behavior	-
 redirection-close-arbitrary-fd	redirection	behavior	-
 redirection-close-stdout	redirection	behavior	-
+redirection-external-direct-input-fd	redirection	behavior	external command can read an arbitrary input fd opened earlier in the same command
 redirection-external-same-command-input-fd-duplication	redirection	behavior	external command can duplicate an arbitrary input fd opened earlier in the same command
 redirection-function-output	redirection	behavior	-
 redirection-here-doc-basic	redirection	here-doc	-
