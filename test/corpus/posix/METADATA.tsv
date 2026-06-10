@@ -18,6 +18,7 @@ assignment-command-substitution-status	variables	behavior	assignment-only comman
 async-builtin-fallback	job_control	job	-
 async-builtin-job-wait	job_control	job	-
 async-compound-job-wait	job_control	job	-
+async-external-fd-duplication	redirection	job;behavior	async external command can write an arbitrary fd duplicated from stdout in the same command
 async-external-pid	job_control	job	-
 async-wait-last-pid	job_control	job	-
 async-wait-unknown-pid	job_control	negative;job	-

@@ -5087,8 +5087,16 @@ pub const Executor = struct {
             else => return err,
         };
         for (command.redirections) |redirection| {
+            if (redirection.operator == .less_and) {
+                const from_fd = redirectionFd(redirection) orelse 0;
+                if (from_fd > 2) {
+                    try self.applyAsyncExternalNonStdioDuplication(&stdout_file, &stderr_file, &inherited_redirections, io, redirection, from_fd);
+                    continue;
+                }
+            }
             if (isInputFdRedirection(redirection)) {
                 const fd = redirectionFd(redirection) orelse 0;
+                if (fd > 2) try moveAsyncExternalRedirectionHandles(&stdout_file, &stderr_file, io, fd);
                 try inherited_redirections.apply(self, io, redirection);
                 if (fd == 0) stdin_redirected = true;
                 continue;
@@ -5097,6 +5105,7 @@ pub const Executor = struct {
                 const target = redirection.target orelse continue;
                 const fd = redirectionFd(redirection) orelse 1;
                 if (fd > 2) {
+                    try moveAsyncExternalRedirectionHandles(&stdout_file, &stderr_file, io, fd);
                     try inherited_redirections.apply(self, io, redirection);
                     continue;
                 }
@@ -5117,6 +5126,10 @@ pub const Executor = struct {
             if (redirection.operator == .greater_and) {
                 const from_fd = redirectionFd(redirection) orelse 1;
                 const target = redirection.target orelse continue;
+                if (from_fd > 2) {
+                    try self.applyAsyncExternalNonStdioDuplication(&stdout_file, &stderr_file, &inherited_redirections, io, redirection, from_fd);
+                    continue;
+                }
                 if (std.mem.eql(u8, target.text, "-")) {
                     if (from_fd == 1) {
                         if (stdout_file) |old| old.close(io);
@@ -5167,6 +5180,42 @@ pub const Executor = struct {
             self.next_job_id += 1;
         }
         return emptyResult(self.allocator, 0);
+    }
+
+    fn applyAsyncExternalNonStdioDuplication(
+        self: *Executor,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        inherited_redirections: *FdRedirectionGuard,
+        io: std.Io,
+        redirection: ir.Redirection,
+        from_fd: std.posix.fd_t,
+    ) !void {
+        try moveAsyncExternalRedirectionHandles(stdout_file, stderr_file, io, from_fd);
+
+        const target = redirection.target orelse return;
+        if (std.mem.eql(u8, target.text, "-")) {
+            try inherited_redirections.apply(self, io, redirection);
+            return;
+        }
+
+        const to_fd = parseFd(target.text) orelse return;
+        const source_file: ?std.Io.File = if (to_fd == 1)
+            stdout_file.*
+        else if (to_fd == 2)
+            stderr_file.*
+        else
+            null;
+        if (source_file) |file| {
+            try self.applyExternalInheritedFile(inherited_redirections, from_fd, file);
+        } else {
+            try inherited_redirections.apply(self, io, redirection);
+        }
+    }
+
+    fn moveAsyncExternalRedirectionHandles(stdout_file: *?std.Io.File, stderr_file: *?std.Io.File, io: std.Io, fd: std.posix.fd_t) !void {
+        try moveExternalFileHandle(stdout_file, io, fd);
+        try moveExternalFileHandle(stderr_file, io, fd);
     }
 
     fn remainingScriptStdin(self: Executor) ?[]const u8 {
@@ -11789,6 +11838,42 @@ test "executor starts external commands asynchronously" {
     try std.testing.expect(std.mem.startsWith(u8, result.stdout, "pid="));
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "\ndone\n"));
     try std.testing.expect(result.stdout.len > "pid=\ndone\n".len);
+}
+
+test "executor asynchronously inherits arbitrary descriptor duplications" {
+    const output_path = "rush-async-external-fd-dup.tmp";
+    const stderr_path = "rush-async-external-fd-dup.err";
+    const stdout_path = "rush-async-external-stdout-fd.tmp";
+    const direct_path = "rush-async-external-direct-fd.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stdout_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, direct_path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\/bin/sh -c 'printf via-dup >&3' >rush-async-external-fd-dup.tmp 3>&1 &
+        \\wait $!
+        \\/bin/sh -c 'printf err >&2' 2>rush-async-external-fd-dup.err 3>&1 &
+        \\wait $!
+        \\/bin/sh -c 'printf stdout; printf direct >&3' >rush-async-external-stdout-fd.tmp 3>rush-async-external-direct-fd.tmp &
+        \\wait $!
+        \\printf 'out:'; /bin/cat rush-async-external-fd-dup.tmp
+        \\printf ' err:'; /bin/cat rush-async-external-fd-dup.err
+        \\printf ' stdout:'; /bin/cat rush-async-external-stdout-fd.tmp
+        \\printf ' direct:'; /bin/cat rush-async-external-direct-fd.tmp
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("out:via-dup err:err stdout:stdout direct:direct", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(!executor.isShellFdOpen(3));
 }
 
 test "executor applies POSIX pipeline negation" {
