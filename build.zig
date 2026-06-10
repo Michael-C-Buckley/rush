@@ -86,11 +86,29 @@ pub fn build(b: *std.Build) void {
     completion_validate.addArtifactArg(exe);
     completion_validate_step.dependOn(&completion_validate.step);
 
+    const invocation_stdin_check = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\set -eu
+        \\tmp=$(mktemp -d)
+        \\trap 'rm -rf "$tmp"' EXIT
+        \\printf '%s\n' 'echo hi' | "$1" >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = hi
+        \\test ! -s "$tmp/stderr"
+        \\printf '%s\n' 'echo "$1"' | "$1" -s posarg >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = posarg
+        \\test ! -s "$tmp/stderr"
+        ,
+        "sh",
+    });
+    invocation_stdin_check.addArtifactArg(exe);
+
     const fmt_step = b.step("fmt", "Check code formatting");
     const fmt_check = b.addFmt(.{ .paths = &.{ "src", "build.zig", "build.zig.zon" }, .check = true });
     fmt_step.dependOn(&fmt_check.step);
     test_step.dependOn(fmt_step);
     test_step.dependOn(&completion_validate.step);
+    test_step.dependOn(&invocation_stdin_check.step);
 
     const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
     const cross_check = b.addSystemCommand(&.{ "sh", "scripts/check-cross-targets.sh" });
