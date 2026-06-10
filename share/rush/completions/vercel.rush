@@ -1,0 +1,77 @@
+# First-party Vercel CLI completion slice.
+
+complete vercel --option --short h --long help --description 'show help'
+complete vercel --option --short v --long version --description 'show version'
+complete vercel --option --long token --value-name token --description 'authentication token'
+complete vercel --option --long scope --value-name scope --description 'team or user scope'
+complete vercel --option-value --long scope --function __rush_complete_vercel_scopes
+complete vercel --subcommand alias --description 'manage aliases'
+complete vercel --subcommand build --description 'build project locally'
+complete vercel --subcommand deploy --description 'deploy project'
+complete vercel --subcommand dev --description 'start development server'
+complete vercel --subcommand domains --description 'manage domains'
+complete vercel --subcommand env --description 'manage environment variables'
+complete vercel --subcommand git --description 'manage Git provider links'
+complete vercel --subcommand inspect --description 'inspect deployment'
+complete vercel --subcommand link --description 'link local directory to project'
+complete vercel --subcommand list --description 'list deployments'
+complete vercel --subcommand login --description 'log in'
+complete vercel --subcommand logout --description 'log out'
+complete vercel --subcommand logs --description 'show deployment logs'
+complete vercel --subcommand project --description 'manage projects'
+complete vercel --subcommand pull --description 'pull project settings'
+complete vercel --subcommand remove --description 'remove deployment'
+complete vercel --subcommand switch --description 'switch account or team'
+complete vercel --subcommand teams --description 'manage teams'
+complete vercel --subcommand whoami --description 'show current user'
+complete 'vercel deploy' --option --long prod --description 'deploy to production'
+complete 'vercel deploy' --option --long prebuilt --description 'deploy prebuilt output'
+complete 'vercel deploy' --option --long archive --value-name format --description 'archive format'
+complete 'vercel deploy' --option-value --long archive --function __rush_complete_vercel_archives
+complete 'vercel deploy' --argument --function __rush_complete_vercel_project_dirs
+complete 'vercel build' --option --long prod --description 'build for production'
+complete 'vercel build' --argument --function __rush_complete_vercel_project_dirs
+complete 'vercel dev' --argument --function __rush_complete_vercel_project_dirs
+complete 'vercel env' --subcommand add --description 'add environment variable'
+complete 'vercel env' --subcommand list --description 'list environment variables'
+complete 'vercel env' --subcommand pull --description 'pull environment variables'
+complete 'vercel env' --subcommand remove --description 'remove environment variable'
+complete 'vercel env add' --argument --function __rush_complete_vercel_env_names
+complete 'vercel env remove' --argument --function __rush_complete_vercel_env_names
+complete 'vercel inspect' --argument --function __rush_complete_vercel_deployments
+complete 'vercel logs' --argument --function __rush_complete_vercel_deployments
+complete 'vercel remove' --argument --function __rush_complete_vercel_deployments
+complete 'vercel project' --subcommand add --description 'create project'
+complete 'vercel project' --subcommand list --description 'list projects'
+complete 'vercel project' --subcommand remove --description 'remove project'
+complete 'vercel project remove' --argument --function __rush_complete_vercel_projects
+complete 'vercel teams' --subcommand list --description 'list teams'
+complete 'vercel teams' --subcommand switch --description 'switch team'
+complete 'vercel teams switch' --argument --function __rush_complete_vercel_scopes
+
+__rush_complete_vercel_projects() {
+  vercel project list 2>/dev/null | awk 'NR > 1 { print $1 }' | while read project; do test -n "$project" && completion candidate "$project" --kind plain; done
+  test -f .vercel/project.json && awk -F'"' '/"projectName"/ { print $4 }' .vercel/project.json 2>/dev/null | while read project; do test -n "$project" && completion candidate "$project" --kind plain; done
+}
+
+__rush_complete_vercel_deployments() {
+  vercel list 2>/dev/null | awk 'NR > 1 { print $1 }' | while read deployment; do test -n "$deployment" && completion candidate "$deployment" --kind plain; done
+}
+
+__rush_complete_vercel_scopes() {
+  vercel teams list 2>/dev/null | awk 'NR > 1 { print $1 }' | while read team; do test -n "$team" && completion candidate "$team" --kind plain; done
+}
+
+__rush_complete_vercel_env_names() {
+  vercel env list 2>/dev/null | awk 'NR > 1 { print $1 }' | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+  env | sed 's/=.*//' | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+}
+
+__rush_complete_vercel_project_dirs() {
+  find . -maxdepth 3 -type f \( -name vercel.json -o -path '*/.vercel/project.json' \) 2>/dev/null | while read file; do dirname "$file"; done | sort -u | while read dir; do completion candidate "$dir" --kind directory; done
+  completion candidate . --kind directory
+}
+
+__rush_complete_vercel_archives() {
+  completion candidate tgz --kind plain
+}
