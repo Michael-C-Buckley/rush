@@ -1,0 +1,516 @@
+# First-party docker completion slice.
+
+# Global options.
+complete docker --option --short h --long help --description 'show help'
+complete docker --option --short v --long version --description 'show version'
+complete docker --option --short H --long host --value-name host --description 'daemon socket to connect to'
+complete docker --option --long context --value-name context --description 'docker context to use'
+complete docker --option-value --long context --function __rush_complete_docker_contexts
+complete docker --option --long config --value-name dir --description 'client config directory'
+complete docker --option-value --long config --function __rush_complete_docker_directories
+complete docker --option --short l --long log-level --value-name level --description 'set logging level'
+complete docker --option-value --short l --function __rush_complete_docker_log_levels
+complete docker --option-value --long log-level --function __rush_complete_docker_log_levels
+complete docker --option --long tls --description 'use TLS'
+complete docker --option --long tlscacert --value-name file --description 'trust certs signed only by this CA'
+complete docker --option-value --long tlscacert --function __rush_complete_docker_files
+complete docker --option --long tlscert --value-name file --description 'path to TLS certificate file'
+complete docker --option-value --long tlscert --function __rush_complete_docker_files
+complete docker --option --long tlskey --value-name file --description 'path to TLS key file'
+complete docker --option-value --long tlskey --function __rush_complete_docker_files
+complete docker --option --long tlsverify --description 'use TLS and verify the remote'
+
+# Root subcommands.
+complete docker --subcommand run --description 'run a command in a new container'
+complete docker --subcommand build --description 'build an image from a Dockerfile'
+complete docker --subcommand pull --description 'download an image from a registry'
+complete docker --subcommand push --description 'upload an image to a registry'
+complete docker --subcommand ps --description 'list containers'
+complete docker --subcommand images --description 'list images'
+complete docker --subcommand exec --description 'execute a command in a running container'
+complete docker --subcommand logs --description 'fetch container logs'
+complete docker --subcommand stop --description 'stop running containers'
+complete docker --subcommand rm --description 'remove containers'
+complete docker --subcommand compose --description 'manage multi-container applications'
+complete docker --subcommand context --description 'manage contexts'
+complete docker --subcommand volume --description 'manage volumes'
+complete docker --subcommand network --description 'manage networks'
+complete docker --subcommand container --description 'manage containers'
+complete docker --subcommand image --description 'manage images'
+complete docker --subcommand inspect --description 'return low-level information'
+complete docker --subcommand login --description 'log in to a registry'
+complete docker --subcommand logout --description 'log out from a registry'
+complete docker --subcommand tag --description 'create an image tag'
+complete docker --subcommand start --description 'start stopped containers'
+complete docker --subcommand restart --description 'restart containers'
+complete docker --subcommand kill --description 'kill containers'
+
+# run/build/pull/push.
+complete 'docker run' --option --short h --long help --description 'show help'
+complete 'docker run' --option --short d --long detach --description 'run container in background'
+complete 'docker run' --option --short i --long interactive --description 'keep stdin open'
+complete 'docker run' --option --short t --long tty --description 'allocate a pseudo-TTY'
+complete 'docker run' --option --long rm --description 'automatically remove the container when it exits'
+complete 'docker run' --option --short n --long name --value-name name --description 'assign a container name'
+complete 'docker run' --option --short p --long publish --value-name port --description 'publish a container port'
+complete 'docker run' --option-value --short p --function __rush_complete_docker_ports
+complete 'docker run' --option-value --long publish --function __rush_complete_docker_ports
+complete 'docker run' --option --short P --long publish-all --description 'publish all exposed ports'
+complete 'docker run' --option --short e --long env --value-name key=value --description 'set environment variables'
+complete 'docker run' --option-value --short e --function __rush_complete_docker_env_vars
+complete 'docker run' --option-value --long env --function __rush_complete_docker_env_vars
+complete 'docker run' --option --long env-file --value-name file --description 'read environment variables from file'
+complete 'docker run' --option-value --long env-file --function __rush_complete_docker_files
+complete 'docker run' --option --short v --long volume --value-name volume --description 'bind mount a volume'
+complete 'docker run' --option-value --short v --function __rush_complete_docker_mounts
+complete 'docker run' --option-value --long volume --function __rush_complete_docker_mounts
+complete 'docker run' --option --long mount --value-name mount --description 'attach a filesystem mount'
+complete 'docker run' --option-value --long mount --function __rush_complete_docker_mount_specs
+complete 'docker run' --option --short w --long workdir --value-name dir --description 'working directory inside the container'
+complete 'docker run' --option --short u --long user --value-name user --description 'username or UID'
+complete 'docker run' --option --long entrypoint --value-name command --description 'overwrite default entrypoint'
+complete 'docker run' --option --long hostname --value-name name --description 'container host name'
+complete 'docker run' --option --long network --value-name network --description 'connect to a network'
+complete 'docker run' --option-value --long network --function __rush_complete_docker_networks
+complete 'docker run' --option --long add-host --value-name host:ip --description 'add custom host-to-IP mapping'
+complete 'docker run' --option --long restart --value-name policy --description 'restart policy'
+complete 'docker run' --option-value --long restart --function __rush_complete_docker_restart_policies
+complete 'docker run' --option --long platform --value-name platform --description 'set platform'
+complete 'docker run' --option-value --long platform --function __rush_complete_docker_platforms
+complete 'docker run' --option --long pull --value-name policy --description 'pull image policy'
+complete 'docker run' --option-value --long pull --function __rush_complete_docker_pull_policies
+complete 'docker run' --argument --function __rush_complete_docker_images_and_commands
+
+complete 'docker build' --option --short h --long help --description 'show help'
+complete 'docker build' --option --short f --long file --value-name file --description 'Dockerfile path'
+complete 'docker build' --option-value --short f --function __rush_complete_docker_dockerfiles
+complete 'docker build' --option-value --long file --function __rush_complete_docker_dockerfiles
+complete 'docker build' --option --short t --long tag --value-name tag --description 'name and optionally tag the image'
+complete 'docker build' --option-value --short t --function __rush_complete_docker_image_tags
+complete 'docker build' --option-value --long tag --function __rush_complete_docker_image_tags
+complete 'docker build' --option --long build-arg --value-name key=value --description 'set build-time variables'
+complete 'docker build' --option-value --long build-arg --function __rush_complete_docker_build_args
+complete 'docker build' --option --long target --value-name stage --description 'target build stage'
+complete 'docker build' --option --long platform --value-name platform --description 'target platform'
+complete 'docker build' --option-value --long platform --function __rush_complete_docker_platforms
+complete 'docker build' --option --long pull --description 'always attempt to pull newer base images'
+complete 'docker build' --option --long no-cache --description 'do not use cache'
+complete 'docker build' --option --short q --long quiet --description 'suppress build output'
+complete 'docker build' --argument --function __rush_complete_docker_directories
+
+complete 'docker pull' --option --short h --long help --description 'show help'
+complete 'docker pull' --option --short a --long all-tags --description 'download all tagged images'
+complete 'docker pull' --option --long platform --value-name platform --description 'set platform'
+complete 'docker pull' --option-value --long platform --function __rush_complete_docker_platforms
+complete 'docker pull' --argument --function __rush_complete_docker_registry_images
+
+complete 'docker push' --option --short h --long help --description 'show help'
+complete 'docker push' --option --short a --long all-tags --description 'push all tags of an image'
+complete 'docker push' --argument --function __rush_complete_docker_images
+
+# ps/images and inspection.
+complete 'docker ps' --option --short h --long help --description 'show help'
+complete 'docker ps' --option --short a --long all --description 'show all containers'
+complete 'docker ps' --option --short q --long quiet --description 'only display container IDs'
+complete 'docker ps' --option --short s --long size --description 'display total file sizes'
+complete 'docker ps' --option --short f --long filter --value-name filter --description 'filter output'
+complete 'docker ps' --option-value --short f --function __rush_complete_docker_container_filters
+complete 'docker ps' --option-value --long filter --function __rush_complete_docker_container_filters
+complete 'docker ps' --option --long format --value-name template --description 'format output using a template'
+complete 'docker ps' --option-value --long format --function __rush_complete_docker_ps_formats
+
+complete 'docker images' --option --short h --long help --description 'show help'
+complete 'docker images' --option --short a --long all --description 'show all images'
+complete 'docker images' --option --short q --long quiet --description 'only show image IDs'
+complete 'docker images' --option --long digests --description 'show digests'
+complete 'docker images' --option --short f --long filter --value-name filter --description 'filter output'
+complete 'docker images' --option-value --short f --function __rush_complete_docker_image_filters
+complete 'docker images' --option-value --long filter --function __rush_complete_docker_image_filters
+complete 'docker images' --argument --function __rush_complete_docker_images
+
+complete 'docker inspect' --option --short h --long help --description 'show help'
+complete 'docker inspect' --option --short f --long format --value-name template --description 'format output using a template'
+complete 'docker inspect' --argument --function __rush_complete_docker_objects
+
+# container lifecycle.
+complete 'docker exec' --option --short h --long help --description 'show help'
+complete 'docker exec' --option --short d --long detach --description 'run command in background'
+complete 'docker exec' --option --short i --long interactive --description 'keep stdin open'
+complete 'docker exec' --option --short t --long tty --description 'allocate a pseudo-TTY'
+complete 'docker exec' --option --short e --long env --value-name key=value --description 'set environment variables'
+complete 'docker exec' --option-value --short e --function __rush_complete_docker_env_vars
+complete 'docker exec' --option-value --long env --function __rush_complete_docker_env_vars
+complete 'docker exec' --option --short u --long user --value-name user --description 'username or UID'
+complete 'docker exec' --option --short w --long workdir --value-name dir --description 'working directory inside the container'
+complete 'docker exec' --argument --function __rush_complete_docker_exec_args
+
+complete 'docker logs' --option --short h --long help --description 'show help'
+complete 'docker logs' --option --short f --long follow --description 'follow log output'
+complete 'docker logs' --option --long since --value-name time --description 'show logs since timestamp or duration'
+complete 'docker logs' --option-value --long since --function __rush_complete_docker_durations
+complete 'docker logs' --option --short n --long tail --value-name lines --description 'number of lines to show'
+complete 'docker logs' --option --short t --long timestamps --description 'show timestamps'
+complete 'docker logs' --option --long details --description 'show extra details'
+complete 'docker logs' --argument --function __rush_complete_docker_containers
+
+complete 'docker stop' --option --short h --long help --description 'show help'
+complete 'docker stop' --option --short t --long time --value-name seconds --description 'seconds to wait before killing'
+complete 'docker stop' --argument --function __rush_complete_docker_running_containers
+complete 'docker rm' --option --short h --long help --description 'show help'
+complete 'docker rm' --option --short f --long force --description 'force removal of running containers'
+complete 'docker rm' --option --short v --long volumes --description 'remove anonymous volumes'
+complete 'docker rm' --argument --function __rush_complete_docker_containers
+complete 'docker start' --argument --function __rush_complete_docker_stopped_containers
+complete 'docker restart' --argument --function __rush_complete_docker_running_containers
+complete 'docker kill' --argument --function __rush_complete_docker_running_containers
+
+# compose.
+complete 'docker compose' --option --short h --long help --description 'show help'
+complete 'docker compose' --option --short f --long file --value-name file --description 'compose configuration file'
+complete 'docker compose' --option-value --short f --function __rush_complete_docker_compose_files
+complete 'docker compose' --option-value --long file --function __rush_complete_docker_compose_files
+complete 'docker compose' --option --short p --long project-name --value-name name --description 'project name'
+complete 'docker compose' --option-value --short p --function __rush_complete_docker_compose_projects
+complete 'docker compose' --option-value --long project-name --function __rush_complete_docker_compose_projects
+complete 'docker compose' --option --long profile --value-name profile --description 'enable a profile'
+complete 'docker compose' --option-value --long profile --function __rush_complete_docker_compose_profiles
+complete 'docker compose' --subcommand up --description 'create and start containers'
+complete 'docker compose' --subcommand down --description 'stop and remove resources'
+complete 'docker compose' --subcommand build --description 'build or rebuild services'
+complete 'docker compose' --subcommand pull --description 'pull service images'
+complete 'docker compose' --subcommand push --description 'push service images'
+complete 'docker compose' --subcommand ps --description 'list containers'
+complete 'docker compose' --subcommand logs --description 'view output from containers'
+complete 'docker compose' --subcommand exec --description 'execute a command in a service container'
+complete 'docker compose' --subcommand run --description 'run a one-off command'
+complete 'docker compose' --subcommand restart --description 'restart services'
+complete 'docker compose' --subcommand stop --description 'stop services'
+complete 'docker compose' --subcommand rm --description 'remove stopped service containers'
+complete 'docker compose' --subcommand config --description 'parse and render compose file'
+complete 'docker compose up' --option --short d --long detach --description 'run containers in background'
+complete 'docker compose up' --option --long build --description 'build images before starting'
+complete 'docker compose up' --option --long no-build --description 'do not build images'
+complete 'docker compose up' --option --long force-recreate --description 'recreate containers even if unchanged'
+complete 'docker compose up' --argument --function __rush_complete_docker_compose_services
+complete 'docker compose down' --option --short v --long volumes --description 'remove named volumes'
+complete 'docker compose down' --option --long remove-orphans --description 'remove orphan containers'
+complete 'docker compose build' --argument --function __rush_complete_docker_compose_services
+complete 'docker compose pull' --argument --function __rush_complete_docker_compose_services
+complete 'docker compose push' --argument --function __rush_complete_docker_compose_services
+complete 'docker compose logs' --option --short f --long follow --description 'follow log output'
+complete 'docker compose logs' --argument --function __rush_complete_docker_compose_services
+complete 'docker compose exec' --argument --function __rush_complete_docker_compose_exec_args
+complete 'docker compose run' --argument --function __rush_complete_docker_compose_exec_args
+complete 'docker compose restart' --argument --function __rush_complete_docker_compose_services
+complete 'docker compose stop' --argument --function __rush_complete_docker_compose_services
+complete 'docker compose rm' --argument --function __rush_complete_docker_compose_services
+
+# context / volume / network.
+complete 'docker context' --subcommand ls --description 'list contexts'
+complete 'docker context' --subcommand use --description 'set current context'
+complete 'docker context' --subcommand inspect --description 'inspect contexts'
+complete 'docker context' --subcommand create --description 'create a context'
+complete 'docker context' --subcommand rm --description 'remove contexts'
+complete 'docker context use' --argument --function __rush_complete_docker_contexts
+complete 'docker context inspect' --argument --function __rush_complete_docker_contexts
+complete 'docker context rm' --argument --function __rush_complete_docker_contexts
+
+complete 'docker volume' --subcommand create --description 'create a volume'
+complete 'docker volume' --subcommand inspect --description 'display volume details'
+complete 'docker volume' --subcommand ls --description 'list volumes'
+complete 'docker volume' --subcommand rm --description 'remove volumes'
+complete 'docker volume' --subcommand prune --description 'remove unused volumes'
+complete 'docker volume inspect' --argument --function __rush_complete_docker_volumes
+complete 'docker volume rm' --argument --function __rush_complete_docker_volumes
+
+complete 'docker network' --subcommand create --description 'create a network'
+complete 'docker network' --subcommand connect --description 'connect a container to a network'
+complete 'docker network' --subcommand disconnect --description 'disconnect a container from a network'
+complete 'docker network' --subcommand inspect --description 'display network details'
+complete 'docker network' --subcommand ls --description 'list networks'
+complete 'docker network' --subcommand rm --description 'remove networks'
+complete 'docker network connect' --argument --function __rush_complete_docker_network_connect_args
+complete 'docker network disconnect' --argument --function __rush_complete_docker_network_connect_args
+complete 'docker network inspect' --argument --function __rush_complete_docker_networks
+complete 'docker network rm' --argument --function __rush_complete_docker_networks
+
+# container/image aliases.
+complete 'docker container' --subcommand ls --description 'list containers'
+complete 'docker container' --subcommand logs --description 'fetch container logs'
+complete 'docker container' --subcommand exec --description 'execute a command in a running container'
+complete 'docker container' --subcommand stop --description 'stop containers'
+complete 'docker container' --subcommand rm --description 'remove containers'
+complete 'docker container ls' --argument --function __rush_complete_docker_containers
+complete 'docker container logs' --argument --function __rush_complete_docker_containers
+complete 'docker container exec' --argument --function __rush_complete_docker_exec_args
+complete 'docker container stop' --argument --function __rush_complete_docker_running_containers
+complete 'docker container rm' --argument --function __rush_complete_docker_containers
+complete 'docker image' --subcommand ls --description 'list images'
+complete 'docker image' --subcommand pull --description 'pull an image'
+complete 'docker image' --subcommand push --description 'push an image'
+complete 'docker image' --subcommand rm --description 'remove images'
+complete 'docker image' --subcommand tag --description 'create a tag'
+complete 'docker image ls' --argument --function __rush_complete_docker_images
+complete 'docker image pull' --argument --function __rush_complete_docker_registry_images
+complete 'docker image push' --argument --function __rush_complete_docker_images
+complete 'docker image rm' --argument --function __rush_complete_docker_images
+complete 'docker image tag' --argument --function __rush_complete_docker_images
+complete 'docker tag' --argument --function __rush_complete_docker_images
+
+__rush_complete_docker_exec_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_docker_running_containers
+  else
+    __rush_complete_docker_commands
+  fi
+}
+
+__rush_complete_docker_compose_exec_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_docker_compose_services
+  else
+    __rush_complete_docker_commands
+  fi
+}
+
+__rush_complete_docker_network_connect_args() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_docker_networks
+  else
+    __rush_complete_docker_containers
+  fi
+}
+
+__rush_complete_docker_images_and_commands() {
+  if test "$(completion argument-index)" = 1; then
+    __rush_complete_docker_images
+    __rush_complete_docker_registry_images
+  else
+    __rush_complete_docker_commands
+  fi
+}
+
+__rush_complete_docker_containers() {
+  docker ps -a --format '{{.Names}}' 2>/dev/null | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+  completion candidate app --kind plain
+  completion candidate api --kind plain
+  completion candidate web --kind plain
+  completion candidate db --kind plain
+  completion candidate redis --kind plain
+}
+
+__rush_complete_docker_running_containers() {
+  docker ps --format '{{.Names}}' 2>/dev/null | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+  __rush_complete_docker_containers
+}
+
+__rush_complete_docker_stopped_containers() {
+  docker ps -a --filter status=exited --filter status=created --format '{{.Names}}' 2>/dev/null | while read name; do test -n "$name" && completion candidate "$name" --kind plain; done
+  __rush_complete_docker_containers
+}
+
+__rush_complete_docker_images() {
+  docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | while read image; do test -n "$image" && test "$image" != '<none>:<none>' && completion candidate "$image" --kind plain; done
+  completion candidate alpine:latest --kind plain
+  completion candidate ubuntu:latest --kind plain
+  completion candidate debian:bookworm --kind plain
+  completion candidate nginx:latest --kind plain
+  completion candidate postgres:16 --kind plain
+  completion candidate redis:7 --kind plain
+  completion candidate node:22 --kind plain
+  completion candidate golang:1.23 --kind plain
+}
+
+__rush_complete_docker_registry_images() {
+  __rush_complete_docker_images
+  completion candidate busybox:latest --kind plain
+  completion candidate python:3 --kind plain
+  completion candidate ghcr.io/ --kind plain
+  completion candidate docker.io/library/ --kind plain
+}
+
+__rush_complete_docker_contexts() {
+  docker context ls --format '{{.Name}}' 2>/dev/null | while read context; do test -n "$context" && completion candidate "$context" --kind plain; done
+  completion candidate default --kind plain
+  completion candidate desktop-linux --kind plain
+  completion candidate colima --kind plain
+  completion candidate remote --kind plain
+}
+
+__rush_complete_docker_volumes() {
+  docker volume ls --format '{{.Name}}' 2>/dev/null | while read volume; do test -n "$volume" && completion candidate "$volume" --kind plain; done
+  completion candidate app-data --kind plain
+  completion candidate db-data --kind plain
+  completion candidate cache --kind plain
+}
+
+__rush_complete_docker_networks() {
+  docker network ls --format '{{.Name}}' 2>/dev/null | while read network; do test -n "$network" && completion candidate "$network" --kind plain; done
+  completion candidate bridge --kind plain
+  completion candidate host --kind plain
+  completion candidate none --kind plain
+  completion candidate app --kind plain
+}
+
+__rush_complete_docker_compose_services() {
+  docker compose config --services 2>/dev/null | while read service; do test -n "$service" && completion candidate "$service" --kind plain; done
+  completion candidate app --kind plain
+  completion candidate api --kind plain
+  completion candidate web --kind plain
+  completion candidate db --kind plain
+  completion candidate redis --kind plain
+  completion candidate worker --kind plain
+}
+
+__rush_complete_docker_compose_projects() {
+  docker compose ls --format json 2>/dev/null | sed -n 's/.*"Name":"\([^"]*\)".*/\1/p' | while read project; do test -n "$project" && completion candidate "$project" --kind plain; done
+  completion candidate app --kind plain
+  completion candidate dev --kind plain
+}
+
+__rush_complete_docker_compose_profiles() {
+  completion candidate dev --kind plain
+  completion candidate test --kind plain
+  completion candidate debug --kind plain
+  completion candidate tools --kind plain
+}
+
+__rush_complete_docker_files() {
+  completion files
+}
+
+__rush_complete_docker_directories() {
+  completion directories --append-slash
+}
+
+__rush_complete_docker_dockerfiles() {
+  completion candidate Dockerfile --kind file
+  completion candidate Dockerfile.dev --kind file
+  completion candidate Dockerfile.test --kind file
+  completion files
+}
+
+__rush_complete_docker_compose_files() {
+  completion candidate compose.yaml --kind file
+  completion candidate compose.yml --kind file
+  completion candidate docker-compose.yaml --kind file
+  completion candidate docker-compose.yml --kind file
+  completion files --extension .yaml
+  completion files --extension .yml
+}
+
+__rush_complete_docker_mounts() {
+  __rush_complete_docker_volumes
+  completion directories --append-slash
+}
+
+__rush_complete_docker_mount_specs() {
+  completion candidate type=bind,source=,target= --kind plain
+  completion candidate type=volume,source=,target= --kind plain
+  completion candidate type=tmpfs,target= --kind plain
+}
+
+__rush_complete_docker_env_vars() {
+  completion candidate NODE_ENV= --kind variable
+  completion candidate PORT= --kind variable
+  completion candidate DATABASE_URL= --kind variable
+  completion candidate REDIS_URL= --kind variable
+  completion candidate DEBUG= --kind variable
+}
+
+__rush_complete_docker_build_args() {
+  completion candidate VERSION= --kind variable
+  completion candidate GIT_SHA= --kind variable
+  completion candidate NODE_ENV= --kind variable
+  completion candidate BUILDKIT_INLINE_CACHE=1 --kind variable
+}
+
+__rush_complete_docker_image_tags() {
+  completion candidate app:latest --kind plain
+  completion candidate app:dev --kind plain
+  completion candidate localhost:5000/app:latest --kind plain
+}
+
+__rush_complete_docker_ports() {
+  completion candidate 80:80 --kind plain
+  completion candidate 443:443 --kind plain
+  completion candidate 3000:3000 --kind plain
+  completion candidate 5432:5432 --kind plain
+  completion candidate 6379:6379 --kind plain
+  completion candidate 8080:80 --kind plain
+}
+
+__rush_complete_docker_commands() {
+  completion candidate sh --kind plain
+  completion candidate bash --kind plain
+  completion candidate /bin/sh --kind plain
+  completion candidate /bin/bash --kind plain
+  completion candidate env --kind plain
+  completion candidate sleep --kind plain
+}
+
+__rush_complete_docker_log_levels() {
+  completion candidate debug --kind plain
+  completion candidate info --kind plain
+  completion candidate warn --kind plain
+  completion candidate error --kind plain
+  completion candidate fatal --kind plain
+}
+
+__rush_complete_docker_restart_policies() {
+  completion candidate no --kind plain
+  completion candidate on-failure --kind plain
+  completion candidate always --kind plain
+  completion candidate unless-stopped --kind plain
+}
+
+__rush_complete_docker_pull_policies() {
+  completion candidate always --kind plain
+  completion candidate missing --kind plain
+  completion candidate never --kind plain
+}
+
+__rush_complete_docker_platforms() {
+  completion candidate linux/amd64 --kind plain
+  completion candidate linux/arm64 --kind plain
+  completion candidate linux/arm/v7 --kind plain
+  completion candidate darwin/arm64 --kind plain
+  completion candidate windows/amd64 --kind plain
+}
+
+__rush_complete_docker_durations() {
+  completion candidate 10s --kind plain
+  completion candidate 30s --kind plain
+  completion candidate 1m --kind plain
+  completion candidate 5m --kind plain
+}
+
+__rush_complete_docker_container_filters() {
+  completion candidate name= --kind variable
+  completion candidate status=running --kind variable
+  completion candidate status=exited --kind variable
+  completion candidate ancestor= --kind variable
+  completion candidate label= --kind variable
+  completion candidate network= --kind variable
+}
+
+__rush_complete_docker_image_filters() {
+  completion candidate reference= --kind variable
+  completion candidate dangling=true --kind variable
+  completion candidate dangling=false --kind variable
+  completion candidate label= --kind variable
+}
+
+__rush_complete_docker_ps_formats() {
+  completion candidate table --kind plain
+  completion candidate json --kind plain
+  completion candidate '{{.Names}}' --kind plain
+  completion candidate '{{.ID}} {{.Image}} {{.Status}}' --kind plain
+}
+
+__rush_complete_docker_objects() {
+  __rush_complete_docker_containers
+  __rush_complete_docker_images
+  __rush_complete_docker_volumes
+  __rush_complete_docker_networks
+}
