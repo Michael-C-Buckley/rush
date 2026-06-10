@@ -3497,6 +3497,8 @@ pub const Executor = struct {
         stdin_file: ?std.Io.File,
         stdout_file: ?std.Io.File,
         stderr_file: ?std.Io.File,
+        stdout_sink_id: ?usize,
+        stderr_sink_id: ?usize,
         stage_index: usize,
         stage_stdio: ExternalStdio = .capture,
         status: ExitStatus = 0,
@@ -3552,10 +3554,15 @@ pub const Executor = struct {
             var stdin_file: ?std.Io.File = if (index == 0) null else takeRead(&pipes[index - 1]);
             var stdout_file: ?std.Io.File = if (!is_last) takeWrite(&pipes[index]) else if (inherit_output) try dupStdioFile(1) else takeWrite(&capture_stdout);
             var stderr_file: ?std.Io.File = if (!is_last) null else if (inherit_output) try dupStdioFile(2) else takeWrite(&capture_stderr);
+            var next_sink_id: usize = 1;
+            var stdout_sink_id: ?usize = if (stdout_file != null) takeNextSinkId(&next_sink_id) else null;
+            var stderr_sink_id: ?usize = if (stderr_file != null) takeNextSinkId(&next_sink_id) else null;
+            var stdout_closed = false;
+            var stderr_closed = false;
             var inherited_redirections = if (is_builtin_stage) null else try FdRedirectionGuard.init(self.allocator, io);
             defer if (inherited_redirections) |*guard| guard.restore(self, io);
             if (!is_builtin_stage) try movePipelineReservedFdHandles(command.redirections, pipes, &capture_stdout, &capture_stderr, io);
-            self.applyPipelineStageRedirections(io, command, options, &stdin_file, &stdout_file, &stderr_file, if (inherited_redirections) |*guard| guard else null) catch |err| {
+            self.applyPipelineStageRedirections(io, command, options, &stdin_file, &stdout_file, &stderr_file, &stdout_sink_id, &stderr_sink_id, &next_sink_id, &stdout_closed, &stderr_closed, if (inherited_redirections) |*guard| guard else null) catch |err| {
                 // A redirection error fails this stage with a diagnostic
                 // while the other pipeline stages still run (POSIX 2.8.1
                 // treats it as a utility redirection error).
@@ -3585,6 +3592,8 @@ pub const Executor = struct {
                     .stdin_file = stdin_file,
                     .stdout_file = stdout_file,
                     .stderr_file = stderr_file,
+                    .stdout_sink_id = stdout_sink_id,
+                    .stderr_sink_id = stderr_sink_id,
                     .stage_index = index,
                     // The last interactive stage lets nested externals write
                     // to the terminal directly so they see a tty, unless a
@@ -3603,8 +3612,8 @@ pub const Executor = struct {
                     .argv = argv,
                     .environ_map = &child_env,
                     .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
-                    .stdout = if (stdout_file) |file| .{ .file = file } else .ignore,
-                    .stderr = if (stderr_file) |file| .{ .file = file } else .inherit,
+                    .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else .ignore,
+                    .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else .inherit,
                 }) catch |err| switch (err) {
                     error.FileNotFound => {
                         if (stdin_file) |file| file.close(io);
@@ -3702,6 +3711,11 @@ pub const Executor = struct {
         stdin_file: *?std.Io.File,
         stdout_file: *?std.Io.File,
         stderr_file: *?std.Io.File,
+        stdout_sink_id: *?usize,
+        stderr_sink_id: *?usize,
+        next_sink_id: *usize,
+        stdout_closed: *bool,
+        stderr_closed: *bool,
         inherited_redirections: ?*FdRedirectionGuard,
     ) !void {
         const redirections = try self.expandRedirections(command.redirections, options);
@@ -3826,12 +3840,81 @@ pub const Executor = struct {
                     1 => {
                         if (stdout_file.*) |old| old.close(io);
                         stdout_file.* = file;
+                        stdout_sink_id.* = takeNextSinkId(next_sink_id);
+                        stdout_closed.* = false;
                     },
                     2 => {
                         if (stderr_file.*) |old| old.close(io);
                         stderr_file.* = file;
+                        stderr_sink_id.* = takeNextSinkId(next_sink_id);
+                        stderr_closed.* = false;
                     },
-                    else => file.close(io),
+                    else => try self.putPipelineInputFd(&input_fds, io, fd, file),
+                }
+                continue;
+            }
+            if (redirection.operator == .greater_and) {
+                const from_fd = redirectionFd(redirection) orelse 1;
+                const target = redirection.target orelse continue;
+                if (std.mem.eql(u8, target.text, "-")) {
+                    if (from_fd > 2) if (inherited_redirections) |guard| try self.closePipelineInheritedFd(&input_fds, stdin_file, stdout_file, stderr_file, guard, io, from_fd);
+                    switch (from_fd) {
+                        0 => {
+                            if (stdin_file.*) |file| file.close(io);
+                            stdin_file.* = null;
+                        },
+                        1 => {
+                            if (stdout_file.*) |file| file.close(io);
+                            stdout_file.* = null;
+                            stdout_sink_id.* = null;
+                            stdout_closed.* = true;
+                        },
+                        2 => {
+                            if (stderr_file.*) |file| file.close(io);
+                            stderr_file.* = null;
+                            stderr_sink_id.* = null;
+                            stderr_closed.* = true;
+                        },
+                        else => if (input_fds.fetchRemove(from_fd)) |entry| entry.value.close(io),
+                    }
+                    continue;
+                }
+
+                const to_fd = parseFd(target.text) orelse continue;
+                const source_sink_id = switch (to_fd) {
+                    1 => stdout_sink_id.*,
+                    2 => stderr_sink_id.*,
+                    else => null,
+                } orelse takeNextSinkId(next_sink_id);
+                const file = try self.pipelineInputSourceFile(&input_fds, stdin_file.*, stdout_file.*, stderr_file.*, to_fd);
+                switch (from_fd) {
+                    0 => {
+                        if (stdin_file.*) |old| old.close(io);
+                        stdin_file.* = file;
+                    },
+                    1 => {
+                        if (stdout_file.*) |old| old.close(io);
+                        stdout_file.* = file;
+                        stdout_sink_id.* = source_sink_id;
+                        stdout_closed.* = false;
+                    },
+                    2 => {
+                        if (stderr_file.*) |old| old.close(io);
+                        stderr_file.* = file;
+                        stderr_sink_id.* = source_sink_id;
+                        stderr_closed.* = false;
+                    },
+                    else => {
+                        if (from_fd > 2) if (inherited_redirections) |guard| {
+                            var close_file = true;
+                            errdefer if (close_file) file.close(io);
+                            const guard_owns_file = try self.applyPipelineInheritedFile(&input_fds, stdin_file, stdout_file, stderr_file, guard, io, from_fd, file);
+                            if (!guard_owns_file) file.close(io);
+                            close_file = false;
+                        } else {
+                            try self.putPipelineInputFd(&input_fds, io, from_fd, file);
+                        };
+                    },
                 }
             }
         }
@@ -3849,6 +3932,7 @@ pub const Executor = struct {
         file: std.Io.File,
     ) !bool {
         try movePipelineStageFdHandles(input_fds, stdin_file, stdout_file, stderr_file, io, fd);
+        if (input_fds.fetchRemove(fd)) |entry| entry.value.close(io);
         try guard.saveFd(self, fd);
         if (file.handle == fd) {
             const duplicate = try rawDup(file.handle);
@@ -4052,8 +4136,20 @@ pub const Executor = struct {
         var result = try context.executor.executeSimpleCommandWithInput(context.command, stdin_bytes, stage_options);
         defer result.deinit();
         context.status = result.status;
+        if (context.stdout_file != null and context.stderr_file != null and context.stdout_sink_id != null and context.stderr_sink_id != null and context.stdout_sink_id.? == context.stderr_sink_id.?) {
+            const combined = try std.mem.concat(context.executor.allocator, u8, &.{ result.stdout, result.stderr });
+            defer context.executor.allocator.free(combined);
+            try writeBytesToFile(context.io, context.stdout_file.?, combined);
+            return;
+        }
         if (context.stdout_file) |file| try writeBytesToFile(context.io, file, result.stdout);
         if (context.stderr_file) |file| try writeBytesToFile(context.io, file, result.stderr);
+    }
+
+    fn takeNextSinkId(next_sink_id: *usize) usize {
+        const sink_id = next_sink_id.*;
+        next_sink_id.* += 1;
+        return sink_id;
     }
 
     fn takeRead(pipe: *PipelinePipe) ?std.Io.File {
@@ -12397,6 +12493,55 @@ test "executor supports real redirections on pipeline stages" {
     defer direct_input_fd_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), direct_input_fd_result.status);
     try std.testing.expectEqualStrings("from-direct-input-fd", direct_input_fd_result.stdout);
+}
+
+test "executor routes pipeline stage stdio duplication and close redirections" {
+    const external_stdout_path = "rush-pipeline-stage-stdio-dup-external-out.tmp";
+    const external_combined_path = "rush-pipeline-stage-stdio-dup-external-combined.tmp";
+    const function_combined_path = "rush-pipeline-stage-stdio-dup-function-combined.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, external_stdout_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, external_combined_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, function_combined_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var stdio = try executor.executeScriptSlice(
+        \\/usr/bin/printf x | /bin/sh -c 'printf err >&2' 2>&1
+        \\/usr/bin/printf x | /bin/sh -c 'printf out' 1>&2
+        \\/usr/bin/printf x | /bin/sh -c 'printf closed' 1>&- || :
+        \\/usr/bin/printf x | /bin/sh -c 'printf closed >&2' 2>&- || :
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer stdio.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), stdio.status);
+    try std.testing.expectEqualStrings("err", stdio.stdout);
+    try std.testing.expectEqualStrings("out", stdio.stderr);
+
+    var ordered = try executor.executeScriptSlice(
+        \\/bin/sh -c 'printf out; printf err >&2' 2>&1 >rush-pipeline-stage-stdio-dup-external-out.tmp | /bin/cat
+        \\printf '\n'
+        \\/bin/sh -c 'printf out; printf err >&2' >rush-pipeline-stage-stdio-dup-external-combined.tmp 2>&1 | /bin/cat
+        \\f() { printf out; command /bin/sh -c 'printf err >&2'; }
+        \\f >rush-pipeline-stage-stdio-dup-function-combined.tmp 2>&1 | /bin/cat
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer ordered.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), ordered.status);
+    try std.testing.expectEqualStrings("err\n", ordered.stdout);
+    try std.testing.expectEqualStrings("", ordered.stderr);
+
+    const external_stdout = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, external_stdout_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(external_stdout);
+    try std.testing.expectEqualStrings("out", external_stdout);
+
+    const external_combined = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, external_combined_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(external_combined);
+    try std.testing.expectEqualStrings("outerr", external_combined);
+
+    const function_combined = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, function_combined_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(function_combined);
+    try std.testing.expectEqualStrings("outerr", function_combined);
 }
 
 test "executor supports mixed builtin and external pipeline stages" {
