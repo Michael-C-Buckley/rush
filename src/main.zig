@@ -1415,9 +1415,12 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer allocator.free(prompt);
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
-        try terminal.reportCurrentDirectory(cwd_buffer[0..cwd_len], terminal_hostname);
-        try terminal.reportWindowTitle(cwd_buffer[0..cwd_len]);
-        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd_buffer[0..cwd_len], .arg_zero = options.arg_zero };
+        const cwd = if (executor.getEnv("PWD")) |pwd| if (pwd.len != 0) pwd else cwd_buffer[0..cwd_len] else cwd_buffer[0..cwd_len];
+        try terminal.reportCurrentDirectory(cwd, terminal_hostname);
+        const title = try terminalTitlePath(allocator, cwd, executor.getEnv("HOME"));
+        defer if (title.owned) allocator.free(title.text);
+        try terminal.reportWindowTitle(title.text);
+        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero };
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
             .prompt_refresh_interval_ms = executor.promptRefreshIntervalMs(),
@@ -1493,6 +1496,21 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     }
 
     return last_status;
+}
+
+const TerminalTitlePath = struct {
+    text: []const u8,
+    owned: bool = false,
+};
+
+fn terminalTitlePath(allocator: std.mem.Allocator, path: []const u8, maybe_home: ?[]const u8) !TerminalTitlePath {
+    const home = maybe_home orelse return .{ .text = path };
+    if (home.len == 0) return .{ .text = path };
+    if (std.mem.eql(u8, path, home)) return .{ .text = "~" };
+    if (std.mem.startsWith(u8, path, home) and path.len > home.len and path[home.len] == '/') {
+        return .{ .text = try std.mem.concat(allocator, u8, &.{ "~", path[home.len..] }), .owned = true };
+    }
+    return .{ .text = path };
 }
 
 fn syncInteractiveTerminalSize(executor: *exec.Executor, terminal: editor_driver.TerminalSession) !void {
