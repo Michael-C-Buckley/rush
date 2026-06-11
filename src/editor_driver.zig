@@ -15,6 +15,8 @@ const invalid_fd: std.posix.fd_t = -1;
 const semanticCommandStart = "\x1b]133;A;cl=w\x07";
 const semanticInputEnd = "\x1b]133;C\x07";
 const semanticInputCancel = "\x1b]133;D;err=CANCEL\x07";
+const completionProgressStart = "\x1b]9;4;3\x07";
+const completionProgressStop = "\x1b]9;4;0\x07";
 
 const ResizeSignalFd = struct {
     var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
@@ -507,6 +509,7 @@ pub const TerminalSession = struct {
     }
 
     pub fn deinit(self: *TerminalSession) void {
+        writeTtyAll(&self.tty, completionProgressStop) catch {};
         self.capabilities.reset(&self.tty);
         self.events.deinit(self.allocator);
         self.completion.deinit();
@@ -863,6 +866,7 @@ pub const TerminalSession = struct {
         request = undefined;
         try worker.start();
         self.completion.active = worker;
+        writeTtyAll(&self.tty, completionProgressStart) catch {};
     }
 
     fn processCompletionResult(self: *TerminalSession, session: *line_editor.LineSession) !bool {
@@ -872,6 +876,7 @@ pub const TerminalSession = struct {
         if (!worker.done.load(.acquire)) return false;
         self.completion.active = null;
         worker.thread.join();
+        writeTtyAll(&self.tty, completionProgressStop) catch {};
         const result = worker.takeResult();
         worker.deinit();
         self.allocator.destroy(worker);
