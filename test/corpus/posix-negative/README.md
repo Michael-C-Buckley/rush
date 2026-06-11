@@ -2,6 +2,8 @@
 
 This corpus records expected Rush behavior for syntax, expansion, redirection, and builtin error cases. It is separate from `test/corpus/posix` because many diagnostics and shell-error consequences are not differential-safe across comparison shells.
 
+Some entries intentionally cover unsupported non-POSIX extension forms, such as Bash/Yash parameter expansion extensions. Those cases document current Rush diagnostics and guard future extension-mode work; they are tracked by out-of-scope extension rows in `test/compliance/posix-shell.tsv` rather than counted as POSIX compliance failures.
+
 Each case has the same files as the POSIX expected-output corpus:
 
 - `script`

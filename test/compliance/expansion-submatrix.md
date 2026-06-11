@@ -9,7 +9,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | POSIX area | manifest rows | current status | primary gaps |
 | --- | --- | --- | --- |
 | Tilde expansion | `expansion-tilde`, `expansion-assignment-prefix-context`, `expansion-tilde-named-user` | baseline | unset HOME edge cases |
-| Parameter expansion | `expansion-parameter-*` | supported/baseline | larger parser/extension work and remaining broad edge-case audit |
+| Parameter expansion | `expansion-parameter-*`, `extensions-parameter-expansion` | supported/baseline; extensions out of scope | larger parser work and non-POSIX extension implementation tracked outside POSIX scoring |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
 | Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | baseline | nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics, exact nested legacy-backquote diagnostics |
@@ -41,16 +41,22 @@ Manifest rows:
 - `expansion-parameter-error-unset`
 - `expansion-parameter-word-nesting-quote-context` (supported)
 
-Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, nested operator words, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The nested-word corpus covers command substitutions containing right braces, nested braced defaults, arithmetic substitutions used as word operands, assignment/alternate word operands, pattern-removal operands containing quoted right braces or command substitutions, and quoted operator words that suppress field splitting/pathname expansion for their own bytes. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, unterminated parameter expansions whose word contains a command substitution with `}`, invalid assignment attempts to positional/special parameters when `${parameter:=word}` or `${parameter=word}` would need to assign, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage.
+Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, nested operator words, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The nested-word corpus covers command substitutions containing right braces, nested braced defaults, arithmetic substitutions used as word operands, assignment/alternate word operands, pattern-removal operands containing quoted right braces or command substitutions, and quoted operator words that suppress field splitting/pathname expansion for their own bytes. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, representative non-POSIX extension rejections such as `${v/a/X}`/`${v^^}`/`${!name}`/`${!prefix*}`, unterminated parameter expansions whose word contains a command substitution with `}`, invalid assignment attempts to positional/special parameters when `${parameter:=word}` or `${parameter=word}` would need to assign, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage.
+
+Non-POSIX extension tracking:
+
+- `extensions-parameter-expansion` is an out-of-scope manifest row so Bash/Yash compatibility work does not affect POSIX scoring.
+- Extension-mode support should eventually cover string-oriented substring `${parameter:offset[:length]}`, replacement `${parameter/pattern/repl}`, case modification `${parameter^}`/`${parameter,}`, indirect expansion `${!name}`, and name-prefix enumeration `${!prefix*}` forms. Rush currently rejects representative cases with `parameter: bad substitution` negative-corpus coverage.
+- Transformation flags such as `${parameter@Q}` and array-style parameter operations are lower-priority non-POSIX extension candidates that need a separate design decision before behavior-backed corpus promotion.
 
 Remaining high-risk gaps:
 
 - full parser integration for every recursive token-recognition context remains larger work.
-- larger parameter syntax work, such as substring or pattern-substitution extensions, remains outside the POSIX baseline.
+- larger parameter syntax work remains outside the POSIX baseline and should be implemented only behind explicit extension-mode support.
 
 The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, unquoted multi-word braced words, focused bad-substitution diagnostics for unsupported or malformed braced forms, and cannot-assign diagnostics for assignment operators targeting positional or special parameters.
 
-Follow-up tasks: broader parser and non-POSIX parameter-extension tasks.
+Follow-up tasks: broader parser and non-POSIX parameter-extension implementation tasks.
 
 ## Special parameters and positional fields
 

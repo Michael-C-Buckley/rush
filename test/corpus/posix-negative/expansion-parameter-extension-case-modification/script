@@ -1,0 +1,3 @@
+v=abc
+echo ${v^^}
+echo after
