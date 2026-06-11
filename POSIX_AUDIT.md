@@ -291,7 +291,7 @@ Implemented or partially implemented:
 - `echo` has minimal behavior and intentionally avoids complex option/escape variations.
 - `read` has broad non-interactive POSIX coverage for IFS splitting, backslash/cooked versus `-r`, EOF status, option/operand diagnostics, and readonly assignment failure. The remaining broad-row gap is interactive terminal input/continuation prompting.
 - `printf` supports common conversions/escapes including representative floating-point conversions, but not POSIX C integer constants or full format grammar details.
-- `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`vi` editing mode and complete job-control terminal semantics).
+- `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `vi` command-line editing mode, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (complete job-control terminal semantics).
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
 - Full POSIX alias substitution token timing remains partial after the parser-command-word, alias-produced reserved-word, eval/dot dynamic-definition, and same-read-line definition-timing slices; the builtin `alias`/`unalias` utility row is supported separately from remaining parser-level timing edge cases.
 
@@ -321,6 +321,7 @@ Implemented or partially implemented:
   - `set -o` option state listing in Rush's stable human-readable format
   - `set +o` reusable option-state command listing for supported options
   - `set -o ignoreeof` / `set +o ignoreeof` controls whether interactive EOF asks for explicit `exit`
+  - `set -o vi` / `set +o vi` switches the interactive terminal-independent editor between POSIX vi mode and Rush's default Emacs-style mode; vi mode includes insert, command, and replace submodes with beam, block, and underline cursors.
   - `set -m` / `set -o monitor` reflects in option state and enables separate process groups for tracked async jobs in interactive and non-interactive shells; without monitor mode, non-interactive async jobs remain in the shell process group.
   - `set -h` / `set +h` and `set -o nolog` / `set +o nolog` are accepted as no-effect obsolescent compatibility spellings; they do not change command lookup, history, `$-`, or option listings.
 
@@ -328,8 +329,7 @@ Implemented or partially implemented:
 
 - Errexit is baseline-only and lacks many POSIX corner cases around compound commands, command substitutions, and AND-OR/pipeline contexts.
 - Xtrace exact output ordering is baseline-only.
-- Unsupported POSIX option behavior remains:
-  - `set -o vi` command-line editing mode
+- POSIX vi command-line editing still has edge commands tracked separately, including external `v`, pathname expansion commands, command aliases, and history pattern search.
 
 ## 8. Interactive behavior and job control
 

@@ -1583,6 +1583,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const ui_theme = interactiveUiTheme(executor);
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
+            .editing_mode = interactiveEditingMode(executor.shell_options),
             .prompt_refresh_interval_ms = executor.promptRefreshIntervalMs(),
             .hook_context = &completion_context,
             .run_hooks = runInteractiveIntervalHooks,
@@ -1699,6 +1700,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     }
 
     return last_status;
+}
+
+fn interactiveEditingMode(options: exec.ShellOptions) line_editor.EditingMode {
+    return if (options.vi) .vi else .emacs;
 }
 
 const TerminalTitlePath = struct {

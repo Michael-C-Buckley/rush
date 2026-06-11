@@ -8,5 +8,6 @@ noglob	off
 notify	off
 nounset	off
 pipefail	off
+vi	off
 verbose	off
 xtrace	off

@@ -8,5 +8,6 @@ set +o noglob
 set +o notify
 set +o nounset
 set +o pipefail
+set +o vi
 set +o verbose
 set +o xtrace

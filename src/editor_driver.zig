@@ -237,6 +237,7 @@ pub const TerminalParser = struct {
 
 pub const ReadLineOptions = struct {
     prompt: []const u8,
+    editing_mode: line_editor.EditingMode = .emacs,
     prompt_refresh_interval_ms: ?u64 = null,
     hook_context: ?*anyopaque = null,
     run_hooks: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror!HookResult = null,
@@ -644,10 +645,10 @@ pub const TerminalSession = struct {
         }
         var read_options = options;
 
-        var session = try line_editor.LineSession.initWithOptions(self.allocator, .{
+        var session = try line_editor.LineSession.initWithEditingMode(self.allocator, .{
             .bytes = read_options.prompt,
             .visible_width = line_editor.visibleWidth(read_options.prompt, self.capabilities.widthMethod()),
-        }, read_options.history);
+        }, read_options.history, read_options.editing_mode);
         defer session.deinit();
 
         try writeTtyAll(&self.tty, semanticCommandStart);
