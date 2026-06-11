@@ -257,6 +257,7 @@ startup-maintained-variables	variables	behavior	startup IFS PPID and PWD shell-m
 strict-misplaced-reserved-word	errors	negative	-
 strict-syntax-stops-execution	errors	negative	strict POSIX syntax diagnostics stop non-interactive execution before earlier or later commands run
 subshell-isolates-env	grammar	behavior	-
+grammar-subshell-contexts	grammar	behavior	subshell grouping covers environment isolation status propagation input and output redirections pipeline stage use and nested/list contexts
 unquoted-at-custom-ifs	expansion	behavior	unquoted $@ splits each positional with custom IFS
 unquoted-at-embedded-positionals	expansion	behavior	embedded unquoted $@ applies surrounding text to first and last generated fields
 unquoted-at-empty-positionals	expansion	behavior	unquoted $@ removes empty positional fields during field splitting

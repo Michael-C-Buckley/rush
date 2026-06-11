@@ -1621,6 +1621,35 @@ const SyntaxParser = struct {
         return self.addNode(.list, span, token_start, token_end, child_start, self.children.items.len);
     }
 
+    fn listContainsCommand(self: SyntaxParser, list: NodeId) bool {
+        const node = self.nodes.items[list.index()];
+        std.debug.assert(node.kind == .list);
+        for (self.children.items[node.child_start..node.child_end]) |child| switch (child) {
+            .node => |node_id| {
+                if (isListCommandNode(self.nodes.items[node_id.index()].kind)) return true;
+            },
+            .token => {},
+        };
+        return false;
+    }
+
+    fn isListCommandNode(kind: NodeKind) bool {
+        return switch (kind) {
+            .pipeline,
+            .simple_command,
+            .if_command,
+            .loop_command,
+            .for_command,
+            .case_command,
+            .function_definition,
+            .brace_group,
+            .subshell,
+            .bash_test_command,
+            => true,
+            else => false,
+        };
+    }
+
     fn parseRawListUntilWord(self: *SyntaxParser, terminator: []const u8) !NodeId {
         const token_start = self.index;
         var list_children: std.ArrayList(SyntaxChild) = .empty;
@@ -1716,10 +1745,12 @@ const SyntaxParser = struct {
         var subshell_children: std.ArrayList(SyntaxChild) = .empty;
         defer subshell_children.deinit(self.allocator);
         var closed = false;
+        var has_body_command = false;
 
         try self.appendCurrentTokenChildTo(&subshell_children);
         if (!self.at(.right_paren) and !self.at(.eof)) {
             const body = try self.parseListUntil(&.{}, &.{.right_paren});
+            has_body_command = self.listContainsCommand(body);
             try subshell_children.append(self.allocator, .{ .node = body });
         }
         if (self.at(.right_paren)) {
@@ -1733,6 +1764,14 @@ const SyntaxParser = struct {
                 .kind = .incomplete_input,
                 .span = spanForTokenRange(self.tokens, token_start, self.index),
                 .message = "missing ) to close subshell",
+            });
+        }
+
+        if (closed and !has_body_command) {
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing command in subshell",
             });
         }
 
@@ -3199,6 +3238,26 @@ test "parser reports incomplete POSIX subshells" {
     try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
     try expectSpan(.init(0, 9), result.diagnostics[0].span);
     try std.testing.expectEqualStrings("missing ) to close subshell", result.diagnostics[0].message);
+}
+
+test "parser reports empty POSIX subshell bodies" {
+    const cases = [_]struct {
+        source: []const u8,
+        span: Span,
+    }{
+        .{ .source = "()", .span = .init(0, 2) },
+        .{ .source = "( ; )", .span = .init(0, 5) },
+    };
+
+    for (cases) |example| {
+        var result = try parse(std.testing.allocator, example.source, .{});
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+        try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+        try expectSpan(example.span, result.diagnostics[0].span);
+        try std.testing.expectEqualStrings("missing command in subshell", result.diagnostics[0].message);
+    }
 }
 
 test "parser builds POSIX brace group nodes" {

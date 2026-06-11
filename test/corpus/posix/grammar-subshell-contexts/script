@@ -1,0 +1,17 @@
+rm -f in out
+FOO=outer
+( FOO=inner; echo "env:$FOO" )
+echo "env-after:$FOO"
+(false)
+echo "status:$?"
+printf '%s\n' one two >in
+( read a; read b; echo "input:$a/$b" ) <in
+( echo redirected ) >out
+read saved <out
+echo "output:$saved"
+( echo left ) | ( read line; echo "pipe:$line"; FOO=pipe )
+echo "pipe-after:$FOO"
+( ( echo nested ) && ( false ); echo "nested-status:$?" )
+false || ( echo or-list; true )
+if ( false ); then echo if-no; else echo if-else; fi
+rm -f in out
