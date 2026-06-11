@@ -20,22 +20,22 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `406` rows
-- `scripts/check-posix-corpus.sh`: `398` expected-output POSIX cases
+- `scripts/check-posix-corpus.sh`: `399` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `227` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `279` cases, `558` comparisons across dash and bash POSIX mode
+- `scripts/check-system-shell-corpus.sh`: `280` cases, `560` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
 - tracked items: `406`
 - scored POSIX items: `402`
-- supported: `379`
-- baseline: `20`
+- supported: `380`
+- baseline: `19`
 - partial: `2`
 - missing: `1`
 - out of scope: `4`
-- strict supported only: `94.3%`
+- strict supported only: `94.5%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `97.9%`
+- weighted progress: `98.0%`
 
 Recent notable capabilities:
 
@@ -43,7 +43,7 @@ Recent notable capabilities:
 - Real OS fd plumbing for external redirections, pipelines, and mixed builtin/external pipelines.
 - Real fd save/restore redirections for CLI inherited-stdio builtins, functions, subshells, brace groups, if/for/while/until/case compound commands, and arbitrary shell-visible fds.
 - Redirection support for `<`, `>`, `>>`, `>|`, `<&`, `>&`, `n<&-`, `n>&-`, and `<>` baseline behavior.
-- Here-doc baseline with ordered pending bodies, quoted delimiter behavior, tab stripping for `<<-`, expansion for unquoted bodies, and safe fd materialization.
+- Here-doc support with ordered pending bodies, POSIX delimiter quote removal, quoted delimiter behavior, tab stripping for `<<-`, expansion for unquoted bodies, and safe fd materialization.
 - POSIX compound command execution baseline: `if`, `while`, `until`, `for`, `case`, functions, subshells, and brace groups.
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
@@ -215,7 +215,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 
 - Capture-mode tests still use captured-result modeling in some paths instead of true inherited process fds.
 - `/dev/full`-style file targets are represented by a Linux-gated negative corpus case; macOS validation skips that case while the portable synthetic fd tests keep cross-platform coverage of Rush's shell-implemented write-failure consequences.
-- Here-doc materialization is fd-backed but full parser-level here-doc token/body integration is still simplified.
+- Exact parser-level here-doc token timing remains tracked under lexical analysis, but no here-doc redirection execution gap is currently tracked.
 
 ## 5. Command search and execution environment
 

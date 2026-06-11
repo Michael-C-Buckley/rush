@@ -202,6 +202,7 @@ export LATER; LATER=ok; command -p env | grep ^LATER=
 foo() { echo function; }; command -v foo
 LOCAL=hidden; export EXPORTED=ok; env | grep -E "^(LOCAL|EXPORTED)=" | sort
 A=bad; cat <<E"O"F\n$A\nEOF
+A=bad; cat <<"E\\OF"\n$A\nE\\OF\necho after
 exit 300
 f() { echo before; exit 7; echo after; }; f; echo outside
 eval 'echo before; exit 7; echo after'; echo outside

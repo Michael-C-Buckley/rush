@@ -214,6 +214,7 @@ redirection-external-stdio-dup-routing	redirection	behavior	external stdout/stde
 redirection-external-stdio-from-arbitrary-fd	redirection	behavior	external command can duplicate an arbitrary output fd opened earlier in the same command back to stdout and stderr
 redirection-function-output	redirection	behavior	-
 redirection-here-doc-basic	redirection	here-doc	-
+redirection-here-doc-double-quoted-backslash-delimiter	redirection	here-doc	double-quoted here-doc delimiter quote removal preserves non-special backslashes
 redirection-here-doc-tab-strip	redirection	here-doc	-
 redirection-read-write-arbitrary-fd	redirection	behavior	-
 redirection-read-write-create	redirection	behavior	-

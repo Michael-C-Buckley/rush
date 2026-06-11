@@ -1441,7 +1441,7 @@ fn hereDocDelimiterFromRaw(allocator: std.mem.Allocator, raw: []const u8) ![]con
         if (quote) |active| {
             if (byte == active) {
                 quote = null;
-            } else if (active == '"' and byte == '\\' and index + 1 < raw.len) {
+            } else if (active == '"' and byte == '\\' and index + 1 < raw.len and isDoubleQuotedQuoteRemovalBackslashEscaped(raw[index + 1])) {
                 index += 1;
                 try out.append(allocator, raw[index]);
             } else {
@@ -1457,6 +1457,10 @@ fn hereDocDelimiterFromRaw(allocator: std.mem.Allocator, raw: []const u8) ![]con
         }
     }
     return out.toOwnedSlice(allocator);
+}
+
+fn isDoubleQuotedQuoteRemovalBackslashEscaped(byte: u8) bool {
+    return byte == '$' or byte == '`' or byte == '"' or byte == '\\' or byte == '\n';
 }
 
 const HereDocBodyParse = struct {
@@ -3695,6 +3699,26 @@ test "parser orders multiple here-doc bodies on a command line" {
     try std.testing.expectEqual(@as(usize, 2), count);
     try expectSpan(.init(12, 16), spans[0]);
     try expectSpan(.init(16, 20), spans[1]);
+}
+
+test "parser preserves non-special backslash in double-quoted here-doc delimiter" {
+    const source = "cat <<\"E\\OF\"\nbody\nE\\OF\necho after";
+    var result = try parse(std.testing.allocator, source, .{});
+    defer result.deinit();
+
+    try std.testing.expect(!result.incomplete);
+    var found_body = false;
+    for (result.nodes) |node| {
+        if (node.kind != .here_doc_body) continue;
+        found_body = true;
+        try expectSpan(.init(13, 23), node.span);
+    }
+    try std.testing.expect(found_body);
+    var command_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .simple_command) command_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), command_count);
 }
 
 test "parser represents command substitutions as nested word syntax" {
