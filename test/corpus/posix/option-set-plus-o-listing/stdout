@@ -1,4 +1,5 @@
 set +o allexport
+set -o emacs
 set +o errexit
 set +o ignoreeof
 set +o monitor

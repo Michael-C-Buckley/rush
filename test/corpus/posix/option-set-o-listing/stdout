@@ -1,4 +1,5 @@
 allexport	off
+emacs	on
 errexit	off
 ignoreeof	off
 monitor	off

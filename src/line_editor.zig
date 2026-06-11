@@ -3469,6 +3469,30 @@ test "line session yanks killed previous and next words" {
     try std.testing.expectEqualStrings("git checkout main", session.editor.buffer.text());
 }
 
+test "line session emacs control keys edit command line" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = keyFromVaxis('f', .{ .ctrl = true }) });
+    try session.handleKey(.{ .key = .text, .text = "abcd ef" });
+    try session.handleKey(.{ .key = keyFromVaxis('a', .{ .ctrl = true }) });
+    try std.testing.expectEqual(@as(usize, 0), session.editor.buffer.cursor_byte);
+    try session.handleKey(.{ .key = keyFromVaxis('f', .{ .ctrl = true }) });
+    try session.handleKey(.{ .key = keyFromVaxis('f', .{ .ctrl = true }) });
+    try session.handleKey(.{ .key = keyFromVaxis('t', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("bacd ef", session.editor.buffer.text());
+    try session.handleKey(.{ .key = keyFromVaxis('k', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("ba", session.editor.buffer.text());
+    try session.handleKey(.{ .key = keyFromVaxis('y', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("bacd ef", session.editor.buffer.text());
+    try session.handleKey(.{ .key = keyFromVaxis('e', .{ .ctrl = true }) });
+    try session.handleKey(.{ .key = keyFromVaxis('b', .{ .ctrl = true }) });
+    try session.handleKey(.{ .key = keyFromVaxis('w', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("bacd f", session.editor.buffer.text());
+    try session.handleKey(.{ .key = keyFromVaxis('u', .{ .ctrl = true }) });
+    try std.testing.expectEqualStrings("f", session.editor.buffer.text());
+}
+
 test "line session records clear screen requests" {
     var session = try LineSession.init(std.testing.allocator, "");
     defer session.deinit();
