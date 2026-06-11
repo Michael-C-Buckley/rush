@@ -14,6 +14,7 @@ complete pnpm --subcommand store --description 'manage package store'
 complete pnpm --subcommand config --description 'manage config'
 complete pnpm --subcommand outdated --description 'check outdated packages'
 complete pnpm --subcommand update --description 'update packages'
+complete pnpm --subcommands --function __rush_complete_pnpm_root_scripts
 
 complete pnpm --option --short F --long filter --value-name selector --description 'filter packages'
 complete pnpm --option-value --short F --function __rush_complete_pnpm_workspaces
@@ -40,6 +41,10 @@ __rush_complete_pnpm_scripts() {
   completion candidate dev --kind plain
   completion candidate lint --kind plain
   completion candidate test --kind plain
+}
+
+__rush_complete_pnpm_root_scripts() {
+  node -e 'let p=require("./package.json"); let builtins=new Set(["install","add","remove","run","test","exec","dlx","workspace","store","config","outdated","update"]); for (let k of Object.keys(p.scripts||{})) if (!builtins.has(k)) console.log(k)' 2>/dev/null | while read script; do test -n "$script" && completion candidate "$script" --kind plain; done
 }
 
 __rush_complete_pnpm_dependencies() {
