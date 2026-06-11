@@ -1584,22 +1584,30 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
         defer if (label.owned) |owned| allocator.free(owned);
         if (index == selected) {
             try appendUiStyleStart(allocator, &line, theme.completion_selected);
-            try line.appendSlice(allocator, "❯");
+            try line.appendSlice(allocator, "  ");
+            try appendPaddedCell(allocator, &line, label.text, label_width);
+            if (candidate.description) |description| {
+                if (description.len != 0 and description_width != 0) {
+                    try line.append(allocator, ' ');
+                    try appendTruncated(allocator, &line, description, description_width);
+                }
+            }
+            const row_width = visibleWidth(line.items, .unicode);
+            if (row_width < width) try line.appendNTimes(allocator, ' ', @as(usize, @intCast(width - row_width)));
             try appendUiStyleEnd(allocator, &line, theme.completion_selected);
-            try line.append(allocator, ' ');
-        } else try line.appendSlice(allocator, "  ");
-        if (index == selected) try line.appendSlice(allocator, "\x1b[1m");
-        const kind_style = completionKindStyle(theme, candidate.kind);
-        try appendUiStyleStart(allocator, &line, kind_style);
-        try appendPaddedCell(allocator, &line, label.text, label_width);
-        try appendUiStyleEnd(allocator, &line, kind_style);
-        if (index == selected) try line.appendSlice(allocator, "\x1b[22m");
-        if (candidate.description) |description| {
-            if (description.len != 0 and description_width != 0) {
-                try line.append(allocator, ' ');
-                try appendUiStyleStart(allocator, &line, theme.completion_description);
-                try appendTruncated(allocator, &line, description, description_width);
-                try appendUiStyleEnd(allocator, &line, theme.completion_description);
+        } else {
+            try line.appendSlice(allocator, "  ");
+            const kind_style = completionKindStyle(theme, candidate.kind);
+            try appendUiStyleStart(allocator, &line, kind_style);
+            try appendPaddedCell(allocator, &line, label.text, label_width);
+            try appendUiStyleEnd(allocator, &line, kind_style);
+            if (candidate.description) |description| {
+                if (description.len != 0 and description_width != 0) {
+                    try line.append(allocator, ' ');
+                    try appendUiStyleStart(allocator, &line, theme.completion_description);
+                    try appendTruncated(allocator, &line, description, description_width);
+                    try appendUiStyleEnd(allocator, &line, theme.completion_description);
+                }
             }
         }
         try lines.append(allocator, try line.toOwnedSlice(allocator));
@@ -2443,7 +2451,7 @@ test "completion menu visible window follows selection" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "three") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m❯\x1b[22m\x1b[39m \x1b[1mthree") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m  three") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 3-3 of 3") != null);
 }
 
@@ -2465,14 +2473,14 @@ test "completion menu only pins selection to bottom while scrolling down" {
     defer std.testing.allocator.free(scrolled_down);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "two") != null);
-    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1m\x1b[38;5;6m❯\x1b[22m\x1b[39m \x1b[1mthree") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1m\x1b[38;5;6m  three") != null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "showing 2-3 of 4") != null);
 
     try session.handleKey(.{ .key = .up });
     const moved_up = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 4 });
     defer std.testing.allocator.free(moved_up);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "one") == null);
-    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1m\x1b[38;5;6m❯\x1b[22m\x1b[39m \x1b[1mtwo") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1m\x1b[38;5;6m  two") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "three") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "showing 2-3 of 4") != null);
 }
@@ -2697,11 +2705,11 @@ test "history search seeds query from current buffer and renders menu-style matc
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m❯") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m  ") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mg\x1b[39m") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2m30s") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "30s") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
 }

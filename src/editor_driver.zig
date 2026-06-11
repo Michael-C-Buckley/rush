@@ -474,6 +474,8 @@ pub const TerminalSession = struct {
     renderer: line_editor.FrameRenderer = .{},
     completion: CompletionController,
     capabilities: TerminalCapabilities = .{},
+    query_batch_sent: bool = false,
+    color_scheme: ColorScheme = .unknown,
     winsize: vaxis.Winsize,
     events: std.ArrayList(TerminalEvent) = .empty,
 
@@ -572,12 +574,14 @@ pub const TerminalSession = struct {
     pub fn leaveEditorMode(self: *TerminalSession) !void {
         self.renderer.reset(self.allocator);
         self.capabilities.reset(&self.tty);
+        self.query_batch_sent = false;
         try self.suspendRawMode();
     }
 
     pub fn enterEditorMode(self: *TerminalSession) !void {
         try self.resumeRawMode();
         try self.capabilities.sendInitialQueries(&self.tty);
+        self.query_batch_sent = true;
     }
 
     pub fn currentWinsize(self: TerminalSession) vaxis.Winsize {
@@ -624,6 +628,10 @@ pub const TerminalSession = struct {
 
     pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !ReadLineResult {
         if (self.reader.thread == null) try self.reader.start();
+        if (!self.query_batch_sent) {
+            try self.capabilities.sendInitialQueries(&self.tty);
+            self.query_batch_sent = true;
+        }
         var read_options = options;
 
         var session = try line_editor.LineSession.initWithOptions(self.allocator, .{
@@ -739,8 +747,12 @@ pub const TerminalSession = struct {
                     .capability => |capability| {
                         render_needed = true;
                         try self.capabilities.apply(self.allocator, &self.tty, capability);
+                        if (capability == .da1 and read_options.refresh_style != null and read_options.style_context != null) {
+                            read_options.theme = try read_options.refresh_style.?(read_options.style_context.?, self.allocator, self.io, self.color_scheme);
+                        }
                     },
                     .color_scheme => |scheme| {
+                        self.color_scheme = scheme;
                         try self.capabilities.requestColorReports(&self.tty);
                         try self.capabilities.sendQueries(&self.tty);
                         if (read_options.refresh_style != null and read_options.style_context != null) {
