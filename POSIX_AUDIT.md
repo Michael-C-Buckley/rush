@@ -294,7 +294,7 @@ Implemented or partially implemented:
 - `read` supports simple field assignment and `-r` acceptance but not full POSIX options/IFS/backslash behavior.
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
 - `test` baseline lacks many operators and edge cases.
-- `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`-m`, `vi`).
+- `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`vi` editing mode and complete job-control terminal semantics).
 - `env` does not support arguments/options.
 - `times` currently emits a deterministic baseline instead of real process usage.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
@@ -327,6 +327,7 @@ Implemented or partially implemented:
   - `set -o` option state listing in Rush's stable human-readable format
   - `set +o` reusable option-state command listing for supported options
   - `set -o ignoreeof` / `set +o ignoreeof` controls whether interactive EOF asks for explicit `exit`
+  - `set -m` / `set -o monitor` reflects in option state and enables separate process groups for interactive tracked async jobs; non-interactive execution keeps the option as state without changing process groups.
   - `set -h` / `set +h` and `set -o nolog` / `set +o nolog` are accepted as no-effect obsolescent compatibility spellings; they do not change command lookup, history, `$-`, or option listings.
 
 ### Partial / gaps
@@ -334,7 +335,6 @@ Implemented or partially implemented:
 - Errexit is baseline-only and lacks many POSIX corner cases around compound commands, command substitutions, and AND-OR/pipeline contexts.
 - Xtrace/verbose exact output ordering is baseline-only.
 - Unsupported POSIX option behavior remains:
-  - `-m` / `set -o monitor` process-group semantics beyond option state
   - `set -o vi` command-line editing mode
 
 ## 8. Interactive behavior and job control
@@ -355,12 +355,13 @@ Implemented or partially implemented:
 - Baseline `fg` waits for current or explicit tracked jobs and returns their status.
 - Baseline `bg` reports current or explicit tracked jobs as backgrounded.
 - Foreground process group handling for inherited-stdio external pipelines.
+- Monitor mode (`set -m`) puts tracked interactive async jobs in their own process groups and lets `fg` hand the terminal to that saved process group when available.
 
 ### Partial / gaps
 
-- Stopped jobs and precise job status refresh are still missing.
-- `fg`/`bg` do not yet resume stopped jobs with `SIGCONT`.
-- Terminal modes are not saved/restored beyond foreground pgrp handoff.
+- Stopped jobs and precise job status refresh are partial rather than complete.
+- `fg`/`bg` resume tracked stopped jobs with `SIGCONT`, but broader signal and terminal edge cases remain.
+- Terminal modes and foreground process groups are not yet complete across every mixed-pipeline and job-control edge case.
 - Signal handling for pipelines and asynchronous lists remains conservative.
 
 ### Missing / gaps

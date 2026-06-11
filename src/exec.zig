@@ -38,6 +38,7 @@ pub const ExecuteOptions = struct {
     features: compat.Features = .{},
     external_stdio: ExternalStdio = .capture,
     interactive: bool = false,
+    foreground_terminal: bool = true,
     cancel: ?*completion.CancellationToken = null,
     arg_zero: []const u8 = "rush",
     source_path: ?[]const u8 = null,
@@ -831,6 +832,7 @@ fn freeFunctionValueWord(allocator: std.mem.Allocator, word: ir.WordRef) void {
 pub const BackgroundJob = struct {
     id: usize,
     pid: i64,
+    pgrp: ?i64 = null,
     command: []const u8,
     child: std.process.Child,
     state: JobState = .running,
@@ -2783,6 +2785,10 @@ pub const Executor = struct {
         return false;
     }
 
+    fn monitorProcessGroupsEnabled(self: Executor, options: ExecuteOptions) bool {
+        return options.interactive and self.shell_options.monitor;
+    }
+
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
         var output: std.ArrayList(u8) = .empty;
         errdefer output.deinit(self.allocator);
@@ -3526,19 +3532,30 @@ pub const Executor = struct {
 
     fn forkAsyncJob(self: *Executor, command_text: []const u8, options: ExecuteOptions, kind: AsyncJobKind, program: ir.Program) !CommandResult {
         const io = options.io orelse return error.Unsupported;
+        const use_monitor_pgrp = self.monitorProcessGroupsEnabled(options);
         const pid = try forkProcess();
         if (pid == 0) {
+            if (use_monitor_pgrp) processSetPgrp(0, 0) catch exitForkedChild(2);
+            var child_options = options;
+            if (use_monitor_pgrp) child_options.foreground_terminal = false;
             var status: ExitStatus = 2;
             var child_result = switch (kind) {
-                .statement => |statement| self.executeStatementSync(program, statement, options),
-                .pipeline => |pipeline| self.executePipeline(program, pipeline, options),
+                .statement => |statement| self.executeStatementSync(program, statement, child_options),
+                .pipeline => |pipeline| self.executePipeline(program, pipeline, child_options),
             } catch null;
             if (child_result) |*result| {
                 status = result.status;
-                if (options.external_stdio == .inherit) writeInheritedResult(io, result.*) catch {};
+                if (child_options.external_stdio == .inherit) writeInheritedResult(io, result.*) catch {};
                 result.deinit();
             }
             exitForkedChild(status);
+        }
+
+        if (use_monitor_pgrp) {
+            processSetPgrp(pid, pid) catch |err| switch (err) {
+                error.ProcessAlreadyExec, error.ProcessNotFound => {},
+                else => return err,
+            };
         }
 
         _ = registerCancelableChild(options, childFromPid(pid));
@@ -3549,6 +3566,7 @@ pub const Executor = struct {
         try self.background_jobs.append(self.allocator, .{
             .id = self.next_job_id,
             .pid = numeric_pid,
+            .pgrp = if (use_monitor_pgrp) numeric_pid else null,
             .command = owned_command,
             .child = childFromPid(pid),
         });
@@ -4339,7 +4357,7 @@ pub const Executor = struct {
 
         var previous_stdout: ?std.Io.File = null;
         defer if (previous_stdout) |file| file.close(io);
-        const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit);
+        const foreground_terminal = try prepareForegroundTerminal(options.foreground_terminal and options.external_stdio == .inherit);
         defer restoreForegroundTerminal(foreground_terminal);
         var pipeline_pgrp: ?std.posix.pid_t = null;
 
@@ -5525,6 +5543,7 @@ pub const Executor = struct {
             .stdin = if (stdin_redirected or options.external_stdio == .inherit) .inherit else .close,
             .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
+            .pgid = if (self.monitorProcessGroupsEnabled(options)) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             else => return err,
@@ -5547,7 +5566,8 @@ pub const Executor = struct {
             defer self.allocator.free(argv_text);
             const command_text = try joinParams(self.allocator, argv_text);
             errdefer self.allocator.free(command_text);
-            try self.background_jobs.append(self.allocator, .{ .id = self.next_job_id, .pid = numeric_pid, .command = command_text, .child = child });
+            const use_monitor_pgrp = self.monitorProcessGroupsEnabled(options);
+            try self.background_jobs.append(self.allocator, .{ .id = self.next_job_id, .pid = numeric_pid, .pgrp = if (use_monitor_pgrp) numeric_pid else null, .command = command_text, .child = child });
             self.selectCurrentJob(self.next_job_id);
             self.next_job_id += 1;
         }
@@ -5739,7 +5759,7 @@ pub const Executor = struct {
         var merged_capture: ?PipelinePipe = if (duplicate_stderr_to_stdout and manual_stdout_capture == null) try makePipelinePipe(io) else null;
         defer if (merged_capture) |*pipe| pipe.close(io);
         const merged_stderr_write: ?std.Io.File = if (merged_capture) |pipe| .{ .handle = try rawDup(pipe.write.?.handle), .flags = pipe.write.?.flags } else null;
-        const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit and stdin_file == null and !stdin_redirected);
+        const foreground_terminal = try prepareForegroundTerminal(options.foreground_terminal and options.external_stdio == .inherit and stdin_file == null and !stdin_redirected);
         try checkCanceled(options);
 
         // Interactive command substitutions still need the shell's tty on
@@ -6324,11 +6344,68 @@ fn dupStdioFile(fd: std.posix.fd_t) !std.Io.File {
 
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
 extern "c" fn tcsetpgrp(fd: std.c.fd_t, pgrp: std.c.pid_t) c_int;
+extern "c" fn getpgid(pid: std.c.pid_t) std.c.pid_t;
 
 const ForegroundTerminal = struct {
     tty_fd: std.posix.fd_t,
     previous_pgrp: std.posix.pid_t,
 };
+
+fn processSetPgrp(pid: std.posix.pid_t, pgrp: std.posix.pid_t) !void {
+    if (zig_builtin.link_libc) {
+        while (true) {
+            const rc = std.c.setpgid(pid, pgrp);
+            switch (std.c.errno(rc)) {
+                .SUCCESS => return,
+                .INTR => continue,
+                .ACCES => return error.ProcessAlreadyExec,
+                .INVAL => return error.InvalidProcessGroupId,
+                .PERM => return error.PermissionDenied,
+                .SRCH => return error.ProcessNotFound,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    if (zig_builtin.os.tag == .linux) {
+        const rc = std.os.linux.setpgid(pid, pgrp);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => return,
+            .ACCES => return error.ProcessAlreadyExec,
+            .INVAL => return error.InvalidProcessGroupId,
+            .PERM => return error.PermissionDenied,
+            .SRCH => return error.ProcessNotFound,
+            else => return error.Unexpected,
+        }
+    }
+    return error.Unsupported;
+}
+
+fn processGetPgrp(pid: std.posix.pid_t) !std.posix.pid_t {
+    if (zig_builtin.link_libc) {
+        while (true) {
+            const rc = getpgid(pid);
+            switch (std.c.errno(rc)) {
+                .SUCCESS => return @intCast(rc),
+                .INTR => continue,
+                .INVAL => return error.InvalidProcessId,
+                .PERM => return error.PermissionDenied,
+                .SRCH => return error.ProcessNotFound,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    if (zig_builtin.os.tag == .linux) {
+        const rc = std.os.linux.getpgid(pid);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .INVAL => return error.InvalidProcessId,
+            .PERM => return error.PermissionDenied,
+            .SRCH => return error.ProcessNotFound,
+            else => return error.Unexpected,
+        }
+    }
+    return error.Unsupported;
+}
 
 fn terminalGetPgrp(fd: std.posix.fd_t) !std.posix.pid_t {
     if (zig_builtin.link_libc) {
@@ -9226,6 +9303,9 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
         self.findBackgroundJobBySpec(command.argv[1].text) orelse return errorResult(self.allocator, 127, "fg", "unknown job");
     const stdout = try std.fmt.allocPrint(self.allocator, "{s}\n", .{job.command});
     errdefer self.allocator.free(stdout);
+    const foreground_terminal = try prepareForegroundTerminal(options.foreground_terminal and options.external_stdio == .inherit and self.shell_options.monitor);
+    defer restoreForegroundTerminal(foreground_terminal);
+    if (job.pgrp) |pgrp| try giveTerminalToForegroundPgrp(@intCast(pgrp), foreground_terminal);
     try continueStoppedJob(job);
     self.selectCurrentJob(job.id);
     const status = try waitBackgroundJob(io, job);
@@ -9273,7 +9353,7 @@ fn waitBackgroundJob(io: std.Io, job: *BackgroundJob) !ExitStatus {
 fn continueStoppedJob(job: *BackgroundJob) !void {
     if (job.state != .stopped) return;
     restoreJobTerminalModes(job);
-    const pid: std.posix.pid_t = @intCast(job.pid);
+    const pid: std.posix.pid_t = if (job.pgrp) |pgrp| @intCast(-pgrp) else @intCast(job.pid);
     try std.posix.kill(pid, .CONT);
     job.state = .running;
 }
@@ -12751,6 +12831,60 @@ test "executor starts external commands asynchronously" {
     try std.testing.expect(std.mem.startsWith(u8, result.stdout, "pid="));
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "\ndone\n"));
     try std.testing.expect(result.stdout.len > "pid=\ndone\n".len);
+}
+
+test "monitor mode assigns tracked async jobs to process groups" {
+    var external_lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 5 &");
+    defer external_lowered.parsed.deinit();
+    defer external_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var external_result = try executor.executeProgram(external_lowered.program, .{ .io = std.testing.io, .allow_external = true, .interactive = true });
+    defer external_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), external_result.status);
+    try std.testing.expectEqual(@as(usize, 1), executor.background_jobs.items.len);
+    const external_job = &executor.background_jobs.items[0];
+    try std.testing.expectEqual(@as(?i64, external_job.pid), external_job.pgrp);
+    try std.testing.expectEqual(@as(std.posix.pid_t, @intCast(external_job.pid)), try processGetPgrp(@intCast(external_job.pid)));
+    std.posix.kill(@intCast(external_job.pid), .TERM) catch {};
+    _ = external_job.child.wait(std.testing.io) catch null;
+    external_job.state = .done;
+
+    var compound_lowered = try parseAndLower(std.testing.allocator, "{ /bin/sleep 5; } &");
+    defer compound_lowered.parsed.deinit();
+    defer compound_lowered.program.deinit();
+
+    var compound_result = try executor.executeProgram(compound_lowered.program, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer compound_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), compound_result.status);
+    try std.testing.expectEqual(@as(usize, 2), executor.background_jobs.items.len);
+    const compound_job = &executor.background_jobs.items[1];
+    try std.testing.expectEqual(@as(?i64, compound_job.pid), compound_job.pgrp);
+    try std.testing.expectEqual(@as(std.posix.pid_t, @intCast(compound_job.pid)), try processGetPgrp(@intCast(compound_job.pid)));
+    if (compound_job.pgrp) |pgrp| std.posix.kill(@intCast(-pgrp), .TERM) catch {};
+    _ = compound_job.child.wait(std.testing.io) catch null;
+    compound_job.state = .done;
+}
+
+test "non-interactive monitor option does not change async process groups" {
+    var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 5 &");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), executor.background_jobs.items.len);
+    const job = &executor.background_jobs.items[0];
+    try std.testing.expectEqual(@as(?i64, null), job.pgrp);
+    std.posix.kill(@intCast(job.pid), .TERM) catch {};
+    _ = job.child.wait(std.testing.io) catch null;
+    job.state = .done;
 }
 
 test "executor asynchronously inherits arbitrary descriptor duplications" {
