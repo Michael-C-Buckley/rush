@@ -8673,10 +8673,10 @@ fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 }
 
 fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    _ = options;
     var arg_start: usize = 1;
-    const read_options = parseReadOptions(command, &arg_start) catch |err| switch (err) {
+    const read_options = parseReadOptions(command, &arg_start, options.features) catch |err| switch (err) {
         error.UnsupportedOption => return errorResult(self.allocator, 2, "read", "unsupported option"),
+        error.MissingDelimiter => return errorResult(self.allocator, 2, "read", "missing delimiter"),
     };
 
     const names = command.argv[arg_start..];
@@ -8707,9 +8707,10 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 
 const ReadOptions = struct {
     raw_mode: bool = false,
+    delimiter: u8 = '\n',
 };
 
-fn parseReadOptions(command: ir.SimpleCommand, arg_start: *usize) !ReadOptions {
+fn parseReadOptions(command: ir.SimpleCommand, arg_start: *usize, features: compat.Features) !ReadOptions {
     var result: ReadOptions = .{};
     while (arg_start.* < command.argv.len) {
         const arg = command.argv[arg_start.*].text;
@@ -8725,6 +8726,19 @@ fn parseReadOptions(command: ir.SimpleCommand, arg_start: *usize) !ReadOptions {
                 'r' => {
                     result.raw_mode = true;
                     option_index += 1;
+                },
+                'd' => {
+                    if (!features.isBash()) return error.UnsupportedOption;
+                    if (option_index + 1 < arg.len) {
+                        result.delimiter = arg[option_index + 1];
+                        option_index = arg.len;
+                    } else {
+                        arg_start.* += 1;
+                        if (arg_start.* >= command.argv.len) return error.MissingDelimiter;
+                        const delimiter_arg = command.argv[arg_start.*].text;
+                        result.delimiter = if (delimiter_arg.len == 0) 0 else delimiter_arg[0];
+                        option_index = arg.len;
+                    }
                 },
                 else => return error.UnsupportedOption,
             }
@@ -8772,6 +8786,7 @@ fn readInputFromFile(self: *Executor, file: std.Io.File, options: ReadOptions) !
     var line: std.ArrayList(u8) = .empty;
     errdefer line.deinit(self.allocator);
     var byte: [1]u8 = undefined;
+    const delimiter = options.delimiter;
     while (true) {
         const read_len = try std.posix.read(file.handle, &byte);
         if (read_len == 0) {
@@ -8779,9 +8794,9 @@ fn readInputFromFile(self: *Executor, file: std.Io.File, options: ReadOptions) !
             const owned = try line.toOwnedSlice(self.allocator);
             return .{ .line = trimReadCarriageReturn(owned), .status = 1, .owned = owned };
         }
-        if (byte[0] == '\n') {
+        if (byte[0] == delimiter) {
             trimReadCarriageReturnInPlace(&line);
-            if (!options.raw_mode and readLineContinues(line.items)) {
+            if (delimiter == '\n' and !options.raw_mode and readLineContinues(line.items)) {
                 line.items.len -= 1;
                 continue;
             }
@@ -8799,11 +8814,11 @@ fn readInputFromSlice(allocator: std.mem.Allocator, stdin: []const u8, options: 
     var continued = false;
     while (true) {
         const remaining = stdin[cursor..];
-        const newline = std.mem.indexOfScalar(u8, remaining, '\n');
-        const line_end = newline orelse remaining.len;
+        const delimiter = std.mem.indexOfScalar(u8, remaining, options.delimiter);
+        const line_end = delimiter orelse remaining.len;
         const consumed = cursor + @min(line_end + 1, remaining.len);
         const physical_line = trimReadCarriageReturn(remaining[0..line_end]);
-        if (newline != null and !options.raw_mode and readLineContinues(physical_line)) {
+        if (options.delimiter == '\n' and delimiter != null and !options.raw_mode and readLineContinues(physical_line)) {
             continued = true;
             try logical.appendSlice(allocator, physical_line[0 .. physical_line.len - 1]);
             cursor = consumed;
@@ -8813,7 +8828,7 @@ fn readInputFromSlice(allocator: std.mem.Allocator, stdin: []const u8, options: 
             }
             continue;
         }
-        const status: ExitStatus = if (newline != null) 0 else 1;
+        const status: ExitStatus = if (delimiter != null) 0 else 1;
         if (continued) {
             try logical.appendSlice(allocator, physical_line);
             const owned = try logical.toOwnedSlice(allocator);
@@ -12927,6 +12942,35 @@ test "executor implements read and printf builtins" {
     defer unsupported_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 2), unsupported_result.status);
     try std.testing.expectEqualStrings("read: unsupported option\n", unsupported_result.stderr);
+
+    var posix_delimiter = try parseAndLower(std.testing.allocator, "read -d : var <<EOF\none:two\nEOF\n");
+    defer posix_delimiter.parsed.deinit();
+    defer posix_delimiter.program.deinit();
+    var posix_delimiter_result = try executor.executeProgram(posix_delimiter.program, .{});
+    defer posix_delimiter_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), posix_delimiter_result.status);
+    try std.testing.expectEqualStrings("read: unsupported option\n", posix_delimiter_result.stderr);
+
+    var bash_delimiter = try parseAndLower(std.testing.allocator,
+        \\read -d : first rest <<EOF
+        \\one:two
+        \\EOF
+        \\printf '<%s><%s>:%s\n' "$first" "$rest" "$?"
+    );
+    defer bash_delimiter.parsed.deinit();
+    defer bash_delimiter.program.deinit();
+    var bash_delimiter_result = try executor.executeProgram(bash_delimiter.program, .{ .features = compat.Features.bash() });
+    defer bash_delimiter_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), bash_delimiter_result.status);
+    try std.testing.expectEqualStrings("<one><>:0\n", bash_delimiter_result.stdout);
+
+    var bash_missing_delimiter = try parseAndLower(std.testing.allocator, "read -d");
+    defer bash_missing_delimiter.parsed.deinit();
+    defer bash_missing_delimiter.program.deinit();
+    var bash_missing_delimiter_result = try executor.executeProgram(bash_missing_delimiter.program, .{ .features = compat.Features.bash() });
+    defer bash_missing_delimiter_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), bash_missing_delimiter_result.status);
+    try std.testing.expectEqualStrings("read: missing delimiter\n", bash_missing_delimiter_result.stderr);
 
     var missing_name = try parseAndLower(std.testing.allocator, "read");
     defer missing_name.parsed.deinit();
