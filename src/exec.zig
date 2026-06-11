@@ -3703,12 +3703,14 @@ pub const Executor = struct {
     };
 
     fn executeMixedPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
-        // Mixed pipelines run builtin/function stages on shell threads. Do not
-        // hand the terminal to an external child process group here: that can
-        // background the shell while those shell-thread stages may still use
-        // stdio. External-only foreground handoff remains in
-        // executeExternalPipeline; async monitor jobs reach this path through a
-        // forked wrapper process group with foreground handoff disabled.
+        const foreground_terminal = try prepareForegroundTerminal(options.interactive and options.foreground_terminal and options.external_stdio == .inherit);
+        if (foreground_terminal) |terminal| return self.executeForegroundMixedPipeline(program, pipeline, options, io, terminal);
+
+        // Mixed pipelines run builtin/function stages on shell threads in the
+        // parent only when no foreground terminal handoff is active. Interactive
+        // inherited-stdio jobs with a controlling terminal fork through
+        // executeForegroundMixedPipeline first so the shell-implemented stages
+        // live in the foreground job's process group before tcsetpgrp.
         const pipe_count = pipeline.command_indexes.len - 1;
         const pipes = try self.allocator.alloc(PipelinePipe, pipe_count);
         defer self.allocator.free(pipes);
@@ -3885,6 +3887,39 @@ pub const Executor = struct {
             .stdout = try multi_reader.toOwnedSlice(0),
             .stderr = stderr_output,
         };
+    }
+
+    fn executeForegroundMixedPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io, terminal: ForegroundTerminal) !CommandResult {
+        const pid = try forkProcess();
+        if (pid == 0) {
+            processSetPgrp(0, 0) catch exitForkedChild(2);
+            var child_options = options;
+            child_options.foreground_terminal = false;
+            var status: ExitStatus = 2;
+            var child_result = self.executeMixedPipeline(program, pipeline, child_options, io) catch null;
+            if (child_result) |*result| {
+                status = result.status;
+                if (child_options.external_stdio == .inherit) writeInheritedResult(io, result.*) catch {};
+                result.deinit();
+            }
+            exitForkedChild(status);
+        }
+
+        var child = childFromPid(pid);
+        errdefer child.kill(io);
+
+        processSetPgrp(pid, pid) catch |err| switch (err) {
+            error.ProcessAlreadyExec, error.ProcessNotFound => {},
+            else => return err,
+        };
+
+        const cancel_pid = registerCancelableChild(options, child);
+        defer unregisterCancelableChild(options, cancel_pid);
+        defer restoreForegroundTerminal(terminal);
+        try giveTerminalToForegroundPgrp(pid, terminal);
+
+        const term = try child.wait(io);
+        return emptyResult(self.allocator, exitStatusFromTerm(term));
     }
 
     fn redirectionFailureDiagnostic(self: *Executor, command: ir.SimpleCommand, err: anyerror) !?[]u8 {
@@ -13302,6 +13337,56 @@ test "executor supports mixed builtin and external pipeline stages" {
     var builtin_status_result = try executor.executeProgram(builtin_status.program, .{ .io = std.testing.io, .allow_external = true });
     defer builtin_status_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 1), builtin_status_result.status);
+}
+
+test "mixed pipeline without foreground terminal preserves last builtin side effects" {
+    const path = "rush-mixed-pipe-no-foreground-terminal.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | read x; echo \"$x\" > rush-mixed-pipe-no-foreground-terminal.tmp");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .foreground_terminal = false });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("hello\n", contents);
+}
+
+test "interactive foreground mixed pipeline gives terminal to wrapper process group" {
+    const shell_pgrp = processGetPgrp(0) catch return error.SkipZigTest;
+    const terminal = try prepareForegroundTerminal(true) orelse return error.SkipZigTest;
+    if (terminal.previous_pgrp != shell_pgrp) return error.SkipZigTest;
+
+    const path = "rush-mixed-pipe-foreground-pgrp.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\f() { /bin/sh -c 'ps -o pgid=,tpgid= -p $$'; }
+        \\f | /bin/cat > rush-mixed-pipe-foreground-pgrp.tmp
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    var parts = std.mem.tokenizeAny(u8, contents, " \t\r\n");
+    const stage_pgrp_text = parts.next() orelse return error.SkipZigTest;
+    const stage_tpgid_text = parts.next() orelse return error.SkipZigTest;
+    const stage_pgrp = std.fmt.parseInt(std.posix.pid_t, stage_pgrp_text, 10) catch return error.SkipZigTest;
+    const stage_tpgid = std.fmt.parseInt(std.posix.pid_t, stage_tpgid_text, 10) catch return error.SkipZigTest;
+
+    try std.testing.expect(stage_pgrp != shell_pgrp);
+    try std.testing.expectEqual(stage_pgrp, stage_tpgid);
 }
 
 test "executor streams large pipeline input into builtin stages" {
