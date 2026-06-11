@@ -102,6 +102,7 @@ if [ ! -d "$CORPUS_DIR" ]; then
   echo "missing POSIX corpus directory: $CORPUS_DIR" >&2
   exit 1
 fi
+CORPUS_DIR=$(CDPATH= cd -- "$CORPUS_DIR" && pwd)
 
 workdir=$(mktemp -d)
 FAILDIR=$workdir/failures
