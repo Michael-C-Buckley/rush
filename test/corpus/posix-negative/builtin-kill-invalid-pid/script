@@ -1,0 +1,1 @@
+kill not-a-pid; echo after

@@ -356,3 +356,4 @@ redirection-case-input-external-command-substitution	redirection	behavior	case i
 builtin-trap-signal-exit	signals	behavior	exit in a signal trap action stops the script with that status
 builtin-trap-exit-overrides-status	builtin	behavior	exit in an EXIT trap action overrides the prior shell status
 option-set-obsolescent-noop	options	behavior	set -h/+h and set -o/+o nolog are accepted as no-effect compatibility spellings
+builtin-kill-job-spec	job_control	job	kill accepts current previous numeric prefix and substring job ID operands

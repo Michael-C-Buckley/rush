@@ -51,7 +51,7 @@ Recent notable capabilities:
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
 - POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
-- Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, and `bg`.
+- Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
 
@@ -356,11 +356,12 @@ Implemented or partially implemented:
 - Visible job table through `jobs`, including POSIX-spaced normal and `-l` output, `-p`, Running/Done/Done(code)/Stopped signal state strings, numeric/% job operands, empty subshell and command-substitution tables, and removal of completed jobs after their termination status is reported.
 - Monitor-enabled `fg` waits for current or explicit tracked jobs, returns the foreground job status, writes the command line, and removes completed foreground jobs from the waitable job table.
 - Monitor-enabled `bg` reports current, explicit, and multiple tracked jobs with the POSIX `[%d] %s` format.
+- `kill` is available as a shell builtin so POSIX job ID operands can target Rush's job table, with default `TERM`, `-s signal`, `-signal`, `-0`, pid operands, and process-group signaling for tracked jobs when available.
 - Foreground process group handling for inherited-stdio external-only pipelines.
 - Foreground inherited-stdio mixed pipelines fork through a job-owned wrapper process group before terminal handoff, so builtin/function stages are no longer run by the parent shell while the job owns the terminal.
 - Stopped foreground inherited-stdio mixed pipelines are recorded in the job table, restore the shell foreground process group, and can be resumed through `fg` after SIGTSTP/SIGTTIN/SIGTTOU stops in the job-owned wrapper process group.
 - Monitor mode (`set -m`) puts tracked async external and forked compound/mixed-pipeline jobs in their own process groups, keeps background jobs from taking foreground terminal ownership, lets `fg` hand the terminal to that saved process group when available, and gates `fg`/`bg` job-control behavior.
-- `jobs`, `fg`, `bg`, and `wait` resolve POSIX job IDs for current (`%%`/`%+`), previous (`%-`), numeric (`%n`), prefix (`%string`), and substring (`%?string`) forms where the match is unambiguous.
+- `jobs`, `fg`, `bg`, `wait`, and `kill` resolve POSIX job IDs for current (`%%`/`%+`), previous (`%-`), numeric (`%n`), prefix (`%string`), and substring (`%?string`) forms where the match is unambiguous.
 - Stopped-job lifecycle coverage includes stopped status refresh and prompt notifications, 128+signal status for stopped foreground jobs, dash-compatible `wait` behavior that remains blocked while a stopped job is not continued, stopped→done refresh/notification when a stopped job is killed, saved terminal mode restore on `fg`, and the dash-compatible first `exit` warning while stopped jobs remain.
 
 ### Partial / gaps

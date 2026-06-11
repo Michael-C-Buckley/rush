@@ -7210,6 +7210,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "getopts")) return builtinGetopts;
     if (std.mem.eql(u8, name, "fg")) return builtinFg;
     if (std.mem.eql(u8, name, "jobs")) return builtinJobs;
+    if (std.mem.eql(u8, name, "kill")) return builtinKill;
     if (std.mem.eql(u8, name, "interval")) return builtinInterval;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
     if (std.mem.eql(u8, name, "env")) return builtinEnv;
@@ -9540,6 +9541,139 @@ fn appendSymbolicPermissions(allocator: std.mem.Allocator, stdout: *std.ArrayLis
 }
 
 const JobPrintMode = enum { normal, long, pids };
+
+const KillSignalSpec = struct {
+    name: []const u8,
+    signal: std.posix.SIG,
+};
+
+const kill_signal_specs = [_]KillSignalSpec{
+    .{ .name = "HUP", .signal = .HUP },
+    .{ .name = "INT", .signal = .INT },
+    .{ .name = "QUIT", .signal = .QUIT },
+    .{ .name = "ILL", .signal = .ILL },
+    .{ .name = "TRAP", .signal = .TRAP },
+    .{ .name = "ABRT", .signal = .ABRT },
+    .{ .name = "BUS", .signal = .BUS },
+    .{ .name = "FPE", .signal = .FPE },
+    .{ .name = "KILL", .signal = .KILL },
+    .{ .name = "USR1", .signal = .USR1 },
+    .{ .name = "SEGV", .signal = .SEGV },
+    .{ .name = "USR2", .signal = .USR2 },
+    .{ .name = "PIPE", .signal = .PIPE },
+    .{ .name = "ALRM", .signal = .ALRM },
+    .{ .name = "TERM", .signal = .TERM },
+    .{ .name = "CHLD", .signal = .CHLD },
+    .{ .name = "CONT", .signal = .CONT },
+    .{ .name = "STOP", .signal = .STOP },
+    .{ .name = "TSTP", .signal = .TSTP },
+    .{ .name = "TTIN", .signal = .TTIN },
+    .{ .name = "TTOU", .signal = .TTOU },
+};
+
+fn builtinKill(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    var signal: std.posix.SIG = .TERM;
+    var index: usize = 1;
+
+    if (index < command.argv.len) {
+        const option = command.argv[index].text;
+        if (std.mem.eql(u8, option, "--")) {
+            index += 1;
+        } else if (std.mem.eql(u8, option, "-l")) {
+            return builtinKillList(self, command.argv[index + 1 ..]);
+        } else if (std.mem.eql(u8, option, "-s")) {
+            index += 1;
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "kill", "missing signal");
+            signal = parseKillSignal(command.argv[index].text) orelse return invalidKillSignal(self, command.argv[index].text);
+            index += 1;
+            if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) index += 1;
+        } else if (option.len > 1 and option[0] == '-') {
+            signal = parseKillSignal(option[1..]) orelse return invalidKillSignal(self, option[1..]);
+            index += 1;
+            if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) index += 1;
+        }
+    }
+
+    if (index >= command.argv.len) return errorResult(self.allocator, 2, "kill", "missing operand");
+    self.refreshBackgroundJobs();
+
+    for (command.argv[index..]) |arg| {
+        const pid = if (std.mem.startsWith(u8, arg.text, "%")) blk: {
+            const job = self.findBackgroundJobBySpec(arg.text) orelse return errorResult(self.allocator, 127, "kill", "unknown job");
+            break :blk killPidForJob(job.*);
+        } else std.fmt.parseInt(std.posix.pid_t, arg.text, 10) catch return errorResult(self.allocator, 2, "kill", "invalid pid");
+        sendKillSignal(pid, signal) catch |err| switch (err) {
+            error.ProcessNotFound => return errorResult(self.allocator, 1, "kill", "no such process"),
+            error.PermissionDenied => return errorResult(self.allocator, 1, "kill", "permission denied"),
+            else => return err,
+        };
+    }
+
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinKillList(self: *Executor, args: []const ir.WordRef) !CommandResult {
+    if (args.len > 1) return errorResult(self.allocator, 2, "kill", "too many arguments");
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    if (args.len == 0) {
+        for (kill_signal_specs, 0..) |spec, index| {
+            if (index != 0) try stdout.append(self.allocator, ' ');
+            try stdout.appendSlice(self.allocator, spec.name);
+        }
+        try stdout.append(self.allocator, '\n');
+    } else {
+        const name = killSignalListName(args[0].text) orelse return invalidKillSignal(self, args[0].text);
+        try stdout.print(self.allocator, "{s}\n", .{name});
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn invalidKillSignal(self: *Executor, raw: []const u8) !CommandResult {
+    const message = try std.fmt.allocPrint(self.allocator, "{s}: invalid signal", .{raw});
+    defer self.allocator.free(message);
+    return errorResult(self.allocator, 2, "kill", message);
+}
+
+fn parseKillSignal(raw: []const u8) ?std.posix.SIG {
+    if (raw.len == 0) return null;
+    if (parseKillSignalNumber(raw)) |signal| return signal;
+    const name = if (std.ascii.startsWithIgnoreCase(raw, "SIG") and raw.len > 3) raw[3..] else raw;
+    for (kill_signal_specs) |spec| {
+        if (std.ascii.eqlIgnoreCase(name, spec.name)) return spec.signal;
+    }
+    return null;
+}
+
+fn parseKillSignalNumber(raw: []const u8) ?std.posix.SIG {
+    for (raw) |byte| if (!std.ascii.isDigit(byte)) return null;
+    const number = std.fmt.parseInt(u8, raw, 10) catch return null;
+    if (number == 0) return @enumFromInt(0);
+    for (kill_signal_specs) |spec| {
+        if (number == signalStatusNumber(spec.signal)) return spec.signal;
+    }
+    return null;
+}
+
+fn killSignalListName(raw: []const u8) ?[]const u8 {
+    const status = std.fmt.parseInt(u16, raw, 10) catch return null;
+    const number = if (status > 128) status - 128 else status;
+    if (number == 0) return "0";
+    for (kill_signal_specs) |spec| {
+        if (number == signalStatusNumber(spec.signal)) return spec.name;
+    }
+    return null;
+}
+
+fn killPidForJob(job: BackgroundJob) std.posix.pid_t {
+    return if (job.pgrp) |pgrp| @intCast(-pgrp) else @intCast(job.pid);
+}
+
+fn sendKillSignal(pid: std.posix.pid_t, signal: std.posix.SIG) std.posix.KillError!void {
+    return std.posix.kill(pid, signal);
+}
 
 fn builtinJobs(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
@@ -13223,6 +13357,65 @@ test "executor resolves POSIX job id string forms" {
     try std.testing.expectEqual(@as(usize, 1), (executor.findBackgroundJobBySpec("%alpha") orelse return error.TestUnexpectedResult).id);
     try std.testing.expectEqual(@as(usize, 2), (executor.findBackgroundJobBySpec("%?beta") orelse return error.TestUnexpectedResult).id);
     try std.testing.expectEqual(@as(?*BackgroundJob, null), executor.findBackgroundJobBySpec("%?alpha"));
+}
+
+test "executor kill builtin resolves POSIX job operands" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\set -m
+        \\/bin/sleep 10 &
+        \\/bin/sh -c 'sleep 10' &
+        \\kill -s 0 $!
+        \\echo pid=$?
+        \\kill -0 %%
+        \\echo current=$?
+        \\kill -0 %-
+        \\echo previous=$?
+        \\kill -0 %1
+        \\echo numeric=$?
+        \\kill -0 %/bin/sh
+        \\echo prefix=$?
+        \\kill -0 %?sh
+        \\echo substring=$?
+        \\kill -TERM %1
+        \\kill -s TERM %2
+        \\wait %1; echo wait1=$?
+        \\wait %2; echo wait2=$?
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    const term_status: ExitStatus = 128 + signalStatusNumber(std.posix.SIG.TERM);
+    const expected = try std.fmt.allocPrint(
+        std.testing.allocator,
+        "pid=0\ncurrent=0\nprevious=0\nnumeric=0\nprefix=0\nsubstring=0\nwait1={d}\nwait2={d}\n",
+        .{ term_status, term_status },
+    );
+    defer std.testing.allocator.free(expected);
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(expected, result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor kill builtin reports usage diagnostics" {
+    var lowered = try parseAndLower(std.testing.allocator, "kill %99; echo first; kill -NOPE $$; echo second; kill not-a-pid; echo third");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("first\nsecond\nthird\n", result.stdout);
+    try std.testing.expectEqualStrings("kill: unknown job\nkill: NOPE: invalid signal\nkill: invalid pid\n", result.stderr);
 }
 
 test "jobs markers prefer stopped jobs" {

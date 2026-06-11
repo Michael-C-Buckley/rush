@@ -8,7 +8,7 @@ This submatrix expands builtin-related rows in `posix-shell.tsv`. It separates P
 | --- | --- | --- |
 | POSIX special builtins | classification and assignment persistence baseline | failure consequences, redirection/expansion errors, utility-specific diagnostics |
 | Core regular builtins | broad baseline for common scripts | option/operand completeness and negative diagnostics |
-| Job-control builtins | background job table, wait baseline, jobs operands/options, fg baseline | bg, stopped jobs, terminal mode restoration |
+| Job-control builtins | background job table, wait baseline, jobs/kill operands, fg/bg, stopped jobs | remaining pipeline/asynchronous-list signal edge cases |
 | Rush helper builtins | useful implementation helpers | keep out of POSIX score unless they affect shell semantics |
 
 ## POSIX special builtins
@@ -63,6 +63,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 | `jobs` | `builtin-jobs`; `job-stopped-state` | POSIX-spaced visible table, `-l`, `-p`, numeric, `%`, `%+`, `%%`, `%-`, prefix, and substring job operands; current/previous markers; nonblocking stopped/done status refresh; notifications; empty subshell and command-substitution tables; completed-job cleanup after reported termination status | remaining signal edge cases are tracked outside the supported `jobs` row |
 | `fg` | `job-fg-bg`; `job-stopped-state` | monitor-enabled current, previous, numeric, prefix, and substring tracked jobs wait, propagate status, get terminal handoff when a saved process group exists, send stopped jobs `SIGCONT`, restore stopped-job terminal modes, and remove completed foreground jobs from the waitable table | remaining signal edge cases are tracked outside the supported `fg`/`bg` row |
 | `bg` | `job-fg-bg`; `job-stopped-state` | monitor-enabled current, previous, numeric, prefix, substring, and multiple tracked jobs report with POSIX `[%d] %s` output; stopped jobs get `SIGCONT`; repeated stopped notifications can be reported after a continue; disabled job control reports an error | remaining signal edge cases are tracked outside the supported `fg`/`bg` row |
+| `kill` | `builtin-kill` | default `TERM`, `-s signal`, `-signal`, `-0`, ordinary pid operands, and current, previous, numeric, prefix, and substring job ID operands; tracked jobs are signaled by process group when available | broader implementation-specific signal list/output formatting remains intentionally minimal |
 
 Follow-up tasks:
 
@@ -70,7 +71,7 @@ Follow-up tasks:
 
 ## Negative diagnostics coverage targets
 
-The POSIX negative corpus covers representative builtin diagnostics for `test`, `read`, `wait`, POSIX special builtin usage failures, `getopts`, `printf`, and `umask`. Remaining builtin rows should add focused negative cases when implementing their listed option and operand gaps.
+The POSIX negative corpus covers representative builtin diagnostics for `test`, `read`, `wait`, `kill`, POSIX special builtin usage failures, `getopts`, `printf`, and `umask`. Remaining builtin rows should add focused negative cases when implementing their listed option and operand gaps.
 
 ## Promotion guidance
 
