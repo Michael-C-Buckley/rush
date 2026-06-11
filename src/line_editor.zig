@@ -320,6 +320,7 @@ pub const LineSession = struct {
     submitted_line: ?[]const u8 = null,
     paste_depth: usize = 0,
     clear_screen_requested: bool = false,
+    completion_flash: ?CompletionFlash = null,
 
     pub const State = enum {
         editing,
@@ -386,7 +387,7 @@ pub const LineSession = struct {
                 self.completion_menu.clear(self.allocator);
             },
             .ctrl_c => {
-                try self.cancel();
+                try self.clearInput();
             },
             .ctrl_d => {
                 self.completion_menu.clear(self.allocator);
@@ -464,6 +465,13 @@ pub const LineSession = struct {
         self.state = .canceled;
     }
 
+    fn clearInput(self: *LineSession) !void {
+        if (self.state != .editing) return;
+        self.completion_menu.clear(self.allocator);
+        if (self.editor.buffer.text().len == 0) return;
+        try self.editor.buffer.replace("");
+    }
+
     pub fn takeClearScreenRequest(self: *LineSession) bool {
         const requested = self.clear_screen_requested;
         self.clear_screen_requested = false;
@@ -495,14 +503,25 @@ pub const LineSession = struct {
             .edit => |edit| {
                 try self.editor.buffer.applyCompletionEdit(edit);
                 self.completion_menu.clear(self.allocator);
+                self.completion_flash = null;
             },
-            .ambiguous => |candidates| try self.completion_menu.replace(self.allocator, candidates),
-            .none => self.completion_menu.clear(self.allocator),
+            .ambiguous => |candidates| {
+                try self.completion_menu.replace(self.allocator, candidates);
+                self.completion_flash = null;
+            },
+            .none => {
+                self.completion_menu.clear(self.allocator);
+                self.completion_flash = completionFlashForCursor(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
+            },
         }
     }
 
     pub fn hasCompletionMenu(self: LineSession) bool {
         return self.completion_menu.isOpen();
+    }
+
+    pub fn hasCompletionFlash(self: LineSession) bool {
+        return self.completion_flash != null;
     }
 
     pub fn beginPaste(self: *LineSession) void {
@@ -534,6 +553,8 @@ pub const LineSession = struct {
         render_options.completion_menu = self.completion_menu.candidates;
         render_options.completion_selection = self.completion_menu.selected;
         render_options.completion_window_start = self.completion_menu.visibleWindowStart(render_options.menuCandidateRows());
+        render_options.completion_flash = self.completion_flash;
+        self.completion_flash = null;
         if (self.state == .history_search) {
             var history_candidates: std.ArrayList(completion.Candidate) = .empty;
             defer history_candidates.deinit(allocator);
@@ -904,6 +925,11 @@ pub const LineSession = struct {
     }
 };
 
+const CompletionFlash = struct {
+    start: usize,
+    end: usize,
+};
+
 fn cloneHistoryEntry(allocator: std.mem.Allocator, entry: HistoryView.HistoryEntry) !HistoryView.HistoryEntry {
     return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text), .when = entry.when };
 }
@@ -953,7 +979,7 @@ fn styledHistorySearchLabel(allocator: std.mem.Allocator, text: []const u8, quer
     var position_index: usize = 0;
     for (text, 0..) |byte, index| {
         if (position_index < positions.len and positions[position_index] == index) {
-            try label.appendSlice(allocator, "\x1b[38;5;220m");
+            try label.appendSlice(allocator, "\x1b[38;5;3m");
             try label.append(allocator, byte);
             try label.appendSlice(allocator, "\x1b[39m");
             position_index += 1;
@@ -1089,6 +1115,7 @@ pub const RenderOptions = struct {
     status_line: []const u8 = "",
     diagnostic_line: []const u8 = "",
     diagnostic_spans: []const DiagnosticSpan = &.{},
+    completion_flash: ?CompletionFlash = null,
     semantic_prompt_marks: bool = false,
     width: u16 = 80,
     height: u16 = 24,
@@ -1140,11 +1167,11 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     errdefer input_line.deinit(allocator);
     try input_line.appendSlice(allocator, options.prompt.bytes);
     if (options.semantic_prompt_marks) try input_line.appendSlice(allocator, semanticPromptEnd);
-    try appendDiagnosticStyledInput(allocator, &input_line, editor.buffer.text(), options.diagnostic_spans);
+    try appendStyledInput(allocator, &input_line, editor.buffer.text(), options.diagnostic_spans, options.completion_flash);
     if (options.suggestion.len != 0 and renderableInlineText(options.suggestion)) {
-        try input_line.appendSlice(allocator, "\x1b[90m");
+        try input_line.appendSlice(allocator, "\x1b[2m");
         try input_line.appendSlice(allocator, options.suggestion);
-        try input_line.appendSlice(allocator, "\x1b[39m");
+        try input_line.appendSlice(allocator, "\x1b[22m");
     }
     const input_line_bytes = try input_line.toOwnedSlice(allocator);
     defer allocator.free(input_line_bytes);
@@ -1171,18 +1198,25 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     };
 }
 
-fn appendDiagnosticStyledInput(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8, spans: []const DiagnosticSpan) !void {
-    if (spans.len == 0) {
+fn appendStyledInput(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8, spans: []const DiagnosticSpan, flash: ?CompletionFlash) !void {
+    if (spans.len == 0 and flash == null) {
         try out.appendSlice(allocator, text);
         return;
     }
 
     var active: ?DiagnosticSeverity = null;
+    var flash_active = false;
     var i: usize = 0;
     while (i < text.len) {
         var iter = vaxis.unicode.graphemeIterator(text[i..]);
         const grapheme = iter.next() orelse break;
         const grapheme_end = i + grapheme.len;
+        const should_flash = completionFlashAt(flash, i, grapheme_end);
+        if (flash_active != should_flash) {
+            if (flash_active) try out.appendSlice(allocator, "\x1b[49;39m");
+            if (should_flash) try out.appendSlice(allocator, "\x1b[48;5;7;38;5;0m");
+            flash_active = should_flash;
+        }
         const severity = diagnosticSeverityAt(spans, i, grapheme_end);
         if (active != severity) {
             if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
@@ -1193,7 +1227,23 @@ fn appendDiagnosticStyledInput(allocator: std.mem.Allocator, out: *std.ArrayList
         i = grapheme_end;
     }
     if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
+    if (flash_active) try out.appendSlice(allocator, "\x1b[49;39m");
     if (i < text.len) try out.appendSlice(allocator, text[i..]);
+}
+
+fn completionFlashAt(flash: ?CompletionFlash, start: usize, end: usize) bool {
+    const span = flash orelse return false;
+    return start < span.end and end > span.start;
+}
+
+fn completionFlashForCursor(text: []const u8, cursor: usize) CompletionFlash {
+    if (text.len == 0) return .{ .start = 0, .end = 0 };
+    var start = @min(cursor, text.len);
+    while (start > 0 and !std.ascii.isWhitespace(text[start - 1])) : (start -= 1) {}
+    var end = @min(cursor, text.len);
+    while (end < text.len and !std.ascii.isWhitespace(text[end])) : (end += 1) {}
+    if (start == end and start != 0) start -= 1;
+    return .{ .start = start, .end = end };
 }
 
 fn diagnosticSeverityAt(spans: []const DiagnosticSpan, start: usize, end: usize) ?DiagnosticSeverity {
@@ -1381,7 +1431,7 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
         errdefer line.deinit(allocator);
         const label = try completionMenuLabel(allocator, candidate);
         defer if (label.owned) |owned| allocator.free(owned);
-        if (index == selected) try line.appendSlice(allocator, "\x1b[1;38;5;81m❯\x1b[22;39m ") else try line.appendSlice(allocator, "  ");
+        if (index == selected) try line.appendSlice(allocator, "\x1b[1;38;5;6m❯\x1b[22;39m ") else try line.appendSlice(allocator, "  ");
         if (index == selected) try line.appendSlice(allocator, "\x1b[1m");
         try appendCompletionKindStyle(allocator, &line, candidate.kind);
         try appendPaddedCell(allocator, &line, label.text, label_width);
@@ -1389,9 +1439,9 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
         if (candidate.description) |description| {
             if (description.len != 0 and description_width != 0) {
                 try line.append(allocator, ' ');
-                try line.appendSlice(allocator, "\x1b[90m");
+                try line.appendSlice(allocator, "\x1b[2m");
                 try appendTruncated(allocator, &line, description, description_width);
-                try line.appendSlice(allocator, "\x1b[39m");
+                try line.appendSlice(allocator, "\x1b[22m");
             }
         }
         try lines.append(allocator, try line.toOwnedSlice(allocator));
@@ -1433,11 +1483,11 @@ fn appendCompletionKindStyle(allocator: std.mem.Allocator, line: *std.ArrayList(
     const color: u8 = switch (kind) {
         .command => 39,
         .builtin => 39,
-        .function => 35,
-        .file => 250,
-        .directory => 33,
-        .variable => 45,
-        .option => 81,
+        .function => 5,
+        .file => 7,
+        .directory => 4,
+        .variable => 5,
+        .option => 6,
         .subcommand => 39,
         .plain => 39,
     };
@@ -1888,6 +1938,21 @@ test "line session leaves ambiguous and empty completions unchanged" {
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
 }
 
+test "line session flashes current word when completion has no candidates" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git zzz");
+
+    try session.applyCompletion(.none);
+    const flashed = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(flashed);
+    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[48;5;7;38;5;0mzzz\x1b[49;39m") != null);
+
+    const normal = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(normal);
+    try std.testing.expect(std.mem.indexOf(u8, normal, "\x1b[48;5;7;38;5;0mzzz") == null);
+}
+
 test "line session renders ambiguous completion menu" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
@@ -1904,8 +1969,8 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "cherry") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯") == null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mswitch branches") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;6m❯") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2mswitch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "git che") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[J") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
@@ -1923,9 +1988,9 @@ test "completion menu styles candidates by kind" {
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;81m--help") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;45m$HOME") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;33msrc/") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;6m--help") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;5m$HOME") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;4msrc/") != null);
 }
 
 test "completion menu renders paired option spellings" {
@@ -2205,7 +2270,7 @@ test "completion menu visible window follows selection" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "three") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯\x1b[22;39m \x1b[1mthree") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;6m❯\x1b[22;39m \x1b[1mthree") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 3-3 of 3") != null);
 }
 
@@ -2227,14 +2292,14 @@ test "completion menu only pins selection to bottom while scrolling down" {
     defer std.testing.allocator.free(scrolled_down);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "two") != null);
-    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1;38;5;81m❯\x1b[22;39m \x1b[1mthree") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1;38;5;6m❯\x1b[22;39m \x1b[1mthree") != null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "showing 2-3 of 4") != null);
 
     try session.handleKey(.{ .key = .up });
     const moved_up = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 4 });
     defer std.testing.allocator.free(moved_up);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "one") == null);
-    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1;38;5;81m❯\x1b[22;39m \x1b[1mtwo") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1;38;5;6m❯\x1b[22;39m \x1b[1mtwo") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "three") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "showing 2-3 of 4") != null);
 }
@@ -2287,7 +2352,7 @@ test "line session keeps input and clears menu on escape" {
     try std.testing.expectEqualStrings("abcd", session.editor.buffer.text());
 }
 
-test "line session cancels input and menu on ctrl-c" {
+test "line session clears input and menu on ctrl-c" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
     var candidates = [_]completion.Candidate{
@@ -2298,10 +2363,14 @@ test "line session cancels input and menu on ctrl-c" {
     try session.applyCompletion(.{ .ambiguous = &candidates });
     try session.handleKey(.{ .key = .ctrl_c });
 
-    try std.testing.expectEqual(LineSession.State.canceled, session.state);
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
     try std.testing.expect(!session.hasCompletionMenu());
     try std.testing.expectEqualStrings("", session.editor.buffer.text());
     try std.testing.expect(session.takeSubmittedLine() == null);
+
+    try session.handleKey(.{ .key = .ctrl_c });
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings("", session.editor.buffer.text());
 }
 
 test "line session treats ctrl-d as eof only on empty buffer" {
@@ -2455,11 +2524,11 @@ test "history search seeds query from current buffer and renders menu-style matc
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;81m❯") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;6m❯") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90m30s") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mg\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2m30s") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
 }
@@ -2480,7 +2549,7 @@ test "history search renders clean no-match menu state" {
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "No history matches") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mmissing") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2mmissing") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
 }
 
@@ -2584,8 +2653,8 @@ test "history search uses fuzzy query matching" {
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mc\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mg\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mc\x1b[39m") != null);
 
     try session.handleKey(.{ .key = .delete_to_start });
     try session.handleKey(.{ .key = .text, .text = "zz" });
@@ -2611,7 +2680,7 @@ test "history search first tab advances the already-open menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "show") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;220mg\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mg\x1b[39m") != null);
 
     try session.handleKey(.{ .key = .tab });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);

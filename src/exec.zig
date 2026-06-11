@@ -8429,6 +8429,7 @@ fn builtinCompletionFiles(self: *Executor, builder: *CompletionBuilder, command:
 fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io, prefix: []const u8, replace_start: usize, replace_end: usize, extension: ?[]const u8, directories_only: bool, append_slash: bool) !void {
     _ = append_slash;
     const split = splitCompletionPathPrefix(prefix);
+    const candidate_replace_start = replace_start + split.display_prefix.len;
     var dir = try std.Io.Dir.cwd().openDir(io, split.directory, .{ .iterate = true });
     defer dir.close(io);
     var iterator = dir.iterate();
@@ -8441,15 +8442,15 @@ fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io
         if (extension) |ext| {
             if (!std.mem.endsWith(u8, entry.name, ext)) continue;
         }
-        const value = if (split.display_prefix.len != 0 or is_directory) value: {
+        const value = if (is_directory) value: {
             const slash = if (is_directory) "/" else "";
-            break :value try std.mem.concat(self.allocator, u8, &.{ split.display_prefix, entry.name, slash });
+            break :value try std.mem.concat(self.allocator, u8, &.{ entry.name, slash });
         } else entry.name;
         defer if (value.ptr != entry.name.ptr) self.allocator.free(value);
         try builder.appendCandidate(self.allocator, .{
             .value = value,
             .kind = if (is_directory) .directory else .file,
-            .replace_start = replace_start,
+            .replace_start = candidate_replace_start,
             .replace_end = replace_end,
             .append_space = !is_directory,
         });
@@ -18060,10 +18061,10 @@ test "builtin cd completion stays directory-only after path slash" {
     const source = "cd " ++ parent_path ++ "/";
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
     defer executor.freeCompletions(candidates);
-    try expectCandidate(candidates, child_dir_path ++ "/", .directory);
+    try expectCandidate(candidates, "child-dir/", .directory);
     try expectNoCandidate(candidates, child_file_path);
-    const child_dir = findCandidate(candidates, child_dir_path ++ "/") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(@as(usize, "cd ".len), child_dir.replace_start);
+    const child_dir = findCandidate(candidates, "child-dir/") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, source.len), child_dir.replace_start);
     try std.testing.expectEqual(@as(usize, source.len), child_dir.replace_end);
     try std.testing.expect(!child_dir.append_space);
 
@@ -18072,6 +18073,34 @@ test "builtin cd completion stays directory-only after path slash" {
     defer executor.freeCompletions(file_only_candidates);
     try expectNoCandidate(file_only_candidates, nested_file_path);
     try std.testing.expectEqual(@as(usize, 0), file_only_candidates.len);
+}
+
+test "directory completion displays nested children relative to accepted directory" {
+    const parent_path = "rush-zig-out";
+    const bin_path = parent_path ++ "/bin";
+    const share_path = parent_path ++ "/share";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, parent_path) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, bin_path);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, share_path);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const root_source = "cd rush-zig";
+    const root_candidates = try executor.collectCompletionsForInput(root_source, root_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(root_candidates);
+    try expectCandidate(root_candidates, parent_path ++ "/", .directory);
+
+    const nested_source = "cd " ++ parent_path ++ "/";
+    const nested_candidates = try executor.collectCompletionsForInput(nested_source, nested_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(nested_candidates);
+    try expectCandidate(nested_candidates, "bin/", .directory);
+    try expectCandidate(nested_candidates, "share/", .directory);
+    try expectNoCandidate(nested_candidates, bin_path ++ "/");
+
+    const bin = findCandidate(nested_candidates, "bin/") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, nested_source.len), bin.replace_start);
+    try std.testing.expectEqual(@as(usize, nested_source.len), bin.replace_end);
 }
 
 test "default completion falls back to paths for unmatched arguments" {
@@ -18118,12 +18147,12 @@ test "default completion falls back to paths for unmatched arguments" {
     const prefixed_source = "cat ./rush-default-completion-dir/foo_";
     const prefixed_candidates = try executor.collectCompletionsForInput(prefixed_source, prefixed_source.len, .{ .io = std.testing.io });
     defer executor.freeCompletions(prefixed_candidates);
-    try expectCandidate(prefixed_candidates, "./" ++ prefixed_file_path, .file);
+    try expectCandidate(prefixed_candidates, "foo_prefixed.txt", .file);
     const application = try completion.applyCandidatesForInput(std.testing.allocator, prefixed_source, prefixed_candidates);
     defer application.deinit(std.testing.allocator);
     const edit = application.edit;
-    try std.testing.expectEqualStrings("./" ++ prefixed_file_path, edit.replacement);
-    try std.testing.expectEqual(@as(usize, "cat ".len), edit.replace_start);
+    try std.testing.expectEqualStrings("foo_prefixed.txt", edit.replacement);
+    try std.testing.expectEqual(@as(usize, "cat ./rush-default-completion-dir/".len), edit.replace_start);
     try std.testing.expectEqual(@as(usize, prefixed_source.len), edit.replace_end);
 }
 

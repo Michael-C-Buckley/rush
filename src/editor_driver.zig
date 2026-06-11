@@ -238,6 +238,7 @@ pub const ReadLineResult = union(enum) {
 };
 
 const completion_debounce_ms = 75;
+const completion_flash_ms = 80;
 
 const CompletionRequestReason = enum { explicit, refresh };
 
@@ -603,14 +604,19 @@ pub const TerminalSession = struct {
         try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
         self.reader.arm();
         var next_prompt_refresh_ms: ?u64 = if (options.prompt_refresh_interval_ms) |interval_ms| nowMs(self.io) + interval_ms else null;
+        var next_completion_flash_clear_ms: ?u64 = null;
         var next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
         while (session.state == .editing or session.state == .history_search) {
             var render_needed = false;
             var loop_events: [8]event_loop.Event = undefined;
-            const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms, self.completion.debounceWaitMs(self.io)));
+            const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms, self.completion.debounceWaitMs(self.io), next_completion_flash_clear_ms));
             if (ready.len == 0 and next_hook_interval_ms != null and promptRefreshWaitMs(self.io, next_hook_interval_ms) == 0) {
                 if (try self.runHooks(options, &session, &render_needed)) return try self.finishInterruptedReadLine();
                 next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
+            }
+            if (ready.len == 0 and next_completion_flash_clear_ms != null and promptRefreshWaitMs(self.io, next_completion_flash_clear_ms) == 0) {
+                render_needed = true;
+                next_completion_flash_clear_ms = null;
             }
             if (ready.len == 0 and next_prompt_refresh_ms != null and promptRefreshWaitMs(self.io, next_prompt_refresh_ms) == 0) {
                 render_needed = true;
@@ -724,7 +730,9 @@ pub const TerminalSession = struct {
                         self.renderer.reset(self.allocator);
                         try writeTtyAll(&self.tty, "\x1b[H\x1b[2J");
                     }
+                    const rendered_completion_flash = session.hasCompletionFlash();
                     try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
+                    if (rendered_completion_flash) next_completion_flash_clear_ms = nowMs(self.io) + completion_flash_ms;
                 }
                 self.reader.arm();
             }
@@ -934,11 +942,12 @@ fn promptRefreshWaitMs(io: std.Io, next_prompt_refresh_ms: ?u64) ?u64 {
     return next - now;
 }
 
-fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64, c: ?u64) ?u64 {
+fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64, c: ?u64, d: ?u64) ?u64 {
     var wait_ms: ?u64 = null;
     if (promptRefreshWaitMs(io, a)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (promptRefreshWaitMs(io, b)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (c) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
+    if (promptRefreshWaitMs(io, d)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     return wait_ms;
 }
 
