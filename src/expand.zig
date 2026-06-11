@@ -848,10 +848,81 @@ pub const ExpansionPattern = struct {
     }
 };
 
+pub const ExpansionPatterns = struct {
+    items: []ExpansionPattern,
+
+    pub fn deinit(self: *ExpansionPatterns, allocator: std.mem.Allocator) void {
+        for (self.items) |*item| item.deinit(allocator);
+        allocator.free(self.items);
+        self.* = undefined;
+    }
+};
+
 pub fn expandWordPattern(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPattern {
     const tilde_expanded = try expandTilde(allocator, raw, options.env);
     defer allocator.free(tilde_expanded);
     return expandPatternWord(allocator, tilde_expanded, options);
+}
+
+pub fn expandWordPatterns(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPatterns {
+    const tilde_expanded = try expandTilde(allocator, raw, options.env);
+    defer allocator.free(tilde_expanded);
+
+    var parts = try parseWordParts(allocator, tilde_expanded);
+    defer parts.deinit();
+
+    var fields: std.ArrayList(ExpansionPattern) = .empty;
+    errdefer {
+        for (fields.items) |*field| field.deinit(allocator);
+        fields.deinit(allocator);
+    }
+    var current_text: std.ArrayList(u8) = .empty;
+    defer current_text.deinit(allocator);
+    var current_special: std.ArrayList(bool) = .empty;
+    defer current_special.deinit(allocator);
+    var force_current_field = false;
+
+    const ifs = options.env.get("IFS") orelse " \t\n";
+    for (parts.parts) |part| {
+        if (part.kind == .parameter) {
+            const parameter = part.value(parts.raw);
+            if (std.mem.eql(u8, parameter, "@")) {
+                try appendUnquotedAtPattern(allocator, &fields, &current_text, &current_special, options.positionals, ifs);
+                continue;
+            }
+            if (std.mem.eql(u8, parameter, "*")) {
+                const joined = try joinPositionalsWithIfs(allocator, options.positionals, ifs);
+                defer allocator.free(joined);
+                try appendSplitPatternText(allocator, &fields, &current_text, &current_special, joined, ifs, true);
+                continue;
+            }
+
+            var rendered = try renderParameterSegmented(allocator, parameter, options);
+            defer rendered.deinit(allocator);
+            if (rendered.force_field) force_current_field = true;
+            try appendSplitPatternSegmentedText(allocator, &fields, &current_text, &current_special, rendered, ifs);
+            continue;
+        }
+
+        const rendered = try renderPart(allocator, parts.raw, part, options);
+        defer allocator.free(rendered);
+        switch (part.kind) {
+            .unquoted => try appendPatternBytes(allocator, &current_text, &current_special, rendered, true),
+            .escaped => try appendPatternBytes(allocator, &current_text, &current_special, rendered, false),
+            .single_quoted, .double_quoted => {
+                force_current_field = true;
+                try appendPatternBytes(allocator, &current_text, &current_special, rendered, false);
+            },
+            .arithmetic, .command_substitution => try appendSplitPatternText(allocator, &fields, &current_text, &current_special, rendered, ifs, true),
+            .parameter => unreachable,
+        }
+    }
+
+    if (current_text.items.len != 0 or force_current_field) {
+        try appendCurrentPatternField(allocator, &fields, &current_text, &current_special);
+    }
+
+    return .{ .items = try fields.toOwnedSlice(allocator) };
 }
 
 fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPattern {
@@ -891,6 +962,93 @@ fn appendPatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), spe
     try text.appendSlice(allocator, rendered);
     for (rendered) |_| {
         try special.append(allocator, meta_active);
+    }
+}
+
+fn appendPatternBytes(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
+    try text.appendSlice(allocator, rendered);
+    for (rendered) |_| try special.append(allocator, meta_active);
+}
+
+fn appendCurrentPatternField(allocator: std.mem.Allocator, fields: *std.ArrayList(ExpansionPattern), current_text: *std.ArrayList(u8), current_special: *std.ArrayList(bool)) !void {
+    const text = try current_text.toOwnedSlice(allocator);
+    errdefer allocator.free(text);
+    const special = try current_special.toOwnedSlice(allocator);
+    errdefer allocator.free(special);
+    std.debug.assert(text.len == special.len);
+    try fields.append(allocator, .{ .text = text, .special = special });
+}
+
+fn appendSplitPatternText(allocator: std.mem.Allocator, fields: *std.ArrayList(ExpansionPattern), current_text: *std.ArrayList(u8), current_special: *std.ArrayList(bool), text: []const u8, ifs: []const u8, meta_active: bool) !void {
+    if (ifs.len == 0) {
+        try appendPatternBytes(allocator, current_text, current_special, text, meta_active);
+        return;
+    }
+
+    var index: usize = 0;
+    while (index < text.len) {
+        const c = text[index];
+        if (!isIfsChar(ifs, c)) {
+            try current_text.append(allocator, c);
+            try current_special.append(allocator, meta_active);
+            index += 1;
+            continue;
+        }
+
+        if (isIfsWhitespace(ifs, c)) {
+            while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
+            if (index < text.len and isIfsChar(ifs, text[index])) continue;
+            if (current_text.items.len != 0) {
+                try appendCurrentPatternField(allocator, fields, current_text, current_special);
+            }
+            continue;
+        }
+
+        try appendCurrentPatternField(allocator, fields, current_text, current_special);
+        index += 1;
+        while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
+    }
+}
+
+fn appendSplitPatternSegmentedText(allocator: std.mem.Allocator, fields: *std.ArrayList(ExpansionPattern), current_text: *std.ArrayList(u8), current_special: *std.ArrayList(bool), text: SegmentedText, ifs: []const u8) !void {
+    std.debug.assert(text.text.len == text.split.len);
+    if (ifs.len == 0) {
+        try current_text.appendSlice(allocator, text.text);
+        try current_special.appendSlice(allocator, text.split);
+        return;
+    }
+
+    var index: usize = 0;
+    while (index < text.text.len) {
+        const c = text.text[index];
+        if (!text.split[index] or !isIfsChar(ifs, c)) {
+            try current_text.append(allocator, c);
+            try current_special.append(allocator, text.split[index]);
+            index += 1;
+            continue;
+        }
+
+        if (isIfsWhitespace(ifs, c)) {
+            while (index < text.text.len and text.split[index] and isIfsWhitespace(ifs, text.text[index])) index += 1;
+            if (index < text.text.len and text.split[index] and isIfsChar(ifs, text.text[index])) continue;
+            if (current_text.items.len != 0) {
+                try appendCurrentPatternField(allocator, fields, current_text, current_special);
+            }
+            continue;
+        }
+
+        try appendCurrentPatternField(allocator, fields, current_text, current_special);
+        index += 1;
+        while (index < text.text.len and text.split[index] and isIfsWhitespace(ifs, text.text[index])) index += 1;
+    }
+}
+
+fn appendUnquotedAtPattern(allocator: std.mem.Allocator, fields: *std.ArrayList(ExpansionPattern), current_text: *std.ArrayList(u8), current_special: *std.ArrayList(bool), positionals: []const []const u8, ifs: []const u8) !void {
+    for (positionals, 0..) |param, index| {
+        try appendSplitPatternText(allocator, fields, current_text, current_special, param, ifs, true);
+        if (index + 1 < positionals.len and current_text.items.len != 0) {
+            try appendCurrentPatternField(allocator, fields, current_text, current_special);
+        }
     }
 }
 

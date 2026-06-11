@@ -1158,15 +1158,31 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
 
 fn expandInteractivePathname(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, word: []const u8) !line_editor.PathExpansionMatches {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    var pattern = try completion_context.executor.expandViPathnamePattern(allocator, io, word);
-    defer pattern.deinit(allocator);
-    return viPathnameExpansions(allocator, io, pattern);
+    var patterns = try completion_context.executor.expandViPathnamePatterns(allocator, io, word);
+    defer patterns.deinit(allocator);
+    return viPathnameExpansionsForPatterns(allocator, io, patterns.items);
 }
 
 fn viPathnameExpansionsForWord(allocator: std.mem.Allocator, io: std.Io, word: []const u8) !line_editor.PathExpansionMatches {
-    var pattern = try expand.expandWordPattern(allocator, word, .{});
-    defer pattern.deinit(allocator);
-    return viPathnameExpansions(allocator, io, pattern);
+    var patterns = try expand.expandWordPatterns(allocator, word, .{});
+    defer patterns.deinit(allocator);
+    return viPathnameExpansionsForPatterns(allocator, io, patterns.items);
+}
+
+fn viPathnameExpansionsForPatterns(allocator: std.mem.Allocator, io: std.Io, patterns: []const expand.ExpansionPattern) !line_editor.PathExpansionMatches {
+    var matches: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (matches.items) |match| allocator.free(match);
+        matches.deinit(allocator);
+    }
+
+    for (patterns) |pattern| {
+        var pattern_matches = try viPathnameExpansions(allocator, io, pattern);
+        defer pattern_matches.deinit(allocator);
+        for (pattern_matches.items) |match| try matches.append(allocator, try allocator.dupe(u8, match));
+    }
+
+    return .{ .items = try matches.toOwnedSlice(allocator) };
 }
 
 fn viPathnameExpansions(allocator: std.mem.Allocator, io: std.Io, pattern: expand.ExpansionPattern) !line_editor.PathExpansionMatches {
@@ -2608,13 +2624,17 @@ test "vi pathname expansions honor quoted glob literals and shell expansions" {
     const literal_star = "rush-vi-quoted-*.tmp";
     const glob_match = "rush-vi-quoted-a.tmp";
     const param_match = "rush-vi-param-value.tmp";
+    const split_param_a = "rush-vi-split-param-a.tmp";
+    const split_param_b = "rush-vi-split-param-b.tmp";
+    const split_command_a = "rush-vi-split-command-a.tmp";
+    const split_command_b = "rush-vi-split-command-b.tmp";
     const arith_match = "rush-vi-arith-3.tmp";
     const command_match = "rush-vi-command-value.tmp";
-    inline for (.{ literal_star, glob_match, param_match, arith_match, command_match }) |path| {
+    inline for (.{ literal_star, glob_match, param_match, split_param_a, split_param_b, split_command_a, split_command_b, arith_match, command_match }) |path| {
         try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
     }
     defer {
-        inline for (.{ literal_star, glob_match, param_match, arith_match, command_match }) |path| {
+        inline for (.{ literal_star, glob_match, param_match, split_param_a, split_param_b, split_command_a, split_command_b, arith_match, command_match }) |path| {
             std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
         }
     }
@@ -2645,6 +2665,15 @@ test "vi pathname expansions honor quoted glob literals and shell expansions" {
     try std.testing.expectEqual(@as(usize, 1), param.items.len);
     try std.testing.expectEqualStrings(param_match, param.items[0]);
 
+    try executor.setEnv("RUSH_VI_SPLIT_PREFIXES", "rush-vi-split-param-a rush-vi-split-param-b");
+    var split_param_patterns = try executor.expandViPathnamePatterns(std.testing.allocator, std.testing.io, "$RUSH_VI_SPLIT_PREFIXES");
+    defer split_param_patterns.deinit(std.testing.allocator);
+    var split_param = try viPathnameExpansionsForPatterns(std.testing.allocator, std.testing.io, split_param_patterns.items);
+    defer split_param.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), split_param.items.len);
+    try std.testing.expectEqualStrings(split_param_a, split_param.items[0]);
+    try std.testing.expectEqualStrings(split_param_b, split_param.items[1]);
+
     var arith_pattern = try executor.expandViPathnamePattern(std.testing.allocator, std.testing.io, "rush-vi-arith-$((1 + 2))");
     defer arith_pattern.deinit(std.testing.allocator);
     var arith = try viPathnameExpansions(std.testing.allocator, std.testing.io, arith_pattern);
@@ -2658,6 +2687,14 @@ test "vi pathname expansions honor quoted glob literals and shell expansions" {
     defer command.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 1), command.items.len);
     try std.testing.expectEqualStrings(command_match, command.items[0]);
+
+    var split_command_patterns = try executor.expandViPathnamePatterns(std.testing.allocator, std.testing.io, "$(printf 'rush-vi-split-command-a rush-vi-split-command-b')");
+    defer split_command_patterns.deinit(std.testing.allocator);
+    var split_command = try viPathnameExpansionsForPatterns(std.testing.allocator, std.testing.io, split_command_patterns.items);
+    defer split_command.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), split_command.items.len);
+    try std.testing.expectEqualStrings(split_command_a, split_command.items[0]);
+    try std.testing.expectEqualStrings(split_command_b, split_command.items[1]);
 }
 
 test "interactive semantic diagnostics render spans without message line" {
