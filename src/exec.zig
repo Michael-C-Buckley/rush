@@ -5383,7 +5383,7 @@ pub const Executor = struct {
         return self.allocator.dupe(u8, path);
     }
 
-    fn readSourceFile(self: *Executor, io: std.Io, name: []const u8) ![]const u8 {
+    fn readSourceFile(self: *Executor, io: std.Io, name: []const u8, posix_dot: bool) ![]const u8 {
         if (std.mem.indexOfScalar(u8, name, '/') != null) {
             return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .unlimited);
         }
@@ -5401,6 +5401,7 @@ pub const Executor = struct {
             }
         }
 
+        if (posix_dot) return error.FileNotFound;
         return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .unlimited);
     }
 
@@ -7732,7 +7733,8 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (command.argv.len < 2) return sourceUsageError(self, command.argv[0].text, 2, "missing file operand");
     if (command.argv.len > 2) return sourceUsageError(self, command.argv[0].text, 2, "arguments are not implemented yet");
-    const contents = self.readSourceFile(io, command.argv[1].text) catch |err| switch (err) {
+    const posix_dot = std.mem.eql(u8, command.argv[0].text, ".");
+    const contents = self.readSourceFile(io, command.argv[1].text, posix_dot) catch |err| switch (err) {
         error.FileNotFound => return sourceUsageError(self, command.argv[0].text, 1, "file not found"),
         error.AccessDenied, error.PermissionDenied => {
             const message = try std.fmt.allocPrint(self.allocator, "{s}: permission denied", .{command.argv[1].text});

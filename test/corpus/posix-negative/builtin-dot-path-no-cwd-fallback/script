@@ -1,0 +1,4 @@
+printf 'echo bad\n' > dotfile
+PATH=/nope
+. dotfile
+echo after

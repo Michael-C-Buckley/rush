@@ -20,22 +20,22 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `406` rows
-- `scripts/check-posix-corpus.sh`: `388` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `224` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `274` cases, `548` comparisons across dash and bash POSIX mode
+- `scripts/check-posix-corpus.sh`: `395` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `225` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `277` cases, `554` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
 - tracked items: `406`
 - scored POSIX items: `402`
-- supported: `371`
-- baseline: `28`
+- supported: `375`
+- baseline: `24`
 - partial: `2`
 - missing: `1`
 - out of scope: `4`
-- strict supported only: `92.3%`
+- strict supported only: `93.3%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `97.3%`
+- weighted progress: `97.6%`
 
 Recent notable capabilities:
 
@@ -51,7 +51,7 @@ Recent notable capabilities:
 - POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline with nested parameter/command preprocessing plus representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Non-POSIX extension forms are excluded from POSIX scoring and tracked separately in `BASH_COMPAT.md`; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
-- POSIX builtins now include supported `export`, `unset`, `umask`, `times`, `trap`, `getopts`, `eval`, and `exec` plus baseline `command`, `exit`, `readonly`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
+- POSIX builtins now include supported `.`, `export`, `unset`, `umask`, `times`, `trap`, `getopts`, `eval`, and `exec` plus baseline `command`, `exit`, `readonly`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
 - Cross-target compile-only coverage is tracked by `zig build cross-check`, which runs native tests and compiles the test binary for representative Linux, macOS, FreeBSD, OpenBSD, and NetBSD targets. Foreign-target runtime validation remains separate follow-up work; use `scripts/check-runtime-portability.sh` on actual Linux/BSD hosts and record the host evidence separately from the compile-only compliance row.

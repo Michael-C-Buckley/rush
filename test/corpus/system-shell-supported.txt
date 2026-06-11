@@ -137,6 +137,8 @@ env RUSH_ENV_STATUS=ok sh -c 'printf "%s/%s\n" "$1" "$RUSH_ENV_STATUS"; exit 7' 
 printf '#!/bin/sh\necho path-ok\n' > rush-env-path-cmd; chmod +x rush-env-path-cmd; env PATH=. rush-env-path-cmd; rm -f rush-env-path-cmd
 f() { printf "%s\n" "$1"; }; f dash-smoke > out; cat out
 printf '%s\n' 'dot_value=loaded' 'dot_func() { echo func:$dot_value; }' > dot-script; . ./dot-script; echo var:$dot_value; dot_func
+printf '' > dot-empty; false; . ./dot-empty; echo dot-empty=$?
+printf '%s\n' 'echo dot-return-one' 'return 3' 'echo dot-return-two' > dot-return; . ./dot-return; echo dot-return=$?
 (x=subshell; echo "$x"); echo "${x:-unset}"
 for x in a b; do case "$x" in a) echo A ;; b) echo B ;; esac; done
 classify() { case "$1" in a|b) echo small ;; *) echo other ;; esac; }; for x in a c; do classify "$x"; done
