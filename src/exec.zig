@@ -12015,7 +12015,7 @@ test "executor executes POSIX brace groups in current shell" {
     try std.testing.expectEqualStrings("inner\nouter\n", nested_result.stdout);
 }
 
-test "executor executes POSIX brace groups as pipeline stages once" {
+test "executor executes POSIX compound commands as pipeline stages once" {
     var lowered = try parseAndLower(std.testing.allocator, "echo x | { read line; echo \"$line\"; }");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
@@ -12035,6 +12035,21 @@ test "executor executes POSIX brace groups as pipeline stages once" {
     defer both_groups_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), both_groups_result.status);
     try std.testing.expectEqualStrings("y\n", both_groups_result.stdout);
+
+    var posix_compounds = try parseAndLower(std.testing.allocator,
+        \\( echo sub ) | { read line; echo "$line"; }
+        \\if true; then echo if; fi | { read line; echo "$line"; }
+        \\for x in loop; do echo "$x"; done | { read line; echo "$line"; }
+        \\n=0; while [ $n -lt 1 ]; do n=$((n + 1)); echo while; done | { read line; echo "$line"; }
+        \\n=0; until [ $n -ge 1 ]; do n=$((n + 1)); echo until; done | { read line; echo "$line"; }
+        \\case x in x) echo c ;; esac | { read line; echo "$line"; }
+    );
+    defer posix_compounds.parsed.deinit();
+    defer posix_compounds.program.deinit();
+    var posix_compounds_result = try executor.executeProgram(posix_compounds.program, .{});
+    defer posix_compounds_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), posix_compounds_result.status);
+    try std.testing.expectEqualStrings("sub\nif\nloop\nwhile\nuntil\nc\n", posix_compounds_result.stdout);
 }
 
 test "executor implements source and dot builtins" {

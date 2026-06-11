@@ -1,0 +1,7 @@
+( echo sub ) | { read line; echo "subshell:$line"; }
+if true; then echo if; fi | { read line; echo "if:$line"; }
+for x in loop; do echo "$x"; done | { read line; echo "for:$line"; }
+n=0; while [ "$n" -lt 1 ]; do n=$((n + 1)); echo while; done | { read line; echo "while:$line"; }
+n=0; until [ "$n" -ge 1 ]; do n=$((n + 1)); echo until; done | { read line; echo "until:$line"; }
+case x in x) echo c ;; esac | { read line; echo "case:$line"; }
+f() { echo body; } | { read line; echo "function:$line"; }

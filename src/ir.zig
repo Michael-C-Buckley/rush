@@ -678,7 +678,19 @@ fn esacStartsCaseItemPattern(parsed: parser.ParseResult, token_index: usize) boo
     var index = token_index + 1;
     while (index < parsed.tokens.len and parsed.tokens[index].kind.isTrivia()) : (index += 1) {}
     if (index >= parsed.tokens.len) return false;
-    return parsed.tokens[index].kind == .right_paren or parsed.tokens[index].kind == .pipe;
+    if (parsed.tokens[index].kind == .right_paren) return true;
+    if (parsed.tokens[index].kind != .pipe) return false;
+    index += 1;
+    while (index < parsed.tokens.len and parsed.tokens[index].kind.isTrivia()) : (index += 1) {}
+    if (index >= parsed.tokens.len) return false;
+    if (parsed.tokens[index].kind != .word and parsed.tokens[index].kind != .right_paren) return false;
+    while (index < parsed.tokens.len) : (index += 1) {
+        const kind = parsed.tokens[index].kind;
+        if (kind.isTrivia()) continue;
+        if (kind == .right_paren) return true;
+        if (isListSeparatorToken(kind) or kind == .eof) return false;
+    }
+    return false;
 }
 
 fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !ForCommand {

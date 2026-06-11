@@ -1,0 +1,7 @@
+subshell:sub
+if:if
+for:loop
+while:while
+until:until
+case:c
+function:

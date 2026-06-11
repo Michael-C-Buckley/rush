@@ -1569,56 +1569,20 @@ const SyntaxParser = struct {
         defer list_children.deinit(self.allocator);
 
         while (!self.at(.eof) and !self.atListTerminator(word_terminators, token_terminators)) {
-            if (self.startsFunctionDefinition()) {
-                const function_definition = try self.parseFunctionDefinition();
-                try list_children.append(self.allocator, .{ .node = function_definition });
-                continue;
-            }
-
-            if (self.startsBraceGroup()) {
-                const brace_group = try self.parseBraceGroup();
+            if (self.startsPosixCompoundCommand()) {
+                const command = try self.parsePosixCompoundCommand();
                 if (self.nextNonWhitespaceIsPipe()) {
-                    const pipeline = try self.parsePipelineAfterFirstCommand(brace_group);
+                    const pipeline = try self.parsePipelineAfterFirstCommand(command);
                     try list_children.append(self.allocator, .{ .node = pipeline });
                     continue;
                 }
-                try list_children.append(self.allocator, .{ .node = brace_group });
-                continue;
-            }
-
-            if (self.startsSubshell()) {
-                const subshell = try self.parseSubshell();
-                try list_children.append(self.allocator, .{ .node = subshell });
+                try list_children.append(self.allocator, .{ .node = command });
                 continue;
             }
 
             if (self.startsBashTestCommand()) {
                 const bash_test = try self.parseBashTestCommand();
                 try list_children.append(self.allocator, .{ .node = bash_test });
-                continue;
-            }
-
-            if (self.startsIfCommand()) {
-                const if_command = try self.parseIfCommand();
-                try list_children.append(self.allocator, .{ .node = if_command });
-                continue;
-            }
-
-            if (self.startsLoopCommand()) {
-                const loop_command = try self.parseLoopCommand();
-                try list_children.append(self.allocator, .{ .node = loop_command });
-                continue;
-            }
-
-            if (self.startsForCommand()) {
-                const for_command = try self.parseForCommand();
-                try list_children.append(self.allocator, .{ .node = for_command });
-                continue;
-            }
-
-            if (self.startsCaseCommand()) {
-                const case_command = try self.parseCaseCommand();
-                try list_children.append(self.allocator, .{ .node = case_command });
                 continue;
             }
 
@@ -2029,7 +1993,19 @@ const SyntaxParser = struct {
         var index = self.index + 1;
         while (index < self.tokens.len and self.tokens[index].kind.isTrivia()) : (index += 1) {}
         if (index >= self.tokens.len) return false;
-        return self.tokens[index].kind == .right_paren or self.tokens[index].kind == .pipe;
+        if (self.tokens[index].kind == .right_paren) return true;
+        if (self.tokens[index].kind != .pipe) return false;
+        index += 1;
+        while (index < self.tokens.len and self.tokens[index].kind.isTrivia()) : (index += 1) {}
+        if (index >= self.tokens.len) return false;
+        if (self.tokens[index].kind != .word and self.tokens[index].kind != .right_paren) return false;
+        while (index < self.tokens.len) : (index += 1) {
+            const kind = self.tokens[index].kind;
+            if (kind.isTrivia()) continue;
+            if (kind == .right_paren) return true;
+            if (isListSeparator(kind) or kind == .eof) return false;
+        }
+        return false;
     }
 
     fn parseBashTestCommand(self: *SyntaxParser) !NodeId {
@@ -2275,6 +2251,17 @@ const SyntaxParser = struct {
         return self.parseSimpleCommand();
     }
 
+    fn parsePosixCompoundCommand(self: *SyntaxParser) anyerror!NodeId {
+        if (self.startsFunctionDefinition()) return self.parseFunctionDefinition();
+        if (self.startsBraceGroup()) return self.parseBraceGroup();
+        if (self.startsSubshell()) return self.parseSubshell();
+        if (self.startsIfCommand()) return self.parseIfCommand();
+        if (self.startsLoopCommand()) return self.parseLoopCommand();
+        if (self.startsForCommand()) return self.parseForCommand();
+        std.debug.assert(self.startsCaseCommand());
+        return self.parseCaseCommand();
+    }
+
     fn parseSimpleCommand(self: *SyntaxParser) !NodeId {
         const token_start = self.index;
         var command_children: std.ArrayList(SyntaxChild) = .empty;
@@ -2488,6 +2475,10 @@ const SyntaxParser = struct {
 
     fn startsListElement(self: SyntaxParser) bool {
         return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
+    }
+
+    fn startsPosixCompoundCommand(self: SyntaxParser) bool {
+        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand();
     }
 
     fn startsBraceGroup(self: SyntaxParser) bool {
@@ -3297,6 +3288,40 @@ test "parser accepts compound commands as POSIX function bodies" {
     try std.testing.expect(saw_subshell_body);
     try std.testing.expect(saw_if_body);
     try std.testing.expect(saw_for_body);
+}
+
+test "parser wraps POSIX compound first pipeline stages" {
+    const cases = [_]struct {
+        source: []const u8,
+        first_kind: NodeKind,
+    }{
+        .{ .source = "( echo sub ) | cat", .first_kind = .subshell },
+        .{ .source = "if true; then echo if; fi | cat", .first_kind = .if_command },
+        .{ .source = "for x in loop; do echo $x; done | cat", .first_kind = .for_command },
+        .{ .source = "while false; do :; done | cat", .first_kind = .loop_command },
+        .{ .source = "until true; do :; done | cat", .first_kind = .loop_command },
+        .{ .source = "case x in x) echo c ;; esac | cat", .first_kind = .case_command },
+        .{ .source = "f() { echo body; } | cat", .first_kind = .function_definition },
+    };
+
+    for (cases) |example| {
+        var result = try parse(std.testing.allocator, example.source, .{});
+        defer result.deinit();
+
+        var found = false;
+        for (result.nodes) |node| {
+            if (node.kind != .pipeline or node.span.start != 0 or node.span.end != example.source.len) continue;
+            for (result.nodeChildren(node)) |child| switch (child) {
+                .node => |node_id| {
+                    if (found) continue;
+                    try std.testing.expectEqual(example.first_kind, result.nodes[node_id.index()].kind);
+                    found = true;
+                },
+                .token => {},
+            };
+        }
+        try std.testing.expect(found);
+    }
 }
 
 test "parser reports incomplete POSIX function definitions" {
