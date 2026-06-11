@@ -14655,7 +14655,7 @@ test "async external fd duplication orders implicit and explicit stdin" {
 }
 
 test "executor backgrounds current and selected tracked jobs" {
-    var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 1 & bg; /bin/sleep 1 & /bin/sleep 1 & bg %2 %3; wait");
+    var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 0.1 & bg; /bin/sleep 0.1 & /bin/sleep 0.1 & bg %2 %3; wait");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -14665,7 +14665,7 @@ test "executor backgrounds current and selected tracked jobs" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("[1] /bin/sleep 1\n[2] /bin/sleep 1\n[3] /bin/sleep 1\n", result.stdout);
+    try std.testing.expectEqualStrings("[1] /bin/sleep 0.1\n[2] /bin/sleep 0.1\n[3] /bin/sleep 0.1\n", result.stdout);
 }
 
 test "executor foregrounds current and selected background jobs" {
@@ -14883,7 +14883,7 @@ test "executor removes completed foreground jobs from the job table" {
 }
 
 test "executor filters and formats jobs builtin output" {
-    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 1 & jobs -p %1; jobs -l 1; wait $!; jobs %1");
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0.1 & jobs -p %1; jobs -l 1; wait $!; jobs %1");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -14897,8 +14897,8 @@ test "executor filters and formats jobs builtin output" {
     try std.testing.expect(first_newline > 0);
     for (result.stdout[0..first_newline]) |byte| try std.testing.expect(std.ascii.isDigit(byte));
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + ") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, " Running /bin/sleep 1\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Done /bin/sleep 1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, " Running /bin/sleep 0.1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Done /bin/sleep 0.1\n") != null);
 }
 
 test "jobs removes completed jobs after reporting termination status" {
@@ -14920,7 +14920,7 @@ test "jobs removes completed jobs after reporting termination status" {
 }
 
 test "jobs sees an empty table in subshell and command substitution environments" {
-    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 1 & (jobs); printf 'cmdsub=[%s]\n' \"$(jobs)\"; jobs; wait $!");
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0.1 & (jobs); printf 'cmdsub=[%s]\n' \"$(jobs)\"; jobs; wait $!");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -14930,12 +14930,12 @@ test "jobs sees an empty table in subshell and command substitution environments
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("cmdsub=[]\n[1] + Running /bin/sleep 1\n", result.stdout);
+    try std.testing.expectEqualStrings("cmdsub=[]\n[1] + Running /bin/sleep 0.1\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor reports tracked background jobs" {
-    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 1 & jobs; wait $!; jobs");
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0.1 & jobs; wait $!; jobs");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -14945,8 +14945,8 @@ test "executor reports tracked background jobs" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Running /bin/sleep 1\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Done /bin/sleep 1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Running /bin/sleep 0.1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Done /bin/sleep 0.1\n") != null);
 }
 
 test "executor drains interactive stopped and done job notifications once" {
