@@ -1,0 +1,1 @@
+trap -- 'echo term' TERM
