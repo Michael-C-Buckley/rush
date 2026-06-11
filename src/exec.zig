@@ -3952,13 +3952,8 @@ pub const Executor = struct {
         for (pipeline.command_indexes, 0..) |command_index, index| {
             if (self.shouldSkipForNoexec(options)) break;
             last.deinit();
-            if (pipeline.command_indexes.len > 1) {
-                const saved_umask = readShellUmask();
-                defer restoreShellUmask(saved_umask);
-                last = try self.executeSimpleCommandWithInput(program.commands[command_index], stdin, options);
-            } else {
-                last = try self.executeSimpleCommandWithInput(program.commands[command_index], stdin, options);
-            }
+            const is_last = index + 1 == pipeline.command_indexes.len;
+            last = try self.executeSimplePipelineStage(program.commands[command_index], stdin, options, is_last, index > 0);
             statuses[index] = last.status;
             statuses_len = index + 1;
             if (self.shouldSkipForNoexec(options)) break;
@@ -3984,7 +3979,8 @@ pub const Executor = struct {
         for (pipeline.stage_spans, 0..) |stage_span, index| {
             if (self.shouldSkipForNoexec(options)) break;
             last.deinit();
-            last = try self.executePipelineStageSpan(program.source[stage_span.start..stage_span.end], stdin, options);
+            const is_last = index + 1 == pipeline.stage_spans.len;
+            last = try self.executePipelineStageSpan(program.source[stage_span.start..stage_span.end], stdin, options, is_last);
             statuses[index] = last.status;
             statuses_len = index + 1;
             if (self.shouldSkipForNoexec(options)) break;
@@ -3999,7 +3995,70 @@ pub const Executor = struct {
         return last;
     }
 
-    fn executePipelineStageSpan(self: *Executor, source: []const u8, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    fn executeSimplePipelineStage(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, is_last: bool, has_pipe_input: bool) !CommandResult {
+        if (is_last) {
+            return if (has_pipe_input)
+                self.executeSimpleCommandWithPipelineInput(command, stdin, options)
+            else
+                self.executeSimpleCommandWithInput(command, stdin, options);
+        }
+
+        var child = Executor.init(self.allocator);
+        defer child.deinit();
+        try child.copyStateFrom(self);
+        try child.resetCaughtTrapsForSubshell();
+
+        var guard = try self.savePipelineSubshellProcessState(options);
+        defer guard.restore();
+
+        return if (has_pipe_input)
+            child.executeSimpleCommandWithPipelineInput(command, stdin, options)
+        else
+            child.executeSimpleCommandWithInput(command, stdin, options);
+    }
+
+    fn executePipelineStageSpan(self: *Executor, source: []const u8, stdin: []const u8, options: ExecuteOptions, is_last: bool) !CommandResult {
+        if (is_last) return self.executePipelineStageSpanInCurrentShell(source, stdin, options);
+
+        var child = Executor.init(self.allocator);
+        defer child.deinit();
+        try child.copyStateFrom(self);
+        try child.resetCaughtTrapsForSubshell();
+
+        var guard = try self.savePipelineSubshellProcessState(options);
+        defer guard.restore();
+
+        return child.executePipelineStageSpanInCurrentShell(source, stdin, options);
+    }
+
+    const PipelineSubshellProcessState = struct {
+        allocator: std.mem.Allocator,
+        io: ?std.Io,
+        cwd: ?[:0]u8,
+        umask: u16,
+
+        fn restore(self: *PipelineSubshellProcessState) void {
+            if (self.cwd) |cwd| {
+                if (self.io) |io| std.process.setCurrentPath(io, cwd) catch {};
+                self.allocator.free(cwd);
+                self.cwd = null;
+            }
+            restoreShellUmask(self.umask);
+        }
+    };
+
+    fn savePipelineSubshellProcessState(self: *Executor, options: ExecuteOptions) !PipelineSubshellProcessState {
+        const cwd = if (options.io) |io| try std.process.currentPathAlloc(io, self.allocator) else null;
+        errdefer if (cwd) |path| self.allocator.free(path);
+        return .{
+            .allocator = self.allocator,
+            .io = options.io,
+            .cwd = cwd,
+            .umask = readShellUmask(),
+        };
+    }
+
+    fn executePipelineStageSpanInCurrentShell(self: *Executor, source: []const u8, stdin: []const u8, options: ExecuteOptions) !CommandResult {
         const prior_stdin = self.script_stdin;
         const prior_stdin_offset = self.script_stdin_offset;
         const prior_stdin_file = self.script_stdin_file;
@@ -4216,9 +4275,20 @@ pub const Executor = struct {
                     // redirection retargeted the stage's output.
                     .stage_stdio = if (is_last and inherit_output and command.redirections.len == 0) .inherit_output else .capture,
                 };
-                const thread = try std.Thread.spawn(.{}, runBuiltinPipelineStage, .{context});
-                try threads.append(self.allocator, thread);
-                try contexts.append(self.allocator, context);
+                if (is_last) {
+                    const thread = try std.Thread.spawn(.{}, runBuiltinPipelineStage, .{context});
+                    try threads.append(self.allocator, thread);
+                    try contexts.append(self.allocator, context);
+                } else {
+                    children[spawned] = try forkBuiltinPipelineStage(context);
+                    cancel_pids[spawned] = registerCancelableChild(options, children[spawned]);
+                    child_stage_indexes[spawned] = index;
+                    spawned += 1;
+                    if (stdin_file) |file| file.close(io);
+                    if (stdout_file) |file| file.close(io);
+                    if (stderr_file) |file| file.close(io);
+                    self.allocator.destroy(context);
+                }
             } else {
                 const argv = try argvForCommand(self.allocator, command_without_redirs);
                 defer self.allocator.free(argv);
@@ -4797,6 +4867,16 @@ pub const Executor = struct {
         };
     }
 
+    fn forkBuiltinPipelineStage(context: *BuiltinPipelineContext) !std.process.Child {
+        const pid = try forkProcess();
+        if (pid == 0) {
+            context.executor.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
+            runBuiltinPipelineStage(context);
+            exitForkedChild(context.status);
+        }
+        return childFromPid(pid);
+    }
+
     fn runBuiltinPipelineStageFallible(context: *BuiltinPipelineContext) !void {
         defer if (context.stdin_file) |file| file.close(context.io);
         defer if (context.stdout_file) |file| file.close(context.io);
@@ -4955,8 +5035,16 @@ pub const Executor = struct {
     }
 
     fn executeSimpleCommandWithInput(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) anyerror!CommandResult {
+        return self.executeSimpleCommandWithInputOptions(command, stdin, options, false);
+    }
+
+    fn executeSimpleCommandWithPipelineInput(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) anyerror!CommandResult {
+        return self.executeSimpleCommandWithInputOptions(command, stdin, options, true);
+    }
+
+    fn executeSimpleCommandWithInputOptions(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, force_stdin: bool) anyerror!CommandResult {
         const trace_enabled = self.shell_options.xtrace;
-        var result = try self.executeSimpleCommandWithInputInner(command, stdin, options);
+        var result = try self.executeSimpleCommandWithInputInner(command, stdin, options, force_stdin);
         errdefer result.deinit();
         if (trace_enabled and command.argv.len != 0) {
             const trace = try traceLineForCommand(self.allocator, command);
@@ -4968,7 +5056,7 @@ pub const Executor = struct {
         return result;
     }
 
-    fn executeSimpleCommandWithInputInner(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) anyerror!CommandResult {
+    fn executeSimpleCommandWithInputInner(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, force_stdin: bool) anyerror!CommandResult {
         const expanded = self.expandSimpleCommand(command, options) catch |err| switch (err) {
             error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => return self.expansionErrorResult(err, options),
             error.ReadonlyVariable => return self.assignmentErrorResult(),
@@ -5022,7 +5110,7 @@ pub const Executor = struct {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
                 const redirected_stdin_file: ?std.Io.File = if (hasInputRedirection(expanded.redirections)) std.Io.File.stdin() else stdin_file;
-                const stdin_guard = self.pushScriptStdin(effective_stdin, redirected_stdin_file, hasInputRedirection(expanded.redirections) or stdin.len != 0);
+                const stdin_guard = self.pushScriptStdin(effective_stdin, redirected_stdin_file, hasInputRedirection(expanded.redirections) or stdin.len != 0 or force_stdin);
                 defer if (stdin_guard) |script_guard| script_guard.restore();
                 var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
                 defer result.deinit();
@@ -5036,7 +5124,7 @@ pub const Executor = struct {
                 };
                 return emptyResult(self.allocator, result.status);
             }
-            const stdin_guard = self.pushScriptStdin(effective_stdin, stdin_file, hasInputRedirection(expanded.redirections) or stdin.len != 0);
+            const stdin_guard = self.pushScriptStdin(effective_stdin, stdin_file, hasInputRedirection(expanded.redirections) or stdin.len != 0 or force_stdin);
             defer if (stdin_guard) |script_guard| script_guard.restore();
             return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options), options, special_builtin);
         }
@@ -5047,7 +5135,7 @@ pub const Executor = struct {
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
         var synthetic_failure = false;
-        const external_stdin = if (stdin.len != 0 or hasInputRedirection(expanded.redirections)) effective_stdin else self.remainingScriptStdin();
+        const external_stdin = if (stdin.len != 0 or force_stdin or hasInputRedirection(expanded.redirections)) effective_stdin else self.remainingScriptStdin();
         var external_result = self.executeExternal(expanded, io, options, external_stdin) catch |err| switch (err) {
             error.CommandNotFound => blk: {
                 synthetic_failure = true;
@@ -6504,7 +6592,7 @@ pub const Executor = struct {
 
     fn remainingScriptStdin(self: Executor) ?[]const u8 {
         const script_stdin = self.script_stdin orelse return null;
-        if (self.script_stdin_offset >= script_stdin.len) return null;
+        if (self.script_stdin_offset > script_stdin.len) return null;
         return script_stdin[self.script_stdin_offset..];
     }
 
@@ -12050,6 +12138,38 @@ test "executor executes POSIX compound commands as pipeline stages once" {
     defer posix_compounds_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), posix_compounds_result.status);
     try std.testing.expectEqualStrings("sub\nif\nloop\nwhile\nuntil\nc\n", posix_compounds_result.stdout);
+}
+
+test "executor isolates non-last pipeline stage shell state" {
+    var fallback = try parseAndLower(std.testing.allocator,
+        \\FOO=bar | /bin/cat; echo "${FOO-unset}"
+        \\{ B=2; } | /bin/cat; echo "${B-unset}"
+        \\f() { echo body; } | /bin/cat; f 2>/dev/null || echo missing
+    );
+    defer fallback.parsed.deinit();
+    defer fallback.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var fallback_result = try executor.executeProgram(fallback.program, .{ .io = std.testing.io, .allow_external = true });
+    defer fallback_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), fallback_result.status);
+    try std.testing.expectEqualStrings("unset\nunset\nmissing\n", fallback_result.stdout);
+    try std.testing.expectEqualStrings("", fallback_result.stderr);
+
+    var mixed = try parseAndLower(std.testing.allocator,
+        \\export PIPE_LEAK=1 | /bin/cat; echo "${PIPE_LEAK-unset}"
+        \\g() { PIPE_FN=changed; echo body; }; g | /bin/cat; echo "${PIPE_FN-unset}"
+    );
+    defer mixed.parsed.deinit();
+    defer mixed.program.deinit();
+
+    var mixed_result = try executor.executeProgram(mixed.program, .{ .io = std.testing.io, .allow_external = true });
+    defer mixed_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), mixed_result.status);
+    try std.testing.expectEqualStrings("unset\nbody\nunset\n", mixed_result.stdout);
+    try std.testing.expectEqualStrings("", mixed_result.stderr);
 }
 
 test "executor implements source and dot builtins" {
