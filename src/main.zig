@@ -340,6 +340,14 @@ pub const History = struct {
         return queryHistoryEntry(db, allocator, prefix, cwd, after, .next);
     }
 
+    pub fn numberedEntry(self: *History, allocator: std.mem.Allocator, number: usize) !?line_editor.HistoryView.HistoryEntry {
+        if (number == 0) return null;
+        if (self.db) |db| return queryHistoryEntryByNumber(db, allocator, number);
+        const index = number - 1;
+        if (index >= self.entries.items.len) return null;
+        return .{ .id = @intCast(index), .text = try allocator.dupe(u8, self.entries.items[index]) };
+    }
+
     pub fn searchEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, cwd: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
         const db = self.db orelse return null;
         return queryHistorySearchEntry(db, allocator, query, cwd, before, .previous);
@@ -364,6 +372,11 @@ fn previousHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefi
 fn nextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8, after: i64) !?line_editor.HistoryView.HistoryEntry {
     const history: *History = @ptrCast(@alignCast(context));
     return history.nextEntry(allocator, prefix, history.current_cwd, after);
+}
+
+fn numberedHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, number: usize) !?line_editor.HistoryView.HistoryEntry {
+    const history: *History = @ptrCast(@alignCast(context));
+    return history.numberedEntry(allocator, number);
 }
 
 fn searchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
@@ -426,6 +439,18 @@ fn queryHistoryEntry(db: *sqlite.sqlite3, allocator: std.mem.Allocator, prefix: 
     }
     try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 2, like_pattern.items.ptr, @intCast(like_pattern.items.len), null), db);
     try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 3, cwd.ptr, @intCast(cwd.len), null), db);
+    const rc = sqlite.sqlite3_step(stmt);
+    if (rc == sqlite.SQLITE_DONE) return null;
+    if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+    const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse return null;
+    return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, std.mem.span(command_text)), .when = sqlite.sqlite3_column_int64(stmt, 2) };
+}
+
+fn queryHistoryEntryByNumber(db: *sqlite.sqlite3, allocator: std.mem.Allocator, number: usize) !?line_editor.HistoryView.HistoryEntry {
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(db, "select id, command, started_at from history where id = ?1", -1, &stmt, null), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, @intCast(number)), db);
     const rc = sqlite.sqlite3_step(stmt);
     if (rc == sqlite.SQLITE_DONE) return null;
     if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
@@ -1136,6 +1161,22 @@ fn expandInteractiveAbbreviation(context: *anyopaque, allocator: std.mem.Allocat
     return completion_context.executor.expandAbbreviationForInput(allocator, source, cursor, append_space);
 }
 
+fn lookupInteractiveViAlias(context: *anyopaque, allocator: std.mem.Allocator, letter: u21) !?[]const u8 {
+    const executor: *exec.Executor = @ptrCast(@alignCast(context));
+    return executor.viCommandAlias(allocator, letter);
+}
+
+fn interactiveExternalEditorCommand(executor: exec.Executor) []const u8 {
+    if (executor.getEnv("VISUAL")) |visual| if (visual.len != 0) return visual;
+    if (executor.getEnv("EDITOR")) |editor| if (editor.len != 0) return editor;
+    return "vi";
+}
+
+fn interactiveExternalEditorTmpdir(executor: exec.Executor) []const u8 {
+    if (executor.getEnv("TMPDIR")) |tmpdir| if (tmpdir.len != 0) return tmpdir;
+    return "/tmp";
+}
+
 fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8) !?line_editor.DiagnosticRender {
     if (source.len == 0) return null;
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
@@ -1595,6 +1636,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
                 .context = &history,
                 .previous = previousHistoryEntry,
                 .next = nextHistoryEntry,
+                .by_number = numberedHistoryEntry,
                 .search = searchHistoryEntry,
                 .search_next = searchNextHistoryEntry,
                 .suggest = suggestHistoryEntry,
@@ -1604,6 +1646,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .clone_completion_context = cloneInteractiveCompletionContext,
             .free_completion_context = freeInteractiveCompletionContext,
             .expand_abbreviation = expandInteractiveAbbreviation,
+            .vi_alias_context = &executor,
+            .lookup_vi_alias = lookupInteractiveViAlias,
+            .external_editor_command = interactiveExternalEditorCommand(executor),
+            .external_editor_tmpdir = interactiveExternalEditorTmpdir(executor),
             .diagnostic_context = &completion_context,
             .diagnose = diagnoseInteractiveLine,
             .theme = ui_theme,

@@ -7,6 +7,7 @@ const completion = @import("completion.zig");
 const vaxis = @import("vaxis");
 
 const max_menu_candidate_rows = 16;
+const max_vi_macro_depth = 16;
 
 pub const UnderlineStyle = enum { none, single, double, curly, dotted, dashed };
 
@@ -201,6 +202,7 @@ const ViPending = union(enum) {
         placement: ViFindPlacement,
     },
     history_search: ViHistoryDirection,
+    alias,
 };
 
 const ViMotionResult = struct {
@@ -527,6 +529,7 @@ pub const HistoryView = struct {
     context: ?*anyopaque = null,
     previous: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, i64) anyerror!?HistoryEntry = null,
+    by_number: ?*const fn (*anyopaque, std.mem.Allocator, usize) anyerror!?HistoryEntry = null,
     search: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     search_next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     suggest: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror!?HistoryEntry = null,
@@ -540,6 +543,20 @@ pub const HistoryView = struct {
             allocator.free(self.text);
         }
     };
+};
+
+pub const ViAliasView = struct {
+    context: ?*anyopaque = null,
+    lookup: ?*const fn (*anyopaque, std.mem.Allocator, u21) anyerror!?[]const u8 = null,
+};
+
+pub const ExternalEditorRequest = struct {
+    text: []const u8,
+    number: ?usize = null,
+
+    pub fn deinit(self: ExternalEditorRequest, allocator: std.mem.Allocator) void {
+        allocator.free(self.text);
+    }
 };
 
 pub const CompletionMenu = struct {
@@ -621,6 +638,8 @@ pub const LineSession = struct {
     vi_insert_repeat: ?ViInsertRepeatCapture = null,
     vi_insert_repeat_ops: std.ArrayList(ViInputRepeatOp) = .empty,
     vi_replaying_repeat: bool = false,
+    vi_macro_depth: usize = 0,
+    vi_aliases: ViAliasView = .{},
     editor: Editor,
     history: HistoryView = .{},
     history_index: ?i64 = null,
@@ -637,6 +656,7 @@ pub const LineSession = struct {
     completion_menu: CompletionMenu = .{},
     state: State = .editing,
     submitted_line: ?[]const u8 = null,
+    external_editor_request: ?ExternalEditorRequest = null,
     paste_depth: usize = 0,
     clear_screen_requested: bool = false,
     completion_flash: ?CompletionFlash = null,
@@ -644,6 +664,7 @@ pub const LineSession = struct {
     pub const State = enum {
         editing,
         history_search,
+        external_editor,
         submitted,
         canceled,
         eof,
@@ -672,6 +693,7 @@ pub const LineSession = struct {
 
     pub fn deinit(self: *LineSession) void {
         if (self.submitted_line) |line| self.allocator.free(line);
+        if (self.external_editor_request) |request| request.deinit(self.allocator);
         if (self.history_search_match) |entry| entry.deinit(self.allocator);
         self.clearHistorySearchMatches();
         self.history_search_matches.deinit(self.allocator);
@@ -885,6 +907,7 @@ pub const LineSession = struct {
     fn handleViCommandKey(self: *LineSession, event: KeyEvent) !void {
         switch (self.vi_pending) {
             .history_search => |direction| return self.handleViHistorySearchKey(direction, event),
+            .alias => return self.handleViAliasKey(event),
             else => {},
         }
 
@@ -943,6 +966,7 @@ pub const LineSession = struct {
                 self.vi_pending = .none;
                 return;
             },
+            .alias => unreachable,
             .history_search => unreachable,
         }
 
@@ -1039,6 +1063,8 @@ pub const LineSession = struct {
             '?' => self.beginViHistorySearch(.forward),
             'n' => try self.repeatViHistorySearch(false),
             'N' => try self.repeatViHistorySearch(true),
+            '@' => self.vi_pending = .alias,
+            'v' => try self.requestExternalEditor(self.takeViCount()),
             '.' => try self.repeatViLastChange(),
             '#' => try self.viCommentAndSubmit(),
             else => self.resetViCommandPrefix(),
@@ -1050,6 +1076,52 @@ pub const LineSession = struct {
         std.debug.assert(self.submitted_line == null);
         self.submitted_line = try self.allocator.dupe(u8, self.editor.buffer.text());
         self.state = .submitted;
+    }
+
+    fn requestExternalEditor(self: *LineSession, maybe_number: ?usize) !void {
+        const text = if (maybe_number) |number| blk: {
+            const entry = try self.historyEntryByNumber(number) orelse {
+                self.resetViCommandPrefix();
+                return;
+            };
+            defer entry.deinit(self.allocator);
+            break :blk try self.allocator.dupe(u8, entry.text);
+        } else try self.allocator.dupe(u8, self.editor.buffer.text());
+        errdefer self.allocator.free(text);
+
+        if (self.external_editor_request) |request| request.deinit(self.allocator);
+        self.external_editor_request = .{ .text = text, .number = maybe_number };
+        self.state = .external_editor;
+        self.resetViCommandPrefix();
+        self.completion_menu.clear(self.allocator);
+    }
+
+    fn historyEntryByNumber(self: *LineSession, number: usize) !?HistoryView.HistoryEntry {
+        if (number == 0) return null;
+        if (self.history.context != null and self.history.by_number != null) {
+            return self.history.by_number.?(self.history.context.?, self.allocator, number);
+        }
+        const index = number - 1;
+        if (index >= self.history.entries.len) return null;
+        return .{ .id = @intCast(index), .text = try self.allocator.dupe(u8, self.history.entries[index]) };
+    }
+
+    pub fn takeExternalEditorRequest(self: *LineSession) ?ExternalEditorRequest {
+        const request = self.external_editor_request orelse return null;
+        self.external_editor_request = null;
+        return request;
+    }
+
+    pub fn acceptExternalEditorResult(self: *LineSession, text: []const u8) !void {
+        self.completion_menu.clear(self.allocator);
+        try self.editor.buffer.replace(text);
+        std.debug.assert(self.submitted_line == null);
+        self.submitted_line = try self.allocator.dupe(u8, self.editor.buffer.text());
+        self.state = .submitted;
+    }
+
+    pub fn resumeEditingAfterExternalEditor(self: *LineSession) void {
+        if (self.state == .external_editor) self.state = .editing;
     }
 
     fn enterViCommandMode(self: *LineSession) void {
@@ -1306,6 +1378,34 @@ pub const LineSession = struct {
         const cursor = viFind(self.editor.buffer.text(), self.editor.buffer.cursor_byte, find, count) orelse return;
         self.editor.buffer.cursor_byte = cursor;
         self.vi_last_find = find;
+    }
+
+    fn handleViAliasKey(self: *LineSession, event: KeyEvent) !void {
+        self.vi_pending = .none;
+        if (event.key != .text or event.text.len == 0) return;
+        const letter = firstCodepoint(event.text) orelse return;
+        try self.applyViAlias(letter);
+    }
+
+    fn applyViAlias(self: *LineSession, letter: u21) !void {
+        if (!isPortableAlphabetic(letter)) return;
+        const context = self.vi_aliases.context orelse return;
+        const lookup = self.vi_aliases.lookup orelse return;
+        const value = try lookup(context, self.allocator, letter) orelse return;
+        defer self.allocator.free(value);
+        try self.feedViMacro(value);
+    }
+
+    fn feedViMacro(self: *LineSession, bytes: []const u8) !void {
+        if (self.vi_macro_depth >= max_vi_macro_depth) return;
+        self.vi_macro_depth += 1;
+        defer self.vi_macro_depth -= 1;
+
+        var index: usize = 0;
+        while (index < bytes.len and self.state == .editing) {
+            const event = viMacroKeyEvent(bytes, &index) orelse return;
+            try self.handleKey(event);
+        }
     }
 
     fn viReplaceInputText(self: *LineSession, text: []const u8) !void {
@@ -2185,6 +2285,26 @@ fn reverseViHistoryDirection(direction: ViHistoryDirection) ViHistoryDirection {
     return switch (direction) {
         .backward => .forward,
         .forward => .backward,
+    };
+}
+
+fn isPortableAlphabetic(codepoint: u21) bool {
+    return (codepoint >= 'A' and codepoint <= 'Z') or (codepoint >= 'a' and codepoint <= 'z');
+}
+
+fn viMacroKeyEvent(bytes: []const u8, index: *usize) ?KeyEvent {
+    if (index.* >= bytes.len) return null;
+    const start = index.*;
+    const byte = bytes[start];
+    index.* += 1;
+    return switch (byte) {
+        '\x1b' => .{ .key = .escape },
+        '\r', '\n' => .{ .key = .enter },
+        '\x08', '\x7f' => .{ .key = .backspace },
+        else => blk: {
+            if (byte >= 0x80) index.* = @min(nextCodepointEnd(bytes, start), bytes.len);
+            break :blk .{ .key = .text, .text = bytes[start..index.*] };
+        },
     };
 }
 
@@ -4447,6 +4567,88 @@ test "vi line session question mark searches history forward" {
 
     try session.handleKey(.{ .key = .text, .text = "n" });
     try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
+}
+
+const TestViAliasSet = struct {
+    entries: []const Entry,
+
+    const Entry = struct {
+        letter: u21,
+        value: []const u8,
+    };
+};
+
+fn testLookupViAlias(context: *anyopaque, allocator: std.mem.Allocator, letter: u21) !?[]const u8 {
+    const aliases: *const TestViAliasSet = @ptrCast(@alignCast(context));
+    for (aliases.entries) |entry| {
+        if (entry.letter == letter) {
+            const copy = try allocator.dupe(u8, entry.value);
+            return copy;
+        }
+    }
+    return null;
+}
+
+test "vi line session expands command aliases as editing input" {
+    const alias_entries = [_]TestViAliasSet.Entry{
+        .{ .letter = 'a', .value = "Igit \x1b" },
+        .{ .letter = 'd', .value = "0dw" },
+    };
+    const aliases: TestViAliasSet = .{ .entries = &alias_entries };
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+    session.vi_aliases = .{ .context = @constCast(&aliases), .lookup = testLookupViAlias };
+
+    try session.handleKey(.{ .key = .text, .text = "status" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "@" });
+    try session.handleKey(.{ .key = .text, .text = "a" });
+    try std.testing.expectEqual(ViState.command, session.vi_state);
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "@" });
+    try session.handleKey(.{ .key = .text, .text = "d" });
+    try std.testing.expectEqualStrings("status", session.editor.buffer.text());
+}
+
+test "vi line session ignores disabled command aliases" {
+    const aliases: TestViAliasSet = .{ .entries = &.{} };
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+    session.vi_aliases = .{ .context = @constCast(&aliases), .lookup = testLookupViAlias };
+
+    try session.handleKey(.{ .key = .text, .text = "abc" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "@" });
+    try session.handleKey(.{ .key = .text, .text = "z" });
+
+    try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+    try std.testing.expectEqual(ViState.command, session.vi_state);
+}
+
+test "vi line session requests external editor for current and numbered history commands" {
+    const entries = [_][]const u8{ "echo one", "echo two" };
+    var current = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    defer current.deinit();
+    try current.handleKey(.{ .key = .text, .text = "echo draft" });
+    try current.handleKey(.{ .key = .escape });
+    try current.handleKey(.{ .key = .text, .text = "v" });
+    try std.testing.expectEqual(LineSession.State.external_editor, current.state);
+    const current_request = current.takeExternalEditorRequest() orelse return error.MissingExternalEditorRequest;
+    defer current_request.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo draft", current_request.text);
+    current.resumeEditingAfterExternalEditor();
+
+    var numbered = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    defer numbered.deinit();
+    try numbered.handleKey(.{ .key = .escape });
+    try numbered.handleKey(.{ .key = .text, .text = "2" });
+    try numbered.handleKey(.{ .key = .text, .text = "v" });
+    try std.testing.expectEqual(LineSession.State.external_editor, numbered.state);
+    const numbered_request = numbered.takeExternalEditorRequest() orelse return error.MissingExternalEditorRequest;
+    defer numbered_request.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo two", numbered_request.text);
+    try std.testing.expectEqual(@as(?usize, 2), numbered_request.number);
 }
 
 test "vi line session renders beam block and underline cursors" {

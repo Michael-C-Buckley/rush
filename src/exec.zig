@@ -3234,6 +3234,14 @@ pub const Executor = struct {
         return false;
     }
 
+    pub fn viCommandAlias(self: *Executor, allocator: std.mem.Allocator, letter: u21) !?[]const u8 {
+        if (!((letter >= 'A' and letter <= 'Z') or (letter >= 'a' and letter <= 'z'))) return null;
+        var name: [2]u8 = .{ '_', @intCast(letter) };
+        const value = self.aliases.get(&name) orelse return null;
+        const copy = try allocator.dupe(u8, value);
+        return copy;
+    }
+
     fn setAbbreviation(self: *Executor, name: []const u8, value: []const u8) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
