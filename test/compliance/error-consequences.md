@@ -44,9 +44,11 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `errors-expansion` | partial | high | nounset, `${parameter:?word}`, and arithmetic negative coverage | ordinary and special-builtin expansion failures have baseline shell-exit coverage; more expansion classes need coverage |
 | `errors-special-builtin` | supported | high | assignment persistence plus negative coverage for redirection, expansion, and utility-specific failures | all 15 POSIX special builtins have audited non-interactive shell-exit consequences for invalid options or operands where applicable and utility-semantic failures |
 | `errors-nounset` | supported | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution, with default-operator and disable behavior covered separately |
-| `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | bad input/output fd, noclobber, missing input, and directory output diagnostics exist; more redirection classes need stricter modeling |
+| `errors-redirection-noninteractive` | partial | high | POSIX and negative corpus | consolidated with the former `redirection-error-consequences` row; bad input/output fd, noclobber, missing input, and directory output diagnostics exist, while status propagation, `errexit`, compound, function, and remaining operator consequences need stricter modeling |
 | `errors-special-builtin-redirection` | supported | high | negative corpus | noclobber, missing input, bad input/output fd, and directory output special-builtin redirection failures exit non-interactive execution across representative POSIX special builtins |
 | `errors-special-builtin-expansion` | supported | high | negative corpus | ${parameter:?word} and nounset special-builtin expansion failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap` |
+
+The former manifest row `redirection-error-consequences` had no distinct scope after comparison with `errors-redirection-noninteractive`: both tracked XCU 2.8.1 redirection error consequences for non-interactive shells. The merged `errors-redirection-noninteractive` row owns ordinary command status propagation through AND-OR lists, negation, pipelines, `$?`, and `errexit`, as well as the broader special-builtin versus non-special shell-exit matrix.
 
 ## POSIX consequence areas to expand
 

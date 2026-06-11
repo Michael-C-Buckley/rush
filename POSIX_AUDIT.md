@@ -210,7 +210,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 ### Partial / gaps
 
 - Capture-mode tests still use captured-result modeling in some paths instead of true inherited process fds.
-- More obscure redirection ordering/error interactions remain to be audited.
+- More obscure redirection ordering/error interactions remain to be audited under the consolidated `errors-redirection-noninteractive` consequence row.
 - Here-doc materialization is fd-backed but full parser-level here-doc token/body integration is still simplified.
 
 ## 5. Command search and execution environment
@@ -390,7 +390,7 @@ Implemented or partially implemented:
 
 ### Partial / gaps
 
-- Redirection error consequences outside the special-builtin baseline need stricter context modeling.
+- Redirection error consequences outside the special-builtin baseline need stricter context modeling; the former redirection-area consequence row is consolidated into `errors-redirection-noninteractive` so status propagation and shell-exit behavior stay in one matrix.
 - Some CLI inherited-stdio paths now write per-command output directly; capture-mode tests still intentionally model output through `CommandResult`.
 
 ## 10. Recommended next roadmap batches
