@@ -49,6 +49,7 @@ builtin-command-v-missing	builtin	builtin	-
 builtin-env-command-assignment	builtin	builtin	-
 builtin-env-ignore-environment	builtin	builtin	-
 builtin-eval	builtin	builtin	-
+builtin-eval-current-env	builtin	behavior	eval executes redirected input and read side effects in the current shell environment
 builtin-eval-special-assignment	builtin	builtin	-
 builtin-exec	builtin	builtin	-
 builtin-exec-assignment-env	builtin	builtin	-

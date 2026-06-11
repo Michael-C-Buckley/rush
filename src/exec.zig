@@ -12995,6 +12995,19 @@ test "executor implements command eval exec and exit builtins" {
     defer eval_result.deinit();
     try std.testing.expectEqualStrings("eval-ok\n", eval_result.stdout);
 
+    var eval_current_lowered = try parseAndLower(std.testing.allocator,
+        \\eval 'read x; echo "$x"' <<'IN'
+        \\eval-input
+        \\IN
+        \\echo saved:$x:$?
+    );
+    defer eval_current_lowered.parsed.deinit();
+    defer eval_current_lowered.program.deinit();
+    var eval_current_result = try executor.executeProgram(eval_current_lowered.program, .{});
+    defer eval_current_result.deinit();
+    try std.testing.expectEqualStrings("eval-input\nsaved:eval-input:0\n", eval_current_result.stdout);
+    try std.testing.expectEqualStrings("eval-input", executor.getEnv("x").?);
+
     var command_executor = Executor.init(std.testing.allocator);
     defer command_executor.deinit();
     var command_lowered = try parseAndLower(std.testing.allocator, "echo() { printf 'function\\n'; }; command echo builtin; command -v echo; command -V echo");

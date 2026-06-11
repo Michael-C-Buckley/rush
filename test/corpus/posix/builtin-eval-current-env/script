@@ -1,0 +1,4 @@
+eval 'read x; echo "$x"' <<'IN'
+eval-input
+IN
+echo saved:$x:$?

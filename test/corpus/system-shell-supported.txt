@@ -181,6 +181,7 @@ old=$(umask); umask u=rwx,g=rx,o=; umask; umask -S; umask a=rx; umask; umask "$o
 f=var; f() { echo func; }; unset f; echo var=${f-unset}; if command -v f; then echo func-present; else echo func-gone; fi
 x=$(printf a; echo; echo); printf "<%s>\n" "$x"; y=$(printf a; echo; echo; printf b); printf "<%s>\n" "$y"
 eval echo one two; eval; echo after-empty:$?
+eval 'read x; echo "$x"' <<'IN'\neval-input\nIN\necho saved:$x:$?
 HOME=/tmp/rush-home; echo ~; echo ~/x
 IFS=,; v=a,,b,; for x in $v; do echo "<$x>"; done
 IFS=" "; v="  a  b  "; for x in $v; do echo "<$x>"; done
