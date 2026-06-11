@@ -55,7 +55,7 @@ Recent notable capabilities:
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
-- Cross-target compile-only coverage is tracked by `zig build cross-check`, which runs native tests and compiles the test binary for representative Linux, macOS, FreeBSD, OpenBSD, and NetBSD targets. Foreign-target runtime validation remains separate follow-up work.
+- Cross-target compile-only coverage is tracked by `zig build cross-check`, which runs native tests and compiles the test binary for representative Linux, macOS, FreeBSD, OpenBSD, and NetBSD targets. Foreign-target runtime validation remains separate follow-up work; use `scripts/check-runtime-portability.sh` on actual Linux/BSD hosts and record the host evidence separately from the compile-only compliance row.
 
 ## 1. Lexical conventions and token recognition
 
@@ -426,7 +426,7 @@ The detailed backlog lives in Tend and the machine-readable status lives in `tes
 1. `#169` Import dash-derived POSIX language smoke cases.
 2. `#170` Import BusyBox ash-inspired builtin and redirection cases.
 3. `#171` Add spec-clause examples for current high-risk POSIX gaps.
-4. Add real runtime validation on Linux and BSD hosts for the cross-target portability matrix; the current supported portability row only claims compile coverage.
+4. Run `scripts/check-runtime-portability.sh` on real Linux and BSD hosts for the cross-target portability matrix and record the host OS/version, Zig version, comparison shells, skipped cases, and failures in Tend or release notes; the current supported portability row only claims compile coverage.
 5. Keep `POSIX_AUDIT.md` as prose context and avoid duplicating generated compliance totals beyond snapshot refreshes.
 
 ### Batch D: Job-control and error-consequence depth
