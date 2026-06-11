@@ -1,0 +1,7 @@
+unset v x
+printf '<%s>\n' ${v:-$((1 + ${x:-2}))}
+x=4
+printf '<%s>\n' $(($x + 1))
+printf '<%s>\n' $((1 + $(printf 2)))
+text='1 + 2'
+printf '<%s>\n' $(($text))

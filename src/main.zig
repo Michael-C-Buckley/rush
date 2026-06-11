@@ -2852,9 +2852,7 @@ test "command string invocation shell options affect execution" {
 test "invalid arithmetic expansion returns a shell diagnostic" {
     const cases = [_][]const u8{
         "echo $((2 ** 3)); echo after",
-        "X=2; echo $(($X)); echo after",
-        "echo $(( $(echo 2) + 1 )); echo after",
-        "echo $((-(-3))); echo after",
+        "echo $((\"1\" + 2)); echo after",
     };
 
     for (cases) |script| {

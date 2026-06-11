@@ -11,6 +11,7 @@ arithmetic-expansion	expansion	behavior	-
 arithmetic-nonnumeric-variable	expansion	behavior	-
 arithmetic-octal-hex-constants	expansion	behavior	-
 arithmetic-operator-coverage	expansion	behavior	-
+arithmetic-recursive-expansion	expansion	behavior	Arithmetic expansion preprocesses nested parameter expansions and command substitutions before evaluation
 arithmetic-variable-lookup	expansion	behavior	-
 assignment-prefix-external	variables	behavior	-
 assignment-prefix-temporary	variables	behavior	-

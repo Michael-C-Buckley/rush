@@ -48,7 +48,7 @@ Recent notable capabilities:
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
-- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
+- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline with nested parameter/command preprocessing, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
@@ -156,6 +156,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
   - `${var##word}`
 - Arithmetic expansion baseline for integer expressions:
   - `+`, `-`, `*`, `/`, `%`, parentheses, unary `+`/`-`
+  - expression text is preprocessed for nested parameter expansion, command substitution, and arithmetic expansion results before arithmetic evaluation in the dash/bash/yash-compatible cases covered by corpus tests
 - Command substitution with `$()` including nested parsing and executor-backed execution.
 - Legacy backquote command substitution baseline.
 - Command substitution inside double quotes, preserving the quoted field.
@@ -170,7 +171,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 ### Partial / gaps
 
 - Expansion order is modeled but still simplified around quote contexts and nested constructs.
-- Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; full parser integration for every recursive token context remains larger work.
+- Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; arithmetic-expression preprocessing now recursively handles nested parameter and command substitutions in representative POSIX cases. Full parser/scanner unification for every recursive token context remains larger work.
 - Pathname expansion lacks full POSIX details such as slash-component behavior and locale/collation details.
 - Tilde expansion does not support `~user`.
 - Unquoted `$@`/`$*` behavior is acceptable for common cases but still needs more spec-derived edge-case coverage.

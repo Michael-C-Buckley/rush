@@ -92,7 +92,7 @@ Remaining gaps:
 
 Manifest row: `expansion-arithmetic`
 
-Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, and negative diagnostics for invalid or currently unsupported arithmetic forms. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
+Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, octal/hex constants, and POSIX arithmetic-expression preprocessing of nested parameter expansions and command substitutions before evaluation. The recursive preprocessing behavior was checked against dash, bash `--posix`, and yash for braced defaults, unbraced `$name`, command substitution output, and expression-valued parameter text. Negative coverage includes invalid operators, quoted arithmetic tokens, malformed parameter syntax inside arithmetic, and `${parameter:?word}` failures inside arithmetic. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
 
 Remaining gaps:
 

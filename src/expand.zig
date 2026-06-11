@@ -285,7 +285,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                     .value_span = .init(value_start, index),
                 });
             },
-            '$' => if (arithmeticPart(raw, index) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse (try parameterPart(allocator, raw, index))) |part| {
+            '$' => if ((try arithmeticPart(allocator, raw, index)) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse (try parameterPart(allocator, raw, index))) |part| {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 try parts.append(allocator, part);
                 index = part.span.end;
@@ -329,20 +329,15 @@ fn flushUnquoted(allocator: std.mem.Allocator, raw: []const u8, parts: *std.Arra
     start.* = null;
 }
 
-fn arithmeticPart(raw: []const u8, dollar: usize) ?WordPart {
+fn arithmeticPart(allocator: std.mem.Allocator, raw: []const u8, dollar: usize) std.mem.Allocator.Error!?WordPart {
     if (dollar + 2 >= raw.len or raw[dollar] != '$' or raw[dollar + 1] != '(' or raw[dollar + 2] != '(') return null;
     const value_start = dollar + 3;
-    var index = value_start;
-    while (index + 1 < raw.len) : (index += 1) {
-        if (raw[index] == ')' and raw[index + 1] == ')') {
-            return .{
-                .kind = .arithmetic,
-                .span = .init(dollar, index + 2),
-                .value_span = .init(value_start, index),
-            };
-        }
-    }
-    return null;
+    const end = (try parser.arithmeticExpansionEnd(allocator, raw, raw.len, dollar)) orelse return null;
+    return .{
+        .kind = .arithmetic,
+        .span = .init(dollar, end),
+        .value_span = .init(value_start, end - 2),
+    };
 }
 
 fn backquoteCommandSubstitutionPart(raw: []const u8, start: usize) ?WordPart {
@@ -390,7 +385,7 @@ fn doubleQuotedSpanEnd(allocator: std.mem.Allocator, raw: []const u8, start: usi
             '"' => return index + 1,
             '\\' => index += if (index + 1 < raw.len) 2 else 1,
             '$' => {
-                const part = arithmeticPart(raw, index) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse (try parameterPart(allocator, raw, index));
+                const part = (try arithmeticPart(allocator, raw, index)) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse (try parameterPart(allocator, raw, index));
                 index = if (part) |p| p.span.end else index + 1;
             },
             '`' => {
@@ -468,8 +463,61 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
 }
 
 fn renderArithmetic(allocator: std.mem.Allocator, source: []const u8, expression: []const u8, options: Options) anyerror![]const u8 {
-    const value = evalArithmetic(expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, source, err, options);
+    const expanded_expression = try expandArithmeticExpression(allocator, expression, options);
+    defer allocator.free(expanded_expression);
+    const value = evalArithmetic(expanded_expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, source, err, options);
     return std.fmt.allocPrint(allocator, "{d}", .{value});
+}
+
+fn expandArithmeticExpression(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    var index: usize = 0;
+    while (index < expression.len) {
+        if (expression[index] == '\\' and index + 1 < expression.len and isArithmeticBackslashEscaped(expression[index + 1])) {
+            if (expression[index + 1] == '\n') {
+                index += 2;
+                continue;
+            }
+            try output.append(allocator, expression[index + 1]);
+            index += 2;
+            continue;
+        }
+
+        const part = switch (expression[index]) {
+            '$' => (try arithmeticPart(allocator, expression, index)) orelse (try commandSubstitutionPart(allocator, expression, index)) orelse (try parameterPart(allocator, expression, index)),
+            '`' => backquoteCommandSubstitutionPart(expression, index),
+            else => null,
+        } orelse {
+            try output.append(allocator, expression[index]);
+            index += 1;
+            continue;
+        };
+
+        const rendered = try renderArithmeticExpressionExpansion(allocator, expression, part, options);
+        defer allocator.free(rendered);
+        try output.appendSlice(allocator, rendered);
+        index = part.span.end;
+    }
+
+    return output.toOwnedSlice(allocator);
+}
+
+fn renderArithmeticExpressionExpansion(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) anyerror![]const u8 {
+    return switch (part.kind) {
+        .parameter => renderParameter(allocator, part.value(raw), options, true),
+        .arithmetic => renderArithmetic(allocator, part.source(raw), part.value(raw), options),
+        .command_substitution => blk: {
+            const script = try commandSubstitutionScript(allocator, raw, part, true);
+            defer allocator.free(script);
+            const output = (try options.command_substitution.run(allocator, script)) orelse try allocator.alloc(u8, 0);
+            defer allocator.free(output);
+            const trimmed = trimTrailingNewlines(output);
+            break :blk allocator.dupe(u8, trimmed);
+        },
+        else => unreachable,
+    };
 }
 
 fn arithmeticExpansionFailed(allocator: std.mem.Allocator, source: []const u8, err: anyerror, options: Options) anyerror {
@@ -1276,7 +1324,7 @@ fn renderDoubleQuotedContent(allocator: std.mem.Allocator, text: []const u8, opt
         }
 
         const part = switch (text[index]) {
-            '$' => arithmeticPart(text, index) orelse (try commandSubstitutionPart(allocator, text, index)) orelse (try parameterPart(allocator, text, index)),
+            '$' => (try arithmeticPart(allocator, text, index)) orelse (try commandSubstitutionPart(allocator, text, index)) orelse (try parameterPart(allocator, text, index)),
             '`' => backquoteCommandSubstitutionPart(text, index),
             else => null,
         } orelse {
@@ -1809,7 +1857,7 @@ pub fn expandHereDocBody(allocator: std.mem.Allocator, text: []const u8, options
             continue;
         }
         const part = switch (c) {
-            '$' => arithmeticPart(text, index) orelse (try commandSubstitutionPart(allocator, text, index)) orelse (try parameterPart(allocator, text, index)),
+            '$' => (try arithmeticPart(allocator, text, index)) orelse (try commandSubstitutionPart(allocator, text, index)) orelse (try parameterPart(allocator, text, index)),
             '`' => backquoteCommandSubstitutionPart(text, index),
             else => null,
         } orelse {
@@ -1985,12 +2033,17 @@ fn isDoubleQuoteBackslashEscaped(c: u8) bool {
     return c == '$' or c == '`' or c == '"' or c == '\\' or c == '\n';
 }
 
+fn isArithmeticBackslashEscaped(c: u8) bool {
+    return c == '$' or c == '`' or c == '\\' or c == '\n';
+}
+
 fn isNameContinue(c: u8) bool {
     return isNameStart(c) or std.ascii.isDigit(c);
 }
 
 fn testCommandSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
     if (std.mem.eql(u8, script, "echo hi")) return allocator.dupe(u8, "hi\n\n");
+    if (std.mem.eql(u8, script, "printf 2")) return allocator.dupe(u8, "2\n");
     if (std.mem.eql(u8, script, "printf 'a}b'")) return allocator.dupe(u8, "a}b");
     if (std.mem.eql(u8, script, "printf '}cd'")) return allocator.dupe(u8, "}cd");
     return allocator.dupe(u8, "");
@@ -2492,6 +2545,28 @@ test "arithmetic expansion evaluates integer expressions" {
     try std.testing.expectEqualStrings("value=7", result.fields[0]);
 }
 
+test "arithmetic expansion preprocesses nested expansion tokens" {
+    var braced = try expandWord(std.testing.allocator, "$((1 + ${MISSING:-2}))", .{});
+    defer braced.deinit();
+    try std.testing.expectEqual(@as(usize, 1), braced.fields.len);
+    try std.testing.expectEqualStrings("3", braced.fields[0]);
+
+    var unbraced = try expandWord(std.testing.allocator, "$(($USER_NUM + 4))", .{ .env = test_env });
+    defer unbraced.deinit();
+    try std.testing.expectEqual(@as(usize, 1), unbraced.fields.len);
+    try std.testing.expectEqualStrings("7", unbraced.fields[0]);
+
+    var command = try expandWord(std.testing.allocator, "$((1 + $(printf 2)))", .{ .command_substitution = test_command_substitution });
+    defer command.deinit();
+    try std.testing.expectEqual(@as(usize, 1), command.fields.len);
+    try std.testing.expectEqualStrings("3", command.fields[0]);
+
+    var nested = try expandWord(std.testing.allocator, "$((1 + $((2))))", .{});
+    defer nested.deinit();
+    try std.testing.expectEqual(@as(usize, 1), nested.fields.len);
+    try std.testing.expectEqualStrings("3", nested.fields[0]);
+}
+
 test "arithmetic expansion records diagnostics instead of leaking parser errors" {
     var arithmetic_error: ArithmeticError = .{};
     defer arithmetic_error.clear(std.testing.allocator);
@@ -2510,6 +2585,12 @@ test "word part parser records arithmetic expansion regions" {
     try std.testing.expectEqual(WordPartKind.arithmetic, parts.parts[1].kind);
     try std.testing.expectEqualStrings("1 + 2", parts.parts[1].value(parts.raw));
     try std.testing.expectEqual(WordPartKind.unquoted, parts.parts[2].kind);
+
+    var nested = try parseWordParts(std.testing.allocator, "$((1 + $(printf 2)))");
+    defer nested.deinit();
+    try std.testing.expectEqual(@as(usize, 1), nested.parts.len);
+    try std.testing.expectEqual(WordPartKind.arithmetic, nested.parts[0].kind);
+    try std.testing.expectEqualStrings("1 + $(printf 2)", nested.parts[0].value(nested.raw));
 }
 
 test "pathname expansion matches sorted cwd entries" {
