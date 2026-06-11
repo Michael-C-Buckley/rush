@@ -33,6 +33,7 @@ const system_config_path = build_config.sysconfdir ++ "/rush/config.rush";
 const embedded_config = @embedFile("default_config");
 const embedded_config_path = "embedded:config.rush";
 const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
+const ignoreeof_message = "Use \"exit\" to leave the shell.\r\n";
 
 const InvocationKind = enum { command_string, script_file, standard_input };
 
@@ -1487,7 +1488,11 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const line = switch (read_result) {
             .submitted => |line| line,
             .canceled => continue,
-            .eof => break,
+            .eof => {
+                if (!executor.shell_options.ignoreeof) break;
+                try writeAll(io, .stderr, ignoreeof_message);
+                continue;
+            },
         };
         defer allocator.free(line);
         if (std.mem.eql(u8, line, "exit")) {

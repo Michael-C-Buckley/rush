@@ -203,6 +203,7 @@ set-noclobber	options	option	-
 set-noglob	options	option	-
 set-nounset	options	option	-
 set-o-errexit-condition	options	option	-
+option-set-ignoreeof	options	option	set -o ignoreeof toggles the interactive EOF guard option and set +o disables it
 set-o-noclobber	options	option	-
 set-o-noglob	options	option	-
 option-set-o-listing	options	option	set -o lists current supported shell option states in Rush's stable human-readable format

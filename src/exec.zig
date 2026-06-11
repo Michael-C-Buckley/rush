@@ -92,6 +92,7 @@ fn unregisterCancelableChild(options: ExecuteOptions, pid: ?i32) void {
 
 pub const ShellOptions = struct {
     pipefail: bool = false,
+    ignoreeof: bool = false,
     noglob: bool = false,
     noclobber: bool = false,
     noexec: bool = false,
@@ -168,6 +169,10 @@ pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool 
 pub fn applyShellOptionName(options: *ShellOptions, name: []const u8, enabled: bool) bool {
     if (std.mem.eql(u8, name, "pipefail")) {
         options.pipefail = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "ignoreeof")) {
+        options.ignoreeof = enabled;
         return true;
     }
     if (std.mem.eql(u8, name, "allexport")) {
@@ -446,7 +451,7 @@ const builtin_names = [_][]const u8{
 };
 
 const set_options = [_][]const u8{ "-a", "+a", "-e", "+e", "-f", "+f", "-h", "+h", "-n", "+n", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
-const set_option_names = [_][]const u8{ "allexport", "errexit", "noglob", "noclobber", "noexec", "nolog", "nounset", "pipefail", "verbose", "xtrace" };
+const set_option_names = [_][]const u8{ "allexport", "errexit", "ignoreeof", "noglob", "noclobber", "noexec", "nolog", "nounset", "pipefail", "verbose", "xtrace" };
 const signal_names = [_][]const u8{ "EXIT", "HUP", "INT", "QUIT", "ILL", "TRAP", "ABRT", "BUS", "FPE", "KILL", "USR1", "SEGV", "USR2", "PIPE", "ALRM", "TERM", "CHLD", "CONT", "STOP", "TSTP", "TTIN", "TTOU" };
 const test_operators = [_][]const u8{ "!", "(", ")", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-n", "-p", "-r", "-S", "-s", "-t", "-u", "-w", "-x", "-z", "=", "!=", "-eq", "-ne", "-gt", "-ge", "-lt", "-le" };
 
@@ -9410,9 +9415,9 @@ fn printShellVariables(self: *Executor) !CommandResult {
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
     const stdout = if (reusable)
-        try std.fmt.allocPrint(self.allocator, "set {s}o allexport\nset {s}o errexit\nset {s}o noclobber\nset {s}o noexec\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\nset {s}o verbose\nset {s}o xtrace\n", .{ if (self.shell_options.allexport) "-" else "+", if (self.shell_options.errexit) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noexec) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+", if (self.shell_options.verbose) "-" else "+", if (self.shell_options.xtrace) "-" else "+" })
+        try std.fmt.allocPrint(self.allocator, "set {s}o allexport\nset {s}o errexit\nset {s}o ignoreeof\nset {s}o noclobber\nset {s}o noexec\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\nset {s}o verbose\nset {s}o xtrace\n", .{ if (self.shell_options.allexport) "-" else "+", if (self.shell_options.errexit) "-" else "+", if (self.shell_options.ignoreeof) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noexec) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+", if (self.shell_options.verbose) "-" else "+", if (self.shell_options.xtrace) "-" else "+" })
     else
-        try std.fmt.allocPrint(self.allocator, "allexport\t{s}\nerrexit\t{s}\nnoclobber\t{s}\nnoexec\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\nverbose\t{s}\nxtrace\t{s}\n", .{ if (self.shell_options.allexport) "on" else "off", if (self.shell_options.errexit) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noexec) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off", if (self.shell_options.verbose) "on" else "off", if (self.shell_options.xtrace) "on" else "off" });
+        try std.fmt.allocPrint(self.allocator, "allexport\t{s}\nerrexit\t{s}\nignoreeof\t{s}\nnoclobber\t{s}\nnoexec\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\nverbose\t{s}\nxtrace\t{s}\n", .{ if (self.shell_options.allexport) "on" else "off", if (self.shell_options.errexit) "on" else "off", if (self.shell_options.ignoreeof) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noexec) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off", if (self.shell_options.verbose) "on" else "off", if (self.shell_options.xtrace) "on" else "off" });
     errdefer self.allocator.free(stdout);
     return .{
         .allocator = self.allocator,
@@ -12269,7 +12274,7 @@ test "executor implements set shell option baseline" {
     var show = try executor.executeProgram(show_lowered.program, .{});
     defer show.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
-    try std.testing.expectEqualStrings("allexport\toff\nerrexit\toff\nnoclobber\toff\nnoexec\toff\nnoglob\toff\nnounset\toff\npipefail\toff\nverbose\toff\nxtrace\toff\n", show.stdout);
+    try std.testing.expectEqualStrings("allexport\toff\nerrexit\toff\nignoreeof\toff\nnoclobber\toff\nnoexec\toff\nnoglob\toff\nnounset\toff\npipefail\toff\nverbose\toff\nxtrace\toff\n", show.stdout);
 
     var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
     defer enable_lowered.parsed.deinit();
@@ -12279,12 +12284,26 @@ test "executor implements set shell option baseline" {
     try std.testing.expectEqual(@as(ExitStatus, 1), enabled.status);
     try std.testing.expect(executor.shell_options.pipefail);
 
+    var ignoreeof_lowered = try parseAndLower(std.testing.allocator, "set -o ignoreeof");
+    defer ignoreeof_lowered.parsed.deinit();
+    defer ignoreeof_lowered.program.deinit();
+    var ignoreeof = try executor.executeProgram(ignoreeof_lowered.program, .{});
+    defer ignoreeof.deinit();
+    try std.testing.expect(executor.shell_options.ignoreeof);
+
     var reusable_lowered = try parseAndLower(std.testing.allocator, "set +o");
     defer reusable_lowered.parsed.deinit();
     defer reusable_lowered.program.deinit();
     var reusable = try executor.executeProgram(reusable_lowered.program, .{});
     defer reusable.deinit();
-    try std.testing.expectEqualStrings("set +o allexport\nset +o errexit\nset +o noclobber\nset +o noexec\nset +o noglob\nset +o nounset\nset -o pipefail\nset +o verbose\nset +o xtrace\n", reusable.stdout);
+    try std.testing.expectEqualStrings("set +o allexport\nset +o errexit\nset -o ignoreeof\nset +o noclobber\nset +o noexec\nset +o noglob\nset +o nounset\nset -o pipefail\nset +o verbose\nset +o xtrace\n", reusable.stdout);
+
+    var disable_ignoreeof_lowered = try parseAndLower(std.testing.allocator, "set +o ignoreeof");
+    defer disable_ignoreeof_lowered.parsed.deinit();
+    defer disable_ignoreeof_lowered.program.deinit();
+    var disable_ignoreeof = try executor.executeProgram(disable_ignoreeof_lowered.program, .{});
+    defer disable_ignoreeof.deinit();
+    try std.testing.expect(!executor.shell_options.ignoreeof);
 
     var noexec_executor = Executor.init(std.testing.allocator);
     defer noexec_executor.deinit();

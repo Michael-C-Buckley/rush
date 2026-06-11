@@ -1,5 +1,6 @@
 set +o allexport
 set +o errexit
+set +o ignoreeof
 set +o noclobber
 set +o noexec
 set +o noglob

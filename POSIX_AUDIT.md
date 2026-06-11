@@ -294,7 +294,7 @@ Implemented or partially implemented:
 - `read` supports simple field assignment and `-r` acceptance but not full POSIX options/IFS/backslash behavior.
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
 - `test` baseline lacks many operators and edge cases.
-- `set` has the POSIX non-interactive short option baseline, positional handling, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`-b`, `-m`, `ignoreeof`, `vi`).
+- `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`-b`, `-m`, `vi`).
 - `env` does not support arguments/options.
 - `times` currently emits a deterministic baseline instead of real process usage.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
@@ -326,6 +326,7 @@ Implemented or partially implemented:
   - `set -o name` / `set +o name` for supported options
   - `set -o` option state listing in Rush's stable human-readable format
   - `set +o` reusable option-state command listing for supported options
+  - `set -o ignoreeof` / `set +o ignoreeof` controls whether interactive EOF asks for explicit `exit`
   - `set -h` / `set +h` and `set -o nolog` / `set +o nolog` are accepted as no-effect obsolescent compatibility spellings; they do not change command lookup, history, `$-`, or option listings.
 
 ### Partial / gaps
@@ -335,7 +336,6 @@ Implemented or partially implemented:
 - Unsupported POSIX options remain:
   - `-b` notification timing for job control
   - `-m` / `set -o monitor` job-control mode toggling
-  - `set -o ignoreeof` interactive EOF handling
   - `set -o vi` command-line editing mode
 
 ## 8. Interactive behavior and job control

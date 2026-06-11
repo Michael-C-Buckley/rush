@@ -1,0 +1,4 @@
+set -o ignoreeof
+set -o | grep '^ignoreeof[[:space:]]*on' >/dev/null && echo ignoreeof:on
+set +o ignoreeof
+set -o | grep '^ignoreeof[[:space:]]*off' >/dev/null && echo ignoreeof:off

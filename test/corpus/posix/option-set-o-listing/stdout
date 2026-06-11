@@ -1,5 +1,6 @@
 allexport	off
 errexit	off
+ignoreeof	off
 noclobber	off
 noexec	off
 noglob	off
