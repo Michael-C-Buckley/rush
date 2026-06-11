@@ -838,6 +838,8 @@ pub const BackgroundJob = struct {
     child: std.process.Child,
     state: JobState = .running,
     status: ExitStatus = 0,
+    stop_signal: ?u8 = null,
+    termination_signal: ?u8 = null,
     saved_termios: ?std.posix.termios = null,
     notified_state: ?JobState = null,
 };
@@ -2779,6 +2781,57 @@ pub const Executor = struct {
         return ' ';
     }
 
+    fn refreshJobMarkers(self: *Executor) void {
+        const old_current = self.current_job_id;
+        const old_previous = self.previous_job_id;
+        var current_stopped: ?usize = null;
+        var previous_stopped: ?usize = null;
+        var index = self.background_jobs.items.len;
+        while (index > 0) {
+            index -= 1;
+            const job = self.background_jobs.items[index];
+            if (job.state != .stopped) continue;
+            if (current_stopped == null) {
+                current_stopped = job.id;
+            } else {
+                previous_stopped = job.id;
+                break;
+            }
+        }
+
+        const current = current_stopped orelse {
+            if (self.current_job_id) |id| {
+                if (self.findBackgroundJobById(id) == null) self.current_job_id = null;
+            }
+            if (self.previous_job_id) |id| {
+                if (self.findBackgroundJobById(id) == null) self.previous_job_id = null;
+            }
+            return;
+        };
+        self.current_job_id = current;
+        if (previous_stopped) |previous| {
+            self.previous_job_id = previous;
+            return;
+        }
+        if (old_current != null and old_current.? != current and self.findBackgroundJobById(old_current.?) != null) {
+            self.previous_job_id = old_current;
+            return;
+        }
+        if (old_previous != null and old_previous.? != current and self.findBackgroundJobById(old_previous.?) != null) {
+            self.previous_job_id = old_previous;
+            return;
+        }
+        var fallback_index = self.background_jobs.items.len;
+        while (fallback_index > 0) {
+            fallback_index -= 1;
+            const job = self.background_jobs.items[fallback_index];
+            if (job.id == current) continue;
+            self.previous_job_id = job.id;
+            return;
+        }
+        self.previous_job_id = null;
+    }
+
     fn refreshBackgroundJobs(self: *Executor) void {
         const flags: c_int = @intCast(std.posix.W.NOHANG | std.posix.W.UNTRACED);
         for (self.background_jobs.items) |*job| {
@@ -2789,7 +2842,15 @@ pub const Executor = struct {
             if (result <= 0 or result != pid) continue;
             const wait_status: u32 = @intCast(status);
             job.status = exitStatusFromWaitStatus(wait_status);
-            job.state = if (std.posix.W.IFSTOPPED(wait_status)) .stopped else .done;
+            job.stop_signal = null;
+            job.termination_signal = null;
+            if (std.posix.W.IFSTOPPED(wait_status)) {
+                job.state = .stopped;
+                job.stop_signal = signalStatusNumber(std.posix.W.STOPSIG(wait_status));
+            } else {
+                job.state = .done;
+                if (std.posix.W.IFSIGNALED(wait_status)) job.termination_signal = signalStatusNumber(std.posix.W.TERMSIG(wait_status));
+            }
             if (job.state == .stopped) saveJobTerminalModes(job);
             self.queueJobNotification(job) catch {};
         }
@@ -3996,6 +4057,7 @@ pub const Executor = struct {
                 .child = child,
                 .state = .stopped,
                 .status = status,
+                .stop_signal = signalStatusNumber(std.posix.W.STOPSIG(wait_status)),
             });
             const job = &self.background_jobs.items[self.background_jobs.items.len - 1];
             saveJobTerminalModes(job);
@@ -9483,6 +9545,7 @@ fn builtinJobs(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     _ = stdin;
     _ = options;
     self.refreshBackgroundJobs();
+    self.refreshJobMarkers();
     var mode: JobPrintMode = .normal;
     var index: usize = 1;
     while (index < command.argv.len) : (index += 1) {
@@ -9503,35 +9566,103 @@ fn builtinJobs(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(self.allocator);
+    var reported_done_ids: std.ArrayList(usize) = .empty;
+    defer reported_done_ids.deinit(self.allocator);
     if (index >= command.argv.len) {
-        for (self.background_jobs.items) |job| try appendJobLine(self.allocator, &stdout, job, self.jobMarker(job), mode);
+        for (self.background_jobs.items) |job| {
+            try appendJobLine(self.allocator, &stdout, job, self.jobMarker(job), mode);
+            if (mode != .pids and job.state == .done) try reported_done_ids.append(self.allocator, job.id);
+        }
     } else {
         for (command.argv[index..]) |arg| {
             const job = self.findBackgroundJobBySpec(arg.text) orelse return errorResult(self.allocator, 127, "jobs", "unknown job");
             try appendJobLine(self.allocator, &stdout, job.*, self.jobMarker(job.*), mode);
+            if (mode != .pids and job.state == .done) try reported_done_ids.append(self.allocator, job.id);
         }
     }
-    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+    const stdout_slice = try stdout.toOwnedSlice(self.allocator);
+    errdefer self.allocator.free(stdout_slice);
+    for (reported_done_ids.items) |id| self.removeBackgroundJobById(id);
+    return .{ .allocator = self.allocator, .status = 0, .stdout = stdout_slice, .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: BackgroundJob, marker: u8, mode: JobPrintMode) !void {
     switch (mode) {
         .pids => try stdout.print(allocator, "{d}\n", .{job.pid}),
         .long => {
-            switch (job.state) {
-                .running => try stdout.print(allocator, "[{d}]{c} {d} Running {s}\n", .{ job.id, marker, job.pid, job.command }),
-                .stopped => try stdout.print(allocator, "[{d}]{c} {d} Stopped {s}\n", .{ job.id, marker, job.pid, job.command }),
-                .done => try stdout.print(allocator, "[{d}]{c} {d} Done({d}) {s}\n", .{ job.id, marker, job.pid, job.status, job.command }),
-            }
+            try stdout.print(allocator, "[{d}] {c} {d} ", .{ job.id, marker, job.pid });
+            try appendJobState(allocator, stdout, job);
+            try stdout.print(allocator, " {s}\n", .{job.command});
         },
         .normal => {
-            switch (job.state) {
-                .running => try stdout.print(allocator, "[{d}]{c} Running {s}\n", .{ job.id, marker, job.command }),
-                .stopped => try stdout.print(allocator, "[{d}]{c} Stopped {s}\n", .{ job.id, marker, job.command }),
-                .done => try stdout.print(allocator, "[{d}]{c} Done({d}) {s}\n", .{ job.id, marker, job.status, job.command }),
+            try stdout.print(allocator, "[{d}] {c} ", .{ job.id, marker });
+            try appendJobState(allocator, stdout, job);
+            try stdout.print(allocator, " {s}\n", .{job.command});
+        },
+    }
+}
+
+fn appendJobState(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: BackgroundJob) !void {
+    switch (job.state) {
+        .running => try stdout.appendSlice(allocator, "Running"),
+        .stopped => try appendStoppedJobState(allocator, stdout, job.stop_signal),
+        .done => {
+            if (job.termination_signal) |signal| {
+                try stdout.appendSlice(allocator, "Terminated(");
+                try appendSignalName(allocator, stdout, signal);
+                try stdout.append(allocator, ')');
+            } else if (job.status == 0) {
+                try stdout.appendSlice(allocator, "Done");
+            } else {
+                try stdout.print(allocator, "Done({d})", .{job.status});
             }
         },
     }
+}
+
+fn appendStoppedJobState(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), signal: ?u8) !void {
+    const sig = signal orelse {
+        try stdout.appendSlice(allocator, "Stopped");
+        return;
+    };
+    if (sig == signalStatusNumber(std.posix.SIG.TSTP) or
+        sig == signalStatusNumber(std.posix.SIG.STOP) or
+        sig == signalStatusNumber(std.posix.SIG.TTIN) or
+        sig == signalStatusNumber(std.posix.SIG.TTOU))
+    {
+        try stdout.appendSlice(allocator, "Stopped (");
+        try appendSignalName(allocator, stdout, sig);
+        try stdout.append(allocator, ')');
+        return;
+    }
+    try stdout.appendSlice(allocator, "Stopped");
+}
+
+fn appendSignalName(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), signal: u8) !void {
+    if (signalName(signal)) |name| {
+        try stdout.appendSlice(allocator, name);
+    } else {
+        try stdout.print(allocator, "signal {d}", .{signal});
+    }
+}
+
+fn signalName(signal: u8) ?[]const u8 {
+    if (signal == signalStatusNumber(std.posix.SIG.HUP)) return "SIGHUP";
+    if (signal == signalStatusNumber(std.posix.SIG.INT)) return "SIGINT";
+    if (signal == signalStatusNumber(std.posix.SIG.QUIT)) return "SIGQUIT";
+    if (signal == signalStatusNumber(std.posix.SIG.ILL)) return "SIGILL";
+    if (signal == signalStatusNumber(std.posix.SIG.ABRT)) return "SIGABRT";
+    if (signal == signalStatusNumber(std.posix.SIG.FPE)) return "SIGFPE";
+    if (signal == signalStatusNumber(std.posix.SIG.KILL)) return "SIGKILL";
+    if (signal == signalStatusNumber(std.posix.SIG.SEGV)) return "SIGSEGV";
+    if (signal == signalStatusNumber(std.posix.SIG.PIPE)) return "SIGPIPE";
+    if (signal == signalStatusNumber(std.posix.SIG.ALRM)) return "SIGALRM";
+    if (signal == signalStatusNumber(std.posix.SIG.TERM)) return "SIGTERM";
+    if (signal == signalStatusNumber(std.posix.SIG.STOP)) return "SIGSTOP";
+    if (signal == signalStatusNumber(std.posix.SIG.TSTP)) return "SIGTSTP";
+    if (signal == signalStatusNumber(std.posix.SIG.TTIN)) return "SIGTTIN";
+    if (signal == signalStatusNumber(std.posix.SIG.TTOU)) return "SIGTTOU";
+    return null;
 }
 
 fn builtinBg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -9539,6 +9670,7 @@ fn builtinBg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     _ = options;
     if (!self.shell_options.monitor) return errorResult(self.allocator, 1, "bg", "job control disabled");
     self.refreshBackgroundJobs();
+    self.refreshJobMarkers();
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(self.allocator);
 
@@ -9571,6 +9703,7 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     if (command.argv.len > 2) return errorResult(self.allocator, 2, "fg", "too many arguments");
     if (!self.shell_options.monitor) return errorResult(self.allocator, 1, "fg", "job control disabled");
     self.refreshBackgroundJobs();
+    self.refreshJobMarkers();
     const job = if (command.argv.len == 1)
         self.currentBackgroundJob() orelse return errorResult(self.allocator, 1, "fg", "no current job")
     else
@@ -9617,8 +9750,17 @@ fn waitBackgroundJob(io: std.Io, job: *BackgroundJob) !ExitStatus {
     if (job.state != .done) {
         const term = try job.child.wait(io);
         job.status = exitStatusFromTerm(term);
+        job.stop_signal = null;
+        job.termination_signal = null;
         job.state = switch (term) {
-            .stopped => .stopped,
+            .stopped => |signal| blk: {
+                job.stop_signal = signalStatusNumber(signal);
+                break :blk .stopped;
+            },
+            .signal => |signal| blk: {
+                job.termination_signal = signalStatusNumber(signal);
+                break :blk .done;
+            },
             else => .done,
         };
         if (job.state == .stopped) saveJobTerminalModes(job);
@@ -9632,14 +9774,13 @@ fn continueStoppedJob(job: *BackgroundJob) !void {
     const pid: std.posix.pid_t = if (job.pgrp) |pgrp| @intCast(-pgrp) else @intCast(job.pid);
     try std.posix.kill(pid, .CONT);
     job.state = .running;
+    job.stop_signal = null;
     job.notified_state = null;
 }
 
 fn saveJobTerminalModes(job: *BackgroundJob) void {
-    job.saved_termios = std.posix.tcgetattr(std.Io.File.stdin().handle) catch |err| switch (err) {
-        error.NotATerminal => null,
-        else => null,
-    };
+    var termios: std.posix.termios = undefined;
+    job.saved_termios = if (std.c.tcgetattr(std.Io.File.stdin().handle, &termios) == 0) termios else null;
 }
 
 fn restoreJobTerminalModes(job: *BackgroundJob) void {
@@ -13084,6 +13225,86 @@ test "executor resolves POSIX job id string forms" {
     try std.testing.expectEqual(@as(?*BackgroundJob, null), executor.findBackgroundJobBySpec("%?alpha"));
 }
 
+test "jobs markers prefer stopped jobs" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 1,
+        .pid = 999_991,
+        .command = try std.testing.allocator.dupe(u8, "first stopped"),
+        .child = undefined,
+        .state = .stopped,
+    });
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 2,
+        .pid = 999_992,
+        .command = try std.testing.allocator.dupe(u8, "second stopped"),
+        .child = undefined,
+        .state = .stopped,
+    });
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 3,
+        .pid = 999_993,
+        .command = try std.testing.allocator.dupe(u8, "running"),
+        .child = undefined,
+    });
+    executor.current_job_id = 3;
+    executor.previous_job_id = 2;
+
+    executor.refreshJobMarkers();
+    try std.testing.expectEqual(@as(?usize, 2), executor.current_job_id);
+    try std.testing.expectEqual(@as(?usize, 1), executor.previous_job_id);
+}
+
+test "jobs formatter uses POSIX spacing and state strings" {
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try appendJobLine(std.testing.allocator, &output, .{
+        .id = 1,
+        .pid = 999_991,
+        .command = "zero",
+        .child = undefined,
+        .state = .done,
+        .status = 0,
+    }, '+', .normal);
+    try appendJobLine(std.testing.allocator, &output, .{
+        .id = 2,
+        .pid = 999_992,
+        .command = "nonzero",
+        .child = undefined,
+        .state = .done,
+        .status = 7,
+    }, '-', .long);
+    try appendJobLine(std.testing.allocator, &output, .{
+        .id = 3,
+        .pid = 999_993,
+        .command = "stopped",
+        .child = undefined,
+        .state = .stopped,
+        .status = 128 + signalStatusNumber(std.posix.SIG.STOP),
+        .stop_signal = signalStatusNumber(std.posix.SIG.STOP),
+    }, ' ', .normal);
+    try appendJobLine(std.testing.allocator, &output, .{
+        .id = 4,
+        .pid = 999_994,
+        .command = "killed",
+        .child = undefined,
+        .state = .done,
+        .status = 128 + signalStatusNumber(std.posix.SIG.KILL),
+        .termination_signal = signalStatusNumber(std.posix.SIG.KILL),
+    }, ' ', .normal);
+
+    try std.testing.expectEqualStrings(
+        "[1] + Done zero\n" ++
+            "[2] - 999992 Done(7) nonzero\n" ++
+            "[3]   Stopped (SIGSTOP) stopped\n" ++
+            "[4]   Terminated(SIGKILL) killed\n",
+        output.items,
+    );
+}
+
 test "executor removes completed foreground jobs from the job table" {
     var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sh -c 'exit 7' & fg; echo fg=$?; jobs; wait %1; echo wait=$?");
     defer lowered.parsed.deinit();
@@ -13115,9 +13336,42 @@ test "executor filters and formats jobs builtin output" {
     const first_newline = std.mem.indexOfScalar(u8, result.stdout, '\n') orelse return error.TestUnexpectedResult;
     try std.testing.expect(first_newline > 0);
     for (result.stdout[0..first_newline]) |byte| try std.testing.expect(std.ascii.isDigit(byte));
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + ") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, " Running /bin/sleep 1\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ Done(0) /bin/sleep 1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Done /bin/sleep 1\n") != null);
+}
+
+test "jobs removes completed jobs after reporting termination status" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'exit 0' & wait $!; jobs; jobs %1; echo wait=$?; /bin/sh -c 'exit 0' & wait $!; jobs -p %2; jobs %2");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Done /bin/sh -c exit 0\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "wait=127\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[2] + Done /bin/sh -c exit 0\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "jobs: unknown job\n") != null);
+    try std.testing.expectEqual(@as(usize, 0), executor.background_jobs.items.len);
+}
+
+test "jobs sees an empty table in subshell and command substitution environments" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 1 & (jobs); printf 'cmdsub=[%s]\n' \"$(jobs)\"; jobs; wait $!");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("cmdsub=[]\n[1] + Running /bin/sleep 1\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor reports tracked background jobs" {
@@ -13131,8 +13385,8 @@ test "executor reports tracked background jobs" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ Running /bin/sleep 1\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1]+ Done(0) /bin/sleep 1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Running /bin/sleep 1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "[1] + Done /bin/sleep 1\n") != null);
 }
 
 test "executor drains interactive stopped and done job notifications once" {

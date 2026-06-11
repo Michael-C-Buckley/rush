@@ -353,7 +353,7 @@ Implemented or partially implemented:
 - `$!` and `wait pid` for tracked background commands, including brace groups, subshells, loops, and pipelines started asynchronously.
 - Asynchronous commands use `/dev/null` as default stdin when job control is disabled, without consuming the invoking shell's stdin.
 - Forked asynchronous compound jobs inherit shell option state, reset caught traps for the subshell environment, keep nested subshell async jobs out of the parent job table, and report redirection diagnostics while remaining waitable.
-- Visible job table through `jobs`, including `-l`, `-p`, and numeric/% job operands.
+- Visible job table through `jobs`, including POSIX-spaced normal and `-l` output, `-p`, Running/Done/Done(code)/Stopped signal state strings, numeric/% job operands, empty subshell and command-substitution tables, and removal of completed jobs after their termination status is reported.
 - Monitor-enabled `fg` waits for current or explicit tracked jobs, returns the foreground job status, writes the command line, and removes completed foreground jobs from the waitable job table.
 - Monitor-enabled `bg` reports current, explicit, and multiple tracked jobs with the POSIX `[%d] %s` format.
 - Foreground process group handling for inherited-stdio external-only pipelines.
@@ -366,7 +366,6 @@ Implemented or partially implemented:
 ### Partial / gaps
 
 - Signal handling for pipelines and asynchronous lists remains conservative.
-- Direct external async redirections still need one ordered fd-dup edge: duplicating fd 0 after the implicit `/dev/null` async stdin assignment is tracked in #458.
 
 ### Missing / gaps
 

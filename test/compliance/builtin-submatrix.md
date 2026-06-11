@@ -60,7 +60,7 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
-| `jobs` | `builtin-jobs`; `job-stopped-state` | visible table, `-l`, `-p`, numeric, `%`, `%+`, `%%`, `%-`, prefix, and substring job operands; current/previous markers; nonblocking stopped/done status refresh and notifications | completed-job cleanup remains under the baseline `builtin-jobs` row |
+| `jobs` | `builtin-jobs`; `job-stopped-state` | POSIX-spaced visible table, `-l`, `-p`, numeric, `%`, `%+`, `%%`, `%-`, prefix, and substring job operands; current/previous markers; nonblocking stopped/done status refresh; notifications; empty subshell and command-substitution tables; completed-job cleanup after reported termination status | remaining signal edge cases are tracked outside the supported `jobs` row |
 | `fg` | `job-fg-bg`; `job-stopped-state` | monitor-enabled current, previous, numeric, prefix, and substring tracked jobs wait, propagate status, get terminal handoff when a saved process group exists, send stopped jobs `SIGCONT`, restore stopped-job terminal modes, and remove completed foreground jobs from the waitable table | remaining signal edge cases are tracked outside the supported `fg`/`bg` row |
 | `bg` | `job-fg-bg`; `job-stopped-state` | monitor-enabled current, previous, numeric, prefix, substring, and multiple tracked jobs report with POSIX `[%d] %s` output; stopped jobs get `SIGCONT`; repeated stopped notifications can be reported after a continue; disabled job control reports an error | remaining signal edge cases are tracked outside the supported `fg`/`bg` row |
 
