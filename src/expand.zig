@@ -285,7 +285,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                     .value_span = .init(value_start, index),
                 });
             },
-            '$' => if ((try arithmeticPart(allocator, raw, index)) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse (try parameterPart(allocator, raw, index))) |part| {
+            '$' => if (try substitutionPart(allocator, raw, index)) |part| {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 try parts.append(allocator, part);
                 index = part.span.end;
@@ -293,7 +293,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                 if (unquoted_start == null) unquoted_start = index;
                 index += 1;
             },
-            '`' => if (backquoteCommandSubstitutionPart(raw, index)) |part| {
+            '`' => if (try substitutionPart(allocator, raw, index)) |part| {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 try parts.append(allocator, part);
                 index = part.span.end;
@@ -329,47 +329,18 @@ fn flushUnquoted(allocator: std.mem.Allocator, raw: []const u8, parts: *std.Arra
     start.* = null;
 }
 
-fn arithmeticPart(allocator: std.mem.Allocator, raw: []const u8, dollar: usize) std.mem.Allocator.Error!?WordPart {
-    if (dollar + 2 >= raw.len or raw[dollar] != '$' or raw[dollar + 1] != '(' or raw[dollar + 2] != '(') return null;
-    const value_start = dollar + 3;
-    const end = (try parser.arithmeticExpansionEnd(allocator, raw, raw.len, dollar)) orelse return null;
-    return .{
-        .kind = .arithmetic,
-        .span = .init(dollar, end),
-        .value_span = .init(value_start, end - 2),
-    };
-}
-
-fn backquoteCommandSubstitutionPart(raw: []const u8, start: usize) ?WordPart {
-    if (raw[start] != '`') return null;
-    var index = start + 1;
-    while (index < raw.len) : (index += 1) {
-        if (raw[index] == '\\' and index + 1 < raw.len) {
-            index += 1;
-            continue;
-        }
-        if (raw[index] == '`') {
-            return .{
-                .kind = .command_substitution,
-                .span = .init(start, index + 1),
-                .value_span = .init(start + 1, index),
-            };
-        }
-    }
-    return null;
-}
-
-fn commandSubstitutionPart(allocator: std.mem.Allocator, raw: []const u8, dollar: usize) !?WordPart {
-    if (dollar + 1 >= raw.len or raw[dollar] != '$' or raw[dollar + 1] != '(') return null;
-    // Arithmetic expansion is handled before this function.
-    if (dollar + 2 < raw.len and raw[dollar + 2] == '(') return null;
-
-    const value_start = dollar + 2;
-    const end = (try parser.commandSubstitutionEnd(allocator, raw, raw.len, dollar)) orelse return null;
-    return .{
-        .kind = .command_substitution,
-        .span = .init(dollar, end),
-        .value_span = .init(value_start, end - 1),
+fn substitutionPart(allocator: std.mem.Allocator, raw: []const u8, start: usize) !?WordPart {
+    return switch (try parser.shellSubstitutionAt(allocator, raw, raw.len, start)) {
+        .none, .incomplete => null,
+        .complete => |substitution| .{
+            .kind = switch (substitution.kind) {
+                .parameter => .parameter,
+                .arithmetic => .arithmetic,
+                .command_substitution => .command_substitution,
+            },
+            .span = .init(substitution.span.start, substitution.span.end),
+            .value_span = .init(substitution.value_span.start, substitution.value_span.end),
+        },
     };
 }
 
@@ -384,51 +355,14 @@ fn doubleQuotedSpanEnd(allocator: std.mem.Allocator, raw: []const u8, start: usi
         switch (raw[index]) {
             '"' => return index + 1,
             '\\' => index += if (index + 1 < raw.len) 2 else 1,
-            '$' => {
-                const part = (try arithmeticPart(allocator, raw, index)) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse (try parameterPart(allocator, raw, index));
-                index = if (part) |p| p.span.end else index + 1;
-            },
-            '`' => {
-                const part = backquoteCommandSubstitutionPart(raw, index);
+            '$', '`' => {
+                const part = try substitutionPart(allocator, raw, index);
                 index = if (part) |p| p.span.end else index + 1;
             },
             else => index += 1,
         }
     }
     return null;
-}
-
-fn parameterPart(allocator: std.mem.Allocator, raw: []const u8, dollar: usize) !?WordPart {
-    std.debug.assert(raw[dollar] == '$');
-    const next = dollar + 1;
-    if (next >= raw.len) return null;
-
-    if (raw[next] == '{') {
-        const name_start = next + 1;
-        const end = (try parser.parameterExpansionEnd(allocator, raw, raw.len, dollar)) orelse return null;
-        return .{
-            .kind = .parameter,
-            .span = .init(dollar, end),
-            .value_span = .init(name_start, end - 1),
-        };
-    }
-
-    if (isSpecialParameterChar(raw[next])) {
-        return .{
-            .kind = .parameter,
-            .span = .init(dollar, next + 1),
-            .value_span = .init(next, next + 1),
-        };
-    }
-
-    if (!isNameStart(raw[next])) return null;
-    var name_end = next + 1;
-    while (name_end < raw.len and isNameContinue(raw[name_end])) : (name_end += 1) {}
-    return .{
-        .kind = .parameter,
-        .span = .init(dollar, name_end),
-        .value_span = .init(next, name_end),
-    };
 }
 
 pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: Options) anyerror![]const u8 {
@@ -485,11 +419,7 @@ fn expandArithmeticExpression(allocator: std.mem.Allocator, expression: []const 
             continue;
         }
 
-        const part = switch (expression[index]) {
-            '$' => (try arithmeticPart(allocator, expression, index)) orelse (try commandSubstitutionPart(allocator, expression, index)) orelse (try parameterPart(allocator, expression, index)),
-            '`' => backquoteCommandSubstitutionPart(expression, index),
-            else => null,
-        } orelse {
+        const part = (if (expression[index] == '$' or expression[index] == '`') try substitutionPart(allocator, expression, index) else null) orelse {
             try output.append(allocator, expression[index]);
             index += 1;
             continue;
@@ -1323,11 +1253,7 @@ fn renderDoubleQuotedContent(allocator: std.mem.Allocator, text: []const u8, opt
             continue;
         }
 
-        const part = switch (text[index]) {
-            '$' => (try arithmeticPart(allocator, text, index)) orelse (try commandSubstitutionPart(allocator, text, index)) orelse (try parameterPart(allocator, text, index)),
-            '`' => backquoteCommandSubstitutionPart(text, index),
-            else => null,
-        } orelse {
+        const part = (if (text[index] == '$' or text[index] == '`') try substitutionPart(allocator, text, index) else null) orelse {
             index += 1;
             continue;
         };
@@ -1856,11 +1782,7 @@ pub fn expandHereDocBody(allocator: std.mem.Allocator, text: []const u8, options
             }
             continue;
         }
-        const part = switch (c) {
-            '$' => (try arithmeticPart(allocator, text, index)) orelse (try commandSubstitutionPart(allocator, text, index)) orelse (try parameterPart(allocator, text, index)),
-            '`' => backquoteCommandSubstitutionPart(text, index),
-            else => null,
-        } orelse {
+        const part = (if (c == '$' or c == '`') try substitutionPart(allocator, text, index) else null) orelse {
             try output.append(allocator, c);
             index += 1;
             continue;

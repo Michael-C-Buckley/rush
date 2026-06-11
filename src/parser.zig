@@ -805,6 +805,99 @@ pub fn commandSubstitutionEnd(allocator: std.mem.Allocator, source: []const u8, 
     return scanner.scan();
 }
 
+pub const ShellSubstitutionKind = enum {
+    parameter,
+    arithmetic,
+    command_substitution,
+};
+
+pub const ShellSubstitution = struct {
+    kind: ShellSubstitutionKind,
+    span: Span,
+    value_span: Span,
+};
+
+pub const ShellSubstitutionScanResult = union(enum) {
+    none,
+    complete: ShellSubstitution,
+    incomplete: ShellSubstitutionKind,
+};
+
+pub fn shellSubstitutionAt(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!ShellSubstitutionScanResult {
+    std.debug.assert(limit <= source.len);
+    if (start >= limit) return .none;
+
+    if (source[start] == '`') {
+        const end = backquoteCommandSubstitutionEnd(source, limit, start) orelse return .{ .incomplete = .command_substitution };
+        return .{ .complete = .{
+            .kind = .command_substitution,
+            .span = .init(start, end),
+            .value_span = .init(start + 1, end - 1),
+        } };
+    }
+
+    if (source[start] != '$' or start + 1 >= limit) return .none;
+    const next = start + 1;
+    switch (source[next]) {
+        '{' => {
+            const end = (try parameterExpansionEnd(allocator, source, limit, start)) orelse return .{ .incomplete = .parameter };
+            return .{ .complete = .{
+                .kind = .parameter,
+                .span = .init(start, end),
+                .value_span = .init(start + 2, end - 1),
+            } };
+        },
+        '(' => {
+            if (next + 1 < limit and source[next + 1] == '(') {
+                const end = (try arithmeticExpansionEnd(allocator, source, limit, start)) orelse return .{ .incomplete = .arithmetic };
+                return .{ .complete = .{
+                    .kind = .arithmetic,
+                    .span = .init(start, end),
+                    .value_span = .init(start + 3, end - 2),
+                } };
+            }
+            const end = (try commandSubstitutionEnd(allocator, source, limit, start)) orelse return .{ .incomplete = .command_substitution };
+            return .{ .complete = .{
+                .kind = .command_substitution,
+                .span = .init(start, end),
+                .value_span = .init(start + 2, end - 1),
+            } };
+        },
+        else => {
+            if (isSpecialParameterChar(source[next])) {
+                return .{ .complete = .{
+                    .kind = .parameter,
+                    .span = .init(start, next + 1),
+                    .value_span = .init(next, next + 1),
+                } };
+            }
+            if (!isNameStart(source[next])) return .none;
+            var end = next + 1;
+            while (end < limit and isNameContinue(source[end])) : (end += 1) {}
+            return .{ .complete = .{
+                .kind = .parameter,
+                .span = .init(start, end),
+                .value_span = .init(next, end),
+            } };
+        },
+    }
+}
+
+fn backquoteCommandSubstitutionEnd(source: []const u8, limit: usize, start: usize) ?usize {
+    std.debug.assert(start < limit);
+    std.debug.assert(source[start] == '`');
+
+    var index = start + 1;
+    while (index < limit) : (index += 1) {
+        if (source[index] == '\\' and index + 1 < limit) {
+            index += 1;
+            continue;
+        }
+        if (source[index] == '`') return index + 1;
+    }
+    return null;
+}
+
 pub fn parameterExpansionEnd(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!?usize {
     std.debug.assert(start + 1 < limit);
     std.debug.assert(source[start] == '$');
@@ -889,19 +982,12 @@ const ArithmeticExpansionScanner = struct {
             self.index += 1;
             return;
         }
-        if (self.source[self.index + 1] == '{') {
-            self.index = (try parameterExpansionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
-            return;
+
+        switch (try shellSubstitutionAt(self.allocator, self.source, self.limit, self.index)) {
+            .complete => |substitution| self.index = substitution.span.end,
+            .incomplete => self.index = self.limit,
+            .none => self.index += 1,
         }
-        if (self.source[self.index + 1] == '(' and self.index + 2 < self.limit and self.source[self.index + 2] == '(') {
-            self.index = (try arithmeticExpansionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
-            return;
-        }
-        if (self.source[self.index + 1] == '(') {
-            self.index = (try commandSubstitutionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
-            return;
-        }
-        self.index += 1;
     }
 
     fn skipBackquoted(self: *ArithmeticExpansionScanner) void {
@@ -933,7 +1019,6 @@ const ParameterExpansionScanner = struct {
     source: []const u8,
     limit: usize,
     index: usize,
-    brace_depth: usize = 1,
 
     fn scan(self: *ParameterExpansionScanner) std.mem.Allocator.Error!?usize {
         while (self.index < self.limit) {
@@ -944,9 +1029,8 @@ const ParameterExpansionScanner = struct {
                 '`' => self.skipBackquoted(),
                 '$' => try self.skipDollarExpansion(),
                 '}' => {
-                    self.brace_depth -= 1;
                     self.index += 1;
-                    if (self.brace_depth == 0) return self.index;
+                    return self.index;
                 },
                 else => self.index += 1,
             }
@@ -959,20 +1043,12 @@ const ParameterExpansionScanner = struct {
             self.index += 1;
             return;
         }
-        if (self.source[self.index + 1] == '{') {
-            self.brace_depth += 1;
-            self.index += 2;
-            return;
+
+        switch (try shellSubstitutionAt(self.allocator, self.source, self.limit, self.index)) {
+            .complete => |substitution| self.index = substitution.span.end,
+            .incomplete => self.index = self.limit,
+            .none => self.index += 1,
         }
-        if (self.source[self.index + 1] == '(' and self.index + 2 < self.limit and self.source[self.index + 2] == '(') {
-            try self.skipArithmeticExpansion();
-            return;
-        }
-        if (self.source[self.index + 1] == '(') {
-            self.index = (try commandSubstitutionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
-            return;
-        }
-        self.index += 1;
     }
 
     fn skipDoubleQuoted(self: *ParameterExpansionScanner) std.mem.Allocator.Error!void {
@@ -1001,10 +1077,6 @@ const ParameterExpansionScanner = struct {
                 else => self.index += 1,
             }
         }
-    }
-
-    fn skipArithmeticExpansion(self: *ParameterExpansionScanner) std.mem.Allocator.Error!void {
-        self.index = (try arithmeticExpansionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
     }
 
     fn skipBackslash(self: *ParameterExpansionScanner) void {
@@ -1199,28 +1271,13 @@ const CommandSubstitutionScanner = struct {
 
     fn skipDollarExpansion(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!bool {
         if (self.index + 1 >= self.limit or self.source[self.index] != '$') return false;
-        if (self.source[self.index + 1] == '{') {
-            try self.skipParameterExpansion();
-            return true;
+
+        switch (try shellSubstitutionAt(self.allocator, self.source, self.limit, self.index)) {
+            .complete => |substitution| self.index = substitution.span.end,
+            .incomplete => self.index = self.limit,
+            .none => self.index += 1,
         }
-        if (self.source[self.index + 1] == '(' and self.index + 2 < self.limit and self.source[self.index + 2] == '(') {
-            try self.skipArithmeticExpansion();
-            return true;
-        }
-        if (self.source[self.index + 1] == '(') {
-            self.index = (try commandSubstitutionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
-            return true;
-        }
-        self.index += 1;
         return true;
-    }
-
-    fn skipParameterExpansion(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
-        self.index = (try parameterExpansionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
-    }
-
-    fn skipArithmeticExpansion(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
-        self.index = (try arithmeticExpansionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
     }
 
     fn skipDoubleQuoted(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
@@ -2485,6 +2542,10 @@ fn isName(word: []const u8) bool {
     return true;
 }
 
+fn isSpecialParameterChar(c: u8) bool {
+    return std.ascii.isDigit(c) or c == '#' or c == '@' or c == '*' or c == '?' or c == '$' or c == '!' or c == '-';
+}
+
 fn isNameStart(c: u8) bool {
     return std.ascii.isAlphabetic(c) or c == '_';
 }
@@ -3489,6 +3550,38 @@ test "parser scans case pattern parens inside command substitution" {
     var optional = try parse(std.testing.allocator, "echo \"$(case x in (x) echo optional ;; esac)\"", .{});
     defer optional.deinit();
     try std.testing.expectEqual(@as(usize, 0), optional.diagnostics.len);
+}
+
+test "shared shell substitution scanner recognizes recursive spans" {
+    const parameter = "${v:-$(printf '}'):$((1 + ${n:-2}))}";
+    const parameter_scan = try shellSubstitutionAt(std.testing.allocator, parameter, parameter.len, 0);
+    const parameter_substitution = switch (parameter_scan) {
+        .complete => |substitution| substitution,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqual(ShellSubstitutionKind.parameter, parameter_substitution.kind);
+    try expectSpan(.init(0, parameter.len), parameter_substitution.span);
+    try std.testing.expectEqualStrings("v:-$(printf '}'):$((1 + ${n:-2}))", parameter_substitution.value_span.slice(parameter));
+
+    const arithmetic = "$((1 + $(printf 2)))";
+    const arithmetic_scan = try shellSubstitutionAt(std.testing.allocator, arithmetic, arithmetic.len, 0);
+    const arithmetic_substitution = switch (arithmetic_scan) {
+        .complete => |substitution| substitution,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqual(ShellSubstitutionKind.arithmetic, arithmetic_substitution.kind);
+    try expectSpan(.init(0, arithmetic.len), arithmetic_substitution.span);
+    try std.testing.expectEqualStrings("1 + $(printf 2)", arithmetic_substitution.value_span.slice(arithmetic));
+
+    const backquote = "`printf \\`literal`";
+    const backquote_scan = try shellSubstitutionAt(std.testing.allocator, backquote, backquote.len, 0);
+    const backquote_substitution = switch (backquote_scan) {
+        .complete => |substitution| substitution,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqual(ShellSubstitutionKind.command_substitution, backquote_substitution.kind);
+    try expectSpan(.init(0, backquote.len), backquote_substitution.span);
+    try std.testing.expectEqualStrings("printf \\`literal", backquote_substitution.value_span.slice(backquote));
 }
 
 test "lexer command substitution handles quoted parens arithmetic and incomplete input" {
