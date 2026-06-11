@@ -260,3 +260,4 @@ v='ab}cd'; printf '<%s>\n' ${v%$(printf '}cd')}; printf '<%s>\n' ${v%"}cd"}; pri
 unset v; set -- ${v:-"a b"}; printf '<%s:%s:%s>\n' "$#" "$1" "${2-unset}"; set -- ${v:-a b}; printf '<%s:%s:%s>\n' "$#" "$1" "${2-unset}"; set -- ${v:-""}; printf '<%s:%s>\n' "$#" "${1-unset}"; touch ab; printf '<%s>\n' ${v:-"*"}; rm -f ab
 unset v x; echo ${v:-$((1 + ${x:-2}))}; x=4; echo $(($x + 1)); echo $((1 + $(printf 2)))
 x=2; printf '<%s>\n' $((1 + $x)); printf '<%s>\n' $((1 + `printf 2`))
+old=$(umask); umask 077; ( umask 022 ); echo parent:$(umask); umask 022; umask 077 | /bin/cat >/dev/null; echo pipeline:$(umask); umask 077; : >umask_file; mkdir umask_dir; ls -ld umask_file umask_dir | sed 's/ .*//'; umask "$old"; rm -rf umask_file umask_dir

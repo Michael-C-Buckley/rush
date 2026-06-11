@@ -252,6 +252,7 @@ builtin-cd-logical-physical	builtin	behavior	cd -L sets logical PWD while cd -P 
 builtin-export-readonly-p	builtin	behavior	export -p and readonly -p list marked variables
 builtin-unset-variable-function	builtin	behavior	unset -v removes variables and unset -f removes functions
 builtin-umask-symbolic-output	builtin	behavior	umask -S prints symbolic permissions for the current mask
+builtin-umask-current-shell	builtin	behavior	umask changes the current shell mask while subshell and pipeline changes do not leak and created file permissions reflect the mask
 builtin-test-file-specials	builtin	behavior	test file type predicates for character devices pipes block devices and sockets
 builtin-test-symlink-predicates	builtin	behavior	test -L and -h recognize symbolic links without breaking followed file predicates
 builtin-test-terminal-predicate	builtin	behavior	test -t reports false for non-terminal stdin in corpus mode
@@ -304,6 +305,7 @@ builtin-exit-status-modulo	builtin	behavior	exit status operands use the low 8 b
 builtin-exit-function	builtin	behavior	exit inside a function exits the shell
 builtin-eval-exit	builtin	behavior	eval executes exit in the current shell
 builtin-umask-symbolic-assignment-clauses	builtin	behavior	umask supports comma-separated symbolic assignment clauses
+builtin-umask-symbolic-chmod-grammar	builtin	behavior	umask symbolic operands support chmod-style multiple actions permission copies and conditional X permission
 builtin-trap-exit-status	builtin	behavior	EXIT trap observes the shell exit status
 quote-double-suppresses-splitting	lexing	behavior	double quotes suppress field splitting after parameter expansion
 redirection-bad-input-fd-duplication	redirection	negative	bad input fd duplication reports a diagnostic and command failure

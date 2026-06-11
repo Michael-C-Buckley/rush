@@ -2533,6 +2533,8 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(self);
         try child.resetCaughtTrapsForSubshell();
+        const saved_umask = readShellUmask();
+        defer restoreShellUmask(saved_umask);
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
         var stdin_file: ?std.Io.File = null;
@@ -3798,7 +3800,13 @@ pub const Executor = struct {
         for (pipeline.command_indexes, 0..) |command_index, index| {
             if (self.shouldSkipForNoexec(options)) break;
             last.deinit();
-            last = try self.executeSimpleCommandWithInput(program.commands[command_index], stdin, options);
+            if (pipeline.command_indexes.len > 1) {
+                const saved_umask = readShellUmask();
+                defer restoreShellUmask(saved_umask);
+                last = try self.executeSimpleCommandWithInput(program.commands[command_index], stdin, options);
+            } else {
+                last = try self.executeSimpleCommandWithInput(program.commands[command_index], stdin, options);
+            }
             statuses[index] = last.status;
             statuses_len = index + 1;
             if (self.shouldSkipForNoexec(options)) break;
@@ -4608,6 +4616,8 @@ pub const Executor = struct {
         const stdin_guard = pushPipelineStageStdin(context.stdin_file);
         defer stdin_guard.restore();
 
+        const saved_umask = readShellUmask();
+        defer restoreShellUmask(saved_umask);
         var result = try context.executor.executeSimpleCommandWithInput(context.command, "", stage_options);
         defer result.deinit();
         context.status = result.status;
@@ -5293,6 +5303,8 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
         try child.resetCaughtTrapsForSubshell();
+        const saved_umask = readShellUmask();
+        defer restoreShellUmask(saved_umask);
         if (substitution_context.executor.remainingScriptStdin()) |stdin| {
             child.script_stdin = stdin;
             child.script_stdin_offset = 0;
@@ -6492,6 +6504,16 @@ fn shellUmask(mask: u16) u16 {
         return @intCast(std.os.linux.syscall1(.umask, mask));
     }
     return @intCast(std.c.umask(mask));
+}
+
+fn readShellUmask() u16 {
+    const mask = shellUmask(0);
+    _ = shellUmask(mask);
+    return mask;
+}
+
+fn restoreShellUmask(mask: u16) void {
+    _ = shellUmask(mask);
 }
 
 const FdRedirectionGuard = struct {
@@ -9788,16 +9810,25 @@ fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     }
     const operand = command.argv[arg_index].text;
     if (!option_terminated and std.mem.startsWith(u8, operand, "-")) return errorResult(self.allocator, 2, "umask", "unsupported option");
-    const new_mask = std.fmt.parseInt(u16, operand, 8) catch blk: {
+    const new_mask = parseOctalUmask(operand) orelse blk: {
         break :blk parseSymbolicUmask(operand, old) orelse return errorResult(self.allocator, 2, "umask", "invalid mask");
     };
     _ = shellUmask(new_mask);
     return emptyResult(self.allocator, 0);
 }
 
+fn parseOctalUmask(operand: []const u8) ?u16 {
+    if (operand.len == 0) return null;
+    for (operand) |char| {
+        if (char < '0' or char > '7') return null;
+    }
+    return std.fmt.parseInt(u16, operand, 8) catch null;
+}
+
 fn parseSymbolicUmask(operand: []const u8, current_mask: u32) ?u16 {
     if (operand.len == 0 or std.ascii.isDigit(operand[0])) return null;
-    var mask: u16 = @intCast(current_mask & 0o777);
+    var permissions: u16 = @intCast((~current_mask) & 0o777);
+    const original_permissions = permissions;
     var index: usize = 0;
     while (index < operand.len) {
         var who_bits: u16 = 0;
@@ -9812,28 +9843,34 @@ fn parseSymbolicUmask(operand: []const u8, current_mask: u32) ?u16 {
         }
         if (who_bits == 0) who_bits = 0o777;
         if (index >= operand.len) return null;
-        const op = operand[index];
-        if (op != '+' and op != '-' and op != '=') return null;
-        index += 1;
+        while (index < operand.len and operand[index] != ',') {
+            const op = operand[index];
+            if (op != '+' and op != '-' and op != '=') return null;
+            index += 1;
 
-        var permissions: u16 = 0;
-        while (index < operand.len and operand[index] != ',') : (index += 1) {
-            switch (operand[index]) {
-                'r' => permissions |= 0o444,
-                'w' => permissions |= 0o222,
-                'x' => permissions |= 0o111,
-                else => return null,
+            var action_permissions: u16 = 0;
+            while (index < operand.len and operand[index] != ',' and operand[index] != '+' and operand[index] != '-' and operand[index] != '=') : (index += 1) {
+                switch (operand[index]) {
+                    'r' => action_permissions |= 0o444,
+                    'w' => action_permissions |= 0o222,
+                    'x' => action_permissions |= 0o111,
+                    'X' => {
+                        if (original_permissions & 0o111 != 0) action_permissions |= 0o111;
+                    },
+                    's', 't' => {},
+                    'u' => action_permissions |= copySymbolicPermissions(original_permissions, 0o700),
+                    'g' => action_permissions |= copySymbolicPermissions(original_permissions, 0o070),
+                    'o' => action_permissions |= copySymbolicPermissions(original_permissions, 0o007),
+                    else => return null,
+                }
             }
-        }
-        const affected_permissions = permissions & who_bits;
-        switch (op) {
-            '+' => mask &= ~affected_permissions,
-            '-' => mask |= affected_permissions,
-            '=' => {
-                mask |= who_bits;
-                mask &= ~affected_permissions;
-            },
-            else => unreachable,
+            const affected_permissions = action_permissions & who_bits;
+            switch (op) {
+                '+' => permissions |= affected_permissions,
+                '-' => permissions &= ~affected_permissions,
+                '=' => permissions = (permissions & ~who_bits) | affected_permissions,
+                else => unreachable,
+            }
         }
         if (index < operand.len) {
             if (operand[index] != ',') return null;
@@ -9841,7 +9878,21 @@ fn parseSymbolicUmask(operand: []const u8, current_mask: u32) ?u16 {
             if (index == operand.len) return null;
         }
     }
-    return mask;
+    return @intCast((~permissions) & 0o777);
+}
+
+fn copySymbolicPermissions(permissions: u16, source_bits: u16) u16 {
+    const source: u16 = switch (source_bits) {
+        0o700 => (permissions >> 6) & 0o7,
+        0o070 => (permissions >> 3) & 0o7,
+        0o007 => permissions & 0o7,
+        else => unreachable,
+    };
+    var copied: u16 = 0;
+    if (source & 0o4 != 0) copied |= 0o444;
+    if (source & 0o2 != 0) copied |= 0o222;
+    if (source & 0o1 != 0) copied |= 0o111;
+    return copied;
 }
 
 fn symbolicUmaskResult(allocator: std.mem.Allocator, mask: u32) !CommandResult {
@@ -9862,6 +9913,23 @@ fn appendSymbolicPermissions(allocator: std.mem.Allocator, stdout: *std.ArrayLis
     if (bits & 0o4 != 0) try stdout.append(allocator, 'r');
     if (bits & 0o2 != 0) try stdout.append(allocator, 'w');
     if (bits & 0o1 != 0) try stdout.append(allocator, 'x');
+}
+
+test "umask octal parser rejects non-octal syntax" {
+    try std.testing.expectEqual(@as(?u16, 0o022), parseOctalUmask("022"));
+    try std.testing.expectEqual(@as(?u16, 0o7777), parseOctalUmask("7777"));
+    try std.testing.expectEqual(@as(?u16, null), parseOctalUmask("0_22"));
+    try std.testing.expectEqual(@as(?u16, null), parseOctalUmask("+022"));
+    try std.testing.expectEqual(@as(?u16, null), parseOctalUmask("099"));
+}
+
+test "umask symbolic parser supports POSIX chmod grammar actions" {
+    try std.testing.expectEqual(@as(?u16, 0o033), parseSymbolicUmask("go+r-w", 0o077));
+    try std.testing.expectEqual(@as(?u16, 0o333), parseSymbolicUmask("u=g", 0o033));
+    try std.testing.expectEqual(@as(?u16, 0o066), parseSymbolicUmask("+X", 0o077));
+    try std.testing.expectEqual(@as(?u16, 0o777), parseSymbolicUmask("+X", 0o777));
+    try std.testing.expectEqual(@as(?u16, 0o007), parseSymbolicUmask("u+rwx,g=u,o=g", 0o077));
+    try std.testing.expectEqual(@as(?u16, null), parseSymbolicUmask("u+z", 0o077));
 }
 
 const JobPrintMode = enum { normal, long, pids };
@@ -10544,6 +10612,8 @@ fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         .argv = command.argv[index..],
         .redirections = &.{},
     };
+    const saved_umask = readShellUmask();
+    defer restoreShellUmask(saved_umask);
     return child.executeSimpleCommandWithInput(nested, stdin, options);
 }
 

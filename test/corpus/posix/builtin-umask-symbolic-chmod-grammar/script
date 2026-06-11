@@ -1,0 +1,13 @@
+old=$(umask)
+umask 077
+umask go+r-w
+umask
+umask u=g
+umask
+umask 077
+umask +X
+umask
+umask 077
+umask u+rwx,g=u,o=g
+umask
+umask "$old"
