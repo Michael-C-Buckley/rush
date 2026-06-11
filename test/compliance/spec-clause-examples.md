@@ -14,6 +14,10 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `case-nested-case-body` | `test/corpus/posix` | `grammar-case` | nested case command inside an outer case item body |
 | `case-subject-in-word` | `test/corpus/posix` | `grammar-case` | `in` may be the case subject word before the delimiter `in` |
 | `case-subject-esac-word` | `test/corpus/posix` | `grammar-case` | `esac` may be the case subject word before the delimiter `in` |
+| `grammar-case-character-classes` | `test/corpus/posix` | `grammar-case`, `grammar-case-pattern-list`, `grammar-case-bracket-patterns` | POSIX character classes inside case bracket patterns |
+| `grammar-case-empty-list` | `test/corpus/posix` | `grammar-case` | case command with no case items exits successfully |
+| `expansion-parameter-pattern-character-classes` | `test/corpus/posix` | `expansion-parameter-pattern`, `expansion-parameter-pattern-bracket-expression` | POSIX character classes inside parameter pattern-removal operands |
+| `pathname-character-classes` | `test/corpus/posix` | `expansion-pathname`, `expansion-pathname-bracket-expressions` | POSIX character classes inside pathname bracket patterns |
 | `strict-syntax-stops-execution` | `test/corpus/posix` | `errors-syntax` | strict POSIX syntax diagnostics return status 2 and prevent non-interactive execution before or after the malformed command |
 | `grammar-case-missing-pattern-end` | `test/corpus/posix-negative` | `grammar-case-empty-arms` | malformed case item diagnostic |
 | `grammar-case-missing-in` | `test/corpus/posix-negative` | `grammar-case` | missing `in` diagnostic for malformed case command |

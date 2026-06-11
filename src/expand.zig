@@ -872,8 +872,8 @@ fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Opt
 
 fn appendPatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
     try text.appendSlice(allocator, rendered);
-    for (rendered) |byte| {
-        try special.append(allocator, meta_active and (byte == '*' or byte == '?' or byte == '['));
+    for (rendered) |_| {
+        try special.append(allocator, meta_active);
     }
 }
 
@@ -1770,7 +1770,7 @@ fn globMatchesAt(pattern: []const u8, special: ?[]const bool, pattern_index: usi
         } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
         '?' => if (isGlobSpecial(special, pattern_index)) return text_index < text.len and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1) else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
         '[' => if (isGlobSpecial(special, pattern_index)) {
-            if (matchBracket(pattern, pattern_index, text, text_index)) |matched| {
+            if (matchBracket(pattern, special, pattern_index, text, text_index)) |matched| {
                 return matched.ok and globMatchesAt(pattern, special, matched.next_pattern, text, text_index + 1);
             }
             return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1);
@@ -1781,7 +1781,7 @@ fn globMatchesAt(pattern: []const u8, special: ?[]const bool, pattern_index: usi
 
 const BracketMatch = struct { ok: bool, next_pattern: usize };
 
-fn matchBracket(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) ?BracketMatch {
+fn matchBracket(pattern: []const u8, special: ?[]const bool, pattern_index: usize, text: []const u8, text_index: usize) ?BracketMatch {
     if (text_index >= text.len) return .{ .ok = false, .next_pattern = pattern_index + 1 };
     var index = pattern_index + 1;
     if (index >= pattern.len) return null;
@@ -1792,12 +1792,17 @@ fn matchBracket(pattern: []const u8, pattern_index: usize, text: []const u8, tex
     var saw_end = false;
     var first_expression = true;
     while (index < pattern.len) : (index += 1) {
-        if (pattern[index] == ']' and !first_expression) {
+        if (pattern[index] == ']' and !first_expression and isGlobSpecial(special, index)) {
             saw_end = true;
             break;
         }
         first_expression = false;
-        if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
+        if (matchBracketCharacterClass(pattern, special, index, text[text_index])) |class| {
+            if (class.ok) matched = true;
+            index = class.end_index;
+            continue;
+        }
+        if (index + 2 < pattern.len and pattern[index + 1] == '-' and isGlobSpecial(special, index + 1) and pattern[index + 2] != ']') {
             const start = pattern[index];
             const end = pattern[index + 2];
             if (text[text_index] >= start and text[text_index] <= end) matched = true;
@@ -1808,6 +1813,48 @@ fn matchBracket(pattern: []const u8, pattern_index: usize, text: []const u8, tex
     }
     if (!saw_end) return null;
     return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1 };
+}
+
+const BracketCharacterClassMatch = struct { ok: bool, end_index: usize };
+
+fn matchBracketCharacterClass(pattern: []const u8, special: ?[]const bool, index: usize, text: u8) ?BracketCharacterClassMatch {
+    if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
+
+    const name_start = index + 2;
+    var name_end = name_start;
+    while (name_end + 1 < pattern.len) : (name_end += 1) {
+        if (pattern[name_end] == ':' and pattern[name_end + 1] == ']') {
+            if (!globPatternBytesAreSpecial(special, index, name_end + 2)) return null;
+            const class_name = pattern[name_start..name_end];
+            const ok = bracketCharacterClassMatches(class_name, text) orelse return null;
+            return .{ .ok = ok, .end_index = name_end + 1 };
+        }
+    }
+    return null;
+}
+
+fn globPatternBytesAreSpecial(special: ?[]const bool, start: usize, end: usize) bool {
+    var index = start;
+    while (index < end) : (index += 1) {
+        if (!isGlobSpecial(special, index)) return false;
+    }
+    return true;
+}
+
+fn bracketCharacterClassMatches(class_name: []const u8, text: u8) ?bool {
+    if (std.mem.eql(u8, class_name, "alnum")) return std.ascii.isAlphanumeric(text);
+    if (std.mem.eql(u8, class_name, "alpha")) return std.ascii.isAlphabetic(text);
+    if (std.mem.eql(u8, class_name, "blank")) return text == ' ' or text == '\t';
+    if (std.mem.eql(u8, class_name, "cntrl")) return std.ascii.isControl(text);
+    if (std.mem.eql(u8, class_name, "digit")) return std.ascii.isDigit(text);
+    if (std.mem.eql(u8, class_name, "graph")) return std.ascii.isGraphical(text);
+    if (std.mem.eql(u8, class_name, "lower")) return std.ascii.isLower(text);
+    if (std.mem.eql(u8, class_name, "print")) return std.ascii.isPrint(text);
+    if (std.mem.eql(u8, class_name, "punct")) return std.ascii.isPunctuation(text);
+    if (std.mem.eql(u8, class_name, "space")) return std.ascii.isWhitespace(text);
+    if (std.mem.eql(u8, class_name, "upper")) return std.ascii.isUpper(text);
+    if (std.mem.eql(u8, class_name, "xdigit")) return std.ascii.isHex(text);
+    return null;
 }
 
 pub fn expandTilde(allocator: std.mem.Allocator, raw: []const u8, env: EnvLookup) ![]const u8 {
@@ -2462,6 +2509,14 @@ test "parameter expansion supports pattern removal operators" {
     const expanded = try expandWordScalar(std.testing.allocator, "${PATHLIKE%/*}:${PATHLIKE%%/*}:${PATHLIKE#*/}:${PATHLIKE##*/}", .{ .env = test_env });
     defer std.testing.allocator.free(expanded);
     try std.testing.expectEqualStrings("/usr/local/bin::usr/local/bin/rush:rush", expanded);
+
+    const class = try expandWordScalar(std.testing.allocator, "${PATHLIKE%%[[:digit:]]*}:${PATHLIKE##*[![:lower:]]}", .{ .env = test_env });
+    defer std.testing.allocator.free(class);
+    try std.testing.expectEqualStrings("/usr/local/bin/rush:rush", class);
+
+    const quoted_class = try expandWordScalar(std.testing.allocator, "${USER_NUM#\"[[:digit:]]\"}", .{ .env = test_env });
+    defer std.testing.allocator.free(quoted_class);
+    try std.testing.expectEqualStrings("3", quoted_class);
 }
 
 test "parameter operator word spans skip nested substitutions and quoted braces" {
@@ -2961,6 +3016,29 @@ test "pathname expansion bracket expressions treat leading right bracket as lite
     defer negated.deinit();
     try std.testing.expectEqual(@as(usize, 1), negated.fields.len);
     try std.testing.expectEqualStrings(open, negated.fields[0]);
+}
+
+test "pathname expansion bracket expressions support POSIX character classes" {
+    const upper = "rush-class-A.tmp";
+    const digit = "rush-class-7.tmp";
+    const lower = "rush-class-x.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = upper, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = digit, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = lower, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, upper) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, digit) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, lower) catch {};
+
+    var upper_result = try expandWord(std.testing.allocator, "rush-class-[[:upper:]].tmp", .{ .io = std.testing.io });
+    defer upper_result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), upper_result.fields.len);
+    try std.testing.expectEqualStrings(upper, upper_result.fields[0]);
+
+    var negated_result = try expandWord(std.testing.allocator, "rush-class-[![:digit:]].tmp", .{ .io = std.testing.io });
+    defer negated_result.deinit();
+    try std.testing.expectEqual(@as(usize, 2), negated_result.fields.len);
+    try std.testing.expectEqualStrings(upper, negated_result.fields[0]);
+    try std.testing.expectEqualStrings(lower, negated_result.fields[1]);
 }
 
 test "quoted parameter expansion is not subject to pathname expansion" {

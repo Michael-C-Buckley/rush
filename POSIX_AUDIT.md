@@ -20,22 +20,22 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `404` rows
-- `scripts/check-posix-corpus.sh`: `366` expected-output POSIX cases
+- `scripts/check-posix-corpus.sh`: `370` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `216` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `257` cases, `514` comparisons across dash and bash POSIX mode
+- `scripts/check-system-shell-corpus.sh`: `260` cases, `520` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
 - tracked items: `404`
 - scored POSIX items: `401`
-- supported: `357`
-- baseline: `41`
+- supported: `358`
+- baseline: `40`
 - partial: `2`
 - missing: `1`
 - out of scope: `3`
-- strict supported only: `89.0%`
+- strict supported only: `89.3%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `96.3%`
+- weighted progress: `96.4%`
 
 Recent notable capabilities:
 
@@ -48,7 +48,7 @@ Recent notable capabilities:
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
-- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline with nested parameter/command preprocessing plus representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
+- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline with nested parameter/command preprocessing plus representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Non-POSIX parameter expansion extension forms are excluded from POSIX scoring and tracked separately; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
@@ -116,13 +116,10 @@ Recent notable capabilities:
 - POSIX-style function definitions: `name() { ...; }`.
 - Parser CST includes nested list bodies for key compound command regions.
 - Parser CST includes structured `case_item` nodes for case arms.
+- `case` execution covers POSIX pattern lists, bracket expressions including ASCII POSIX character classes, optional leading parenthesis, empty arms, empty case item lists, final arms without `;;`, nested case bodies, reserved-word subject words, and trailing compound-command redirections.
 
 ### Partial / gaps
 
-- `case` execution supports basic patterns and structured CST arms, but full POSIX case grammar edge cases remain:
-  - multiple pattern separators
-  - empty arms
-  - alternate terminators in future Bash modes
 - `for` supports POSIX word lists, but not Bash-style arithmetic for loops.
 - Function definitions use body source slicing and reparse at call time; semantics work for baseline tests but are not yet a fully lowered function body IR.
 - Async execution has real external-command baseline, forked builtin/compound jobs where IO/fork context is available, and pid/job metadata.
@@ -164,7 +161,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Legacy backquote command substitution baseline.
 - Command substitution inside double quotes, preserving the quoted field.
 - Field splitting honors `IFS`, including empty IFS and non-whitespace delimiters.
-- Pathname expansion using current directory glob support for `*`, `?`, bracket classes.
+- Pathname expansion using current directory glob support for `*`, `?`, ranges, negated bracket expressions, and ASCII POSIX character classes.
 - Quote removal baseline with POSIX double-quote backslash handling for common cases.
 - Here-doc expansion for unquoted delimiters; quoted delimiters suppress expansion.
 - Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, malformed or unsupported braced parameter substitutions, invalid `${parameter:=word}` / `${parameter=word}` assignment attempts to positional or special parameters, invalid arithmetic expansion, and invalid arithmetic variable values. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
@@ -176,7 +173,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 - Expansion order is modeled but still simplified around quote contexts and nested constructs.
 - Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; arithmetic-expression preprocessing now recursively handles nested parameter and command substitutions plus focused quote/backslash edge cases in representative POSIX cases. Full parser/scanner unification for every recursive token context remains larger work.
 - Non-POSIX extension forms are intentionally outside the POSIX claim. Rush should eventually support string-oriented substring `${parameter:offset[:length]}`, replacement `${parameter/pattern/repl}`, case modification `${parameter^}`/`${parameter,}`, and indirect/name-prefix operations `${!name}`/`${!prefix*}` in an extension mode. Bash mode has a minimal indexed-array slice for arithmetic `name[index]=word` assignment subscripts, with unquoted whitespace allowed inside the subscript, and `${name[index]}` expansion subscripts against the array runtime model; broader Bash array semantics such as compound assignment, negative relative indices, whole-array expansion, and array-specific parameter operations remain outside this baseline. Transformation flags such as `${parameter@Q}` are not in Rush's planned extension-mode scope for now; keep them as unsupported negative coverage until a concrete compatibility use case justifies design work. Representative unsupported extension forms reject with bad-substitution diagnostics and are tracked in `extensions-parameter-expansion` instead of counted as POSIX gaps; `${name[index]}` remains on that bad-substitution path outside Bash mode.
-- Pathname expansion lacks full POSIX details such as slash-component behavior and locale/collation details.
+- Pathname expansion remains bytewise; locale-specific collation, equivalence classes, and multi-character collating elements are outside the current model.
 - Tilde expansion does not support `~user`.
 - Unquoted `$@`/`$*` behavior is acceptable for common cases but still needs more spec-derived edge-case coverage.
 
@@ -413,9 +410,8 @@ The detailed backlog lives in Tend and the machine-readable status lives in `tes
 
 ### Batch A: Parser/CST precision
 
-1. `#158` Harden POSIX case grammar edge cases, especially empty arms and pattern-list forms.
-2. `#157` Lower function bodies into structured IR instead of reparsing source slices.
-3. Continue strict diagnostics only where explicitly requested by `--posix-strict` so editor recovery remains useful.
+1. `#157` Lower function bodies into structured IR instead of reparsing source slices.
+2. Continue strict diagnostics only where explicitly requested by `--posix-strict` so editor recovery remains useful.
 
 ### Batch B: Pathname and expansion edge cases
 

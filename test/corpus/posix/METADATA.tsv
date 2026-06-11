@@ -352,8 +352,12 @@ redirection-function-call-input	redirection	behavior	input redirection on a func
 builtin-env-terminator-assignment-command	builtin	behavior	env option terminator before assignment and command
 grammar-case-quoted-pattern-metacharacters	grammar	behavior	case pattern metacharacters are literal when quoted or escaped
 grammar-case-bracket-patterns	grammar	behavior	case bracket pattern expressions
+grammar-case-character-classes	grammar	behavior	case bracket pattern POSIX character classes
+grammar-case-empty-list	grammar	behavior	case command with no case items exits successfully
 expansion-parameter-pattern-quoted-metacharacters	expansion	behavior	parameter pattern removal quote and bracket handling
 expansion-parameter-pattern-large-quoted-metacharacters	expansion	behavior	large parameter pattern removal quoted metacharacters
+expansion-parameter-pattern-character-classes	expansion	behavior	parameter pattern removal POSIX character classes
+pathname-character-classes	expansion	behavior	pathname bracket pattern POSIX character classes
 redirection-compound-if-for-loop	redirection	behavior	if for while until compound command redirections
 redirection-compound-case-output	redirection	behavior	case compound command output redirection
 redirection-case-input-command-substitution	redirection	behavior	case input redirection feeds command substitution stdin

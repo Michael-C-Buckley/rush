@@ -1,0 +1,7 @@
+case A in [[:upper:]]) echo upper ;; *) echo bad-upper ;; esac
+case z in [[:lower:]]) echo lower ;; *) echo bad-lower ;; esac
+case 7 in [[:digit:]]) echo digit ;; *) echo bad-digit ;; esac
+case ' ' in [[:space:]]) echo space ;; *) echo bad-space ;; esac
+case _ in [[:punct:]]) echo punct ;; *) echo bad-punct ;; esac
+case 7 in [![:digit:]]) echo bad-negated ;; *) echo negated-ok ;; esac
+case A in ["[:upper:]"]) echo bad-quoted-class ;; *) echo quoted-class-literal ;; esac

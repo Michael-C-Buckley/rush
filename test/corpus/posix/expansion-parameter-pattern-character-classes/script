@@ -1,0 +1,5 @@
+v=abc123
+echo ${v%%[[:digit:]]*}
+echo ${v##*[![:digit:]]}
+v=A
+echo ${v#["[:upper:]"]}

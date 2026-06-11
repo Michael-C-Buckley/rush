@@ -41,7 +41,7 @@ Manifest rows:
 - `expansion-parameter-error-unset`
 - `expansion-parameter-word-nesting-quote-context` (supported)
 
-Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, nested operator words, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The nested-word corpus covers command substitutions containing right braces, nested braced defaults, arithmetic substitutions used as word operands, assignment/alternate word operands, pattern-removal operands containing quoted right braces or command substitutions, and quoted operator words that suppress field splitting/pathname expansion for their own bytes. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, representative non-POSIX extension rejections such as `${v/a/X}`/`${v^^}`/`${!name}`/`${!prefix*}`/`${v@Q}`, POSIX/default-mode rejection of `${v[0]}`, unterminated parameter expansions whose word contains a command substitution with `}`, invalid assignment attempts to positional/special parameters when `${parameter:=word}` or `${parameter=word}` would need to assign, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage.
+Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal including ASCII POSIX character classes, nested operator words, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The nested-word corpus covers command substitutions containing right braces, nested braced defaults, arithmetic substitutions used as word operands, assignment/alternate word operands, pattern-removal operands containing quoted right braces or command substitutions, and quoted operator words that suppress field splitting/pathname expansion for their own bytes. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, representative non-POSIX extension rejections such as `${v/a/X}`/`${v^^}`/`${!name}`/`${!prefix*}`/`${v@Q}`, POSIX/default-mode rejection of `${v[0]}`, unterminated parameter expansions whose word contains a command substitution with `}`, invalid assignment attempts to positional/special parameters when `${parameter:=word}` or `${parameter=word}` would need to assign, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage.
 
 Non-POSIX extension tracking:
 
@@ -134,7 +134,7 @@ Manifest rows:
 - `expansion-pathname-bracket-expressions`
 - `expansion-pathname-escaped-metacharacters`
 
-Rush has supported pathname expansion coverage for sorted bytewise results, recursive slash-component matching, leading-dot rules, unmatched literals, basic bracket range/negation expressions, and escaped metacharacters remaining literal.
+Rush has supported pathname expansion coverage for sorted bytewise results, recursive slash-component matching, leading-dot rules, unmatched literals, bracket range/negation expressions, ASCII POSIX character classes, and escaped metacharacters remaining literal.
 
 Remaining cases:
 

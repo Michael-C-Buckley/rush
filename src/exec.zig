@@ -11040,8 +11040,8 @@ const CasePattern = struct {
 
 fn appendCasePatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
     try text.appendSlice(allocator, rendered);
-    for (rendered) |byte| {
-        try special.append(allocator, meta_active and (byte == '*' or byte == '?' or byte == '['));
+    for (rendered) |_| {
+        try special.append(allocator, meta_active);
     }
 }
 
@@ -11069,7 +11069,7 @@ fn shellPatternMatchesFrom(pattern: []const u8, special: ?[]const bool, text: []
     }
     if (text_index >= text.len) return false;
     if (pattern[pattern_index] == '[' and isSpecialPatternByte(special, pattern_index)) {
-        if (matchShellBracket(pattern, pattern_index, text[text_index])) |matched| {
+        if (matchShellBracket(pattern, special, pattern_index, text[text_index])) |matched| {
             return matched.ok and shellPatternMatchesFrom(pattern, special, text, matched.next_pattern, text_index + 1);
         }
     }
@@ -11081,7 +11081,7 @@ fn shellPatternMatchesFrom(pattern: []const u8, special: ?[]const bool, text: []
 
 const ShellBracketMatch = struct { ok: bool, next_pattern: usize };
 
-fn matchShellBracket(pattern: []const u8, pattern_index: usize, text: u8) ?ShellBracketMatch {
+fn matchShellBracket(pattern: []const u8, special: ?[]const bool, pattern_index: usize, text: u8) ?ShellBracketMatch {
     var index = pattern_index + 1;
     if (index >= pattern.len) return null;
     const negated = pattern[index] == '!' or pattern[index] == '^';
@@ -11090,12 +11090,18 @@ fn matchShellBracket(pattern: []const u8, pattern_index: usize, text: u8) ?Shell
     var matched = false;
     var first_expression = true;
     while (index < pattern.len) : (index += 1) {
-        if (pattern[index] == ']' and !first_expression) {
+        if (pattern[index] == ']' and !first_expression and isSpecialPatternByte(special, index)) {
             return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1 };
         }
         first_expression = false;
 
-        if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
+        if (matchShellBracketCharacterClass(pattern, special, index, text)) |class| {
+            if (class.ok) matched = true;
+            index = class.end_index;
+            continue;
+        }
+
+        if (index + 2 < pattern.len and pattern[index + 1] == '-' and isSpecialPatternByte(special, index + 1) and pattern[index + 2] != ']') {
             const start = pattern[index];
             const end = pattern[index + 2];
             if (start <= text and text <= end) matched = true;
@@ -11106,6 +11112,48 @@ fn matchShellBracket(pattern: []const u8, pattern_index: usize, text: u8) ?Shell
         if (pattern[index] == text) matched = true;
     }
 
+    return null;
+}
+
+const ShellBracketCharacterClassMatch = struct { ok: bool, end_index: usize };
+
+fn matchShellBracketCharacterClass(pattern: []const u8, special: ?[]const bool, index: usize, text: u8) ?ShellBracketCharacterClassMatch {
+    if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
+
+    const name_start = index + 2;
+    var name_end = name_start;
+    while (name_end + 1 < pattern.len) : (name_end += 1) {
+        if (pattern[name_end] == ':' and pattern[name_end + 1] == ']') {
+            if (!shellPatternBytesAreSpecial(special, index, name_end + 2)) return null;
+            const class_name = pattern[name_start..name_end];
+            const ok = shellCharacterClassMatches(class_name, text) orelse return null;
+            return .{ .ok = ok, .end_index = name_end + 1 };
+        }
+    }
+    return null;
+}
+
+fn shellPatternBytesAreSpecial(special: ?[]const bool, start: usize, end: usize) bool {
+    var index = start;
+    while (index < end) : (index += 1) {
+        if (!isSpecialPatternByte(special, index)) return false;
+    }
+    return true;
+}
+
+fn shellCharacterClassMatches(class_name: []const u8, text: u8) ?bool {
+    if (std.mem.eql(u8, class_name, "alnum")) return std.ascii.isAlphanumeric(text);
+    if (std.mem.eql(u8, class_name, "alpha")) return std.ascii.isAlphabetic(text);
+    if (std.mem.eql(u8, class_name, "blank")) return text == ' ' or text == '\t';
+    if (std.mem.eql(u8, class_name, "cntrl")) return std.ascii.isControl(text);
+    if (std.mem.eql(u8, class_name, "digit")) return std.ascii.isDigit(text);
+    if (std.mem.eql(u8, class_name, "graph")) return std.ascii.isGraphical(text);
+    if (std.mem.eql(u8, class_name, "lower")) return std.ascii.isLower(text);
+    if (std.mem.eql(u8, class_name, "print")) return std.ascii.isPrint(text);
+    if (std.mem.eql(u8, class_name, "punct")) return std.ascii.isPunctuation(text);
+    if (std.mem.eql(u8, class_name, "space")) return std.ascii.isWhitespace(text);
+    if (std.mem.eql(u8, class_name, "upper")) return std.ascii.isUpper(text);
+    if (std.mem.eql(u8, class_name, "xdigit")) return std.ascii.isHex(text);
     return null;
 }
 
@@ -11555,6 +11603,15 @@ test "executor executes POSIX case statements" {
     defer fallback.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), fallback.status);
     try std.testing.expectEqualStrings("one\n", fallback.stdout);
+
+    var class_lowered = try parseAndLower(std.testing.allocator, "case A in [[:upper:]]) echo upper ;; *) echo fallback ;; esac; case 7 in [![:digit:]]) echo bad ;; [[:digit:]]) echo digit ;; esac; case A in [\"[:upper:]\"]) echo bad-quoted ;; *) echo quoted-literal ;; esac");
+    defer class_lowered.parsed.deinit();
+    defer class_lowered.program.deinit();
+
+    var class = try executor.executeProgram(class_lowered.program, .{});
+    defer class.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), class.status);
+    try std.testing.expectEqualStrings("upper\ndigit\nquoted-literal\n", class.stdout);
 }
 
 test "executor executes POSIX for loops" {
