@@ -2213,6 +2213,7 @@ pub const Executor = struct {
     }
 
     pub fn setArrayElement(self: *Executor, name: []const u8, index: usize, value: []const u8) !void {
+        if (self.isReadonly(name)) return error.ReadonlyVariable;
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const result = try self.arrays.getOrPut(self.allocator, owned_name);
@@ -2236,10 +2237,40 @@ pub const Executor = struct {
     }
 
     pub fn unsetArray(self: *Executor, name: []const u8) void {
+        self.removeArray(name);
+    }
+
+    fn cloneArray(self: *Executor, name: []const u8) !?ArrayValue {
+        const array = self.arrays.get(name) orelse return null;
+        var clone: ArrayValue = .{};
+        errdefer clone.deinit(self.allocator);
+        for (array.values.items) |value| {
+            try clone.values.append(self.allocator, try self.allocator.dupe(u8, value));
+        }
+        return clone;
+    }
+
+    fn removeArray(self: *Executor, name: []const u8) void {
         if (self.arrays.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             var value = entry.value;
             value.deinit(self.allocator);
+        }
+    }
+
+    fn restoreArray(self: *Executor, name: []const u8, old_value: ?ArrayValue) void {
+        self.removeArray(name);
+        if (old_value) |old| {
+            var value = old;
+            const owned_name = self.allocator.dupe(u8, name) catch {
+                value.deinit(self.allocator);
+                return;
+            };
+            self.arrays.put(self.allocator, owned_name, value) catch {
+                self.allocator.free(owned_name);
+                value.deinit(self.allocator);
+                return;
+            };
         }
     }
 
@@ -5027,7 +5058,7 @@ pub const Executor = struct {
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
             defer fields.deinit();
             for (fields.fields) |field| {
                 const raw = try self.allocator.dupe(u8, word.raw);
@@ -5104,7 +5135,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
+        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -5113,7 +5144,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -5129,7 +5160,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
 
         for (parts.parts) |part| {
             const rendered = try expand.expandWordScalar(self.allocator, part.source(parts.raw), expansion_options);
@@ -5150,7 +5181,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandAssignmentWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        const text = try expand.expandAssignmentWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -5292,6 +5323,10 @@ pub const Executor = struct {
         return .{ .context = self, .lookupFn = lookupEnv };
     }
 
+    fn arrayLookup(self: *Executor) expand.ArrayLookup {
+        return .{ .context = self, .lookupFn = lookupArray };
+    }
+
     fn setEnvCallback(context: ?*anyopaque, name: []const u8, value: []const u8) !void {
         const self: *Executor = @ptrCast(@alignCast(context.?));
         try self.setEnv(name, value);
@@ -5313,6 +5348,11 @@ pub const Executor = struct {
             return null;
         }
         return self.getEnv(name);
+    }
+
+    fn lookupArray(context: ?*const anyopaque, name: []const u8, index: usize) ?[]const u8 {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        return self.getArrayElement(name, index);
     }
 
     fn freeExpandedCommand(self: *Executor, command: ir.SimpleCommand) void {
@@ -5348,15 +5388,32 @@ pub const Executor = struct {
         old_exported: bool = false,
     };
 
+    const SavedArrayAssignment = struct {
+        name: []const u8,
+        old_value: ?ArrayValue,
+    };
+
     const AssignmentExpansionScope = struct {
         executor: *Executor,
         saved: std.ArrayList(SavedAssignment) = .empty,
+        saved_arrays: std.ArrayList(SavedArrayAssignment) = .empty,
 
         fn init(executor: *Executor) AssignmentExpansionScope {
             return .{ .executor = executor };
         }
 
         fn apply(self: *AssignmentExpansionScope, assignment: ir.WordRef) !void {
+            if (indexedArrayAssignment(assignment.text)) |array_assignment| {
+                var old_value = try self.executor.cloneArray(array_assignment.name);
+                errdefer if (old_value) |*value| value.deinit(self.executor.allocator);
+                const owned_name = try self.executor.allocator.dupe(u8, array_assignment.name);
+                errdefer self.executor.allocator.free(owned_name);
+                try self.saved_arrays.append(self.executor.allocator, .{ .name = owned_name, .old_value = old_value });
+                errdefer _ = self.saved_arrays.pop();
+                try self.executor.setArrayElement(array_assignment.name, array_assignment.index, array_assignment.value);
+                return;
+            }
+
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse return;
             const name = assignment.text[0..equals];
             const old_value = if (self.executor.getEnv(name)) |value| try self.executor.allocator.dupe(u8, value) else null;
@@ -5383,6 +5440,15 @@ pub const Executor = struct {
                 self.executor.allocator.free(entry.name);
             }
             self.saved.deinit(self.executor.allocator);
+
+            var array_index = self.saved_arrays.items.len;
+            while (array_index > 0) {
+                array_index -= 1;
+                const entry = self.saved_arrays.items[array_index];
+                self.executor.restoreArray(entry.name, entry.old_value);
+                self.executor.allocator.free(entry.name);
+            }
+            self.saved_arrays.deinit(self.executor.allocator);
             self.* = undefined;
         }
     };
@@ -5390,6 +5456,7 @@ pub const Executor = struct {
     const AssignmentScope = struct {
         executor: *Executor,
         saved: []SavedAssignment,
+        saved_arrays: []SavedArrayAssignment,
 
         fn restore(self: *AssignmentScope) void {
             var index = self.saved.len;
@@ -5406,36 +5473,82 @@ pub const Executor = struct {
                 self.executor.allocator.free(entry.name);
             }
             self.executor.allocator.free(self.saved);
+
+            var array_index = self.saved_arrays.len;
+            while (array_index > 0) {
+                array_index -= 1;
+                const entry = self.saved_arrays[array_index];
+                self.executor.restoreArray(entry.name, entry.old_value);
+                self.executor.allocator.free(entry.name);
+            }
+            self.executor.allocator.free(self.saved_arrays);
             self.* = undefined;
         }
     };
 
     fn pushTemporaryAssignments(self: *Executor, assignments: []const ir.WordRef) !AssignmentScope {
-        const saved = try self.allocator.alloc(SavedAssignment, assignments.len);
-        var initialized: usize = 0;
+        var saved: std.ArrayList(SavedAssignment) = .empty;
+        var saved_arrays: std.ArrayList(SavedArrayAssignment) = .empty;
         errdefer {
-            for (saved[0..initialized]) |entry| {
+            for (saved.items) |entry| {
                 self.allocator.free(entry.name);
                 if (entry.old_value) |value| self.allocator.free(value);
             }
-            self.allocator.free(saved);
+            saved.deinit(self.allocator);
+            for (saved_arrays.items) |entry| {
+                self.allocator.free(entry.name);
+                if (entry.old_value) |old| {
+                    var value = old;
+                    value.deinit(self.allocator);
+                }
+            }
+            saved_arrays.deinit(self.allocator);
         }
 
         for (assignments) |assignment| {
+            if (indexedArrayAssignment(assignment.text)) |array_assignment| {
+                var old_value = try self.cloneArray(array_assignment.name);
+                errdefer if (old_value) |*value| value.deinit(self.allocator);
+                var owned_name: ?[]u8 = try self.allocator.dupe(u8, array_assignment.name);
+                errdefer if (owned_name) |name| self.allocator.free(name);
+                try saved_arrays.append(self.allocator, .{ .name = owned_name.?, .old_value = old_value });
+                owned_name = null;
+                old_value = null;
+                try self.setArrayElement(array_assignment.name, array_assignment.index, array_assignment.value);
+                continue;
+            }
+
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
             const name = assignment.text[0..equals];
-            const old_value = if (self.getEnv(name)) |value| try self.allocator.dupe(u8, value) else null;
-            saved[initialized] = .{ .name = try self.allocator.dupe(u8, name), .old_value = old_value, .old_exported = self.isExported(name) };
-            initialized += 1;
+            var old_value = if (self.getEnv(name)) |value| try self.allocator.dupe(u8, value) else null;
+            errdefer if (old_value) |value| self.allocator.free(value);
+            var owned_name: ?[]u8 = try self.allocator.dupe(u8, name);
+            errdefer if (owned_name) |owned| self.allocator.free(owned);
+            try saved.append(self.allocator, .{ .name = owned_name.?, .old_value = old_value, .old_exported = self.isExported(name) });
+            owned_name = null;
+            old_value = null;
             try self.setEnv(name, assignment.text[equals + 1 ..]);
             try self.setExported(name);
         }
 
-        return .{ .executor = self, .saved = saved[0..initialized] };
+        const owned_saved = try saved.toOwnedSlice(self.allocator);
+        errdefer {
+            for (owned_saved) |entry| {
+                self.allocator.free(entry.name);
+                if (entry.old_value) |value| self.allocator.free(value);
+            }
+            self.allocator.free(owned_saved);
+        }
+        return .{ .executor = self, .saved = owned_saved, .saved_arrays = try saved_arrays.toOwnedSlice(self.allocator) };
     }
 
     fn applyAssignments(self: *Executor, assignments: []const ir.WordRef) !void {
         for (assignments) |assignment| {
+            if (indexedArrayAssignment(assignment.text)) |array_assignment| {
+                try self.setArrayElement(array_assignment.name, array_assignment.index, array_assignment.value);
+                continue;
+            }
+
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
             const name = assignment.text[0..equals];
             try self.setEnv(name, assignment.text[equals + 1 ..]);
@@ -5451,6 +5564,7 @@ pub const Executor = struct {
             if (self.env.get(entry.key_ptr.*)) |value| try map.put(entry.key_ptr.*, value);
         }
         for (assignments) |assignment| {
+            if (indexedArrayAssignment(assignment.text) != null) continue;
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
             try map.put(assignment.text[0..equals], assignment.text[equals + 1 ..]);
         }
@@ -10458,6 +10572,38 @@ fn envAssignment(text: []const u8) ?EnvAssignment {
     return .{ .name = text[0..equals], .value = text[equals + 1 ..] };
 }
 
+const IndexedArrayAssignment = struct {
+    name: []const u8,
+    index: usize,
+    value: []const u8,
+};
+
+fn indexedArrayAssignment(text: []const u8) ?IndexedArrayAssignment {
+    const equals = std.mem.indexOfScalar(u8, text, '=') orelse return null;
+    if (equals == 0 or !isShellNameStart(text[0])) return null;
+
+    var name_end: usize = 1;
+    while (name_end < equals and isShellNameContinue(text[name_end])) : (name_end += 1) {}
+    if (name_end == equals) return null;
+    if (text[name_end] != '[' or text[equals - 1] != ']') return null;
+
+    const index_text = text[name_end + 1 .. equals - 1];
+    if (index_text.len == 0) return null;
+    for (index_text) |byte| {
+        if (!std.ascii.isDigit(byte)) return null;
+    }
+    const index = std.fmt.parseInt(usize, index_text, 10) catch return null;
+    return .{ .name = text[0..name_end], .index = index, .value = text[equals + 1 ..] };
+}
+
+fn isShellNameStart(byte: u8) bool {
+    return std.ascii.isAlphabetic(byte) or byte == '_';
+}
+
+fn isShellNameContinue(byte: u8) bool {
+    return isShellNameStart(byte) or std.ascii.isDigit(byte);
+}
+
 fn builtinTest(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     const is_bracket = std.mem.eql(u8, command.argv[0].text, "[");
@@ -11691,6 +11837,42 @@ test "executor stores Bash array runtime data" {
 
     executor.unsetArray("arr");
     try std.testing.expect(executor.getArrayElement("arr", 0) == null);
+}
+
+test "executor expands Bash indexed array elements" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\arr[0]=zero
+        \\arr[2]='two words'
+        \\copy=${arr[0]}
+        \\printf '<%s>|<%s>|<%s>|<%s>\n' "${arr[0]}" "${arr[1]}" "${arr[2]}" "$copy"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<zero>|<>|<two words>|<zero>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor keeps indexed array expansion on POSIX bad-substitution path" {
+    var lowered = try parseAndLower(std.testing.allocator, "echo ${arr[0]}; echo after");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setArrayElement("arr", 0, "zero");
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("parameter: bad substitution\n", result.stderr);
 }
 
 test "executor implements test and bracket builtins" {

@@ -28,6 +28,16 @@ pub const EnvSet = struct {
     }
 };
 
+pub const ArrayLookup = struct {
+    context: ?*const anyopaque = null,
+    lookupFn: ?*const fn (?*const anyopaque, []const u8, usize) ?[]const u8 = null,
+
+    pub fn get(self: ArrayLookup, name: []const u8, index: usize) ?[]const u8 {
+        const lookup = self.lookupFn orelse return null;
+        return lookup(self.context, name, index);
+    }
+};
+
 pub const CommandSubstitution = struct {
     context: ?*anyopaque = null,
     runFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8) anyerror![]const u8 = null,
@@ -63,6 +73,7 @@ pub const ArithmeticError = struct {
 pub const Options = struct {
     env: EnvLookup = .{},
     env_set: EnvSet = .{},
+    arrays: ArrayLookup = .{},
     io: ?std.Io = null,
     features: compat.Features = .{},
     command_substitution: CommandSubstitution = .{},
@@ -509,11 +520,16 @@ const ParameterPatternOperation = struct {
     word: []const u8,
 };
 
+const ParameterArrayIndexOperation = struct {
+    index: []const u8,
+};
+
 const ParameterOperation = union(enum) {
     value,
     length,
     word: ParameterWordOperation,
     pattern: ParameterPatternOperation,
+    array_index: ParameterArrayIndexOperation,
 };
 
 const ParameterExpansion = struct {
@@ -531,6 +547,7 @@ const ParameterExpression = struct {
     operator: ParameterOperator = .none,
     word: []const u8 = "",
     colon: bool = false,
+    array_index: ?[]const u8 = null,
 };
 
 const SegmentedText = struct {
@@ -585,8 +602,9 @@ const SegmentedTextBuilder = struct {
 };
 
 fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
-    const parsed = parseParameterExpression(expression);
+    const parsed = parseParameterExpression(expression, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
+    if (parsed.array_index) |index_text| return renderArrayElement(allocator, parsed.name, index_text, options);
 
     const digit_name = isDigitParameterName(parsed.name);
     const value = if (digit_name)
@@ -653,8 +671,13 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
 }
 
 fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror!SegmentedText {
-    const parsed = parseParameterExpression(expression);
+    const parsed = parseParameterExpression(expression, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
+    if (parsed.array_index) |index_text| {
+        const rendered = try renderArrayElement(allocator, parsed.name, index_text, options);
+        defer allocator.free(rendered);
+        return segmentedFromText(allocator, rendered, true, false, false);
+    }
 
     const digit_name = isDigitParameterName(parsed.name);
     const value = if (digit_name)
@@ -688,6 +711,13 @@ fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8
         },
         .invalid => unreachable,
     }
+}
+
+fn renderArrayElement(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
+    const index = std.fmt.parseInt(usize, index_text, 10) catch return invalidParameterExpansion(allocator, options);
+    if (options.arrays.get(name, index)) |value| return allocator.dupe(u8, value);
+    if (options.nounset) return error.NounsetParameter;
+    return allocator.alloc(u8, 0);
 }
 
 fn segmentedFromText(allocator: std.mem.Allocator, text: []const u8, split_enabled: bool, force_field: bool, quoted_glob: bool) !SegmentedText {
@@ -895,8 +925,8 @@ fn parameterHasUsableValue(is_set: bool, is_null: bool, colon: bool) bool {
     return if (colon) is_set and !is_null else is_set;
 }
 
-fn parseParameterExpression(expression: []const u8) ParameterExpression {
-    const syntax = parseParameterExpansionSyntax(expression);
+fn parseParameterExpression(expression: []const u8, features: compat.Features) ParameterExpression {
+    const syntax = parseParameterExpansionSyntax(expression, features);
     const expansion = switch (syntax) {
         .invalid => return .{ .name = "", .operator = .invalid },
         .expansion => |parsed| parsed,
@@ -916,10 +946,14 @@ fn parseParameterExpression(expression: []const u8) ParameterExpression {
             .operator = operation.kind,
             .word = operation.word,
         },
+        .array_index => |operation| .{
+            .name = expansion.target.text,
+            .array_index = operation.index,
+        },
     };
 }
 
-fn parseParameterExpansionSyntax(expression: []const u8) ParameterExpansionSyntax {
+fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Features) ParameterExpansionSyntax {
     if (expression.len == 0) return .invalid;
 
     if (expression.len > 1 and expression[0] == '#') {
@@ -935,6 +969,10 @@ fn parseParameterExpansionSyntax(expression: []const u8) ParameterExpansionSynta
         .target = target,
         .operation = .value,
     } };
+
+    if (features.isBash() and target.kind == .name and expression[name_end] == '[') {
+        return parseBashArrayIndexExpansion(expression, target, name_end);
+    }
 
     var operator_index = name_end;
     var colon = false;
@@ -971,6 +1009,22 @@ fn parseParameterExpansionSyntax(expression: []const u8) ParameterExpansionSynta
     } };
 }
 
+fn parseBashArrayIndexExpansion(expression: []const u8, target: ParameterTarget, name_end: usize) ParameterExpansionSyntax {
+    std.debug.assert(name_end < expression.len);
+    std.debug.assert(expression[name_end] == '[');
+
+    const index_start = name_end + 1;
+    const close = std.mem.findScalar(u8, expression[index_start..], ']') orelse return .invalid;
+    const close_index = index_start + close;
+    if (close_index + 1 != expression.len) return .invalid;
+    const index_text = expression[index_start..close_index];
+    if (!isDecimalIndex(index_text)) return .invalid;
+    return .{ .expansion = .{
+        .target = target,
+        .operation = .{ .array_index = .{ .index = index_text } },
+    } };
+}
+
 fn classifyParameterTarget(text: []const u8) ParameterTarget {
     if (isDigitParameterName(text)) return .{ .kind = .positional, .text = text };
     if (text.len == 1 and isSpecialParameterChar(text[0])) return .{ .kind = .special, .text = text };
@@ -991,6 +1045,14 @@ fn parseParameterNameEnd(expression: []const u8) ?usize {
     var name_end: usize = 1;
     while (name_end < expression.len and isNameContinue(expression[name_end])) : (name_end += 1) {}
     return name_end;
+}
+
+fn isDecimalIndex(text: []const u8) bool {
+    if (text.len == 0) return false;
+    for (text) |byte| {
+        if (!std.ascii.isDigit(byte)) return false;
+    }
+    return true;
 }
 
 const ArithmeticParser = struct {
@@ -2108,7 +2170,11 @@ fn testCommaIfsLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
 const test_comma_ifs_env: EnvLookup = .{ .lookupFn = testCommaIfsLookup };
 
 fn expectParameterSyntax(expression: []const u8) !ParameterExpansion {
-    return switch (parseParameterExpansionSyntax(expression)) {
+    return expectParameterSyntaxWithFeatures(expression, .{});
+}
+
+fn expectParameterSyntaxWithFeatures(expression: []const u8, features: compat.Features) !ParameterExpansion {
+    return switch (parseParameterExpansionSyntax(expression, features)) {
         .expansion => |parsed| parsed,
         .invalid => {
             try std.testing.expect(false);
@@ -2123,7 +2189,7 @@ fn expectParameterTarget(target: ParameterTarget, kind: ParameterTargetKind, tex
 }
 
 fn expectInvalidParameterSyntax(expression: []const u8) !void {
-    switch (parseParameterExpansionSyntax(expression)) {
+    switch (parseParameterExpansionSyntax(expression, .{})) {
         .invalid => {},
         .expansion => try std.testing.expect(false),
     }
@@ -2285,9 +2351,27 @@ test "structured parameter parser rejects malformed POSIX forms" {
         "USER:1",
         "USER^",
         "1abc",
+        "USER[0]",
     };
 
     for (cases) |case| try expectInvalidParameterSyntax(case);
+}
+
+test "structured parameter parser accepts Bash indexed array expansion" {
+    const indexed = try expectParameterSyntaxWithFeatures("arr[12]", compat.Features.bash());
+    try expectParameterTarget(indexed.target, .name, "arr");
+    switch (indexed.operation) {
+        .array_index => |operation| try std.testing.expectEqualStrings("12", operation.index),
+        else => try std.testing.expect(false),
+    }
+
+    const invalid_cases = [_][]const u8{ "arr[]", "arr[-1]", "arr[1]x", "1[0]" };
+    for (invalid_cases) |case| {
+        switch (parseParameterExpansionSyntax(case, compat.Features.bash())) {
+            .invalid => {},
+            .expansion => try std.testing.expect(false),
+        }
+    }
 }
 
 test "parameter assignment expansion rejects non-variable targets when assignment is needed" {

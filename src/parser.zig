@@ -2233,7 +2233,7 @@ const SyntaxParser = struct {
             }
 
             if (self.at(.word)) {
-                const kind: NodeKind = if (!saw_command_word and isAssignmentWord(self.current().lexeme(self.source)))
+                const kind: NodeKind = if (!saw_command_word and isAssignmentWord(self.current().lexeme(self.source), self.features))
                     .assignment_word
                 else if (!saw_command_word) blk: {
                     saw_command_word = true;
@@ -2524,12 +2524,21 @@ fn functionBodyWordContinuesCommandPosition(word: []const u8) bool {
         std.mem.eql(u8, word, "in");
 }
 
-fn isAssignmentWord(word: []const u8) bool {
+fn isAssignmentWord(word: []const u8, features: compat.Features) bool {
     const equals = std.mem.indexOfScalar(u8, word, '=') orelse return false;
     if (equals == 0) return false;
     if (!isNameStart(word[0])) return false;
-    for (word[1..equals]) |c| {
-        if (!isNameContinue(c)) return false;
+    var name_end: usize = 1;
+    while (name_end < equals and isNameContinue(word[name_end])) : (name_end += 1) {}
+    if (name_end == equals) return true;
+
+    if (!features.isBash()) return false;
+    if (word[name_end] != '[') return false;
+    const index_start = name_end + 1;
+    if (index_start >= equals) return false;
+    if (word[equals - 1] != ']') return false;
+    for (word[index_start .. equals - 1]) |c| {
+        if (!std.ascii.isDigit(c)) return false;
     }
     return true;
 }
@@ -2875,6 +2884,39 @@ test "parser classifies assignment words, command word, and arguments" {
             .{ .kind = .command_word, .span = .init(8, 12), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
             .{ .kind = .word, .span = .init(13, 15), .token_start = 4, .token_end = 5, .child_start = 2, .child_end = 3 },
             .{ .kind = .simple_command, .span = .init(0, 15), .token_start = 0, .token_end = 5 },
+        },
+    });
+}
+
+test "parser gates indexed array assignment words behind Bash mode" {
+    try expectParse("arr[0]=zero echo", .{
+        .options = .{ .features = compat.Features.bash() },
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 11) },
+            .{ .kind = .whitespace, .span = .init(11, 12) },
+            .{ .kind = .word, .span = .init(12, 16) },
+            .{ .kind = .eof, .span = .empty(16) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 16) },
+            .{ .kind = .assignment_word, .span = .init(0, 11) },
+            .{ .kind = .command_word, .span = .init(12, 16) },
+            .{ .kind = .simple_command, .span = .init(0, 16) },
+        },
+    });
+
+    try expectParse("arr[0]=zero echo", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 11) },
+            .{ .kind = .whitespace, .span = .init(11, 12) },
+            .{ .kind = .word, .span = .init(12, 16) },
+            .{ .kind = .eof, .span = .empty(16) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 16) },
+            .{ .kind = .command_word, .span = .init(0, 11) },
+            .{ .kind = .word, .span = .init(12, 16) },
+            .{ .kind = .simple_command, .span = .init(0, 16) },
         },
     });
 }
