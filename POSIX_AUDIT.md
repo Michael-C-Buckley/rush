@@ -20,7 +20,7 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `404` rows
-- `scripts/check-posix-corpus.sh`: `365` expected-output POSIX cases
+- `scripts/check-posix-corpus.sh`: `366` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `216` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
 - `scripts/check-system-shell-corpus.sh`: `257` cases, `514` comparisons across dash and bash POSIX mode
 
@@ -28,12 +28,12 @@ Current compliance report snapshot:
 
 - tracked items: `404`
 - scored POSIX items: `401`
-- supported: `356`
-- baseline: `42`
+- supported: `357`
+- baseline: `41`
 - partial: `2`
 - missing: `1`
 - out of scope: `3`
-- strict supported only: `88.8%`
+- strict supported only: `89.0%`
 - practical supported+baseline: `99.3%`
 - weighted progress: `96.3%`
 
@@ -126,7 +126,7 @@ Recent notable capabilities:
 - `for` supports POSIX word lists, but not Bash-style arithmetic for loops.
 - Function definitions use body source slicing and reparse at call time; semantics work for baseline tests but are not yet a fully lowered function body IR.
 - Async execution has real external-command baseline, forked builtin/compound jobs where IO/fork context is available, and pid/job metadata.
-- Strict syntax errors where POSIX requires them are not fully enforced; Rush still favors recovery/incomplete-input behavior for tooling.
+- Strict POSIX syntax-error consequences are covered under `--posix-strict`; the default parser still favors recovery/incomplete-input behavior for tooling.
 
 ## 3. Expansions
 
@@ -400,6 +400,7 @@ Implemented or partially implemented:
 - Interactive expansion failures abort the current command without setting `pending_exit`, allowing the prompt loop to continue.
 - Special builtin expansion, redirection, invalid option/operand, and utility-semantic failures now stop non-interactive execution for the audited POSIX special-builtin set.
 - Negative POSIX corpus covers syntax, expansion, redirection, and builtin diagnostic cases.
+- Strict POSIX mode reports status 2 for covered syntax diagnostics and stops non-interactive execution before earlier or later commands in the submitted script run; default recovery parsing remains intentionally permissive for tooling.
 
 ### Partial / gaps
 
