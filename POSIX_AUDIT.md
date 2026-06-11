@@ -291,7 +291,7 @@ Implemented or partially implemented:
 - `times` deterministic baseline
 - `getopts` baseline
 - `trap` baseline with `EXIT` trap execution
-- `alias` / `unalias` baseline
+- `alias` / `unalias` utility behavior, including POSIX-format listing/query output, reusable value quoting, POSIX alias-name operands, current-shell removal, `unalias -a`, and `unalias --` operands
 
 ### Partial / gaps
 
@@ -305,7 +305,7 @@ Implemented or partially implemented:
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
 - `exec` is not a true process replacement.
 - `trap` has supported real-signal dispatch for the tracked common catchable signals, including ignored-at-entry non-interactive behavior, caught-trap reset in subshells and command substitutions, signal trap status preservation, EXIT trap ordering for signal and `errexit` exits, wait interruption by trapped signals, and prompt editor wake/redraw for process-directed trapped signals.
-- `alias`/`unalias` have baseline parser integration but not full POSIX recursive/timing edge cases.
+- Full POSIX alias substitution token timing remains partial; the builtin `alias`/`unalias` utility row is supported separately from those parser-level timing edge cases.
 
 ## 7. Shell options and modes
 

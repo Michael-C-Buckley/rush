@@ -3029,7 +3029,7 @@ test "repl expands aliases defined on previous input lines" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
-    try std.testing.expectEqualStrings("$ $ alias-ok\n$ alias lsx='echo alias-ok'\n$ $ $ ", result.stdout);
+    try std.testing.expectEqualStrings("$ $ alias-ok\n$ lsx='echo alias-ok'\n$ $ $ ", result.stdout);
     try std.testing.expectEqualStrings("lsx: command not found\n", result.stderr);
 }
 

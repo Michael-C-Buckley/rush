@@ -38,7 +38,9 @@ basic-colon	builtin	behavior	-
 bg-current-job	job_control	job	bg reports the current tracked background job
 brace-group-current-env	grammar	behavior	-
 brace-group-real-fd-redirection	grammar	behavior	-
-builtin-alias-list	builtin	builtin	-
+builtin-alias-list	builtin	builtin	alias lists queried names and all aliases in POSIX name=value format
+builtin-alias-posix-names	builtin	behavior	alias and unalias accept POSIX alias names beyond shell variable names
+builtin-alias-reusable-output	builtin	behavior	alias listing quotes values so they can be reused as alias operands
 builtin-colon-special-assignment	builtin	builtin	-
 builtin-command	builtin	builtin	-
 builtin-command-default-path	builtin	builtin	-

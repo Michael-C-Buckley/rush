@@ -1,1 +1,3 @@
-alias foo='echo hi'
+alpha='echo one'
+alpha='echo one'
+beta='echo two'

@@ -1,2 +1,3 @@
-alias 1BAD=value
+alias bad/name=value
+alias bad/name
 echo after

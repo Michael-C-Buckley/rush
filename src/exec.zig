@@ -9024,6 +9024,14 @@ fn isShellName(name: []const u8) bool {
     return true;
 }
 
+fn isAliasName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    for (name) |byte| {
+        if (!(std.ascii.isAlphabetic(byte) or std.ascii.isDigit(byte) or byte == '!' or byte == '%' or byte == ',' or byte == '-' or byte == '@' or byte == '_')) return false;
+    }
+    return true;
+}
+
 fn unescapeReadLine(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -9338,13 +9346,14 @@ fn builtinAlias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     for (command.argv[1..]) |arg| {
         if (std.mem.indexOfScalar(u8, arg.text, '=')) |equals| {
             const name = arg.text[0..equals];
-            if (!isShellName(name)) return errorResult(self.allocator, 2, "alias", "invalid alias name");
+            if (!isAliasName(name)) return errorResult(self.allocator, 2, "alias", "invalid alias name");
             try self.setAlias(name, arg.text[equals + 1 ..]);
         } else {
+            if (!isAliasName(arg.text)) return errorResult(self.allocator, 2, "alias", "invalid alias name");
             const value = self.aliases.get(arg.text) orelse return errorResult(self.allocator, 1, "alias", "not found");
             const quoted = try singleQuote(self.allocator, value);
             defer self.allocator.free(quoted);
-            try stdout.print(self.allocator, "alias {s}={s}\n", .{ arg.text, quoted });
+            try stdout.print(self.allocator, "{s}={s}\n", .{ arg.text, quoted });
         }
     }
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
@@ -9397,7 +9406,7 @@ fn listAliases(self: *Executor, prefix: ?[]const u8) !CommandResult {
     for (names.items) |name| {
         const quoted = try singleQuote(self.allocator, self.aliases.get(name).?);
         defer self.allocator.free(quoted);
-        try stdout.print(self.allocator, "alias {s}={s}\n", .{ name, quoted });
+        try stdout.print(self.allocator, "{s}={s}\n", .{ name, quoted });
     }
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
@@ -9422,7 +9431,7 @@ fn builtinUnalias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
         if (index == command.argv.len) return emptyResult(self.allocator, 0);
     }
     for (command.argv[index..]) |arg| {
-        if (!isShellName(arg.text)) return errorResult(self.allocator, 2, "unalias", "invalid alias name");
+        if (!isAliasName(arg.text)) return errorResult(self.allocator, 2, "unalias", "invalid alias name");
         if (!self.unsetAlias(arg.text)) return errorResult(self.allocator, 1, "unalias", "not found");
     }
     return emptyResult(self.allocator, 0);
