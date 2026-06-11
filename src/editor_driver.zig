@@ -17,6 +17,7 @@ const semanticInputEnd = "\x1b]133;C\x07";
 const semanticInputCancel = "\x1b]133;D;err=CANCEL\x07";
 const completionProgressStart = "\x1b]9;4;3\x07";
 const completionProgressStop = "\x1b]9;4;0\x07";
+const completion_progress_delay_ms = 500;
 
 const ResizeSignalFd = struct {
     var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
@@ -377,6 +378,8 @@ const CompletionController = struct {
     queued: ?CompletionRequest = null,
     debounce: ?CompletionRequest = null,
     debounce_deadline_ms: ?u64 = null,
+    progress_deadline_ms: ?u64 = null,
+    progress_started: bool = false,
 
     fn init(allocator: std.mem.Allocator) CompletionController {
         return .{ .allocator = allocator };
@@ -427,6 +430,13 @@ const CompletionController = struct {
 
     fn debounceWaitMs(self: CompletionController, io: std.Io) ?u64 {
         const deadline = self.debounce_deadline_ms orelse return null;
+        const now = nowMs(io);
+        return if (deadline <= now) 0 else deadline - now;
+    }
+
+    fn progressWaitMs(self: CompletionController, io: std.Io) ?u64 {
+        if (self.progress_started) return null;
+        const deadline = self.progress_deadline_ms orelse return null;
         const now = nowMs(io);
         return if (deadline <= now) 0 else deadline - now;
     }
@@ -649,7 +659,10 @@ pub const TerminalSession = struct {
         while (session.state == .editing or session.state == .history_search) {
             var render_needed = false;
             var loop_events: [8]event_loop.Event = undefined;
-            const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms, self.completion.debounceWaitMs(self.io), next_completion_flash_clear_ms));
+            const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms, self.completion.debounceWaitMs(self.io), next_completion_flash_clear_ms, self.completion.progressWaitMs(self.io)));
+            if (ready.len == 0 and self.completion.progressWaitMs(self.io) == 0) {
+                try self.startCompletionProgress();
+            }
             if (ready.len == 0 and next_hook_interval_ms != null and promptRefreshWaitMs(self.io, next_hook_interval_ms) == 0) {
                 if (try self.runHooks(read_options, &session, &render_needed)) return try self.finishInterruptedReadLine();
                 next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
@@ -932,7 +945,15 @@ pub const TerminalSession = struct {
         request = undefined;
         try worker.start();
         self.completion.active = worker;
-        writeTtyAll(&self.tty, completionProgressStart) catch {};
+        self.completion.progress_deadline_ms = nowMs(self.io) + completion_progress_delay_ms;
+        self.completion.progress_started = false;
+    }
+
+    fn startCompletionProgress(self: *TerminalSession) !void {
+        if (self.completion.active == null or self.completion.progress_started) return;
+        self.completion.progress_started = true;
+        self.completion.progress_deadline_ms = null;
+        try writeTtyAll(&self.tty, completionProgressStart);
     }
 
     fn processCompletionResult(self: *TerminalSession, session: *line_editor.LineSession) !bool {
@@ -942,7 +963,9 @@ pub const TerminalSession = struct {
         if (!worker.done.load(.acquire)) return false;
         self.completion.active = null;
         worker.thread.join();
-        writeTtyAll(&self.tty, completionProgressStop) catch {};
+        if (self.completion.progress_started) writeTtyAll(&self.tty, completionProgressStop) catch {};
+        self.completion.progress_started = false;
+        self.completion.progress_deadline_ms = null;
         const result = worker.takeResult();
         worker.deinit();
         self.allocator.destroy(worker);
@@ -1000,12 +1023,13 @@ fn promptRefreshWaitMs(io: std.Io, next_prompt_refresh_ms: ?u64) ?u64 {
     return next - now;
 }
 
-fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64, c: ?u64, d: ?u64) ?u64 {
+fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64, c: ?u64, d: ?u64, e: ?u64) ?u64 {
     var wait_ms: ?u64 = null;
     if (promptRefreshWaitMs(io, a)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (promptRefreshWaitMs(io, b)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (c) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (promptRefreshWaitMs(io, d)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
+    if (e) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     return wait_ms;
 }
 
