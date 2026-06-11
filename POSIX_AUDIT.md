@@ -19,16 +19,16 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `418` rows
-- `scripts/check-posix-corpus.sh`: `428` expected-output POSIX cases
+- `scripts/check-compliance-manifest.sh`: `419` rows
+- `scripts/check-posix-corpus.sh`: `429` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `245` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
 - `scripts/check-system-shell-corpus.sh`: `305` cases, `610` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `418`
-- scored POSIX items: `414`
-- supported: `407`
+- tracked items: `419`
+- scored POSIX items: `415`
+- supported: `408`
 - baseline: `3`
 - partial: `3`
 - missing: `1`
@@ -48,7 +48,7 @@ Recent notable capabilities:
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`; non-last shell-implemented pipeline stages run in an isolated pipeline environment, while Rush preserves documented last-stage current-shell side effects for non-foreground mixed pipelines.
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
-- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes including representative nested and compound-command contexts, arithmetic baseline with nested parameter/command preprocessing, division/remainder-by-zero diagnostics, and representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` positional field behavior including POSIX-permitted unquoted `$*` empty-field retention.
+- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes including representative nested and compound-command contexts, arithmetic baseline with nested parameter/command preprocessing, logical/conditional short-circuit evaluation, division/remainder-by-zero diagnostics, and representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` positional field behavior including POSIX-permitted unquoted `$*` empty-field retention.
 - Non-POSIX extension forms are excluded from POSIX scoring and tracked separately in `BASH_COMPAT.md`; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - POSIX builtins now include supported `.`, `export`, `readonly`, `unset`, `umask`, `times`, `trap`, `getopts`, `eval`, and `exec` plus baseline `command`, `exit`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
@@ -156,6 +156,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
   - `+`, `-`, `*`, `/`, `%`, parentheses, unary `+`/`-`
   - expression text is preprocessed for nested parameter expansion, command substitution, and arithmetic expansion results before arithmetic evaluation in the dash/bash/yash-compatible cases covered by corpus tests
   - Rush's POSIX arithmetic policy is signed 64-bit: constants and variable values must fit the signed range, signed overflow reports `arithmetic overflow`, and bitwise/shift operators expose two's-complement signed results with masked shift counts
+  - logical `&&`, logical `||`, and conditional `?:` operators short-circuit unused operands, including skipped division-by-zero, signed-overflow, and assignment side-effect cases
   - shell variable values used by identifier are accepted when they form POSIX integer constants; unset or null variables evaluate as zero, while nonnumeric values, expression-valued strings such as `1 + 2`, and literal nested substitution text in variable values produce arithmetic diagnostics instead of being recursively evaluated
   - arithmetic-expression backslash processing follows the POSIX double-quote-like subset in representative cases: backslash-newline is removed, escaped `$` remains literal instead of starting a nested expansion, legacy backquotes still perform command substitution, unmatched raw legacy backquotes after escaped literal backquotes are classified as backquote substitution syntax errors, and quote bytes that remain in the arithmetic expression produce invalid-expression diagnostics rather than being quote-removed
   - representative arithmetic diagnostics cover invalid operators, missing operands, malformed parentheses, malformed conditional and comma forms, signed overflow, division and remainder by zero, and assignment-word expansion consequences

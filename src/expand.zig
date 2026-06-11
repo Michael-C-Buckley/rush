@@ -1059,6 +1059,9 @@ const ArithmeticParser = struct {
     env: EnvLookup = .{},
     env_set: EnvSet = .{},
     index: usize = 0,
+    mode: EvaluationMode = .evaluate,
+
+    const EvaluationMode = enum { evaluate, skip };
 
     fn parse(self: *ArithmeticParser) anyerror!i64 {
         const value = try self.parseComma();
@@ -1076,6 +1079,38 @@ const ArithmeticParser = struct {
         }
     }
 
+    fn parseCommaMode(self: *ArithmeticParser, mode: EvaluationMode) anyerror!i64 {
+        const saved = self.mode;
+        self.mode = mode;
+        defer self.mode = saved;
+        return self.parseComma();
+    }
+
+    fn parseTernaryMode(self: *ArithmeticParser, mode: EvaluationMode) anyerror!i64 {
+        const saved = self.mode;
+        self.mode = mode;
+        defer self.mode = saved;
+        return self.parseTernary();
+    }
+
+    fn parseLogicalAndMode(self: *ArithmeticParser, mode: EvaluationMode) anyerror!i64 {
+        const saved = self.mode;
+        self.mode = mode;
+        defer self.mode = saved;
+        return self.parseLogicalAnd();
+    }
+
+    fn parseBitwiseOrMode(self: *ArithmeticParser, mode: EvaluationMode) anyerror!i64 {
+        const saved = self.mode;
+        self.mode = mode;
+        defer self.mode = saved;
+        return self.parseBitwiseOr();
+    }
+
+    fn evaluating(self: ArithmeticParser) bool {
+        return self.mode == .evaluate;
+    }
+
     fn parseAssignment(self: *ArithmeticParser) anyerror!i64 {
         self.skipSpace();
         const saved = self.index;
@@ -1087,6 +1122,7 @@ const ArithmeticParser = struct {
             self.skipSpace();
             if (self.assignmentOperator()) |op| {
                 const rhs = try self.parseAssignment();
+                if (!self.evaluating()) return 0;
                 const value = switch (op) {
                     .assign => rhs,
                     .add_assign => try checkedAdd(try self.lookupNumber(name), rhs),
@@ -1133,11 +1169,23 @@ const ArithmeticParser = struct {
         const condition = try self.parseLogicalOr();
         self.skipSpace();
         if (!self.eat('?')) return condition;
-        const when_true = try self.parseComma();
+
+        if (!self.evaluating()) {
+            _ = try self.parseComma();
+            self.skipSpace();
+            if (!self.eat(':')) return error.InvalidArithmetic;
+            _ = try self.parseTernary();
+            return 0;
+        }
+
+        const when_true = if (condition != 0) try self.parseComma() else try self.parseCommaMode(.skip);
         self.skipSpace();
         if (!self.eat(':')) return error.InvalidArithmetic;
-        const when_false = try self.parseTernary();
-        return if (condition != 0) when_true else when_false;
+        if (condition != 0) {
+            _ = try self.parseTernaryMode(.skip);
+            return when_true;
+        }
+        return self.parseTernary();
     }
 
     fn parseLogicalOr(self: *ArithmeticParser) anyerror!i64 {
@@ -1145,7 +1193,12 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (!self.eatString("||")) return value;
-            const rhs = try self.parseLogicalAnd();
+            if (!self.evaluating()) {
+                _ = try self.parseLogicalAnd();
+                value = 0;
+                continue;
+            }
+            const rhs = if (value != 0) try self.parseLogicalAndMode(.skip) else try self.parseLogicalAnd();
             value = if (value != 0 or rhs != 0) 1 else 0;
         }
     }
@@ -1155,7 +1208,12 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (!self.eatString("&&")) return value;
-            const rhs = try self.parseBitwiseOr();
+            if (!self.evaluating()) {
+                _ = try self.parseBitwiseOr();
+                value = 0;
+                continue;
+            }
+            const rhs = if (value == 0) try self.parseBitwiseOrMode(.skip) else try self.parseBitwiseOr();
             value = if (value != 0 and rhs != 0) 1 else 0;
         }
     }
@@ -1165,7 +1223,8 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.startsWith("||") or !self.eat('|')) return value;
-            value |= try self.parseBitwiseXor();
+            const rhs = try self.parseBitwiseXor();
+            if (self.evaluating()) value |= rhs;
         }
     }
 
@@ -1174,7 +1233,8 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (!self.eat('^')) return value;
-            value ^= try self.parseBitwiseAnd();
+            const rhs = try self.parseBitwiseAnd();
+            if (self.evaluating()) value ^= rhs;
         }
     }
 
@@ -1183,7 +1243,8 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.startsWith("&&") or !self.eat('&')) return value;
-            value &= try self.parseEquality();
+            const rhs = try self.parseEquality();
+            if (self.evaluating()) value &= rhs;
         }
     }
 
@@ -1192,9 +1253,11 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.eatString("==")) {
-                value = if (value == try self.parseRelational()) 1 else 0;
+                const rhs = try self.parseRelational();
+                if (self.evaluating()) value = if (value == rhs) 1 else 0;
             } else if (self.eatString("!=")) {
-                value = if (value != try self.parseRelational()) 1 else 0;
+                const rhs = try self.parseRelational();
+                if (self.evaluating()) value = if (value != rhs) 1 else 0;
             } else return value;
         }
     }
@@ -1204,13 +1267,17 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.eatString("<=")) {
-                value = if (value <= try self.parseShift()) 1 else 0;
+                const rhs = try self.parseShift();
+                if (self.evaluating()) value = if (value <= rhs) 1 else 0;
             } else if (self.eatString(">=")) {
-                value = if (value >= try self.parseShift()) 1 else 0;
+                const rhs = try self.parseShift();
+                if (self.evaluating()) value = if (value >= rhs) 1 else 0;
             } else if (!self.startsWith("<<") and self.eat('<')) {
-                value = if (value < try self.parseShift()) 1 else 0;
+                const rhs = try self.parseShift();
+                if (self.evaluating()) value = if (value < rhs) 1 else 0;
             } else if (!self.startsWith(">>") and self.eat('>')) {
-                value = if (value > try self.parseShift()) 1 else 0;
+                const rhs = try self.parseShift();
+                if (self.evaluating()) value = if (value > rhs) 1 else 0;
             } else return value;
         }
     }
@@ -1220,9 +1287,11 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.eatString("<<")) {
-                value = value << shiftAmount(try self.parseAdditive());
+                const rhs = try self.parseAdditive();
+                if (self.evaluating()) value = value << shiftAmount(rhs);
             } else if (self.eatString(">>")) {
-                value = value >> shiftAmount(try self.parseAdditive());
+                const rhs = try self.parseAdditive();
+                if (self.evaluating()) value = value >> shiftAmount(rhs);
             } else return value;
         }
     }
@@ -1232,9 +1301,11 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.eat('+')) {
-                value = try checkedAdd(value, try self.parseTerm());
+                const rhs = try self.parseTerm();
+                if (self.evaluating()) value = try checkedAdd(value, rhs);
             } else if (self.eat('-')) {
-                value = try checkedSub(value, try self.parseTerm());
+                const rhs = try self.parseTerm();
+                if (self.evaluating()) value = try checkedSub(value, rhs);
             } else return value;
         }
     }
@@ -1244,11 +1315,14 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.eat('*')) {
-                value = try checkedMul(value, try self.parseFactor());
+                const rhs = try self.parseFactor();
+                if (self.evaluating()) value = try checkedMul(value, rhs);
             } else if (self.eat('/')) {
-                value = try checkedDiv(value, try self.parseFactor());
+                const rhs = try self.parseFactor();
+                if (self.evaluating()) value = try checkedDiv(value, rhs);
             } else if (self.eat('%')) {
-                value = try checkedRem(value, try self.parseFactor());
+                const rhs = try self.parseFactor();
+                if (self.evaluating()) value = try checkedRem(value, rhs);
             } else return value;
         }
     }
@@ -1258,10 +1332,18 @@ const ArithmeticParser = struct {
         if (self.eat('+')) return self.parseFactor();
         if (self.eat('-')) {
             if (try self.parseNegativeNumber()) |value| return value;
-            return checkedNeg(try self.parseFactor());
+            const value = try self.parseFactor();
+            if (!self.evaluating()) return 0;
+            return checkedNeg(value);
         }
-        if (self.eat('!')) return if ((try self.parseFactor()) == 0) 1 else 0;
-        if (self.eat('~')) return ~(try self.parseFactor());
+        if (self.eat('!')) {
+            const value = try self.parseFactor();
+            return if (self.evaluating() and value == 0) 1 else 0;
+        }
+        if (self.eat('~')) {
+            const value = try self.parseFactor();
+            return if (self.evaluating()) ~value else 0;
+        }
         if (self.eat('(')) {
             const value = try self.parseComma();
             self.skipSpace();
@@ -1276,6 +1358,7 @@ const ArithmeticParser = struct {
         const start = self.index;
         self.index += 1;
         while (self.index < self.input.len and isNameContinue(self.input[self.index])) : (self.index += 1) {}
+        if (!self.evaluating()) return 0;
         return self.lookupNumber(self.input[start..self.index]);
     }
 
@@ -1295,6 +1378,7 @@ const ArithmeticParser = struct {
         self.skipSpace();
         const start = self.index;
         self.index = numberEnd(self.input, self.index) orelse return error.InvalidArithmetic;
+        if (!self.evaluating()) return 0;
         return parseIntegerConstant(self.input[start..self.index]);
     }
 
@@ -1303,6 +1387,7 @@ const ArithmeticParser = struct {
         const start = self.index;
         const end = numberEnd(self.input, start) orelse return null;
         self.index = end;
+        if (!self.evaluating()) return 0;
         return try parseSignedIntegerConstant(self.input[start..end], true);
     }
 
@@ -2937,6 +3022,75 @@ test "arithmetic expansion evaluates integer expressions" {
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("value=7", result.fields[0]);
+}
+
+const ArithmeticSetRecorder = struct {
+    count: usize = 0,
+    last_name: [64]u8 = undefined,
+    last_name_len: usize = 0,
+    last_value: [64]u8 = undefined,
+    last_value_len: usize = 0,
+
+    fn envSet(self: *ArithmeticSetRecorder) EnvSet {
+        return .{ .context = self, .setFn = arithmeticSetRecorderSet };
+    }
+
+    fn lastValue(self: *const ArithmeticSetRecorder) []const u8 {
+        return self.last_value[0..self.last_value_len];
+    }
+};
+
+fn arithmeticSetRecorderSet(context: ?*anyopaque, name: []const u8, value: []const u8) anyerror!void {
+    const recorder: *ArithmeticSetRecorder = @ptrCast(@alignCast(context.?));
+    try std.testing.expect(name.len <= recorder.last_name.len);
+    try std.testing.expect(value.len <= recorder.last_value.len);
+    @memcpy(recorder.last_name[0..name.len], name);
+    @memcpy(recorder.last_value[0..value.len], value);
+    recorder.last_name_len = name.len;
+    recorder.last_value_len = value.len;
+    recorder.count += 1;
+}
+
+test "arithmetic expansion short-circuits logical operands" {
+    var recorder: ArithmeticSetRecorder = .{};
+
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("0 && (x = 2)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(usize, 0), recorder.count);
+    try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 || (x = 2)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(usize, 0), recorder.count);
+
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("0 && (1 / 0)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 || (1 / 0)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("0 && (9223372036854775807 + 1)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 || (9223372036854775807 + 1)", .{}, recorder.envSet()));
+
+    try std.testing.expectError(error.DivisionByZero, evalArithmetic("1 && (1 / 0)", .{}, recorder.envSet()));
+    try std.testing.expectError(error.DivisionByZero, evalArithmetic("0 || (1 / 0)", .{}, recorder.envSet()));
+
+    try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 && (x = 3)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(usize, 1), recorder.count);
+    try std.testing.expectEqualStrings("3", recorder.lastValue());
+}
+
+test "arithmetic expansion evaluates only the selected conditional operand" {
+    var recorder: ArithmeticSetRecorder = .{};
+
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 ? 7 : (x = 2)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(usize, 0), recorder.count);
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("0 ? (x = 2) : 7", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(usize, 0), recorder.count);
+
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 ? 7 : (1 / 0)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("0 ? (1 / 0) : 7", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 ? 7 : (9223372036854775807 + 1)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("0 ? (9223372036854775807 + 1) : 7", .{}, recorder.envSet()));
+
+    try std.testing.expectError(error.DivisionByZero, evalArithmetic("0 ? 7 : (1 / 0)", .{}, recorder.envSet()));
+    try std.testing.expectError(error.DivisionByZero, evalArithmetic("1 ? (1 / 0) : 7", .{}, recorder.envSet()));
+
+    try std.testing.expectEqual(@as(i64, 4), try evalArithmetic("0 ? 7 : (x = 4)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(@as(usize, 1), recorder.count);
+    try std.testing.expectEqualStrings("4", recorder.lastValue());
 }
 
 test "arithmetic expansion rejects invalid variable values" {

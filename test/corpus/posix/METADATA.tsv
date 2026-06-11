@@ -14,6 +14,7 @@ arithmetic-octal-hex-constants	expansion	behavior	-
 arithmetic-operator-coverage	expansion	behavior	-
 arithmetic-quote-backslash-handling	expansion	behavior	Arithmetic expansion treats backslash-newline as continuation and supports legacy backquote substitution in expressions
 arithmetic-recursive-expansion	expansion	behavior	Arithmetic expansion preprocesses nested parameter expansions and command substitutions before evaluation
+arithmetic-short-circuit	expansion	behavior	Logical and conditional arithmetic operators skip unused operands, including diagnostics and assignment side effects
 arithmetic-signed-64-boundaries	expansion	behavior	Rush POSIX arithmetic uses signed 64-bit values, checked overflow, and two's-complement bitwise/shift results
 arithmetic-variable-lookup	expansion	behavior	-
 assignment-prefix-external	variables	behavior	-
