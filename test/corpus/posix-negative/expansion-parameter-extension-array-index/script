@@ -1,0 +1,3 @@
+v=abc
+echo ${v[0]}
+echo after

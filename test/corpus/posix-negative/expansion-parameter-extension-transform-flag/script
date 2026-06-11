@@ -1,0 +1,3 @@
+v='a b'
+echo ${v@Q}
+echo after
