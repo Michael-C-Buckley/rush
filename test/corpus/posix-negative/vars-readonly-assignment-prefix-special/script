@@ -1,0 +1,3 @@
+readonly R=old
+R=new :
+echo after
