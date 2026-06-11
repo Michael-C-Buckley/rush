@@ -52,7 +52,7 @@ Recent notable capabilities:
 - POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, and `bg`.
-- POSIX shell options baseline for `errexit`, `noglob`, `noclobber`, `nounset`, `verbose`, and `xtrace`.
+- POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
 
 ## 1. Lexical conventions and token recognition
@@ -294,7 +294,7 @@ Implemented or partially implemented:
 - `read` supports simple field assignment and `-r` acceptance but not full POSIX options/IFS/backslash behavior.
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
 - `test` baseline lacks many operators and edge cases.
-- `set` has key POSIX options and positional handling, but not full option surface (`-b`, `-m`, `-h`, etc.).
+- `set` has the POSIX non-interactive short option baseline and positional handling, but not the full optional interactive/User Portability surface (`-b`, `-m`, `ignoreeof`, `vi`) or optional/obsolescent `-h`/`nolog` decisions.
 - `env` does not support arguments/options.
 - `times` currently emits a deterministic baseline instead of real process usage.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
@@ -313,6 +313,7 @@ Implemented or partially implemented:
 - Bash arrays runtime model baseline.
 - POSIX option baseline:
   - `set -- ...`
+  - `set -a` / `set +a` allexport
   - `set -f` / `set +f` noglob
   - `set -C` / `set +C` noclobber
   - `set -u` / `set +u` nounset
@@ -320,6 +321,7 @@ Implemented or partially implemented:
   - `set -n` / `set -o noexec` noexec syntax-check behavior
   - `set -x` / `set +x` xtrace baseline
   - `set -v` / `set +v` verbose baseline
+  - `$-` reflects representative current short shell option flags
   - `set -o name` / `set +o name` for supported options
   - `set -o` option state listing in Rush's stable human-readable format
   - `set +o` reusable option-state command listing for supported options
@@ -329,9 +331,11 @@ Implemented or partially implemented:
 - Errexit is baseline-only and lacks many POSIX corner cases around compound commands, command substitutions, and AND-OR/pipeline contexts.
 - Xtrace/verbose exact output ordering is baseline-only.
 - Unsupported POSIX options remain:
-  - `-b`
-  - `-m`
-  - others as applicable
+  - `-b` notification timing for job control
+  - `-m` / `set -o monitor` job-control mode toggling
+  - `set -o ignoreeof` interactive EOF handling
+  - `set -o vi` command-line editing mode
+  - optional/obsolescent `-h` and `set -o nolog` handling decisions
 
 ## 8. Interactive behavior and job control
 

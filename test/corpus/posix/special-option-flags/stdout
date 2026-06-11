@@ -1,6 +1,11 @@
 <>
+set-a
+cleared-a
 set-e
 cleared-e
 set-u
 set-f
 set-C
+set-v
+set-x
+after-trace
