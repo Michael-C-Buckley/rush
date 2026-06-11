@@ -5056,20 +5056,6 @@ pub const Executor = struct {
     }
 
     fn executeSimpleCommandWithInputOptions(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, force_stdin: bool) anyerror!CommandResult {
-        const trace_enabled = self.shell_options.xtrace;
-        var result = try self.executeSimpleCommandWithInputInner(command, stdin, options, force_stdin);
-        errdefer result.deinit();
-        if (trace_enabled and command.argv.len != 0) {
-            const trace = try traceLineForCommand(self.allocator, command);
-            defer self.allocator.free(trace);
-            const stderr = try std.mem.concat(self.allocator, u8, &.{ trace, result.stderr });
-            self.allocator.free(result.stderr);
-            result.stderr = stderr;
-        }
-        return result;
-    }
-
-    fn executeSimpleCommandWithInputInner(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, force_stdin: bool) anyerror!CommandResult {
         const expanded = self.expandSimpleCommand(command, options) catch |err| switch (err) {
             error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => return self.expansionErrorResult(err, options),
             error.ReadonlyVariable => return self.assignmentErrorResult(),
@@ -5077,6 +5063,28 @@ pub const Executor = struct {
         };
         defer self.freeExpandedCommand(expanded);
 
+        var trace: ?[]const u8 = null;
+        var trace_written = false;
+        if (self.shell_options.xtrace and (expanded.assignments.len != 0 or expanded.argv.len != 0)) {
+            trace = try traceLineForCommand(self.allocator, expanded);
+            if (options.external_stdio == .inherit and options.io != null) {
+                try rawWriteAll(2, trace.?);
+                trace_written = true;
+            }
+        }
+        defer if (trace) |bytes| self.allocator.free(bytes);
+
+        var result = try self.executeExpandedSimpleCommandWithInput(expanded, stdin, options, force_stdin);
+        errdefer result.deinit();
+        if (trace != null and !trace_written) {
+            const stderr = try std.mem.concat(self.allocator, u8, &.{ trace.?, result.stderr });
+            self.allocator.free(result.stderr);
+            result.stderr = stderr;
+        }
+        return result;
+    }
+
+    fn executeExpandedSimpleCommandWithInput(self: *Executor, expanded: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, force_stdin: bool) anyerror!CommandResult {
         if (isRedirectionOnlyExec(expanded)) {
             self.applyAssignments(expanded.assignments) catch |err| switch (err) {
                 error.ReadonlyVariable => return self.assignmentErrorResult(),
@@ -7713,11 +7721,11 @@ fn traceLineForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) 
     try line.appendSlice(allocator, "+");
     for (command.assignments) |assignment| {
         try line.append(allocator, ' ');
-        try line.appendSlice(allocator, assignment.raw);
+        try line.appendSlice(allocator, assignment.text);
     }
     for (command.argv) |arg| {
         try line.append(allocator, ' ');
-        try line.appendSlice(allocator, arg.raw);
+        try line.appendSlice(allocator, arg.text);
     }
     try line.append(allocator, '\n');
     return line.toOwnedSlice(allocator);
@@ -15180,14 +15188,13 @@ test "executor implements set shell option baseline" {
 
     var trace_executor = Executor.init(std.testing.allocator);
     defer trace_executor.deinit();
-    var trace_lowered = try parseAndLower(std.testing.allocator, "set -x; echo hi; set +x; echo quiet");
+    var trace_lowered = try parseAndLower(std.testing.allocator, "set -x; X=hi; echo \"$X\"; set +x; echo quiet");
     defer trace_lowered.parsed.deinit();
     defer trace_lowered.program.deinit();
     var trace = try trace_executor.executeProgram(trace_lowered.program, .{});
     defer trace.deinit();
     try std.testing.expectEqualStrings("hi\nquiet\n", trace.stdout);
-    try std.testing.expect(std.mem.indexOf(u8, trace.stderr, "+ echo hi\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, trace.stderr, "+ echo quiet\n") == null);
+    try std.testing.expectEqualStrings("+ X=hi\n+ echo hi\n+ set +x\n", trace.stderr);
 
     var verbose_executor = Executor.init(std.testing.allocator);
     defer verbose_executor.deinit();

@@ -1,0 +1,6 @@
+exec 2>&1
+set -x
+X=v
+echo "$X" suffix
+set +x
+echo quiet

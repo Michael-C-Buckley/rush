@@ -251,6 +251,7 @@ option-set-plus-o-reinput	options	option	set +o output can be re-input to restor
 set-o-nounset-default-operator	options	option	-
 set-verbose	options	option	-
 set-xtrace	options	option	-
+set-xtrace-expanded-assignments	options	option	xtrace output is emitted before execution and after assignment and word expansion
 simple-echo	lexing	behavior	-
 special-builtin-assignment-prefix	variables	behavior	-
 special-last-background	job_control	behavior	-
