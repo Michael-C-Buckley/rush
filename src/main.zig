@@ -3330,6 +3330,41 @@ test "aliases expand inside command substitutions without touching here-doc bodi
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "aliases can introduce reserved-word compound commands" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias start='if'
+        \\start true
+        \\then echo alias-if-ok
+        \\fi
+        \\alias loop='while '
+        \\count=0
+        \\loop [ "$count" -lt 1 ]
+        \\do echo alias-while-ok; count=$((count + 1))
+        \\done
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("alias-if-ok\nalias-while-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "aliases defined by eval and dot affect later complete commands" {
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, "rush-alias-dot-source") catch {};
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\eval "alias say='echo eval-ok'"
+        \\say
+        \\printf '%s\n' "alias dot='echo dot-ok'" > rush-alias-dot-source
+        \\. ./rush-alias-dot-source
+        \\dot
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("eval-ok\ndot-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "prompt rendering subcommands are scoped while repaint is public" {
     var prompt_result = try runScript(std.testing.allocator, std.testing.io, "prompt text hi");
     defer prompt_result.deinit();

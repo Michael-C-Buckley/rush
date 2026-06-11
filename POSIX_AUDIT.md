@@ -19,16 +19,16 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `419` rows
-- `scripts/check-posix-corpus.sh`: `429` expected-output POSIX cases
+- `scripts/check-compliance-manifest.sh`: `421` rows
+- `scripts/check-posix-corpus.sh`: `431` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `245` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `305` cases, `610` comparisons across dash and bash POSIX mode
+- `scripts/check-system-shell-corpus.sh`: `307` cases, `614` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `419`
-- scored POSIX items: `415`
-- supported: `408`
+- tracked items: `421`
+- scored POSIX items: `417`
+- supported: `410`
 - baseline: `3`
 - partial: `3`
 - missing: `1`
@@ -76,16 +76,13 @@ Recent notable capabilities:
   - double-quoted expansion contexts suppress field splitting while retaining parameter and command substitution recognition
 - Nested command substitution CST recognition for `$()`.
 - Legacy backquote command substitution recognition in the lexer/expansion pipeline.
-- Alias expansion is integrated ahead of parser lowering for future input/script slices, using parser-recognized command-word spans for representative assignment-prefixed, redirection-prefixed, compound-list, and command-substitution contexts while preserving here-doc body text.
+- Alias expansion is integrated ahead of parser lowering for future input/script slices, using parser-recognized command-word spans for representative assignment-prefixed, redirection-prefixed, compound-list, command-substitution, alias-produced reserved-word compound-command, and eval/dot dynamic-definition contexts while preserving here-doc body text.
 
 ### Partial / gaps
 
 - Reserved words are recognized mostly by parser context/string matching rather than a fully POSIX grammar phase.
 - Newline/list handling works for common constructs, but the parser remains permissive and recovery-oriented rather than a strict POSIX grammar.
-- Alias substitution is baseline-only:
-  - not a complete token-recognition state machine
-  - not fully recursive in all POSIX edge cases
-  - reserved-word interaction still needs broader edge-case coverage
+- Alias substitution is still not a complete token-recognition state machine; remaining work is exact parser/token-state integration beyond the covered parser-command-word, recursive/trailing-blank, alias-produced reserved-word, and eval/dot dynamic-definition slices.
 
 ### Missing / gaps
 
@@ -296,7 +293,7 @@ Implemented or partially implemented:
 - `printf` supports common conversions/escapes including representative floating-point conversions, but not POSIX C integer constants or full format grammar details.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`vi` editing mode and complete job-control terminal semantics).
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
-- Full POSIX alias substitution token timing remains partial after the parser-command-word slice; the builtin `alias`/`unalias` utility row is supported separately from remaining parser-level timing edge cases.
+- Full POSIX alias substitution token timing remains partial after the parser-command-word, alias-produced reserved-word, and eval/dot dynamic-definition slices; the builtin `alias`/`unalias` utility row is supported separately from remaining parser-level timing edge cases.
 
 ## 7. Shell options and modes
 

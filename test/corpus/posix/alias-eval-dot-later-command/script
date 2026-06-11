@@ -1,0 +1,5 @@
+eval "alias say='echo eval-ok'"
+say
+printf '%s\n' "alias dot='echo dot-ok'" > alias-dot-source
+. ./alias-dot-source
+dot

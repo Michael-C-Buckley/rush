@@ -1,9 +1,11 @@
 case	area	tags	notes
 alias-command-substitution-here-doc	lexing	behavior	Aliases are recognized inside command substitutions while here-doc bodies remain literal input text
+alias-eval-dot-later-command	lexing	behavior	Aliases defined by eval and dot commands affect later complete commands
 alias-function-definition-protection	lexing	behavior	-
 alias-later-complete-command	lexing	behavior	Alias defined by an earlier complete command affects a later command
 alias-parser-command-word-contexts	lexing	behavior	Parser-recognized command-name positions include assignment-prefixed, redirection-prefixed, and compound-list commands
 alias-recursive-expansion	lexing	behavior	Recursive alias substitution for command-position aliases
+alias-reserved-word-compound	lexing	behavior	Alias values that produce reserved words are reparsed with following tokens to form compound commands
 alias-reserved-word-protection	lexing	behavior	-
 alias-trailing-blank-command-position	lexing	behavior	Alias value ending in blank keeps the next word in command position
 and-or-lists	grammar	behavior	-

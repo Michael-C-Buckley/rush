@@ -3892,7 +3892,7 @@ pub const Executor = struct {
         const trimmed = std.mem.trim(u8, script, " \t\r\n;");
         if (trimmed.len == 0) return emptyResult(self.allocator, 0);
         const source = std.mem.trimStart(u8, script, " \t\r\n;");
-        if (containsAliasCommandToken(source)) {
+        if (containsAliasTimingCommandToken(source)) {
             if (try self.aliasTimingChunkProgram(source, options)) |chunk_program| {
                 var program = chunk_program;
                 defer program.deinit();
@@ -3940,21 +3940,39 @@ pub const Executor = struct {
         errdefer stderr.deinit(self.allocator);
         var last_status: ExitStatus = 0;
         var verbose_read_offset: usize = 0;
-        for (program.statements, 0..) |statement, index| {
-            const start = statement.span.start;
-            const end = if (index + 1 < program.statements.len) program.statements[index + 1].span.start else script.len;
-            try self.appendOrWriteVerboseInput(options, &stderr, script, &verbose_read_offset, start, end);
-            if (self.shouldSkipForNoexec(options)) break;
-            var statement_options = options;
-            statement_options.verbose_input_echo = false;
-            var result = try self.executeScriptSlice(script[start..end], statement_options);
-            defer result.deinit();
-            last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
-            if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
+        var statement_index: usize = 0;
+        execute_chunks: while (statement_index < program.statements.len) {
+            const start = program.statements[statement_index].span.start;
+            var end_statement_index = statement_index;
+            while (true) {
+                const end = if (end_statement_index + 1 < program.statements.len) program.statements[end_statement_index + 1].span.start else script.len;
+                if (try self.scriptSliceParsesWithCurrentAliases(script[start..end], options.features)) {
+                    try self.appendOrWriteVerboseInput(options, &stderr, script, &verbose_read_offset, start, end);
+                    if (self.shouldSkipForNoexec(options)) break :execute_chunks;
+                    var statement_options = options;
+                    statement_options.verbose_input_echo = false;
+                    var result = try self.executeScriptSlice(script[start..end], statement_options);
+                    defer result.deinit();
+                    last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
+                    statement_index = end_statement_index + 1;
+                    if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break :execute_chunks;
+                    continue :execute_chunks;
+                }
+                if (end_statement_index + 1 >= program.statements.len) return error.ParseError;
+                end_statement_index += 1;
+            }
         }
         var result: CommandResult = .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         errdefer result.deinit();
         return self.finishExecuteProgram(root_execution, options, result);
+    }
+
+    fn scriptSliceParsesWithCurrentAliases(self: *Executor, script: []const u8, features: compat.Features) !bool {
+        const aliased = try self.expandAliasesForScriptWithFeatures(script, features);
+        defer self.allocator.free(aliased);
+        var parsed = try parser.parse(self.allocator, aliased, .{ .features = features });
+        defer parsed.deinit();
+        return parsed.diagnostics.len == 0;
     }
 
     fn executeStatementSync(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
@@ -8077,13 +8095,15 @@ fn isShellSeparatorByte(byte: u8) bool {
     return byte == '\n' or byte == ';' or byte == '&' or byte == '|';
 }
 
-fn containsAliasCommandToken(script: []const u8) bool {
+fn containsAliasTimingCommandToken(script: []const u8) bool {
     var index: usize = 0;
     while (index < script.len) {
         const start = index;
         while (index < script.len and !isAliasWordBoundary(script[index])) : (index += 1) {}
         const word = script[start..index];
         if (std.mem.eql(u8, word, "alias")) return true;
+        if (std.mem.eql(u8, word, "eval")) return true;
+        if (std.mem.eql(u8, word, ".")) return true;
         if (index < script.len) index += 1;
     }
     return false;
