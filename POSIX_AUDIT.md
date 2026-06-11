@@ -354,13 +354,14 @@ Implemented or partially implemented:
 - Visible job table through `jobs`, including `-l`, `-p`, and numeric/% job operands.
 - Baseline `fg` waits for current or explicit tracked jobs and returns their status.
 - Baseline `bg` reports current or explicit tracked jobs as backgrounded.
-- Foreground process group handling for inherited-stdio external pipelines.
-- Monitor mode (`set -m`) puts tracked interactive async jobs in their own process groups and lets `fg` hand the terminal to that saved process group when available.
+- Foreground process group handling for inherited-stdio external-only pipelines.
+- Monitor mode (`set -m`) puts tracked interactive async external and forked compound/mixed-pipeline jobs in their own process groups and lets `fg` hand the terminal to that saved process group when available.
 
 ### Partial / gaps
 
 - Stopped jobs and precise job status refresh are partial rather than complete.
 - `fg`/`bg` resume tracked stopped jobs with `SIGCONT`, but broader signal and terminal edge cases remain.
+- Foreground mixed pipelines with builtin/function stages intentionally do not hand the terminal to an external child process group while those stages still run as shell threads.
 - Terminal modes and foreground process groups are not yet complete across every mixed-pipeline and job-control edge case.
 - Signal handling for pipelines and asynchronous lists remains conservative.
 

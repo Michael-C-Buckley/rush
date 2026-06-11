@@ -3703,6 +3703,12 @@ pub const Executor = struct {
     };
 
     fn executeMixedPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
+        // Mixed pipelines run builtin/function stages on shell threads. Do not
+        // hand the terminal to an external child process group here: that can
+        // background the shell while those shell-thread stages may still use
+        // stdio. External-only foreground handoff remains in
+        // executeExternalPipeline; async monitor jobs reach this path through a
+        // forked wrapper process group with foreground handoff disabled.
         const pipe_count = pipeline.command_indexes.len - 1;
         const pipes = try self.allocator.alloc(PipelinePipe, pipe_count);
         defer self.allocator.free(pipes);
@@ -12866,6 +12872,29 @@ test "monitor mode assigns tracked async jobs to process groups" {
     if (compound_job.pgrp) |pgrp| std.posix.kill(@intCast(-pgrp), .TERM) catch {};
     _ = compound_job.child.wait(std.testing.io) catch null;
     compound_job.state = .done;
+}
+
+test "monitor mode assigns async mixed pipelines to wrapper process groups" {
+    var lowered = try parseAndLower(std.testing.allocator, "set -m; : | /bin/sleep 5 &");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), executor.background_jobs.items.len);
+
+    const job = &executor.background_jobs.items[0];
+    defer {
+        if (job.pgrp) |pgrp| std.posix.kill(@intCast(-pgrp), .TERM) catch {};
+        _ = job.child.wait(std.testing.io) catch null;
+        job.state = .done;
+    }
+    try std.testing.expectEqual(@as(?i64, job.pid), job.pgrp);
+    try std.testing.expectEqual(@as(std.posix.pid_t, @intCast(job.pid)), try processGetPgrp(@intCast(job.pid)));
 }
 
 test "non-interactive monitor option does not change async process groups" {
