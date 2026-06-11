@@ -191,7 +191,10 @@ const ViFindCommand = struct {
 
 const ViPending = union(enum) {
     none,
-    operator: ViOperator,
+    operator: struct {
+        operator: ViOperator,
+        count: usize,
+    },
     replace,
     find: struct {
         direction: ViFindDirection,
@@ -214,6 +217,75 @@ const ViMotionRange = struct {
 const ViWordKind = enum {
     word,
     bigword,
+};
+
+const ViInsertPlacement = enum {
+    at_cursor,
+    after_cursor,
+    line_start,
+    line_end,
+};
+
+const ViInsertRepeatCapture = union(enum) {
+    insert: struct {
+        placement: ViInsertPlacement,
+        text_count: usize,
+    },
+    change_to_end,
+    clear_line_change,
+    operator_change: struct {
+        motion_command: u21,
+        count: usize,
+    },
+};
+
+const ViRepeat = union(enum) {
+    insert: struct {
+        placement: ViInsertPlacement,
+        text: []u8,
+        text_count: usize,
+    },
+    replace: struct {
+        text: []u8,
+        count: usize,
+    },
+    delete_forward: usize,
+    delete_backward: usize,
+    delete_to_end,
+    change_to_end: []u8,
+    clear_line_delete,
+    clear_line_change: []u8,
+    operator_delete: struct {
+        motion_command: u21,
+        count: usize,
+    },
+    operator_change: struct {
+        motion_command: u21,
+        count: usize,
+        text: []u8,
+    },
+    put_after: usize,
+    put_before: usize,
+    toggle_case: usize,
+
+    fn deinit(self: ViRepeat, allocator: std.mem.Allocator) void {
+        switch (self) {
+            .insert => |repeat| allocator.free(repeat.text),
+            .replace => |repeat| allocator.free(repeat.text),
+            .change_to_end => |text| allocator.free(text),
+            .clear_line_change => |text| allocator.free(text),
+            .operator_change => |repeat| allocator.free(repeat.text),
+            .delete_forward,
+            .delete_backward,
+            .delete_to_end,
+            .clear_line_delete,
+            .operator_delete,
+            .put_after,
+            .put_before,
+            .toggle_case,
+            => {},
+        }
+    }
 };
 
 const BufferSnapshot = struct {
@@ -496,6 +568,10 @@ pub const LineSession = struct {
     vi_last_find: ?ViFindCommand = null,
     vi_undo: ?BufferSnapshot = null,
     vi_line_undo: ?BufferSnapshot = null,
+    vi_last_repeat: ?ViRepeat = null,
+    vi_insert_repeat: ?ViInsertRepeatCapture = null,
+    vi_insert_repeat_text: std.ArrayList(u8) = .empty,
+    vi_replaying_repeat: bool = false,
     editor: Editor,
     history: HistoryView = .{},
     history_index: ?i64 = null,
@@ -557,6 +633,8 @@ pub const LineSession = struct {
         self.completion_menu.deinit(self.allocator);
         self.kill_ring.deinit(self.allocator);
         self.saved_edit.deinit(self.allocator);
+        self.clearViLastRepeat();
+        self.vi_insert_repeat_text.deinit(self.allocator);
         self.clearViUndo();
         self.clearViLineUndo();
         self.editor.deinit();
@@ -672,7 +750,10 @@ pub const LineSession = struct {
 
     fn handleViInsertKey(self: *LineSession, event: KeyEvent) !void {
         switch (event.key) {
-            .escape => self.enterViCommandMode(),
+            .escape => {
+                try self.finishViInsertRepeat();
+                self.enterViCommandMode();
+            },
             .ctrl_c => try self.clearInput(),
             .enter => try self.submitInput(),
             .backspace => {
@@ -705,6 +786,7 @@ pub const LineSession = struct {
             .text => {
                 if (event.text.len == 0) return;
                 try self.editor.buffer.insertText(event.text);
+                try self.appendViInsertRepeatText(event.text);
                 self.completion_menu.clear(self.allocator);
             },
             else => {},
@@ -713,7 +795,10 @@ pub const LineSession = struct {
 
     fn handleViReplaceKey(self: *LineSession, event: KeyEvent) !void {
         switch (event.key) {
-            .escape => self.enterViCommandMode(),
+            .escape => {
+                try self.finishViInsertRepeat();
+                self.enterViCommandMode();
+            },
             .ctrl_c => try self.clearInput(),
             .enter => try self.submitInput(),
             .backspace => {
@@ -765,12 +850,24 @@ pub const LineSession = struct {
         switch (self.vi_pending) {
             .none => {},
             .replace => {
-                try self.viReplaceCharacters(event.text, self.takeViCountOrDefault(1));
+                const count = self.takeViCountOrDefault(1);
+                if (try self.viReplaceCharacters(event.text, count) and !self.vi_replaying_repeat) {
+                    try self.setViLastRepeat(.{ .replace = .{ .text = try self.allocator.dupe(u8, event.text), .count = count } });
+                }
                 self.vi_pending = .none;
                 return;
             },
-            .operator => |operator| {
-                try self.applyViOperator(operator, command);
+            .operator => |pending| {
+                if (command >= '1' and command <= '9') {
+                    self.vi_count = (self.vi_count orelse 0) * 10 + (command - '0');
+                    return;
+                }
+                if (command == '0' and self.vi_count != null) {
+                    self.vi_count = (self.vi_count orelse 0) * 10;
+                    return;
+                }
+                const motion_count = self.takeViCountOrDefault(1);
+                try self.applyViOperator(pending.operator, command, multiplyViCounts(pending.count, motion_count));
                 self.vi_pending = .none;
                 return;
             },
@@ -795,17 +892,31 @@ pub const LineSession = struct {
             'T' => self.vi_pending = .{ .find = .{ .direction = .backward, .placement = .after_character } },
             ';' => if (self.vi_last_find) |find| try self.applyViFind(find, self.takeViCountOrDefault(1)),
             ',' => if (self.vi_last_find) |find| try self.applyViFind(reverseViFind(find), self.takeViCountOrDefault(1)),
-            'i' => self.enterViInsertModeAtCursor(),
+            'i' => {
+                const count = self.takeViCountOrDefault(1);
+                try self.saveViUndo();
+                self.beginViInsertRepeat(.{ .insert = .{ .placement = .at_cursor, .text_count = count } });
+                self.enterViInsertModeAtCursor();
+            },
             'I' => {
-                self.editor.buffer.moveHome();
+                const count = self.takeViCountOrDefault(1);
+                self.editor.buffer.cursor_byte = firstNonBlank(self.editor.buffer.text());
+                try self.saveViUndo();
+                self.beginViInsertRepeat(.{ .insert = .{ .placement = .line_start, .text_count = count } });
                 self.enterViInsertModeAtCursor();
             },
             'a' => {
+                const count = self.takeViCountOrDefault(1);
                 if (self.editor.buffer.text().len != 0) self.editor.buffer.moveRight();
+                try self.saveViUndo();
+                self.beginViInsertRepeat(.{ .insert = .{ .placement = .after_cursor, .text_count = count } });
                 self.enterViInsertModeAtCursor();
             },
             'A' => {
+                const count = self.takeViCountOrDefault(1);
                 self.editor.buffer.moveEnd();
+                try self.saveViUndo();
+                self.beginViInsertRepeat(.{ .insert = .{ .placement = .line_end, .text_count = count } });
                 self.enterViInsertModeAtCursor();
             },
             'R' => {
@@ -814,26 +925,44 @@ pub const LineSession = struct {
                 self.resetViCommandPrefix();
             },
             'r' => self.vi_pending = .replace,
-            'x' => try self.viDeleteForward(self.takeViCountOrDefault(1)),
-            'X' => try self.viDeleteBackward(self.takeViCountOrDefault(1)),
-            'D' => try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte),
+            'x' => {
+                const count = self.takeViCountOrDefault(1);
+                if (try self.viDeleteForward(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .delete_forward = count });
+            },
+            'X' => {
+                const count = self.takeViCountOrDefault(1);
+                if (try self.viDeleteBackward(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .delete_backward = count });
+            },
+            'D' => if (try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte) and !self.vi_replaying_repeat) try self.setViLastRepeat(.delete_to_end),
             'C' => {
-                try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte);
+                _ = try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte);
+                self.beginViInsertRepeat(.change_to_end);
                 self.enterViInsertModeAtCursor();
             },
             'S' => {
-                try self.viClearLine(true);
+                _ = try self.viClearLine(false);
+                self.beginViInsertRepeat(.clear_line_change);
+                self.enterViInsertModeAtCursor();
             },
             '_' => try self.viInsertPreviousBigword(self.takeViCount()),
-            'd' => self.vi_pending = .{ .operator = .delete },
-            'c' => self.vi_pending = .{ .operator = .change },
-            'y' => self.vi_pending = .{ .operator = .yank },
+            'd' => self.vi_pending = .{ .operator = .{ .operator = .delete, .count = self.takeViCountOrDefault(1) } },
+            'c' => self.vi_pending = .{ .operator = .{ .operator = .change, .count = self.takeViCountOrDefault(1) } },
+            'y' => self.vi_pending = .{ .operator = .{ .operator = .yank, .count = self.takeViCountOrDefault(1) } },
             'Y' => try self.viYankRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len),
-            'p' => try self.viPutAfter(self.takeViCountOrDefault(1)),
-            'P' => try self.viPutBefore(self.takeViCountOrDefault(1)),
+            'p' => {
+                const count = self.takeViCountOrDefault(1);
+                if (try self.viPutAfter(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .put_after = count });
+            },
+            'P' => {
+                const count = self.takeViCountOrDefault(1);
+                if (try self.viPutBefore(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .put_before = count });
+            },
             'u' => try self.restoreViUndo(),
             'U' => try self.restoreViLineUndo(),
-            '~' => try self.viToggleCase(self.takeViCountOrDefault(1)),
+            '~' => {
+                const count = self.takeViCountOrDefault(1);
+                if (try self.viToggleCase(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .toggle_case = count });
+            },
             'k', '-' => try self.viHistoryPrevious(self.takeViCountOrDefault(1)),
             'j', '+' => try self.viHistoryNext(self.takeViCountOrDefault(1)),
             'G' => try self.viHistoryOldestOrNumber(self.vi_count),
@@ -841,6 +970,7 @@ pub const LineSession = struct {
             '?' => self.beginViHistorySearch(.forward),
             'n' => try self.repeatViHistorySearch(false),
             'N' => try self.repeatViHistorySearch(true),
+            '.' => try self.repeatViLastChange(),
             '#' => try self.viCommentAndSubmit(),
             else => self.resetViCommandPrefix(),
         }
@@ -887,28 +1017,146 @@ pub const LineSession = struct {
         return if (count) |value| @max(value, 1) else null;
     }
 
+    fn beginViInsertRepeat(self: *LineSession, capture: ViInsertRepeatCapture) void {
+        if (self.vi_replaying_repeat) return;
+        self.vi_insert_repeat = capture;
+        self.vi_insert_repeat_text.clearRetainingCapacity();
+    }
+
+    fn appendViInsertRepeatText(self: *LineSession, text: []const u8) !void {
+        if (self.vi_insert_repeat == null or self.vi_replaying_repeat) return;
+        try self.vi_insert_repeat_text.appendSlice(self.allocator, text);
+    }
+
+    fn finishViInsertRepeat(self: *LineSession) !void {
+        const capture = self.vi_insert_repeat orelse return;
+        defer {
+            self.vi_insert_repeat = null;
+            self.vi_insert_repeat_text.clearRetainingCapacity();
+        }
+
+        const text = self.vi_insert_repeat_text.items;
+        switch (capture) {
+            .insert => |insert| {
+                if (text.len == 0) return;
+                var remaining = insert.text_count -| 1;
+                while (remaining != 0) : (remaining -= 1) try self.editor.buffer.insertText(text);
+                if (!self.vi_replaying_repeat) {
+                    try self.setViLastRepeat(.{ .insert = .{ .placement = insert.placement, .text = try self.allocator.dupe(u8, text), .text_count = insert.text_count } });
+                }
+            },
+            .change_to_end => {
+                if (!self.vi_replaying_repeat) try self.setViLastRepeat(.{ .change_to_end = try self.allocator.dupe(u8, text) });
+            },
+            .clear_line_change => {
+                if (!self.vi_replaying_repeat) try self.setViLastRepeat(.{ .clear_line_change = try self.allocator.dupe(u8, text) });
+            },
+            .operator_change => |change| {
+                if (!self.vi_replaying_repeat) {
+                    try self.setViLastRepeat(.{ .operator_change = .{ .motion_command = change.motion_command, .count = change.count, .text = try self.allocator.dupe(u8, text) } });
+                }
+            },
+        }
+    }
+
+    fn clearViLastRepeat(self: *LineSession) void {
+        if (self.vi_last_repeat) |repeat| repeat.deinit(self.allocator);
+        self.vi_last_repeat = null;
+    }
+
+    fn setViLastRepeat(self: *LineSession, repeat: ViRepeat) !void {
+        self.clearViLastRepeat();
+        self.vi_last_repeat = repeat;
+    }
+
+    fn repeatViLastChange(self: *LineSession) !void {
+        const repeat = self.vi_last_repeat orelse {
+            self.resetViCommandPrefix();
+            return;
+        };
+        const count = self.takeViCountOrDefault(1);
+        self.vi_replaying_repeat = true;
+        defer self.vi_replaying_repeat = false;
+        var remaining = count;
+        while (remaining != 0) : (remaining -= 1) try self.applyViRepeat(repeat);
+        self.resetViCommandPrefix();
+    }
+
+    fn applyViRepeat(self: *LineSession, repeat: ViRepeat) !void {
+        switch (repeat) {
+            .insert => |insert| {
+                try self.saveViUndo();
+                self.applyViInsertPlacement(insert.placement);
+                try self.insertViRepeatText(insert.text, insert.text_count);
+            },
+            .replace => |replace| _ = try self.viReplaceCharacters(replace.text, replace.count),
+            .delete_forward => |count| _ = try self.viDeleteForward(count),
+            .delete_backward => |count| _ = try self.viDeleteBackward(count),
+            .delete_to_end => _ = try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte),
+            .change_to_end => |text| {
+                _ = try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte);
+                try self.insertViRepeatText(text, 1);
+            },
+            .clear_line_delete => _ = try self.viClearLine(false),
+            .clear_line_change => |text| {
+                _ = try self.viClearLine(false);
+                try self.insertViRepeatText(text, 1);
+            },
+            .operator_delete => |operator| try self.applyViOperator(.delete, operator.motion_command, operator.count),
+            .operator_change => |operator| {
+                const motion = viMotion(self.editor.buffer.text(), self.editor.buffer.cursor_byte, operator.motion_command, operator.count) orelse return;
+                const range = viOperatorMotionRange(self.editor.buffer.text(), self.editor.buffer.cursor_byte, .change, operator.motion_command, operator.count, motion);
+                if (!try self.viDeleteRange(range.start, range.end, range.cursor_after_delete)) return;
+                try self.insertViRepeatText(operator.text, 1);
+            },
+            .put_after => |count| _ = try self.viPutAfter(count),
+            .put_before => |count| _ = try self.viPutBefore(count),
+            .toggle_case => |count| _ = try self.viToggleCase(count),
+        }
+    }
+
+    fn applyViInsertPlacement(self: *LineSession, placement: ViInsertPlacement) void {
+        switch (placement) {
+            .at_cursor => {},
+            .after_cursor => if (self.editor.buffer.text().len != 0) self.editor.buffer.moveRight(),
+            .line_start => self.editor.buffer.cursor_byte = firstNonBlank(self.editor.buffer.text()),
+            .line_end => self.editor.buffer.moveEnd(),
+        }
+    }
+
+    fn insertViRepeatText(self: *LineSession, text: []const u8, count: usize) !void {
+        var remaining = count;
+        while (remaining != 0) : (remaining -= 1) try self.editor.buffer.insertText(text);
+        if (text.len != 0) self.editor.buffer.moveLeft();
+        self.completion_menu.clear(self.allocator);
+    }
+
     fn applyViMotionCommand(self: *LineSession, command: u21) !void {
         const count = self.takeViCountOrDefault(1);
         const motion = viMotion(self.editor.buffer.text(), self.editor.buffer.cursor_byte, command, count) orelse return;
         self.editor.buffer.cursor_byte = motion.cursor;
     }
 
-    fn applyViOperator(self: *LineSession, operator: ViOperator, motion_command: u21) !void {
+    fn applyViOperator(self: *LineSession, operator: ViOperator, motion_command: u21, count: usize) !void {
         if ((operator == .delete and motion_command == 'd') or (operator == .change and motion_command == 'c') or (operator == .yank and motion_command == 'y')) {
             switch (operator) {
-                .delete => try self.viClearLine(false),
-                .change => try self.viClearLine(true),
+                .delete => if (try self.viClearLine(false) and !self.vi_replaying_repeat) try self.setViLastRepeat(.clear_line_delete),
+                .change => {
+                    _ = try self.viClearLine(false);
+                    self.beginViInsertRepeat(.clear_line_change);
+                    self.enterViInsertModeAtCursor();
+                },
                 .yank => try self.viYankRange(0, self.editor.buffer.text().len),
             }
             return;
         }
-        const count = self.takeViCountOrDefault(1);
         const motion = viMotion(self.editor.buffer.text(), self.editor.buffer.cursor_byte, motion_command, count) orelse return;
-        const range = viMotionRange(self.editor.buffer.text(), self.editor.buffer.cursor_byte, motion);
+        const range = viOperatorMotionRange(self.editor.buffer.text(), self.editor.buffer.cursor_byte, operator, motion_command, count, motion);
         switch (operator) {
-            .delete => try self.viDeleteRange(range.start, range.end, range.cursor_after_delete),
+            .delete => if (try self.viDeleteRange(range.start, range.end, range.cursor_after_delete) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .operator_delete = .{ .motion_command = motion_command, .count = count } }),
             .change => {
-                try self.viDeleteRange(range.start, range.end, range.cursor_after_delete);
+                if (!try self.viDeleteRange(range.start, range.end, range.cursor_after_delete)) return;
+                self.beginViInsertRepeat(.{ .operator_change = .{ .motion_command = motion_command, .count = count } });
                 self.enterViInsertModeAtCursor();
             },
             .yank => try self.viYankRange(range.start, range.end),
@@ -921,8 +1169,8 @@ pub const LineSession = struct {
         self.vi_last_find = find;
     }
 
-    fn viReplaceCharacters(self: *LineSession, replacement: []const u8, count: usize) !void {
-        if (self.editor.buffer.text().len == 0) return;
+    fn viReplaceCharacters(self: *LineSession, replacement: []const u8, count: usize) !bool {
+        if (self.editor.buffer.text().len == 0) return false;
         try self.saveViUndo();
         var remaining = count;
         while (remaining != 0 and self.editor.buffer.cursor_byte < self.editor.buffer.text().len) : (remaining -= 1) {
@@ -930,26 +1178,27 @@ pub const LineSession = struct {
         }
         self.editor.buffer.moveLeft();
         self.completion_menu.clear(self.allocator);
+        return remaining != count;
     }
 
-    fn viDeleteForward(self: *LineSession, count: usize) !void {
-        if (self.editor.buffer.text().len == 0) return;
+    fn viDeleteForward(self: *LineSession, count: usize) !bool {
+        if (self.editor.buffer.text().len == 0) return false;
         var end = self.editor.buffer.cursor_byte;
         var remaining = count;
         while (remaining != 0 and end < self.editor.buffer.text().len) : (remaining -= 1) end = nextGraphemeEnd(self.editor.buffer.text(), end);
-        try self.viDeleteRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
+        return self.viDeleteRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
     }
 
-    fn viDeleteBackward(self: *LineSession, count: usize) !void {
-        if (self.editor.buffer.text().len <= 1 or self.editor.buffer.cursor_byte == 0) return;
+    fn viDeleteBackward(self: *LineSession, count: usize) !bool {
+        if (self.editor.buffer.text().len <= 1 or self.editor.buffer.cursor_byte == 0) return false;
         var start = self.editor.buffer.cursor_byte;
         var remaining = count;
         while (remaining != 0 and start != 0) : (remaining -= 1) start = previousGraphemeStart(self.editor.buffer.text(), start);
-        try self.viDeleteRange(start, self.editor.buffer.cursor_byte, start);
+        return self.viDeleteRange(start, self.editor.buffer.cursor_byte, start);
     }
 
-    fn viDeleteRange(self: *LineSession, start: usize, end: usize, cursor_after_delete: usize) !void {
-        if (start >= end) return;
+    fn viDeleteRange(self: *LineSession, start: usize, end: usize, cursor_after_delete: usize) !bool {
+        if (start >= end) return false;
         try self.saveViUndo();
         self.kill_ring.clearRetainingCapacity();
         try self.kill_ring.appendSlice(self.allocator, self.editor.buffer.text()[start..end]);
@@ -957,6 +1206,7 @@ pub const LineSession = struct {
         self.editor.buffer.cursor_byte = @min(cursor_after_delete, self.editor.buffer.text().len);
         if (self.vi_state == .command and self.editor.buffer.cursor_byte == self.editor.buffer.text().len) self.editor.buffer.moveLeft();
         self.completion_menu.clear(self.allocator);
+        return true;
     }
 
     fn viYankRange(self: *LineSession, start: usize, end: usize) !void {
@@ -965,37 +1215,42 @@ pub const LineSession = struct {
         try self.kill_ring.appendSlice(self.allocator, self.editor.buffer.text()[start..end]);
     }
 
-    fn viClearLine(self: *LineSession, insert_after: bool) !void {
+    fn viClearLine(self: *LineSession, insert_after: bool) !bool {
+        const changed = self.editor.buffer.text().len != 0;
         try self.saveViUndo();
         self.kill_ring.clearRetainingCapacity();
         try self.kill_ring.appendSlice(self.allocator, self.editor.buffer.text());
         try self.editor.buffer.replace("");
         if (insert_after) self.enterViInsertModeAtCursor();
         self.completion_menu.clear(self.allocator);
+        return changed;
     }
 
-    fn viPutAfter(self: *LineSession, count: usize) !void {
-        if (self.kill_ring.items.len == 0) return;
+    fn viPutAfter(self: *LineSession, count: usize) !bool {
+        if (self.kill_ring.items.len == 0) return false;
         try self.saveViUndo();
         if (self.editor.buffer.text().len != 0) self.editor.buffer.moveRight();
         var remaining = count;
         while (remaining != 0) : (remaining -= 1) try self.editor.buffer.insertText(self.kill_ring.items);
         self.editor.buffer.moveLeft();
         self.completion_menu.clear(self.allocator);
+        return true;
     }
 
-    fn viPutBefore(self: *LineSession, count: usize) !void {
-        if (self.kill_ring.items.len == 0) return;
+    fn viPutBefore(self: *LineSession, count: usize) !bool {
+        if (self.kill_ring.items.len == 0) return false;
         try self.saveViUndo();
         var remaining = count;
         while (remaining != 0) : (remaining -= 1) try self.editor.buffer.insertText(self.kill_ring.items);
         self.editor.buffer.moveLeft();
         self.completion_menu.clear(self.allocator);
+        return true;
     }
 
-    fn viToggleCase(self: *LineSession, count: usize) !void {
-        if (self.editor.buffer.text().len == 0) return;
+    fn viToggleCase(self: *LineSession, count: usize) !bool {
+        if (self.editor.buffer.text().len == 0) return false;
         try self.saveViUndo();
+        const start_cursor = self.editor.buffer.cursor_byte;
         var remaining = count;
         while (remaining != 0 and self.editor.buffer.cursor_byte < self.editor.buffer.text().len) : (remaining -= 1) {
             const cursor = self.editor.buffer.cursor_byte;
@@ -1007,6 +1262,7 @@ pub const LineSession = struct {
             self.editor.buffer.moveRight();
         }
         self.completion_menu.clear(self.allocator);
+        return self.editor.buffer.cursor_byte != start_cursor or count != 0;
     }
 
     fn viHistoryPrevious(self: *LineSession, count: usize) !void {
@@ -2802,7 +3058,7 @@ fn viMotion(bytes: []const u8, cursor_byte: usize, command: u21, count: usize) ?
     return switch (command) {
         '0' => .{ .cursor = 0 },
         '^' => .{ .cursor = firstNonBlank(bytes) },
-        '$' => .{ .cursor = lastGraphemeStart(bytes), .inclusive = true },
+        '$' => if (count == 1) .{ .cursor = lastGraphemeStart(bytes), .inclusive = true } else null,
         'h' => .{ .cursor = previousViCharacter(bytes, cursor_byte, count) },
         'l', ' ' => .{ .cursor = nextViCharacter(bytes, cursor_byte, count) },
         '|' => .{ .cursor = nthViCharacter(bytes, count) },
@@ -2820,6 +3076,40 @@ fn viMotionRange(bytes: []const u8, cursor_byte: usize, motion: ViMotionResult) 
     if (motion.cursor < cursor_byte) return .{ .start = motion.cursor, .end = cursor_byte, .cursor_after_delete = motion.cursor };
     const end = if (motion.inclusive) nextGraphemeEnd(bytes, motion.cursor) else motion.cursor;
     return .{ .start = cursor_byte, .end = end, .cursor_after_delete = cursor_byte };
+}
+
+fn viOperatorMotionRange(bytes: []const u8, cursor_byte: usize, operator: ViOperator, motion_command: u21, count: usize, motion: ViMotionResult) ViMotionRange {
+    if (operator == .change and (motion_command == 'w' or motion_command == 'W')) {
+        return viChangeWordMotionRange(bytes, cursor_byte, motion_command, count, motion);
+    }
+    if ((motion_command == 'w' or motion_command == 'W') and motion.cursor == lastGraphemeStart(bytes) and motion.cursor >= cursor_byte) {
+        return .{ .start = cursor_byte, .end = bytes.len, .cursor_after_delete = cursor_byte };
+    }
+    return viMotionRange(bytes, cursor_byte, motion);
+}
+
+fn viChangeWordMotionRange(bytes: []const u8, cursor_byte: usize, motion_command: u21, count: usize, motion: ViMotionResult) ViMotionRange {
+    if (bytes.len == 0 or motion.cursor <= cursor_byte) return viMotionRange(bytes, cursor_byte, motion);
+    if (count == 1 and cursor_byte < bytes.len and isAsciiWhitespace(bytes[cursor_byte])) {
+        return .{ .start = cursor_byte, .end = nextCodepointEnd(bytes, cursor_byte), .cursor_after_delete = cursor_byte };
+    }
+    if (motion.cursor == lastGraphemeStart(bytes)) {
+        return .{ .start = cursor_byte, .end = bytes.len, .cursor_after_delete = cursor_byte };
+    }
+
+    var end = motion.cursor;
+    while (end > cursor_byte) {
+        const previous = previousCodepointStart(bytes, end);
+        if (!isAsciiWhitespace(bytes[previous])) break;
+        end = previous;
+    }
+    if (end == cursor_byte and (motion_command == 'w' or motion_command == 'W')) end = motion.cursor;
+    return .{ .start = cursor_byte, .end = end, .cursor_after_delete = cursor_byte };
+}
+
+fn multiplyViCounts(a: usize, b: usize) usize {
+    if (a != 0 and b > std.math.maxInt(usize) / a) return std.math.maxInt(usize);
+    return a * b;
 }
 
 fn previousViCharacter(bytes: []const u8, cursor_byte: usize, count: usize) usize {
@@ -3726,6 +4016,136 @@ test "vi line session deletes to end and puts killed text" {
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
     try session.handleKey(.{ .key = .text, .text = "p" });
     try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+}
+
+test "vi line session repeats insert replace and delete changes with dot" {
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "ab" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "I" });
+    try session.handleKey(.{ .key = .text, .text = "x" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "." });
+    try std.testing.expectEqualStrings("xxab", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "l" });
+    try session.handleKey(.{ .key = .text, .text = "r" });
+    try session.handleKey(.{ .key = .text, .text = "Y" });
+    try session.handleKey(.{ .key = .text, .text = "l" });
+    try session.handleKey(.{ .key = .text, .text = "." });
+    try std.testing.expectEqualStrings("xYYb", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "0" });
+    try session.handleKey(.{ .key = .text, .text = "2" });
+    try session.handleKey(.{ .key = .text, .text = "x" });
+    try std.testing.expectEqualStrings("Yb", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .text, .text = "." });
+    try std.testing.expectEqualStrings("", session.editor.buffer.text());
+}
+
+test "vi line session repeats counted insert text" {
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "ab" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "0" });
+    try session.handleKey(.{ .key = .text, .text = "3" });
+    try session.handleKey(.{ .key = .text, .text = "i" });
+    try session.handleKey(.{ .key = .text, .text = "x" });
+    try session.handleKey(.{ .key = .escape });
+    try std.testing.expectEqualStrings("xxxab", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "." });
+    try std.testing.expectEqualStrings("xxxxxxab", session.editor.buffer.text());
+}
+
+test "vi line session multiplies operator and motion counts" {
+    var before_operator = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer before_operator.deinit();
+    try before_operator.handleKey(.{ .key = .text, .text = "one two three" });
+    try before_operator.handleKey(.{ .key = .escape });
+    try before_operator.handleKey(.{ .key = .text, .text = "0" });
+    try before_operator.handleKey(.{ .key = .text, .text = "2" });
+    try before_operator.handleKey(.{ .key = .text, .text = "c" });
+    try before_operator.handleKey(.{ .key = .text, .text = "w" });
+    try before_operator.handleKey(.{ .key = .text, .text = "X" });
+    try before_operator.handleKey(.{ .key = .escape });
+    try std.testing.expectEqualStrings("X three", before_operator.editor.buffer.text());
+
+    var after_operator = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer after_operator.deinit();
+    try after_operator.handleKey(.{ .key = .text, .text = "one two three" });
+    try after_operator.handleKey(.{ .key = .escape });
+    try after_operator.handleKey(.{ .key = .text, .text = "0" });
+    try after_operator.handleKey(.{ .key = .text, .text = "c" });
+    try after_operator.handleKey(.{ .key = .text, .text = "2" });
+    try after_operator.handleKey(.{ .key = .text, .text = "w" });
+    try after_operator.handleKey(.{ .key = .text, .text = "X" });
+    try after_operator.handleKey(.{ .key = .escape });
+    try std.testing.expectEqualStrings("X three", after_operator.editor.buffer.text());
+
+    var multiplied = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer multiplied.deinit();
+    try multiplied.handleKey(.{ .key = .text, .text = "one two three four" });
+    try multiplied.handleKey(.{ .key = .escape });
+    try multiplied.handleKey(.{ .key = .text, .text = "0" });
+    try multiplied.handleKey(.{ .key = .text, .text = "2" });
+    try multiplied.handleKey(.{ .key = .text, .text = "d" });
+    try multiplied.handleKey(.{ .key = .text, .text = "2" });
+    try multiplied.handleKey(.{ .key = .text, .text = "w" });
+    try std.testing.expectEqualStrings("", multiplied.editor.buffer.text());
+}
+
+test "vi line session repeats operator changes and preserves change-word blanks" {
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "one two three" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "0" });
+    try session.handleKey(.{ .key = .text, .text = "c" });
+    try session.handleKey(.{ .key = .text, .text = "w" });
+    try session.handleKey(.{ .key = .text, .text = "X" });
+    try session.handleKey(.{ .key = .escape });
+    try std.testing.expectEqualStrings("X two three", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "w" });
+    try session.handleKey(.{ .key = .text, .text = "." });
+    try std.testing.expectEqualStrings("X X three", session.editor.buffer.text());
+
+    var blank = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer blank.deinit();
+    try blank.handleKey(.{ .key = .text, .text = "one  two" });
+    try blank.handleKey(.{ .key = .escape });
+    try blank.handleKey(.{ .key = .text, .text = "0" });
+    try blank.handleKey(.{ .key = .text, .text = "l" });
+    try blank.handleKey(.{ .key = .text, .text = "l" });
+    try blank.handleKey(.{ .key = .text, .text = "l" });
+    try blank.handleKey(.{ .key = .text, .text = "c" });
+    try blank.handleKey(.{ .key = .text, .text = "w" });
+    try blank.handleKey(.{ .key = .text, .text = "X" });
+    try blank.handleKey(.{ .key = .escape });
+    try std.testing.expectEqualStrings("oneX two", blank.editor.buffer.text());
+}
+
+test "vi line session leaves out-of-range operator motions unchanged" {
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "abc" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "d" });
+    try session.handleKey(.{ .key = .text, .text = "l" });
+    try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 2), session.editor.buffer.cursor_byte);
+
+    try session.handleKey(.{ .key = .text, .text = "2" });
+    try session.handleKey(.{ .key = .text, .text = "$" });
+    try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 2), session.editor.buffer.cursor_byte);
 }
 
 test "vi line session inserts previous history bigwords with underscore" {
