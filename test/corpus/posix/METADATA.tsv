@@ -251,6 +251,7 @@ option-set-plus-o-reinput	options	option	set +o output can be re-input to restor
 set-o-nounset-default-operator	options	option	-
 set-verbose	options	option	-
 set-xtrace	options	option	-
+set-xtrace-external-pipeline	options	option	xtrace output is emitted for each optimized external-only pipeline stage before pipeline output
 set-xtrace-expanded-assignments	options	option	xtrace output is emitted before execution and after assignment and word expansion
 simple-echo	lexing	behavior	-
 special-builtin-assignment-prefix	variables	behavior	-

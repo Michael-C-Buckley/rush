@@ -4940,6 +4940,28 @@ pub const Executor = struct {
     }
 
     fn executeExternalPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
+        const expanded_commands = try self.allocator.alloc(ir.SimpleCommand, pipeline.command_indexes.len);
+        defer self.allocator.free(expanded_commands);
+        var expanded_count: usize = 0;
+        defer for (expanded_commands[0..expanded_count]) |expanded| self.freeExpandedCommand(expanded);
+
+        var trace_stderr: std.ArrayList(u8) = .empty;
+        defer trace_stderr.deinit(self.allocator);
+
+        for (pipeline.command_indexes, 0..) |command_index, index| {
+            expanded_commands[index] = try self.expandSimpleCommand(program.commands[command_index], options);
+            expanded_count += 1;
+            if (self.shell_options.xtrace and (expanded_commands[index].assignments.len != 0 or expanded_commands[index].argv.len != 0)) {
+                const trace = try traceLineForCommand(self.allocator, expanded_commands[index]);
+                defer self.allocator.free(trace);
+                if (options.external_stdio == .inherit) {
+                    try rawWriteAll(2, trace);
+                } else {
+                    try trace_stderr.appendSlice(self.allocator, trace);
+                }
+            }
+        }
+
         const children = try self.allocator.alloc(std.process.Child, pipeline.command_indexes.len);
         defer self.allocator.free(children);
         const cancel_pids = try self.allocator.alloc(?i32, pipeline.command_indexes.len);
@@ -4955,9 +4977,9 @@ pub const Executor = struct {
         defer restoreForegroundTerminal(foreground_terminal);
         var pipeline_pgrp: ?std.posix.pid_t = null;
 
-        for (pipeline.command_indexes, 0..) |command_index, index| {
+        for (pipeline.command_indexes, 0..) |_, index| {
             try checkCanceled(options);
-            const command = program.commands[command_index];
+            const command = expanded_commands[index];
             const argv = try argvForCommand(self.allocator, command);
             defer self.allocator.free(argv);
             var child_env = try self.buildProcessEnv(command.assignments);
@@ -4980,7 +5002,14 @@ pub const Executor = struct {
                 error.FileNotFound => {
                     const open_stdin = previous_stdout;
                     previous_stdout = null;
-                    return self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin);
+                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin);
+                    errdefer failure.deinit();
+                    if (trace_stderr.items.len != 0) {
+                        const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
+                        self.allocator.free(failure.stderr);
+                        failure.stderr = stderr;
+                    }
+                    return failure;
                 },
                 else => return err,
             };
@@ -5020,6 +5049,11 @@ pub const Executor = struct {
             stdout_bytes = try multi_reader.toOwnedSlice(0);
             self.allocator.free(stderr_bytes);
             stderr_bytes = try multi_reader.toOwnedSlice(1);
+        }
+        if (trace_stderr.items.len != 0) {
+            const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, stderr_bytes });
+            self.allocator.free(stderr_bytes);
+            stderr_bytes = stderr;
         }
 
         const statuses = try self.allocator.alloc(ExitStatus, spawned);
@@ -15195,6 +15229,14 @@ test "executor implements set shell option baseline" {
     defer trace.deinit();
     try std.testing.expectEqualStrings("hi\nquiet\n", trace.stdout);
     try std.testing.expectEqualStrings("+ X=hi\n+ echo hi\n+ set +x\n", trace.stderr);
+
+    var external_pipeline_trace_lowered = try parseAndLower(std.testing.allocator, "set -x; X=hi; /usr/bin/printf '%s\\n' \"$X\" | /bin/cat | /bin/cat");
+    defer external_pipeline_trace_lowered.parsed.deinit();
+    defer external_pipeline_trace_lowered.program.deinit();
+    var external_pipeline_trace = try trace_executor.executeProgram(external_pipeline_trace_lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer external_pipeline_trace.deinit();
+    try std.testing.expectEqualStrings("hi\n", external_pipeline_trace.stdout);
+    try std.testing.expectEqualStrings("+ X=hi\n+ /usr/bin/printf %s\\n hi\n+ /bin/cat\n+ /bin/cat\n", external_pipeline_trace.stderr);
 
     var verbose_executor = Executor.init(std.testing.allocator);
     defer verbose_executor.deinit();
