@@ -3867,6 +3867,7 @@ pub const Executor = struct {
         if (pipeline.command_indexes.len != 1 or !options.allow_external or options.io == null) return self.executeAsyncPipelineFallback(program, pipeline, options);
         const command = program.commands[pipeline.command_indexes[0]];
         if (command.argv.len == 0 or builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) return self.executeAsyncPipelineFallback(program, pipeline, options);
+        if (commandNameNeedsRuntimeExpansion(command)) return self.executeAsyncPipelineFallback(program, pipeline, options);
         const expanded = try self.expandSimpleCommand(command, options);
         defer self.freeExpandedCommand(expanded);
         if (expanded.argv.len == 0) return emptyResult(self.allocator, 0);
@@ -4117,8 +4118,18 @@ pub const Executor = struct {
         for (pipeline.command_indexes) |command_index| {
             const command = program.commands[command_index];
             if (command.argv.len == 0) return false;
+            // The real-pipe path chooses external vs. mixed execution before
+            // per-stage expansion, so dynamic command names must use the
+            // normal path where expanded names get function/builtin lookup.
+            if (commandNameNeedsRuntimeExpansion(command)) return false;
         }
         return true;
+    }
+
+    fn commandNameNeedsRuntimeExpansion(command: ir.SimpleCommand) bool {
+        std.debug.assert(command.argv.len != 0);
+        const name = command.argv[0];
+        return !std.mem.eql(u8, name.raw, name.text);
     }
 
     fn executeRealPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
@@ -12292,6 +12303,28 @@ test "executor isolates non-last pipeline stage shell state" {
     try std.testing.expectEqual(@as(ExitStatus, 0), mixed_result.status);
     try std.testing.expectEqualStrings("unset\nbody\nunset\n", mixed_result.stdout);
     try std.testing.expectEqualStrings("", mixed_result.stderr);
+}
+
+test "executor resolves expanded pipeline command names before external fast path" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\f() { printf 'function\n'; }
+        \\cmd=f
+        \\$cmd | /bin/cat
+        \\cmd=cd
+        \\$cmd / | /bin/cat
+        \\printf 'status:%s\n' "$?"
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("function\nstatus:0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor implements source and dot builtins" {

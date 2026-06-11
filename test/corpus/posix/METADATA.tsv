@@ -195,6 +195,7 @@ pathname-bracket-ranges	expansion	behavior	bracket expression ranges in pathname
 pathname-escaped-metacharacter	expansion	behavior	escaped pathname metacharacters are literal
 pathname-slash-components	expansion	behavior	pathname expansion matches slash-separated components
 pathname-unmatched-slash	expansion	behavior	unmatched slash-containing patterns remain literal
+pipeline-expanded-command-lookup	expansion	behavior	Pipeline command names expanded to shell functions or builtins use normal command lookup instead of optimized external-only execution
 pipeline-negation-false	grammar	behavior	-
 pipeline-negation-pipeline	grammar	behavior	-
 pipeline-negation-true	grammar	behavior	-
