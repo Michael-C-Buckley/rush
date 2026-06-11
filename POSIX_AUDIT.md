@@ -157,7 +157,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Arithmetic expansion baseline for integer expressions:
   - `+`, `-`, `*`, `/`, `%`, parentheses, unary `+`/`-`
   - expression text is preprocessed for nested parameter expansion, command substitution, and arithmetic expansion results before arithmetic evaluation in the dash/bash/yash-compatible cases covered by corpus tests
-  - arithmetic-expression backslash processing follows the POSIX double-quote-like subset in representative cases: backslash-newline is removed, escaped `$` remains literal instead of starting a nested expansion, legacy backquotes still perform command substitution, and quote bytes that remain in the arithmetic expression produce invalid-expression diagnostics rather than being quote-removed
+  - arithmetic-expression backslash processing follows the POSIX double-quote-like subset in representative cases: backslash-newline is removed, escaped `$` remains literal instead of starting a nested expansion, legacy backquotes still perform command substitution, unmatched raw legacy backquotes after escaped literal backquotes are classified as backquote substitution syntax errors, and quote bytes that remain in the arithmetic expression produce invalid-expression diagnostics rather than being quote-removed
 - Command substitution with `$()` including nested parsing and executor-backed execution.
 - Legacy backquote command substitution baseline.
 - Command substitution inside double quotes, preserving the quoted field.
@@ -183,7 +183,6 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 - Full pathname expansion semantics.
 - `~user` lookup.
 - POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered malformed braced-parameter and arithmetic cases.
-- Exact diagnostic classification for an unmatched raw legacy backquote that appears later in an arithmetic expression after an escaped literal backquote; Rush now fails before executing earlier commands, but reports the enclosing arithmetic expansion as unterminated instead of naming the backquote substitution like dash/bash/yash.
 
 ## 4. Redirection
 

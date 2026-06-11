@@ -92,12 +92,11 @@ Remaining gaps:
 
 Manifest row: `expansion-arithmetic`
 
-Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, octal/hex constants, and POSIX arithmetic-expression preprocessing of nested parameter expansions and command substitutions before evaluation. The recursive preprocessing behavior was checked against dash, bash `--posix`, and yash for braced defaults, unbraced `$name`, command substitution output, legacy backquote output, backslash-newline continuation, and expression-valued parameter text. Negative coverage includes invalid operators, quoted arithmetic tokens, quote bytes that remain in the expression, escaped `$`/`${...`/backquote initiators that must stay literal, malformed parameter syntax inside arithmetic, and `${parameter:?word}` failures inside arithmetic. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
+Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, octal/hex constants, and POSIX arithmetic-expression preprocessing of nested parameter expansions and command substitutions before evaluation. The recursive preprocessing behavior was checked against dash, bash `--posix`, and yash for braced defaults, unbraced `$name`, command substitution output, legacy backquote output, backslash-newline continuation, and expression-valued parameter text. Negative coverage includes invalid operators, quoted arithmetic tokens, quote bytes that remain in the expression, escaped `$`/`${...`/backquote initiators that must stay literal, unmatched raw legacy-backquote diagnostics after escaped literal backquotes, malformed parameter syntax inside arithmetic, and `${parameter:?word}` failures inside arithmetic. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
 
 Remaining gaps:
 
 - exact POSIX diagnostic wording and consequences for more arithmetic syntax failures;
-- exact diagnostic classification for an unmatched raw legacy backquote that appears after an escaped literal backquote in an arithmetic expression;
 - divide-by-zero behavior;
 - integer overflow and signedness decisions;
 - nonnumeric variable behavior is Rush/Bash-like and not fully differential-safe.

@@ -368,9 +368,17 @@ const Lexer = struct {
 
     fn consumeArithmeticExpansion(self: *Lexer) !void {
         const start = self.index;
-        if (try arithmeticExpansionEnd(self.allocator, self.source, self.source.len, start)) |end| {
-            self.index = end;
-            return;
+        switch (try arithmeticExpansionScan(self.allocator, self.source, self.source.len, start)) {
+            .complete => |end| {
+                self.index = end;
+                return;
+            },
+            .incomplete_backquote => |backquote_start| {
+                self.index = self.source.len;
+                try self.addIncomplete(.init(backquote_start, self.source.len), "unterminated backquote command substitution");
+                return;
+            },
+            .incomplete_arithmetic => {},
         }
 
         self.index = self.source.len;
@@ -812,6 +820,19 @@ pub fn parameterExpansionEnd(allocator: std.mem.Allocator, source: []const u8, l
 }
 
 pub fn arithmeticExpansionEnd(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!?usize {
+    switch (try arithmeticExpansionScan(allocator, source, limit, start)) {
+        .complete => |end| return end,
+        .incomplete_backquote, .incomplete_arithmetic => return null,
+    }
+}
+
+const ArithmeticExpansionScanResult = union(enum) {
+    complete: usize,
+    incomplete_backquote: usize,
+    incomplete_arithmetic,
+};
+
+fn arithmeticExpansionScan(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!ArithmeticExpansionScanResult {
     std.debug.assert(start + 2 < limit);
     std.debug.assert(source[start] == '$');
     std.debug.assert(source[start + 1] == '(');
@@ -832,8 +853,9 @@ const ArithmeticExpansionScanner = struct {
     limit: usize,
     index: usize,
     paren_depth: usize = 0,
+    incomplete_backquote_start: ?usize = null,
 
-    fn scan(self: *ArithmeticExpansionScanner) std.mem.Allocator.Error!?usize {
+    fn scan(self: *ArithmeticExpansionScanner) std.mem.Allocator.Error!ArithmeticExpansionScanResult {
         while (self.index < self.limit) {
             switch (self.source[self.index]) {
                 '\\' => self.skipBackslash(),
@@ -844,14 +866,15 @@ const ArithmeticExpansionScanner = struct {
                     self.index += 1;
                 },
                 ')' => {
-                    if (self.paren_depth == 0 and self.index + 1 < self.limit and self.source[self.index + 1] == ')') return self.index + 2;
+                    if (self.paren_depth == 0 and self.index + 1 < self.limit and self.source[self.index + 1] == ')') return .{ .complete = self.index + 2 };
                     if (self.paren_depth != 0) self.paren_depth -= 1;
                     self.index += 1;
                 },
                 else => self.index += 1,
             }
         }
-        return null;
+        if (self.incomplete_backquote_start) |start| return .{ .incomplete_backquote = start };
+        return .incomplete_arithmetic;
     }
 
     fn skipBackslash(self: *ArithmeticExpansionScanner) void {
@@ -882,6 +905,7 @@ const ArithmeticExpansionScanner = struct {
     }
 
     fn skipBackquoted(self: *ArithmeticExpansionScanner) void {
+        const start = self.index;
         self.index += 1;
         while (self.index < self.limit) {
             switch (self.source[self.index]) {
@@ -896,6 +920,7 @@ const ArithmeticExpansionScanner = struct {
                 else => self.index += 1,
             }
         }
+        self.incomplete_backquote_start = start;
     }
 };
 
@@ -3543,6 +3568,17 @@ test "arithmetic expansion scanner honors arithmetic backslash escapes" {
         @as(?usize, null),
         try arithmeticExpansionEnd(std.testing.allocator, escaped_backquote, escaped_backquote.len, escaped_backquote_start),
     );
+
+    var escaped_backquote_parse = try parse(std.testing.allocator, escaped_backquote, .{});
+    defer escaped_backquote_parse.deinit();
+    try std.testing.expect(escaped_backquote_parse.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), escaped_backquote_parse.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.incomplete_input, escaped_backquote_parse.diagnostics[0].kind);
+    try expectSpan(
+        .init(std.mem.findScalarLast(u8, escaped_backquote, '`').?, escaped_backquote.len),
+        escaped_backquote_parse.diagnostics[0].span,
+    );
+    try std.testing.expectEqualStrings("unterminated backquote command substitution", escaped_backquote_parse.diagnostics[0].message);
 
     const literal_backquote = "echo $((1 + \\`printf 2)); echo after";
     const literal_backquote_start = std.mem.indexOf(u8, literal_backquote, "$((").?;
