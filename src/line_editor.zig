@@ -172,6 +172,11 @@ const ViFindDirection = enum {
     backward,
 };
 
+const ViHistoryDirection = enum {
+    backward,
+    forward,
+};
+
 const ViFindPlacement = enum {
     on_character,
     before_character,
@@ -192,6 +197,7 @@ const ViPending = union(enum) {
         direction: ViFindDirection,
         placement: ViFindPlacement,
     },
+    history_search: ViHistoryDirection,
 };
 
 const ViMotionResult = struct {
@@ -499,6 +505,9 @@ pub const LineSession = struct {
     history_search_match: ?HistoryView.HistoryEntry = null,
     history_search_matches: std.ArrayList(HistoryView.HistoryEntry) = .empty,
     history_search_selected: usize = 0,
+    vi_history_search_query: std.ArrayList(u8) = .empty,
+    vi_last_history_search_pattern: std.ArrayList(u8) = .empty,
+    vi_last_history_search_direction: ?ViHistoryDirection = null,
     kill_ring: std.ArrayList(u8) = .empty,
     completion_menu: CompletionMenu = .{},
     state: State = .editing,
@@ -543,6 +552,8 @@ pub const LineSession = struct {
         self.history_search_matches.deinit(self.allocator);
         self.history_search_original.deinit(self.allocator);
         self.history_search_query.deinit(self.allocator);
+        self.vi_last_history_search_pattern.deinit(self.allocator);
+        self.vi_history_search_query.deinit(self.allocator);
         self.completion_menu.deinit(self.allocator);
         self.kill_ring.deinit(self.allocator);
         self.saved_edit.deinit(self.allocator);
@@ -720,6 +731,11 @@ pub const LineSession = struct {
     }
 
     fn handleViCommandKey(self: *LineSession, event: KeyEvent) !void {
+        switch (self.vi_pending) {
+            .history_search => |direction| return self.handleViHistorySearchKey(direction, event),
+            else => {},
+        }
+
         switch (event.key) {
             .enter => return self.submitInput(),
             .ctrl_c => return self.clearInput(),
@@ -763,6 +779,7 @@ pub const LineSession = struct {
                 self.vi_pending = .none;
                 return;
             },
+            .history_search => unreachable,
         }
 
         if (command >= '1' and command <= '9') {
@@ -807,6 +824,7 @@ pub const LineSession = struct {
             'S' => {
                 try self.viClearLine(true);
             },
+            '_' => try self.viInsertPreviousBigword(self.takeViCount()),
             'd' => self.vi_pending = .{ .operator = .delete },
             'c' => self.vi_pending = .{ .operator = .change },
             'y' => self.vi_pending = .{ .operator = .yank },
@@ -819,6 +837,10 @@ pub const LineSession = struct {
             'k', '-' => try self.viHistoryPrevious(self.takeViCountOrDefault(1)),
             'j', '+' => try self.viHistoryNext(self.takeViCountOrDefault(1)),
             'G' => try self.viHistoryOldestOrNumber(self.vi_count),
+            '/' => self.beginViHistorySearch(.backward),
+            '?' => self.beginViHistorySearch(.forward),
+            'n' => try self.repeatViHistorySearch(false),
+            'N' => try self.repeatViHistorySearch(true),
             '#' => try self.viCommentAndSubmit(),
             else => self.resetViCommandPrefix(),
         }
@@ -857,6 +879,12 @@ pub const LineSession = struct {
         const count = self.vi_count orelse default;
         self.vi_count = null;
         return @max(count, 1);
+    }
+
+    fn takeViCount(self: *LineSession) ?usize {
+        const count = self.vi_count;
+        self.vi_count = null;
+        return if (count) |value| @max(value, 1) else null;
     }
 
     fn applyViMotionCommand(self: *LineSession, command: u21) !void {
@@ -1048,6 +1076,172 @@ pub const LineSession = struct {
         self.editor.buffer.moveHome();
         self.captureViLineUndo() catch {};
         self.completion_menu.clear(self.allocator);
+    }
+
+    fn beginViHistorySearch(self: *LineSession, direction: ViHistoryDirection) void {
+        self.vi_history_search_query.clearRetainingCapacity();
+        self.vi_pending = .{ .history_search = direction };
+        self.completion_menu.clear(self.allocator);
+    }
+
+    fn handleViHistorySearchKey(self: *LineSession, direction: ViHistoryDirection, event: KeyEvent) !void {
+        switch (event.key) {
+            .enter => {
+                const count = self.takeViCountOrDefault(1);
+                const typed_pattern = self.vi_history_search_query.items;
+                if (typed_pattern.len == 0 and self.vi_last_history_search_pattern.items.len == 0) {
+                    self.vi_history_search_query.clearRetainingCapacity();
+                    self.vi_pending = .none;
+                    return;
+                }
+                const pattern = if (typed_pattern.len == 0) self.vi_last_history_search_pattern.items else blk: {
+                    self.vi_last_history_search_pattern.clearRetainingCapacity();
+                    try self.vi_last_history_search_pattern.appendSlice(self.allocator, typed_pattern);
+                    self.vi_last_history_search_direction = direction;
+                    break :blk self.vi_last_history_search_pattern.items;
+                };
+                self.vi_history_search_query.clearRetainingCapacity();
+                self.vi_pending = .none;
+                try self.applyViHistoryPatternSearch(direction, pattern, count);
+            },
+            .escape => {
+                self.vi_history_search_query.clearRetainingCapacity();
+                self.resetViCommandPrefix();
+            },
+            .ctrl_c => {
+                self.vi_history_search_query.clearRetainingCapacity();
+                self.resetViCommandPrefix();
+                try self.clearInput();
+            },
+            .backspace => {
+                if (self.vi_history_search_query.items.len != 0) {
+                    const start = previousCodepointStart(self.vi_history_search_query.items, self.vi_history_search_query.items.len);
+                    self.vi_history_search_query.items.len = start;
+                }
+            },
+            .text => {
+                if (event.text.len != 0) try self.vi_history_search_query.appendSlice(self.allocator, event.text);
+            },
+            else => {},
+        }
+    }
+
+    fn repeatViHistorySearch(self: *LineSession, reverse: bool) !void {
+        const last_direction = self.vi_last_history_search_direction orelse {
+            self.resetViCommandPrefix();
+            return;
+        };
+        if (self.vi_last_history_search_pattern.items.len == 0) {
+            self.resetViCommandPrefix();
+            return;
+        }
+        const direction = if (reverse) reverseViHistoryDirection(last_direction) else last_direction;
+        try self.applyViHistoryPatternSearch(direction, self.vi_last_history_search_pattern.items, self.takeViCountOrDefault(1));
+    }
+
+    fn applyViHistoryPatternSearch(self: *LineSession, direction: ViHistoryDirection, pattern: []const u8, count: usize) !void {
+        if (pattern.len == 0) return;
+        if (self.history_index == null) {
+            self.saved_edit.clearRetainingCapacity();
+            try self.saved_edit.appendSlice(self.allocator, self.editor.buffer.text());
+        }
+
+        var cursor = self.history_index;
+        var selected: ?HistoryView.HistoryEntry = null;
+        var remaining = count;
+        while (remaining != 0) : (remaining -= 1) {
+            const entry = try self.findViHistoryPatternMatch(direction, pattern, cursor) orelse break;
+            if (selected) |old| old.deinit(self.allocator);
+            cursor = entry.id;
+            selected = entry;
+        }
+        const entry = selected orelse return;
+        defer entry.deinit(self.allocator);
+        self.history_index = entry.id;
+        try self.editor.buffer.replace(entry.text);
+        self.editor.buffer.moveHome();
+        self.captureViLineUndo() catch {};
+        self.completion_menu.clear(self.allocator);
+    }
+
+    fn findViHistoryPatternMatch(self: *LineSession, direction: ViHistoryDirection, pattern: []const u8, cursor: ?i64) !?HistoryView.HistoryEntry {
+        if (self.history.context != null) {
+            switch (direction) {
+                .backward => if (self.history.previous != null) return self.queryViHistoryPatternMatch(direction, pattern, cursor),
+                .forward => if (self.history.next != null) return self.queryViHistoryPatternMatch(direction, pattern, cursor),
+            }
+        }
+        return self.findStaticViHistoryPatternMatch(direction, pattern, cursor);
+    }
+
+    fn queryViHistoryPatternMatch(self: *LineSession, direction: ViHistoryDirection, pattern: []const u8, start_cursor: ?i64) !?HistoryView.HistoryEntry {
+        var cursor = start_cursor;
+        while (true) {
+            const entry = switch (direction) {
+                .backward => try self.queryPreviousHistoryBefore("", cursor),
+                .forward => if (cursor) |after| try self.queryNextHistory("", after) else null,
+            } orelse return null;
+            cursor = entry.id;
+            if (viHistoryPatternMatches(pattern, entry.text)) return entry;
+            entry.deinit(self.allocator);
+        }
+    }
+
+    fn findStaticViHistoryPatternMatch(self: LineSession, direction: ViHistoryDirection, pattern: []const u8, cursor: ?i64) !?HistoryView.HistoryEntry {
+        const index = switch (direction) {
+            .backward => self.findPreviousHistoryPatternMatch(staticHistoryStart(self.history.entries.len, cursor), pattern),
+            .forward => if (cursor) |after| self.findNextHistoryPatternMatch(@as(usize, @intCast(after)) + 1, pattern) else null,
+        } orelse return null;
+        return .{ .id = @intCast(index), .text = try self.allocator.dupe(u8, self.history.entries[index]) };
+    }
+
+    fn findPreviousHistoryPatternMatch(self: LineSession, start: usize, pattern: []const u8) ?usize {
+        var index = start;
+        while (index > 0) {
+            index -= 1;
+            if (self.historyEntryPatternMatches(index, pattern)) return index;
+        }
+        return null;
+    }
+
+    fn findNextHistoryPatternMatch(self: LineSession, start: usize, pattern: []const u8) ?usize {
+        var index = start;
+        while (index < self.history.entries.len) : (index += 1) {
+            if (self.historyEntryPatternMatches(index, pattern)) return index;
+        }
+        return null;
+    }
+
+    fn historyEntryPatternMatches(self: LineSession, index: usize, pattern: []const u8) bool {
+        if (!viHistoryPatternMatches(pattern, self.history.entries[index])) return false;
+        const entry = self.history.entries[index];
+        for (self.history.entries[index + 1 ..]) |newer| {
+            if (!std.mem.eql(u8, newer, entry)) continue;
+            if (viHistoryPatternMatches(pattern, newer)) return false;
+        }
+        return true;
+    }
+
+    fn viInsertPreviousBigword(self: *LineSession, maybe_count: ?usize) !void {
+        const entry = try self.previousViHistoryEntry() orelse return;
+        defer entry.deinit(self.allocator);
+        const bigword = viHistoryBigword(entry.text, maybe_count) orelse return;
+
+        try self.saveViUndo();
+        if (self.editor.buffer.text().len != 0) {
+            if (self.editor.buffer.cursor_byte < self.editor.buffer.text().len) self.editor.buffer.moveRight();
+            try self.editor.buffer.insertText(" ");
+        }
+        try self.editor.buffer.insertText(bigword);
+        self.vi_state = .insert;
+        self.resetViCommandPrefix();
+        self.completion_menu.clear(self.allocator);
+    }
+
+    fn previousViHistoryEntry(self: *LineSession) !?HistoryView.HistoryEntry {
+        if (self.history.context != null and self.history.previous != null) return self.queryPreviousHistoryBefore("", self.history_index);
+        const index = self.findPreviousHistoryMatch(staticHistoryStart(self.history.entries.len, self.history_index), "") orelse return null;
+        return .{ .id = @intCast(index), .text = try self.allocator.dupe(u8, self.history.entries[index]) };
     }
 
     fn viCommentAndSubmit(self: *LineSession) !void {
@@ -1328,9 +1522,13 @@ pub const LineSession = struct {
     }
 
     fn queryPreviousHistory(self: *LineSession, prefix: []const u8) !?HistoryView.HistoryEntry {
+        return self.queryPreviousHistoryBefore(prefix, self.history_index);
+    }
+
+    fn queryPreviousHistoryBefore(self: *LineSession, prefix: []const u8, before: ?i64) !?HistoryView.HistoryEntry {
         const context = self.history.context orelse return null;
         const previous = self.history.previous orelse return null;
-        return previous(context, self.allocator, prefix, self.history_index);
+        return previous(context, self.allocator, prefix, before);
     }
 
     fn queryNextHistory(self: *LineSession, prefix: []const u8, after: i64) !?HistoryView.HistoryEntry {
@@ -1576,6 +1774,152 @@ const CompletionFlash = struct {
     start: usize,
     end: usize,
 };
+
+fn reverseViHistoryDirection(direction: ViHistoryDirection) ViHistoryDirection {
+    return switch (direction) {
+        .backward => .forward,
+        .forward => .backward,
+    };
+}
+
+fn staticHistoryStart(entry_count: usize, cursor: ?i64) usize {
+    const index = cursor orelse return entry_count;
+    if (index < 0) return 0;
+    return @min(@as(usize, @intCast(index)), entry_count);
+}
+
+fn viHistoryBigword(line: []const u8, maybe_count: ?usize) ?[]const u8 {
+    var last: ?[]const u8 = null;
+    var ordinal: usize = 0;
+    var index: usize = 0;
+    while (index < line.len) {
+        while (index < line.len and isAsciiWhitespace(line[index])) index += 1;
+        if (index >= line.len) break;
+        const start = index;
+        while (index < line.len and !isAsciiWhitespace(line[index])) index += 1;
+        ordinal += 1;
+        const bigword = line[start..index];
+        if (maybe_count) |count| {
+            if (ordinal == count) return bigword;
+        } else {
+            last = bigword;
+        }
+    }
+    return last;
+}
+
+fn viHistoryPatternMatches(pattern: []const u8, text: []const u8) bool {
+    if (pattern.len == 0) return false;
+    if (pattern[0] == '^') return viHistoryPatternMatchesAt(pattern[1..], text, 0, 0);
+
+    var text_index: usize = 0;
+    while (true) {
+        if (viHistoryPatternMatchesAt(pattern, text, 0, text_index)) return true;
+        if (text_index >= text.len) break;
+        text_index = nextCodepointEnd(text, text_index);
+    }
+    return false;
+}
+
+fn viHistoryPatternMatchesAt(pattern: []const u8, text: []const u8, pattern_index: usize, text_index: usize) bool {
+    if (pattern_index == pattern.len) return true;
+
+    switch (pattern[pattern_index]) {
+        '\\' => {
+            const literal_index = pattern_index + 1;
+            if (literal_index >= pattern.len) return text_index < text.len and text[text_index] == '\\' and viHistoryPatternMatchesAt(pattern, text, literal_index, text_index + 1);
+            return text_index < text.len and text[text_index] == pattern[literal_index] and viHistoryPatternMatchesAt(pattern, text, literal_index + 1, text_index + 1);
+        },
+        '*' => {
+            var next_text = text_index;
+            while (true) {
+                if (viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, next_text)) return true;
+                if (next_text >= text.len) break;
+                next_text = nextCodepointEnd(text, next_text);
+            }
+            return false;
+        },
+        '?' => return text_index < text.len and viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, nextCodepointEnd(text, text_index)),
+        '[' => {
+            if (matchViHistoryPatternBracket(pattern, pattern_index, text, text_index)) |matched| {
+                return matched.ok and viHistoryPatternMatchesAt(pattern, text, matched.next_pattern, nextCodepointEnd(text, text_index));
+            }
+            return text_index < text.len and text[text_index] == '[' and viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, text_index + 1);
+        },
+        else => |byte| return text_index < text.len and text[text_index] == byte and viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, text_index + 1),
+    }
+}
+
+const ViHistoryPatternBracketMatch = struct { ok: bool, next_pattern: usize };
+
+fn matchViHistoryPatternBracket(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) ?ViHistoryPatternBracketMatch {
+    if (text_index >= text.len) return .{ .ok = false, .next_pattern = pattern_index + 1 };
+    var index = pattern_index + 1;
+    if (index >= pattern.len) return null;
+    const negated = pattern[index] == '!' or pattern[index] == '^';
+    if (negated) index += 1;
+
+    var matched = false;
+    var saw_end = false;
+    var first_expression = true;
+    while (index < pattern.len) : (index += 1) {
+        if (pattern[index] == ']' and !first_expression) {
+            saw_end = true;
+            break;
+        }
+        first_expression = false;
+
+        if (matchViHistoryPatternBracketCharacterClass(pattern, index, text[text_index])) |class| {
+            if (class.ok) matched = true;
+            index = class.end_index;
+            continue;
+        }
+
+        if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
+            const start = pattern[index];
+            const end = pattern[index + 2];
+            if (start <= text[text_index] and text[text_index] <= end) matched = true;
+            index += 2;
+            continue;
+        }
+
+        if (pattern[index] == '\\' and index + 1 < pattern.len) index += 1;
+        if (pattern[index] == text[text_index]) matched = true;
+    }
+    if (!saw_end) return null;
+    return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1 };
+}
+
+const ViHistoryPatternBracketClassMatch = struct { ok: bool, end_index: usize };
+
+fn matchViHistoryPatternBracketCharacterClass(pattern: []const u8, index: usize, text: u8) ?ViHistoryPatternBracketClassMatch {
+    if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
+    const name_start = index + 2;
+    var name_end = name_start;
+    while (name_end + 1 < pattern.len) : (name_end += 1) {
+        if (pattern[name_end] == ':' and pattern[name_end + 1] == ']') {
+            const ok = bracketCharacterClassMatches(pattern[name_start..name_end], text) orelse return null;
+            return .{ .ok = ok, .end_index = name_end + 1 };
+        }
+    }
+    return null;
+}
+
+fn bracketCharacterClassMatches(class_name: []const u8, text: u8) ?bool {
+    if (std.mem.eql(u8, class_name, "alnum")) return std.ascii.isAlphanumeric(text);
+    if (std.mem.eql(u8, class_name, "alpha")) return std.ascii.isAlphabetic(text);
+    if (std.mem.eql(u8, class_name, "blank")) return text == ' ' or text == '\t';
+    if (std.mem.eql(u8, class_name, "cntrl")) return std.ascii.isControl(text);
+    if (std.mem.eql(u8, class_name, "digit")) return std.ascii.isDigit(text);
+    if (std.mem.eql(u8, class_name, "graph")) return std.ascii.isGraphical(text);
+    if (std.mem.eql(u8, class_name, "lower")) return std.ascii.isLower(text);
+    if (std.mem.eql(u8, class_name, "print")) return std.ascii.isPrint(text);
+    if (std.mem.eql(u8, class_name, "punct")) return std.ascii.isPunctuation(text);
+    if (std.mem.eql(u8, class_name, "space")) return std.ascii.isWhitespace(text);
+    if (std.mem.eql(u8, class_name, "upper")) return std.ascii.isUpper(text);
+    if (std.mem.eql(u8, class_name, "xdigit")) return std.ascii.isHex(text);
+    return null;
+}
 
 fn cloneHistoryEntry(allocator: std.mem.Allocator, entry: HistoryView.HistoryEntry) !HistoryView.HistoryEntry {
     return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text), .when = entry.when };
@@ -3382,6 +3726,66 @@ test "vi line session deletes to end and puts killed text" {
     try std.testing.expectEqualStrings("git ", session.editor.buffer.text());
     try session.handleKey(.{ .key = .text, .text = "p" });
     try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+}
+
+test "vi line session inserts previous history bigwords with underscore" {
+    const entries = [_][]const u8{ "echo first", "git commit --amend" };
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "run" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "_" });
+    try std.testing.expectEqual(ViState.insert, session.vi_state);
+    try std.testing.expectEqualStrings("run --amend", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "0" });
+    try session.handleKey(.{ .key = .text, .text = "2" });
+    try session.handleKey(.{ .key = .text, .text = "_" });
+    try std.testing.expectEqualStrings("r commitun --amend", session.editor.buffer.text());
+}
+
+test "vi line session searches history with POSIX patterns and n N" {
+    const entries = [_][]const u8{ "echo one", "git status", "echo two", "git commit --amend" };
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "/" });
+    try session.handleKey(.{ .key = .text, .text = "git *" });
+    try session.handleKey(.{ .key = .enter });
+    try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 0), session.editor.buffer.cursor_byte);
+
+    try session.handleKey(.{ .key = .text, .text = "n" });
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "N" });
+    try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "/" });
+    try session.handleKey(.{ .key = .text, .text = "^echo" });
+    try session.handleKey(.{ .key = .enter });
+    try std.testing.expectEqualStrings("echo two", session.editor.buffer.text());
+}
+
+test "vi line session question mark searches history forward" {
+    const entries = [_][]const u8{ "echo one", "git status", "echo two", "git commit --amend" };
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "G" });
+    try std.testing.expectEqualStrings("echo one", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "?" });
+    try session.handleKey(.{ .key = .text, .text = "git*" });
+    try session.handleKey(.{ .key = .enter });
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+
+    try session.handleKey(.{ .key = .text, .text = "n" });
+    try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
 }
 
 test "vi line session renders beam block and underline cursors" {

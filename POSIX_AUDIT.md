@@ -321,7 +321,7 @@ Implemented or partially implemented:
   - `set -o` option state listing in Rush's stable human-readable format
   - `set +o` reusable option-state command listing for supported options
   - `set -o ignoreeof` / `set +o ignoreeof` controls whether interactive EOF asks for explicit `exit`
-  - `set -o vi` / `set +o vi` switches the interactive terminal-independent editor between POSIX vi mode and Rush's default Emacs-style mode; vi mode includes insert, command, and replace submodes with beam, block, and underline cursors.
+  - `set -o vi` / `set +o vi` switches the interactive terminal-independent editor between POSIX vi mode and Rush's default Emacs-style mode; vi mode includes insert, command, and replace submodes with beam, block, and underline cursors, plus POSIX history pattern search (`/`, `?`, `n`, `N`) and previous-line bigword insertion (`_`).
   - `set -m` / `set -o monitor` reflects in option state and enables separate process groups for tracked async jobs in interactive and non-interactive shells; without monitor mode, non-interactive async jobs remain in the shell process group.
   - `set -h` / `set +h` and `set -o nolog` / `set +o nolog` are accepted as no-effect obsolescent compatibility spellings; they do not change command lookup, history, `$-`, or option listings.
 
@@ -329,7 +329,7 @@ Implemented or partially implemented:
 
 - Errexit is baseline-only and lacks many POSIX corner cases around compound commands, command substitutions, and AND-OR/pipeline contexts.
 - Xtrace exact output ordering is baseline-only.
-- POSIX vi command-line editing still has edge commands tracked separately, including external `v`, pathname expansion commands, command aliases, and history pattern search.
+- POSIX vi command-line editing still has edge commands tracked separately, including external `v`, pathname expansion commands, command aliases, and exact repeat/operator-motion edge behavior.
 
 ## 8. Interactive behavior and job control
 
