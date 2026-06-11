@@ -27,6 +27,7 @@ pub const DriverEvent = union(enum) {
 pub const TerminalEvent = union(enum) {
     key_press: line_editor.KeyEvent,
     key_release: line_editor.KeyEvent,
+    paste: []const u8,
     paste_start,
     paste_end,
     focus_in,
@@ -162,6 +163,7 @@ pub const TerminalParser = struct {
         return switch (event) {
             .key_press => |key| .{ .key_press = try self.keyEventFromVaxis(key) },
             .key_release => |key| .{ .key_release = try self.keyEventFromVaxis(key) },
+            .paste => |text| .{ .paste = try self.eventText(text) },
             .paste_start => .paste_start,
             .paste_end => .paste_end,
             .focus_in => .focus_in,
@@ -175,18 +177,22 @@ pub const TerminalParser = struct {
             .cap_color_scheme_updates => .{ .capability = .color_scheme_updates },
             .cap_multi_cursor => .{ .capability = .multi_cursor },
             .winsize => |winsize| .{ .resize = winsize },
-            .mouse, .mouse_leave, .paste, .color_report, .color_scheme => null,
+            .mouse, .mouse_leave, .color_report, .color_scheme => null,
         };
     }
 
     fn keyEventFromVaxis(self: *TerminalParser, key: vaxis.Key) !line_editor.KeyEvent {
         var event = line_editor.keyEventFromVaxis(key);
         if (event.text.len != 0) {
-            const start = self.event_text.items.len;
-            try self.event_text.appendSlice(self.allocator, event.text);
-            event.text = self.event_text.items[start..];
+            event.text = try self.eventText(event.text);
         }
         return event;
+    }
+
+    fn eventText(self: *TerminalParser, text: []const u8) ![]const u8 {
+        const start = self.event_text.items.len;
+        try self.event_text.appendSlice(self.allocator, text);
+        return self.event_text.items[start..];
     }
 };
 
@@ -618,6 +624,10 @@ pub const TerminalSession = struct {
                     .paste_start => {
                         render_needed = true;
                         session.beginPaste();
+                    },
+                    .paste => |text| {
+                        render_needed = true;
+                        try session.handlePaste(text);
                     },
                     .paste_end => {
                         render_needed = true;
@@ -1304,6 +1314,24 @@ test "terminal parser emits enter and backspace" {
     try std.testing.expectEqual(@as(usize, 2), events.items.len);
     try std.testing.expectEqual(line_editor.Key.enter, events.items[0].key_press.key);
     try std.testing.expectEqual(line_editor.Key.backspace, events.items[1].key_press.key);
+}
+
+test "terminal parser marks bracketed paste around text keys" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[200~echo one\necho two\x1b[201~", &events);
+
+    try std.testing.expect(events.items.len > 3);
+    try std.testing.expectEqual(TerminalEvent.paste_start, events.items[0]);
+    try std.testing.expectEqual(TerminalEvent.paste_end, events.items[events.items.len - 1]);
+    var saw_enter = false;
+    for (events.items[1 .. events.items.len - 1]) |event| {
+        if (event == .key_press and event.key_press.key == .enter) saw_enter = true;
+    }
+    try std.testing.expect(saw_enter);
 }
 
 fn testExpandAbbreviation(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8, cursor: usize, append_space: bool) !?completion.Edit {

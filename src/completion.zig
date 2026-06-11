@@ -196,11 +196,13 @@ fn lessThanCandidate(_: void, a: Candidate, b: Candidate) bool {
 }
 
 fn candidateSortClass(candidate: Candidate) u8 {
-    if (candidate.kind != .option) return 0;
+    if (candidate.kind == .directory) return 0;
+    if (candidate.kind == .file) return 1;
+    if (candidate.kind != .option) return 2;
     if (candidate.option) |option| {
-        if (option.long == null and option.short != null) return 1;
+        if (option.long == null and option.short != null) return 3;
     }
-    return 2;
+    return 4;
 }
 
 fn candidateSortKey(candidate: Candidate) []const u8 {

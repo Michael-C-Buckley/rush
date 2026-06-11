@@ -7257,6 +7257,7 @@ fn builtinCompletionFiles(self: *Executor, builder: *CompletionBuilder, command:
 }
 
 fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io, prefix: []const u8, replace_start: usize, replace_end: usize, extension: ?[]const u8, directories_only: bool, append_slash: bool) !void {
+    _ = append_slash;
     const split = splitCompletionPathPrefix(prefix);
     var dir = try std.Io.Dir.cwd().openDir(io, split.directory, .{ .iterate = true });
     defer dir.close(io);
@@ -7270,8 +7271,8 @@ fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io
         if (extension) |ext| {
             if (!std.mem.endsWith(u8, entry.name, ext)) continue;
         }
-        const value = if (split.display_prefix.len != 0 or (append_slash and is_directory)) value: {
-            const slash = if (append_slash and is_directory) "/" else "";
+        const value = if (split.display_prefix.len != 0 or is_directory) value: {
+            const slash = if (is_directory) "/" else "";
             break :value try std.mem.concat(self.allocator, u8, &.{ split.display_prefix, entry.name, slash });
         } else entry.name;
         defer if (value.ptr != entry.name.ptr) self.allocator.free(value);
@@ -14482,6 +14483,16 @@ test "default completion falls back to paths for unmatched arguments" {
     var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
     file.close(std.testing.io);
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+    const sorted_file_path = "rush-default-completion-a-file.txt";
+    var sorted_file = try std.Io.Dir.cwd().createFile(std.testing.io, sorted_file_path, .{ .truncate = true });
+    sorted_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, sorted_file_path) catch {};
+    const sorted_dir_path = "rush-default-completion-z-dir";
+    std.Io.Dir.cwd().createDir(std.testing.io, sorted_dir_path, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, sorted_dir_path) catch {};
     const prefixed_file_path = "rush-default-completion-dir/foo_prefixed.txt";
     std.Io.Dir.cwd().createDir(std.testing.io, "rush-default-completion-dir", .default_dir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
@@ -14501,6 +14512,12 @@ test "default completion falls back to paths for unmatched arguments" {
     const builtin_candidates = try executor.collectCompletionsForInput("printf rush-default", "printf rush-default".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(builtin_candidates);
     try expectCandidate(builtin_candidates, file_path, .file);
+    try std.testing.expectEqualStrings("rush-default-completion-dir/", builtin_candidates[0].value);
+    try std.testing.expectEqual(completion.Kind.directory, builtin_candidates[0].kind);
+    try std.testing.expectEqualStrings(sorted_dir_path ++ "/", builtin_candidates[1].value);
+    try std.testing.expectEqual(completion.Kind.directory, builtin_candidates[1].kind);
+    try std.testing.expectEqualStrings(sorted_file_path, builtin_candidates[2].value);
+    try std.testing.expectEqual(completion.Kind.file, builtin_candidates[2].kind);
 
     const prefixed_source = "cat ./rush-default-completion-dir/foo_";
     const prefixed_candidates = try executor.collectCompletionsForInput(prefixed_source, prefixed_source.len, .{ .io = std.testing.io });

@@ -507,6 +507,19 @@ pub const LineSession = struct {
         if (self.paste_depth != 0) self.paste_depth -= 1;
     }
 
+    pub fn handlePaste(self: *LineSession, text: []const u8) !void {
+        if (self.state != .editing and self.state != .history_search) return;
+        var normalized: std.ArrayList(u8) = .empty;
+        defer normalized.deinit(self.allocator);
+        const pasted = try normalizePastedText(self.allocator, &normalized, text);
+        try self.editor.buffer.insertText(pasted);
+        self.completion_menu.clear(self.allocator);
+        if (self.state == .history_search) {
+            try self.syncHistorySearchQueryFromBuffer();
+            try self.refreshHistorySearch(null);
+        }
+    }
+
     pub fn renderFrame(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) !Frame {
         var render_options = options;
         var suggestion_suffix: ?[]const u8 = null;
@@ -889,6 +902,20 @@ fn cloneHistoryEntry(allocator: std.mem.Allocator, entry: HistoryView.HistoryEnt
     return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text), .when = entry.when };
 }
 
+fn normalizePastedText(allocator: std.mem.Allocator, buffer: *std.ArrayList(u8), text: []const u8) ![]const u8 {
+    if (std.mem.indexOfScalar(u8, text, '\r') == null) return text;
+    var index: usize = 0;
+    while (index < text.len) : (index += 1) {
+        if (text[index] == '\r') {
+            try buffer.append(allocator, '\n');
+            if (index + 1 < text.len and text[index + 1] == '\n') index += 1;
+        } else {
+            try buffer.append(allocator, text[index]);
+        }
+    }
+    return buffer.items;
+}
+
 fn historySearchDescription(allocator: std.mem.Allocator, now: i64, when: i64) !?[]const u8 {
     if (now <= 0 or when <= 0) return null;
     var age_buffer: [16]u8 = undefined;
@@ -1227,6 +1254,13 @@ fn appendWrappedLine(allocator: std.mem.Allocator, lines: *std.ArrayList([]const
     var row_width: u16 = 0;
     var i: usize = 0;
     while (i < bytes.len) {
+        if (bytes[i] == '\n') {
+            try lines.append(allocator, try row.toOwnedSlice(allocator));
+            row = .empty;
+            row_width = 0;
+            i += 1;
+            continue;
+        }
         if (escapeSequenceEnd(bytes, i)) |end| {
             try row.appendSlice(allocator, bytes[i..end]);
             i = end;
@@ -1264,6 +1298,12 @@ fn wrappedPosition(bytes: []const u8, width: u16, method: vaxis.gwidth.Method) W
     var col: u16 = 0;
     var i: usize = 0;
     while (i < bytes.len) {
+        if (bytes[i] == '\n') {
+            row += 1;
+            col = 0;
+            i += 1;
+            continue;
+        }
         if (escapeSequenceEnd(bytes, i)) |end| {
             i = end;
             continue;
@@ -1842,7 +1882,7 @@ test "completion menu styles candidates by kind" {
     var candidates = [_]completion.Candidate{
         .{ .value = "--help", .description = "show help", .kind = .option, .replace_start = 0, .replace_end = 0 },
         .{ .value = "$HOME", .description = "home directory", .kind = .variable, .replace_start = 0, .replace_end = 0 },
-        .{ .value = "src", .description = "source directory", .kind = .directory, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "src/", .description = "source directory", .kind = .directory, .replace_start = 0, .replace_end = 0 },
     };
     try session.applyCompletion(.{ .ambiguous = &candidates });
 
@@ -1850,7 +1890,7 @@ test "completion menu styles candidates by kind" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;81m--help") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;45m$HOME") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;33msrc") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;33msrc/") != null);
 }
 
 test "completion menu renders paired option spellings" {
@@ -2647,6 +2687,22 @@ test "line session inserts enter literally during paste" {
 
     try std.testing.expectEqual(LineSession.State.editing, session.state);
     try std.testing.expectEqualStrings("echo\nhi", session.editor.buffer.text());
+}
+
+test "line session inserts and renders pasted newlines" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+
+    try session.handlePaste("echo one\r\necho two");
+
+    try std.testing.expectEqualStrings("echo one\necho two", session.editor.buffer.text());
+    var frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer frame.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), frame.input_line_count);
+    try std.testing.expectEqualStrings("$ echo one", frame.lines[0]);
+    try std.testing.expectEqualStrings("echo two", frame.lines[1]);
+    try std.testing.expectEqual(@as(usize, 1), frame.cursor_row);
+    try std.testing.expectEqual(@as(u16, 8), frame.cursor_col);
 }
 
 test "prompt invalidation preserves edit state and redraws through session" {

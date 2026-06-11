@@ -1070,6 +1070,7 @@ fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.
     const a_class = completionRankClass(a);
     const b_class = completionRankClass(b);
     if (a_class != b_class) return a_class < b_class;
+    if (completionPathRankClass(a) != null and completionPathRankClass(b) != null) return lessThanCompletionLabel(a, b);
     const a_match_rank = completionCandidateRankSortKey(context.source, a);
     const b_match_rank = completionCandidateRankSortKey(context.source, b);
     if (a_match_rank != b_match_rank) return a_match_rank < b_match_rank;
@@ -1087,11 +1088,20 @@ fn completionCandidateRankSortKey(source: []const u8, candidate: completion_mode
 }
 
 fn completionRankClass(candidate: completion_model.Candidate) u8 {
-    if (candidate.kind != .option) return 0;
+    if (completionPathRankClass(candidate)) |class| return class;
+    if (candidate.kind != .option) return 2;
     if (candidate.option) |option| {
-        if (option.long == null and option.short != null) return 1;
+        if (option.long == null and option.short != null) return 3;
     }
-    return 2;
+    return 4;
+}
+
+fn completionPathRankClass(candidate: completion_model.Candidate) ?u8 {
+    return switch (candidate.kind) {
+        .directory => 0,
+        .file => 1,
+        else => null,
+    };
 }
 
 fn lessThanCompletionLabel(a: completion_model.Candidate, b: completion_model.Candidate) bool {
