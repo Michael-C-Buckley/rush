@@ -2935,6 +2935,14 @@ test "arithmetic expansion records diagnostics instead of leaking parser errors"
     try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((2 ** 3))", .{ .arithmetic_error = &arithmetic_error }));
     try std.testing.expectEqualStrings("$((2 ** 3))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
+
+    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((1 / 0))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectEqualStrings("$((1 / 0))", arithmetic_error.expression);
+    try std.testing.expectEqualStrings("division by zero", arithmetic_error.message);
+
+    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((1 % 0))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectEqualStrings("$((1 % 0))", arithmetic_error.expression);
+    try std.testing.expectEqualStrings("division by zero", arithmetic_error.message);
 }
 
 test "word part parser records arithmetic expansion regions" {
