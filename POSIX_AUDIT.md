@@ -48,7 +48,7 @@ Recent notable capabilities:
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
-- POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
+- POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
@@ -145,6 +145,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
   - `${var-word}`
   - `${var:=word}`
   - `${var=word}`
+  - `${parameter:=word}` / `${parameter=word}` reject positional or special parameters when the expansion would need to assign to them
   - `${var:+word}`
   - `${var+word}`
   - `${var:?word}` baseline error
@@ -162,7 +163,9 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Pathname expansion using current directory glob support for `*`, `?`, bracket classes.
 - Quote removal baseline with POSIX double-quote backslash handling for common cases.
 - Here-doc expansion for unquoted delimiters; quoted delimiters suppress expansion.
-- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, malformed or unsupported braced parameter substitutions, and invalid arithmetic expansion. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
+- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, malformed or unsupported braced parameter substitutions, invalid `${parameter:=word}` / `${parameter=word}` assignment attempts to positional or special parameters, and invalid arithmetic expansion. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
+
+Shell comparison note: dash, bash, and yash agree that assignment forms such as `${1:=x}` and `${10:=x}` are errors when the positional parameter is unset or null, but they expand normally when the parameter already has a usable value. `${1=x}` similarly errors only when the positional is unset. Special parameters follow the same assignment-needed rule in the portable subset Rush now covers; comparison shells differ on some extension edge cases such as empty `$@` with the no-colon form, so Rush keeps focused negative coverage on assignment-needed cases.
 
 ### Partial / gaps
 
@@ -385,6 +388,7 @@ Implemented or partially implemented:
 - Redirected output write failures after successful setup/open report shell-visible `write` diagnostics for shell-implemented commands and non-zero command/stage status in the inherited-stdio executor; external utility write failures are left to the child process.
 - Nounset produces a baseline unset-parameter diagnostic and exits non-interactive execution.
 - `${parameter:?word}` expands the diagnostic word, reports the parameter name, and exits non-interactive execution.
+- `${parameter:=word}` / `${parameter=word}` report a parameter diagnostic and exit non-interactive execution when they would need to assign to a positional or special parameter; set/non-null positional parameters continue to expand normally, including braced multi-digit positionals.
 - Expansion failures in redirection target words, assignment words, for-loop word lists, case subjects/patterns, and invalid arithmetic expansion exit non-interactive execution in current-shell contexts.
 - Expansion failures inside command substitutions exit the substitution subshell, surface diagnostics to the invoking shell, and preserve assignment-only command-substitution status without exiting the invoking shell.
 - Interactive expansion failures abort the current command without setting `pending_exit`, allowing the prompt loop to continue.

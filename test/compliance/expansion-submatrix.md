@@ -40,14 +40,14 @@ Manifest rows:
 - `expansion-parameter-error`
 - `expansion-parameter-error-unset`
 
-Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage. Nested parameter-word hardening remains tracked by the broad baseline row.
+Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, invalid assignment attempts to positional/special parameters when `${parameter:=word}` or `${parameter=word}` would need to assign, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage. Nested parameter-word hardening remains tracked by the broad baseline row.
 
 Remaining high-risk gaps:
 
 - nested `word` portions need broader recursive expansion coverage.
 - larger parameter syntax work, such as substring or pattern-substitution extensions, remains outside the POSIX baseline.
 
-The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, unquoted multi-word braced words, and focused bad-substitution diagnostics for unsupported or malformed braced forms.
+The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, unquoted multi-word braced words, focused bad-substitution diagnostics for unsupported or malformed braced forms, and cannot-assign diagnostics for assignment operators targeting positional or special parameters.
 
 Follow-up tasks: broader nested parameter-word hardening tasks.
 
@@ -62,7 +62,7 @@ Manifest rows:
 - `expansion-positionals-quoted-star`
 - `expansion-positionals-unquoted-at-star`
 
-Rush has supported spec-clause coverage for `$?`, `$$`, `$!`, `$0`, braced multi-digit positional parameters such as `${10}`, quoted `$@`, quoted `$*`, and unquoted `$@`/`$*` with custom IFS. The braced multi-digit coverage also guards that unbraced `$10` remains `$1` followed by literal `0`, and mixed malformed forms such as `${1abc}` stay on the bad-substitution diagnostics path.
+Rush has supported spec-clause coverage for `$?`, `$$`, `$!`, `$0`, braced multi-digit positional parameters such as `${10}`, quoted `$@`, quoted `$*`, and unquoted `$@`/`$*` with custom IFS. The braced multi-digit coverage also guards that unbraced `$10` remains `$1` followed by literal `0`, mixed malformed forms such as `${1abc}` stay on the bad-substitution diagnostics path, and assignment operators reject positional/special targets only when an assignment would actually be needed.
 
 Remaining high-risk gaps:
 

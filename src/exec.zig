@@ -12562,6 +12562,40 @@ test "executor supports POSIX parameter expansion assignment" {
     try std.testing.expectEqualStrings("value\nvalue\nset\n", result.stdout);
 }
 
+test "executor rejects assignment parameter expansion to unset positional parameters" {
+    var lowered = try parseAndLower(std.testing.allocator, "set --; echo before; echo ${1:=value}; echo after");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
+    try std.testing.expectEqualStrings("before\n", result.stdout);
+    try std.testing.expectEqualStrings("1: cannot assign in this way\n", result.stderr);
+}
+
+test "executor permits positional assignment expansion when no assignment is needed" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\set -- one "" 3 4 5 6 7 8 9 ten
+        \\echo ${1:=fallback}
+        \\echo "<${2=fallback}>"
+        \\echo ${10:=fallback}
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("one\n<>\nten\n", result.stdout);
+}
+
 test "executor expands parameters from shell environment" {
     var lowered = try parseAndLower(std.testing.allocator, "FOO=bar; echo $FOO");
     defer lowered.parsed.deinit();

@@ -19,6 +19,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `grammar-case-missing-esac` | `test/corpus/posix-negative` | `grammar-case` | missing `esac` diagnostic for incomplete case command |
 | `expansion-redirection-target-error` | `test/corpus/posix-negative` | `errors-expansion` | redirection target word expansion failure exits non-interactive execution |
 | `expansion-assignment-word-error` | `test/corpus/posix-negative` | `errors-expansion` | assignment word expansion failure exits non-interactive execution |
+| `expansion-parameter-assign-positional-*` / `expansion-parameter-assign-special-*` | `test/corpus/posix-negative` | `errors-expansion`, `expansion-parameter-assignment-operator` | assignment parameter expansion to positional/special parameters fails when assignment would be needed |
 | `expansion-for-list-error` | `test/corpus/posix-negative` | `errors-expansion` | for-loop word-list expansion failure exits non-interactive execution before running the loop body |
 | `expansion-case-subject-error` / `expansion-case-pattern-error` | `test/corpus/posix-negative` | `errors-expansion` | case subject and pattern expansion failures exit non-interactive execution before selecting/running an arm |
 | `expansion-command-substitution-parameter-error` | `test/corpus/posix-negative` | `errors-expansion` | command-substitution parameter expansion failure exits only the substitution subshell while surfacing diagnostics and assignment-only status |

@@ -546,6 +546,7 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
         },
         .assign_default => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
+            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
             const expanded = try expandParameterWord(allocator, parsed.word, options, in_double_quotes);
             errdefer allocator.free(expanded);
             try options.env_set.set(parsed.name, expanded);
@@ -594,6 +595,26 @@ fn invalidParameterExpansion(allocator: std.mem.Allocator, options: Options) any
         parameter_error.message = message;
     }
     return error.ParameterExpansionFailed;
+}
+
+fn parameterAssignmentInvalid(allocator: std.mem.Allocator, options: Options, parameter: []const u8) anyerror {
+    if (options.parameter_error) |parameter_error| {
+        const name = try allocator.dupe(u8, parameter);
+        errdefer allocator.free(name);
+        const message = try allocator.dupe(u8, "cannot assign in this way");
+        parameter_error.clear(allocator);
+        parameter_error.name = name;
+        parameter_error.message = message;
+    }
+    return error.ParameterExpansionFailed;
+}
+
+fn isAssignableParameterName(name: []const u8) bool {
+    if (name.len == 0 or !isNameStart(name[0])) return false;
+    for (name[1..]) |c| {
+        if (!isNameContinue(c)) return false;
+    }
+    return true;
 }
 
 fn specialParameterValue(name: []const u8, options: Options) ?[]const u8 {
@@ -1900,6 +1921,38 @@ test "parameter expansion supports POSIX operators" {
     try std.testing.expectEqualStrings("9:0:0", lengths);
 
     try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }));
+}
+
+test "parameter assignment expansion rejects non-variable targets when assignment is needed" {
+    const params = [_][]const u8{ "one", "" };
+
+    const set_positional = try expandWordScalar(std.testing.allocator, "${1:=fallback}", .{ .positionals = &params });
+    defer std.testing.allocator.free(set_positional);
+    try std.testing.expectEqualStrings("one", set_positional);
+
+    const null_positional_without_colon = try expandWordScalar(std.testing.allocator, "<${2=fallback}>", .{ .positionals = &params });
+    defer std.testing.allocator.free(null_positional_without_colon);
+    try std.testing.expectEqualStrings("<>", null_positional_without_colon);
+
+    const cases = [_]struct {
+        raw: []const u8,
+        name: []const u8,
+    }{
+        .{ .raw = "${2:=fallback}", .name = "2" },
+        .{ .raw = "${3=fallback}", .name = "3" },
+        .{ .raw = "${10:=fallback}", .name = "10" },
+        .{ .raw = "${@:=fallback}", .name = "@" },
+        .{ .raw = "${-:=fallback}", .name = "-" },
+    };
+
+    for (cases) |case| {
+        var parameter_error: ParameterError = .{};
+        defer parameter_error.clear(std.testing.allocator);
+
+        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case.raw, .{ .positionals = &params, .parameter_error = &parameter_error }));
+        try std.testing.expectEqualStrings(case.name, parameter_error.name);
+        try std.testing.expectEqualStrings("cannot assign in this way", parameter_error.message);
+    }
 }
 
 test "parameter expansion rejects malformed braced forms" {
