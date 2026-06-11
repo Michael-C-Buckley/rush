@@ -21,7 +21,7 @@ Validated for this audit refresh:
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `400` rows
 - `scripts/check-posix-corpus.sh`: `360` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `185` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-posix-negative-corpus.sh`: `194` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
 - `scripts/check-system-shell-corpus.sh`: `250` cases, `500` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
@@ -48,7 +48,7 @@ Recent notable capabilities:
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
-- POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
+- POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
@@ -162,7 +162,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Pathname expansion using current directory glob support for `*`, `?`, bracket classes.
 - Quote removal baseline with POSIX double-quote backslash handling for common cases.
 - Here-doc expansion for unquoted delimiters; quoted delimiters suppress expansion.
-- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, and invalid arithmetic expansion. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
+- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, malformed or unsupported braced parameter substitutions, and invalid arithmetic expansion. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
 
 ### Partial / gaps
 
@@ -177,7 +177,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Full quote-aware expansion and field generation in all nested contexts.
 - Full pathname expansion semantics.
 - `~user` lookup.
-- POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered consequence matrix.
+- POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered malformed braced-parameter and arithmetic cases.
 
 ## 4. Redirection
 

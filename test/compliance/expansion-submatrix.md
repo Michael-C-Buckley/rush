@@ -40,13 +40,14 @@ Manifest rows:
 - `expansion-parameter-error`
 - `expansion-parameter-error-unset`
 
-Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage. Nested parameter-word hardening remains tracked by the broad baseline row.
+Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage. Nested parameter-word hardening remains tracked by the broad baseline row.
 
 Remaining high-risk gaps:
 
 - nested `word` portions need broader recursive expansion coverage.
+- larger parameter syntax work, such as substring or pattern-substitution extensions, remains outside the POSIX baseline.
 
-The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, and unquoted multi-word braced words.
+The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, unquoted multi-word braced words, and focused bad-substitution diagnostics for unsupported or malformed braced forms.
 
 Follow-up tasks: broader nested parameter-word hardening tasks.
 

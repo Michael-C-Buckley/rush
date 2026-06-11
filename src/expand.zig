@@ -498,6 +498,7 @@ fn arithmeticExpansionFailed(allocator: std.mem.Allocator, source: []const u8, e
 
 const ParameterOperator = enum {
     none,
+    invalid,
     length,
     default_value,
     assign_default,
@@ -518,6 +519,8 @@ const ParameterExpression = struct {
 
 fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
     const parsed = parseParameterExpression(expression);
+    if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
+
     const value = specialParameterValue(parsed.name, options) orelse options.env.get(parsed.name);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
@@ -573,7 +576,20 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
             defer pattern.deinit(allocator);
             return removePattern(allocator, base, pattern, parsed.operator);
         },
+        .invalid => unreachable,
     }
+}
+
+fn invalidParameterExpansion(allocator: std.mem.Allocator, options: Options) anyerror {
+    if (options.parameter_error) |parameter_error| {
+        const name = try allocator.dupe(u8, "parameter");
+        errdefer allocator.free(name);
+        const message = try allocator.dupe(u8, "bad substitution");
+        parameter_error.clear(allocator);
+        parameter_error.name = name;
+        parameter_error.message = message;
+    }
+    return error.ParameterExpansionFailed;
 }
 
 fn specialParameterValue(name: []const u8, options: Options) ?[]const u8 {
@@ -677,17 +693,13 @@ fn parameterHasUsableValue(is_set: bool, is_null: bool, colon: bool) bool {
 }
 
 fn parseParameterExpression(expression: []const u8) ParameterExpression {
+    if (expression.len == 0) return .{ .name = "", .operator = .invalid };
+
     if (expression.len > 1 and expression[0] == '#') {
         return .{ .name = expression[1..], .operator = .length };
     }
 
-    var name_end: usize = 0;
-    if (expression.len > 0 and isSpecialParameterChar(expression[0])) {
-        name_end = 1;
-    } else {
-        while (name_end < expression.len and isNameContinue(expression[name_end])) : (name_end += 1) {}
-    }
-    if (name_end == 0) return .{ .name = expression };
+    const name_end = parseParameterNameEnd(expression) orelse return .{ .name = "", .operator = .invalid };
     if (name_end >= expression.len) return .{ .name = expression[0..name_end] };
 
     var operator_index = name_end;
@@ -703,7 +715,7 @@ fn parseParameterExpression(expression: []const u8) ParameterExpression {
         '?' => .error_if_unset,
         '%' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '%') .remove_large_suffix else .remove_small_suffix,
         '#' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '#') .remove_large_prefix else .remove_small_prefix,
-        else => return .{ .name = expression },
+        else => return .{ .name = expression[0..name_end], .operator = .invalid },
     };
     const word_start = operator_index + @as(usize, if (operator == .remove_large_suffix or operator == .remove_large_prefix) 2 else 1);
     return .{
@@ -712,6 +724,21 @@ fn parseParameterExpression(expression: []const u8) ParameterExpression {
         .word = expression[word_start..],
         .colon = colon,
     };
+}
+
+fn parseParameterNameEnd(expression: []const u8) ?usize {
+    if (expression.len == 0) return null;
+    if (std.ascii.isDigit(expression[0])) {
+        var name_end: usize = 1;
+        while (name_end < expression.len and std.ascii.isDigit(expression[name_end])) : (name_end += 1) {}
+        return name_end;
+    }
+    if (isSpecialParameterChar(expression[0])) return 1;
+    if (!isNameStart(expression[0])) return null;
+
+    var name_end: usize = 1;
+    while (name_end < expression.len and isNameContinue(expression[name_end])) : (name_end += 1) {}
+    return name_end;
 }
 
 const ArithmeticParser = struct {
@@ -1765,6 +1792,7 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "NEGATIVE_OCTAL_NUM")) return "-010";
     if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
+    if (std.mem.eql(u8, name, "10")) return "ten";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
     if (std.mem.eql(u8, name, "GLOBBY")) return "rush-quoted-glob-?.tmp";
     return null;
@@ -1851,7 +1879,31 @@ test "parameter expansion supports POSIX operators" {
     defer std.testing.allocator.free(lengths);
     try std.testing.expectEqualStrings("9:0:0", lengths);
 
+    const multi_digit = try expandWordScalar(std.testing.allocator, "${10}", .{ .env = test_env });
+    defer std.testing.allocator.free(multi_digit);
+    try std.testing.expectEqualStrings("ten", multi_digit);
+
     try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }));
+}
+
+test "parameter expansion rejects malformed braced forms" {
+    const cases = [_][]const u8{
+        "${}",
+        "${:}",
+        "${USER/}",
+        "${USER:1}",
+        "${USER^}",
+        "${1abc}",
+    };
+
+    for (cases) |case| {
+        var parameter_error: ParameterError = .{};
+        defer parameter_error.clear(std.testing.allocator);
+
+        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case, .{ .env = test_env, .parameter_error = &parameter_error }));
+        try std.testing.expectEqualStrings("parameter", parameter_error.name);
+        try std.testing.expectEqualStrings("bad substitution", parameter_error.message);
+    }
 }
 
 test "parameter expansion supports pattern removal operators" {
