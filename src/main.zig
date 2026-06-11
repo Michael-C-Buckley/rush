@@ -1506,6 +1506,11 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         };
         defer allocator.free(line);
         if (std.mem.eql(u8, line, "exit")) {
+            if (executor.shouldWarnBeforeExitWithStoppedJobs()) {
+                try terminal.finishSemanticCommand(0);
+                try writeAll(io, .stderr, exec.stopped_jobs_exit_warning);
+                continue;
+            }
             try terminal.finishSemanticCommand(0);
             break;
         }

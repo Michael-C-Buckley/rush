@@ -359,20 +359,16 @@ Implemented or partially implemented:
 - Stopped foreground inherited-stdio mixed pipelines are recorded in the job table, restore the shell foreground process group, and can be resumed through `fg` after SIGTSTP/SIGTTIN/SIGTTOU stops in the job-owned wrapper process group.
 - Monitor mode (`set -m`) puts tracked async external and forked compound/mixed-pipeline jobs in their own process groups, keeps background jobs from taking foreground terminal ownership, lets `fg` hand the terminal to that saved process group when available, and gates `fg`/`bg` job-control behavior.
 - `jobs`, `fg`, `bg`, and `wait` resolve POSIX job IDs for current (`%%`/`%+`), previous (`%-`), numeric (`%n`), prefix (`%string`), and substring (`%?string`) forms where the match is unambiguous.
+- Stopped-job lifecycle coverage includes stopped status refresh and prompt notifications, 128+signal status for stopped foreground jobs, dash-compatible `wait` behavior that remains blocked while a stopped job is not continued, stopped→done refresh/notification when a stopped job is killed, saved terminal mode restore on `fg`, and the dash-compatible first `exit` warning while stopped jobs remain.
 
 ### Partial / gaps
 
-- Stopped jobs and precise job status refresh are partial rather than complete.
-- Stopped-job terminal mode save/restore has focused coverage for `fg`, but broader stopped-state lifecycle polish remains tracked separately from the supported `fg`/`bg` utility row.
 - Signal handling for pipelines and asynchronous lists remains conservative.
 
 ### Missing / gaps
 
 - Full job control:
-  - stopped process handling
-  - terminal mode save/restore per job
-  - current/previous job markers and richer job specs
-  - interactive notifications for job state changes
+  - remaining signal-handling edge cases across pipelines and asynchronous lists
 
 ## 9. Error handling and diagnostics
 
@@ -419,8 +415,7 @@ The detailed backlog lives in Tend and the machine-readable status lives in `tes
 
 ### Batch D: Job-control and error-consequence depth
 
-1. Continue stopped-job lifecycle cleanup beyond the focused `fg`/`bg` resume path.
-2. Deepen interactive notification and status-refresh edge cases for completed/stopped jobs.
-3. Add more special-builtin expansion and redirection consequence cases across utilities.
+1. Deepen pipeline/asynchronous-list signal-handling edge cases beyond the supported job-control utility rows.
+2. Add more special-builtin expansion and redirection consequence cases across utilities.
 
 Keep adding POSIX corpus, negative corpus, and manifest evidence alongside each behavior change.

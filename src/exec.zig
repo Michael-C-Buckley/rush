@@ -21,6 +21,7 @@ var pending_trap_signal: std.atomic.Value(u8) = .init(0);
 var test_term_signal_count: std.atomic.Value(u8) = .init(0);
 
 pub const ExitStatus = u8;
+pub const stopped_jobs_exit_warning = "You have stopped jobs.\n";
 
 pub const ExternalStdio = enum {
     capture,
@@ -952,6 +953,7 @@ pub const Executor = struct {
     execution_depth: usize = 0,
     hook_depth: usize = 0,
     running_exit_trap: bool = false,
+    warned_stopped_jobs_on_exit: bool = false,
     arg_zero: []const u8 = "rush",
     last_status_text: [3]u8 = .{ '0', 0, 0 },
     last_status_text_len: usize = 1,
@@ -2799,6 +2801,24 @@ pub const Executor = struct {
             if (job.state == .stopped) saveJobTerminalModes(job);
             self.queueJobNotification(job) catch {};
         }
+    }
+
+    fn hasStoppedBackgroundJobs(self: Executor) bool {
+        for (self.background_jobs.items) |job| {
+            if (job.state == .stopped) return true;
+        }
+        return false;
+    }
+
+    pub fn shouldWarnBeforeExitWithStoppedJobs(self: *Executor) bool {
+        self.refreshBackgroundJobs();
+        if (!self.hasStoppedBackgroundJobs()) {
+            self.warned_stopped_jobs_on_exit = false;
+            return false;
+        }
+        if (self.warned_stopped_jobs_on_exit) return false;
+        self.warned_stopped_jobs_on_exit = true;
+        return true;
     }
 
     fn queueJobNotification(self: *Executor, job: *BackgroundJob) !void {
@@ -7696,12 +7716,16 @@ fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 
 fn builtinExit(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
-    _ = options;
     if (command.argv.len > 2) return exitUsageError(self, "too many arguments");
     const status: ExitStatus = if (command.argv.len == 2) blk: {
         const parsed = std.fmt.parseInt(u64, command.argv[1].text, 10) catch return exitUsageError(self, "numeric argument required");
         break :blk @truncate(parsed);
     } else self.lastStatus();
+    if (options.interactive and self.shouldWarnBeforeExitWithStoppedJobs()) {
+        const stderr = try self.allocator.dupe(u8, stopped_jobs_exit_warning);
+        errdefer self.allocator.free(stderr);
+        return .{ .allocator = self.allocator, .status = 0, .stdout = try self.allocator.alloc(u8, 0), .stderr = stderr };
+    }
     self.pending_exit = status;
     return emptyResult(self.allocator, status);
 }
@@ -9517,6 +9541,7 @@ fn continueStoppedJob(job: *BackgroundJob) !void {
     const pid: std.posix.pid_t = if (job.pgrp) |pgrp| @intCast(-pgrp) else @intCast(job.pid);
     try std.posix.kill(pid, .CONT);
     job.state = .running;
+    job.notified_state = null;
 }
 
 fn saveJobTerminalModes(job: *BackgroundJob) void {
@@ -12974,6 +12999,125 @@ test "executor polls immediate job notifications only for notify jobs" {
     try std.testing.expect(!executor.wantsImmediateJobNotificationPoll());
 }
 
+test "interactive exit warns once while stopped jobs remain" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 1,
+        .pid = 999_999,
+        .command = try std.testing.allocator.dupe(u8, "sleep 1"),
+        .child = undefined,
+        .state = .stopped,
+    });
+
+    var first = try executor.executeScriptSlice("exit", .{ .io = std.testing.io, .interactive = true });
+    defer first.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), first.status);
+    try std.testing.expectEqual(@as(?ExitStatus, null), executor.pending_exit);
+    try std.testing.expectEqualStrings(stopped_jobs_exit_warning, first.stderr);
+
+    var second = try executor.executeScriptSlice("exit", .{ .io = std.testing.io, .interactive = true });
+    defer second.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), second.status);
+    try std.testing.expectEqual(@as(?ExitStatus, 0), executor.pending_exit);
+    try std.testing.expectEqualStrings("", second.stderr);
+}
+
+test "wait on a stopped job blocks until the job continues and exits" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'kill -STOP $$; exit 23' &");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), executor.background_jobs.items.len);
+
+    const job = &executor.background_jobs.items[0];
+    defer if (job.state != .done) {
+        std.posix.kill(@intCast(job.pid), .KILL) catch {};
+        std.posix.kill(@intCast(job.pid), .CONT) catch {};
+        _ = job.child.wait(std.testing.io) catch null;
+        job.state = .done;
+    };
+    try waitForJobState(&executor, job, .stopped);
+    try std.testing.expectEqual(@as(ExitStatus, 128) + signalStatusNumber(std.posix.SIG.STOP), job.status);
+
+    const WaitContext = struct {
+        job: *BackgroundJob,
+        done: std.atomic.Value(bool) = .init(false),
+        status: ExitStatus = 0,
+        err: ?anyerror = null,
+
+        fn run(self: *@This()) void {
+            defer self.done.store(true, .release);
+            self.status = waitBackgroundJob(std.testing.io, self.job) catch |err| {
+                self.err = err;
+                return;
+            };
+        }
+    };
+
+    var context: WaitContext = .{ .job = job };
+    const thread = try std.Thread.spawn(.{}, WaitContext.run, .{&context});
+    var joined = false;
+    defer if (!joined) {
+        std.posix.kill(@intCast(job.pid), .KILL) catch {};
+        std.posix.kill(@intCast(job.pid), .CONT) catch {};
+        thread.join();
+    };
+
+    var attempts: usize = 0;
+    while (attempts < 10) : (attempts += 1) sleepPtyTestPollInterval();
+    try std.testing.expect(!context.done.load(.acquire));
+
+    try std.posix.kill(@intCast(job.pid), .CONT);
+    try waitForWaitContextDone(&context.done);
+    thread.join();
+    joined = true;
+
+    if (context.err) |err| return err;
+    try std.testing.expectEqual(@as(ExitStatus, 23), context.status);
+    try std.testing.expectEqual(JobState.done, job.state);
+}
+
+test "stopped jobs killed while stopped refresh to done and notify" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'kill -STOP $$; sleep 100' &");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), executor.background_jobs.items.len);
+
+    const job = &executor.background_jobs.items[0];
+    defer if (job.state != .done) {
+        std.posix.kill(@intCast(job.pid), .KILL) catch {};
+        std.posix.kill(@intCast(job.pid), .CONT) catch {};
+        _ = job.child.wait(std.testing.io) catch null;
+        job.state = .done;
+    };
+    try waitForJobState(&executor, job, .stopped);
+
+    const stopped = try executor.drainJobNotifications();
+    defer std.testing.allocator.free(stopped);
+    try std.testing.expectEqualStrings("[1] Stopped /bin/sh -c kill -STOP $$; sleep 100\n", stopped);
+
+    try std.posix.kill(@intCast(job.pid), .KILL);
+    try waitForJobState(&executor, job, .done);
+    try std.testing.expectEqual(@as(ExitStatus, 128) + signalStatusNumber(std.posix.SIG.KILL), job.status);
+
+    const done = try executor.drainJobNotifications();
+    defer std.testing.allocator.free(done);
+    try std.testing.expectEqualStrings("[1] Done /bin/sh -c kill -STOP $$; sleep 100\n", done);
+}
+
 test "executor restores saved pty terminal modes before continuing stopped job" {
     var master: c_int = -1;
     var slave: c_int = -1;
@@ -13698,6 +13842,25 @@ fn readPtyTestFileEventually(allocator: std.mem.Allocator, path: []const u8) ![]
         };
         if (contents.len != 0) return contents;
         allocator.free(contents);
+        sleepPtyTestPollInterval();
+    }
+    return error.TestTimedOut;
+}
+
+fn waitForJobState(executor: *Executor, job: *BackgroundJob, state: JobState) !void {
+    var attempts: usize = 0;
+    while (attempts < 500) : (attempts += 1) {
+        executor.refreshBackgroundJobs();
+        if (job.state == state) return;
+        sleepPtyTestPollInterval();
+    }
+    return error.TestTimedOut;
+}
+
+fn waitForWaitContextDone(done: *std.atomic.Value(bool)) !void {
+    var attempts: usize = 0;
+    while (attempts < 500) : (attempts += 1) {
+        if (done.load(.acquire)) return;
         sleepPtyTestPollInterval();
     }
     return error.TestTimedOut;

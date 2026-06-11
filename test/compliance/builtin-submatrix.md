@@ -60,13 +60,13 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
-| `jobs` | `builtin-jobs` | visible table, `-l`, `-p`, numeric, `%`, `%+`, `%%`, `%-`, prefix, and substring job operands; current/previous markers; nonblocking status refresh | interactive notifications and completed-job cleanup |
-| `fg` | `job-fg-bg` | monitor-enabled current, previous, numeric, prefix, and substring tracked jobs wait, propagate status, get terminal handoff when a saved process group exists, send stopped jobs `SIGCONT`, and remove completed foreground jobs from the waitable table | broader stopped-state lifecycle belongs to `job-stopped-state` |
-| `bg` | `job-fg-bg` | monitor-enabled current, previous, numeric, prefix, substring, and multiple tracked jobs report with POSIX `[%d] %s` output; stopped jobs get `SIGCONT`; disabled job control reports an error | broader stopped-state notifications belong to `job-stopped-state` |
+| `jobs` | `builtin-jobs`; `job-stopped-state` | visible table, `-l`, `-p`, numeric, `%`, `%+`, `%%`, `%-`, prefix, and substring job operands; current/previous markers; nonblocking stopped/done status refresh and notifications | completed-job cleanup remains under the baseline `builtin-jobs` row |
+| `fg` | `job-fg-bg`; `job-stopped-state` | monitor-enabled current, previous, numeric, prefix, and substring tracked jobs wait, propagate status, get terminal handoff when a saved process group exists, send stopped jobs `SIGCONT`, restore stopped-job terminal modes, and remove completed foreground jobs from the waitable table | remaining signal edge cases are tracked outside the supported `fg`/`bg` row |
+| `bg` | `job-fg-bg`; `job-stopped-state` | monitor-enabled current, previous, numeric, prefix, substring, and multiple tracked jobs report with POSIX `[%d] %s` output; stopped jobs get `SIGCONT`; repeated stopped notifications can be reported after a continue; disabled job control reports an error | remaining signal edge cases are tracked outside the supported `fg`/`bg` row |
 
 Follow-up tasks:
 
-- broader stopped-state lifecycle cleanup and interactive job notifications should be tracked separately from the supported `fg`/`bg` utility row.
+- remaining job-control follow-up work is in pipeline/asynchronous-list signal edge cases rather than the supported `fg`/`bg` and stopped-state utility rows.
 
 ## Negative diagnostics coverage targets
 
