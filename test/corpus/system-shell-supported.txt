@@ -224,6 +224,7 @@ test ! foo; echo not_nonempty:$?; test ! ""; echo not_empty:$?; [ ! foo ]; echo 
 cd -P -- .; echo cd:$?; pwd -P -- >/dev/null; echo pwd:$?; unset -v -- NO_SUCH_NAME; echo unset:$?; umask -S -- >/dev/null; echo umask:$?
 IFS=:; A=":a::b:"; set -- $A; echo "count:$#:$1:$2:$3:$4:$5"
 IFS=" :"; A="a : b::c"; set -- $A; echo "count:$#:$1:$2:$3:$4"
+IFS=2; set -- $((12)) $((202)); printf "count:%s:" "$#"; printf "<%s>" "$@"; echo
 set -- $(printf 'a b'); echo unquoted:$#:$1:$2; set -- "$(printf 'a b')"; echo quoted:$#:$1
 set -- $(printf ''); echo bare:$#; set -- x$(printf '')y; echo embedded:$#:$1; set -- "$(printf '')"; echo quoted:$#:${1-unset}
 unset v; f() { set -- "a b" 'c d' e\ f; printf 'fn:%s:%s:%s:%s\n' "$#" "$1" "$2" "$3"; }; f; printf 'cmd:<%s>\n' "$(set -- 'x y' z\ w; printf '%s:%s:%s' "$#" "$1" "$2")"; set -- ${v:-"p q"} ${v:-r\ s} ${v:-'t u'}; printf 'param:%s:%s:%s:%s\n' "$#" "$1" "$2" "$3"

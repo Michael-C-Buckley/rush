@@ -20,22 +20,22 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `406` rows
-- `scripts/check-posix-corpus.sh`: `399` expected-output POSIX cases
+- `scripts/check-posix-corpus.sh`: `401` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `227` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `280` cases, `560` comparisons across dash and bash POSIX mode
+- `scripts/check-system-shell-corpus.sh`: `282` cases, `564` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
 - tracked items: `406`
 - scored POSIX items: `402`
-- supported: `380`
-- baseline: `19`
+- supported: `382`
+- baseline: `17`
 - partial: `2`
 - missing: `1`
 - out of scope: `4`
-- strict supported only: `94.5%`
+- strict supported only: `95.0%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `98.0%`
+- weighted progress: `98.1%`
 
 Recent notable capabilities:
 

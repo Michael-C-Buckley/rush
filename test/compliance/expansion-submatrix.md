@@ -117,11 +117,9 @@ Manifest rows:
 - `expansion-field-splitting-ifs-nonwhitespace`
 - `expansion-field-splitting-empty-ifs`
 
-Current corpus covers newline splitting, leading/trailing IFS whitespace trimming, comma/colon splitting, adjacent non-whitespace delimiters producing empty fields, generated empty field removal, quoted generated/literal empty preservation, and empty IFS disabling splitting.
+Current corpus covers newline splitting, leading/trailing IFS whitespace trimming, comma/colon splitting, adjacent non-whitespace delimiters producing empty fields, generated empty field removal, quoted generated/literal empty preservation, empty IFS disabling splitting, literal IFS bytes adjacent to expansions, arithmetic and command substitution output splitting, and quoted/unquoted `$@` and `$*` interactions.
 
-Remaining gaps:
-
-- interactions with quoted/unquoted `$@` and `$*`.
+Remaining gaps: none known for the tracked POSIX field-splitting surface; broader recursive expansion/parser interactions are tracked by adjacent expansion rows.
 
 ## Pathname expansion
 
