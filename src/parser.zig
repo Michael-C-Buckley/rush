@@ -2525,22 +2525,21 @@ fn functionBodyWordContinuesCommandPosition(word: []const u8) bool {
 }
 
 fn isAssignmentWord(word: []const u8, features: compat.Features) bool {
-    const equals = std.mem.indexOfScalar(u8, word, '=') orelse return false;
-    if (equals == 0) return false;
+    if (word.len == 0) return false;
     if (!isNameStart(word[0])) return false;
     var name_end: usize = 1;
-    while (name_end < equals and isNameContinue(word[name_end])) : (name_end += 1) {}
-    if (name_end == equals) return true;
+    while (name_end < word.len and isNameContinue(word[name_end])) : (name_end += 1) {}
 
-    if (!features.isBash()) return false;
-    if (word[name_end] != '[') return false;
-    const index_start = name_end + 1;
-    if (index_start >= equals) return false;
-    if (word[equals - 1] != ']') return false;
-    for (word[index_start .. equals - 1]) |c| {
-        if (!std.ascii.isDigit(c)) return false;
+    if (features.isBash() and name_end < word.len and word[name_end] == '[') {
+        const index_start = name_end + 1;
+        const close = std.mem.findScalar(u8, word[index_start..], ']') orelse return false;
+        const close_index = index_start + close;
+        if (index_start == close_index) return false;
+        return close_index + 1 < word.len and word[close_index + 1] == '=';
     }
-    return true;
+
+    const equals = std.mem.indexOfScalar(u8, word, '=') orelse return false;
+    return name_end == equals;
 }
 
 fn isName(word: []const u8) bool {
@@ -2902,6 +2901,22 @@ test "parser gates indexed array assignment words behind Bash mode" {
             .{ .kind = .assignment_word, .span = .init(0, 11) },
             .{ .kind = .command_word, .span = .init(12, 16) },
             .{ .kind = .simple_command, .span = .init(0, 16) },
+        },
+    });
+
+    try expectParse("arr[i+1]=zero echo", .{
+        .options = .{ .features = compat.Features.bash() },
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 13) },
+            .{ .kind = .whitespace, .span = .init(13, 14) },
+            .{ .kind = .word, .span = .init(14, 18) },
+            .{ .kind = .eof, .span = .empty(18) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 18) },
+            .{ .kind = .assignment_word, .span = .init(0, 13) },
+            .{ .kind = .command_word, .span = .init(14, 18) },
+            .{ .kind = .simple_command, .span = .init(0, 18) },
         },
     });
 

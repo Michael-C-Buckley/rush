@@ -5403,7 +5403,7 @@ pub const Executor = struct {
         }
 
         fn apply(self: *AssignmentExpansionScope, assignment: ir.WordRef) !void {
-            if (indexedArrayAssignment(assignment.text)) |array_assignment| {
+            if (try self.executor.indexedArrayAssignment(assignment.text)) |array_assignment| {
                 var old_value = try self.executor.cloneArray(array_assignment.name);
                 errdefer if (old_value) |*value| value.deinit(self.executor.allocator);
                 const owned_name = try self.executor.allocator.dupe(u8, array_assignment.name);
@@ -5506,7 +5506,7 @@ pub const Executor = struct {
         }
 
         for (assignments) |assignment| {
-            if (indexedArrayAssignment(assignment.text)) |array_assignment| {
+            if (try self.indexedArrayAssignment(assignment.text)) |array_assignment| {
                 var old_value = try self.cloneArray(array_assignment.name);
                 errdefer if (old_value) |*value| value.deinit(self.allocator);
                 var owned_name: ?[]u8 = try self.allocator.dupe(u8, array_assignment.name);
@@ -5544,7 +5544,7 @@ pub const Executor = struct {
 
     fn applyAssignments(self: *Executor, assignments: []const ir.WordRef) !void {
         for (assignments) |assignment| {
-            if (indexedArrayAssignment(assignment.text)) |array_assignment| {
+            if (try self.indexedArrayAssignment(assignment.text)) |array_assignment| {
                 try self.setArrayElement(array_assignment.name, array_assignment.index, array_assignment.value);
                 continue;
             }
@@ -5556,6 +5556,30 @@ pub const Executor = struct {
         }
     }
 
+    fn indexedArrayAssignment(self: *Executor, text: []const u8) !?IndexedArrayAssignment {
+        const syntax = indexedArrayAssignmentSyntax(text) orelse return null;
+        const value = expand.evalArithmetic(syntax.index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(syntax.index_text, err);
+        const index = std.math.cast(usize, value) orelse return self.arraySubscriptExpansionFailed(syntax.index_text, error.InvalidArithmetic);
+        return .{ .name = syntax.name, .index = index, .value = syntax.value };
+    }
+
+    fn arraySubscriptExpansionFailed(self: *Executor, index_text: []const u8, err: anyerror) anyerror {
+        const message = switch (err) {
+            error.InvalidArithmetic => "invalid arithmetic expression",
+            error.DivisionByZero => "division by zero",
+            error.Overflow => "arithmetic overflow",
+            else => return err,
+        };
+
+        const expression = try self.allocator.dupe(u8, index_text);
+        errdefer self.allocator.free(expression);
+        const owned_message = try self.allocator.dupe(u8, message);
+        self.arithmetic_error.clear(self.allocator);
+        self.arithmetic_error.expression = expression;
+        self.arithmetic_error.message = owned_message;
+        return error.ArithmeticExpansionFailed;
+    }
+
     fn buildProcessEnv(self: *Executor, assignments: []const ir.WordRef) !std.process.Environ.Map {
         var map = std.process.Environ.Map.init(self.allocator);
         errdefer map.deinit();
@@ -5564,7 +5588,7 @@ pub const Executor = struct {
             if (self.env.get(entry.key_ptr.*)) |value| try map.put(entry.key_ptr.*, value);
         }
         for (assignments) |assignment| {
-            if (indexedArrayAssignment(assignment.text) != null) continue;
+            if (indexedArrayAssignmentSyntax(assignment.text) != null) continue;
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
             try map.put(assignment.text[0..equals], assignment.text[equals + 1 ..]);
         }
@@ -10578,22 +10602,26 @@ const IndexedArrayAssignment = struct {
     value: []const u8,
 };
 
-fn indexedArrayAssignment(text: []const u8) ?IndexedArrayAssignment {
-    const equals = std.mem.indexOfScalar(u8, text, '=') orelse return null;
-    if (equals == 0 or !isShellNameStart(text[0])) return null;
+const IndexedArrayAssignmentSyntax = struct {
+    name: []const u8,
+    index_text: []const u8,
+    value: []const u8,
+};
+
+fn indexedArrayAssignmentSyntax(text: []const u8) ?IndexedArrayAssignmentSyntax {
+    if (text.len == 0 or !isShellNameStart(text[0])) return null;
 
     var name_end: usize = 1;
-    while (name_end < equals and isShellNameContinue(text[name_end])) : (name_end += 1) {}
-    if (name_end == equals) return null;
-    if (text[name_end] != '[' or text[equals - 1] != ']') return null;
+    while (name_end < text.len and isShellNameContinue(text[name_end])) : (name_end += 1) {}
+    if (name_end >= text.len or text[name_end] != '[') return null;
 
-    const index_text = text[name_end + 1 .. equals - 1];
+    const index_start = name_end + 1;
+    const close_offset = std.mem.findScalar(u8, text[index_start..], ']') orelse return null;
+    const close_index = index_start + close_offset;
+    if (close_index + 1 >= text.len or text[close_index + 1] != '=') return null;
+    const index_text = text[index_start..close_index];
     if (index_text.len == 0) return null;
-    for (index_text) |byte| {
-        if (!std.ascii.isDigit(byte)) return null;
-    }
-    const index = std.fmt.parseInt(usize, index_text, 10) catch return null;
-    return .{ .name = text[0..name_end], .index = index, .value = text[equals + 1 ..] };
+    return .{ .name = text[0..name_end], .index_text = index_text, .value = text[close_index + 2 ..] };
 }
 
 fn isShellNameStart(byte: u8) bool {
@@ -11856,6 +11884,28 @@ test "executor expands Bash indexed array elements" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("<zero>|<>|<two words>|<zero>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor supports Bash arithmetic indexed array subscripts" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\i=1
+        \\arr[i==1]=one
+        \\arr[i+1]='two words'
+        \\arr[$((i + 2))]=three
+        \\copy=${arr[$i + 1]}
+        \\printf '<%s>|<%s>|<%s>|<%s>\n' "${arr[1]}" "${arr[2]}" "${arr[$((i + 2))]}" "$copy"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<one>|<two words>|<three>|<two words>\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

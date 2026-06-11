@@ -714,10 +714,17 @@ fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8
 }
 
 fn renderArrayElement(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
-    const index = std.fmt.parseInt(usize, index_text, 10) catch return invalidParameterExpansion(allocator, options);
+    const index = try evaluateArrayIndex(allocator, index_text, options);
     if (options.arrays.get(name, index)) |value| return allocator.dupe(u8, value);
     if (options.nounset) return error.NounsetParameter;
     return allocator.alloc(u8, 0);
+}
+
+fn evaluateArrayIndex(allocator: std.mem.Allocator, index_text: []const u8, options: Options) anyerror!usize {
+    const expanded_expression = try expandArithmeticExpression(allocator, index_text, options);
+    defer allocator.free(expanded_expression);
+    const value = evalArithmetic(expanded_expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, index_text, err, options);
+    return std.math.cast(usize, value) orelse return invalidParameterExpansion(allocator, options);
 }
 
 fn segmentedFromText(allocator: std.mem.Allocator, text: []const u8, split_enabled: bool, force_field: bool, quoted_glob: bool) !SegmentedText {
@@ -1018,7 +1025,7 @@ fn parseBashArrayIndexExpansion(expression: []const u8, target: ParameterTarget,
     const close_index = index_start + close;
     if (close_index + 1 != expression.len) return .invalid;
     const index_text = expression[index_start..close_index];
-    if (!isDecimalIndex(index_text)) return .invalid;
+    if (index_text.len == 0) return .invalid;
     return .{ .expansion = .{
         .target = target,
         .operation = .{ .array_index = .{ .index = index_text } },
@@ -1045,14 +1052,6 @@ fn parseParameterNameEnd(expression: []const u8) ?usize {
     var name_end: usize = 1;
     while (name_end < expression.len and isNameContinue(expression[name_end])) : (name_end += 1) {}
     return name_end;
-}
-
-fn isDecimalIndex(text: []const u8) bool {
-    if (text.len == 0) return false;
-    for (text) |byte| {
-        if (!std.ascii.isDigit(byte)) return false;
-    }
-    return true;
 }
 
 const ArithmeticParser = struct {
@@ -2146,6 +2145,17 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
 
 const test_env: EnvLookup = .{ .lookupFn = testLookup };
 
+fn testArrayLookup(_: ?*const anyopaque, name: []const u8, index: usize) ?[]const u8 {
+    if (!std.mem.eql(u8, name, "arr")) return null;
+    return switch (index) {
+        2 => "two words",
+        3 => "three",
+        else => null,
+    };
+}
+
+const test_arrays: ArrayLookup = .{ .lookupFn = testArrayLookup };
+
 fn testIfsLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "IFS")) return ":,";
     if (std.mem.eql(u8, name, "LIST")) return ":a::b:";
@@ -2365,7 +2375,14 @@ test "structured parameter parser accepts Bash indexed array expansion" {
         else => try std.testing.expect(false),
     }
 
-    const invalid_cases = [_][]const u8{ "arr[]", "arr[-1]", "arr[1]x", "1[0]" };
+    const arithmetic = try expectParameterSyntaxWithFeatures("arr[USER_NUM - 1]", compat.Features.bash());
+    try expectParameterTarget(arithmetic.target, .name, "arr");
+    switch (arithmetic.operation) {
+        .array_index => |operation| try std.testing.expectEqualStrings("USER_NUM - 1", operation.index),
+        else => try std.testing.expect(false),
+    }
+
+    const invalid_cases = [_][]const u8{ "arr[]", "arr[1]x", "1[0]" };
     for (invalid_cases) |case| {
         switch (parseParameterExpansionSyntax(case, compat.Features.bash())) {
             .invalid => {},
@@ -2424,6 +2441,21 @@ test "parameter expansion rejects malformed braced forms" {
         try std.testing.expectEqualStrings("parameter", parameter_error.name);
         try std.testing.expectEqualStrings("bad substitution", parameter_error.message);
     }
+}
+
+test "parameter expansion supports Bash arithmetic indexed array subscripts" {
+    const expanded = try expandWordScalar(std.testing.allocator, "${arr[USER_NUM - 1]}:${arr[$USER_NUM]}", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(expanded);
+    try std.testing.expectEqualStrings("two words:three", expanded);
+}
+
+test "parameter expansion reports arithmetic errors in Bash array subscripts" {
+    var arithmetic_error: ArithmeticError = .{};
+    defer arithmetic_error.clear(std.testing.allocator);
+
+    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "${arr[1 / 0]}", .{ .arrays = test_arrays, .features = compat.Features.bash(), .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectEqualStrings("1 / 0", arithmetic_error.expression);
+    try std.testing.expectEqualStrings("division by zero", arithmetic_error.message);
 }
 
 test "parameter expansion supports pattern removal operators" {
