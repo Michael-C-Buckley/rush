@@ -365,6 +365,7 @@ grammar-loop-exit-status	grammar	behavior	while and until exit statuses follow b
 builtin-loop-control-status	builtin	behavior	break and continue determine loop command status
 grammar-if-exit-status	grammar	behavior	if compound command exit status
 grammar-compound-pipeline-first-stage	grammar	behavior	POSIX compound commands parse and execute as first pipeline stages
+grammar-if-pipeline-stage	grammar	behavior	if commands parse and execute as first middle and last pipeline stages
 grammar-loop-pipeline-stage	grammar	behavior	while and until loops parse and execute as first middle and last pipeline stages
 grammar-brace-group-pipeline-stage	grammar	behavior	brace groups execute exactly once as first and non-first pipeline stages
 grammar-brace-group-separators	grammar	behavior	brace group opening and closing reserved words are recognized with POSIX separators
