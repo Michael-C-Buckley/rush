@@ -20,6 +20,10 @@ const ResizeSignalFd = struct {
     var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
 };
 
+const ChildSignalFd = struct {
+    var value: std.atomic.Value(std.posix.fd_t) = .init(invalid_fd);
+};
+
 pub const DriverEvent = union(enum) {
     tty_read_ready,
 };
@@ -419,6 +423,7 @@ pub const TerminalSession = struct {
     prompt_redraw: Pipe,
     completion_wake: Pipe,
     resize: ResizeSignalSource,
+    child_signal: ChildSignalSource,
     loop: event_loop.EventLoop,
     reader: OneShotReader,
     terminal_parser: TerminalParser,
@@ -446,12 +451,15 @@ pub const TerminalSession = struct {
         try setNonBlocking(completion_wake.write.handle);
         var resize = try ResizeSignalSource.init(io);
         errdefer resize.deinitUnregistered(io);
+        var child_signal = try ChildSignalSource.init(io);
+        errdefer child_signal.deinitUnregistered(io);
         var loop = try event_loop.EventLoop.init();
         errdefer loop.deinit();
         try loop.addReadFd(wake.read.handle, .tty_input);
         try loop.addReadFd(prompt_redraw.read.handle, .prompt_redraw);
         try loop.addReadFd(completion_wake.read.handle, .completion_result);
         try loop.addReadFd(resize.readFd(), .resize);
+        try loop.addReadFd(child_signal.readFd(), .child_signal);
 
         const read_fd = try rawDup(tty.fd.handle);
         const read_file: std.Io.File = .{ .handle = read_fd, .flags = .{ .nonblocking = false } };
@@ -468,6 +476,7 @@ pub const TerminalSession = struct {
             .prompt_redraw = prompt_redraw,
             .completion_wake = completion_wake,
             .resize = resize,
+            .child_signal = child_signal,
             .loop = loop,
             .reader = reader,
             .terminal_parser = .init(allocator),
@@ -485,6 +494,7 @@ pub const TerminalSession = struct {
         self.terminal_parser.deinit();
         self.renderer.deinit(self.allocator);
         self.reader.deinit();
+        self.child_signal.deinit(self.io, &self.loop);
         self.resize.deinit(self.io, &self.loop);
         self.loop.deinit();
         self.completion_wake.close(self.io);
@@ -589,6 +599,7 @@ pub const TerminalSession = struct {
             }
             try self.startReadyCompletion(options);
             self.events.clearRetainingCapacity();
+            var child_signal_ready = false;
             for (ready) |ready_event| {
                 switch (ready_event.source) {
                     .tty_input => try self.processTtyInput(),
@@ -597,7 +608,21 @@ pub const TerminalSession = struct {
                     .completion_result => {
                         if (try self.processCompletionResult(&session)) render_needed = true;
                     },
+                    .child_signal => {
+                        self.processChildSignal();
+                        child_signal_ready = true;
+                    },
                 }
+            }
+            if (child_signal_ready and options.run_hooks != null and options.hook_context != null) {
+                const hook_result = try options.run_hooks.?(options.hook_context.?, self.allocator, self.io);
+                defer self.allocator.free(hook_result.output);
+                if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
+                if (hook_result.refresh_prompt or hook_result.output.len != 0) {
+                    render_needed = true;
+                    session.invalidatePrompt();
+                }
+                next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
             }
             for (self.events.items) |event| {
                 switch (event) {
@@ -757,6 +782,10 @@ pub const TerminalSession = struct {
         var buffer: [32]u8 = undefined;
         _ = try rawRead(self.prompt_redraw.read.handle, &buffer);
         try self.events.append(self.allocator, .prompt_redraw);
+    }
+
+    fn processChildSignal(self: *TerminalSession) void {
+        self.child_signal.drain();
     }
 
     fn requestCompletion(self: *TerminalSession, options: ReadLineOptions, source: []const u8, cursor: usize, reason: CompletionRequestReason) !void {
@@ -984,6 +1013,65 @@ fn resizeSignalHandler(_: std.posix.SIG) callconv(.c) void {
     const fd = ResizeSignalFd.value.load(.acquire);
     if (fd == invalid_fd) return;
     _ = std.c.write(fd, "r", 1);
+}
+
+const ChildSignalSource = struct {
+    pipe: ?Pipe,
+    previous: ?std.posix.Sigaction,
+
+    fn init(io: std.Io) !ChildSignalSource {
+        var pipe = try makePipe(io);
+        errdefer pipe.close(io);
+        try setNonBlocking(pipe.read.handle);
+        try setNonBlocking(pipe.write.handle);
+
+        ChildSignalFd.value.store(pipe.write.handle, .release);
+        const action: std.posix.Sigaction = .{
+            .handler = .{ .handler = childSignalHandler },
+            .mask = std.posix.sigemptyset(),
+            .flags = 0,
+        };
+        var previous: std.posix.Sigaction = undefined;
+        std.posix.sigaction(.CHLD, &action, &previous);
+        return .{ .pipe = pipe, .previous = previous };
+    }
+
+    fn readFd(self: ChildSignalSource) std.posix.fd_t {
+        return self.pipe.?.read.handle;
+    }
+
+    fn drain(self: *ChildSignalSource) void {
+        const pipe = self.pipe orelse return;
+        var buffer: [64]u8 = undefined;
+        _ = rawRead(pipe.read.handle, &buffer) catch {};
+    }
+
+    fn deinit(self: *ChildSignalSource, io: std.Io, loop: *event_loop.EventLoop) void {
+        ChildSignalFd.value.store(invalid_fd, .release);
+        if (self.previous) |previous| {
+            std.posix.sigaction(.CHLD, &previous, null);
+            self.previous = null;
+        }
+        if (self.pipe) |*pipe| {
+            loop.removeFd(pipe.read.handle) catch {};
+            pipe.close(io);
+            self.pipe = null;
+        }
+        self.* = undefined;
+    }
+
+    fn deinitUnregistered(self: *ChildSignalSource, io: std.Io) void {
+        ChildSignalFd.value.store(invalid_fd, .release);
+        if (self.previous) |previous| std.posix.sigaction(.CHLD, &previous, null);
+        if (self.pipe) |*pipe| pipe.close(io);
+        self.* = undefined;
+    }
+};
+
+fn childSignalHandler(_: std.posix.SIG) callconv(.c) void {
+    const fd = ChildSignalFd.value.load(.acquire);
+    if (fd == invalid_fd) return;
+    _ = std.c.write(fd, "c", 1);
 }
 
 pub fn makePipe(io: std.Io) !Pipe {
@@ -1278,6 +1366,22 @@ fn setNonBlocking(fd: std.posix.fd_t) !void {
 fn readAllFromFile(io: std.Io, file: std.Io.File, buffer: []u8) !usize {
     _ = io;
     return rawRead(file.handle, buffer);
+}
+
+test "child signal source reports SIGCHLD through event loop" {
+    var source = try ChildSignalSource.init(std.testing.io);
+    var loop = try event_loop.EventLoop.init();
+    defer loop.deinit();
+    defer source.deinit(std.testing.io, &loop);
+    try loop.addReadFd(source.readFd(), .child_signal);
+
+    try std.posix.raise(.CHLD);
+
+    var events: [4]event_loop.Event = undefined;
+    const ready = try loop.waitTimeout(&events, 1000);
+    try std.testing.expectEqual(@as(usize, 1), ready.len);
+    try std.testing.expectEqual(event_loop.Source.child_signal, ready[0].source);
+    source.drain();
 }
 
 test "terminal parser emits text keys" {

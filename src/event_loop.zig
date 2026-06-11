@@ -8,6 +8,7 @@ pub const Source = enum(u32) {
     resize,
     prompt_redraw,
     completion_result,
+    child_signal,
 };
 
 pub const Event = struct {
@@ -141,7 +142,7 @@ test "event loop reports readable pipe fd" {
     defer loop.deinit();
     try loop.addReadFd(pipe.read, .tty_input);
 
-    _ = try std.posix.write(pipe.write, "x");
+    _ = writeFd(pipe.write, "x") catch return error.TestUnexpectedResult;
     var events: [4]Event = undefined;
     const ready = try loop.wait(&events);
     try std.testing.expectEqual(@as(usize, 1), ready.len);
@@ -172,9 +173,35 @@ const TestPipe = struct {
 };
 
 fn makeTestPipe() !TestPipe {
-    var fds: [2]std.posix.fd_t = undefined;
-    try std.posix.pipe2(&fds, .{ .CLOEXEC = true });
+    const fds = switch (builtin.os.tag) {
+        .linux => blk: {
+            var fds: [2]i32 = undefined;
+            const rc = std.os.linux.pipe2(&fds, .{ .CLOEXEC = true });
+            switch (std.os.linux.errno(rc)) {
+                .SUCCESS => {},
+                else => return error.Unexpected,
+            }
+            break :blk .{ fds[0], fds[1] };
+        },
+        else => blk: {
+            var fds: [2]std.c.fd_t = undefined;
+            const rc = std.c.pipe(&fds);
+            switch (std.c.errno(rc)) {
+                .SUCCESS => {},
+                else => return error.Unexpected,
+            }
+            break :blk .{ fds[0], fds[1] };
+        },
+    };
     return .{ .read = fds[0], .write = fds[1] };
+}
+
+fn writeFd(fd: std.posix.fd_t, bytes: []const u8) !usize {
+    const rc = std.c.write(fd, bytes.ptr, bytes.len);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return @intCast(rc),
+        else => return error.Unexpected,
+    }
 }
 
 fn closeFd(fd: std.posix.fd_t) void {
