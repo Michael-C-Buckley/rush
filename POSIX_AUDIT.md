@@ -19,23 +19,23 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `402` rows
-- `scripts/check-posix-corpus.sh`: `364` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `202` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `254` cases, `508` comparisons across dash and bash POSIX mode
+- `scripts/check-compliance-manifest.sh`: `403` rows
+- `scripts/check-posix-corpus.sh`: `365` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `210` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `257` cases, `514` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `402`
-- scored POSIX items: `400`
-- supported: `355`
+- tracked items: `403`
+- scored POSIX items: `401`
+- supported: `356`
 - baseline: `42`
 - partial: `2`
 - missing: `1`
 - out of scope: `2`
 - strict supported only: `88.8%`
-- practical supported+baseline: `99.2%`
-- weighted progress: `96.2%`
+- practical supported+baseline: `99.3%`
+- weighted progress: `96.3%`
 
 Recent notable capabilities:
 
@@ -157,6 +157,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Arithmetic expansion baseline for integer expressions:
   - `+`, `-`, `*`, `/`, `%`, parentheses, unary `+`/`-`
   - expression text is preprocessed for nested parameter expansion, command substitution, and arithmetic expansion results before arithmetic evaluation in the dash/bash/yash-compatible cases covered by corpus tests
+  - shell variable values used by identifier are accepted when they form POSIX integer constants; unset or null variables evaluate as zero, while nonnumeric values, expression-valued strings such as `1 + 2`, and literal nested substitution text in variable values produce arithmetic diagnostics instead of being recursively evaluated
   - arithmetic-expression backslash processing follows the POSIX double-quote-like subset in representative cases: backslash-newline is removed, escaped `$` remains literal instead of starting a nested expansion, legacy backquotes still perform command substitution, unmatched raw legacy backquotes after escaped literal backquotes are classified as backquote substitution syntax errors, and quote bytes that remain in the arithmetic expression produce invalid-expression diagnostics rather than being quote-removed
 - Command substitution with `$()` including nested parsing and executor-backed execution.
 - Legacy backquote command substitution baseline.
@@ -165,7 +166,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Pathname expansion using current directory glob support for `*`, `?`, bracket classes.
 - Quote removal baseline with POSIX double-quote backslash handling for common cases.
 - Here-doc expansion for unquoted delimiters; quoted delimiters suppress expansion.
-- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, malformed or unsupported braced parameter substitutions, invalid `${parameter:=word}` / `${parameter=word}` assignment attempts to positional or special parameters, and invalid arithmetic expansion. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
+- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, malformed or unsupported braced parameter substitutions, invalid `${parameter:=word}` / `${parameter=word}` assignment attempts to positional or special parameters, invalid arithmetic expansion, and invalid arithmetic variable values. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
 
 Shell comparison note: dash, bash, and yash agree that assignment forms such as `${1:=x}` and `${10:=x}` are errors when the positional parameter is unset or null, but they expand normally when the parameter already has a usable value. `${1=x}` similarly errors only when the positional is unset. Special parameters follow the same assignment-needed rule in the portable subset Rush now covers; comparison shells differ on some extension edge cases such as empty `$@` with the no-colon form, so Rush keeps focused negative coverage on assignment-needed cases.
 

@@ -1006,16 +1006,16 @@ const ArithmeticParser = struct {
                 const rhs = try self.parseAssignment();
                 const value = switch (op) {
                     .assign => rhs,
-                    .add_assign => self.lookupNumber(name) + rhs,
-                    .sub_assign => self.lookupNumber(name) - rhs,
-                    .mul_assign => self.lookupNumber(name) * rhs,
+                    .add_assign => try self.lookupNumber(name) + rhs,
+                    .sub_assign => try self.lookupNumber(name) - rhs,
+                    .mul_assign => try self.lookupNumber(name) * rhs,
                     .div_assign => blk: {
                         if (rhs == 0) return error.DivisionByZero;
-                        break :blk @divTrunc(self.lookupNumber(name), rhs);
+                        break :blk @divTrunc(try self.lookupNumber(name), rhs);
                     },
                     .mod_assign => blk: {
                         if (rhs == 0) return error.DivisionByZero;
-                        break :blk @rem(self.lookupNumber(name), rhs);
+                        break :blk @rem(try self.lookupNumber(name), rhs);
                     },
                 };
                 try self.setNumber(name, value);
@@ -1199,10 +1199,10 @@ const ArithmeticParser = struct {
         return self.lookupNumber(self.input[start..self.index]);
     }
 
-    fn lookupNumber(self: ArithmeticParser, name: []const u8) i64 {
+    fn lookupNumber(self: ArithmeticParser, name: []const u8) !i64 {
         const value = self.env.get(name) orelse return 0;
         if (value.len == 0) return 0;
-        return parseIntegerConstant(value) catch 0;
+        return parseIntegerConstant(value);
     }
 
     fn setNumber(self: ArithmeticParser, name: []const u8, value: i64) !void {
@@ -2058,6 +2058,8 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "OCTAL_NUM")) return "010";
     if (std.mem.eql(u8, name, "HEX_NUM")) return "0x2f";
     if (std.mem.eql(u8, name, "NEGATIVE_OCTAL_NUM")) return "-010";
+    if (std.mem.eql(u8, name, "EXPRESSION_VALUE")) return "1 + 2";
+    if (std.mem.eql(u8, name, "NESTED_PARAMETER_TEXT")) return "${MISSING:-2} + 1";
     if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
@@ -2515,7 +2517,7 @@ test "arithmetic expansion evaluates integer expressions" {
     try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("(1 + 2) * 3", .{}, .{}));
     try std.testing.expectEqual(@as(i64, -4), try evalArithmetic("-8 / 2", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 5), try evalArithmetic("USER_NUM + 2", test_env, .{}));
-    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("UNKNOWN + USER", test_env, .{}));
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("UNKNOWN + EMPTY", test_env, .{}));
     try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("3 > 2", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("3 == 2", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 || 0", .{}, .{}));
@@ -2543,6 +2545,20 @@ test "arithmetic expansion evaluates integer expressions" {
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("value=7", result.fields[0]);
+}
+
+test "arithmetic expansion rejects invalid variable values" {
+    try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("USER", test_env, .{}));
+    try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("EXPRESSION_VALUE", test_env, .{}));
+    try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("NESTED_PARAMETER_TEXT", test_env, .{}));
+    try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("USER += 1", test_env, .{}));
+
+    var arithmetic_error: ArithmeticError = .{};
+    defer arithmetic_error.clear(std.testing.allocator);
+
+    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((EXPRESSION_VALUE))", .{ .env = test_env, .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectEqualStrings("$((EXPRESSION_VALUE))", arithmetic_error.expression);
+    try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
 }
 
 test "arithmetic expansion preprocesses nested expansion tokens" {

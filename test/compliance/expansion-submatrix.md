@@ -92,14 +92,15 @@ Remaining gaps:
 
 Manifest row: `expansion-arithmetic`
 
-Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, octal/hex constants, and POSIX arithmetic-expression preprocessing of nested parameter expansions and command substitutions before evaluation. The recursive preprocessing behavior was checked against dash, bash `--posix`, and yash for braced defaults, unbraced `$name`, command substitution output, legacy backquote output, backslash-newline continuation, and expression-valued parameter text. Negative coverage includes invalid operators, quoted arithmetic tokens, quote bytes that remain in the expression, escaped `$`/`${...`/backquote initiators that must stay literal, unmatched raw legacy-backquote diagnostics after escaped literal backquotes, malformed parameter syntax inside arithmetic, and `${parameter:?word}` failures inside arithmetic. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
+Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, octal/hex constants, and POSIX arithmetic-expression preprocessing of nested parameter expansions and command substitutions before evaluation. The recursive preprocessing behavior was checked against dash, bash `--posix`, and yash for braced defaults, unbraced `$name`, command substitution output, legacy backquote output, backslash-newline continuation, and expression-valued parameter text produced by explicit parameter expansion. Variable values referenced by arithmetic identifiers are intentionally narrower: POSIX integer constants are accepted, unset/null variables evaluate as zero, and nonnumeric values, expression-valued strings, or literal nested substitution text in variable values fail instead of being recursively evaluated. Negative coverage includes invalid operators, invalid variable values, quoted arithmetic tokens, quote bytes that remain in the expression, escaped `$`/`${...`/backquote initiators that must stay literal, unmatched raw legacy-backquote diagnostics after escaped literal backquotes, malformed parameter syntax inside arithmetic, and `${parameter:?word}` failures inside arithmetic. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
 
 Remaining gaps:
 
 - exact POSIX diagnostic wording and consequences for more arithmetic syntax failures;
 - divide-by-zero behavior;
-- integer overflow and signedness decisions;
-- nonnumeric variable behavior is Rush/Bash-like and not fully differential-safe.
+- integer overflow and signedness decisions.
+
+Portability note: dash rejects expression-valued arithmetic variables such as `x='1 + 2'; echo $((x))`, bash `--posix` recursively evaluates them, and yash prints the raw value in the audited mode. Rush follows the POSIX-required integer-constant subset and treats expression-valued variable contents as invalid rather than adopting one divergent extension.
 
 ## Field splitting
 

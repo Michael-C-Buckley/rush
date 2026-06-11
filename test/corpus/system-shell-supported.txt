@@ -64,6 +64,7 @@ EMPTY=; echo ${EMPTY-fallback}; echo ${EMPTY:-fallback}; echo ${EMPTY+yes}; echo
 unset A; B=ok; echo ${A:-$B}
 VAR=abcdef; echo ${#VAR}; echo ${#MISSING}
 echo $((2 + 3 * 4)); echo $(((2 + 3) * 4))
+X=010; echo $((X)); echo $(($X))
 echo $(printf "a b")
 : > rush-b.tmp; : > rush-a.tmp; echo rush-?.tmp
 LIST="a\nb c"; for x in $LIST; do echo "<$x>"; done
