@@ -381,3 +381,5 @@ builtin-trap-exit-overrides-status	builtin	behavior	exit in an EXIT trap action 
 option-set-obsolescent-noop	options	behavior	set -h/+h and set -o/+o nolog are accepted as no-effect compatibility spellings
 builtin-kill-job-spec	job_control	job	kill accepts current previous numeric prefix and substring job ID operands
 expansion-braced-multi-digit-positionals	expansion	behavior	braced all-digit parameter names use the full positional parameter index while unbraced $10 remains $1 plus literal 0
+builtin-export-declaration-assignment	builtin	behavior	export name=value operands use declaration-utility assignment expansion without field splitting and with assignment tilde expansion
+builtin-export-p-marked-name	builtin	behavior	export -p lists names marked for export before they have an assigned value

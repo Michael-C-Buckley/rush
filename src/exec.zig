@@ -5091,7 +5091,10 @@ pub const Executor = struct {
         self.command_substitution_status = null;
         const assignments = try self.expandAssignmentWords(command.assignments, options);
         errdefer self.freeWords(assignments);
-        const argv = try self.expandArgv(command.argv, options);
+        const argv = if (isDeclarationUtilityInvocation(command.argv))
+            try self.expandDeclarationArgv(command.argv, options)
+        else
+            try self.expandArgv(command.argv, options);
         errdefer self.freeWords(argv);
         const redirections = try self.expandRedirections(command.redirections, options);
         errdefer self.freeRedirections(redirections);
@@ -5111,23 +5114,57 @@ pub const Executor = struct {
             expanded.deinit(self.allocator);
         }
 
-        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
-        const positionals: []const []const u8 = self.currentPositionals().params;
-        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
-        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
         for (words) |word| {
-            var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
-            defer fields.deinit();
-            for (fields.fields) |field| {
-                const raw = try self.allocator.dupe(u8, word.raw);
-                errdefer self.allocator.free(raw);
-                const text = try self.allocator.dupe(u8, field);
-                errdefer self.allocator.free(text);
-                try expanded.append(self.allocator, .{ .span = word.span, .raw = raw, .text = text });
+            try self.appendExpandedArgvWord(&expanded, word, options);
+        }
+
+        return expanded.toOwnedSlice(self.allocator);
+    }
+
+    fn expandDeclarationArgv(self: *Executor, words: []const ir.WordRef, options: ExecuteOptions) ![]ir.WordRef {
+        var expanded: std.ArrayList(ir.WordRef) = .empty;
+        errdefer {
+            for (expanded.items) |word| self.freeWord(word);
+            expanded.deinit(self.allocator);
+        }
+
+        for (words, 0..) |word, index| {
+            if (index != 0 and isDeclarationAssignmentWord(word.raw)) {
+                const expanded_word = try self.expandAssignmentWord(word, options);
+                errdefer self.freeWord(expanded_word);
+                try expanded.append(self.allocator, expanded_word);
+            } else {
+                try self.appendExpandedArgvWord(&expanded, word, options);
             }
         }
 
         return expanded.toOwnedSlice(self.allocator);
+    }
+
+    fn appendExpandedArgvWord(self: *Executor, expanded: *std.ArrayList(ir.WordRef), word: ir.WordRef, options: ExecuteOptions) !void {
+        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
+        const positionals: []const []const u8 = self.currentPositionals().params;
+        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
+        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        defer fields.deinit();
+        for (fields.fields) |field| {
+            const raw = try self.allocator.dupe(u8, word.raw);
+            errdefer self.allocator.free(raw);
+            const text = try self.allocator.dupe(u8, field);
+            errdefer self.allocator.free(text);
+            try expanded.append(self.allocator, .{ .span = word.span, .raw = raw, .text = text });
+        }
+    }
+
+    fn isDeclarationUtilityInvocation(words: []const ir.WordRef) bool {
+        if (words.len == 0) return false;
+        return std.mem.eql(u8, words[0].raw, "export") or std.mem.eql(u8, words[0].raw, "readonly");
+    }
+
+    fn isDeclarationAssignmentWord(raw: []const u8) bool {
+        const equals = std.mem.indexOfScalar(u8, raw, '=') orelse return false;
+        return isShellName(raw[0..equals]);
     }
 
     fn expandWords(self: *Executor, words: []const ir.WordRef, options: ExecuteOptions) ![]ir.WordRef {
@@ -9783,7 +9820,7 @@ fn listExported(self: *Executor) !CommandResult {
     var names: std.ArrayList([]const u8) = .empty;
     defer names.deinit(self.allocator);
     var iter = self.exported.iterator();
-    while (iter.next()) |entry| if (self.env.contains(entry.key_ptr.*)) try names.append(self.allocator, entry.key_ptr.*);
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
     std.mem.sort([]const u8, names.items, {}, lessThanString);
 
     var stdout: std.ArrayList(u8) = .empty;
@@ -9791,8 +9828,10 @@ fn listExported(self: *Executor) !CommandResult {
     for (names.items) |name| {
         try stdout.appendSlice(self.allocator, "export ");
         try stdout.appendSlice(self.allocator, name);
-        try stdout.append(self.allocator, '=');
-        try appendShellSingleQuoted(self.allocator, &stdout, self.env.get(name).?);
+        if (self.env.get(name)) |value| {
+            try stdout.append(self.allocator, '=');
+            try appendShellSingleQuoted(self.allocator, &stdout, value);
+        }
         try stdout.append(self.allocator, '\n');
     }
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
@@ -12773,6 +12812,22 @@ test "executor implements unset and env builtins" {
     defer allexport_result.deinit();
     try std.testing.expect(std.mem.indexOf(u8, allexport_result.stdout, "AUTO=ok\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, allexport_result.stdout, "LOCAL=hidden\n") == null);
+
+    var declaration = try parseAndLower(std.testing.allocator,
+        \\v='a b'; HOME=/tmp/rush-home
+        \\export DECL=$v TILDE=~ MARKED
+        \\readonly READDECL=$v
+        \\case "$(export -p)" in *"export MARKED"*) echo marked ;; *) echo missing ;; esac
+        \\echo "<$DECL><$TILDE><$READDECL>"
+    );
+    defer declaration.parsed.deinit();
+    defer declaration.program.deinit();
+    var declaration_result = try executor.executeProgram(declaration.program, .{});
+    defer declaration_result.deinit();
+    try std.testing.expectEqualStrings("marked\n<a b></tmp/rush-home><a b>\n", declaration_result.stdout);
+    try std.testing.expectEqualStrings("a b", executor.getEnv("DECL").?);
+    try std.testing.expectEqualStrings("/tmp/rush-home", executor.getEnv("TILDE").?);
+    try std.testing.expect(executor.isExported("MARKED"));
 }
 
 test "executor implements global positional parameters via set --" {

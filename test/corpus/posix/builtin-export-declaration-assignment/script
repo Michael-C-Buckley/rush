@@ -1,0 +1,4 @@
+v='a b'
+HOME=/tmp/rush-home
+export RUSH_DECL=$v RUSH_TILDE=~
+printf '<%s>\n' "$RUSH_DECL" "$RUSH_TILDE"

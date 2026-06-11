@@ -52,7 +52,7 @@ Recent notable capabilities:
 - POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline with nested parameter/command preprocessing plus representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Non-POSIX extension forms are excluded from POSIX scoring and tracked separately in `BASH_COMPAT.md`; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
-- POSIX builtins now include supported `umask`, `times`, `trap`, and `getopts` plus baseline `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
+- POSIX builtins now include supported `export`, `unset`, `umask`, `times`, `trap`, and `getopts` plus baseline `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
 - Cross-target compile-only coverage is tracked by `zig build cross-check`, which runs native tests and compiles the test binary for representative Linux, macOS, FreeBSD, OpenBSD, and NetBSD targets. Foreign-target runtime validation remains separate follow-up work; use `scripts/check-runtime-portability.sh` on actual Linux/BSD hosts and record the host evidence separately from the compile-only compliance row.
@@ -231,7 +231,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
   - temporary for regular builtins/functions/external commands
   - persistent for assignment-only and POSIX special builtins
   - included in external process environments
-- `export`, `unset`, `env` baseline.
+- `export` and `unset` utility behavior, plus `env` baseline.
 - Subshell executes with copied executor state.
 - Brace group executes in current executor.
 - Functions have call frames and positional parameters.
@@ -273,8 +273,8 @@ Implemented or partially implemented:
 - `echo`
 - `false`
 - `true`
-- `export`
-- `unset`
+- `export` utility behavior, including assignment-context `name=value` operands, exported-name marking, `-p` reusable listing, and diagnostics
+- `unset` utility behavior, including default variable mode, `-v`, `-f`, readonly protection, and diagnostics
 - `env`
 - `set` baseline for shell options and positional parameters
 - `test` / `[` POSIX-defined argument-count grammar, unary and binary primaries, file predicates, and diagnostics
