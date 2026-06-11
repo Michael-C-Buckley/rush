@@ -1,0 +1,3 @@
+printf '%s\n' 'a , b' > in
+IFS=' ,' read a b c < in
+printf '<%s><%s><%s>\n' "$a" "$b" "$c"

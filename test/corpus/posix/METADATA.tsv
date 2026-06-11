@@ -68,6 +68,7 @@ builtin-read-backslash	builtin	builtin	-
 builtin-read-continuation	builtin	behavior	Backslash-newline continues a cooked read line before field splitting, while -r reads the physical line
 builtin-read-escaped-ifs	builtin	behavior	Backslash escapes IFS delimiters before read field splitting unless -r is used
 builtin-read-custom-ifs	builtin	builtin	-
+builtin-read-mixed-ifs-whitespace	builtin	behavior	IFS whitespace before a non-whitespace IFS delimiter is part of the delimiter and does not create an empty field
 builtin-read-unsupported-option	builtin	negative;builtin	-
 builtin-readonly	builtin	builtin	-
 builtin-real-fd-redirection	builtin	builtin	-

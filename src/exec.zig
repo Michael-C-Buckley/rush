@@ -8674,42 +8674,63 @@ fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = options;
     var arg_start: usize = 1;
-    var raw_mode = false;
-    while (arg_start < command.argv.len and std.mem.startsWith(u8, command.argv[arg_start].text, "-") and command.argv[arg_start].text.len > 1) {
-        const option = command.argv[arg_start].text;
-        if (std.mem.eql(u8, option, "--")) {
-            arg_start += 1;
-            break;
-        }
-        if (!std.mem.eql(u8, option, "-r")) return errorResult(self.allocator, 2, "read", "unsupported option");
-        raw_mode = true;
-        arg_start += 1;
-    }
+    const read_options = parseReadOptions(command, &arg_start) catch |err| switch (err) {
+        error.UnsupportedOption => return errorResult(self.allocator, 2, "read", "unsupported option"),
+    };
 
     const names = command.argv[arg_start..];
-    const read_input = try nextReadInput(self, stdin, raw_mode);
+    if (names.len == 0) return errorResult(self.allocator, 2, "read", "missing variable name");
+    for (names) |name_word| {
+        if (!isShellName(name_word.text)) return errorResult(self.allocator, 2, "read", "invalid variable name");
+    }
+
+    const read_input = try nextReadInput(self, stdin, read_options);
     defer read_input.deinit(self.allocator);
     const status = read_input.status;
     const raw_line = read_input.line;
-    if (names.len == 0) {
-        try setReadValue(self, "REPLY", raw_line, raw_mode);
-        return emptyResult(self.allocator, status);
-    }
 
     const ifs = self.getEnv("IFS") orelse " \t\n";
-    var cursor = skipReadIfsWhitespace(raw_line, 0, ifs, !raw_mode);
+    var cursor = skipReadIfsWhitespace(raw_line, 0, ifs, !read_options.raw_mode);
     for (names, 0..) |name_word, index| {
-        if (!isShellName(name_word.text)) return errorResult(self.allocator, 2, "read", "invalid variable name");
         if (index == names.len - 1) {
-            const value_end = trimTrailingReadIfsWhitespace(raw_line, raw_line.len, ifs, !raw_mode);
+            const value_end = trimTrailingReadIfsWhitespace(raw_line, raw_line.len, ifs, !read_options.raw_mode);
             const value = if (cursor <= value_end) raw_line[cursor..value_end] else "";
-            try setReadValue(self, name_word.text, value, raw_mode);
+            try setReadValue(self, name_word.text, value, read_options.raw_mode);
             break;
         }
-        const field = nextReadField(raw_line, &cursor, ifs, !raw_mode);
-        try setReadValue(self, name_word.text, field, raw_mode);
+        const field = nextReadField(raw_line, &cursor, ifs, !read_options.raw_mode);
+        try setReadValue(self, name_word.text, field, read_options.raw_mode);
     }
     return emptyResult(self.allocator, status);
+}
+
+const ReadOptions = struct {
+    raw_mode: bool = false,
+};
+
+fn parseReadOptions(command: ir.SimpleCommand, arg_start: *usize) !ReadOptions {
+    var result: ReadOptions = .{};
+    while (arg_start.* < command.argv.len) {
+        const arg = command.argv[arg_start.*].text;
+        if (std.mem.eql(u8, arg, "--")) {
+            arg_start.* += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+
+        var option_index: usize = 1;
+        while (option_index < arg.len) {
+            switch (arg[option_index]) {
+                'r' => {
+                    result.raw_mode = true;
+                    option_index += 1;
+                },
+                else => return error.UnsupportedOption,
+            }
+        }
+        arg_start.* += 1;
+    }
+    return result;
 }
 
 fn setReadValue(self: *Executor, name: []const u8, raw_value: []const u8, raw_mode: bool) !void {
@@ -8731,22 +8752,22 @@ const ReadInput = struct {
     }
 };
 
-fn nextReadInput(self: *Executor, stdin: []const u8, raw_mode: bool) !ReadInput {
-    if (stdin.len != 0) return try readInputFromSlice(self.allocator, stdin, raw_mode);
+fn nextReadInput(self: *Executor, stdin: []const u8, options: ReadOptions) !ReadInput {
+    if (stdin.len != 0) return try readInputFromSlice(self.allocator, stdin, options);
     if (pipeline_stage_stdin.active) {
-        if (pipeline_stage_stdin.file) |file| return try readInputFromFile(self, file, raw_mode);
+        if (pipeline_stage_stdin.file) |file| return try readInputFromFile(self, file, options);
         return .{ .line = "", .status = 1 };
     }
-    if (self.script_stdin_file) |file| return try readInputFromFile(self, file, raw_mode);
+    if (self.script_stdin_file) |file| return try readInputFromFile(self, file, options);
     const script_stdin = self.script_stdin orelse return .{ .line = "", .status = 1 };
     if (self.script_stdin_offset >= script_stdin.len) return .{ .line = "", .status = 1 };
     const remaining = script_stdin[self.script_stdin_offset..];
-    const input = try readInputFromSlice(self.allocator, remaining, raw_mode);
+    const input = try readInputFromSlice(self.allocator, remaining, options);
     self.script_stdin_offset += input.consumed;
     return input;
 }
 
-fn readInputFromFile(self: *Executor, file: std.Io.File, raw_mode: bool) !ReadInput {
+fn readInputFromFile(self: *Executor, file: std.Io.File, options: ReadOptions) !ReadInput {
     var line: std.ArrayList(u8) = .empty;
     errdefer line.deinit(self.allocator);
     var byte: [1]u8 = undefined;
@@ -8759,7 +8780,7 @@ fn readInputFromFile(self: *Executor, file: std.Io.File, raw_mode: bool) !ReadIn
         }
         if (byte[0] == '\n') {
             trimReadCarriageReturnInPlace(&line);
-            if (!raw_mode and readLineContinues(line.items)) {
+            if (!options.raw_mode and readLineContinues(line.items)) {
                 line.items.len -= 1;
                 continue;
             }
@@ -8770,7 +8791,7 @@ fn readInputFromFile(self: *Executor, file: std.Io.File, raw_mode: bool) !ReadIn
     }
 }
 
-fn readInputFromSlice(allocator: std.mem.Allocator, stdin: []const u8, raw_mode: bool) !ReadInput {
+fn readInputFromSlice(allocator: std.mem.Allocator, stdin: []const u8, options: ReadOptions) !ReadInput {
     var cursor: usize = 0;
     var logical: std.ArrayList(u8) = .empty;
     errdefer logical.deinit(allocator);
@@ -8781,7 +8802,7 @@ fn readInputFromSlice(allocator: std.mem.Allocator, stdin: []const u8, raw_mode:
         const line_end = newline orelse remaining.len;
         const consumed = cursor + @min(line_end + 1, remaining.len);
         const physical_line = trimReadCarriageReturn(remaining[0..line_end]);
-        if (newline != null and !raw_mode and readLineContinues(physical_line)) {
+        if (newline != null and !options.raw_mode and readLineContinues(physical_line)) {
             continued = true;
             try logical.appendSlice(allocator, physical_line[0 .. physical_line.len - 1]);
             cursor = consumed;
@@ -9087,7 +9108,14 @@ fn nextReadField(text: []const u8, cursor: *usize, ifs: []const u8, honor_escape
         cursor.* += 1;
     }
     const end = cursor.*;
-    if (cursor.* < text.len and isReadIfsNonWhitespace(text[cursor.*], ifs)) cursor.* += 1;
+    if (cursor.* < text.len and isReadIfsWhitespace(text[cursor.*], ifs)) {
+        const after_whitespace = skipReadIfsWhitespace(text, cursor.*, ifs, honor_escapes);
+        if (after_whitespace < text.len and isReadIfsNonWhitespace(text[after_whitespace], ifs)) {
+            cursor.* = after_whitespace + 1;
+        }
+    } else if (cursor.* < text.len and isReadIfsNonWhitespace(text[cursor.*], ifs)) {
+        cursor.* += 1;
+    }
     cursor.* = skipReadIfsWhitespace(text, cursor.*, ifs, honor_escapes);
     return text[start..end];
 }
@@ -9118,7 +9146,7 @@ fn isEscapedReadByte(text: []const u8, index: usize) bool {
 }
 
 fn isReadIfs(byte: u8, ifs: []const u8) bool {
-    return std.mem.indexOfScalar(u8, ifs, byte) != null;
+    return std.mem.findScalar(u8, ifs, byte) != null;
 }
 
 fn isDefaultReadIfsWhitespace(byte: u8) bool {
@@ -12879,6 +12907,18 @@ test "executor implements read and printf builtins" {
     defer ifs_result.deinit();
     try std.testing.expectEqualStrings("one//three\n", ifs_result.stdout);
 
+    var mixed_ifs_lowered = try parseAndLower(std.testing.allocator,
+        \\printf '%s\n' 'a , b' > rush-test-read-mixed-ifs.tmp
+        \\IFS=' ,' read a b c < rush-test-read-mixed-ifs.tmp
+        \\printf '<%s><%s><%s>\n' "$a" "$b" "$c"
+    );
+    defer mixed_ifs_lowered.parsed.deinit();
+    defer mixed_ifs_lowered.program.deinit();
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, "rush-test-read-mixed-ifs.tmp") catch {};
+    var mixed_ifs_result = try executor.executeProgram(mixed_ifs_lowered.program, .{ .io = std.testing.io });
+    defer mixed_ifs_result.deinit();
+    try std.testing.expectEqualStrings("<a><b><>\n", mixed_ifs_result.stdout);
+
     var unsupported = try parseAndLower(std.testing.allocator, "read -z var");
     defer unsupported.parsed.deinit();
     defer unsupported.program.deinit();
@@ -12886,6 +12926,22 @@ test "executor implements read and printf builtins" {
     defer unsupported_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 2), unsupported_result.status);
     try std.testing.expectEqualStrings("read: unsupported option\n", unsupported_result.stderr);
+
+    var missing_name = try parseAndLower(std.testing.allocator, "read");
+    defer missing_name.parsed.deinit();
+    defer missing_name.program.deinit();
+    var missing_name_result = try executor.executeProgram(missing_name.program, .{});
+    defer missing_name_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), missing_name_result.status);
+    try std.testing.expectEqualStrings("read: missing variable name\n", missing_name_result.stderr);
+
+    var invalid_name = try parseAndLower(std.testing.allocator, "read 1BAD");
+    defer invalid_name.parsed.deinit();
+    defer invalid_name.program.deinit();
+    var invalid_name_result = try executor.executeProgram(invalid_name.program, .{});
+    defer invalid_name_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), invalid_name_result.status);
+    try std.testing.expectEqualStrings("read: invalid variable name\n", invalid_name_result.stderr);
 }
 
 test "executor implements pwd cd and export builtins" {

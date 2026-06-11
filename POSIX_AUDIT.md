@@ -278,7 +278,7 @@ Implemented or partially implemented:
 - `env`
 - `set` baseline for shell options and positional parameters
 - `test` / `[` POSIX-defined argument-count grammar, unary and binary primaries, file predicates, and diagnostics
-- `read` baseline
+- `read` baseline with non-interactive IFS/backslash, `-r`, EOF, and diagnostic coverage
 - `printf` baseline
 - `command` baseline
 - `eval` baseline
@@ -296,7 +296,7 @@ Implemented or partially implemented:
 ### Partial / gaps
 
 - `echo` has minimal behavior and intentionally avoids complex option/escape variations.
-- `read` supports simple field assignment and `-r` acceptance but not full POSIX options/IFS/backslash behavior.
+- `read` has broad non-interactive POSIX coverage for IFS splitting, backslash/cooked versus `-r`, EOF status, option/operand diagnostics, and readonly assignment failure. The remaining broad-row gap is interactive terminal input/continuation prompting.
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`vi` editing mode and complete job-control terminal semantics).
 - `env` does not support arguments/options.

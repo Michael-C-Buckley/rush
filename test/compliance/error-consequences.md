@@ -50,7 +50,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `errors-special-builtin-nounset-{colon,eval,export,readonly,set,unset,trap}` | special builtin | covered baseline | nounset expansion diagnostic, status 1, non-interactive execution stops |
 | `builtin-dot-non-readable` | special builtin | covered baseline | permission diagnostic, status 1, non-interactive execution stops |
 | `builtin-test-invalid-expression` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
-| `builtin-read-unsupported-option` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
+| `builtin-read-{unsupported-option,missing-variable,invalid-variable}` | builtin diagnostics | covered baseline | diagnostic, builtin status 2, following command runs |
 | `builtin-wait-unknown-pid` | builtin diagnostics | covered baseline | diagnostic, builtin status 127, following command runs |
 
 ## Manifest rows
