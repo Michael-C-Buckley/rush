@@ -1390,35 +1390,85 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
     _ = options.mode;
     _ = options.cursor;
 
-    var lex_result = try lex(allocator, source);
-    errdefer lex_result.deinit();
+    var masked_ranges: std.ArrayList(Span) = .empty;
+    defer masked_ranges.deinit(allocator);
 
-    var parser: SyntaxParser = .{
-        .allocator = allocator,
-        .source = source,
-        .tokens = lex_result.tokens,
-        .features = options.features,
-    };
-    errdefer parser.deinit();
+    var masked_source: ?[]u8 = null;
+    defer if (masked_source) |buffer| allocator.free(buffer);
 
-    try parser.diagnostics.appendSlice(allocator, lex_result.diagnostics);
-    allocator.free(lex_result.diagnostics);
-    lex_result.diagnostics = &.{};
+    while (true) {
+        var lex_result = try lex(allocator, masked_source orelse source);
+        errdefer lex_result.deinit();
 
-    try parser.run();
-    parser.freePendingHereDocs();
-    parser.pending_here_docs.deinit(allocator);
-    parser.pending_here_docs = .empty;
+        var parser: SyntaxParser = .{
+            .allocator = allocator,
+            .source = source,
+            .tokens = lex_result.tokens,
+            .features = options.features,
+        };
+        errdefer parser.deinit();
 
-    return .{
-        .allocator = allocator,
-        .source = source,
-        .tokens = lex_result.tokens,
-        .nodes = try parser.nodes.toOwnedSlice(allocator),
-        .children = try parser.children.toOwnedSlice(allocator),
-        .diagnostics = try parser.diagnostics.toOwnedSlice(allocator),
-        .incomplete = lex_result.incomplete or parser.incomplete,
-    };
+        try parser.diagnostics.appendSlice(allocator, lex_result.diagnostics);
+        allocator.free(lex_result.diagnostics);
+        lex_result.diagnostics = &.{};
+
+        try parser.run();
+        parser.freePendingHereDocs();
+        parser.pending_here_docs.deinit(allocator);
+        parser.pending_here_docs = .empty;
+
+        // Here-doc bodies are not shell tokens. The first pass discovers body
+        // spans; later passes neutralize those bytes so quotes or substitutions
+        // inside the body cannot consume commands after the delimiter.
+        if (try appendNewHereDocBodyRanges(allocator, &masked_ranges, parser.nodes.items)) {
+            parser.deinit();
+            lex_result.deinit();
+            if (masked_source) |buffer| {
+                allocator.free(buffer);
+                masked_source = null;
+            }
+            masked_source = try maskSourceRanges(allocator, source, masked_ranges.items);
+            continue;
+        }
+
+        return .{
+            .allocator = allocator,
+            .source = source,
+            .tokens = lex_result.tokens,
+            .nodes = try parser.nodes.toOwnedSlice(allocator),
+            .children = try parser.children.toOwnedSlice(allocator),
+            .diagnostics = try parser.diagnostics.toOwnedSlice(allocator),
+            .incomplete = lex_result.incomplete or parser.incomplete,
+        };
+    }
+}
+
+fn appendNewHereDocBodyRanges(allocator: std.mem.Allocator, ranges: *std.ArrayList(Span), nodes: []const Node) !bool {
+    var added = false;
+    for (nodes) |node| {
+        if (node.kind != .here_doc_body) continue;
+        if (spanListContains(ranges.items, node.span)) continue;
+        try ranges.append(allocator, node.span);
+        added = true;
+    }
+    return added;
+}
+
+fn spanListContains(ranges: []const Span, span: Span) bool {
+    for (ranges) |range| {
+        if (range.start == span.start and range.end == span.end) return true;
+    }
+    return false;
+}
+
+fn maskSourceRanges(allocator: std.mem.Allocator, source: []const u8, ranges: []const Span) ![]u8 {
+    const masked = try allocator.dupe(u8, source);
+    for (ranges) |range| {
+        for (masked[range.start..range.end]) |*byte| {
+            if (byte.* != '\n') byte.* = ' ';
+        }
+    }
+    return masked;
 }
 
 const PendingHereDoc = struct {
@@ -4033,6 +4083,27 @@ test "parser preserves non-special backslash in double-quoted here-doc delimiter
         if (node.kind != .here_doc_body) continue;
         found_body = true;
         try expectSpan(.init(13, 23), node.span);
+    }
+    try std.testing.expect(found_body);
+    var command_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .simple_command) command_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), command_count);
+}
+
+test "parser does not tokenize quoted here-doc body as shell syntax" {
+    const source = "cat <<'EOF'\nif then bad ; | &\n\"unterminated double\n'unterminated single\n$(unterminated command\n${unterminated\nEOF\necho after";
+    var result = try parse(std.testing.allocator, source, .{});
+    defer result.deinit();
+
+    try std.testing.expect(!result.incomplete);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    var found_body = false;
+    for (result.nodes) |node| {
+        if (node.kind != .here_doc_body) continue;
+        found_body = true;
+        try expectSpan(.init(12, 114), node.span);
     }
     try std.testing.expect(found_body);
     var command_count: usize = 0;

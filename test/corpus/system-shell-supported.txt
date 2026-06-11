@@ -27,6 +27,7 @@ VALUE=ok; cat <<EOF\n$VALUE $(echo hi) $((1 + 2))\nEOF
 unset B; HOME=/qh; A=v; cat <<EOF\n"q" 'one' \\"$A\\" ${B:-~}\nEOF
 VALUE=ok; cat <<'EOF'\n$VALUE $(echo hi) $((1 + 2))\nEOF
 cat <<FIRST <<SECOND\nfirst\nFIRST\nsecond\nSECOND
+cat <<'EOF'\nif then bad ; | &\n"unterminated double\n'unterminated single\n$(unterminated command\n${unterminated\nEOF\necho after
 echo 'a b $HOME'
 A=value; echo "$A and spaces"
 echo a\ b c

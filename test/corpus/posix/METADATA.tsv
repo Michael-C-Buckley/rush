@@ -171,6 +171,7 @@ heredoc-body-literal-quoting	redirection	here-doc	here-doc bodies keep quotes an
 heredoc-positional-star-ifs	redirection	here-doc	$* in a here-doc body joins positional parameters with the first IFS character
 heredoc-delimiter-line-continuation	redirection	here-doc	a body line ending in backslash-newline joins the next line so it cannot be the delimiter
 heredoc-body-not-syntax	redirection	here-doc	-
+heredoc-quoted-body-not-tokenized	redirection	here-doc	quoted here-doc bodies can contain reserved words operators unmatched quotes and substitution-looking text as literal data
 if-elif	grammar	behavior	-
 if-else	grammar	behavior	-
 ifs-colon-splitting	expansion	behavior	-
