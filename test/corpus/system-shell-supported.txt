@@ -133,6 +133,8 @@ alias greet='echo alias'; greet() { echo function; }; unalias greet; greet
 echo one > one; echo two > two; echo stdin | cat one - two
 env -i ONLY=value env
 OUTER=keep; env INNER=value env | grep ^INNER=; echo ${INNER:-unset}/$OUTER
+env RUSH_ENV_STATUS=ok sh -c 'printf "%s/%s\n" "$1" "$RUSH_ENV_STATUS"; exit 7' sh arg
+printf '#!/bin/sh\necho path-ok\n' > rush-env-path-cmd; chmod +x rush-env-path-cmd; env PATH=. rush-env-path-cmd; rm -f rush-env-path-cmd
 f() { printf "%s\n" "$1"; }; f dash-smoke > out; cat out
 printf '%s\n' 'dot_value=loaded' 'dot_func() { echo func:$dot_value; }' > dot-script; . ./dot-script; echo var:$dot_value; dot_func
 (x=subshell; echo "$x"); echo "${x:-unset}"

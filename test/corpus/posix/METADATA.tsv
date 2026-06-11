@@ -308,6 +308,8 @@ builtin-export-mark-later-assignment	builtin	behavior	export marks an unset name
 builtin-command-v-function	builtin	behavior	command -v identifies shell functions by name
 builtin-readonly-p-marked-name	builtin	behavior	readonly -p lists a readonly name marked before assignment
 builtin-env-exported-only	builtin	behavior	env prints exported environment and omits local shell variables
+builtin-env-path-search	builtin	behavior	env uses a PATH assignment operand when locating the utility operand
+builtin-env-utility-status-arguments	builtin	behavior	env passes utility arguments and returns the invoked utility status
 redirection-here-doc-mixed-quoted-delimiter	redirection	behavior	here-doc delimiter quote removal disables body expansion for mixed quoted delimiters
 builtin-exit-status-modulo	builtin	behavior	exit status operands use the low 8 bits for nonnegative integers
 builtin-exit-function	builtin	behavior	exit inside a function exits the shell

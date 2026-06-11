@@ -4915,6 +4915,10 @@ pub const Executor = struct {
                 synthetic_failure = true;
                 break :blk try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found");
             },
+            error.AccessDenied, error.PermissionDenied => blk: {
+                synthetic_failure = true;
+                break :blk try errorResult(self.allocator, 126, expanded.argv[0].text, "permission denied");
+            },
             error.BadFileDescriptor, error.FileNotFound, error.IsDir, error.PathAlreadyExists => return self.redirectionErrorResult(expanded, err, false),
             else => return err,
         };
@@ -5289,10 +5293,10 @@ pub const Executor = struct {
     }
 
     fn findExecutableInPathValue(self: *Executor, io: std.Io, name: []const u8, path_value: []const u8) !?[]const u8 {
-        if (std.mem.indexOfScalar(u8, name, '/') != null) {
-            std.Io.Dir.cwd().access(io, name, .{ .execute = true }) catch return null;
-            return try self.allocator.dupe(u8, name);
-        }
+        if (std.mem.indexOfScalar(u8, name, '/') != null) return self.executableReplacementPath(io, name) catch |err| switch (err) {
+            error.CommandNotFound, error.AccessDenied => return null,
+            else => return err,
+        };
         var parts = std.mem.splitScalar(u8, path_value, ':');
         while (parts.next()) |part| {
             const dir = if (part.len == 0) "." else part;
@@ -5311,15 +5315,12 @@ pub const Executor = struct {
     }
 
     fn findReplacementExecutable(self: *Executor, io: std.Io, name: []const u8, use_default_path: bool) ![]const u8 {
+        if (std.mem.indexOfScalar(u8, name, '/') != null) return self.executableReplacementPath(io, name);
         const path_value = if (use_default_path) "/bin:/usr/bin" else self.getEnv("PATH") orelse return error.CommandNotFound;
         return self.findReplacementExecutableInPathValue(io, name, path_value);
     }
 
     fn findReplacementExecutableInPathValue(self: *Executor, io: std.Io, name: []const u8, path_value: []const u8) ![]const u8 {
-        if (std.mem.indexOfScalar(u8, name, '/') != null) {
-            return self.executableReplacementPath(io, name);
-        }
-
         var permission_denied = false;
         var parts = std.mem.splitScalar(u8, path_value, ':');
         while (parts.next()) |part| {
@@ -6041,6 +6042,7 @@ pub const Executor = struct {
         defer self.allocator.free(argv);
         const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
             error.CommandNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
             else => return err,
         };
         defer if (resolved_executable) |executable| self.allocator.free(executable);
@@ -6159,6 +6161,7 @@ pub const Executor = struct {
             .pgid = if (self.monitorProcessGroupsEnabled()) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
             else => return err,
         };
         inherited_redirections.restore(self, io);
@@ -6445,6 +6448,7 @@ pub const Executor = struct {
             .pgid = if (foreground_terminal != null) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return error.CommandNotFound,
+            error.AccessDenied, error.PermissionDenied => return error.AccessDenied,
             else => return err,
         };
         inherited_redirections.restore(self, io);
@@ -6590,12 +6594,8 @@ pub const Executor = struct {
     }
 
     fn resolveExternalArgv0(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !?[]const u8 {
-        if (std.mem.indexOfScalar(u8, command.argv[0].text, '/') != null) return null;
-        const executable = if (options.default_path_lookup)
-            try self.findExecutableInDefaultPath(io, command.argv[0].text)
-        else
-            try self.findExecutableInPath(io, command.argv[0].text);
-        return executable orelse error.CommandNotFound;
+        const executable = try self.findReplacementExecutable(io, command.argv[0].text, options.default_path_lookup);
+        return @as(?[]const u8, executable);
     }
 };
 
@@ -12873,6 +12873,39 @@ test "executor implements unset and env builtins" {
     try std.testing.expectEqualStrings("a b", executor.getEnv("DECL").?);
     try std.testing.expectEqualStrings("/tmp/rush-home", executor.getEnv("TILDE").?);
     try std.testing.expect(executor.isExported("MARKED"));
+}
+
+test "env invokes utilities with modified environment, arguments, PATH, and status" {
+    var status_lowered = try parseAndLower(std.testing.allocator,
+        \\env RUSH_ENV_STATUS=ok /bin/sh -c 'printf "%s/%s\n" "$1" "$RUSH_ENV_STATUS"; exit 7' sh arg
+        \\echo status:$?
+    );
+    defer status_lowered.parsed.deinit();
+    defer status_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var status_result = try executor.executeProgram(status_lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer status_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), status_result.status);
+    try std.testing.expectEqualStrings("arg/ok\nstatus:7\n", status_result.stdout);
+
+    const root = "rush-env-path-command-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
+    try std.Io.Dir.cwd().symLink(std.testing.io, "/bin/sh", root ++ "/rush-env-sh", .{});
+
+    var path_lowered = try parseAndLower(std.testing.allocator,
+        \\PATH=/nope; env PATH=rush-env-path-command-test rush-env-sh -c 'printf %s path-ok'; printf '\n%s\n' "$PATH"
+    );
+    defer path_lowered.parsed.deinit();
+    defer path_lowered.program.deinit();
+
+    var path_result = try executor.executeProgram(path_lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer path_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), path_result.status);
+    try std.testing.expectEqualStrings("path-ok\n/nope\n", path_result.stdout);
 }
 
 test "executor implements global positional parameters via set --" {

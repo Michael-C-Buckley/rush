@@ -19,24 +19,23 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-cross-targets.sh`: passing native tests plus compile-only test builds for `x86_64-linux-gnu`, `aarch64-linux-gnu`, `x86_64-macos`, `aarch64-macos`, `x86_64-freebsd`, `x86_64-openbsd`, and `x86_64-netbsd`
-- `scripts/check-compliance-manifest.sh`: `404` rows
-- `scripts/check-posix-corpus.sh`: `370` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `216` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `260` cases, `520` comparisons across dash and bash POSIX mode
+- `scripts/check-compliance-manifest.sh`: `406` rows
+- `scripts/check-posix-corpus.sh`: `388` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `224` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `274` cases, `548` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `404`
-- scored POSIX items: `401`
-- supported: `359`
-- baseline: `39`
+- tracked items: `406`
+- scored POSIX items: `402`
+- supported: `371`
+- baseline: `28`
 - partial: `2`
 - missing: `1`
-- out of scope: `3`
-- strict supported only: `89.5%`
+- out of scope: `4`
+- strict supported only: `92.3%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `96.5%`
+- weighted progress: `97.3%`
 
 Recent notable capabilities:
 
@@ -231,7 +230,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
   - temporary for regular builtins/functions/external commands
   - persistent for assignment-only and POSIX special builtins
   - included in external process environments
-- `export` and `unset` utility behavior, plus `env` baseline.
+- `export`, `unset`, and `env` utility behavior.
 - Subshell executes with copied executor state.
 - Brace group executes in current executor.
 - Functions have call frames and positional parameters.
@@ -273,7 +272,7 @@ Implemented or partially implemented:
 - `true`
 - `export` utility behavior, including assignment-context `name=value` operands, exported-name marking, `-p` reusable listing, and diagnostics
 - `unset` utility behavior, including default variable mode, `-v`, `-f`, readonly protection, and diagnostics
-- `env`
+- `env` utility behavior, including exported-only environment printing, `-i`, assignment operands, PATH operand lookup, utility arguments, invoked-utility status propagation, and diagnostics
 - `set` baseline for shell options and positional parameters
 - `test` / `[` POSIX-defined argument-count grammar, unary and binary primaries, file predicates, and diagnostics
 - `read` baseline with non-interactive IFS/backslash, `-r`, EOF, and diagnostic coverage
@@ -297,7 +296,6 @@ Implemented or partially implemented:
 - `read` has broad non-interactive POSIX coverage for IFS splitting, backslash/cooked versus `-r`, EOF status, option/operand diagnostics, and readonly assignment failure. The remaining broad-row gap is interactive terminal input/continuation prompting.
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`vi` editing mode and complete job-control terminal semantics).
-- `env` does not support arguments/options.
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
 - Full POSIX alias substitution token timing remains partial; the builtin `alias`/`unalias` utility row is supported separately from those parser-level timing edge cases.
