@@ -155,11 +155,13 @@ __rush_complete_brew_commands() {
 }
 
 __rush_complete_brew_formulae() {
-  brew search --formula "$(completion prefix)" 2>/dev/null | while read formula; do test -n "$formula" && completion candidate "$formula" --kind plain; done
+  prefix="$(completion prefix)"
+  brew formulae 2>/dev/null | awk -v prefix="$prefix" 'index($0, prefix) == 1 { print }' | completion candidates --kind plain
 }
 
 __rush_complete_brew_casks() {
-  brew search --cask "$(completion prefix)" 2>/dev/null | while read cask; do test -n "$cask" && completion candidate "$cask" --kind plain; done
+  prefix="$(completion prefix)"
+  brew casks 2>/dev/null | awk -v prefix="$prefix" 'index($0, prefix) == 1 { print }' | completion candidates --kind plain
 }
 
 __rush_complete_brew_install_targets() {

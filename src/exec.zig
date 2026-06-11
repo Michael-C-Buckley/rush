@@ -3889,7 +3889,7 @@ pub const Executor = struct {
     }
 
     fn canExecuteRealPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
-        _ = self;
+        if (self.completion_builder != null or self.completion_context != null) return false;
         if (pipeline.stage_spans.len != pipeline.command_indexes.len) return false;
         if (!options.allow_external or options.io == null or pipeline.command_indexes.len < 2) return false;
         for (pipeline.command_indexes) |command_index| {
@@ -4885,7 +4885,7 @@ pub const Executor = struct {
                 const redirected_stdin_file: ?std.Io.File = if (hasInputRedirection(expanded.redirections)) std.Io.File.stdin() else stdin_file;
                 const stdin_guard = self.pushScriptStdin(effective_stdin, redirected_stdin_file, hasInputRedirection(expanded.redirections) or stdin.len != 0);
                 defer if (stdin_guard) |script_guard| script_guard.restore();
-                var result = try self.executeBuiltinWithAssignments(builtin, expanded, "", options);
+                var result = try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options);
                 defer result.deinit();
                 if (options.interactive and std.mem.eql(u8, builtin_name, "exec") and result.status != 0 and self.pending_exit == null) {
                     guard.commit(options.io.?);
@@ -4899,7 +4899,7 @@ pub const Executor = struct {
             }
             const stdin_guard = self.pushScriptStdin(effective_stdin, stdin_file, hasInputRedirection(expanded.redirections) or stdin.len != 0);
             defer if (stdin_guard) |script_guard| script_guard.restore();
-            return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, "", options), options, special_builtin);
+            return try self.applyOutputRedirections(expanded, try self.executeBuiltinWithAssignments(builtin, expanded, effective_stdin, options), options, special_builtin);
         }
 
         if (!options.allow_external) {
@@ -4908,7 +4908,7 @@ pub const Executor = struct {
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
         var synthetic_failure = false;
-        const external_stdin = self.remainingScriptStdin();
+        const external_stdin = if (stdin.len != 0 or hasInputRedirection(expanded.redirections)) effective_stdin else self.remainingScriptStdin();
         var external_result = self.executeExternal(expanded, io, options, external_stdin) catch |err| switch (err) {
             error.CommandNotFound => blk: {
                 synthetic_failure = true;
@@ -6328,7 +6328,7 @@ pub const Executor = struct {
         if (stdin_file == null and !stdin_redirected and externalStdinUsesScriptInput(options.external_stdio)) {
             if (fallback_stdin) |stdin| {
                 stdin_file = try fileFromBytes(io, stdin);
-                self.script_stdin_offset = (self.script_stdin orelse unreachable).len;
+                if (self.script_stdin) |script_stdin| self.script_stdin_offset = script_stdin.len;
             } else if (pipeline_stage_stdin.active) {
                 if (pipeline_stage_stdin.file) |file| stdin_file = try dupFile(file);
             } else if (self.remainingScriptStdinFile()) |file| {
@@ -7850,7 +7850,6 @@ fn parseCompletionPattern(allocator: std.mem.Allocator, pattern: []const u8) !Co
 }
 
 fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    _ = stdin;
     const builder = if (self.completion_builder) |*builder| builder else return errorResult(self.allocator, 2, "completion", "not completing a command");
     if (command.argv.len < 2) return errorResult(self.allocator, 2, "completion", "missing subcommand");
     const subcommand = command.argv[1].text;
@@ -7874,6 +7873,7 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     if (std.mem.eql(u8, subcommand, "executables")) return builtinCompletionExecutables(self, builder, command, options);
     if (std.mem.eql(u8, subcommand, "variables")) return builtinCompletionVariables(self, builder, command);
     if (std.mem.eql(u8, subcommand, "option")) return builtinCompletionOption(self, builder, command);
+    if (std.mem.eql(u8, subcommand, "candidates")) return builtinCompletionCandidates(self, builder, command, stdin);
     if (!std.mem.eql(u8, subcommand, "candidate")) return errorResult(self.allocator, 2, "completion", "unsupported subcommand");
 
     var candidate: completion.Candidate = .{ .value = "", .replace_start = 0, .replace_end = 0 };
@@ -7907,6 +7907,39 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     }
     if (!value_set) return errorResult(self.allocator, 2, "completion", "missing candidate value");
     try builder.appendCandidate(self.allocator, candidate);
+    return emptyResult(self.allocator, 0);
+}
+
+fn builtinCompletionCandidates(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand, stdin: []const u8) !CommandResult {
+    var candidate: completion.Candidate = .{ .value = "", .replace_start = 0, .replace_end = 0 };
+    var index: usize = 2;
+    while (index < command.argv.len) {
+        const arg = command.argv[index].text;
+        index += 1;
+        if (std.mem.eql(u8, arg, "--description")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing description text");
+            candidate.description = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--kind")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing kind");
+            candidate.kind = parseCompletionKind(command.argv[index].text) orelse return errorResult(self.allocator, 2, "completion", "unsupported kind");
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--no-space")) {
+            candidate.append_space = false;
+        } else if (std.mem.startsWith(u8, arg, "--")) {
+            return errorResult(self.allocator, 2, "completion", "unsupported candidates option");
+        } else {
+            return errorResult(self.allocator, 2, "completion", "too many arguments");
+        }
+    }
+
+    var lines = std.mem.splitScalar(u8, stdin, '\n');
+    while (lines.next()) |raw_line| {
+        const value = if (std.mem.endsWith(u8, raw_line, "\r")) raw_line[0 .. raw_line.len - 1] else raw_line;
+        if (value.len == 0) continue;
+        candidate.value = value;
+        try builder.appendCandidate(self.allocator, candidate);
+    }
     return emptyResult(self.allocator, 0);
 }
 
@@ -16729,6 +16762,32 @@ test "dynamic structured argument provider runs after subcommand path" {
     const candidates = try executor.collectCompletionsForInput("brew install q", "brew install q".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(candidates);
     try expectCandidate(candidates, "qemu", .plain);
+}
+
+test "completion candidates reads newline separated values from stdin" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__brew_formulae() {
+        \\  printf 'qemu\n\nqt\r\n' | completion candidates --kind plain --description formula
+        \\}
+        \\complete brew --subcommand install
+        \\complete 'brew install' --argument --function __brew_formulae
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("brew install q", "brew install q".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "qemu", .plain);
+    try expectCandidate(candidates, "qt", .plain);
+    const qemu = findCandidate(candidates, "qemu") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("formula", qemu.description.?);
+    try expectNoCandidate(candidates, "");
 }
 
 test "dynamic structured completion candidates support fuzzy display filtering" {
