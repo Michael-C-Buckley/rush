@@ -2121,6 +2121,40 @@ test "supplied completion scripts validate" {
     try std.testing.expectEqual(@as(usize, 0), result.failures);
 }
 
+test "supplied git completion does not offer reverse for show" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_HOME", "share");
+    try executor.setEnv("XDG_DATA_DIRS", "");
+
+    const show_options = try executor.collectCompletionsForInput("git show --", "git show --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(show_options);
+    try expectCompletionCandidate(show_options, "--stat");
+    try expectCompletionCandidate(show_options, "--format");
+    try expectNoCompletionCandidate(show_options, "--reverse");
+
+    const show_reverse = try executor.collectCompletionsForInput("git show --rev", "git show --rev".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(show_reverse);
+    try expectNoCompletionCandidate(show_reverse, "--reverse");
+
+    const log_reverse = try executor.collectCompletionsForInput("git log --rev", "git log --rev".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(log_reverse);
+    try expectCompletionCandidate(log_reverse, "--reverse");
+}
+
+fn expectCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) !void {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) return;
+    }
+    return error.MissingCompletionCandidate;
+}
+
+fn expectNoCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) !void {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) return error.UnexpectedCompletionCandidate;
+    }
+}
+
 test "completion cache keys include completion generation" {
     var cache = CompletionCache.init(std.testing.allocator);
     defer cache.deinit();
