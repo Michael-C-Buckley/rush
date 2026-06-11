@@ -8,6 +8,97 @@ const vaxis = @import("vaxis");
 
 const max_menu_candidate_rows = 16;
 
+pub const UnderlineStyle = enum { none, single, double, curly, dotted, dashed };
+
+pub const UiStyle = struct {
+    fg: ?vaxis.Color = null,
+    bg: ?vaxis.Color = null,
+    ul: UnderlineStyle = .none,
+    ul_color: ?vaxis.Color = null,
+    bold: bool = false,
+    dim: bool = false,
+    italic: bool = false,
+    reverse: bool = false,
+    strike: bool = false,
+};
+
+pub const UiTheme = struct {
+    completion_selected: UiStyle = .{ .fg = .{ .index = 6 }, .bold = true },
+    completion_directory: UiStyle = .{ .fg = .{ .index = 4 } },
+    completion_option: UiStyle = .{ .fg = .{ .index = 6 } },
+    completion_variable: UiStyle = .{ .fg = .{ .index = 5 } },
+    completion_function: UiStyle = .{ .fg = .{ .index = 5 } },
+    completion_file: UiStyle = .{ .fg = .{ .index = 7 } },
+    completion_description: UiStyle = .{ .dim = true },
+    completion_flash: UiStyle = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 7 } },
+    history_match: UiStyle = .{ .fg = .{ .index = 3 } },
+    autosuggestion: UiStyle = .{ .dim = true },
+    diagnostic_error: UiStyle = .{ .ul = .curly, .ul_color = .{ .index = 1 } },
+};
+
+pub fn parseUiStyle(text: []const u8) ?UiStyle {
+    var style: UiStyle = .{};
+    var iter = std.mem.splitScalar(u8, text, ',');
+    while (iter.next()) |raw_part| {
+        const part = std.mem.trim(u8, raw_part, " \t\r\n");
+        if (part.len == 0) continue;
+        if (std.mem.eql(u8, part, "bold")) {
+            style.bold = true;
+        } else if (std.mem.eql(u8, part, "dim")) {
+            style.dim = true;
+        } else if (std.mem.eql(u8, part, "italic")) {
+            style.italic = true;
+        } else if (std.mem.eql(u8, part, "reverse")) {
+            style.reverse = true;
+        } else if (std.mem.eql(u8, part, "strike")) {
+            style.strike = true;
+        } else if (std.mem.startsWith(u8, part, "fg=")) {
+            style.fg = parseUiColor(part["fg=".len..]) orelse return null;
+        } else if (std.mem.startsWith(u8, part, "bg=")) {
+            style.bg = parseUiColor(part["bg=".len..]) orelse return null;
+        } else if (std.mem.startsWith(u8, part, "ul_color=")) {
+            style.ul_color = parseUiColor(part["ul_color=".len..]) orelse return null;
+        } else if (std.mem.startsWith(u8, part, "ul=")) {
+            style.ul = parseUiUnderline(part["ul=".len..]) orelse return null;
+        } else return null;
+    }
+    return style;
+}
+
+fn parseUiUnderline(name: []const u8) ?UnderlineStyle {
+    if (std.mem.eql(u8, name, "none")) return .none;
+    if (std.mem.eql(u8, name, "single")) return .single;
+    if (std.mem.eql(u8, name, "double")) return .double;
+    if (std.mem.eql(u8, name, "curly")) return .curly;
+    if (std.mem.eql(u8, name, "dotted")) return .dotted;
+    if (std.mem.eql(u8, name, "dashed")) return .dashed;
+    return null;
+}
+
+fn parseUiColor(name: []const u8) ?vaxis.Color {
+    if (std.mem.eql(u8, name, "default")) return .default;
+    if (std.mem.eql(u8, name, "black")) return .{ .index = 0 };
+    if (std.mem.eql(u8, name, "red")) return .{ .index = 1 };
+    if (std.mem.eql(u8, name, "green")) return .{ .index = 2 };
+    if (std.mem.eql(u8, name, "yellow")) return .{ .index = 3 };
+    if (std.mem.eql(u8, name, "blue")) return .{ .index = 4 };
+    if (std.mem.eql(u8, name, "magenta")) return .{ .index = 5 };
+    if (std.mem.eql(u8, name, "cyan")) return .{ .index = 6 };
+    if (std.mem.eql(u8, name, "white")) return .{ .index = 7 };
+    if (std.mem.eql(u8, name, "bright-black")) return .{ .index = 8 };
+    if (std.mem.eql(u8, name, "bright-red")) return .{ .index = 9 };
+    if (std.mem.eql(u8, name, "bright-green")) return .{ .index = 10 };
+    if (std.mem.eql(u8, name, "bright-yellow")) return .{ .index = 11 };
+    if (std.mem.eql(u8, name, "bright-blue")) return .{ .index = 12 };
+    if (std.mem.eql(u8, name, "bright-magenta")) return .{ .index = 13 };
+    if (std.mem.eql(u8, name, "bright-cyan")) return .{ .index = 14 };
+    if (std.mem.eql(u8, name, "bright-white")) return .{ .index = 15 };
+    if (std.mem.startsWith(u8, name, "index:")) return .{ .index = std.fmt.parseUnsigned(u8, name["index:".len..], 10) catch return null };
+    if (name.len != 0 and std.ascii.isDigit(name[0])) return .{ .index = std.fmt.parseUnsigned(u8, name, 10) catch return null };
+    if (name.len == 7 and name[0] == '#') return vaxis.Color.rgbFromUint(std.fmt.parseUnsigned(u24, name[1..], 16) catch return null);
+    return null;
+}
+
 pub const KeyEvent = struct {
     key: Key,
     modifiers: Modifiers = .{},
@@ -566,7 +657,7 @@ pub const LineSession = struct {
             }
             if (self.history_search_matches.items.len != 0) {
                 for (self.history_search_matches.items) |entry| {
-                    const label = try styledHistorySearchLabel(allocator, entry.text, self.history_search_query.items);
+                    const label = try styledHistorySearchLabel(allocator, entry.text, self.history_search_query.items, render_options.theme);
                     try styled_labels.append(allocator, label);
                     history_label_width = @max(history_label_width, visibleWidth(label, render_options.width_method));
                     const description = try historySearchDescription(allocator, self.history.now, entry.when);
@@ -969,7 +1060,7 @@ pub fn relativeAge(buffer: *[16]u8, now: i64, when: i64) []const u8 {
     return std.fmt.bufPrint(buffer, "{d}{c}", .{ value, suffix }) catch unreachable;
 }
 
-fn styledHistorySearchLabel(allocator: std.mem.Allocator, text: []const u8, query: []const u8) ![]const u8 {
+fn styledHistorySearchLabel(allocator: std.mem.Allocator, text: []const u8, query: []const u8, theme: UiTheme) ![]const u8 {
     const positions = (try completion.fuzzyMatchPositions(allocator, text, query)) orelse return try allocator.dupe(u8, text);
     defer allocator.free(positions);
     if (positions.len == 0) return try allocator.dupe(u8, text);
@@ -979,9 +1070,9 @@ fn styledHistorySearchLabel(allocator: std.mem.Allocator, text: []const u8, quer
     var position_index: usize = 0;
     for (text, 0..) |byte, index| {
         if (position_index < positions.len and positions[position_index] == index) {
-            try label.appendSlice(allocator, "\x1b[38;5;3m");
+            try appendUiStyleStart(allocator, &label, theme.history_match);
             try label.append(allocator, byte);
-            try label.appendSlice(allocator, "\x1b[39m");
+            try appendUiStyleEnd(allocator, &label, theme.history_match);
             position_index += 1;
         } else {
             try label.append(allocator, byte);
@@ -1116,6 +1207,7 @@ pub const RenderOptions = struct {
     diagnostic_line: []const u8 = "",
     diagnostic_spans: []const DiagnosticSpan = &.{},
     completion_flash: ?CompletionFlash = null,
+    theme: UiTheme = .{},
     semantic_prompt_marks: bool = false,
     width: u16 = 80,
     height: u16 = 24,
@@ -1167,11 +1259,11 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     errdefer input_line.deinit(allocator);
     try input_line.appendSlice(allocator, options.prompt.bytes);
     if (options.semantic_prompt_marks) try input_line.appendSlice(allocator, semanticPromptEnd);
-    try appendStyledInput(allocator, &input_line, editor.buffer.text(), options.diagnostic_spans, options.completion_flash);
+    try appendStyledInput(allocator, &input_line, editor.buffer.text(), options.diagnostic_spans, options.completion_flash, options.theme);
     if (options.suggestion.len != 0 and renderableInlineText(options.suggestion)) {
-        try input_line.appendSlice(allocator, "\x1b[2m");
+        try appendUiStyleStart(allocator, &input_line, options.theme.autosuggestion);
         try input_line.appendSlice(allocator, options.suggestion);
-        try input_line.appendSlice(allocator, "\x1b[22m");
+        try appendUiStyleEnd(allocator, &input_line, options.theme.autosuggestion);
     }
     const input_line_bytes = try input_line.toOwnedSlice(allocator);
     defer allocator.free(input_line_bytes);
@@ -1188,7 +1280,7 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     const input_line_count = lines.items.len;
     if (options.status_line.len != 0) try appendWrappedLine(allocator, &lines, options.status_line, wrap_width, options.width_method);
     if (options.diagnostic_line.len != 0) try appendWrappedLine(allocator, &lines, options.diagnostic_line, wrap_width, options.width_method);
-    try appendCompletionMenuLines(allocator, &lines, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height, options.completion_label_width);
+    try appendCompletionMenuLines(allocator, &lines, options.completion_menu, options.completion_selection, options.completion_window_start, options.width, options.height, options.completion_label_width, options.theme);
 
     return .{
         .lines = try lines.toOwnedSlice(allocator),
@@ -1198,7 +1290,7 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     };
 }
 
-fn appendStyledInput(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8, spans: []const DiagnosticSpan, flash: ?CompletionFlash) !void {
+fn appendStyledInput(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8, spans: []const DiagnosticSpan, flash: ?CompletionFlash, theme: UiTheme) !void {
     if (spans.len == 0 and flash == null) {
         try out.appendSlice(allocator, text);
         return;
@@ -1213,21 +1305,21 @@ fn appendStyledInput(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text
         const grapheme_end = i + grapheme.len;
         const should_flash = completionFlashAt(flash, i, grapheme_end);
         if (flash_active != should_flash) {
-            if (flash_active) try out.appendSlice(allocator, "\x1b[49;39m");
-            if (should_flash) try out.appendSlice(allocator, "\x1b[48;5;7;38;5;0m");
+            if (flash_active) try appendUiStyleEnd(allocator, out, theme.completion_flash);
+            if (should_flash) try appendUiStyleStart(allocator, out, theme.completion_flash);
             flash_active = should_flash;
         }
         const severity = diagnosticSeverityAt(spans, i, grapheme_end);
         if (active != severity) {
             if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
-            if (severity) |value| try out.appendSlice(allocator, diagnosticUnderlineAnsi(value));
+            if (severity) |value| try appendUiStyleStart(allocator, out, diagnosticStyle(theme, value));
             active = severity;
         }
         try out.appendSlice(allocator, text[i..grapheme_end]);
         i = grapheme_end;
     }
     if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
-    if (flash_active) try out.appendSlice(allocator, "\x1b[49;39m");
+    if (flash_active) try appendUiStyleEnd(allocator, out, theme.completion_flash);
     if (i < text.len) try out.appendSlice(allocator, text[i..]);
 }
 
@@ -1246,16 +1338,75 @@ fn completionFlashForCursor(text: []const u8, cursor: usize) CompletionFlash {
     return .{ .start = start, .end = end };
 }
 
+fn diagnosticStyle(theme: UiTheme, _: DiagnosticSeverity) UiStyle {
+    return theme.diagnostic_error;
+}
+
+fn appendUiStyleStart(allocator: std.mem.Allocator, out: *std.ArrayList(u8), style: UiStyle) !void {
+    if (style.bold) try out.appendSlice(allocator, "\x1b[1m");
+    if (style.dim) try out.appendSlice(allocator, "\x1b[2m");
+    if (style.italic) try out.appendSlice(allocator, "\x1b[3m");
+    switch (style.ul) {
+        .none => {},
+        .single => try out.appendSlice(allocator, "\x1b[4m"),
+        .double => try out.appendSlice(allocator, "\x1b[4:2m"),
+        .curly => try out.appendSlice(allocator, "\x1b[4:3m"),
+        .dotted => try out.appendSlice(allocator, "\x1b[4:4m"),
+        .dashed => try out.appendSlice(allocator, "\x1b[4:5m"),
+    }
+    if (style.reverse) try out.appendSlice(allocator, "\x1b[7m");
+    if (style.strike) try out.appendSlice(allocator, "\x1b[9m");
+    if (style.fg) |color| try appendAnsiColor(allocator, out, .fg, color);
+    if (style.bg) |color| try appendAnsiColor(allocator, out, .bg, color);
+    if (style.ul_color) |color| try appendAnsiColor(allocator, out, .ul, color);
+}
+
+fn appendUiStyleEnd(allocator: std.mem.Allocator, out: *std.ArrayList(u8), style: UiStyle) !void {
+    if (style.strike) try out.appendSlice(allocator, "\x1b[29m");
+    if (style.reverse) try out.appendSlice(allocator, "\x1b[27m");
+    if (style.ul != .none or style.ul_color != null) try out.appendSlice(allocator, "\x1b[24;59m");
+    if (style.italic) try out.appendSlice(allocator, "\x1b[23m");
+    if (style.bold or style.dim) try out.appendSlice(allocator, "\x1b[22m");
+    if (style.bg != null) try out.appendSlice(allocator, "\x1b[49m");
+    if (style.fg != null) try out.appendSlice(allocator, "\x1b[39m");
+}
+
+fn appendAnsiColor(allocator: std.mem.Allocator, out: *std.ArrayList(u8), kind: enum { fg, bg, ul }, color: vaxis.Color) !void {
+    switch (color) {
+        .default => switch (kind) {
+            .fg => try out.appendSlice(allocator, "\x1b[39m"),
+            .bg => try out.appendSlice(allocator, "\x1b[49m"),
+            .ul => try out.appendSlice(allocator, "\x1b[59m"),
+        },
+        .index => |index| {
+            const prefix = switch (kind) {
+                .fg => "38",
+                .bg => "48",
+                .ul => "58",
+            };
+            const sequence = try std.fmt.allocPrint(allocator, "\x1b[{s};5;{d}m", .{ prefix, index });
+            defer allocator.free(sequence);
+            try out.appendSlice(allocator, sequence);
+        },
+        .rgb => |rgb| {
+            const prefix = switch (kind) {
+                .fg => "38",
+                .bg => "48",
+                .ul => "58",
+            };
+            const sequence = try std.fmt.allocPrint(allocator, "\x1b[{s};2;{d};{d};{d}m", .{ prefix, rgb[0], rgb[1], rgb[2] });
+            defer allocator.free(sequence);
+            try out.appendSlice(allocator, sequence);
+        },
+    }
+}
+
 fn diagnosticSeverityAt(spans: []const DiagnosticSpan, start: usize, end: usize) ?DiagnosticSeverity {
     for (spans) |span| {
         const span_end = @max(span.end, span.start + 1);
         if (start < span_end and end > span.start) return span.severity;
     }
     return null;
-}
-
-fn diagnosticUnderlineAnsi(_: DiagnosticSeverity) []const u8 {
-    return "\x1b[4:3;58;5;1m";
 }
 
 fn renderableInlineText(bytes: []const u8) bool {
@@ -1419,7 +1570,7 @@ fn escapeSequenceEnd(bytes: []const u8, index: usize) ?usize {
     return index + 2;
 }
 
-fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList([]const u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16, label_width_override: ?usize) !void {
+fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList([]const u8), candidates: []const completion.Candidate, selected: usize, window_start: usize, width: u16, height: u16, label_width_override: ?usize, theme: UiTheme) !void {
     if (candidates.len == 0) return;
     const max_rows = @min(@max(@as(usize, @intCast(height)) -| 2, 1), max_menu_candidate_rows);
     const window = completionMenuWindow(candidates.len, selected, window_start, max_rows);
@@ -1431,23 +1582,38 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
         errdefer line.deinit(allocator);
         const label = try completionMenuLabel(allocator, candidate);
         defer if (label.owned) |owned| allocator.free(owned);
-        if (index == selected) try line.appendSlice(allocator, "\x1b[1;38;5;6m❯\x1b[22;39m ") else try line.appendSlice(allocator, "  ");
+        if (index == selected) {
+            try appendUiStyleStart(allocator, &line, theme.completion_selected);
+            try line.appendSlice(allocator, "❯");
+            try appendUiStyleEnd(allocator, &line, theme.completion_selected);
+            try line.append(allocator, ' ');
+        } else try line.appendSlice(allocator, "  ");
         if (index == selected) try line.appendSlice(allocator, "\x1b[1m");
-        try appendCompletionKindStyle(allocator, &line, candidate.kind);
+        const kind_style = completionKindStyle(theme, candidate.kind);
+        try appendUiStyleStart(allocator, &line, kind_style);
         try appendPaddedCell(allocator, &line, label.text, label_width);
-        try line.appendSlice(allocator, "\x1b[22;39m");
+        try appendUiStyleEnd(allocator, &line, kind_style);
+        if (index == selected) try line.appendSlice(allocator, "\x1b[22m");
         if (candidate.description) |description| {
             if (description.len != 0 and description_width != 0) {
                 try line.append(allocator, ' ');
-                try line.appendSlice(allocator, "\x1b[2m");
+                try appendUiStyleStart(allocator, &line, theme.completion_description);
                 try appendTruncated(allocator, &line, description, description_width);
-                try line.appendSlice(allocator, "\x1b[22m");
+                try appendUiStyleEnd(allocator, &line, theme.completion_description);
             }
         }
         try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
     if (window.start != 0 or window.end != candidates.len) {
-        try lines.append(allocator, try std.fmt.allocPrint(allocator, "  \x1b[2mshowing {d}-{d} of {d}\x1b[22m", .{ window.start + 1, window.end, candidates.len }));
+        var line: std.ArrayList(u8) = .empty;
+        errdefer line.deinit(allocator);
+        try line.appendSlice(allocator, "  ");
+        try appendUiStyleStart(allocator, &line, theme.completion_description);
+        const text = try std.fmt.allocPrint(allocator, "showing {d}-{d} of {d}", .{ window.start + 1, window.end, candidates.len });
+        defer allocator.free(text);
+        try line.appendSlice(allocator, text);
+        try appendUiStyleEnd(allocator, &line, theme.completion_description);
+        try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
 }
 
@@ -1479,22 +1645,15 @@ fn completionMenuLabel(allocator: std.mem.Allocator, candidate: completion.Candi
     return .{ .text = candidate.value };
 }
 
-fn appendCompletionKindStyle(allocator: std.mem.Allocator, line: *std.ArrayList(u8), kind: completion.Kind) !void {
-    const color: u8 = switch (kind) {
-        .command => 39,
-        .builtin => 39,
-        .function => 5,
-        .file => 7,
-        .directory => 4,
-        .variable => 5,
-        .option => 6,
-        .subcommand => 39,
-        .plain => 39,
+fn completionKindStyle(theme: UiTheme, kind: completion.Kind) UiStyle {
+    return switch (kind) {
+        .function => theme.completion_function,
+        .file => theme.completion_file,
+        .directory => theme.completion_directory,
+        .variable => theme.completion_variable,
+        .option => theme.completion_option,
+        .command, .builtin, .subcommand, .plain => .{},
     };
-    if (color == 39) return;
-    const sequence = try std.fmt.allocPrint(allocator, "\x1b[38;5;{d}m", .{color});
-    defer allocator.free(sequence);
-    try line.appendSlice(allocator, sequence);
 }
 
 const CompletionMenuWindow = struct {
@@ -1946,11 +2105,11 @@ test "line session flashes current word when completion has no candidates" {
     try session.applyCompletion(.none);
     const flashed = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(flashed);
-    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[48;5;7;38;5;0mzzz\x1b[49;39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[38;5;0m\x1b[48;5;7mzzz\x1b[49m\x1b[39m") != null);
 
     const normal = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(normal);
-    try std.testing.expect(std.mem.indexOf(u8, normal, "\x1b[48;5;7;38;5;0mzzz") == null);
+    try std.testing.expect(std.mem.indexOf(u8, normal, "\x1b[38;5;0m\x1b[48;5;7mzzz") == null);
 }
 
 test "line session renders ambiguous completion menu" {
@@ -1969,7 +2128,7 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "cherry") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;6m❯") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m❯") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2mswitch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "git che") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[J") == null);
@@ -1991,6 +2150,20 @@ test "completion menu styles candidates by kind" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;6m--help") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;5m$HOME") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;4msrc/") != null);
+}
+
+test "ui style parser supports colors and attributes" {
+    const style = parseUiStyle("fg=bright-blue,bg=#112233,ul=dashed,ul_color=red,bold,dim,italic,reverse,strike") orelse return error.MissingStyle;
+    try std.testing.expectEqual(vaxis.Color{ .index = 12 }, style.fg.?);
+    try std.testing.expectEqual(vaxis.Color.rgbFromUint(0x112233), style.bg.?);
+    try std.testing.expectEqual(UnderlineStyle.dashed, style.ul);
+    try std.testing.expectEqual(vaxis.Color{ .index = 1 }, style.ul_color.?);
+    try std.testing.expect(style.bold);
+    try std.testing.expect(style.dim);
+    try std.testing.expect(style.italic);
+    try std.testing.expect(style.reverse);
+    try std.testing.expect(style.strike);
+    try std.testing.expect(parseUiStyle("fg=nope") == null);
 }
 
 test "completion menu renders paired option spellings" {
@@ -2270,7 +2443,7 @@ test "completion menu visible window follows selection" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "three") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;6m❯\x1b[22;39m \x1b[1mthree") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m❯\x1b[22m\x1b[39m \x1b[1mthree") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 3-3 of 3") != null);
 }
 
@@ -2292,14 +2465,14 @@ test "completion menu only pins selection to bottom while scrolling down" {
     defer std.testing.allocator.free(scrolled_down);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "two") != null);
-    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1;38;5;6m❯\x1b[22;39m \x1b[1mthree") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1m\x1b[38;5;6m❯\x1b[22m\x1b[39m \x1b[1mthree") != null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "showing 2-3 of 4") != null);
 
     try session.handleKey(.{ .key = .up });
     const moved_up = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 4 });
     defer std.testing.allocator.free(moved_up);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "one") == null);
-    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1;38;5;6m❯\x1b[22;39m \x1b[1mtwo") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1m\x1b[38;5;6m❯\x1b[22m\x1b[39m \x1b[1mtwo") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "three") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "showing 2-3 of 4") != null);
 }
@@ -2412,7 +2585,7 @@ test "render line styles diagnostic spans without moving cursor" {
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4:3;58;5;1mcomit\x1b[24;59m\r\x1b[11C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4:3m\x1b[58;5;1mcomit\x1b[24;59m\r\x1b[11C", rendered);
 }
 
 test "render line wraps styled diagnostic spans" {
@@ -2429,7 +2602,7 @@ test "render line wraps styled diagnostic spans" {
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[4:3;58;5;1m--amend\x1b[24;59m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[4:3m\x1b[58;5;1m--amend\x1b[24;59m") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\r\n") != null);
     try std.testing.expect(std.mem.endsWith(u8, rendered, "\r\x1b[8C"));
 }
@@ -2524,7 +2697,7 @@ test "history search seeds query from current buffer and renders menu-style matc
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1;38;5;6m❯") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m❯") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mg\x1b[39m") != null);

@@ -762,6 +762,27 @@ fn requestInteractivePromptRepaint(context: *anyopaque) void {
     terminal.requestPromptRedraw();
 }
 
+fn interactiveUiTheme(executor: exec.Executor) line_editor.UiTheme {
+    var theme: line_editor.UiTheme = .{};
+    applyUiStyleVariable(executor, &theme.completion_selected, "rush_style_completion_selected");
+    applyUiStyleVariable(executor, &theme.completion_directory, "rush_style_completion_directory");
+    applyUiStyleVariable(executor, &theme.completion_option, "rush_style_completion_option");
+    applyUiStyleVariable(executor, &theme.completion_variable, "rush_style_completion_variable");
+    applyUiStyleVariable(executor, &theme.completion_function, "rush_style_completion_function");
+    applyUiStyleVariable(executor, &theme.completion_file, "rush_style_completion_file");
+    applyUiStyleVariable(executor, &theme.completion_description, "rush_style_completion_description");
+    applyUiStyleVariable(executor, &theme.completion_flash, "rush_style_completion_flash");
+    applyUiStyleVariable(executor, &theme.history_match, "rush_style_history_match");
+    applyUiStyleVariable(executor, &theme.autosuggestion, "rush_style_autosuggestion");
+    applyUiStyleVariable(executor, &theme.diagnostic_error, "rush_style_diagnostic_error");
+    return theme;
+}
+
+fn applyUiStyleVariable(executor: exec.Executor, style: *line_editor.UiStyle, name: []const u8) void {
+    const value = executor.getEnv(name) orelse return;
+    style.* = line_editor.parseUiStyle(value) orelse style.*;
+}
+
 fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor_driver.HookResult {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
     const refresh_prompt = if (completion_context.executor.promptIntervalWaitMs(io)) |wait_ms| wait_ms == 0 else false;
@@ -1492,6 +1513,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer if (title.owned) allocator.free(title.text);
         try terminal.reportWindowTitle(title.text);
         var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero };
+        const ui_theme = interactiveUiTheme(executor);
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
             .prompt_refresh_interval_ms = executor.promptRefreshIntervalMs(),
@@ -1516,6 +1538,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .expand_abbreviation = expandInteractiveAbbreviation,
             .diagnostic_context = &completion_context,
             .diagnose = diagnoseInteractiveLine,
+            .theme = ui_theme,
         });
         try syncInteractiveTerminalSize(&executor, terminal);
         const line = switch (read_result) {

@@ -222,6 +222,7 @@ pub const ReadLineOptions = struct {
     expand_abbreviation: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize, bool) anyerror!?completion.Edit = null,
     diagnostic_context: ?*anyopaque = null,
     diagnose: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8) anyerror!?line_editor.DiagnosticRender = null,
+    theme: line_editor.UiTheme = .{},
 };
 
 pub const HookResult = struct {
@@ -973,6 +974,7 @@ fn renderSession(allocator: std.mem.Allocator, io: std.Io, tty: *vaxis.tty.Posix
         .width_method = capabilities.widthMethod(),
         .diagnostic_line = if (diagnostic) |render| render.line else "",
         .diagnostic_spans = if (diagnostic) |render| render.spans else &.{},
+        .theme = options.theme,
         .semantic_prompt_marks = true,
     });
     defer frame.deinit(allocator);

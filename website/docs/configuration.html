@@ -93,6 +93,27 @@
 
   <p>Place <code>abbr</code> commands in your Rush configuration file to persist them across interactive sessions.</p>
 
+  <h2 id="ui-styles"><a href="#ui-styles">UI styles</a></h2>
+
+  <p>Interactive editor colors are configured with lowercase shell variables. Values are comma-separated style options, so normal shell expansion works before Rush stores the variable.</p>
+
+  <pre>accent=cyan
+muted=bright-black
+
+rush_style_completion_directory='fg=blue'
+rush_style_completion_selected="fg=$accent,bold"
+rush_style_completion_description="fg=$muted,dim"
+rush_style_completion_flash='fg=black,bg=white'
+rush_style_history_match='fg=yellow,bold'
+rush_style_autosuggestion='dim'
+rush_style_diagnostic_error='ul=curly,ul_color=red'</pre>
+
+  <p>Supported options are <code>fg=&lt;color&gt;</code>, <code>bg=&lt;color&gt;</code>, <code>ul=&lt;style&gt;</code>, <code>ul_color=&lt;color&gt;</code>, <code>bold</code>, <code>dim</code>, <code>italic</code>, <code>reverse</code>, and <code>strike</code>. Underline styles are <code>none</code>, <code>single</code>, <code>double</code>, <code>curly</code>, <code>dotted</code>, and <code>dashed</code>.</p>
+
+  <p>Colors use the same names as prompt colors: <code>default</code>, <code>black</code>, <code>red</code>, <code>green</code>, <code>yellow</code>, <code>blue</code>, <code>magenta</code>, <code>cyan</code>, <code>white</code>, their <code>bright-</code> variants, <code>index:N</code> or <code>N</code> for 256-color palette entries, and <code>#rrggbb</code> truecolor values.</p>
+
+  <p>Available style variables are <code>rush_style_completion_selected</code>, <code>rush_style_completion_directory</code>, <code>rush_style_completion_option</code>, <code>rush_style_completion_variable</code>, <code>rush_style_completion_function</code>, <code>rush_style_completion_file</code>, <code>rush_style_completion_description</code>, <code>rush_style_completion_flash</code>, <code>rush_style_history_match</code>, <code>rush_style_autosuggestion</code>, and <code>rush_style_diagnostic_error</code>. Invalid style values are ignored and the default for that role is used.</p>
+
   <h2 id="prompt"><a href="#prompt">Prompt</a></h2>
 
   <p>Rush ships a default prompt: the current directory in blue, the Git branch in yellow with a <code>•</code> marker when the worktree is dirty and <code>↑</code>/<code>↓</code> commit counts against the upstream, and a <code>$</code> that turns red when the previous command failed.</p>
