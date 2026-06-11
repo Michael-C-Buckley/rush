@@ -1,0 +1,6 @@
+unset v
+f() { set -- "a b" 'c d' e\ f; printf 'fn:%s:%s:%s:%s\n' "$#" "$1" "$2" "$3"; }
+f
+printf 'cmd:<%s>\n' "$(set -- 'x y' z\ w; printf '%s:%s:%s' "$#" "$1" "$2")"
+set -- ${v:-"p q"} ${v:-r\ s} ${v:-'t u'}
+printf 'param:%s:%s:%s:%s\n' "$#" "$1" "$2" "$3"

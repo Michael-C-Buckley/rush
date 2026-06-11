@@ -152,6 +152,7 @@ expansion-pathname-sorted	expansion	behavior	-
 expansion-quoted-backquote-substitution	expansion	behavior	-
 expansion-quoted-substitution-inner-quotes	expansion	behavior	double-quoted command substitution may contain double quotes and nested substitutions
 expansion-quoted-command-substitution	expansion	behavior	-
+quote-removal-recursive-contexts	expansion	behavior	quote removal applies in function bodies, command substitution bodies, and nested parameter operator words
 fg-current-job	job_control	job	fg waits for the current background job
 for-loop	grammar	behavior	-
 for-nested-if	grammar	behavior	-

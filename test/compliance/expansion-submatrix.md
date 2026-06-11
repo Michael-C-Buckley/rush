@@ -149,12 +149,11 @@ Manifest rows:
 - `expansion-quote-removal`
 - `lex-quotes`
 
-Current coverage includes single quotes, double quotes, escaped spaces, explicit quoted empty fields, double-quote backslash handling for special and non-special characters, escaped-newline continuation, common quoted expansion cases, and here-doc delimiter quote removal including mixed quoting and preserved non-special backslashes inside double quotes.
+Current coverage includes single quotes, double quotes, escaped spaces, explicit quoted empty fields, double-quote backslash handling for special and non-special characters, escaped-newline continuation, quoted command substitutions including inner quotes and legacy backquotes, quote handling in nested parameter operator words, recursive function and command-substitution bodies, case and parameter pattern literalization, and here-doc delimiter quote removal including mixed quoting and preserved non-special backslashes inside double quotes.
 
 Remaining gaps:
 
-- quote removal around nested expansion `word` operands;
-- recursive parser contexts such as command substitutions and function bodies.
+- no POSIX-first quote-removal gaps are currently tracked for the representative supported row; add narrower spec-clause rows if a new edge case is found.
 
 ## Promotion guidance
 
