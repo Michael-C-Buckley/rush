@@ -769,12 +769,49 @@ fn refreshInteractiveStyle(context: *anyopaque, allocator: std.mem.Allocator, io
     return interactiveUiTheme(completion_context.executor.*);
 }
 
+fn refreshInteractiveColorReport(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, report: editor_driver.ColorReport) !line_editor.UiTheme {
+    _ = allocator;
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    try applyInteractiveColorReport(completion_context.executor, io, report);
+    return interactiveUiTheme(completion_context.executor.*);
+}
+
 fn applyInteractiveColorScheme(executor: *exec.Executor, io: std.Io, scheme: editor_driver.ColorScheme) !void {
     try executor.setRushStateVariable("rush_color_scheme", colorSchemeName(scheme));
     if (!executor.hasFunction("rush_style")) return;
     const style_options: exec.ExecuteOptions = .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = executor.arg_zero };
     var result = try executor.executeScriptSlice("rush_style", style_options);
     defer result.deinit();
+}
+
+fn applyInteractiveColorReport(executor: *exec.Executor, io: std.Io, report: editor_driver.ColorReport) !void {
+    const variable = colorReportVariable(report) orelse return;
+    var value_buffer: [8]u8 = undefined;
+    const value = try std.fmt.bufPrint(&value_buffer, "#{x:0>2}{x:0>2}{x:0>2}", .{ report.value[0], report.value[1], report.value[2] });
+    try executor.setRushStateVariable(variable, value);
+    if (!executor.hasFunction("rush_style")) return;
+    const style_options: exec.ExecuteOptions = .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = executor.arg_zero };
+    var result = try executor.executeScriptSlice("rush_style", style_options);
+    defer result.deinit();
+}
+
+fn colorReportVariable(report: editor_driver.ColorReport) ?[]const u8 {
+    return switch (report.kind) {
+        .fg => "rush_color_foreground",
+        .bg => "rush_color_background",
+        .cursor => null,
+        .index => |index| switch (index) {
+            0 => "rush_color_black",
+            1 => "rush_color_red",
+            2 => "rush_color_green",
+            3 => "rush_color_yellow",
+            4 => "rush_color_blue",
+            5 => "rush_color_magenta",
+            6 => "rush_color_cyan",
+            7 => "rush_color_white",
+            else => null,
+        },
+    };
 }
 
 fn colorSchemeName(scheme: editor_driver.ColorScheme) []const u8 {
@@ -1565,6 +1602,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .theme = ui_theme,
             .style_context = &completion_context,
             .refresh_style = refreshInteractiveStyle,
+            .refresh_color_report = refreshInteractiveColorReport,
         });
         try syncInteractiveTerminalSize(&executor, terminal);
         const line = switch (read_result) {
@@ -3242,6 +3280,25 @@ test "rush_style sees rush-owned color scheme" {
     try applyInteractiveColorScheme(&executor, std.testing.io, .dark);
     try std.testing.expectEqualStrings("dark", executor.getEnv("rush_color_scheme").?);
     try std.testing.expectEqualStrings("fg=dark", executor.getEnv("rush_style_history_match").?);
+}
+
+test "interactive color reports define rgb theme variables" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.initializeShellVariables(std.testing.io);
+
+    var setup = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\rush_style() { rush_style_history_match="fg=$rush_color_blue"; }
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer setup.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
+
+    try applyInteractiveColorReport(&executor, std.testing.io, .{ .kind = .{ .index = 4 }, .value = .{ 0x01, 0x23, 0x45 } });
+    try std.testing.expectEqualStrings("#012345", executor.getEnv("rush_color_blue").?);
+    try std.testing.expectEqualStrings("fg=#012345", executor.getEnv("rush_style_history_match").?);
+
+    try applyInteractiveColorReport(&executor, std.testing.io, .{ .kind = .fg, .value = .{ 0xab, 0xcd, 0xef } });
+    try std.testing.expectEqualStrings("#abcdef", executor.getEnv("rush_color_foreground").?);
 }
 
 test "repl uses rush_prompt function to build prompt text" {

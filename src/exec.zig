@@ -444,6 +444,7 @@ const builtin_names = [_][]const u8{
     "alias",
     "bg",
     "break",
+    "color",
     "true",
     "false",
     "echo",
@@ -7977,6 +7978,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "alias")) return builtinAlias;
     if (std.mem.eql(u8, name, "bg")) return builtinBg;
     if (std.mem.eql(u8, name, "break")) return builtinBreak;
+    if (std.mem.eql(u8, name, "color")) return builtinColor;
     if (std.mem.eql(u8, name, "true")) return builtinTrue;
     if (std.mem.eql(u8, name, "false")) return builtinFalse;
     if (std.mem.eql(u8, name, "echo")) return builtinEcho;
@@ -8788,6 +8790,72 @@ fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         .stdout = try stdout.toOwnedSlice(self.allocator),
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn builtinColor(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    if (command.argv.len < 2) return errorResult(self.allocator, 2, "color", "missing subcommand");
+
+    const subcommand = command.argv[1].text;
+    const rgb: [3]u8 = if (std.mem.eql(u8, subcommand, "dim")) blk: {
+        if (command.argv.len != 4) return errorResult(self.allocator, 2, "color", "usage: color dim COLOR PERCENT");
+        const color = parseHexColor(command.argv[2].text) orelse return invalidColorResult(self, command.argv[2].text);
+        const percent = parseColorPercent(command.argv[3].text) orelse return errorResult(self.allocator, 2, "color", "percent must be between 0 and 100");
+        break :blk mixRgb(color, .{ 0, 0, 0 }, percent);
+    } else if (std.mem.eql(u8, subcommand, "blend")) blk: {
+        if (command.argv.len != 5) return errorResult(self.allocator, 2, "color", "usage: color blend COLOR COLOR PERCENT");
+        const first = parseHexColor(command.argv[2].text) orelse return invalidColorResult(self, command.argv[2].text);
+        const second = parseHexColor(command.argv[3].text) orelse return invalidColorResult(self, command.argv[3].text);
+        const percent = parseColorPercent(command.argv[4].text) orelse return errorResult(self.allocator, 2, "color", "percent must be between 0 and 100");
+        break :blk mixRgb(first, second, percent);
+    } else return errorResult(self.allocator, 2, "color", "unsupported subcommand");
+
+    const stdout = try std.fmt.allocPrint(self.allocator, "#{x:0>2}{x:0>2}{x:0>2}\n", .{ rgb[0], rgb[1], rgb[2] });
+    errdefer self.allocator.free(stdout);
+    return .{
+        .allocator = self.allocator,
+        .status = 0,
+        .stdout = stdout,
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
+}
+
+fn invalidColorResult(self: *Executor, color: []const u8) !CommandResult {
+    const stderr = try std.fmt.allocPrint(self.allocator, "color: invalid color: {s}\n", .{color});
+    errdefer self.allocator.free(stderr);
+    return .{
+        .allocator = self.allocator,
+        .status = 2,
+        .stdout = try self.allocator.alloc(u8, 0),
+        .stderr = stderr,
+    };
+}
+
+fn parseHexColor(color: []const u8) ?[3]u8 {
+    if (color.len != 7 or color[0] != '#') return null;
+    const value = std.fmt.parseUnsigned(u24, color[1..], 16) catch return null;
+    return .{ @intCast(value >> 16), @intCast((value >> 8) & 0xff), @intCast(value & 0xff) };
+}
+
+fn parseColorPercent(text: []const u8) ?u8 {
+    const percent = std.fmt.parseUnsigned(u8, text, 10) catch return null;
+    if (percent > 100) return null;
+    return percent;
+}
+
+fn mixRgb(first: [3]u8, second: [3]u8, percent: u8) [3]u8 {
+    return .{
+        mixChannel(first[0], second[0], percent),
+        mixChannel(first[1], second[1], percent),
+        mixChannel(first[2], second[2], percent),
+    };
+}
+
+fn mixChannel(first: u8, second: u8, percent: u8) u8 {
+    const remaining: u16 = 100 - @as(u16, percent);
+    const amount: u16 = percent;
+    return @intCast((@as(u16, first) * remaining + @as(u16, second) * amount + 50) / 100);
 }
 
 fn builtinPrompt(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -15157,6 +15225,36 @@ test "executor reports parameter error expansion diagnostics" {
     try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("RUSH_UNSET_FOR_TEST: bad-why\n", result.stderr);
+}
+
+test "color builtin dims and blends hex colors" {
+    var lowered = try parseAndLower(std.testing.allocator, "color dim '#204080' 25; color blend '#000000' '#ffffff' 50");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("#183060\n#808080\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "color builtin reports invalid input without stdout" {
+    var lowered = try parseAndLower(std.testing.allocator, "color dim nope 30");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("color: invalid color: nope\n", result.stderr);
 }
 
 test "executor runs builtin async jobs as waitable children" {

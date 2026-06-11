@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush advanced features</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      font-family: monospace;
+      max-width: 120ch;
+      margin: 4ch auto;
+      padding: 0 2ch;
+    }
+
+    pre {
+      background: light-dark(#f2f2f2, #1f1f1f);
+      padding: 2ch;
+    }
+
+    h1 a,
+    h2 a,
+    h1 a:visited,
+    h2 a:visited,
+    h1 a:hover,
+    h2 a:hover {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .prompt,
+    .comment {
+      opacity: 0.65;
+    }
+
+    code,
+    .cmd,
+    .kw {
+      color: light-dark(#003c8f, #8ab4ff);
+    }
+
+    .opt {
+      color: light-dark(#8a2a00, #ffb86c);
+    }
+
+    .str {
+      color: light-dark(#006400, #7ee787);
+    }
+
+    .var {
+      color: light-dark(#6f42c1, #d2a8ff);
+    }
+  </style>
+</head>
+<body>
+  <p><a href="../index.html">rush</a> / docs</p>
+
+  <h1 id="advanced-features"><a href="#advanced-features">Advanced features</a></h1>
+
+  <p>Rush is a shell, but its interactive editor is also a terminal application. It speaks modern terminal protocols when they are available, falls back when they are not, and exposes useful state back to normal Rush scripts.</p>
+
+  <p>The goal is not a separate configuration language. The interesting parts of the terminal become shell variables and builtins, so the same language that runs commands can also shape the prompt, completions, and editor UI.</p>
+
+  <h2 id="adaptive-ui-theme"><a href="#adaptive-ui-theme">Adaptive UI theme</a></h2>
+
+  <p>Rush can theme completion menus, autosuggestions, history matches, and diagnostics with <code>rush_style_*</code> variables. Those variables are read once at the start of each prompt and cached for rendering, so the editor does not re-run shell code for every frame.</p>
+
+  <pre><span class="cmd">rush_style</span>() {
+  <span class="kw">if</span> <span class="cmd">test</span> <span class="str">"$rush_color_scheme"</span> = light; <span class="kw">then</span>
+    muted=black
+  <span class="kw">else</span>
+    muted=bright-black
+  <span class="kw">fi</span>
+
+  rush_style_completion_selected=<span class="str">"fg=${rush_color_cyan-#00ffff},bold"</span>
+  rush_style_completion_directory=<span class="str">"fg=$(color dim "${rush_color_blue-#0000ff}" 15)"</span>
+  rush_style_completion_description=<span class="str">"fg=$muted,dim"</span>
+  rush_style_history_match=<span class="str">'fg=yellow,bold'</span>
+}</pre>
+
+  <p><code>rush_style</code> runs once during interactive startup, and again when the terminal reports that its color scheme or palette changed. Before calling it for a scheme change, Rush sets <code>rush_color_scheme</code> to <code>dark</code>, <code>light</code>, or <code>unknown</code>.</p>
+
+  <p>Before the normal capability query batch, Rush asks the terminal for the current foreground, background, and ANSI palette colors 0 through 7. When reports arrive, Rush sets variables such as <code>rush_color_foreground</code>, <code>rush_color_background</code>, <code>rush_color_blue</code>, and <code>rush_color_cyan</code> to <code>#rrggbb</code> values. If a terminal does not report them, Rush does not invent defaults; configs can use normal shell fallback syntax like <code>${rush_color_blue-#0000ff}</code>.</p>
+
+  <p>On terminals that support color-scheme notifications, Rush subscribes to those updates. When the terminal switches between light and dark, Rush re-queries the palette, requests device attributes again, updates Rush-owned variables, reruns <code>rush_style</code>, and repaints the editor.</p>
+
+  <h2 id="color-utilities"><a href="#color-utilities">Color utilities</a></h2>
+
+  <p>The <code>color</code> builtin turns reported terminal colors into derived colors that compose in command substitution.</p>
+
+  <pre><span class="cmd">color</span> dim <span class="str">'#204080'</span> 25
+<span class="comment">#183060</span>
+
+<span class="cmd">color</span> blend <span class="str">'#000000'</span> <span class="str">'#ffffff'</span> 50
+<span class="comment">#808080</span></pre>
+
+  <p><code>color dim COLOR PERCENT</code> blends a <code>#rrggbb</code> color toward black. <code>color blend COLOR COLOR PERCENT</code> blends the first color toward the second. Invalid input exits with status <code>2</code>, writes a diagnostic to stderr, and writes nothing to stdout. If that produces an invalid <code>rush_style_*</code> value, the host-side style parser ignores it and falls back to the default style for that role.</p>
+
+  <h2 id="parser-aware-completion"><a href="#parser-aware-completion">Parser-aware completion</a></h2>
+
+  <p>Rush completions are Rush scripts, but they are driven by the shell parser rather than by splitting the current line on whitespace. Completion code can see command position, option position, assignment context, redirections, command substitutions, and whether a word is being completed as a path or as a command.</p>
+
+  <p>That lets completions stay shell-like in edge cases: abbreviations expand before completion, directory candidates display only the part that should be inserted, and command-specific scripts can mix static candidates with dynamic shell logic.</p>
+
+  <p>See <a href="completion.html">Writing completions</a> for the reference API.</p>
+
+  <h2 id="editor-feedback"><a href="#editor-feedback">Editor feedback</a></h2>
+
+  <p>The line editor provides small pieces of immediate feedback without committing to a full-screen UI. Completion misses briefly flash the word being completed. Ctrl-C clears the current prompt when there is text, and otherwise leaves an empty prompt alone. Completion entries use role-specific styles so files, directories, options, variables, functions, descriptions, and the selected row can all be distinct while still following the terminal theme.</p>
+
+  <h2 id="terminal-protocols"><a href="#terminal-protocols">Terminal protocols</a></h2>
+
+  <p>Rush probes terminal capabilities instead of assuming them. It can use modern keyboard protocols, bracketed paste, in-band resize information, color-scheme reports, palette reports, and other device responses when supported. Unsupported or unanswered queries simply time out or remain unknown, and the editor continues with conservative behavior.</p>
+
+  <p>This is why advanced features are incremental: a capable terminal gets adaptive colors and richer input, while older terminals still get a working shell.</p>
+</body>
+</html>

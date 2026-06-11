@@ -45,10 +45,13 @@ pub const TerminalEvent = union(enum) {
     resize: vaxis.Winsize,
     capability: Capability,
     color_scheme: ColorScheme,
+    color_report: ColorReport,
     prompt_redraw,
 };
 
 pub const ColorScheme = enum { dark, light, unknown };
+
+pub const ColorReport = vaxis.Color.Report;
 
 pub const Capability = enum {
     kitty_keyboard,
@@ -94,6 +97,20 @@ pub const TerminalCapabilities = struct {
         );
         self.bracketed_paste = true;
         self.in_band_resize_enabled = true;
+    }
+
+    pub fn requestColorReports(_: TerminalCapabilities, tty: *vaxis.tty.PosixTty) !void {
+        try writeTtyAll(tty, vaxis.ctlseqs.osc10_query ++ vaxis.ctlseqs.osc11_query);
+        for (0..8) |index| {
+            var sequence_buffer: [32]u8 = undefined;
+            const sequence = try std.fmt.bufPrint(&sequence_buffer, vaxis.ctlseqs.osc4_query, .{index});
+            try writeTtyAll(tty, sequence);
+        }
+    }
+
+    pub fn sendInitialQueries(self: *TerminalCapabilities, tty: *vaxis.tty.PosixTty) !void {
+        try self.requestColorReports(tty);
+        try self.sendQueries(tty);
     }
 
     pub fn apply(self: *TerminalCapabilities, allocator: std.mem.Allocator, tty: *vaxis.tty.PosixTty, capability: Capability) !void {
@@ -197,7 +214,8 @@ pub const TerminalParser = struct {
                 .dark => .dark,
                 .light => .light,
             } },
-            .mouse, .mouse_leave, .color_report => null,
+            .color_report => |report| .{ .color_report = report },
+            .mouse, .mouse_leave => null,
         };
     }
 
@@ -235,6 +253,7 @@ pub const ReadLineOptions = struct {
     theme: line_editor.UiTheme = .{},
     style_context: ?*anyopaque = null,
     refresh_style: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, ColorScheme) anyerror!line_editor.UiTheme = null,
+    refresh_color_report: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, ColorReport) anyerror!line_editor.UiTheme = null,
 };
 
 pub const HookResult = struct {
@@ -500,7 +519,7 @@ pub const TerminalSession = struct {
         errdefer reader.deinit();
         const winsize = tty.getWinsize() catch vaxis.Winsize{ .rows = 24, .cols = 80, .x_pixel = 0, .y_pixel = 0 };
 
-        var self: TerminalSession = .{
+        const self: TerminalSession = .{
             .allocator = allocator,
             .io = io,
             .tty_buffer = tty_buffer,
@@ -518,7 +537,6 @@ pub const TerminalSession = struct {
             .completion = .init(allocator),
             .winsize = winsize,
         };
-        try self.capabilities.sendQueries(&self.tty);
         return self;
     }
 
@@ -559,7 +577,7 @@ pub const TerminalSession = struct {
 
     pub fn enterEditorMode(self: *TerminalSession) !void {
         try self.resumeRawMode();
-        try self.capabilities.sendQueries(&self.tty);
+        try self.capabilities.sendInitialQueries(&self.tty);
     }
 
     pub fn currentWinsize(self: TerminalSession) vaxis.Winsize {
@@ -723,8 +741,16 @@ pub const TerminalSession = struct {
                         try self.capabilities.apply(self.allocator, &self.tty, capability);
                     },
                     .color_scheme => |scheme| {
+                        try self.capabilities.requestColorReports(&self.tty);
+                        try self.capabilities.sendQueries(&self.tty);
                         if (read_options.refresh_style != null and read_options.style_context != null) {
                             read_options.theme = try read_options.refresh_style.?(read_options.style_context.?, self.allocator, self.io, scheme);
+                            render_needed = true;
+                        }
+                    },
+                    .color_report => |report| {
+                        if (read_options.refresh_color_report != null and read_options.style_context != null) {
+                            read_options.theme = try read_options.refresh_color_report.?(read_options.style_context.?, self.allocator, self.io, report);
                             render_needed = true;
                         }
                     },
@@ -1566,6 +1592,22 @@ test "terminal parser emits color scheme changes" {
     try std.testing.expectEqual(@as(usize, 2), events.items.len);
     try std.testing.expectEqual(ColorScheme.dark, events.items[0].color_scheme);
     try std.testing.expectEqual(ColorScheme.light, events.items[1].color_scheme);
+}
+
+test "terminal parser emits terminal color reports" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b]10;rgb:0101/2323/4545\x1b\\", &events);
+    try parser.feed("\x1b]4;4;rgb:6767/8989/abab\x1b\\", &events);
+
+    try std.testing.expectEqual(@as(usize, 2), events.items.len);
+    try std.testing.expectEqual(vaxis.Color.Kind.fg, events.items[0].color_report.kind);
+    try std.testing.expectEqual([3]u8{ 0x01, 0x23, 0x45 }, events.items[0].color_report.value);
+    try std.testing.expectEqual(vaxis.Color.Kind{ .index = 4 }, events.items[1].color_report.kind);
+    try std.testing.expectEqual([3]u8{ 0x67, 0x89, 0xab }, events.items[1].color_report.value);
 }
 
 test "terminal parser treats single escape chunk as escape key" {
