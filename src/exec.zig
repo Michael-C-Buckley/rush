@@ -4370,6 +4370,9 @@ pub const Executor = struct {
                     },
                     else => return err,
                 };
+                const spawned_index = spawned;
+                errdefer children[spawned_index].kill(io);
+                try movePipelineStageHandlesFromGuard(inherited_redirections.?, &stdin_file, &stdout_file, &stderr_file, io);
                 inherited_redirections.?.restore(self, io);
                 cancel_pids[spawned] = registerCancelableChild(options, children[spawned]);
                 child_stage_indexes[spawned] = index;
@@ -4810,6 +4813,20 @@ pub const Executor = struct {
         }
     }
 
+    fn movePipelineStageHandlesFromGuard(
+        guard: FdRedirectionGuard,
+        stdin_file: *?std.Io.File,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        io: std.Io,
+    ) !void {
+        for (guard.saved.items) |entry| {
+            try movePipelineStageFileHandle(stdin_file, io, entry.fd);
+            try movePipelineStageFileHandle(stdout_file, io, entry.fd);
+            try movePipelineStageFileHandle(stderr_file, io, entry.fd);
+        }
+    }
+
     fn moveExternalRedirectionHandles(
         stdin_file: *?std.Io.File,
         stdout_file: *?std.Io.File,
@@ -4824,6 +4841,32 @@ pub const Executor = struct {
         try moveExternalFileHandle(stderr_file, io, fd);
         if (manual_stdout_capture.*) |*pipe| try moveExternalPipeFdHandle(pipe, io, fd);
         if (manual_stderr_capture.*) |*pipe| try moveExternalPipeFdHandle(pipe, io, fd);
+    }
+
+    fn moveExternalRedirectionHandlesFromGuard(
+        guard: FdRedirectionGuard,
+        stdin_file: *?std.Io.File,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        manual_stdout_capture: *?PipelinePipe,
+        manual_stderr_capture: *?PipelinePipe,
+        io: std.Io,
+    ) !void {
+        for (guard.saved.items) |entry| {
+            try moveExternalRedirectionHandles(stdin_file, stdout_file, stderr_file, manual_stdout_capture, manual_stderr_capture, io, entry.fd);
+        }
+    }
+
+    fn moveAsyncExternalRedirectionHandlesFromGuard(
+        guard: FdRedirectionGuard,
+        stdin_file: *?std.Io.File,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        io: std.Io,
+    ) !void {
+        for (guard.saved.items) |entry| {
+            try moveAsyncExternalRedirectionHandles(stdin_file, stdout_file, stderr_file, io, entry.fd);
+        }
     }
 
     fn moveExternalPipeFdHandle(pipe: *PipelinePipe, io: std.Io, fd: std.posix.fd_t) !void {
@@ -6571,6 +6614,8 @@ pub const Executor = struct {
             error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
             else => return err,
         };
+        errdefer child.kill(io);
+        try moveAsyncExternalRedirectionHandlesFromGuard(inherited_redirections, &stdin_file, &stdout_file, &stderr_file, io);
         inherited_redirections.restore(self, io);
         if (stdin_file) |file| {
             file.close(io);
@@ -6584,7 +6629,6 @@ pub const Executor = struct {
             file.close(io);
             stderr_file = null;
         }
-        errdefer child.kill(io);
         _ = registerCancelableChild(options, child);
         if (child.id) |pid| {
             const numeric_pid: i64 = @intCast(pid);
@@ -6858,6 +6902,8 @@ pub const Executor = struct {
             error.AccessDenied, error.PermissionDenied => return error.AccessDenied,
             else => return err,
         };
+        errdefer child.kill(io);
+        try moveExternalRedirectionHandlesFromGuard(inherited_redirections, &stdin_file, &stdout_file, &stderr_file, &manual_stdout_capture, &manual_stderr_capture, io);
         inherited_redirections.restore(self, io);
         if (stdin_file) |file| {
             file.close(io);
@@ -14568,6 +14614,37 @@ test "external command inherits arbitrary descriptor duplications" {
     const ordered_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, ordered_path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(ordered_output);
     try std.testing.expectEqualStrings("via-ordered-file", ordered_output);
+}
+
+test "external command arbitrary fd close restores before stdio handles close" {
+    const output_path = "rush-test-external-fd-close-restore.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\if /bin/sh -c 'printf hidden >&3' 3>rush-test-external-fd-close-restore.tmp 3>&- 2>/dev/null; then
+        \\  printf 'unexpected-close-success\n'
+        \\else
+        \\  printf 'closed\n'
+        \\fi
+        \\if /bin/sh -c 'printf leak >&3' 2>/dev/null; then
+        \\  printf 'unexpected-restore-success\n'
+        \\else
+        \\  printf 'restored\n'
+        \\fi
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("closed\nrestored\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(!executor.isShellFdOpen(3));
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, output_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(output);
+    try std.testing.expectEqualStrings("", output);
 }
 
 test "external command duplicates same-command arbitrary output fd to stdio" {
