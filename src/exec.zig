@@ -9002,7 +9002,7 @@ fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         if (action_index >= command.argv.len) return listTraps(self);
     }
     const action = command.argv[action_index].text;
-    if (action_index + 1 >= command.argv.len) return errorResult(self.allocator, 2, "trap", "missing signal");
+    if (action_index + 1 >= command.argv.len) return trapError(self, 2, "missing signal");
 
     for (command.argv[action_index + 1 ..]) |signal_word| {
         const name = try normalizeTrapName(self.allocator, signal_word.text);
@@ -9010,7 +9010,7 @@ fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         if (!validTrapName(name)) {
             const message = try std.fmt.allocPrint(self.allocator, "{s}: invalid signal specification", .{signal_word.text});
             defer self.allocator.free(message);
-            return errorResult(self.allocator, 1, "trap", message);
+            return trapError(self, 1, message);
         }
         if (!options.interactive and self.ignoredTrapSignalAtEntry(name)) continue;
         if (std.mem.eql(u8, action, "-")) {
@@ -9020,6 +9020,11 @@ fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         }
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn trapError(self: *Executor, status: ExitStatus, message: []const u8) !CommandResult {
+    self.pending_exit = status;
+    return errorResult(self.allocator, status, "trap", message);
 }
 
 fn listTraps(self: *Executor) !CommandResult {
@@ -10074,7 +10079,7 @@ fn restoreJobTerminalModes(job: *BackgroundJob) void {
 fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len != 1) return errorResult(self.allocator, 2, "times", "too many arguments");
+    if (command.argv.len != 1) return timesUsageError(self, "too many arguments");
     const usage = readResourceUsage();
     const self_user = try formatCpuTime(self.allocator, usage.self_user);
     defer self.allocator.free(self_user);
@@ -10087,6 +10092,11 @@ fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     const stdout = try std.fmt.allocPrint(self.allocator, "{s} {s}\n{s} {s}\n", .{ self_user, self_system, children_user, children_system });
     errdefer self.allocator.free(stdout);
     return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn timesUsageError(self: *Executor, message: []const u8) !CommandResult {
+    self.pending_exit = 2;
+    return errorResult(self.allocator, 2, "times", message);
 }
 
 const CpuUsage = struct {

@@ -49,7 +49,7 @@ Remaining high-risk gaps:
 
 The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, and unquoted multi-word braced words.
 
-Follow-up tasks: `#156 Model POSIX special builtin error consequences` and broader nested parameter-word hardening tasks.
+Follow-up tasks: broader nested parameter-word hardening tasks.
 
 ## Special parameters and positional fields
 

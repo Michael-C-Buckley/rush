@@ -6,7 +6,7 @@ This submatrix expands builtin-related rows in `posix-shell.tsv`. It separates P
 
 | group | current state | primary gaps |
 | --- | --- | --- |
-| POSIX special builtins | classification and assignment persistence baseline | failure consequences, redirection/expansion errors, utility-specific diagnostics |
+| POSIX special builtins | classification, assignment persistence, and error consequences supported | utility-specific breadth remains on broad builtin rows |
 | Core regular builtins | broad baseline for common scripts | option/operand completeness and negative diagnostics |
 | Job-control builtins | background job table, wait baseline, jobs/kill operands, fg/bg, stopped jobs | remaining pipeline/asynchronous-list signal edge cases |
 | Rush helper builtins | useful implementation helpers | keep out of POSIX score unless they affect shell semantics |
@@ -17,29 +17,27 @@ Special builtins matter because POSIX assigns special consequences to expansion 
 
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
-| `:` | `builtin-colon` | `basic-colon`, `builtin-colon-special-assignment` | redirection failure consequences need negative coverage |
+| `:` | `builtin-colon` | `basic-colon`, `builtin-colon-special-assignment`, special-builtin expansion/redirection consequences | none for the narrow special-builtin consequence row |
 | `.` | `builtin-dot`, `builtin-dot-current-env`, `builtin-dot-path-search`, `builtin-dot-usage-errors` | current-shell effects, PATH search, missing/nonexistent/non-readable file diagnostics and unit coverage | broader file loading edge cases |
 | `break`, `continue` | `builtin-break-continue`, `builtin-loop-control-nested-levels`, `builtin-loop-control-outside-loop`, `builtin-loop-control-usage-errors` | basic loop control, nested levels, outside-loop and operand diagnostic negative corpus | deeper mixed compound-command edge cases |
-| `eval` | `builtin-eval`, `builtin-eval-arguments` | basic eval, argument concatenation, empty eval status, special assignment persistence | parse/expansion failure consequences |
+| `eval` | `builtin-eval`, `builtin-eval-arguments` | basic eval, argument concatenation, empty eval status, special assignment persistence, parse/expansion/redirection failure consequences | broader diagnostics edge cases |
 | `exec` | `builtin-exec`, `builtin-exec-redirection-only` | `builtin-exec`, `builtin-exec-assignment-env`, `builtin-exec-failure-exits`, `builtin-exec-replaces-process`, current-shell redirection-only exec | permission-denied failure status details, no-return contexts |
-| `exit` | `builtin-exit`, `builtin-exit-status-default`, `builtin-exit-usage-errors` | explicit/default status, invalid-operand, and too-many diagnostics | additional nested/non-interactive consequence cases |
+| `exit` | `builtin-exit`, `builtin-exit-status-default`, `builtin-exit-usage-errors` | explicit/default status, invalid-operand, and too-many diagnostics with non-interactive exit | additional nested contexts |
 | `export` | `builtin-export-unset`, `builtin-export-readonly-p`, `builtin-export-readonly-p-reusable`, `builtin-variable-usage-errors` | `builtin-export-env`, `export -p`, reusable quoted values, invalid-name, readonly-assignment, unsupported-option, and `-p` usage diagnostics | broader reusable listing edge cases |
 | `readonly` | `vars-readonly`, `builtin-export-readonly-p`, `builtin-export-readonly-p-reusable`, `builtin-variable-usage-errors` | `builtin-readonly`, `readonly -p`, reusable quoted values, invalid-name, readonly-assignment, unsupported-option, and `-p` usage diagnostics | broader reusable listing edge cases |
 | `return` | `builtin-return-status-default`, `builtin-return-usage-errors` plus function tests | explicit status, default previous-status behavior, outside-function, invalid-operand, and too-many diagnostics | additional nested function edge cases |
 | `set` | `option-set`, `option-set-short-clusters`, `option-set-allexport`, `option-set-o-listing`, `option-set-plus-o-listing`, `builtin-set-positionals`, `option-set-usage-errors`, `option-set-obsolescent-noop`, `option-set-ignoreeof`, option rows | shell option, allexport, clustered short option, `$-` flag reflection including monitor/-m and notify/-b state, set - option reset, no-operand variable listing, set -o/+o option listing and reusable re-input smoke, set -- positional parameter corpus, option parsing followed by positional operands, obsolescent no-effect `-h`/`nolog` compatibility, interactive `ignoreeof`, interactive `notify` polling while the editor is active, monitor-mode process groups for tracked interactive async jobs, and invalid option diagnostics | vi and complete job-control terminal edge cases |
 | `shift` | `builtin-shift-operands`, `builtin-shift-too-far`, `builtin-shift-usage-errors` | default and explicit count operands, too-far status, invalid operand, and too-many diagnostics | additional function/top-level interaction edge cases |
-| `times` | `builtin-times` | `builtin-times` | portability/runtime precision is baseline only |
-| `trap` | `builtin-trap`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus, invalid signal diagnostics; real signal dispatch covers ignored-at-entry non-interactive signals, caught-trap reset in subshells and command substitutions, trap status preservation, wait interruption, and process-directed trapped signals waking/redrawing the active editor | remaining broad trap utility edges are tracked on `builtin-trap` |
-| `unset` | `builtin-export-unset`, `builtin-unset-default-variable`, `builtin-unset-variable-function`, `builtin-variable-usage-errors` | default variable mode, unset -v, unset -f, invalid-name, readonly-variable, and unsupported-option coverage | remaining special-builtin edge cases |
+| `times` | `builtin-times`, `builtin-times-usage-errors` | resource usage output plus excess-operand diagnostics with non-interactive exit | portability/runtime precision is baseline only |
+| `trap` | `builtin-trap`, `builtin-trap-invalid-signal`, `signal-trap-real` | listing, clear, EXIT, INT signal corpus, invalid signal diagnostics with non-interactive exit; real signal dispatch covers ignored-at-entry non-interactive signals, caught-trap reset in subshells and command substitutions, trap status preservation, wait interruption, and process-directed trapped signals waking/redrawing the active editor | remaining broad trap utility edges are tracked on `builtin-trap` |
+| `unset` | `builtin-export-unset`, `builtin-unset-default-variable`, `builtin-unset-variable-function`, `builtin-variable-usage-errors` | default variable mode, unset -v, unset -f, invalid-name, readonly-variable, and unsupported-option coverage with non-interactive exit for failures | broader unset utility edges |
 
 High-risk rows:
 
-- `errors-special-builtin`
+- `errors-special-builtin` — supported after the all-special-builtin utility-error audit.
 - `errors-special-builtin-redirection`
 - `errors-special-builtin-expansion`
 - `builtin-special`
-
-Follow-up task: `#156 Model POSIX special builtin error consequences`.
 
 ## Regular POSIX utilities implemented as builtins
 
@@ -71,8 +69,8 @@ Follow-up tasks:
 
 ## Negative diagnostics coverage targets
 
-The POSIX negative corpus covers representative builtin diagnostics for `test`, `read`, `wait`, `kill`, POSIX special builtin usage failures, `getopts`, `printf`, and `umask`. Remaining builtin rows should add focused negative cases when implementing their listed option and operand gaps.
+The POSIX negative corpus covers representative builtin diagnostics for `test`, `read`, `wait`, `kill`, POSIX special builtin usage failures, `getopts`, `printf`, and `umask`. Remaining broad builtin rows should add focused negative cases when implementing their listed option and operand gaps.
 
 ## Promotion guidance
 
-Builtin rows should usually stay `baseline` while they are broad utility-level rows. Promote smaller `spec_clause` rows first, such as individual `test` predicate groups or `read -r` behavior, after unit, POSIX corpus, and negative corpus evidence exists. High-risk special-builtin consequence rows should not become `supported` until non-interactive exit behavior is modeled and covered.
+Builtin rows should usually stay `baseline` while they are broad utility-level rows. Promote smaller `spec_clause` rows first, such as individual `test` predicate groups or `read -r` behavior, after unit, POSIX corpus, and negative corpus evidence exists. Special-builtin consequence rows require non-interactive exit behavior plus negative corpus coverage before support claims.

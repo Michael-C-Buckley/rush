@@ -1,2 +1,2 @@
-trap 'echo bad' NOSIG
+( trap 'echo bad' NOSIG; echo bad )
 echo status:$?

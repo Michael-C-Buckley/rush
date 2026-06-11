@@ -26,6 +26,8 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `errors-special-builtin-redirection-input-{eval,export,readonly,set,unset,trap}` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | utility-specific missing input redirection failures exit non-interactive execution |
 | `errors-special-builtin-redirection-bad-fd-{eval,export,readonly,set,unset,trap}` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | utility-specific bad fd redirection failures exit non-interactive execution |
 | `errors-special-builtin-redirection-bad-input-fd{-eval,-export,-readonly,-set,-unset,-trap}` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | utility-specific bad input fd redirection failures exit non-interactive execution |
+| `builtin-times-too-many-arguments` | `test/corpus/posix-negative` | `errors-special-builtin`, `builtin-times-usage-errors` | special builtin utility operand failure exits non-interactive execution |
+| `builtin-trap-invalid-signal-exits` | `test/corpus/posix-negative` | `errors-special-builtin`, `builtin-trap-invalid-signal` | special builtin utility semantic failure exits non-interactive execution |
 | `redirection-input-missing` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | ordinary command missing input redirection reports an error and continues |
 | `redirection-bad-input-fd-duplication` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | ordinary command bad input fd duplication reports an error and continues |
 | `redirection-{output,append}-directory` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | ordinary command directory output redirections report an error and continue |
@@ -36,6 +38,5 @@ This note records hand-curated examples added from current high-risk POSIX shell
 
 ## Known follow-up examples
 
-- Add more special-builtin expansion failure classes beyond `${parameter:?word}`.
 - Add redirection consequence examples for non-special utilities versus special builtins across more redirection operators.
 - Add alias token-recognition timing examples after parser alias handling is deepened.

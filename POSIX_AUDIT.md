@@ -232,6 +232,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Functions have call frames and positional parameters.
 - Global positional parameters via `set --`.
 - POSIX special builtin classification baseline.
+- POSIX special builtin error consequences are modeled for the audited XCU 2.8.1/2.15 cases: expansion/redirection failures, invalid options or operands where applicable, and utility-semantic failures stop non-interactive execution across all 15 special builtins.
 - Exit status propagation and `$?` baseline.
 - Logical `PWD`/`OLDPWD` tracking for `cd`/`pwd`.
 - `$!` tracks the most recent real background external command pid.
@@ -241,14 +242,13 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 
 - `command -v` and command lookup controls are baseline-only.
 - `exec` currently executes and exits through Rush's process model; it does not replace the Rush process image with `execve` yet.
-- Special builtin error consequences are only partially modeled.
 - PATH hashing/caching and POSIX command search edge cases are missing.
 - Background job metadata is enough for `$!`/`wait`, but not for full job control.
 
 ### Missing / gaps
 
 - Real `execve` replacement semantics for `exec` in CLI mode.
-- Full POSIX special builtin error/exit behavior.
+- Additional implementation-specific `exec` replacement and command-search edge cases.
 - Full signal environment semantics.
 - Command search cache/hash behavior if desired later.
 
@@ -385,12 +385,11 @@ Implemented or partially implemented:
 - Redirection failures for bad fd duplication and noclobber are shell-visible errors.
 - Nounset produces a baseline unset-parameter diagnostic and exits non-interactive execution.
 - `${parameter:?word}` expands the diagnostic word, reports the parameter name, and exits non-interactive execution.
-- Special builtin redirection failures now stop non-interactive execution in the covered baseline.
+- Special builtin expansion, redirection, invalid option/operand, and utility-semantic failures now stop non-interactive execution for the audited POSIX special-builtin set.
 - Negative POSIX corpus covers syntax, expansion, redirection, and builtin diagnostic cases.
 
 ### Partial / gaps
 
-- POSIX-specified shell error consequences are still incomplete for some special builtin expansion failures and utility-specific failures.
 - Redirection error consequences outside the special-builtin baseline need stricter context modeling.
 - Some CLI inherited-stdio paths now write per-command output directly; capture-mode tests still intentionally model output through `CommandResult`.
 
@@ -420,6 +419,6 @@ The detailed backlog lives in Tend and the machine-readable status lives in `tes
 ### Batch D: Job-control and error-consequence depth
 
 1. Deepen pipeline/asynchronous-list signal-handling edge cases beyond the supported job-control utility rows.
-2. Add more special-builtin expansion and redirection consequence cases across utilities.
+2. Deepen non-special redirection and expansion consequence edge cases that remain partial.
 
 Keep adding POSIX corpus, negative corpus, and manifest evidence alongside each behavior change.

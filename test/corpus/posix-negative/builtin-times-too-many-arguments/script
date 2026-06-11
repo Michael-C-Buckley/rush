@@ -1,2 +1,2 @@
 times arg
-echo after:$?
+echo after
