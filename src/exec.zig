@@ -12439,6 +12439,15 @@ test "executor executes POSIX case statements" {
     defer class.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), class.status);
     try std.testing.expectEqualStrings("upper\ndigit\nquoted-literal\n", class.stdout);
+
+    var reserved_body_lowered = try parseAndLower(std.testing.allocator, "case x in x) printf '%s\n' case esac in do done then fi ;; esac");
+    defer reserved_body_lowered.parsed.deinit();
+    defer reserved_body_lowered.program.deinit();
+
+    var reserved_body = try executor.executeProgram(reserved_body_lowered.program, .{});
+    defer reserved_body.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), reserved_body.status);
+    try std.testing.expectEqualStrings("case\nesac\nin\ndo\ndone\nthen\nfi\n", reserved_body.stdout);
 }
 
 test "executor executes POSIX for loops" {
@@ -12462,6 +12471,15 @@ test "executor executes POSIX for loops" {
     defer split_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), split_result.status);
     try std.testing.expectEqualStrings("c\nd\n", split_result.stdout);
+
+    var reserved_list_lowered = try parseAndLower(std.testing.allocator, "for x in if then do done; do printf '<%s>\n' \"$x\"; done");
+    defer reserved_list_lowered.parsed.deinit();
+    defer reserved_list_lowered.program.deinit();
+
+    var reserved_list_result = try executor.executeProgram(reserved_list_lowered.program, .{});
+    defer reserved_list_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), reserved_list_result.status);
+    try std.testing.expectEqualStrings("<if>\n<then>\n<do>\n<done>\n", reserved_list_result.stdout);
 }
 
 test "executor executes POSIX while and until loops" {

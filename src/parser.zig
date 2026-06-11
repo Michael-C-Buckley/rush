@@ -1952,25 +1952,23 @@ const SyntaxParser = struct {
         var item_children: std.ArrayList(SyntaxChild) = .empty;
         defer item_children.deinit(self.allocator);
         var saw_pattern_end = false;
-        var nested_case_depth: usize = 0;
 
         while (!self.at(.eof)) {
-            if (self.atWord("esac") and nested_case_depth == 0 and (saw_pattern_end or !self.esacStartsCaseItemPattern())) break;
+            if (self.at(.dsemicolon)) break;
+            if (self.atWord("esac") and !self.esacStartsCaseItemPattern()) break;
             try self.appendCurrentTokenChildTo(&item_children);
-            const previous = self.previousToken();
-            if (previous.kind == .right_paren) {
+            if (self.previousToken().kind == .right_paren) {
                 saw_pattern_end = true;
-                continue;
+                break;
             }
-            if (saw_pattern_end and previous.kind == .word) {
-                const lexeme = previous.lexeme(self.source);
-                if (std.mem.eql(u8, lexeme, "case")) {
-                    nested_case_depth += 1;
-                } else if (std.mem.eql(u8, lexeme, "esac") and nested_case_depth > 0) {
-                    nested_case_depth -= 1;
-                }
-            }
-            if (saw_pattern_end and nested_case_depth == 0 and previous.kind == .dsemicolon) break;
+        }
+
+        if (saw_pattern_end) {
+            const body = try self.parseListUntil(&.{"esac"}, &.{.dsemicolon});
+            try item_children.append(self.allocator, .{ .node = body });
+            if (self.at(.dsemicolon)) try self.appendCurrentTokenChildTo(&item_children);
+        } else if (self.at(.dsemicolon)) {
+            try self.appendCurrentTokenChildTo(&item_children);
         }
 
         if (!saw_pattern_end) {
@@ -2055,7 +2053,19 @@ const SyntaxParser = struct {
             saw_name = true;
             try self.appendCurrentTokenChildTo(&for_children);
         }
-        while (!self.at(.eof) and !self.atWord("do") and !self.atWord("done")) {
+        var saw_in = false;
+        var saw_header_separator = false;
+        var saw_non_separator_after_name = false;
+        while (!self.at(.eof) and !self.atForDoTerminator(saw_in, saw_header_separator, saw_non_separator_after_name) and !self.atForDoneBeforeDo(saw_in, saw_header_separator)) {
+            const token = self.current();
+            if (token.kind == .word and !saw_in and std.mem.eql(u8, token.lexeme(self.source), "in")) {
+                saw_in = true;
+            }
+            if (isForHeaderSeparator(token.kind)) {
+                saw_header_separator = true;
+            } else if (!token.kind.isTrivia()) {
+                saw_non_separator_after_name = true;
+            }
             try self.appendCurrentTokenChildTo(&for_children);
         }
         if (self.atWord("do")) {
@@ -2101,6 +2111,16 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, for_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.for_command, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn atForDoTerminator(self: SyntaxParser, saw_in: bool, saw_header_separator: bool, saw_non_separator_after_name: bool) bool {
+        if (!self.atWord("do")) return false;
+        if (saw_in) return saw_header_separator;
+        return !saw_non_separator_after_name;
+    }
+
+    fn atForDoneBeforeDo(self: SyntaxParser, saw_in: bool, saw_header_separator: bool) bool {
+        return self.atWord("done") and saw_in and saw_header_separator;
     }
 
     fn parseLoopCommand(self: *SyntaxParser) anyerror!NodeId {
@@ -2654,6 +2674,10 @@ fn isListSeparator(kind: TokenKind) bool {
         => true,
         else => false,
     };
+}
+
+fn isForHeaderSeparator(kind: TokenKind) bool {
+    return kind == .semicolon or kind == .newline;
 }
 
 fn functionBodyWordContinuesCommandPosition(word: []const u8) bool {
@@ -3358,7 +3382,7 @@ test "parser builds POSIX case command nodes" {
 }
 
 test "parser accepts POSIX case edge items" {
-    var result = try parse(std.testing.allocator, "case b in (a|b) ;; c) echo c esac", .{});
+    var result = try parse(std.testing.allocator, "case b in (a|b) ;; c) echo c; esac", .{});
     defer result.deinit();
 
     var saw_case = false;
@@ -3371,6 +3395,19 @@ test "parser accepts POSIX case edge items" {
     try std.testing.expectEqual(@as(usize, 2), item_count);
 }
 
+test "parser treats reserved-looking words literally in POSIX case item bodies" {
+    var result = try parse(std.testing.allocator, "case x in x) echo case esac in do done then fi ;; esac", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try std.testing.expect(!result.incomplete);
+    var item_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .case_item) item_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 1), item_count);
+}
+
 test "parser keeps nested POSIX case statements inside case item bodies" {
     var result = try parse(std.testing.allocator, "case x in x) case y in y) echo nested ;; esac ;; esac", .{});
     defer result.deinit();
@@ -3378,13 +3415,22 @@ test "parser keeps nested POSIX case statements inside case item bodies" {
     try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
     try std.testing.expect(!result.incomplete);
     var item_count: usize = 0;
+    var saw_outer_item = false;
+    var saw_nested_item = false;
     for (result.nodes) |node| {
         if (node.kind == .case_item) {
             item_count += 1;
-            try expectSpan(.init(10, 48), node.span);
+            if (node.span.start == 10) {
+                saw_outer_item = true;
+                try expectSpan(.init(10, 48), node.span);
+            } else if (node.span.start == 23) {
+                saw_nested_item = true;
+            }
         }
     }
-    try std.testing.expectEqual(@as(usize, 1), item_count);
+    try std.testing.expectEqual(@as(usize, 2), item_count);
+    try std.testing.expect(saw_outer_item);
+    try std.testing.expect(saw_nested_item);
 }
 
 test "parser accepts in as POSIX case subject word" {
@@ -3473,6 +3519,23 @@ test "parser builds POSIX for command nodes" {
             found = true;
             try expectSpan(.init(0, 30), node.span);
             try std.testing.expectEqual(@as(usize, 0), node.token_start);
+            try std.testing.expectEqual(@as(usize, 1), countChildNodesOfKind(result, node, .list));
+        }
+    }
+    try std.testing.expect(found);
+}
+
+test "parser treats reserved-looking words literally in POSIX for word lists" {
+    var result = try parse(std.testing.allocator, "for x in if then do done; do echo $x; done", .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try std.testing.expect(!result.incomplete);
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .for_command) {
+            found = true;
+            try expectSpan(.init(0, 42), node.span);
             try std.testing.expectEqual(@as(usize, 1), countChildNodesOfKind(result, node, .list));
         }
     }

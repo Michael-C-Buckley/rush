@@ -16,6 +16,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `case-subject-esac-word` | `test/corpus/posix` | `grammar-case` | `esac` may be the case subject word before the delimiter `in` |
 | `grammar-case-character-classes` | `test/corpus/posix` | `grammar-case`, `grammar-case-pattern-list`, `grammar-case-bracket-patterns` | POSIX character classes inside case bracket patterns |
 | `grammar-case-empty-list` | `test/corpus/posix` | `grammar-case` | case command with no case items exits successfully |
+| `grammar-reserved-literal-contexts` | `test/corpus/posix` | `grammar-for-reserved-word-list-literals`, `grammar-case-reserved-word-body-literals` | reserved-looking words are literal in for word lists and case item body arguments |
 | `grammar-brace-group-separators` | `test/corpus/posix` | `grammar-brace-group` | brace groups recognize `{` and `}` as reserved words when separated by POSIX separators, including semicolon and newline before `}` |
 | `grammar-brace-group-pipeline-stage` | `test/corpus/posix` | `grammar-brace-group` | brace groups execute exactly once as first and non-first pipeline stages |
 | `grammar-compound-pipeline-first-stage` | `test/corpus/posix` | `grammar-compound-pipeline-first-stage` | representative POSIX compound commands parse and execute as first pipeline stages |

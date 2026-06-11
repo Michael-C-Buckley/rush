@@ -371,6 +371,7 @@ fn isCompoundNode(kind: parser.NodeKind) bool {
         .loop_command,
         .for_command,
         .case_command,
+        .case_item,
         .function_definition,
         .bash_test_command,
         .brace_group,
@@ -585,27 +586,15 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     std.debug.assert(node.kind == .case_command);
     var word_token: ?usize = null;
     var in_token: ?usize = null;
-    var esac_token: ?usize = null;
 
-    var depth: usize = 0;
-    var subject_seen = false;
     for (node.token_start + 1..node.token_end) |token_index| {
         const token = parsed.tokens[token_index];
         if (token.kind != .word) continue;
         const lexeme = token.lexeme(parsed.source);
         if (word_token == null) {
             word_token = token_index;
-            subject_seen = true;
-        } else if (subject_seen and in_token == null and std.mem.eql(u8, lexeme, "in")) {
+        } else if (in_token == null and std.mem.eql(u8, lexeme, "in")) {
             in_token = token_index;
-        } else if (in_token != null and std.mem.eql(u8, lexeme, "case")) {
-            depth += 1;
-        } else if (in_token != null and std.mem.eql(u8, lexeme, "esac") and esacStartsCaseItemPattern(parsed, token_index)) {
-            continue;
-        } else if (in_token != null and std.mem.eql(u8, lexeme, "esac") and depth > 0) {
-            depth -= 1;
-        } else if (in_token != null and std.mem.eql(u8, lexeme, "esac")) {
-            esac_token = token_index;
             break;
         }
     }
@@ -619,39 +608,36 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         arms.deinit(allocator);
     }
 
-    var index = if (in_token) |token_index| token_index + 1 else node.token_end;
-    const limit = esac_token orelse node.token_end;
-    while (index < limit) {
-        while (index < limit and parsed.tokens[index].kind.isTrivia()) : (index += 1) {}
-        if (index >= limit) break;
+    for (parsed.nodeChildren(node)) |child| {
+        const child_node = switch (child) {
+            .node => |node_id| parsed.nodes[node_id.index()],
+            .token => continue,
+        };
+        if (child_node.kind != .case_item) continue;
 
         var patterns: std.ArrayList(WordRef) = .empty;
         errdefer {
             for (patterns.items) |pattern| freeWord(allocator, pattern);
             patterns.deinit(allocator);
         }
-        while (index < limit and parsed.tokens[index].kind != .right_paren) : (index += 1) {
-            if (parsed.tokens[index].kind == .word) {
-                try patterns.append(allocator, try wordRefFromToken(allocator, parsed, index));
+
+        var pattern_end: ?usize = null;
+        for (child_node.token_start..child_node.token_end) |token_index| {
+            const token = parsed.tokens[token_index];
+            if (token.kind == .right_paren) {
+                pattern_end = token_index;
+                break;
             }
-        }
-        if (index < limit and parsed.tokens[index].kind == .right_paren) index += 1;
-        const body_start = index;
-        var nested_case_depth: usize = 0;
-        while (index < limit) : (index += 1) {
-            const token = parsed.tokens[index];
             if (token.kind == .word) {
-                const lexeme = token.lexeme(parsed.source);
-                if (std.mem.eql(u8, lexeme, "case")) {
-                    nested_case_depth += 1;
-                } else if (std.mem.eql(u8, lexeme, "esac") and nested_case_depth > 0) {
-                    nested_case_depth -= 1;
-                }
+                try patterns.append(allocator, try wordRefFromToken(allocator, parsed, token_index));
             }
-            if (nested_case_depth == 0 and token.kind == .dsemicolon) break;
         }
-        const body_end = index;
-        if (index < limit and parsed.tokens[index].kind == .dsemicolon) index += 1;
+
+        const body_start = if (pattern_end) |token_index| token_index + 1 else child_node.token_end;
+        const body_end = if (body_start < child_node.token_end and parsed.tokens[child_node.token_end - 1].kind == .dsemicolon)
+            child_node.token_end - 1
+        else
+            child_node.token_end;
 
         try arms.append(allocator, .{
             .patterns = try patterns.toOwnedSlice(allocator),
@@ -673,52 +659,41 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     };
 }
 
-fn esacStartsCaseItemPattern(parsed: parser.ParseResult, token_index: usize) bool {
-    if (!std.mem.eql(u8, parsed.tokens[token_index].lexeme(parsed.source), "esac")) return false;
-    var index = token_index + 1;
-    while (index < parsed.tokens.len and parsed.tokens[index].kind.isTrivia()) : (index += 1) {}
-    if (index >= parsed.tokens.len) return false;
-    if (parsed.tokens[index].kind == .right_paren) return true;
-    if (parsed.tokens[index].kind != .pipe) return false;
-    index += 1;
-    while (index < parsed.tokens.len and parsed.tokens[index].kind.isTrivia()) : (index += 1) {}
-    if (index >= parsed.tokens.len) return false;
-    if (parsed.tokens[index].kind != .word and parsed.tokens[index].kind != .right_paren) return false;
-    while (index < parsed.tokens.len) : (index += 1) {
-        const kind = parsed.tokens[index].kind;
-        if (kind.isTrivia()) continue;
-        if (kind == .right_paren) return true;
-        if (isListSeparatorToken(kind) or kind == .eof) return false;
-    }
-    return false;
-}
-
 fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !ForCommand {
     std.debug.assert(node.kind == .for_command);
     var name_token: ?usize = null;
     var in_token: ?usize = null;
     var do_token: ?usize = null;
     var done_token: ?usize = null;
-    var depth: usize = 0;
+    var previous_word_token: ?usize = null;
+    var body_node: ?parser.Node = null;
 
-    for (node.token_start..node.token_end) |token_index| {
-        const token = parsed.tokens[token_index];
-        if (token.kind != .word) continue;
-        const lexeme = token.lexeme(parsed.source);
-        const reserved_position = isReservedPosition(parsed, node.token_start, token_index);
-        if (reserved_position and std.mem.eql(u8, lexeme, "for")) {
-            depth += 1;
-        } else if (depth == 1 and name_token == null) {
-            if (!std.mem.eql(u8, lexeme, "in") and !std.mem.eql(u8, lexeme, "do")) name_token = token_index;
-        } else if (depth == 1 and std.mem.eql(u8, lexeme, "in") and do_token == null) {
-            in_token = token_index;
-        } else if (depth == 1 and do_token == null and reserved_position and std.mem.eql(u8, lexeme, "do")) {
-            do_token = token_index;
-        } else if (reserved_position and std.mem.eql(u8, lexeme, "done")) {
-            if (depth == 1 and done_token == null) done_token = token_index;
-            if (depth > 0) depth -= 1;
-        }
-    }
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .token => |token_id| {
+            const token_index = token_id.index();
+            const token = parsed.tokens[token_index];
+            if (token.kind != .word) continue;
+            const lexeme = token.lexeme(parsed.source);
+            if (body_node == null) {
+                if (std.mem.eql(u8, lexeme, "for")) continue;
+                if (name_token == null) {
+                    if (!std.mem.eql(u8, lexeme, "in") and !std.mem.eql(u8, lexeme, "do")) name_token = token_index;
+                } else if (in_token == null and std.mem.eql(u8, lexeme, "in")) {
+                    in_token = token_index;
+                }
+                previous_word_token = token_index;
+            } else if (done_token == null and std.mem.eql(u8, lexeme, "done")) {
+                done_token = token_index;
+            }
+        },
+        .node => |node_id| {
+            const child_node = parsed.nodes[node_id.index()];
+            if (child_node.kind == .list and body_node == null) {
+                body_node = child_node;
+                do_token = previous_word_token;
+            }
+        },
+    };
 
     const name_index = name_token orelse node.token_start;
     const do_index = do_token orelse node.token_end;
@@ -750,7 +725,7 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
         .name = name,
         .words = try words.toOwnedSlice(allocator),
         .use_positionals = in_token == null,
-        .body = spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
+        .body = if (body_node) |body| spanSlice(parsed, body.token_start, body.token_end) else spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
