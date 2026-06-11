@@ -8458,7 +8458,7 @@ fn setLoopControlBuiltin(self: *Executor, command: ir.SimpleCommand, kind: LoopC
     // status 0 and the shell keeps running; dash and bash agree. Operand
     // errors above still stop the shell like other special builtins.
     if (self.loop_depth == 0) return emptyResult(self.allocator, 0);
-    self.pending_loop_control = .{ .kind = kind, .levels = levels };
+    self.pending_loop_control = .{ .kind = kind, .levels = @min(levels, self.loop_depth) };
     return emptyResult(self.allocator, 0);
 }
 
@@ -11900,6 +11900,28 @@ test "executor supports break and continue builtins in loops" {
     try std.testing.expectEqual(@as(ExitStatus, 0), outside_result.status);
     try std.testing.expectEqualStrings("after\n", outside_result.stdout);
     try std.testing.expectEqualStrings("", outside_result.stderr);
+}
+
+test "executor clamps over-depth break and continue loop counts" {
+    var break_lowered = try parseAndLower(std.testing.allocator, "for outer in a b; do for inner in 1 2; do echo $outer$inner; break 3; done; echo bad; done; echo done");
+    defer break_lowered.parsed.deinit();
+    defer break_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var break_result = try executor.executeProgram(break_lowered.program, .{});
+    defer break_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), break_result.status);
+    try std.testing.expectEqualStrings("a1\ndone\n", break_result.stdout);
+
+    var continue_lowered = try parseAndLower(std.testing.allocator, "for outer in a b; do for inner in 1 2; do echo $outer$inner; continue 3; done; echo bad; done; echo done");
+    defer continue_lowered.parsed.deinit();
+    defer continue_lowered.program.deinit();
+    var continue_result = try executor.executeProgram(continue_lowered.program, .{});
+    defer continue_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), continue_result.status);
+    try std.testing.expectEqualStrings("a1\nb1\ndone\n", continue_result.stdout);
 }
 
 test "executor supports return builtin in shell functions" {

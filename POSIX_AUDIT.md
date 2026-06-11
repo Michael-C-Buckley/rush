@@ -262,8 +262,7 @@ Implemented or partially implemented:
 
 - `:`
 - `.` / `source`
-- `break`
-- `continue`
+- `break` / `continue` loop control, including nested and over-depth counts, outside-loop no-op behavior, status propagation, and operand diagnostics
 - `cd`
 - `pwd`
 - `return`
