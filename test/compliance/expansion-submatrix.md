@@ -57,11 +57,12 @@ Manifest rows:
 
 - `expansion-special-params`
 - `expansion-positionals`
+- `expansion-positionals-braced-multi-digit` (supported)
 - `expansion-positionals-quoted-at`
 - `expansion-positionals-quoted-star`
 - `expansion-positionals-unquoted-at-star`
 
-Rush has supported spec-clause coverage for `$?`, `$$`, `$!`, `$0`, quoted `$@`, quoted `$*`, and unquoted `$@`/`$*` with custom IFS.
+Rush has supported spec-clause coverage for `$?`, `$$`, `$!`, `$0`, braced multi-digit positional parameters such as `${10}`, quoted `$@`, quoted `$*`, and unquoted `$@`/`$*` with custom IFS. The braced multi-digit coverage also guards that unbraced `$10` remains `$1` followed by literal `0`, and mixed malformed forms such as `${1abc}` stay on the bad-substitution diagnostics path.
 
 Remaining high-risk gaps:
 

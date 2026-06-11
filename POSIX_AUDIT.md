@@ -19,23 +19,23 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `400` rows
-- `scripts/check-posix-corpus.sh`: `360` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `194` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `250` cases, `500` comparisons across dash and bash POSIX mode
+- `scripts/check-compliance-manifest.sh`: `401` rows
+- `scripts/check-posix-corpus.sh`: `361` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `195` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `251` cases, `502` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `400`
-- scored POSIX items: `398`
-- supported: `352`
+- tracked items: `401`
+- scored POSIX items: `399`
+- supported: `354`
 - baseline: `42`
-- partial: `3`
+- partial: `2`
 - missing: `1`
 - out of scope: `2`
-- strict supported only: `88.4%`
-- practical supported+baseline: `99.0%`
-- weighted progress: `96.1%`
+- strict supported only: `88.7%`
+- practical supported+baseline: `99.2%`
+- weighted progress: `96.2%`
 
 Recent notable capabilities:
 
@@ -48,7 +48,7 @@ Recent notable capabilities:
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
-- POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
+- POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.

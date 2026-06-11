@@ -521,7 +521,11 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
     const parsed = parseParameterExpression(expression);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
 
-    const value = specialParameterValue(parsed.name, options) orelse options.env.get(parsed.name);
+    const digit_name = isDigitParameterName(parsed.name);
+    const value = if (digit_name)
+        digitParameterValue(parsed.name, options)
+    else
+        specialParameterValue(parsed.name, options) orelse options.env.get(parsed.name);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
 
@@ -595,6 +599,23 @@ fn invalidParameterExpansion(allocator: std.mem.Allocator, options: Options) any
 fn specialParameterValue(name: []const u8, options: Options) ?[]const u8 {
     if (std.mem.eql(u8, name, "-")) return options.option_flags;
     return null;
+}
+
+fn digitParameterValue(name: []const u8, options: Options) ?[]const u8 {
+    std.debug.assert(isDigitParameterName(name));
+    const number = std.fmt.parseInt(usize, name, 10) catch return null;
+    if (number == 0) return options.env.get("0");
+    const index = number - 1;
+    if (index >= options.positionals.len) return null;
+    return options.positionals[index];
+}
+
+fn isDigitParameterName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    for (name) |byte| {
+        if (!std.ascii.isDigit(byte)) return false;
+    }
+    return true;
 }
 
 const ExpansionPattern = struct {
@@ -1792,7 +1813,6 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "NEGATIVE_OCTAL_NUM")) return "-010";
     if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
-    if (std.mem.eql(u8, name, "10")) return "ten";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
     if (std.mem.eql(u8, name, "GLOBBY")) return "rush-quoted-glob-?.tmp";
     return null;
@@ -1878,10 +1898,6 @@ test "parameter expansion supports POSIX operators" {
     const lengths = try expandWordScalar(std.testing.allocator, "${#USER}:${#MISSING}:${#EMPTY}", .{ .env = test_env });
     defer std.testing.allocator.free(lengths);
     try std.testing.expectEqualStrings("9:0:0", lengths);
-
-    const multi_digit = try expandWordScalar(std.testing.allocator, "${10}", .{ .env = test_env });
-    defer std.testing.allocator.free(multi_digit);
-    try std.testing.expectEqualStrings("ten", multi_digit);
 
     try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }));
 }
@@ -2012,6 +2028,20 @@ test "unquoted positional parameters split field-aware values" {
     try std.testing.expectEqualStrings("a", star.fields[0]);
     try std.testing.expectEqualStrings("b", star.fields[1]);
     try std.testing.expectEqualStrings("c", star.fields[2]);
+}
+
+test "braced multi-digit positional parameters use the full decimal index" {
+    const params = [_][]const u8{ "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten words", "eleven" };
+
+    const scalar = try expandWordScalar(std.testing.allocator, "${10}:${11}:${12}:${01}:$10", .{ .positionals = &params });
+    defer std.testing.allocator.free(scalar);
+    try std.testing.expectEqualStrings("ten words:eleven::one:one0", scalar);
+
+    var unquoted = try expandWord(std.testing.allocator, "${10}", .{ .positionals = &params });
+    defer unquoted.deinit();
+    try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
+    try std.testing.expectEqualStrings("ten", unquoted.fields[0]);
+    try std.testing.expectEqualStrings("words", unquoted.fields[1]);
 }
 
 test "quoted positional parameters preserve fields" {
