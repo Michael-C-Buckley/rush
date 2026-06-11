@@ -359,6 +359,7 @@ expansion-command-substitution-empty-fields	expansion	behavior	empty command sub
 grammar-for-implicit-positionals	grammar	behavior	for without in iterates positional parameters
 grammar-for-explicit-empty-in	grammar	behavior	for with explicit empty in list iterates zero words
 grammar-for-quoted-at-words	grammar	behavior	for word lists preserve quoted at positional fields
+grammar-for-exit-status	grammar	behavior	for loops report last body status or zero when no words are iterated
 grammar-reserved-literal-contexts	grammar	behavior	reserved-looking words stay literal in for word lists and case item body arguments
 grammar-loop-exit-status	grammar	behavior	while and until exit statuses follow body execution
 builtin-loop-control-status	builtin	behavior	break and continue determine loop command status

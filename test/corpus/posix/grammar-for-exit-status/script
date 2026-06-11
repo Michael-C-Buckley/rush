@@ -1,0 +1,10 @@
+for x in a b; do false; done
+echo explicit:$?
+for x in; do false; done
+echo explicit_empty:$?
+set -- a b
+for x; do false; done
+echo implicit:$?
+set --
+for x; do false; done
+echo implicit_empty:$?

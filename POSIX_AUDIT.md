@@ -118,10 +118,10 @@ Recent notable capabilities:
 - Parser CST includes nested list bodies for key compound command regions.
 - Parser CST includes structured `case_item` nodes for case arms.
 - `case` execution covers POSIX pattern lists, bracket expressions including ASCII POSIX character classes, optional leading parenthesis, empty arms, empty case item lists, final arms without `;;`, nested case bodies, reserved-word subject words, and trailing compound-command redirections.
+- `for` execution covers POSIX explicit and omitted word lists, empty lists, quoted and reserved-looking literal word-list entries, nested compound bodies, loop-control and exit-status behavior, and trailing compound-command redirections.
 
 ### Partial / gaps
 
-- `for` supports POSIX word lists, but not Bash-style arithmetic for loops.
 - Function definitions use body source slicing and reparse at call time; semantics work for baseline tests but are not yet a fully lowered function body IR.
 - Async execution has real external-command baseline, forked builtin/compound jobs where IO/fork context is available, and pid/job metadata.
 - Strict POSIX syntax-error consequences are covered under `--posix-strict`; the default parser still favors recovery/incomplete-input behavior for tooling.
