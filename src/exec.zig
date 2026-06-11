@@ -1615,7 +1615,6 @@ pub const Executor = struct {
             };
         }
 
-        const current_token_index = parser_context.token_index;
         const root = words.items[0].lexeme(source);
         var path: std.ArrayList([]const u8) = .empty;
         errdefer path.deinit(self.allocator);
@@ -1625,7 +1624,7 @@ pub const Executor = struct {
         var option_value: ?CompletionOptionValue = null;
         while (index < words.items.len) {
             const token = words.items[index];
-            const is_current = current_token_index != null and token.span.start == parsed.tokens[current_token_index.?].span.start and clamped_cursor <= token.span.end;
+            const is_current = token.span.start == parser_context.span.start and clamped_cursor <= token.span.end;
             if (is_current or token.span.end > clamped_cursor) break;
             const word = token.lexeme(source);
             previous = word;
@@ -1633,7 +1632,7 @@ pub const Executor = struct {
                 if (matched.takes_value and !matched.attached_value) {
                     if (index + 1 < words.items.len) {
                         const value_token = words.items[index + 1];
-                        const value_is_current = current_token_index != null and value_token.span.start == parsed.tokens[current_token_index.?].span.start and clamped_cursor <= value_token.span.end;
+                        const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
                         if (!value_is_current and value_token.span.end <= clamped_cursor) {
                             index += 1;
                             previous = value_token.lexeme(source);
@@ -1650,7 +1649,7 @@ pub const Executor = struct {
                 } else if (cluster.takes_next_value) {
                     if (index + 1 < words.items.len) {
                         const value_token = words.items[index + 1];
-                        const value_is_current = current_token_index != null and value_token.span.start == parsed.tokens[current_token_index.?].span.start and clamped_cursor <= value_token.span.end;
+                        const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
                         if (!value_is_current and value_token.span.end <= clamped_cursor) {
                             index += 1;
                             previous = value_token.lexeme(source);
@@ -1684,8 +1683,10 @@ pub const Executor = struct {
             .command
         else if (std.mem.startsWith(u8, prefix, "-"))
             .option
+        else if (prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completion_rules.items, root, path.items))
+            .subcommand
         else
-            .subcommand;
+            .argument;
         return .{
             .allocator = self.allocator,
             .root = root,
@@ -16616,6 +16617,28 @@ test "dynamic structured argument provider is scoped to command path" {
     const commit = try executor.collectCompletionsForInput("git commit ma", "git commit ma".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(commit);
     try expectNoCandidate(commit, "main");
+}
+
+test "dynamic structured argument provider runs after subcommand path" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__brew_formulae() {
+        \\  completion candidate qemu --kind plain
+        \\}
+        \\complete brew --subcommand install
+        \\complete 'brew install' --argument --function __brew_formulae
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("brew install q", "brew install q".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "qemu", .plain);
 }
 
 test "dynamic structured completion candidates support fuzzy display filtering" {
