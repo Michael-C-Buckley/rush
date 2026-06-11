@@ -299,7 +299,7 @@ Implemented or partially implemented:
 - `times` currently emits a deterministic baseline instead of real process usage.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
 - `exec` is not a true process replacement.
-- `trap` has baseline real-signal dispatch for common catchable signals between commands and wakes the interactive editor promptly for process-directed trapped signals; broader inheritance and ignored-signal semantics remain limited outside the focused interactive/job-control coverage below.
+- `trap` has supported real-signal dispatch for the tracked common catchable signals, including ignored-at-entry non-interactive behavior, caught-trap reset in subshells and command substitutions, signal trap status preservation, EXIT trap ordering for signal and `errexit` exits, wait interruption by trapped signals, and prompt editor wake/redraw for process-directed trapped signals.
 - `alias`/`unalias` have baseline parser integration but not full POSIX recursive/timing edge cases.
 
 ## 7. Shell options and modes

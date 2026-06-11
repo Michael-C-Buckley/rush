@@ -21,6 +21,8 @@ var pending_trap_signal: std.atomic.Value(u8) = .init(0);
 var trap_signal_wake_fd: std.atomic.Value(std.posix.fd_t) = .init(-1);
 var test_term_signal_count: std.atomic.Value(u8) = .init(0);
 
+const supported_trap_signals = [_]std.posix.SIG{ .HUP, .INT, .QUIT, .TERM, .USR1, .USR2 };
+
 pub const ExitStatus = u8;
 pub const stopped_jobs_exit_warning = "You have stopped jobs.\n";
 
@@ -932,6 +934,7 @@ pub const Executor = struct {
     abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     trap_signal_actions: std.ArrayList(TrapSignalAction) = .empty,
+    ignored_trap_signals_at_entry: u64 = 0,
     event_hooks: std.StringHashMapUnmanaged(std.ArrayList(EventHook)) = .empty,
     interval_hooks: std.ArrayList(IntervalHook) = .empty,
     pending_variable_hooks: std.ArrayList([]const u8) = .empty,
@@ -990,7 +993,7 @@ pub const Executor = struct {
     script_stdin_file: ?std.Io.File = null,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
-        var executor: Executor = .{ .allocator = allocator };
+        var executor: Executor = .{ .allocator = allocator, .ignored_trap_signals_at_entry = ignoredTrapSignalsAtEntry() };
         executor.setLastStatus(0);
         executor.setPidText();
         return executor;
@@ -2619,6 +2622,7 @@ pub const Executor = struct {
         var abbr_iter = other.abbreviations.iterator();
         while (abbr_iter.next()) |entry| try self.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
         for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
+        self.ignored_trap_signals_at_entry = other.ignored_trap_signals_at_entry;
         var trap_iter = other.traps.iterator();
         while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
         var hook_iter = other.event_hooks.iterator();
@@ -3129,6 +3133,11 @@ pub const Executor = struct {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
         }
+    }
+
+    fn ignoredTrapSignalAtEntry(self: Executor, name: []const u8) bool {
+        const signal = signalFromTrapName(name) orelse return false;
+        return self.ignored_trap_signals_at_entry & signalBit(signal) != 0;
     }
 
     fn ensureTrapSignalInstalled(self: *Executor, signal: std.posix.SIG) !bool {
@@ -6855,6 +6864,21 @@ fn signalNameFromNumber(raw: u8) ?[]const u8 {
     return null;
 }
 
+fn ignoredTrapSignalsAtEntry() u64 {
+    var mask: u64 = 0;
+    for (supported_trap_signals) |signal| {
+        var current: std.posix.Sigaction = undefined;
+        std.posix.sigaction(signal, null, &current);
+        if (current.handler.handler == std.posix.SIG.IGN) mask |= signalBit(signal);
+    }
+    return mask;
+}
+
+fn signalBit(signal: std.posix.SIG) u64 {
+    const raw = @intFromEnum(signal);
+    return if (raw < 64) @as(u64, 1) << @intCast(raw) else 0;
+}
+
 const SignalActionGuard = struct {
     signal: std.posix.SIG,
     previous: std.posix.Sigaction,
@@ -8970,7 +8994,6 @@ fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
 
 fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
-    _ = options;
     if (command.argv.len == 1) return listTraps(self);
 
     var action_index: usize = 1;
@@ -8989,6 +9012,7 @@ fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
             defer self.allocator.free(message);
             return errorResult(self.allocator, 1, "trap", message);
         }
+        if (!options.interactive and self.ignoredTrapSignalAtEntry(name)) continue;
         if (std.mem.eql(u8, action, "-")) {
             self.clearTrap(name);
         } else {
@@ -9888,7 +9912,7 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     if (job.pgrp) |pgrp| try giveTerminalToForegroundPgrp(@intCast(pgrp), foreground_terminal);
     try continueStoppedJob(job);
     self.selectCurrentJob(job.id);
-    const status = try waitBackgroundJob(io, job);
+    const status = try waitBackgroundJob(io, job, false);
     if (job.state == .done) self.removeBackgroundJobById(job_id);
     return .{ .allocator = self.allocator, .status = status, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
 }
@@ -9901,7 +9925,10 @@ fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (operand_start >= command.argv.len) {
         var status: ExitStatus = 0;
-        for (self.background_jobs.items) |*job| status = try waitBackgroundJob(io, job);
+        for (self.background_jobs.items) |*job| {
+            status = try waitBackgroundJob(io, job, true);
+            if (pending_trap_signal.load(.seq_cst) != 0) return emptyResult(self.allocator, status);
+        }
         return emptyResult(self.allocator, status);
     }
 
@@ -9913,31 +9940,116 @@ fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
             const pid = std.fmt.parseInt(i64, arg.text, 10) catch return errorResult(self.allocator, 127, "wait", "invalid pid");
             break :blk self.findBackgroundJob(pid) orelse return errorResult(self.allocator, 127, "wait", "unknown pid");
         };
-        status = try waitBackgroundJob(io, job);
+        status = try waitBackgroundJob(io, job, true);
+        if (pending_trap_signal.load(.seq_cst) != 0) return emptyResult(self.allocator, status);
     }
     return emptyResult(self.allocator, status);
 }
 
-fn waitBackgroundJob(io: std.Io, job: *BackgroundJob) !ExitStatus {
+fn waitBackgroundJob(io: std.Io, job: *BackgroundJob, interruptible_by_traps: bool) !ExitStatus {
     if (job.state != .done) {
-        const term = try job.child.wait(io);
-        job.status = exitStatusFromTerm(term);
-        job.stop_signal = null;
-        job.termination_signal = null;
-        job.state = switch (term) {
-            .stopped => |signal| blk: {
-                job.stop_signal = signalStatusNumber(signal);
-                break :blk .stopped;
-            },
-            .signal => |signal| blk: {
-                job.termination_signal = signalStatusNumber(signal);
-                break :blk .done;
-            },
-            else => .done,
-        };
-        if (job.state == .stopped) saveJobTerminalModes(job);
+        if (interruptible_by_traps) {
+            if (try waitBackgroundJobInterruptible(io, job)) |status| return status;
+        } else {
+            const term = try job.child.wait(io);
+            applyBackgroundJobTerm(job, term);
+        }
     }
     return job.status;
+}
+
+fn waitBackgroundJobInterruptible(io: std.Io, job: *BackgroundJob) !?ExitStatus {
+    const pid = job.child.id orelse return null;
+    if (zig_builtin.link_libc) {
+        while (true) {
+            var status: c_int = 0;
+            const rc = std.c.waitpid(pid, &status, 0);
+            switch (std.c.errno(rc)) {
+                .SUCCESS => {
+                    applyBackgroundJobWaitStatus(job, @bitCast(status));
+                    cleanupWaitedChild(io, &job.child);
+                    return null;
+                },
+                .INTR => if (pendingTrapSignalStatus()) |trap_status| return trap_status else continue,
+                .CHILD => return error.ProcessNotFound,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    if (zig_builtin.os.tag == .linux) {
+        while (true) {
+            var status: u32 = 0;
+            const rc = std.os.linux.waitpid(pid, &status, 0);
+            switch (std.os.linux.errno(rc)) {
+                .SUCCESS => {
+                    applyBackgroundJobWaitStatus(job, status);
+                    cleanupWaitedChild(io, &job.child);
+                    return null;
+                },
+                .INTR => if (pendingTrapSignalStatus()) |trap_status| return trap_status else continue,
+                .CHILD => return error.ProcessNotFound,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    return error.Unsupported;
+}
+
+fn pendingTrapSignalStatus() ?ExitStatus {
+    const raw = pending_trap_signal.load(.seq_cst);
+    if (raw == 0) return null;
+    return 128 + raw;
+}
+
+fn applyBackgroundJobTerm(job: *BackgroundJob, term: std.process.Child.Term) void {
+    job.status = exitStatusFromTerm(term);
+    job.stop_signal = null;
+    job.termination_signal = null;
+    job.state = switch (term) {
+        .stopped => |signal| blk: {
+            job.stop_signal = signalStatusNumber(signal);
+            break :blk .stopped;
+        },
+        .signal => |signal| blk: {
+            job.termination_signal = signalStatusNumber(signal);
+            break :blk .done;
+        },
+        else => .done,
+    };
+    if (job.state == .stopped) saveJobTerminalModes(job);
+}
+
+fn applyBackgroundJobWaitStatus(job: *BackgroundJob, wait_status: u32) void {
+    job.status = exitStatusFromWaitStatus(wait_status);
+    job.stop_signal = null;
+    job.termination_signal = null;
+    if (std.posix.W.IFSTOPPED(wait_status)) {
+        job.state = .stopped;
+        job.stop_signal = signalStatusNumber(std.posix.W.STOPSIG(wait_status));
+        saveJobTerminalModes(job);
+        return;
+    }
+    job.state = .done;
+    if (std.posix.W.IFSIGNALED(wait_status)) job.termination_signal = signalStatusNumber(std.posix.W.TERMSIG(wait_status));
+}
+
+fn cleanupWaitedChild(io: std.Io, child: *std.process.Child) void {
+    if (child.stdin) |file| {
+        var owned = file;
+        owned.close(io);
+        child.stdin = null;
+    }
+    if (child.stdout) |file| {
+        var owned = file;
+        owned.close(io);
+        child.stdout = null;
+    }
+    if (child.stderr) |file| {
+        var owned = file;
+        owned.close(io);
+        child.stderr = null;
+    }
+    child.id = null;
 }
 
 fn continueStoppedJob(job: *BackgroundJob) !void {
@@ -11562,6 +11674,16 @@ test "executor implements trap builtin baseline" {
     try std.testing.expectEqual(@as(ExitStatus, 0), signal_result.status);
     try std.testing.expectEqualStrings("int\nafter\n", signal_result.stdout);
 
+    var signal_status = try parseAndLower(std.testing.allocator, "trap 'echo trap:$?; false' TERM; /bin/kill -TERM $$; echo after:$?");
+    defer signal_status.parsed.deinit();
+    defer signal_status.program.deinit();
+    var signal_status_executor = Executor.init(std.testing.allocator);
+    defer signal_status_executor.deinit();
+    var signal_status_result = try signal_status_executor.executeProgram(signal_status.program, .{ .io = std.testing.io, .allow_external = true });
+    defer signal_status_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), signal_status_result.status);
+    try std.testing.expectEqualStrings("trap:0\nafter:0\n", signal_status_result.stdout);
+
     var signal_exit = try parseAndLower(std.testing.allocator, "trap 'exit 9' INT; /bin/kill -INT $$; echo unreached");
     defer signal_exit.parsed.deinit();
     defer signal_exit.program.deinit();
@@ -11582,6 +11704,26 @@ test "executor implements trap builtin baseline" {
     try std.testing.expectEqual(@as(ExitStatus, 5), exit_override_result.status);
     try std.testing.expectEqualStrings("et\n", exit_override_result.stdout);
 
+    var exit_after_signal = try parseAndLower(std.testing.allocator, "trap 'echo exit:$?' EXIT; trap 'echo term:$?; exit 7' TERM; /bin/kill -TERM $$; echo unreached");
+    defer exit_after_signal.parsed.deinit();
+    defer exit_after_signal.program.deinit();
+    var exit_after_signal_executor = Executor.init(std.testing.allocator);
+    defer exit_after_signal_executor.deinit();
+    var exit_after_signal_result = try exit_after_signal_executor.executeProgram(exit_after_signal.program, .{ .io = std.testing.io, .allow_external = true });
+    defer exit_after_signal_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 7), exit_after_signal_result.status);
+    try std.testing.expectEqualStrings("term:0\nexit:7\n", exit_after_signal_result.stdout);
+
+    var exit_after_errexit = try parseAndLower(std.testing.allocator, "set -e; trap 'echo exit:$?' EXIT; false; echo unreached");
+    defer exit_after_errexit.parsed.deinit();
+    defer exit_after_errexit.program.deinit();
+    var exit_after_errexit_executor = Executor.init(std.testing.allocator);
+    defer exit_after_errexit_executor.deinit();
+    var exit_after_errexit_result = try exit_after_errexit_executor.executeProgram(exit_after_errexit.program, .{});
+    defer exit_after_errexit_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), exit_after_errexit_result.status);
+    try std.testing.expectEqualStrings("exit:1\n", exit_after_errexit_result.stdout);
+
     var zero = try parseAndLower(std.testing.allocator, "trap 'echo zero' 0; echo body");
     defer zero.parsed.deinit();
     defer zero.program.deinit();
@@ -11590,6 +11732,43 @@ test "executor implements trap builtin baseline" {
     var zero_result = try zero_executor.executeProgram(zero.program, .{});
     defer zero_result.deinit();
     try std.testing.expectEqualStrings("body\nzero\n", zero_result.stdout);
+
+    var quoted = try parseAndLower(std.testing.allocator, "trap \"echo 'a b'\" TERM; trap");
+    defer quoted.parsed.deinit();
+    defer quoted.program.deinit();
+    var quoted_executor = Executor.init(std.testing.allocator);
+    defer quoted_executor.deinit();
+    var quoted_result = try quoted_executor.executeProgram(quoted.program, .{});
+    defer quoted_result.deinit();
+    try std.testing.expectEqualStrings("trap -- 'echo '\\''a b'\\''' TERM\n", quoted_result.stdout);
+}
+
+test "executor ignores non-interactive traps for signals ignored at shell entry" {
+    pending_trap_signal.store(0, .seq_cst);
+    defer pending_trap_signal.store(0, .seq_cst);
+
+    var guard = ignoreSignal(.INT);
+    defer guard.restore();
+
+    var ignored = try parseAndLower(std.testing.allocator, "trap 'echo int' INT; /bin/kill -INT $$; echo after; trap");
+    defer ignored.parsed.deinit();
+    defer ignored.program.deinit();
+    var ignored_executor = Executor.init(std.testing.allocator);
+    defer ignored_executor.deinit();
+    var ignored_result = try ignored_executor.executeProgram(ignored.program, .{ .io = std.testing.io, .allow_external = true });
+    defer ignored_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), ignored_result.status);
+    try std.testing.expectEqualStrings("after\n", ignored_result.stdout);
+
+    var interactive = try parseAndLower(std.testing.allocator, "trap 'echo int' INT; /bin/kill -INT $$; echo after");
+    defer interactive.parsed.deinit();
+    defer interactive.program.deinit();
+    var interactive_executor = Executor.init(std.testing.allocator);
+    defer interactive_executor.deinit();
+    var interactive_result = try interactive_executor.executeProgram(interactive.program, .{ .io = std.testing.io, .allow_external = true, .interactive = true });
+    defer interactive_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), interactive_result.status);
+    try std.testing.expectEqualStrings("int\nafter\n", interactive_result.stdout);
 }
 
 test "executor resets caught traps for subshell environments" {
@@ -11612,6 +11791,26 @@ test "executor resets caught traps for subshell environments" {
     defer command_substitution_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), command_substitution_result.status);
     try std.testing.expectEqualStrings("<>\nouter-exit\n", command_substitution_result.stdout);
+
+    var signal_subshell = try parseAndLower(std.testing.allocator, "trap 'echo term' TERM; (trap); echo marker; trap");
+    defer signal_subshell.parsed.deinit();
+    defer signal_subshell.program.deinit();
+    var signal_subshell_executor = Executor.init(std.testing.allocator);
+    defer signal_subshell_executor.deinit();
+    var signal_subshell_result = try signal_subshell_executor.executeProgram(signal_subshell.program, .{});
+    defer signal_subshell_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), signal_subshell_result.status);
+    try std.testing.expectEqualStrings("marker\ntrap -- 'echo term' TERM\n", signal_subshell_result.stdout);
+
+    var signal_command_substitution = try parseAndLower(std.testing.allocator, "trap 'echo usr1' USR1; value=$(trap); printf '<%s>\n' \"$value\"; trap");
+    defer signal_command_substitution.parsed.deinit();
+    defer signal_command_substitution.program.deinit();
+    var signal_command_substitution_executor = Executor.init(std.testing.allocator);
+    defer signal_command_substitution_executor.deinit();
+    var signal_command_substitution_result = try signal_command_substitution_executor.executeProgram(signal_command_substitution.program, .{});
+    defer signal_command_substitution_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), signal_command_substitution_result.status);
+    try std.testing.expectEqualStrings("<>\ntrap -- 'echo usr1' USR1\n", signal_command_substitution_result.stdout);
 }
 
 test "executor restores trap signal handlers on clear and deinit" {
@@ -13780,7 +13979,7 @@ test "wait on a stopped job blocks until the job continues and exits" {
 
         fn run(self: *@This()) void {
             defer self.done.store(true, .release);
-            self.status = waitBackgroundJob(std.testing.io, self.job) catch |err| {
+            self.status = waitBackgroundJob(std.testing.io, self.job, false) catch |err| {
                 self.err = err;
                 return;
             };
@@ -13907,6 +14106,35 @@ test "executor waits for background pid operands" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("status=7\n", result.stdout);
+}
+
+test "wait builtin interrupted by trapped signal returns signal status" {
+    pending_trap_signal.store(0, .seq_cst);
+    defer pending_trap_signal.store(0, .seq_cst);
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\trap 'echo term-trap' TERM
+        \\/bin/sleep 0.3 & p=$!
+        \\/bin/sh -c 'sleep 0.05; kill -TERM "$1"' sh $$ & notifier=$!
+        \\wait "$p"; echo wait-status:$?
+        \\/bin/kill -TERM "$p" 2>/dev/null
+        \\wait "$p" 2>/dev/null
+        \\wait "$notifier" 2>/dev/null
+        \\:
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    const term_status: ExitStatus = 128 + signalStatusNumber(std.posix.SIG.TERM);
+    const expected = try std.fmt.allocPrint(std.testing.allocator, "term-trap\nwait-status:{d}\n", .{term_status});
+    defer std.testing.allocator.free(expected);
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(expected, result.stdout);
 }
 
 test "executor starts external commands asynchronously" {
