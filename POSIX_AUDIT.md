@@ -19,23 +19,23 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `414` rows
-- `scripts/check-posix-corpus.sh`: `418` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `236` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `298` cases, `596` comparisons across dash and bash POSIX mode
+- `scripts/check-compliance-manifest.sh`: `417` rows
+- `scripts/check-posix-corpus.sh`: `425` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `237` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `303` cases, `606` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `414`
-- scored POSIX items: `410`
-- supported: `403`
-- baseline: `4`
-- partial: `2`
+- tracked items: `417`
+- scored POSIX items: `413`
+- supported: `406`
+- baseline: `3`
+- partial: `3`
 - missing: `1`
 - out of scope: `4`
 - strict supported only: `98.3%`
-- practical supported+baseline: `99.3%`
-- weighted progress: `99.1%`
+- practical supported+baseline: `99.0%`
+- weighted progress: `99.0%`
 
 Recent notable capabilities:
 
