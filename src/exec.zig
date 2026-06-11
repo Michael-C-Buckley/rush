@@ -9837,6 +9837,22 @@ const PrintfIntegerConstant = struct {
     magnitude: u64,
     negative: bool = false,
     complete: bool = true,
+    overflow: bool = false,
+};
+
+const PrintfMagnitude = struct {
+    value: u64,
+    overflow: bool = false,
+};
+
+const PrintfSignedValue = struct {
+    value: i64,
+    overflow: bool = false,
+};
+
+const PrintfUnsignedValue = struct {
+    value: u64,
+    overflow: bool = false,
 };
 
 fn parsePrintfSigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool, arg: []const u8) !i64 {
@@ -9850,11 +9866,9 @@ fn parsePrintfSigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), s
             return 0;
         },
     };
-    if (!parsed.complete) try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
-    return printfSignedValue(parsed) orelse {
-        try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
-        return 0;
-    };
+    const converted = printfSignedValue(parsed);
+    if (!parsed.complete or converted.overflow) try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+    return converted.value;
 }
 
 fn parsePrintfUnsigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool, arg: []const u8) !u64 {
@@ -9868,24 +9882,34 @@ fn parsePrintfUnsigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8),
             return 0;
         },
     };
-    if (!parsed.complete) try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
-    if (!parsed.negative) return parsed.magnitude;
-    const signed = printfSignedValue(parsed) orelse {
-        try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
-        return 0;
-    };
-    return @bitCast(signed);
+    const converted = printfUnsignedValue(parsed);
+    if (!parsed.complete or converted.overflow) try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+    return converted.value;
 }
 
-fn printfSignedValue(parsed: PrintfIntegerConstant) ?i64 {
+fn printfSignedValue(parsed: PrintfIntegerConstant) PrintfSignedValue {
     if (!parsed.negative) {
-        if (parsed.magnitude > std.math.maxInt(i64)) return null;
-        return @intCast(parsed.magnitude);
+        if (parsed.magnitude > std.math.maxInt(i64)) return .{ .value = std.math.maxInt(i64), .overflow = true };
+        return .{ .value = @intCast(parsed.magnitude), .overflow = parsed.overflow };
     }
     const max_plus_one = @as(u64, @intCast(std.math.maxInt(i64))) + 1;
-    if (parsed.magnitude == max_plus_one) return std.math.minInt(i64);
-    if (parsed.magnitude > max_plus_one) return null;
-    return -@as(i64, @intCast(parsed.magnitude));
+    if (parsed.magnitude == max_plus_one) return .{ .value = std.math.minInt(i64), .overflow = parsed.overflow };
+    if (parsed.magnitude > max_plus_one) return .{ .value = std.math.minInt(i64), .overflow = true };
+    return .{ .value = -@as(i64, @intCast(parsed.magnitude)), .overflow = parsed.overflow };
+}
+
+fn printfUnsignedValue(parsed: PrintfIntegerConstant) PrintfUnsignedValue {
+    if (!parsed.negative) return .{ .value = parsed.magnitude, .overflow = parsed.overflow };
+    if (parsed.overflow) return .{ .value = std.math.maxInt(u64), .overflow = true };
+    return .{ .value = (~parsed.magnitude) +% 1 };
+}
+
+fn parsePrintfMagnitude(text: []const u8, base: u8) !PrintfMagnitude {
+    const value = std.fmt.parseInt(u64, text, base) catch |err| switch (err) {
+        error.Overflow => return .{ .value = std.math.maxInt(u64), .overflow = true },
+        else => return err,
+    };
+    return .{ .value = value };
 }
 
 fn parsePrintfIntegerConstant(arg: []const u8) !PrintfIntegerConstant {
@@ -9911,20 +9935,24 @@ fn parsePrintfIntegerConstant(arg: []const u8) !PrintfIntegerConstant {
             const hex_start = cursor;
             while (cursor < arg.len and std.ascii.isHex(arg[cursor])) : (cursor += 1) {}
             if (cursor == hex_start) return .{ .magnitude = 0, .negative = negative, .complete = false };
+            const magnitude = try parsePrintfMagnitude(arg[hex_start..cursor], base);
             return .{
-                .magnitude = try std.fmt.parseInt(u64, arg[hex_start..cursor], base),
+                .magnitude = magnitude.value,
                 .negative = negative,
                 .complete = cursor == arg.len,
+                .overflow = magnitude.overflow,
             };
         }
         while (cursor < arg.len and arg[cursor] >= '0' and arg[cursor] <= '7') : (cursor += 1) {}
     } else {
         while (cursor < arg.len and std.ascii.isDigit(arg[cursor])) : (cursor += 1) {}
     }
+    const magnitude = try parsePrintfMagnitude(arg[digits_start..cursor], base);
     return .{
-        .magnitude = try std.fmt.parseInt(u64, arg[digits_start..cursor], base),
+        .magnitude = magnitude.value,
         .negative = negative,
         .complete = cursor == arg.len,
+        .overflow = magnitude.overflow,
     };
 }
 
@@ -14088,6 +14116,15 @@ test "executor implements read and printf builtins" {
     try std.testing.expectEqual(@as(ExitStatus, 1), partial_integer_result.status);
     try std.testing.expectEqualStrings("123:0\n", partial_integer_result.stdout);
     try std.testing.expectEqualStrings("printf: numeric argument required\nprintf: numeric argument required\n", partial_integer_result.stderr);
+
+    var overflow_integer_lowered = try parseAndLower(std.testing.allocator, "printf '%d:%d:%u:%x:%u:%u\\n' 9223372036854775808 -9223372036854775809 18446744073709551616 0x10000000000000000 -9223372036854775809 -18446744073709551616");
+    defer overflow_integer_lowered.parsed.deinit();
+    defer overflow_integer_lowered.program.deinit();
+    var overflow_integer_result = try executor.executeProgram(overflow_integer_lowered.program, .{});
+    defer overflow_integer_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), overflow_integer_result.status);
+    try std.testing.expectEqualStrings("9223372036854775807:-9223372036854775808:18446744073709551615:ffffffffffffffff:9223372036854775807:18446744073709551615\n", overflow_integer_result.stdout);
+    try std.testing.expectEqualStrings("printf: numeric argument required\nprintf: numeric argument required\nprintf: numeric argument required\nprintf: numeric argument required\nprintf: numeric argument required\n", overflow_integer_result.stderr);
 
     var invalid_integer_order_lowered = try parseAndLower(std.testing.allocator, "printf '%d\\n' nope 2>&1");
     defer invalid_integer_order_lowered.parsed.deinit();
