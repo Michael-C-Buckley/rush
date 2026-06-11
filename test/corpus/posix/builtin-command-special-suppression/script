@@ -1,0 +1,11 @@
+A=outer
+A=inner command export B=ok
+printf 'assign:%s/%s\n' "$A" "$B"
+command eval 'if'
+printf 'eval:%s\n' "$?"
+command export -z
+printf 'export:%s\n' "$?"
+set -- a
+command shift 2
+printf 'shift:%s\n' "$?"
+printf 'after\n'

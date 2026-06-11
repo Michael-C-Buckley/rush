@@ -31,6 +31,12 @@ backquote-command-substitution	expansion	behavior	-
 backquote-double-quote-escaped-quote	expansion	behavior	Backslash before double-quote is removed inside a double-quoted backquote substitution
 builtin-dot-return	builtin	behavior	return in a dot script stops the script and supplies the dot exit status
 builtin-command-v-keyword	builtin	behavior	command -v and -V classify reserved words and report missing names with status 127
+builtin-command-alias-lookup	builtin	behavior	command -v and -V identify aliases
+builtin-command-clustered-options	builtin	behavior	command accepts clustered -p/-v/-V options
+builtin-command-declaration-utility	builtin	behavior	command wrapping export or readonly expands following assignment operands in assignment context
+builtin-command-special-suppression	builtin	behavior	command suppresses special builtin assignment persistence and shell-exit error consequences
+builtin-command-verbose-function	builtin	behavior	command -V identifies shell functions
+builtin-command-V-special	builtin	behavior	command -V identifies special builtins
 builtin-cd-double-slash-root	builtin	behavior	cd preserves an exactly-two-slash root while collapsing three or more slashes
 backquote-preserves-nonspecial-backslash	expansion	behavior	-
 backslash-escaped-space	expansion	behavior	-

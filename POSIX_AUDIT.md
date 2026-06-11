@@ -242,10 +242,10 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 - `$!` tracks the most recent real background external command pid.
 - `wait` can wait for tracked background pids and job IDs, returns operand statuses, and returns zero after waiting for all known jobs when invoked without operands.
 - `exec` replaces the Rush process image for CLI inherited-stdio external command paths, preserves assignment operands in the replacement environment, reports command-not-found and permission-denied failures with shell-exit consequences, and applies redirection-only fd changes to the current shell.
+- `command` utility behavior covers `-p`, `-v`, `-V`, clustered POSIX options, `--`, multiple lookup operands, aliases, shell functions, reserved words, special and regular builtins, default-path lookup without replacing child `PATH`, function lookup suppression, declaration-utility assignment expansion for wrapped `export`/`readonly`, and suppression of special-builtin assignment-prefix persistence and shell-exit error consequences.
 
 ### Partial / gaps
 
-- `command -v` and command lookup controls are baseline-only.
 - PATH hashing/caching and POSIX command search edge cases are missing.
 - Background job metadata is enough for `$!`/`wait`, but not for full job control.
 
@@ -277,7 +277,7 @@ Implemented or partially implemented:
 - `test` / `[` POSIX-defined argument-count grammar, unary and binary primaries, file predicates, and diagnostics
 - `read` baseline with non-interactive IFS/backslash, `-r`, EOF, and diagnostic coverage
 - `printf` baseline
-- `command` baseline
+- `command` utility behavior, including lookup modes, alias/function/special-builtin classification, default-path lookup, function suppression, declaration-utility expansion, and special-builtin property suppression
 - `eval` utility behavior, including argument concatenation, empty status, current-shell assignment/stdin/redirection side effects, exit, and special-builtin failure consequences
 - `exec` utility behavior, including process replacement for CLI inherited external commands, assignment environment, non-interactive shell-exit failures, permission-denied status, no-return function context, and redirection-only current-shell fd changes
 - `exit` baseline
@@ -297,7 +297,6 @@ Implemented or partially implemented:
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`vi` editing mode and complete job-control terminal semantics).
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
-- `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
 - Full POSIX alias substitution token timing remains partial; the builtin `alias`/`unalias` utility row is supported separately from those parser-level timing edge cases.
 
 ## 7. Shell options and modes

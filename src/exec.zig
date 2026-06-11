@@ -47,6 +47,7 @@ pub const ExecuteOptions = struct {
     arg_zero: []const u8 = "rush",
     source_path: ?[]const u8 = null,
     suppress_functions: bool = false,
+    suppress_special_builtin_properties: bool = false,
     suppress_errexit: bool = false,
     force_noninteractive_error_consequences: bool = false,
     default_path_lookup: bool = false,
@@ -988,6 +989,7 @@ pub const Executor = struct {
     arithmetic_error: expand.ArithmeticError = .{},
     had_expansion_error: bool = false,
     pending_command_abort: bool = false,
+    suppress_special_builtin_properties: bool = false,
     command_substitution_stderr: std.ArrayList(u8) = .empty,
     command_substitution_status: ?ExitStatus = null,
     script_stdin: ?[]const u8 = null,
@@ -4841,7 +4843,7 @@ pub const Executor = struct {
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
         var stdin_file: ?std.Io.File = null;
         defer if (stdin_file) |file| file.close(options.io.?);
-        const input_special_builtin = expanded.argv.len > 0 and isSpecialBuiltin(expanded.argv[0].text);
+        const input_special_builtin = expanded.argv.len > 0 and specialBuiltinPropertiesApply(options, expanded.argv[0].text);
         const effective_stdin = self.applyInputRedirections(expanded, stdin, options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(expanded, err, input_special_builtin);
 
         if (expanded.argv.len == 0) {
@@ -4879,7 +4881,7 @@ pub const Executor = struct {
 
         if (builtinForName(self.*, expanded.argv[0].text)) |builtin| {
             const builtin_name = expanded.argv[0].text;
-            const special_builtin = isSpecialBuiltin(builtin_name);
+            const special_builtin = specialBuiltinPropertiesApply(options, builtin_name);
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, special_builtin)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
@@ -5003,7 +5005,7 @@ pub const Executor = struct {
     }
 
     fn executeBuiltinWithAssignments(self: *Executor, builtin: BuiltinFn, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-        if (isSpecialBuiltin(command.argv[0].text)) {
+        if (specialBuiltinPropertiesApply(options, command.argv[0].text)) {
             self.applyAssignments(command.assignments) catch |err| switch (err) {
                 error.ReadonlyVariable => return self.assignmentErrorResult(),
                 else => return err,
@@ -5023,9 +5025,12 @@ pub const Executor = struct {
     // variable assignment error, a non-special builtin does not stop the
     // shell (POSIX XCU 2.8.1).
     fn runBuiltin(self: *Executor, builtin: BuiltinFn, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+        const previous_suppression = self.suppress_special_builtin_properties;
+        self.suppress_special_builtin_properties = previous_suppression or (options.suppress_special_builtin_properties and isSpecialBuiltin(command.argv[0].text));
+        defer self.suppress_special_builtin_properties = previous_suppression;
         return builtin(self, command, stdin, options) catch |err| switch (err) {
             error.ReadonlyVariable => blk: {
-                if (isSpecialBuiltin(command.argv[0].text)) self.pending_exit = 2;
+                if (specialBuiltinPropertiesApply(options, command.argv[0].text)) self.pending_exit = 2;
                 break :blk try errorResult(self.allocator, 2, command.argv[0].text, "readonly variable");
             },
             else => err,
@@ -5162,8 +5167,34 @@ pub const Executor = struct {
     }
 
     fn isDeclarationUtilityInvocation(words: []const ir.WordRef) bool {
-        if (words.len == 0) return false;
-        return std.mem.eql(u8, words[0].raw, "export") or std.mem.eql(u8, words[0].raw, "readonly");
+        return declarationUtilityIndex(words) != null;
+    }
+
+    fn declarationUtilityIndex(words: []const ir.WordRef) ?usize {
+        if (words.len == 0) return null;
+        if (isDeclarationUtilityName(words[0].raw)) return 0;
+        if (!std.mem.eql(u8, words[0].raw, "command")) return null;
+
+        var index: usize = 0;
+        while (index < words.len and std.mem.eql(u8, words[index].raw, "command")) {
+            index += 1;
+            while (index < words.len and words[index].raw.len > 1 and words[index].raw[0] == '-') {
+                const option = words[index].raw;
+                index += 1;
+                if (std.mem.eql(u8, option, "--")) break;
+                for (option[1..]) |flag| switch (flag) {
+                    'p' => {},
+                    'v', 'V' => return null,
+                    else => return null,
+                };
+            }
+        }
+
+        return if (index < words.len and isDeclarationUtilityName(words[index].raw)) index else null;
+    }
+
+    fn isDeclarationUtilityName(name: []const u8) bool {
+        return std.mem.eql(u8, name, "export") or std.mem.eql(u8, name, "readonly");
     }
 
     fn isDeclarationAssignmentWord(raw: []const u8) bool {
@@ -7633,6 +7664,14 @@ fn isSpecialBuiltin(name: []const u8) bool {
         std.mem.eql(u8, name, "unset");
 }
 
+fn specialBuiltinPropertiesApply(options: ExecuteOptions, name: []const u8) bool {
+    return isSpecialBuiltin(name) and !options.suppress_special_builtin_properties;
+}
+
+fn setSpecialBuiltinErrorConsequence(self: *Executor, status: ExitStatus) void {
+    if (!self.suppress_special_builtin_properties) self.pending_exit = status;
+}
+
 fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "prompt")) return builtinPrompt;
     if (self.prompt_builder != null) {
@@ -7725,7 +7764,7 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 }
 
 fn sourceUsageError(self: *Executor, name: []const u8, status: ExitStatus, message: []const u8) !CommandResult {
-    if (std.mem.eql(u8, name, ".")) self.pending_exit = status;
+    if (std.mem.eql(u8, name, ".")) setSpecialBuiltinErrorConsequence(self, status);
     return errorResult(self.allocator, status, name, message);
 }
 
@@ -7738,14 +7777,14 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
         const option = command.argv[index].text;
         index += 1;
         if (std.mem.eql(u8, option, "--")) break;
-        if (std.mem.eql(u8, option, "-p")) {
-            use_default_path = true;
-        } else if (std.mem.eql(u8, option, "-v")) {
-            lookup_mode = .terse;
-        } else if (std.mem.eql(u8, option, "-V")) {
+        for (option[1..]) |flag| switch (flag) {
+            'p' => use_default_path = true,
+            'v' => lookup_mode = .terse,
+            'V' => lookup_mode = .verbose,
+            else => return errorResult(self.allocator, 2, "command", "unsupported option"),
+        };
+        if (std.mem.indexOfScalar(u8, option[1..], 'V') != null) {
             lookup_mode = .verbose;
-        } else {
-            return errorResult(self.allocator, 2, "command", "unsupported option");
         }
     }
     if (lookup_mode != .none) {
@@ -7757,6 +7796,7 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     defer pre_expanded.deinit();
     var nested_options = options;
     nested_options.suppress_functions = true;
+    nested_options.suppress_special_builtin_properties = true;
     if (use_default_path) nested_options.default_path_lookup = true;
     return self.executeSimpleCommandWithInput(pre_expanded.command(command.span), stdin, nested_options);
 }
@@ -7791,23 +7831,37 @@ fn commandLookupMany(self: *Executor, options: ExecuteOptions, args: []const ir.
 }
 
 fn commandLookup(self: *Executor, options: ExecuteOptions, name: []const u8, use_default_path: bool, mode: CommandLookupMode) !CommandResult {
+    if (self.aliases.get(name)) |value| {
+        if (mode == .terse) {
+            const quoted = try singleQuote(self.allocator, value);
+            defer self.allocator.free(quoted);
+            return stdoutLineFmt(self.allocator, "alias {s}={s}", .{ name, quoted }, 0);
+        }
+        return stdoutLineFmt(self.allocator, "{s} is an alias for {s}", .{ name, value }, 0);
+    }
     if (isReservedAliasWord(name)) {
         return if (mode == .terse)
             stdoutLine(self.allocator, name, 0)
         else
             stdoutLineFmt(self.allocator, "{s} is a shell keyword", .{name}, 0);
     }
-    if (builtinForName(self.*, name) != null) {
-        return if (mode == .terse)
-            stdoutLine(self.allocator, name, 0)
-        else
-            stdoutLineFmt(self.allocator, "{s} is a shell builtin", .{name}, 0);
-    }
     if (self.functions.get(name) != null) {
         return if (mode == .terse)
             stdoutLine(self.allocator, name, 0)
         else
             stdoutLineFmt(self.allocator, "{s} is a function", .{name}, 0);
+    }
+    if (isSpecialBuiltin(name)) {
+        return if (mode == .terse)
+            stdoutLine(self.allocator, name, 0)
+        else
+            stdoutLineFmt(self.allocator, "{s} is a special shell builtin", .{name}, 0);
+    }
+    if (builtinForName(self.*, name) != null) {
+        return if (mode == .terse)
+            stdoutLine(self.allocator, name, 0)
+        else
+            stdoutLineFmt(self.allocator, "{s} is a shell builtin", .{name}, 0);
     }
     if (options.io) |io| {
         const found = if (use_default_path) try self.findExecutableInDefaultPath(io, name) else try self.findExecutableInPath(io, name);
@@ -8339,7 +8393,7 @@ fn builtinEval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         error.ParseError => blk: {
             // eval is a special builtin: a syntax error in the constructed
             // command stops the non-interactive shell (POSIX XCU 2.8.1).
-            self.pending_exit = 2;
+            setSpecialBuiltinErrorConsequence(self, 2);
             break :blk try errorResult(self.allocator, 2, "eval", "syntax error");
         },
         else => err,
@@ -8380,7 +8434,7 @@ fn builtinExit(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 }
 
 fn exitUsageError(self: *Executor, message: []const u8) !CommandResult {
-    self.pending_exit = 2;
+    setSpecialBuiltinErrorConsequence(self, 2);
     return errorResult(self.allocator, 2, "exit", message);
 }
 
@@ -8412,7 +8466,7 @@ fn setLoopControlBuiltin(self: *Executor, command: ir.SimpleCommand, kind: LoopC
 }
 
 fn loopControlUsageError(self: *Executor, name: []const u8, message: []const u8) !CommandResult {
-    self.pending_exit = 2;
+    setSpecialBuiltinErrorConsequence(self, 2);
     return errorResult(self.allocator, 2, name, message);
 }
 
@@ -9524,7 +9578,7 @@ fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 }
 
 fn trapError(self: *Executor, status: ExitStatus, message: []const u8) !CommandResult {
-    self.pending_exit = status;
+    setSpecialBuiltinErrorConsequence(self, status);
     return errorResult(self.allocator, status, "trap", message);
 }
 
@@ -9977,7 +10031,7 @@ fn appendShellSingleQuoted(allocator: std.mem.Allocator, out: *std.ArrayList(u8)
 }
 
 fn variableBuiltinUsageError(self: *Executor, name: []const u8, message: []const u8) !CommandResult {
-    self.pending_exit = 2;
+    setSpecialBuiltinErrorConsequence(self, 2);
     return errorResult(self.allocator, 2, name, message);
 }
 
@@ -9990,7 +10044,7 @@ fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         break :blk std.fmt.parseInt(usize, command.argv[1].text, 10) catch return shiftUsageError(self, "numeric argument required");
     };
     if (amount > positionals.params.len) {
-        self.pending_exit = 1;
+        setSpecialBuiltinErrorConsequence(self, 1);
         return errorResult(self.allocator, 1, "shift", "shift count out of range");
     }
     if (positionals.owned) {
@@ -10005,7 +10059,7 @@ fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
 }
 
 fn shiftUsageError(self: *Executor, message: []const u8) !CommandResult {
-    self.pending_exit = 2;
+    setSpecialBuiltinErrorConsequence(self, 2);
     return errorResult(self.allocator, 2, "shift", message);
 }
 
@@ -10651,7 +10705,7 @@ fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
 }
 
 fn timesUsageError(self: *Executor, message: []const u8) !CommandResult {
-    self.pending_exit = 2;
+    setSpecialBuiltinErrorConsequence(self, 2);
     return errorResult(self.allocator, 2, "times", message);
 }
 
@@ -10722,7 +10776,7 @@ fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
 }
 
 fn returnUsageError(self: *Executor, message: []const u8) !CommandResult {
-    self.pending_exit = 2;
+    setSpecialBuiltinErrorConsequence(self, 2);
     return errorResult(self.allocator, 2, "return", message);
 }
 
@@ -10777,7 +10831,7 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
 }
 
 fn setUsageError(self: *Executor, message: []const u8) !CommandResult {
-    self.pending_exit = 2;
+    setSpecialBuiltinErrorConsequence(self, 2);
     return errorResult(self.allocator, 2, "set", message);
 }
 
@@ -13048,7 +13102,7 @@ test "executor implements command eval exec and exit builtins" {
     defer command_lowered.program.deinit();
     var command_result = try command_executor.executeProgram(command_lowered.program, .{});
     defer command_result.deinit();
-    try std.testing.expectEqualStrings("builtin\necho\necho is a shell builtin\n", command_result.stdout);
+    try std.testing.expectEqualStrings("builtin\necho\necho is a function\n", command_result.stdout);
 
     var command_path = try parseAndLower(std.testing.allocator, "PATH=/nope; command -p sh -c 'echo path-ok'; printf '%s\n' \"$PATH\"");
     defer command_path.parsed.deinit();
