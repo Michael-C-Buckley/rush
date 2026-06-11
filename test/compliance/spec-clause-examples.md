@@ -21,6 +21,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `grammar-brace-group-separators` | `test/corpus/posix` | `grammar-brace-group` | brace groups recognize `{` and `}` as reserved words when separated by POSIX separators, including semicolon and newline before `}` |
 | `grammar-brace-group-pipeline-stage` | `test/corpus/posix` | `grammar-brace-group` | brace groups execute exactly once as first and non-first pipeline stages |
 | `grammar-compound-pipeline-first-stage` | `test/corpus/posix` | `grammar-compound-pipeline-first-stage` | representative POSIX compound commands parse and execute as first pipeline stages |
+| `grammar-compound-pipeline-nonfirst-stage` | `test/corpus/posix` | `grammar-compound-pipeline-nonfirst-stage` | representative POSIX subshell, for, case, and function-definition commands parse and execute as middle pipeline stages |
 | `expansion-parameter-pattern-character-classes` | `test/corpus/posix` | `expansion-parameter-pattern`, `expansion-parameter-pattern-bracket-expression` | POSIX character classes inside parameter pattern-removal operands |
 | `pathname-character-classes` | `test/corpus/posix` | `expansion-pathname`, `expansion-pathname-bracket-expressions` | POSIX character classes inside pathname bracket patterns |
 | `strict-syntax-stops-execution` | `test/corpus/posix` | `errors-syntax` | strict POSIX syntax diagnostics return status 2 and prevent non-interactive execution before or after the malformed command |

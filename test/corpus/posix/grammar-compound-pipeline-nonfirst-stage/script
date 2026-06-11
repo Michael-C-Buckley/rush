@@ -1,0 +1,5 @@
+printf 'sub\n' | ( read line; echo "$line" ) | { read line; echo "subshell:$line"; }
+printf 'for\n' | for line in $(cat); do echo "$line"; done | { read line; echo "for:$line"; }
+printf 'case\n' | case $(cat) in case) echo case ;; *) echo bad ;; esac | { read line; echo "case:$line"; }
+printf 'fn\n' | f_stage() { echo body; } | { if read line; then echo "function:$line"; else echo function:empty; fi; }
+echo "function-status:$?"
