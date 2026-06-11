@@ -10435,8 +10435,8 @@ fn readResourceUsage() CpuUsage {
     if (!zig_builtin.link_libc) return .{};
     var self_usage: std.c.rusage = undefined;
     var child_usage: std.c.rusage = undefined;
-    const self_ok = std.c.getrusage(0, &self_usage) == 0;
-    const child_ok = std.c.getrusage(-1, &child_usage) == 0;
+    const self_ok = std.c.getrusage(std.c.rusage.SELF, &self_usage) == 0;
+    const child_ok = std.c.getrusage(std.c.rusage.CHILDREN, &child_usage) == 0;
     return .{
         .self_user = if (self_ok) timevalCentiseconds(self_usage.utime) else 0,
         .self_system = if (self_ok) timevalCentiseconds(self_usage.stime) else 0,
@@ -10456,6 +10456,25 @@ fn formatCpuTime(allocator: std.mem.Allocator, centiseconds: u64) ![]u8 {
     const seconds = (centiseconds / 100) % 60;
     const hundredths = centiseconds % 100;
     return std.fmt.allocPrint(allocator, "{d}m{d}.{d:0>2}s", .{ minutes, seconds, hundredths });
+}
+
+test "times helpers format POSIX CPU time fields" {
+    const zero = try formatCpuTime(std.testing.allocator, 0);
+    defer std.testing.allocator.free(zero);
+    try std.testing.expectEqualStrings("0m0.00s", zero);
+
+    const centisecond = try formatCpuTime(std.testing.allocator, 1);
+    defer std.testing.allocator.free(centisecond);
+    try std.testing.expectEqualStrings("0m0.01s", centisecond);
+
+    const minute_rollover = try formatCpuTime(std.testing.allocator, 6101);
+    defer std.testing.allocator.free(minute_rollover);
+    try std.testing.expectEqualStrings("1m1.01s", minute_rollover);
+
+    try std.testing.expectEqual(@as(u64, 0), timevalCentiseconds(.{ .sec = 0, .usec = 9999 }));
+    try std.testing.expectEqual(@as(u64, 1), timevalCentiseconds(.{ .sec = 0, .usec = 10_000 }));
+    try std.testing.expectEqual(@as(u64, 123), timevalCentiseconds(.{ .sec = 1, .usec = 230_000 }));
+    try expectTimesOutputShape("0m0.00s 1m2.03s\n4m5.06s 7m8.09s\n");
 }
 
 fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -11266,13 +11285,37 @@ fn expectTimesOutputShape(output: []const u8) !void {
     const first = lines.next() orelse return error.MissingTimesLine;
     const second = lines.next() orelse return error.MissingTimesLine;
     const third = lines.next() orelse return error.MissingTimesLine;
-    try std.testing.expect(first.len != 0);
-    try std.testing.expect(second.len != 0);
     try std.testing.expectEqualStrings("", third);
-    try std.testing.expect(std.mem.indexOf(u8, first, "m") != null);
-    try std.testing.expect(std.mem.indexOf(u8, first, "s ") != null);
-    try std.testing.expect(std.mem.indexOf(u8, second, "m") != null);
-    try std.testing.expect(std.mem.endsWith(u8, second, "s"));
+    try std.testing.expect(lines.next() == null);
+    try expectTimesLineShape(first);
+    try expectTimesLineShape(second);
+}
+
+fn expectTimesLineShape(line: []const u8) !void {
+    var fields = std.mem.splitScalar(u8, line, ' ');
+    const user = fields.next() orelse return error.MissingTimesField;
+    const system = fields.next() orelse return error.MissingTimesField;
+    try std.testing.expect(fields.next() == null);
+    try expectCpuTimeFieldShape(user);
+    try expectCpuTimeFieldShape(system);
+}
+
+fn expectCpuTimeFieldShape(field: []const u8) !void {
+    const m_index = std.mem.findScalar(u8, field, 'm') orelse return error.InvalidCpuTimeField;
+    const dot_index = std.mem.findScalarPos(u8, field, m_index + 1, '.') orelse return error.InvalidCpuTimeField;
+    const s_index = std.mem.findScalarPos(u8, field, dot_index + 1, 's') orelse return error.InvalidCpuTimeField;
+    if (s_index + 1 != field.len) return error.InvalidCpuTimeField;
+    if (dot_index + 3 != s_index) return error.InvalidCpuTimeField;
+    try expectDigits(field[0..m_index]);
+    try expectDigits(field[m_index + 1 .. dot_index]);
+    try expectDigits(field[dot_index + 1 .. s_index]);
+}
+
+fn expectDigits(bytes: []const u8) !void {
+    if (bytes.len == 0) return error.ExpectedDigits;
+    for (bytes) |byte| {
+        if (!std.ascii.isDigit(byte)) return error.ExpectedDigits;
+    }
 }
 
 fn parseAndLower(allocator: std.mem.Allocator, source: []const u8) !LoweredForTest {

@@ -52,7 +52,7 @@ Recent notable capabilities:
 - POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline with nested parameter/command preprocessing plus representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Non-POSIX parameter expansion extension forms are excluded from POSIX scoring and tracked separately; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
-- POSIX builtins now include supported `umask` and `trap` plus baseline `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `wait`, `times`, `getopts`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
+- POSIX builtins now include supported `umask`, `times`, and `trap` plus baseline `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `wait`, `getopts`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
 - Cross-target compile-only coverage is tracked by `zig build cross-check`, which runs native tests and compiles the test binary for representative Linux, macOS, FreeBSD, OpenBSD, and NetBSD targets. Foreign-target runtime validation remains separate follow-up work; use `scripts/check-runtime-portability.sh` on actual Linux/BSD hosts and record the host evidence separately from the compile-only compliance row.
@@ -288,7 +288,7 @@ Implemented or partially implemented:
 - `shift` baseline
 - `umask` with current-shell mask effects, subshell/pipeline isolation, octal/default output, `-S`, POSIX permission-bit symbolic operands, and diagnostics
 - `wait` builtin with tracked pid/job operands, no-operand all-job semantics, and last-operand status
-- `times` deterministic baseline
+- `times` POSIX-style resource usage output
 - `getopts` baseline
 - `trap` utility behavior with reusable listing output, reset/null-ignore actions, `EXIT` trap execution, common catchable signal traps, invalid signal diagnostics, and subshell/command-substitution reset behavior
 - `alias` / `unalias` utility behavior, including POSIX-format listing/query output, reusable value quoting, POSIX alias-name operands, current-shell removal, `unalias -a`, and `unalias --` operands
@@ -301,7 +301,7 @@ Implemented or partially implemented:
 - `test` baseline lacks many operators and edge cases.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`vi` editing mode and complete job-control terminal semantics).
 - `env` does not support arguments/options.
-- `times` currently emits a deterministic baseline instead of real process usage.
+- Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
 - `exec` is not a true process replacement.
 - Full POSIX alias substitution token timing remains partial; the builtin `alias`/`unalias` utility row is supported separately from those parser-level timing edge cases.

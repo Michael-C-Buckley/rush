@@ -82,7 +82,7 @@ builtin-test-integer-comparison	builtin	builtin	test integer binary comparison o
 builtin-test-invalid-expression	builtin	negative;builtin	-
 builtin-test-string-comparison	builtin	builtin	test string equality inequality non-empty and empty operators
 builtin-test-string-order	builtin	builtin	-
-builtin-times	builtin	builtin	-
+builtin-times	builtin	builtin	Runtime-dependent CPU values; corpus checker validates the POSIX two-line time field shape instead of fixed totals
 builtin-trap-clear	signals	builtin	-
 builtin-trap-exit	signals	builtin	-
 builtin-trap-int-signal	signals	builtin	-
