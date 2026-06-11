@@ -209,6 +209,7 @@ option-set-o-listing	options	option	set -o lists current supported shell option 
 option-set-noexec	options	option	set -n parses remaining input without executing subsequent commands
 option-set-o-noexec	options	option	set -o noexec parses remaining input without executing subsequent commands
 option-set-plus-o-listing	options	option	set +o lists reusable commands for every supported shell option
+option-set-positionals	options	option	set option parsing can be followed by positional operands, with --, -, and + terminators preserving POSIX operand behavior
 option-set-plus-o-reinput	options	option	set +o output can be re-input to restore representative option states
 set-o-nounset-default-operator	options	option	-
 set-verbose	options	option	-

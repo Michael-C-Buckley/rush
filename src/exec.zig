@@ -9326,30 +9326,50 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     _ = stdin;
 
     if (command.argv.len == 1) return printShellVariables(self);
-    if (command.argv.len >= 2 and std.mem.eql(u8, command.argv[1].text, "--")) {
-        try setCurrentPositionals(self, command.argv[2..]);
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-")) {
-        self.shell_options.xtrace = false;
-        self.shell_options.verbose = false;
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and applyShellOptionShort(&self.shell_options, command.argv[1].text)) {
-        if (options.interactive) self.shell_options.noexec = false;
-        return emptyResult(self.allocator, 0);
-    }
-    if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
-    if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "+o")) return printShellOptions(self, true);
-    if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
-        const enabled = command.argv[1].text[0] == '-';
-        if (applyShellOptionName(&self.shell_options, command.argv[2].text, enabled)) {
-            if (options.interactive) self.shell_options.noexec = false;
-            return emptyResult(self.allocator, 0);
+
+    var index: usize = 1;
+    var set_positionals = false;
+    while (index < command.argv.len) {
+        const arg = command.argv[index].text;
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            set_positionals = true;
+            break;
         }
-        return setUsageError(self, "unknown option name");
+        if (std.mem.eql(u8, arg, "-")) {
+            self.shell_options.xtrace = false;
+            self.shell_options.verbose = false;
+            index += 1;
+            set_positionals = index < command.argv.len;
+            break;
+        }
+        if (std.mem.eql(u8, arg, "+")) {
+            index += 1;
+            set_positionals = index < command.argv.len;
+            break;
+        }
+        if (std.mem.eql(u8, arg, "-o") or std.mem.eql(u8, arg, "+o")) {
+            if (index + 1 == command.argv.len) return printShellOptions(self, arg[0] == '+');
+            const enabled = arg[0] == '-';
+            index += 1;
+            if (!applyShellOptionName(&self.shell_options, command.argv[index].text, enabled)) return setUsageError(self, "unknown option name");
+            if (options.interactive) self.shell_options.noexec = false;
+            index += 1;
+            continue;
+        }
+        if (arg.len >= 2 and (arg[0] == '-' or arg[0] == '+')) {
+            if (!applyShellOptionShort(&self.shell_options, arg)) return setUsageError(self, "unsupported arguments");
+            if (options.interactive) self.shell_options.noexec = false;
+            index += 1;
+            continue;
+        }
+
+        set_positionals = true;
+        break;
     }
-    return setUsageError(self, "unsupported arguments");
+
+    if (set_positionals) try setCurrentPositionals(self, command.argv[index..]);
+    return emptyResult(self.allocator, 0);
 }
 
 fn setUsageError(self: *Executor, message: []const u8) !CommandResult {
@@ -11036,6 +11056,45 @@ test "executor implements global positional parameters via set --" {
     defer result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("a b/c/3\n<a b>\n<c>\n<>\n<a b:c:>\nc/2\n", result.stdout);
+}
+
+test "executor parses set options before positional operands" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\set -e -- a b
+        \\echo "first:$#:$1:$2"
+        \\case $- in *e*) echo e-on ;; *) echo e-off ;; esac
+        \\set +e c d
+        \\echo "second:$#:$1:$2"
+        \\case $- in *e*) echo e-stale ;; *) echo e-off ;; esac
+        \\set -o nounset n1 n2
+        \\echo "named:$#:$1:$2:${RUSH_UNSET_FOR_TEST-fallback}"
+        \\case $- in *u*) echo u-on ;; *) echo u-off ;; esac
+        \\set +o nounset z
+        \\echo "disabled:$#:$1:${RUSH_UNSET_FOR_TEST-fallback}"
+        \\case $- in *u*) echo u-stale ;; *) echo u-off ;; esac
+        \\set -f -- -x y
+        \\echo "terminator:$#:$1:$2"
+        \\case $- in *f*) echo f-on ;; *) echo f-off ;; esac
+        \\set - a b
+        \\echo "hyphen:$#:$1:$2"
+        \\set + plus
+        \\echo "plus:$#:$1"
+        \\set plain operand
+        \\echo "plain:$#:$1:$2"
+        \\set -f --
+        \\echo "clear:$#:${1-unset}"
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("first:2:a:b\ne-on\nsecond:2:c:d\ne-off\nnamed:2:n1:n2:fallback\nu-on\ndisabled:1:z:fallback\nu-off\nterminator:2:-x:y\nf-on\nhyphen:2:a:b\nplus:1:plus\nplain:2:plain:operand\nclear:0:unset\n", result.stdout);
+    try std.testing.expect(!executor.shell_options.errexit);
+    try std.testing.expect(!executor.shell_options.nounset);
+    try std.testing.expect(executor.shell_options.noglob);
 }
 
 test "executor persists assignment prefixes for POSIX special builtins" {

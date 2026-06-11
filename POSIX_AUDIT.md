@@ -322,6 +322,7 @@ Implemented or partially implemented:
   - `set -x` / `set +x` xtrace baseline
   - `set -v` / `set +v` verbose baseline
   - `$-` reflects representative current short shell option flags
+  - option parsing followed by positional operands, including `--`, `-`, and `+` terminator behavior
   - `set -o name` / `set +o name` for supported options
   - `set -o` option state listing in Rush's stable human-readable format
   - `set +o` reusable option-state command listing for supported options
