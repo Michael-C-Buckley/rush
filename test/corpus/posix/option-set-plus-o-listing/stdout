@@ -1,0 +1,9 @@
+set +o allexport
+set +o errexit
+set +o noclobber
+set +o noexec
+set +o noglob
+set +o nounset
+set +o pipefail
+set +o verbose
+set +o xtrace

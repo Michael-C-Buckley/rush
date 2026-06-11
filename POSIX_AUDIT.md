@@ -321,16 +321,16 @@ Implemented or partially implemented:
   - `set -x` / `set +x` xtrace baseline
   - `set -v` / `set +v` verbose baseline
   - `set -o name` / `set +o name` for supported options
+  - `set -o` option state listing in Rush's stable human-readable format
+  - `set +o` reusable option-state command listing for supported options
 
 ### Partial / gaps
 
 - Errexit is baseline-only and lacks many POSIX corner cases around compound commands, command substitutions, and AND-OR/pipeline contexts.
 - Xtrace/verbose exact output ordering is baseline-only.
 - Unsupported POSIX options remain:
-  - `-a`
   - `-b`
   - `-m`
-  - `-n`
   - others as applicable
 
 ## 8. Interactive behavior and job control

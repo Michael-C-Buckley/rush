@@ -247,3 +247,5 @@ read first rest <<'EOF1'\none\\\ntwo three\nEOF1\nread -r raw <<'EOF2'\none\\\nt
 rm -f in; printf '%s' 'trail\\' >in; read cooked <in; cooked_status=$?; read -r raw <in; raw_status=$?; printf '<%s>:%s|<%s>:%s\n' "$cooked" "$cooked_status" "$raw" "$raw_status"; rm -f in
 set -n; echo bad
 set -o noexec; echo bad
+set -e; set -o | grep "^errexit[[:space:]]*on" >/dev/null && echo set-o-errexit:on
+set -efuC; saved=$(set +o); set +efuC; eval "$saved"; case $- in *e*) echo e:on;; *) echo e:off;; esac; case $- in *f*) echo f:on;; *) echo f:off;; esac; case $- in *u*) echo u:on;; *) echo u:off;; esac; case $- in *C*) echo C:on;; *) echo C:off;; esac

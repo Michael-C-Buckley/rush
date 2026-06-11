@@ -1,0 +1,9 @@
+allexport	off
+errexit	off
+noclobber	off
+noexec	off
+noglob	off
+nounset	off
+pipefail	off
+verbose	off
+xtrace	off

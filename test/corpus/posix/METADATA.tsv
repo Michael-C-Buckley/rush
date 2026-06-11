@@ -205,8 +205,11 @@ set-nounset	options	option	-
 set-o-errexit-condition	options	option	-
 set-o-noclobber	options	option	-
 set-o-noglob	options	option	-
+option-set-o-listing	options	option	set -o lists current supported shell option states in Rush's stable human-readable format
 option-set-noexec	options	option	set -n parses remaining input without executing subsequent commands
 option-set-o-noexec	options	option	set -o noexec parses remaining input without executing subsequent commands
+option-set-plus-o-listing	options	option	set +o lists reusable commands for every supported shell option
+option-set-plus-o-reinput	options	option	set +o output can be re-input to restore representative option states
 set-o-nounset-default-operator	options	option	-
 set-verbose	options	option	-
 set-xtrace	options	option	-
