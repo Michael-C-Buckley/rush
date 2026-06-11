@@ -20,22 +20,22 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `406` rows
-- `scripts/check-posix-corpus.sh`: `395` expected-output POSIX cases
+- `scripts/check-posix-corpus.sh`: `396` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `225` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `277` cases, `554` comparisons across dash and bash POSIX mode
+- `scripts/check-system-shell-corpus.sh`: `278` cases, `556` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
 - tracked items: `406`
 - scored POSIX items: `402`
-- supported: `375`
-- baseline: `24`
+- supported: `376`
+- baseline: `23`
 - partial: `2`
 - missing: `1`
 - out of scope: `4`
-- strict supported only: `93.3%`
+- strict supported only: `93.5%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `97.6%`
+- weighted progress: `97.7%`
 
 Recent notable capabilities:
 
@@ -235,7 +235,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 - Brace group executes in current executor.
 - Functions have call frames and positional parameters.
 - Global positional parameters via `set --`.
-- POSIX special builtin classification baseline.
+- POSIX special builtin classification and assignment persistence are supported across all 15 special builtins.
 - POSIX special builtin error consequences are modeled for the audited XCU 2.8.1/2.15 cases: expansion/redirection failures, invalid options or operands where applicable, and utility-semantic failures stop non-interactive execution across all 15 special builtins.
 - Exit status propagation and `$?` baseline.
 - Logical `PWD`/`OLDPWD` tracking for `cd`/`pwd`, including valid inherited logical `PWD`, `CDPATH`, `cd -`, and `-L`/`-P` behavior.

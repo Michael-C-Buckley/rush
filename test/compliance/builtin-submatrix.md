@@ -6,7 +6,7 @@ This submatrix expands builtin-related rows in `posix-shell.tsv`. It separates P
 
 | group | current state | primary gaps |
 | --- | --- | --- |
-| POSIX special builtins | classification, assignment persistence, and error consequences supported | utility-specific breadth remains on broad builtin rows |
+| POSIX special builtins | classification, assignment persistence, and error consequences supported | utility-specific breadth remains on broad utility rows |
 | Core regular builtins | broad baseline for common scripts | option/operand completeness and negative diagnostics |
 | Job-control builtins | background job table, wait baseline, jobs/kill operands, fg/bg, stopped jobs | remaining pipeline/asynchronous-list signal edge cases |
 | Rush helper builtins | useful implementation helpers | keep out of POSIX score unless they affect shell semantics |
@@ -37,7 +37,7 @@ High-risk rows:
 - `errors-special-builtin` — supported after the all-special-builtin utility-error audit.
 - `errors-special-builtin-redirection`
 - `errors-special-builtin-expansion`
-- `builtin-special`
+- `builtin-special` — supported after the all-special classification and assignment-persistence audit.
 
 ## Regular POSIX utilities implemented as builtins
 
@@ -73,4 +73,4 @@ The POSIX negative corpus covers representative builtin diagnostics for `test`, 
 
 ## Promotion guidance
 
-Builtin rows should usually stay `baseline` while they are broad utility-level rows. Promote smaller `spec_clause` rows first, such as individual `test` predicate groups or `read -r` behavior, after unit, POSIX corpus, and negative corpus evidence exists. Special-builtin consequence rows require non-interactive exit behavior plus negative corpus coverage before support claims.
+Builtin rows should usually stay `baseline` while they are broad utility-level rows. Promote smaller `spec_clause` rows first, such as individual `test` predicate groups or `read -r` behavior, after unit, POSIX corpus, and negative corpus evidence exists. The `builtin-special` row is narrow enough to stay supported after exhaustive classification and assignment-persistence evidence across the 15 POSIX special builtins. Special-builtin consequence rows require non-interactive exit behavior plus negative corpus coverage before support claims.

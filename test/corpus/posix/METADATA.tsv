@@ -38,6 +38,7 @@ builtin-command-declaration-utility	builtin	behavior	command wrapping export or 
 builtin-command-special-suppression	builtin	behavior	command suppresses special builtin assignment persistence and shell-exit error consequences
 builtin-command-verbose-function	builtin	behavior	command -V identifies shell functions
 builtin-command-V-special	builtin	behavior	command -V identifies special builtins
+builtin-special-classification-assignment	builtin	behavior	all POSIX special builtins are classified and assignment prefixes persist
 builtin-cd-double-slash-root	builtin	behavior	cd preserves an exactly-two-slash root while collapsing three or more slashes
 backquote-preserves-nonspecial-backslash	expansion	behavior	-
 backslash-escaped-space	expansion	behavior	-

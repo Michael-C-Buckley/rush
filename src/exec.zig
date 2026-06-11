@@ -13056,18 +13056,86 @@ test "executor parses set options before positional operands" {
     try std.testing.expect(executor.shell_options.noglob);
 }
 
+test "executor classifies POSIX special builtins" {
+    const special_names = [_][]const u8{
+        ":",    ".",     "break",  "continue", "eval",
+        "exec", "exit",  "export", "readonly", "return",
+        "set",  "shift", "times",  "trap",     "unset",
+    };
+    for (&special_names) |name| try std.testing.expect(isSpecialBuiltin(name));
+
+    const regular_names = [_][]const u8{
+        "alias", "cd",      "command", "echo", "env",  "false",
+        "pwd",   "read",    "source",  "test", "true", "umask",
+        "wait",  "printf",  "getopts", "jobs", "fg",   "bg",
+        "kill",  "unalias",
+    };
+    for (&regular_names) |name| try std.testing.expect(!isSpecialBuiltin(name));
+}
+
 test "executor persists assignment prefixes for POSIX special builtins" {
     var lowered = try parseAndLower(std.testing.allocator,
         \\FOO=regular echo ok; echo ${FOO:-unset}; FOO=special export BAR=value; echo $FOO/$BAR
+        \\COLON=colon :
+        \\DOT=dot . /dev/null
+        \\EVAL=eval eval :
+        \\EXEC=exec exec
+        \\EXPORT=export export RUSH_SPECIAL_EXPORT=ok
+        \\READONLY=readonly readonly RUSH_SPECIAL_RO=ok
+        \\SET=set set -- one two
+        \\SHIFT=shift shift
+        \\TIMES=times times >/dev/null
+        \\TRAP=trap trap - EXIT
+        \\UNSET=unset unset RUSH_SPECIAL_MISSING
+        \\while :; do BREAK=break break; done
+        \\n=0
+        \\while [ "$n" -lt 1 ]; do n=$((n + 1)); CONTINUE=continue continue; done
+        \\f() { RETURN=return return; }
+        \\f
+        \\printf '%s\n' "$COLON:$DOT:$EVAL:$EXEC:$EXPORT:$READONLY:$SET:$SHIFT:$TIMES:$TRAP:$UNSET:$BREAK:$CONTINUE:$RETURN:$#:${1-unset}"
     );
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
-    var result = try executor.executeProgram(lowered.program, .{});
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
     defer result.deinit();
-    try std.testing.expectEqualStrings("ok\nunset\nspecial/value\n", result.stdout);
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        "ok\nunset\nspecial/value\n" ++
+            "colon:dot:eval:exec:export:readonly:set:shift:times:trap:unset:break:continue:return:1:two\n",
+        result.stdout,
+    );
+    try std.testing.expectEqualStrings("", result.stderr);
     try std.testing.expectEqualStrings("special", executor.getEnv("FOO").?);
+
+    const persistent_assignments = [_]struct { name: []const u8, value: []const u8 }{
+        .{ .name = "COLON", .value = "colon" },
+        .{ .name = "DOT", .value = "dot" },
+        .{ .name = "EVAL", .value = "eval" },
+        .{ .name = "EXEC", .value = "exec" },
+        .{ .name = "EXPORT", .value = "export" },
+        .{ .name = "READONLY", .value = "readonly" },
+        .{ .name = "SET", .value = "set" },
+        .{ .name = "SHIFT", .value = "shift" },
+        .{ .name = "TIMES", .value = "times" },
+        .{ .name = "TRAP", .value = "trap" },
+        .{ .name = "UNSET", .value = "unset" },
+        .{ .name = "BREAK", .value = "break" },
+        .{ .name = "CONTINUE", .value = "continue" },
+        .{ .name = "RETURN", .value = "return" },
+    };
+    for (&persistent_assignments) |assignment| try std.testing.expectEqualStrings(assignment.value, executor.getEnv(assignment.name).?);
+
+    var exit_lowered = try parseAndLower(std.testing.allocator, "EXIT=exit exit 7");
+    defer exit_lowered.parsed.deinit();
+    defer exit_lowered.program.deinit();
+    var exit_executor = Executor.init(std.testing.allocator);
+    defer exit_executor.deinit();
+    var exit_result = try exit_executor.executeProgram(exit_lowered.program, .{});
+    defer exit_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 7), exit_result.status);
+    try std.testing.expectEqualStrings("exit", exit_executor.getEnv("EXIT").?);
 }
 
 test "executor implements readonly shift umask wait and times builtins" {
