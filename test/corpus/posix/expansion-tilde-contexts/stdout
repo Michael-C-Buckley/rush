@@ -1,0 +1,16 @@
+</tmp/rush-home>
+</tmp/rush-home/x>
+<~>
+</tmp/rush-home/quoted>
+<~>
+<~/x>
+<a~>
+<cmd=~>
+empty:1:/x:unset
+A=/tmp/rush-home
+B=/tmp/rush-home/x
+C=/tmp/rush-home:/tail
+D=prefix:/tmp/rush-home
+E=~
+F=~
+G=/tmp/rush-home/quoted

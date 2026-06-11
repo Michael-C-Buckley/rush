@@ -132,7 +132,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 
 ### Supported / baseline
 
-- Tilde expansion for `~` and `~/...` using `HOME`.
+- Tilde expansion for `~` and `~/...` using `HOME`, empty `HOME`, quoted/non-initial literal cases, assignment contexts after `=` and `:`, and `~user` lookup through the POSIX user database when libc support is available.
 - Parameter expansion:
   - `$name`
   - `${name}`
@@ -177,14 +177,12 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 - Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; arithmetic-expression preprocessing now recursively handles nested parameter and command substitutions plus focused quote/backslash edge cases in representative POSIX cases. Full parser/scanner unification for recursive and extension syntax remains larger tracked work, but it is not a known POSIX gap for the supported `expansion-parameter-basic` row.
 - Non-POSIX extension forms are intentionally outside the POSIX claim. Rush should eventually support string-oriented substring `${parameter:offset[:length]}`, replacement `${parameter/pattern/repl}`, case modification `${parameter^}`/`${parameter,}`, and indirect/name-prefix operations `${!name}`/`${!prefix*}` in an extension mode. Bash mode has a minimal indexed-array slice for arithmetic `name[index]=word` assignment subscripts, with unquoted whitespace allowed inside the subscript, and `${name[index]}` expansion subscripts against the array runtime model; broader Bash array semantics such as compound assignment, negative relative indices, whole-array expansion, and array-specific parameter operations remain outside this baseline. Transformation flags such as `${parameter@Q}` are not in Rush's planned extension-mode scope for now; keep them as unsupported negative coverage until a concrete compatibility use case justifies design work. Representative unsupported extension forms reject with bad-substitution diagnostics and are tracked in `extensions-parameter-expansion` instead of counted as POSIX gaps; `${name[index]}` remains on that bad-substitution path outside Bash mode.
 - Pathname expansion remains bytewise; locale-specific collation, equivalence classes, and multi-character collating elements are outside the current model.
-- Tilde expansion does not support `~user`.
 - Unquoted `$@`/`$*` behavior is acceptable for common cases but still needs more spec-derived edge-case coverage.
 
 ### Missing / gaps
 
 - Full quote-aware expansion and field generation in all nested contexts beyond the covered parameter operator-word cases.
 - Full pathname expansion semantics.
-- `~user` lookup.
 - POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered malformed braced-parameter and arithmetic cases.
 
 ## 4. Redirection

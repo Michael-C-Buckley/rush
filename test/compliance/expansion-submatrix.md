@@ -8,7 +8,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 
 | POSIX area | manifest rows | current status | primary gaps |
 | --- | --- | --- | --- |
-| Tilde expansion | `expansion-tilde`, `expansion-assignment-prefix-context`, `expansion-tilde-named-user` | baseline | unset HOME edge cases |
+| Tilde expansion | `expansion-tilde`, `expansion-assignment-prefix-context`, `expansion-tilde-named-user` | supported | none known for the tracked POSIX-first surface |
 | Parameter expansion | `expansion-parameter-*`, `extensions-parameter-expansion` | supported; extensions out of scope | larger parser work and non-POSIX extension implementation tracked outside POSIX scoring |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported | none known for the tracked POSIX-first surface |
 | Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | supported | none known for the tracked POSIX-first surface |
@@ -21,13 +21,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 
 Manifest row: `expansion-tilde`
 
-Current Rush behavior supports `~` and `~/...` using `HOME`, with POSIX and differential corpus coverage in `expansion-tilde-home`. Named-user expansion is covered by `expansion-tilde-named-user`.
-
-Recommended cases:
-
-- assignment contexts where tilde expansion is required or not required
-- unset/empty `HOME` behavior
-- explicit decision on whether to support `~user`
+Current Rush behavior supports unquoted `~` and `~/...` using `HOME`, empty `HOME`, quoted/non-initial literal cases, assignment contexts after `=` and `:`, and named-user expansion through the POSIX user database. These are covered by `expansion-tilde-home`, `expansion-tilde-contexts`, `expansion-assignment-prefix-context`, `expansion-tilde-named-user`, and `expansion-quoted-default-word-tilde`. If `HOME` is unset, POSIX leaves the result unspecified; Rush keeps the tilde-prefix literal, so unset `HOME` is not counted as a POSIX compliance gap.
 
 ## Parameter expansion
 

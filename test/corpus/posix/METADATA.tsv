@@ -149,6 +149,7 @@ expansion-parameter-word-nested-substitutions	expansion	behavior	parameter opera
 expansion-parameter-pattern-nested-word	expansion	behavior	parameter pattern-removal words keep quoted braces and command substitutions inside the pattern operand
 expansion-parameter-word-quote-context	expansion	behavior	quotes inside parameter operator words suppress field splitting and pathname expansion for their own bytes
 expansion-quoted-default-word-tilde	expansion	behavior	tilde in a parameter default word expands only when the expansion is unquoted
+expansion-tilde-contexts	expansion	behavior	tilde expansion applies only to unquoted tilde-prefixes at word start or assignment =/: positions, including empty HOME behavior
 expansion-null-colon-operators	expansion	behavior	-
 expansion-pathname-sorted	expansion	behavior	-
 expansion-quoted-backquote-substitution	expansion	behavior	-

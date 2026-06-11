@@ -1,0 +1,4 @@
+HOME=/tmp/rush-home
+printf '<%s>\n' ~ ~/x ~"" ~/"quoted" "~" "~/x" a~ cmd=~
+HOME=; set -- ~ ~/x; printf 'empty:%s:%s:%s\n' "$#" "${1-unset}" "${2-unset}"
+HOME=/tmp/rush-home A=~ B=~/x C=~:/tail D=prefix:~ E=~"" F="~" G=~/"quoted" command -p env | grep -E '^[A-G]=' | sort
