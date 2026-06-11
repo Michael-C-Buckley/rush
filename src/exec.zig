@@ -3906,7 +3906,8 @@ pub const Executor = struct {
         }
 
         var child = childFromPid(pid);
-        errdefer child.kill(io);
+        var kill_child_on_error = true;
+        errdefer if (kill_child_on_error) child.kill(io);
 
         processSetPgrp(pid, pid) catch |err| switch (err) {
             error.ProcessAlreadyExec, error.ProcessNotFound => {},
@@ -3918,8 +3919,31 @@ pub const Executor = struct {
         defer restoreForegroundTerminal(terminal);
         try giveTerminalToForegroundPgrp(pid, terminal);
 
-        const term = try child.wait(io);
-        return emptyResult(self.allocator, exitStatusFromTerm(term));
+        const wait_status = try waitForegroundProcess(pid);
+        const status = exitStatusFromWaitStatus(wait_status);
+        if (std.posix.W.IFSTOPPED(wait_status)) {
+            const command = try self.allocator.dupe(u8, std.mem.trim(u8, pipelineText(program, pipeline), " \t\r\n;&"));
+            errdefer self.allocator.free(command);
+            try self.background_jobs.append(self.allocator, .{
+                .id = self.next_job_id,
+                .pid = @intCast(pid),
+                .pgrp = @intCast(pid),
+                .command = command,
+                .child = child,
+                .state = .stopped,
+                .status = status,
+            });
+            const job = &self.background_jobs.items[self.background_jobs.items.len - 1];
+            saveJobTerminalModes(job);
+            self.queueJobNotification(job) catch {};
+            self.selectCurrentJob(self.next_job_id);
+            self.next_job_id += 1;
+            kill_child_on_error = false;
+        } else {
+            child.id = null;
+            kill_child_on_error = false;
+        }
+        return emptyResult(self.allocator, status);
     }
 
     fn redirectionFailureDiagnostic(self: *Executor, command: ir.SimpleCommand, err: anyerror) !?[]u8 {
@@ -6489,6 +6513,34 @@ fn prepareForegroundTerminal(enabled: bool) !?ForegroundTerminal {
         else => return err,
     };
     return .{ .tty_fd = tty_fd, .previous_pgrp = previous_pgrp };
+}
+
+fn waitForegroundProcess(pid: std.posix.pid_t) !u32 {
+    if (zig_builtin.link_libc) {
+        while (true) {
+            var status: c_int = 0;
+            const rc = std.c.waitpid(pid, &status, @intCast(std.posix.W.UNTRACED));
+            switch (std.c.errno(rc)) {
+                .SUCCESS => return @bitCast(status),
+                .INTR => continue,
+                .CHILD => return error.ProcessNotFound,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    if (zig_builtin.os.tag == .linux) {
+        while (true) {
+            var status: u32 = 0;
+            const rc = std.os.linux.waitpid(pid, &status, std.posix.W.UNTRACED);
+            switch (std.os.linux.errno(rc)) {
+                .SUCCESS => return status,
+                .INTR => continue,
+                .CHILD => return error.ProcessNotFound,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    return error.Unsupported;
 }
 
 fn giveTerminalToForegroundChild(child: *std.process.Child, terminal: ?ForegroundTerminal) !void {
@@ -13387,6 +13439,127 @@ test "interactive foreground mixed pipeline gives terminal to wrapper process gr
 
     try std.testing.expect(stage_pgrp != shell_pgrp);
     try std.testing.expectEqual(stage_pgrp, stage_tpgid);
+}
+
+test "interactive foreground mixed pipeline stopped jobs can be resumed" {
+    var master: c_int = -1;
+    var slave: c_int = -1;
+    if (openpty(&master, &slave, null, null, null) != 0) return error.SkipZigTest;
+    defer _ = close(master);
+    defer _ = close(slave);
+
+    const child_pid = fork();
+    if (child_pid < 0) return error.SkipZigTest;
+    if (child_pid == 0) {
+        _ = close(master);
+        runStoppedForegroundMixedPipelinePtyTest(slave) catch |err| switch (err) {
+            error.SkipZigTest => exitForkedChild(77),
+            else => exitForkedChild(1),
+        };
+        exitForkedChild(0);
+    }
+
+    try expectPtyTestChildSucceeded(child_pid);
+}
+
+fn runStoppedForegroundMixedPipelinePtyTest(slave: c_int) anyerror!void {
+    if (std.c.setsid() < 0) return error.SkipZigTest;
+    const tiocsctty = comptime blk: {
+        if (@hasDecl(std.c.T, "IOCSCTTY")) break :blk std.c.T.IOCSCTTY;
+        if (@hasDecl(std.c.T, "TIOCSCTTY")) break :blk std.c.T.TIOCSCTTY;
+        break :blk null;
+    };
+    if (tiocsctty) |request| {
+        if (std.c.ioctl(slave, @as(c_int, @intCast(request)), @as(c_int, 0)) < 0) return error.SkipZigTest;
+    } else return error.SkipZigTest;
+    if (dup2(slave, std.Io.File.stdin().handle) < 0) return error.SkipZigTest;
+    if (dup2(slave, std.Io.File.stdout().handle) < 0) return error.SkipZigTest;
+    if (dup2(slave, std.Io.File.stderr().handle) < 0) return error.SkipZigTest;
+
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const shell_pgrp = processGetPgrp(0) catch return error.SkipZigTest;
+    try terminalSetPgrp(std.Io.File.stdin().handle, shell_pgrp);
+
+    var executor = Executor.init(allocator);
+    defer executor.deinit();
+
+    var monitor = try executor.executeScriptSlice("set -m", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer monitor.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), monitor.status);
+
+    try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TSTP", .TSTP);
+    try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TTIN", .TTIN);
+    try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TTOU", .TTOU);
+}
+
+fn expectStoppedForegroundMixedSignal(allocator: std.mem.Allocator, executor: *Executor, shell_pgrp: std.posix.pid_t, signal_name: []const u8, signal: std.posix.SIG) anyerror!void {
+    const path = try std.fmt.allocPrint(allocator, "rush-stopped-foreground-mixed-{s}.tmp", .{signal_name});
+    defer allocator.free(path);
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    const script = try std.fmt.allocPrint(allocator,
+        \\f() { /bin/sh -c 'kill -s {s} 0; printf {s}-resumed'; }
+        \\f | /bin/cat > {s}
+    , .{ signal_name, signal_name, path });
+    defer allocator.free(script);
+
+    const job_count = executor.background_jobs.items.len;
+    var stopped = try executor.executeScriptSlice(script, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer stopped.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 128) + signalStatusNumber(signal), stopped.status);
+    try std.testing.expectEqual(job_count + 1, executor.background_jobs.items.len);
+
+    const job = &executor.background_jobs.items[executor.background_jobs.items.len - 1];
+    try std.testing.expectEqual(JobState.stopped, job.state);
+    try std.testing.expectEqual(@as(?i64, job.pid), job.pgrp);
+    try std.testing.expect(job.saved_termios != null);
+    try std.testing.expectEqual(shell_pgrp, try terminalGetPgrp(std.Io.File.stdin().handle));
+
+    var jobs = try executor.executeScriptSlice("jobs", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer jobs.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, jobs.stdout, "Stopped f | /bin/cat") != null);
+
+    var foreground = try executor.executeScriptSlice("fg", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer foreground.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), foreground.status);
+    try std.testing.expect(std.mem.indexOf(u8, foreground.stdout, "f | /bin/cat") != null);
+    try std.testing.expectEqual(JobState.done, job.state);
+    try std.testing.expectEqual(shell_pgrp, try terminalGetPgrp(std.Io.File.stdin().handle));
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, allocator, .limited(1024));
+    defer allocator.free(contents);
+    const expected = try std.fmt.allocPrint(allocator, "{s}-resumed", .{signal_name});
+    defer allocator.free(expected);
+    try std.testing.expectEqualStrings(expected, contents);
+}
+
+fn expectPtyTestChildSucceeded(child_pid: std.c.pid_t) !void {
+    var attempts: usize = 0;
+    while (attempts < 500) : (attempts += 1) {
+        var status: c_int = 0;
+        const result = std.c.waitpid(child_pid, &status, @intCast(std.posix.W.NOHANG));
+        if (result == child_pid) {
+            const wait_status: u32 = @bitCast(status);
+            if (std.posix.W.IFEXITED(wait_status) and std.posix.W.EXITSTATUS(wait_status) == 77) return error.SkipZigTest;
+            try std.testing.expect(std.posix.W.IFEXITED(wait_status));
+            try std.testing.expectEqual(@as(u8, 0), std.posix.W.EXITSTATUS(wait_status));
+            return;
+        }
+        if (result < 0) return error.SkipZigTest;
+        sleepPtyTestPollInterval();
+    }
+    std.posix.kill(-child_pid, .KILL) catch {};
+    _ = std.c.waitpid(child_pid, null, 0);
+    return error.TestTimedOut;
+}
+
+fn sleepPtyTestPollInterval() void {
+    var remaining: std.c.timespec = .{ .sec = 0, .nsec = 10 * std.time.ns_per_ms };
+    while (std.c.nanosleep(&remaining, &remaining) != 0) {}
 }
 
 test "executor streams large pipeline input into builtin stages" {
