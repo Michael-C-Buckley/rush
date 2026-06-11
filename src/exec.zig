@@ -11909,6 +11909,28 @@ test "executor supports Bash arithmetic indexed array subscripts" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "executor supports Bash indexed array assignment subscripts with whitespace" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\i=1
+        \\arr[ i + 1 ]='two words'
+        \\arr[
+        \\i + 2
+        \\]=three
+        \\printf '<%s>|<%s>\n' "${arr[2]}" "${arr[3]}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<two words>|<three>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor keeps indexed array expansion on POSIX bad-substitution path" {
     var lowered = try parseAndLower(std.testing.allocator, "echo ${arr[0]}; echo after");
     defer lowered.parsed.deinit();

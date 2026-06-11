@@ -753,7 +753,7 @@ fn previousSignificantToken(tokens: []const Token, cursor: usize) ?usize {
 
 pub fn nodeKindForToken(result: ParseResult, token_index: usize) ?NodeKind {
     for (result.nodes) |node| {
-        if (node.token_start == token_index and node.token_end == token_index + 1) {
+        if (token_index >= node.token_start and token_index < node.token_end) {
             switch (node.kind) {
                 .assignment_word, .command_word, .word, .io_number => return node.kind,
                 else => {},
@@ -2233,6 +2233,15 @@ const SyntaxParser = struct {
             }
 
             if (self.at(.word)) {
+                if (!saw_command_word) {
+                    if (try self.bashIndexedArrayAssignmentTokenEnd()) |token_end| {
+                        const word = try self.addWordNodeForTokenRange(.assignment_word, self.index, token_end);
+                        try command_children.append(self.allocator, .{ .node = word });
+                        self.index = token_end;
+                        continue;
+                    }
+                }
+
                 const kind: NodeKind = if (!saw_command_word and isAssignmentWord(self.current().lexeme(self.source), self.features))
                     .assignment_word
                 else if (!saw_command_word) blk: {
@@ -2338,21 +2347,31 @@ const SyntaxParser = struct {
     }
 
     fn addWordNode(self: *SyntaxParser, kind: NodeKind, token_index: usize) !NodeId {
-        const token = self.tokens[token_index];
+        return self.addWordNodeForTokenRange(kind, token_index, token_index + 1);
+    }
+
+    fn addWordNodeForTokenRange(self: *SyntaxParser, kind: NodeKind, token_start: usize, token_end: usize) !NodeId {
+        std.debug.assert(token_start < token_end);
+        std.debug.assert(token_end <= self.tokens.len);
         var word_children: std.ArrayList(SyntaxChild) = .empty;
         defer word_children.deinit(self.allocator);
-        try word_children.append(self.allocator, .{ .token = .init(token_index) });
 
-        var substitutions = try commandSubstitutionSpans(self.allocator, self.source, token.span);
-        defer substitutions.deinit(self.allocator);
-        for (substitutions.items) |span| {
-            const substitution = try self.addCommandSubstitutionNode(token_index, span);
-            try word_children.append(self.allocator, .{ .node = substitution });
+        for (token_start..token_end) |token_index| {
+            const token = self.tokens[token_index];
+            try word_children.append(self.allocator, .{ .token = .init(token_index) });
+            if (token.kind != .word) continue;
+
+            var substitutions = try commandSubstitutionSpans(self.allocator, self.source, token.span);
+            defer substitutions.deinit(self.allocator);
+            for (substitutions.items) |span| {
+                const substitution = try self.addCommandSubstitutionNode(token_index, span);
+                try word_children.append(self.allocator, .{ .node = substitution });
+            }
         }
 
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, word_children.items);
-        return self.addNode(kind, token.span, token_index, token_index + 1, child_start, self.children.items.len);
+        return self.addNode(kind, spanForTokenRange(self.tokens, token_start, token_end), token_start, token_end, child_start, self.children.items.len);
     }
 
     fn addCommandSubstitutionNode(self: *SyntaxParser, token_index: usize, span: Span) !NodeId {
@@ -2477,6 +2496,69 @@ const SyntaxParser = struct {
         if (!isAllDigits(self.current().lexeme(self.source))) return false;
         const next = self.tokens[self.index + 1];
         return self.current().span.end == next.span.start and next.kind.isRedirectOperator();
+    }
+
+    fn bashIndexedArrayAssignmentTokenEnd(self: *SyntaxParser) std.mem.Allocator.Error!?usize {
+        if (!self.features.isBash() or !self.at(.word)) return null;
+        const first = self.current();
+        const word = first.lexeme(self.source);
+        if (word.len == 0 or !isNameStart(word[0])) return null;
+
+        var name_end: usize = 1;
+        while (name_end < word.len and isNameContinue(word[name_end])) : (name_end += 1) {}
+        if (name_end >= word.len or word[name_end] != '[') return null;
+
+        var index = first.span.start + name_end + 1;
+        var saw_subscript_byte = false;
+        while (index < self.source.len) {
+            switch (self.source[index]) {
+                ' ', '\t', '\r', '\n' => index += 1,
+                ']' => {
+                    if (!saw_subscript_byte) return null;
+                    if (index + 1 >= self.source.len or self.source[index + 1] != '=') return null;
+                    return self.tokenEndContaining(index + 1);
+                },
+                '\\' => {
+                    saw_subscript_byte = true;
+                    index += 1;
+                    if (index < self.source.len) index += 1;
+                },
+                '\'' => {
+                    saw_subscript_byte = true;
+                    skipQuoted(self.source, self.source.len, &index, '\'');
+                },
+                '"' => {
+                    saw_subscript_byte = true;
+                    skipQuoted(self.source, self.source.len, &index, '"');
+                },
+                '`' => {
+                    saw_subscript_byte = true;
+                    index = backquoteCommandSubstitutionEnd(self.source, self.source.len, index) orelse return null;
+                },
+                '$' => {
+                    saw_subscript_byte = true;
+                    switch (try shellSubstitutionAt(self.allocator, self.source, self.source.len, index)) {
+                        .complete => |substitution| index = substitution.span.end,
+                        .none => index += 1,
+                        .incomplete => return null,
+                    }
+                },
+                else => {
+                    saw_subscript_byte = true;
+                    index += 1;
+                },
+            }
+        }
+        return null;
+    }
+
+    fn tokenEndContaining(self: SyntaxParser, offset: usize) ?usize {
+        for (self.index..self.tokens.len) |token_index| {
+            const token = self.tokens[token_index];
+            if (token.kind == .eof) return null;
+            if (token.span.contains(offset)) return token_index + 1;
+        }
+        return null;
     }
 
     fn at(self: SyntaxParser, kind: TokenKind) bool {
@@ -2920,6 +3002,30 @@ test "parser gates indexed array assignment words behind Bash mode" {
         },
     });
 
+    try expectParse("arr[ i + 1 ]=zero echo", .{
+        .options = .{ .features = compat.Features.bash() },
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 6) },
+            .{ .kind = .whitespace, .span = .init(6, 7) },
+            .{ .kind = .word, .span = .init(7, 8) },
+            .{ .kind = .whitespace, .span = .init(8, 9) },
+            .{ .kind = .word, .span = .init(9, 10) },
+            .{ .kind = .whitespace, .span = .init(10, 11) },
+            .{ .kind = .word, .span = .init(11, 17) },
+            .{ .kind = .whitespace, .span = .init(17, 18) },
+            .{ .kind = .word, .span = .init(18, 22) },
+            .{ .kind = .eof, .span = .empty(22) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 22) },
+            .{ .kind = .assignment_word, .span = .init(0, 17), .token_start = 0, .token_end = 9 },
+            .{ .kind = .command_word, .span = .init(18, 22), .token_start = 10, .token_end = 11 },
+            .{ .kind = .simple_command, .span = .init(0, 22) },
+        },
+    });
+
     try expectParse("arr[0]=zero echo", .{
         .tokens = &.{
             .{ .kind = .word, .span = .init(0, 11) },
@@ -2932,6 +3038,33 @@ test "parser gates indexed array assignment words behind Bash mode" {
             .{ .kind = .command_word, .span = .init(0, 11) },
             .{ .kind = .word, .span = .init(12, 16) },
             .{ .kind = .simple_command, .span = .init(0, 16) },
+        },
+    });
+
+    try expectParse("arr[ i + 1 ]=zero echo", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 6) },
+            .{ .kind = .whitespace, .span = .init(6, 7) },
+            .{ .kind = .word, .span = .init(7, 8) },
+            .{ .kind = .whitespace, .span = .init(8, 9) },
+            .{ .kind = .word, .span = .init(9, 10) },
+            .{ .kind = .whitespace, .span = .init(10, 11) },
+            .{ .kind = .word, .span = .init(11, 17) },
+            .{ .kind = .whitespace, .span = .init(17, 18) },
+            .{ .kind = .word, .span = .init(18, 22) },
+            .{ .kind = .eof, .span = .empty(22) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 22) },
+            .{ .kind = .command_word, .span = .init(0, 4), .token_start = 0, .token_end = 1 },
+            .{ .kind = .word, .span = .init(5, 6), .token_start = 2, .token_end = 3 },
+            .{ .kind = .word, .span = .init(7, 8), .token_start = 4, .token_end = 5 },
+            .{ .kind = .word, .span = .init(9, 10), .token_start = 6, .token_end = 7 },
+            .{ .kind = .word, .span = .init(11, 17), .token_start = 8, .token_end = 9 },
+            .{ .kind = .word, .span = .init(18, 22), .token_start = 10, .token_end = 11 },
+            .{ .kind = .simple_command, .span = .init(0, 22) },
         },
     });
 }

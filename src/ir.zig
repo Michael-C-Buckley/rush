@@ -1116,13 +1116,17 @@ fn containsUsize(items: []const usize, needle: usize) bool {
 }
 
 fn wordRef(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !WordRef {
-    std.debug.assert(node.token_end == node.token_start + 1);
-    return wordRefFromToken(allocator, parsed, node.token_start);
+    if (node.token_end == node.token_start + 1) return wordRefFromToken(allocator, parsed, node.token_start);
+    return wordRefFromSpan(allocator, parsed, node.span);
 }
 
 fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, token_index: usize) !WordRef {
     const token = parsed.tokens[token_index];
-    const raw = try allocator.dupe(u8, token.lexeme(parsed.source));
+    return wordRefFromSpan(allocator, parsed, token.span);
+}
+
+fn wordRefFromSpan(allocator: std.mem.Allocator, parsed: parser.ParseResult, span: parser.Span) !WordRef {
+    const raw = try allocator.dupe(u8, span.slice(parsed.source));
     errdefer allocator.free(raw);
     const text = expand.expandWordScalar(allocator, raw, .{}) catch |err| switch (err) {
         error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => try allocator.dupe(u8, raw),
@@ -1130,7 +1134,7 @@ fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, to
     };
     errdefer allocator.free(text);
     return .{
-        .span = token.span,
+        .span = span,
         .raw = raw,
         .text = text,
     };
