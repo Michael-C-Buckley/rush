@@ -2785,8 +2785,8 @@ pub const Executor = struct {
         return false;
     }
 
-    fn monitorProcessGroupsEnabled(self: Executor, options: ExecuteOptions) bool {
-        return options.interactive and self.shell_options.monitor;
+    fn monitorProcessGroupsEnabled(self: Executor) bool {
+        return self.shell_options.monitor;
     }
 
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
@@ -3532,7 +3532,7 @@ pub const Executor = struct {
 
     fn forkAsyncJob(self: *Executor, command_text: []const u8, options: ExecuteOptions, kind: AsyncJobKind, program: ir.Program) !CommandResult {
         const io = options.io orelse return error.Unsupported;
-        const use_monitor_pgrp = self.monitorProcessGroupsEnabled(options);
+        const use_monitor_pgrp = self.monitorProcessGroupsEnabled();
         const pid = try forkProcess();
         if (pid == 0) {
             if (use_monitor_pgrp) processSetPgrp(0, 0) catch exitForkedChild(2);
@@ -5608,7 +5608,7 @@ pub const Executor = struct {
             .stdin = if (stdin_redirected or options.external_stdio == .inherit) .inherit else .close,
             .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
-            .pgid = if (self.monitorProcessGroupsEnabled(options)) 0 else null,
+            .pgid = if (self.monitorProcessGroupsEnabled()) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             else => return err,
@@ -5631,7 +5631,7 @@ pub const Executor = struct {
             defer self.allocator.free(argv_text);
             const command_text = try joinParams(self.allocator, argv_text);
             errdefer self.allocator.free(command_text);
-            const use_monitor_pgrp = self.monitorProcessGroupsEnabled(options);
+            const use_monitor_pgrp = self.monitorProcessGroupsEnabled();
             try self.background_jobs.append(self.allocator, .{ .id = self.next_job_id, .pid = numeric_pid, .pgrp = if (use_monitor_pgrp) numeric_pid else null, .command = command_text, .child = child });
             self.selectCurrentJob(self.next_job_id);
             self.next_job_id += 1;
@@ -12984,8 +12984,9 @@ test "monitor mode assigns async mixed pipelines to wrapper process groups" {
     try std.testing.expectEqual(@as(std.posix.pid_t, @intCast(job.pid)), try processGetPgrp(@intCast(job.pid)));
 }
 
-test "non-interactive monitor option does not change async process groups" {
-    var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 5 &");
+test "non-interactive default leaves async jobs in the shell process group" {
+    const shell_pgrp = processGetPgrp(0) catch return error.SkipZigTest;
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 5 &");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -12998,9 +12999,32 @@ test "non-interactive monitor option does not change async process groups" {
     try std.testing.expectEqual(@as(usize, 1), executor.background_jobs.items.len);
     const job = &executor.background_jobs.items[0];
     try std.testing.expectEqual(@as(?i64, null), job.pgrp);
+    try std.testing.expectEqual(shell_pgrp, try processGetPgrp(@intCast(job.pid)));
     std.posix.kill(@intCast(job.pid), .TERM) catch {};
     _ = job.child.wait(std.testing.io) catch null;
     job.state = .done;
+}
+
+test "non-interactive monitor mode assigns async jobs to process groups" {
+    var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 5 &");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), executor.background_jobs.items.len);
+    const job = &executor.background_jobs.items[0];
+    defer {
+        if (job.pgrp) |pgrp| std.posix.kill(@intCast(-pgrp), .TERM) catch {};
+        _ = job.child.wait(std.testing.io) catch null;
+        job.state = .done;
+    }
+    try std.testing.expectEqual(@as(?i64, job.pid), job.pgrp);
+    try std.testing.expectEqual(@as(std.posix.pid_t, @intCast(job.pid)), try processGetPgrp(@intCast(job.pid)));
 }
 
 test "executor asynchronously inherits arbitrary descriptor duplications" {
@@ -13490,9 +13514,64 @@ fn runStoppedForegroundMixedPipelinePtyTest(slave: c_int) anyerror!void {
     defer monitor.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), monitor.status);
 
+    try expectMonitorAsyncJobKeepsShellForeground(allocator, &executor, shell_pgrp);
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TSTP", .TSTP);
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TTIN", .TTIN);
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TTOU", .TTOU);
+}
+
+fn expectMonitorAsyncJobKeepsShellForeground(allocator: std.mem.Allocator, executor: *Executor, shell_pgrp: std.posix.pid_t) anyerror!void {
+    const path = "rush-monitor-async-terminal-pgrp.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    const script = try std.fmt.allocPrint(allocator,
+        \\/bin/sh -c 'ps -o pgid=,tpgid= -p $$ > {s}; sleep 5' &
+    , .{path});
+    defer allocator.free(script);
+
+    var result = try executor.executeScriptSlice(script, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expect(executor.background_jobs.items.len != 0);
+
+    const job = &executor.background_jobs.items[executor.background_jobs.items.len - 1];
+    defer {
+        if (job.pgrp) |pgrp| std.posix.kill(@intCast(-pgrp), .TERM) catch {};
+        _ = job.child.wait(std.testing.io) catch null;
+        job.state = .done;
+    }
+    try std.testing.expectEqual(@as(?i64, job.pid), job.pgrp);
+    try std.testing.expectEqual(shell_pgrp, try terminalGetPgrp(std.Io.File.stdin().handle));
+
+    const contents = try readPtyTestFileEventually(allocator, path);
+    defer allocator.free(contents);
+    var parts = std.mem.tokenizeAny(u8, contents, " \t\r\n");
+    const child_pgrp_text = parts.next() orelse return error.SkipZigTest;
+    const child_tpgid_text = parts.next() orelse return error.SkipZigTest;
+    const child_pgrp = std.fmt.parseInt(std.posix.pid_t, child_pgrp_text, 10) catch return error.SkipZigTest;
+    const child_tpgid = std.fmt.parseInt(std.posix.pid_t, child_tpgid_text, 10) catch return error.SkipZigTest;
+
+    try std.testing.expectEqual(@as(std.posix.pid_t, @intCast(job.pgrp.?)), child_pgrp);
+    try std.testing.expect(child_pgrp != shell_pgrp);
+    try std.testing.expectEqual(shell_pgrp, child_tpgid);
+}
+
+fn readPtyTestFileEventually(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    var attempts: usize = 0;
+    while (attempts < 500) : (attempts += 1) {
+        const contents = std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, allocator, .limited(1024)) catch |err| switch (err) {
+            error.FileNotFound => {
+                sleepPtyTestPollInterval();
+                continue;
+            },
+            else => return err,
+        };
+        if (contents.len != 0) return contents;
+        allocator.free(contents);
+        sleepPtyTestPollInterval();
+    }
+    return error.TestTimedOut;
 }
 
 fn expectStoppedForegroundMixedSignal(allocator: std.mem.Allocator, executor: *Executor, shell_pgrp: std.posix.pid_t, signal_name: []const u8, signal: std.posix.SIG) anyerror!void {

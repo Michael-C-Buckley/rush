@@ -327,7 +327,7 @@ Implemented or partially implemented:
   - `set -o` option state listing in Rush's stable human-readable format
   - `set +o` reusable option-state command listing for supported options
   - `set -o ignoreeof` / `set +o ignoreeof` controls whether interactive EOF asks for explicit `exit`
-  - `set -m` / `set -o monitor` reflects in option state and enables separate process groups for interactive tracked async jobs; non-interactive execution keeps the option as state without changing process groups.
+  - `set -m` / `set -o monitor` reflects in option state and enables separate process groups for tracked async jobs in interactive and non-interactive shells; without monitor mode, non-interactive async jobs remain in the shell process group.
   - `set -h` / `set +h` and `set -o nolog` / `set +o nolog` are accepted as no-effect obsolescent compatibility spellings; they do not change command lookup, history, `$-`, or option listings.
 
 ### Partial / gaps
@@ -357,14 +357,13 @@ Implemented or partially implemented:
 - Foreground process group handling for inherited-stdio external-only pipelines.
 - Foreground inherited-stdio mixed pipelines fork through a job-owned wrapper process group before terminal handoff, so builtin/function stages are no longer run by the parent shell while the job owns the terminal.
 - Stopped foreground inherited-stdio mixed pipelines are recorded in the job table, restore the shell foreground process group, and can be resumed through `fg` after SIGTSTP/SIGTTIN/SIGTTOU stops in the job-owned wrapper process group.
-- Monitor mode (`set -m`) puts tracked interactive async external and forked compound/mixed-pipeline jobs in their own process groups and lets `fg` hand the terminal to that saved process group when available.
+- Monitor mode (`set -m`) puts tracked async external and forked compound/mixed-pipeline jobs in their own process groups, keeps background jobs from taking foreground terminal ownership, and lets `fg` hand the terminal to that saved process group when available.
 
 ### Partial / gaps
 
 - Stopped jobs and precise job status refresh are partial rather than complete.
 - `fg`/`bg` resume tracked stopped jobs with `SIGCONT`, but broader signal and terminal edge cases remain.
-- Foreground mixed-pipeline handoff now uses a wrapper process group and has stopped-job PTY coverage, but richer terminal edge coverage remains incomplete.
-- Terminal modes and foreground process groups are not yet complete across every job-control edge case.
+- Terminal mode save/restore and `fg`/`bg` behavior are still tracked as broader job-control rows rather than as process-group ownership gaps.
 - Signal handling for pipelines and asynchronous lists remains conservative.
 
 ### Missing / gaps
