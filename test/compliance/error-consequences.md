@@ -8,7 +8,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 - **covered gap**: Rush behavior is captured, but known POSIX consequences are incomplete.
 - **uncovered gap**: known high-risk area without dedicated negative corpus coverage.
 
-## Current negative corpus
+## Current negative corpus and unit evidence
 
 | case | area | status | current consequence |
 | --- | --- | --- | --- |
@@ -31,6 +31,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `redirection-errexit` / `redirection-errexit-suppressed-contexts` | redirection | covered baseline | redirection failures trigger `errexit` only outside suppressed AND-OR and negation contexts |
 | `redirection-pipeline-missing-input-last` | redirection | covered baseline | a last-stage pipeline redirection failure determines the pipeline status and does not expose internal pipe write errors |
 | `redirection-heredoc-materialization-failure` / `redirection-async-heredoc-materialization-failure` | redirection | covered baseline | here-doc fd materialization failure reports a redirection diagnostic; the async form still reports successful job submission status |
+| inherited broken-pipe fd unit tests | output write | covered baseline | after `>&fd` setup succeeds, shell-implemented builtins diagnose `write: broken pipe`, return status 1, functions/brace groups expose status 1, and pipelines record failed stage status including `pipefail` and last-stage cases; no `/dev/full` corpus case is used because it is not portable to macOS |
 | `errors-special-builtin-redirection` | special builtin | covered baseline | diagnostic, status 1, non-interactive execution stops |
 | `errors-special-builtin-redirection-{eval,export,readonly,set,unset,trap}` | special builtin | covered baseline | noclobber diagnostic, status 1, non-interactive execution stops |
 | `errors-special-builtin-redirection-{output,append}-directory` | special builtin | covered baseline | directory output diagnostic, status 1, non-interactive execution stops |
@@ -54,6 +55,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `errors-special-builtin` | supported | high | assignment persistence plus negative coverage for redirection, expansion, and utility-specific failures | all 15 POSIX special builtins have audited non-interactive shell-exit consequences for invalid options or operands where applicable and utility-semantic failures |
 | `errors-nounset` | supported | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution, with default-operator and disable behavior covered separately |
 | `errors-redirection-noninteractive` | supported | high | POSIX and negative corpus | consolidated with the former `redirection-error-consequences` row; ordinary utility, compound, function, `<>`, here-doc materialization, async, pipeline, AND-OR, negation, `$?`, and `errexit` consequences are covered. Rush uses status 1 for most non-special redirection failures where dash often uses 2; both are documented as conforming non-zero statuses. |
+| `errors-output-write-failure` | supported | high | unit tests | a portable broken-pipe fd harness covers write failures after redirection setup/open succeeds without relying on Linux `/dev/full`; shell-implemented commands diagnose and return non-zero, pipelines record stage status, and external utility write failures are delegated to the child process |
 | `errors-special-builtin-redirection` | supported | high | negative corpus | noclobber, missing input, bad input/output fd, and directory output special-builtin redirection failures exit non-interactive execution across representative POSIX special builtins |
 | `errors-special-builtin-expansion` | supported | high | negative corpus | ${parameter:?word} and nounset special-builtin expansion failures exit non-interactive execution across `:`, `eval`, `export`, `readonly`, `set`, `unset`, and `trap` |
 
@@ -71,7 +73,7 @@ Current coverage includes nounset and `${parameter:?word}` with diagnostic word 
 
 ### Redirection errors
 
-Current coverage includes bad input/output fd duplication, noclobber, missing input redirection targets, directory output failures, missing redirection operands, `<>` open failures, compound and function redirection consequences, pipeline status propagation, AND-OR/negation/`$?`, `errexit` interactions, here-doc delimiter diagnostics, and here-doc fd materialization failures. Rush status values intentionally track POSIX's non-zero requirement rather than dash's exact status 2 convention for many redirection errors.
+Current coverage includes bad input/output fd duplication, noclobber, missing input redirection targets, directory output failures, missing redirection operands, `<>` open failures, compound and function redirection consequences, pipeline status propagation, AND-OR/negation/`$?`, `errexit` interactions, here-doc delimiter diagnostics, and here-doc fd materialization failures. Redirected output write failures after successful setup/open are covered by unit tests using a shell-visible fd duplicated from a broken pipe; `/dev/full` remains intentionally out of corpus because it is Linux-specific. Rush status values intentionally track POSIX's non-zero requirement rather than dash's exact status 2 convention for many redirection errors.
 
 ### Special builtin failures
 
@@ -89,6 +91,7 @@ Track expected status families separately:
 - command not found: 127;
 - command not executable/permission denied: 126 where implemented;
 - expansion/redirection failures: expansion failures stop non-interactive execution; non-special redirection failures use status 1 or pipeline-stage status 2 depending on context, while special-builtin redirection failures stop the shell with non-zero status;
+- redirected output write failures after setup succeeds: shell-implemented builtins/functions/compound commands use status 1 with a `write` diagnostic when Rush observes the failed write; pipeline status follows the failed stage and normal `pipefail`/last-stage rules; external command status and diagnostics come from the child utility or signal termination;
 - signal termination: not yet represented in negative corpus.
 
 ## Follow-up implementation targets

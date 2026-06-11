@@ -2332,9 +2332,9 @@ pub const Executor = struct {
                     self.executeStatementSync(program, statement, options)) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
                 defer result.deinit();
                 try self.annotateSourcedError(program.source, statement.span.start, options, &result);
-                try self.appendOrWriteResult(options, &stdout, &stderr, result);
+                const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
-                last_status = self.pending_exit orelse result.status;
+                last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
                 self.applyErrexit(last_status, options, isFollowedByAndOrListOp(program.statements, statement_index));
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
@@ -2354,9 +2354,9 @@ pub const Executor = struct {
                     self.executePipeline(program, pipeline, options)) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
                 defer result.deinit();
                 try self.annotateSourcedError(program.source, pipeline.span.start, options, &result);
-                try self.appendOrWriteResult(options, &stdout, &stderr, result);
+                const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
-                last_status = self.pending_exit orelse result.status;
+                last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
                 self.applyErrexit(last_status, options, isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index));
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
@@ -2371,9 +2371,9 @@ pub const Executor = struct {
             var result = self.executeSimpleCommand(command, options) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
             defer result.deinit();
             try self.annotateSourcedError(program.source, command.span.start, options, &result);
-            try self.appendOrWriteResult(options, &stdout, &stderr, result);
+            const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
             try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
-            last_status = self.pending_exit orelse result.status;
+            last_status = self.pending_exit orelse result_status;
             self.setLastStatus(last_status);
             self.applyErrexit(last_status, options, false);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
@@ -2458,6 +2458,17 @@ pub const Executor = struct {
         self.pending_exit = status;
     }
 
+    fn appendOrWriteResultStatus(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), result: CommandResult) !ExitStatus {
+        self.appendOrWriteResult(options, stdout, stderr, result) catch |err| {
+            if (!isOutputWriteFailure(err)) return err;
+            var failure = try self.writeFailureResult(err, false);
+            defer failure.deinit();
+            try self.appendOrWriteResult(options, stdout, stderr, failure);
+            return failure.status;
+        };
+        return result.status;
+    }
+
     fn appendOrWriteResult(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), result: CommandResult) !void {
         try self.appendOrWriteCommandSubstitutionStderr(options, stderr);
         if (options.external_stdio == .inherit) {
@@ -2514,6 +2525,7 @@ pub const Executor = struct {
             defer result.deinit();
             writeInheritedResult(options.io.?, result) catch |err| switch (err) {
                 error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
                 else => return err,
             };
             return emptyResult(self.allocator, result.status);
@@ -2561,6 +2573,7 @@ pub const Executor = struct {
             defer result.deinit();
             writeInheritedResult(options.io.?, result) catch |err| switch (err) {
                 error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
                 else => return err,
             };
             return emptyResult(self.allocator, result.status);
@@ -3602,8 +3615,7 @@ pub const Executor = struct {
             const end = if (index + 1 < program.statements.len) program.statements[index + 1].span.start else script.len;
             var result = try self.executeScriptSlice(script[start..end], options);
             defer result.deinit();
-            try self.appendOrWriteResult(options, &stdout, &stderr, result);
-            last_status = result.status;
+            last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
         }
         var result: CommandResult = .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
@@ -4752,6 +4764,7 @@ pub const Executor = struct {
                 defer result.deinit();
                 writeInheritedResult(options.io.?, result) catch |err| switch (err) {
                     error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                    error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
                     else => return err,
                 };
                 return emptyResult(self.allocator, result.status);
@@ -4777,6 +4790,7 @@ pub const Executor = struct {
                 }
                 writeInheritedResult(options.io.?, result) catch |err| switch (err) {
                     error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                    error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, special_builtin),
                     else => return err,
                 };
                 return emptyResult(self.allocator, result.status);
@@ -4824,6 +4838,13 @@ pub const Executor = struct {
             error.IsDir => try errorResult(self.allocator, 1, redirectionTargetName(command), "is a directory"),
             else => return err,
         };
+        if (special_builtin) self.pending_exit = result.status;
+        return result;
+    }
+
+    fn writeFailureResult(self: *Executor, err: anyerror, special_builtin: bool) !CommandResult {
+        const message = writeFailureMessage(err) orelse return err;
+        const result = try errorResult(self.allocator, 1, "write", message);
         if (special_builtin) self.pending_exit = result.status;
         return result;
     }
@@ -5540,6 +5561,11 @@ pub const Executor = struct {
 
         const original_stdout = redirected.stdout;
         const original_stderr = redirected.stderr;
+        var original_streams_active = true;
+        defer if (original_streams_active) {
+            self.allocator.free(original_stdout);
+            self.allocator.free(original_stderr);
+        };
         redirected.stdout = try self.allocator.alloc(u8, 0);
         errdefer self.allocator.free(redirected.stdout);
         redirected.stderr = try self.allocator.alloc(u8, 0);
@@ -5549,14 +5575,27 @@ pub const Executor = struct {
             const file_sink = stdout_sink.file;
             const combined = try std.mem.concat(self.allocator, u8, &.{ original_stdout, original_stderr });
             defer self.allocator.free(combined);
-            try self.writeRedirectedBytes(combined, file_sink.redirection, options);
+            self.writeRedirectedBytes(combined, file_sink.redirection, options) catch |err| {
+                if (!isOutputWriteFailure(err)) return err;
+                redirected.deinit();
+                return self.writeFailureResult(err, special_exit);
+            };
         } else {
-            try self.routeCapturedStream(&redirected.stdout, &redirected.stderr, original_stdout, stdout_sink, options);
-            try self.routeCapturedStream(&redirected.stdout, &redirected.stderr, original_stderr, stderr_sink, options);
+            self.routeCapturedStream(&redirected.stdout, &redirected.stderr, original_stdout, stdout_sink, options) catch |err| {
+                if (!isOutputWriteFailure(err)) return err;
+                redirected.deinit();
+                return self.writeFailureResult(err, special_exit);
+            };
+            self.routeCapturedStream(&redirected.stdout, &redirected.stderr, original_stderr, stderr_sink, options) catch |err| {
+                if (!isOutputWriteFailure(err)) return err;
+                redirected.deinit();
+                return self.writeFailureResult(err, special_exit);
+            };
         }
 
         self.allocator.free(original_stdout);
         self.allocator.free(original_stderr);
+        original_streams_active = false;
         return redirected;
     }
 
@@ -6437,6 +6476,20 @@ fn rawWrite(fd: std.posix.fd_t, bytes: []const u8) !usize {
             else => return error.Unexpected,
         }
     }
+}
+
+fn isOutputWriteFailure(err: anyerror) bool {
+    return writeFailureMessage(err) != null;
+}
+
+fn writeFailureMessage(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.BrokenPipe => "broken pipe",
+        error.NoSpaceLeft => "no space left on device",
+        error.InputOutput => "input/output error",
+        error.WriteFailed => "write failed",
+        else => null,
+    };
 }
 
 fn rawDup(fd: std.posix.fd_t) !std.posix.fd_t {
@@ -12990,6 +13043,108 @@ test "inherited external stdio duplications copy the target stream" {
     const stderr_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(stderr_output);
     try std.testing.expectEqualStrings("sync-outasync-out", stderr_output);
+}
+
+const InheritedBrokenStdoutRun = struct {
+    allocator: std.mem.Allocator,
+    result: CommandResult,
+    stderr: []const u8,
+
+    fn deinit(self: *InheritedBrokenStdoutRun) void {
+        self.result.deinit();
+        self.allocator.free(self.stderr);
+        self.* = undefined;
+    }
+};
+
+fn runInheritedWithBrokenStdout(allocator: std.mem.Allocator, script: []const u8) !InheritedBrokenStdoutRun {
+    const stderr_path = "rush-test-inherited-write-failure.err";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch {};
+
+    const saved_stdout = try rawDup(std.Io.File.stdout().handle);
+    defer closeRawFd(std.testing.io, saved_stdout);
+    const saved_stderr = try rawDup(std.Io.File.stderr().handle);
+    defer closeRawFd(std.testing.io, saved_stderr);
+
+    var pipe = try makePipelinePipe(std.testing.io);
+    defer pipe.close(std.testing.io);
+    pipe.read.?.close(std.testing.io);
+    pipe.read = null;
+
+    var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{ .truncate = true });
+    defer stderr_file.close(std.testing.io);
+
+    try rawDup2(pipe.write.?.handle, std.Io.File.stdout().handle);
+    try rawDup2(stderr_file.handle, std.Io.File.stderr().handle);
+    var redirected_stdio = true;
+    defer if (redirected_stdio) {
+        rawDup2(saved_stdout, std.Io.File.stdout().handle) catch {};
+        rawDup2(saved_stderr, std.Io.File.stderr().handle) catch {};
+    };
+
+    var sigpipe = ignoreSignal(.PIPE);
+    defer sigpipe.restore();
+
+    var executor = Executor.init(allocator);
+    defer executor.deinit();
+    var result = try executor.executeScriptSlice(script, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    errdefer result.deinit();
+
+    try rawDup2(saved_stdout, std.Io.File.stdout().handle);
+    try rawDup2(saved_stderr, std.Io.File.stderr().handle);
+    redirected_stdio = false;
+
+    const stderr = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, allocator, .limited(4096));
+    errdefer allocator.free(stderr);
+    return .{ .allocator = allocator, .result = result, .stderr = stderr };
+}
+
+test "inherited redirection write failure reports builtin status and continues" {
+    var run = try runInheritedWithBrokenStdout(std.testing.allocator,
+        \\exec 9>&1
+        \\printf x >&9
+        \\printf 'builtin-status=%s\n' "$?" >&2
+    );
+    defer run.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), run.result.status);
+    try std.testing.expectEqualStrings("", run.result.stdout);
+    try std.testing.expectEqualStrings("", run.result.stderr);
+    try std.testing.expectEqualStrings("write: broken pipe\nbuiltin-status=1\n", run.stderr);
+}
+
+test "inherited redirection write failure reports function and compound statuses" {
+    var run = try runInheritedWithBrokenStdout(std.testing.allocator,
+        \\exec 9>&1
+        \\f() { printf x; }
+        \\f >&9
+        \\printf 'function-status=%s\n' "$?" >&2
+        \\{ printf y; } >&9
+        \\printf 'group-status=%s\n' "$?" >&2
+    );
+    defer run.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), run.result.status);
+    try std.testing.expectEqualStrings("write: broken pipe\nfunction-status=1\nwrite: broken pipe\ngroup-status=1\n", run.stderr);
+}
+
+test "inherited redirection write failure affects pipeline stage statuses" {
+    var run = try runInheritedWithBrokenStdout(std.testing.allocator,
+        \\exec 9>&1
+        \\set -o pipefail
+        \\printf x >&9 | :
+        \\printf 'pipefail-first-stage=%s\n' "$?" >&2
+        \\printf y | printf x >&9
+        \\printf 'last-stage=%s\n' "$?" >&2
+    );
+    defer run.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), run.result.status);
+    try std.testing.expectEqualStrings("pipefail-first-stage=1\nlast-stage=1\n", run.stderr);
 }
 
 test "executor short-circuits AND and OR lists" {

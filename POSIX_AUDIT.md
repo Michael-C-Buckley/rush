@@ -206,11 +206,12 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - CLI inherited-stdio builtins, functions, subshells, and brace groups use temporary OS fd mutation and restore for supported fd forms.
 - Shell-visible fd tracking prevents internal fds from being accidentally exposed as shell fds.
 - Non-interactive redirection error consequences are covered for ordinary builtins, external commands, compound commands, function calls and bodies, `<>`, here-doc materialization, async commands, pipelines, AND-OR lists, negation, `$?`, `errexit`, and special-builtin shell exit behavior. Rush intentionally uses non-zero status `1` for many non-special redirection failures where dash reports `2`; POSIX only requires non-zero.
+- Output write failures after redirection setup succeeds are covered in inherited-stdio unit tests with a portable broken-pipe fd harness rather than `/dev/full`: regular builtins diagnose `write`, return status `1`, and let following commands run; functions and brace groups propagate the failed redirected write as their status; pipelines record the failed stage status, including `pipefail` and last-stage behavior. External command write failures remain delegated to the external utility and OS signal/write semantics.
 
 ### Partial / gaps
 
 - Capture-mode tests still use captured-result modeling in some paths instead of true inherited process fds.
-- Portable output write-failure cases such as `/dev/full` remain separate from the supported open/redirection-error consequence matrix because they are platform-dependent and are not represented on macOS.
+- `/dev/full`-style file targets are intentionally not in the cross-platform corpus because macOS lacks `/dev/full`; the portable synthetic fd tests cover Rush's shell-implemented write-failure consequences without making corpus validation platform-specific.
 - Here-doc materialization is fd-backed but full parser-level here-doc token/body integration is still simplified.
 
 ## 5. Command search and execution environment
@@ -384,6 +385,7 @@ Implemented or partially implemented:
 - Missing pipeline stage spawn cleanup.
 - Redirection failures for bad fd duplication and noclobber are shell-visible errors.
 - Non-interactive redirection failures now have negative-corpus coverage for ordinary utility continuation, compound and function redirections, status propagation, `errexit`, pipelines, `<>`, here-doc materialization, and special-builtin shell exit behavior.
+- Redirected output write failures after successful setup/open report shell-visible `write` diagnostics for shell-implemented commands and non-zero command/stage status in the inherited-stdio executor; external utility write failures are left to the child process.
 - Nounset produces a baseline unset-parameter diagnostic and exits non-interactive execution.
 - `${parameter:?word}` expands the diagnostic word, reports the parameter name, and exits non-interactive execution.
 - Special builtin expansion, redirection, invalid option/operand, and utility-semantic failures now stop non-interactive execution for the audited POSIX special-builtin set.
@@ -391,7 +393,7 @@ Implemented or partially implemented:
 
 ### Partial / gaps
 
-- Output write-failure diagnostics after a redirection has opened successfully still need a portable cross-platform strategy; `/dev/full` is useful on Linux but not available in the macOS validation environment.
+- Cross-platform corpus coverage for `/dev/full`-style file write failures remains deferred; current evidence is portable inherited-fd unit coverage so macOS validation stays stable.
 - Some CLI inherited-stdio paths now write per-command output directly; capture-mode tests still intentionally model output through `CommandResult`.
 
 ## 10. Recommended next roadmap batches
