@@ -144,6 +144,7 @@ expansion-field-splitting-newline	expansion	behavior	-
 expansion-length-operator	expansion	behavior	-
 expansion-nested-default-word	expansion	behavior	-
 expansion-nounset-length-unset-parameter	expansion	negative	string length expansion of an unset parameter fails under set -u
+expansion-parameter-basic	expansion	behavior	plain and braced parameter references, unset/null expansion, longest-name parsing, and positional parameter references
 expansion-parameter-word-nested-substitutions	expansion	behavior	parameter operator words keep nested braced, command, and arithmetic substitutions in the word operand
 expansion-parameter-pattern-nested-word	expansion	behavior	parameter pattern-removal words keep quoted braces and command substitutions inside the pattern operand
 expansion-parameter-word-quote-context	expansion	behavior	quotes inside parameter operator words suppress field splitting and pathname expansion for their own bytes

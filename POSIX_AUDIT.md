@@ -20,7 +20,7 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `407` rows
-- `scripts/check-posix-corpus.sh`: `403` expected-output POSIX cases
+- `scripts/check-posix-corpus.sh`: `404` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `228` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
 - `scripts/check-system-shell-corpus.sh`: `286` cases, `572` comparisons across dash and bash POSIX mode
 
@@ -28,14 +28,14 @@ Current compliance report snapshot:
 
 - tracked items: `407`
 - scored POSIX items: `403`
-- supported: `385`
-- baseline: `15`
+- supported: `386`
+- baseline: `14`
 - partial: `2`
 - missing: `1`
 - out of scope: `4`
-- strict supported only: `95.5%`
+- strict supported only: `95.8%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `98.3%`
+- weighted progress: `98.4%`
 
 Recent notable capabilities:
 
@@ -174,7 +174,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 ### Partial / gaps
 
 - Expansion order is modeled but still simplified around some not-yet-audited nested constructs beyond the current POSIX representative coverage.
-- Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; arithmetic-expression preprocessing now recursively handles nested parameter and command substitutions plus focused quote/backslash edge cases in representative POSIX cases. Full parser/scanner unification for every recursive token context remains larger work.
+- Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; arithmetic-expression preprocessing now recursively handles nested parameter and command substitutions plus focused quote/backslash edge cases in representative POSIX cases. Full parser/scanner unification for recursive and extension syntax remains larger tracked work, but it is not a known POSIX gap for the supported `expansion-parameter-basic` row.
 - Non-POSIX extension forms are intentionally outside the POSIX claim. Rush should eventually support string-oriented substring `${parameter:offset[:length]}`, replacement `${parameter/pattern/repl}`, case modification `${parameter^}`/`${parameter,}`, and indirect/name-prefix operations `${!name}`/`${!prefix*}` in an extension mode. Bash mode has a minimal indexed-array slice for arithmetic `name[index]=word` assignment subscripts, with unquoted whitespace allowed inside the subscript, and `${name[index]}` expansion subscripts against the array runtime model; broader Bash array semantics such as compound assignment, negative relative indices, whole-array expansion, and array-specific parameter operations remain outside this baseline. Transformation flags such as `${parameter@Q}` are not in Rush's planned extension-mode scope for now; keep them as unsupported negative coverage until a concrete compatibility use case justifies design work. Representative unsupported extension forms reject with bad-substitution diagnostics and are tracked in `extensions-parameter-expansion` instead of counted as POSIX gaps; `${name[index]}` remains on that bad-substitution path outside Bash mode.
 - Pathname expansion remains bytewise; locale-specific collation, equivalence classes, and multi-character collating elements are outside the current model.
 - Tilde expansion does not support `~user`.
