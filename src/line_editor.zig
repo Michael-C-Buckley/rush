@@ -1348,7 +1348,7 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
     if (candidates.len == 0) return;
     const max_rows = @min(@max(@as(usize, @intCast(height)) -| 2, 1), max_menu_candidate_rows);
     const window = completionMenuWindow(candidates.len, selected, window_start, max_rows);
-    const label_width = label_width_override orelse @min(@max(@as(usize, @intCast(width)) / 3, 12), 28);
+    const label_width = label_width_override orelse try completionMenuLabelWidth(allocator, candidates[window.start..window.end], width);
     const fixed_width = 2 + label_width + 1;
     const description_width = @as(usize, @intCast(width)) -| fixed_width;
     for (candidates[window.start..window.end], window.start..) |candidate, index| {
@@ -1374,6 +1374,16 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
     if (window.start != 0 or window.end != candidates.len) {
         try lines.append(allocator, try std.fmt.allocPrint(allocator, "  \x1b[2mshowing {d}-{d} of {d}\x1b[22m", .{ window.start + 1, window.end, candidates.len }));
     }
+}
+
+fn completionMenuLabelWidth(allocator: std.mem.Allocator, candidates: []const completion.Candidate, width: u16) !usize {
+    var widest: usize = 0;
+    for (candidates) |candidate| {
+        const label = try completionMenuLabel(allocator, candidate);
+        defer if (label.owned) |owned| allocator.free(owned);
+        widest = @max(widest, visibleWidth(label.text, .unicode));
+    }
+    return @min(widest, @as(usize, @intCast(width)) -| 3);
 }
 
 const CompletionMenuLabel = struct {
@@ -2218,7 +2228,7 @@ test "completion menu truncates long columns to terminal width" {
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .width = 32 });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "extraordina…") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "extraordinarily-long-subcomm…") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "intentionally") == null);
 }
 
