@@ -248,6 +248,7 @@ pub const CommandResult = struct {
     status: ExitStatus,
     stdout: []u8,
     stderr: []u8,
+    stderr_before_stdout: bool = false,
 
     pub fn deinit(self: *CommandResult) void {
         self.allocator.free(self.stdout);
@@ -6327,9 +6328,25 @@ pub const Executor = struct {
 
         if (sameFileSink(stdout_sink, stderr_sink)) {
             const file_sink = stdout_sink.file;
-            const combined = try std.mem.concat(self.allocator, u8, &.{ original_stdout, original_stderr });
+            const combined = if (redirected.stderr_before_stdout)
+                try std.mem.concat(self.allocator, u8, &.{ original_stderr, original_stdout })
+            else
+                try std.mem.concat(self.allocator, u8, &.{ original_stdout, original_stderr });
             defer self.allocator.free(combined);
             self.writeRedirectedBytes(combined, file_sink.redirection, options) catch |err| {
+                if (!isOutputWriteFailure(err)) return err;
+                redirected.deinit();
+                return self.writeFailureResult(err, special_exit);
+            };
+        } else if (sameCapturedSink(stdout_sink, stderr_sink)) {
+            const first = if (redirected.stderr_before_stdout) original_stderr else original_stdout;
+            const second = if (redirected.stderr_before_stdout) original_stdout else original_stderr;
+            self.routeCapturedStream(&redirected.stdout, &redirected.stderr, first, stdout_sink, options) catch |err| {
+                if (!isOutputWriteFailure(err)) return err;
+                redirected.deinit();
+                return self.writeFailureResult(err, special_exit);
+            };
+            self.routeCapturedStream(&redirected.stdout, &redirected.stderr, second, stdout_sink, options) catch |err| {
                 if (!isOutputWriteFailure(err)) return err;
                 redirected.deinit();
                 return self.writeFailureResult(err, special_exit);
@@ -6356,6 +6373,10 @@ pub const Executor = struct {
     fn sameFileSink(left: OutputSink, right: OutputSink) bool {
         if (left != .file or right != .file) return false;
         return left.file.id == right.file.id;
+    }
+
+    fn sameCapturedSink(left: OutputSink, right: OutputSink) bool {
+        return (left == .stdout and right == .stdout) or (left == .stderr and right == .stderr);
     }
 
     fn routeCapturedStream(self: *Executor, stdout: *[]u8, stderr: *[]u8, bytes: []const u8, sink: OutputSink, options: ExecuteOptions) !void {
@@ -7206,6 +7227,11 @@ const FdRedirectionGuard = struct {
 
 fn writeInheritedResult(io: std.Io, result: CommandResult) !void {
     _ = io;
+    if (result.stderr_before_stdout) {
+        try rawWriteAll(2, result.stderr);
+        try rawWriteAll(1, result.stdout);
+        return;
+    }
     try rawWriteAll(1, result.stdout);
     try rawWriteAll(2, result.stderr);
 }
@@ -9372,12 +9398,14 @@ fn builtinPrintf(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     var stderr: std.ArrayList(u8) = .empty;
     errdefer stderr.deinit(self.allocator);
     var status: ExitStatus = 0;
-    try appendPrintfOutput(self.allocator, &stdout, &stderr, &status, command.argv[format_index].text, command.argv[format_index + 1 ..]);
+    var stderr_before_stdout = false;
+    try appendPrintfOutput(self.allocator, &stdout, &stderr, &status, &stderr_before_stdout, command.argv[format_index].text, command.argv[format_index + 1 ..]);
     return .{
         .allocator = self.allocator,
         .status = status,
         .stdout = try stdout.toOwnedSlice(self.allocator),
         .stderr = try stderr.toOwnedSlice(self.allocator),
+        .stderr_before_stdout = stderr_before_stdout,
     };
 }
 
@@ -9593,7 +9621,7 @@ const PrintfSpec = struct {
     precision: ?usize = null,
 };
 
-fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, format: []const u8, args: []const ir.WordRef) !void {
+fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool, format: []const u8, args: []const ir.WordRef) !void {
     var arg_index: usize = 0;
     var first_pass = true;
     while (first_pass or arg_index < args.len) {
@@ -9629,7 +9657,7 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                         arg_index += 1;
                         break :blk value;
                     } else "";
-                    if (!try appendPrintfConversion(allocator, stdout, stderr, status, spec, arg)) return;
+                    if (!try appendPrintfConversion(allocator, stdout, stderr, status, stderr_before_stdout, spec, arg)) return;
                 },
                 else => {
                     try stdout.append(allocator, format[index]);
@@ -9646,6 +9674,11 @@ fn printfDiagnostic(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), st
     try stderr.appendSlice(allocator, "printf: ");
     try stderr.appendSlice(allocator, message);
     try stderr.append(allocator, '\n');
+}
+
+fn printfNumericDiagnostic(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool) !void {
+    stderr_before_stdout.* = true;
+    try printfDiagnostic(allocator, stderr, status, "numeric argument required");
 }
 
 fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
@@ -9678,7 +9711,7 @@ fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
     return result;
 }
 
-fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, spec: PrintfSpec, arg: []const u8) !bool {
+fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool, spec: PrintfSpec, arg: []const u8) !bool {
     if (isPrintfFloatSpec(spec.spec)) {
         try appendPrintfFloatConversion(allocator, stdout, stderr, status, spec, arg);
         return true;
@@ -9699,11 +9732,11 @@ fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u
             break :blk bytes;
         },
         'c' => try allocator.dupe(u8, if (arg.len == 0) &[_]u8{0} else arg[0..1]),
-        'd', 'i' => try std.fmt.allocPrint(allocator, "{d}", .{try parsePrintfSigned(allocator, stderr, status, arg)}),
-        'u' => try std.fmt.allocPrint(allocator, "{d}", .{try parsePrintfUnsigned(allocator, stderr, status, arg)}),
-        'o' => try std.fmt.allocPrint(allocator, "{o}", .{try parsePrintfUnsigned(allocator, stderr, status, arg)}),
-        'x' => try std.fmt.allocPrint(allocator, "{x}", .{try parsePrintfUnsigned(allocator, stderr, status, arg)}),
-        'X' => try std.fmt.allocPrint(allocator, "{X}", .{try parsePrintfUnsigned(allocator, stderr, status, arg)}),
+        'd', 'i' => try std.fmt.allocPrint(allocator, "{d}", .{try parsePrintfSigned(allocator, stderr, status, stderr_before_stdout, arg)}),
+        'u' => try std.fmt.allocPrint(allocator, "{d}", .{try parsePrintfUnsigned(allocator, stderr, status, stderr_before_stdout, arg)}),
+        'o' => try std.fmt.allocPrint(allocator, "{o}", .{try parsePrintfUnsigned(allocator, stderr, status, stderr_before_stdout, arg)}),
+        'x' => try std.fmt.allocPrint(allocator, "{x}", .{try parsePrintfUnsigned(allocator, stderr, status, stderr_before_stdout, arg)}),
+        'X' => try std.fmt.allocPrint(allocator, "{X}", .{try parsePrintfUnsigned(allocator, stderr, status, stderr_before_stdout, arg)}),
         else => blk: {
             try printfDiagnostic(allocator, stderr, status, "invalid conversion");
             break :blk try allocator.alloc(u8, 0);
@@ -9800,20 +9833,98 @@ fn printfCFormat(buffer: []u8, spec: PrintfSpec) ![:0]u8 {
     return std.fmt.bufPrintSentinel(buffer, "%{s}{c}", .{ flags, spec.spec }, 0);
 }
 
-fn parsePrintfSigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, arg: []const u8) !i64 {
-    return std.fmt.parseInt(i64, arg, 0) catch {
-        try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+const PrintfIntegerConstant = struct {
+    magnitude: u64,
+    negative: bool = false,
+    complete: bool = true,
+};
+
+fn parsePrintfSigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool, arg: []const u8) !i64 {
+    const parsed = parsePrintfIntegerConstant(arg) catch |err| switch (err) {
+        error.InvalidCharacter => {
+            try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+            return 0;
+        },
+        error.Overflow => {
+            try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+            return 0;
+        },
+    };
+    if (!parsed.complete) try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+    return printfSignedValue(parsed) orelse {
+        try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
         return 0;
     };
 }
 
-fn parsePrintfUnsigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, arg: []const u8) !u64 {
-    return std.fmt.parseInt(u64, arg, 0) catch blk: {
-        const signed = std.fmt.parseInt(i64, arg, 0) catch {
-            try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+fn parsePrintfUnsigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool, arg: []const u8) !u64 {
+    const parsed = parsePrintfIntegerConstant(arg) catch |err| switch (err) {
+        error.InvalidCharacter => {
+            try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
             return 0;
-        };
-        break :blk @bitCast(signed);
+        },
+        error.Overflow => {
+            try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+            return 0;
+        },
+    };
+    if (!parsed.complete) try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+    if (!parsed.negative) return parsed.magnitude;
+    const signed = printfSignedValue(parsed) orelse {
+        try printfNumericDiagnostic(allocator, stderr, status, stderr_before_stdout);
+        return 0;
+    };
+    return @bitCast(signed);
+}
+
+fn printfSignedValue(parsed: PrintfIntegerConstant) ?i64 {
+    if (!parsed.negative) {
+        if (parsed.magnitude > std.math.maxInt(i64)) return null;
+        return @intCast(parsed.magnitude);
+    }
+    const max_plus_one = @as(u64, @intCast(std.math.maxInt(i64))) + 1;
+    if (parsed.magnitude == max_plus_one) return std.math.minInt(i64);
+    if (parsed.magnitude > max_plus_one) return null;
+    return -@as(i64, @intCast(parsed.magnitude));
+}
+
+fn parsePrintfIntegerConstant(arg: []const u8) !PrintfIntegerConstant {
+    if (arg.len == 0) return .{ .magnitude = 0 };
+    if (arg[0] == '\'' or arg[0] == '"') return .{ .magnitude = if (arg.len > 1) arg[1] else 0 };
+
+    var cursor: usize = 0;
+    var negative = false;
+    if (arg[cursor] == '+' or arg[cursor] == '-') {
+        negative = arg[cursor] == '-';
+        cursor += 1;
+    }
+    if (cursor >= arg.len or !std.ascii.isDigit(arg[cursor])) return error.InvalidCharacter;
+
+    const digits_start: usize = cursor;
+    var base: u8 = 10;
+    if (arg[cursor] == '0') {
+        base = 8;
+        cursor += 1;
+        if (cursor < arg.len and (arg[cursor] == 'x' or arg[cursor] == 'X')) {
+            base = 16;
+            cursor += 1;
+            const hex_start = cursor;
+            while (cursor < arg.len and std.ascii.isHex(arg[cursor])) : (cursor += 1) {}
+            if (cursor == hex_start) return .{ .magnitude = 0, .negative = negative, .complete = false };
+            return .{
+                .magnitude = try std.fmt.parseInt(u64, arg[hex_start..cursor], base),
+                .negative = negative,
+                .complete = cursor == arg.len,
+            };
+        }
+        while (cursor < arg.len and arg[cursor] >= '0' and arg[cursor] <= '7') : (cursor += 1) {}
+    } else {
+        while (cursor < arg.len and std.ascii.isDigit(arg[cursor])) : (cursor += 1) {}
+    }
+    return .{
+        .magnitude = try std.fmt.parseInt(u64, arg[digits_start..cursor], base),
+        .negative = negative,
+        .complete = cursor == arg.len,
     };
 }
 
@@ -13960,6 +14071,32 @@ test "executor implements read and printf builtins" {
     var width_result = try executor.executeProgram(width_lowered.program, .{});
     defer width_result.deinit();
     try std.testing.expectEqualStrings("[    a][b    ][abc][0007][12][ff][FF]", width_result.stdout);
+
+    var integer_constant_lowered = try parseAndLower(std.testing.allocator, "printf '%d:%d:%d:%d:%u:%x:%d\\n' 010 +0x10 \"'A\" '\"B' -010 -0x10 ''");
+    defer integer_constant_lowered.parsed.deinit();
+    defer integer_constant_lowered.program.deinit();
+    var integer_constant_result = try executor.executeProgram(integer_constant_lowered.program, .{});
+    defer integer_constant_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), integer_constant_result.status);
+    try std.testing.expectEqualStrings("8:16:65:66:18446744073709551608:fffffffffffffff0:0\n", integer_constant_result.stdout);
+
+    var partial_integer_lowered = try parseAndLower(std.testing.allocator, "printf '%d:%d\\n' 123abc 0o10");
+    defer partial_integer_lowered.parsed.deinit();
+    defer partial_integer_lowered.program.deinit();
+    var partial_integer_result = try executor.executeProgram(partial_integer_lowered.program, .{});
+    defer partial_integer_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), partial_integer_result.status);
+    try std.testing.expectEqualStrings("123:0\n", partial_integer_result.stdout);
+    try std.testing.expectEqualStrings("printf: numeric argument required\nprintf: numeric argument required\n", partial_integer_result.stderr);
+
+    var invalid_integer_order_lowered = try parseAndLower(std.testing.allocator, "printf '%d\\n' nope 2>&1");
+    defer invalid_integer_order_lowered.parsed.deinit();
+    defer invalid_integer_order_lowered.program.deinit();
+    var invalid_integer_order_result = try executor.executeProgram(invalid_integer_order_lowered.program, .{});
+    defer invalid_integer_order_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), invalid_integer_order_result.status);
+    try std.testing.expectEqualStrings("printf: numeric argument required\n0\n", invalid_integer_order_result.stdout);
+    try std.testing.expectEqualStrings("", invalid_integer_order_result.stderr);
 
     var float_lowered = try parseAndLower(std.testing.allocator, "printf '%5.2f|%e|%g|%G|%a|%A' 3.14159 2.5 1234567 0.0000123 3.5 3.5");
     defer float_lowered.parsed.deinit();
