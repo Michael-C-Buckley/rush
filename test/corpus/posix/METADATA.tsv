@@ -112,6 +112,7 @@ busybox-ash-smoke-read-redirection	redirection	external-suite-smoke	BusyBox ash-
 busybox-ash-smoke-test-redirection	builtin	external-suite-smoke	BusyBox ash-inspired test -s around redirected files
 cd-cdpath	variables	behavior	CDPATH searches relative directory operands, including slash operands, skips dot/dot-dot first components, and prints matched non-empty prefixes
 cd-oldpwd-dash	variables	behavior	cd updates PWD and OLDPWD and cd - returns to OLDPWD with output
+cd-pwd-oldpwd-export	variables	behavior	cd exports updated PWD and OLDPWD values to utility environments
 case-default	grammar	behavior	-
 case-final-arm-no-terminator	grammar	behavior	final case arm may omit double-semicolon terminator
 case-leading-paren-empty-arm	grammar	behavior	case arm with optional leading parenthesis and empty body

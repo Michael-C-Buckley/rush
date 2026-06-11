@@ -9455,6 +9455,8 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     errdefer self.allocator.free(new_pwd);
     try self.setEnv("OLDPWD", old_pwd);
     try self.setEnv("PWD", new_pwd);
+    try self.setExported("OLDPWD");
+    try self.setExported("PWD");
     const stdout = if (oldpwd_target or cd_target.print_path) try std.fmt.allocPrint(self.allocator, "{s}\n", .{new_pwd}) else try self.allocator.alloc(u8, 0);
     errdefer self.allocator.free(stdout);
     self.allocator.free(new_pwd);

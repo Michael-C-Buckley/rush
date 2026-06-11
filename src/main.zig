@@ -2916,6 +2916,33 @@ test "runScriptWithEnvironment preserves valid inherited logical PWD" {
     try std.testing.expectEqualStrings("logical-pwd\npwd-L\npwd-P\n", result.stdout);
 }
 
+test "runScriptWithEnvironment exports PWD and OLDPWD after cd" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    const dir = "rush-test-pwd-export";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, dir, .default_dir);
+
+    var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io,
+        \\unset PWD OLDPWD
+        \\cd rush-test-pwd-export
+        \\env
+    , .{ .io = std.testing.io, .allow_external = true }, null);
+    defer result.deinit();
+
+    const pwd_line = try std.fmt.allocPrint(std.testing.allocator, "PWD={s}/{s}\n", .{ original_cwd, dir });
+    defer std.testing.allocator.free(pwd_line);
+    const oldpwd_line = try std.fmt.allocPrint(std.testing.allocator, "OLDPWD={s}\n", .{original_cwd});
+    defer std.testing.allocator.free(oldpwd_line);
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, pwd_line) != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, oldpwd_line) != null);
+}
+
 test "runScriptWithOptions accepts inherit mode for external commands" {
     var result = try runScriptWithOptions(std.testing.allocator, std.testing.io, "/usr/bin/true", .{
         .io = std.testing.io,
