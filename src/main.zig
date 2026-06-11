@@ -1418,7 +1418,8 @@ const InteractiveOptions = struct {
 };
 
 pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !u8 {
-    installInteractiveSignalHandlers();
+    var signal_handlers = installInteractiveSignalHandlers();
+    defer signal_handlers.restore();
 
     var history = History.init(allocator);
     defer history.deinit();
@@ -1497,7 +1498,30 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         try syncInteractiveTerminalSize(&executor, terminal);
         const line = switch (read_result) {
             .submitted => |line| line,
-            .canceled => continue,
+            .canceled => {
+                if (try runInteractiveInterruptTrap(io, &executor, options.arg_zero)) |result| {
+                    var trap_result = result;
+                    defer trap_result.deinit();
+                    try terminal.leaveEditorMode();
+                    var editor_mode_left = true;
+                    defer if (editor_mode_left) terminal.enterEditorMode() catch {};
+
+                    try writeAll(io, .stdout, trap_result.stdout);
+                    try writeAll(io, .stderr, trap_result.stderr);
+                    if (outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
+                    last_status = trap_result.status;
+                    try terminal.finishSemanticCommand(trap_result.status);
+                    if (executor.pending_exit) |status| {
+                        last_status = status;
+                        editor_mode_left = false;
+                        break;
+                    }
+
+                    try terminal.enterEditorMode();
+                    editor_mode_left = false;
+                }
+                continue;
+            },
             .eof => {
                 if (!executor.shell_options.ignoreeof) break;
                 try writeAll(io, .stderr, ignoreeof_message);
@@ -1586,6 +1610,10 @@ fn outputNeedsNewlineMarker(stdout: []const u8, stderr: []const u8) bool {
     const output = if (stderr.len != 0) stderr else stdout;
     if (output.len == 0) return false;
     return output[output.len - 1] != '\n';
+}
+
+fn runInteractiveInterruptTrap(io: std.Io, executor: *exec.Executor, arg_zero: []const u8) !?exec.CommandResult {
+    return try executor.executeSignalTrap("INT", .{ .io = io, .allow_external = true, .interactive = true, .arg_zero = arg_zero });
 }
 
 pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8) !exec.CommandResult {
@@ -1796,16 +1824,47 @@ fn historyPath(allocator: std.mem.Allocator, environ_map: *const std.process.Env
     return null;
 }
 
-fn installInteractiveSignalHandlers() void {
-    const sigint_action: std.posix.Sigaction = .{
-        .handler = .{ .handler = handleInteractiveSigint },
+const InteractiveSignalHandlers = struct {
+    int: SignalActionGuard,
+    quit: SignalActionGuard,
+    term: SignalActionGuard,
+
+    fn restore(self: *InteractiveSignalHandlers) void {
+        self.term.restore();
+        self.quit.restore();
+        self.int.restore();
+    }
+};
+
+const SignalActionGuard = struct {
+    signal: std.posix.SIG,
+    previous: std.posix.Sigaction,
+
+    fn restore(self: SignalActionGuard) void {
+        std.posix.sigaction(self.signal, &self.previous, null);
+    }
+};
+
+fn installInteractiveSignalHandlers() InteractiveSignalHandlers {
+    return .{
+        .int = installInteractiveSignalHandler(.INT),
+        .quit = installInteractiveSignalHandler(.QUIT),
+        .term = installInteractiveSignalHandler(.TERM),
+    };
+}
+
+fn installInteractiveSignalHandler(signal: std.posix.SIG) SignalActionGuard {
+    const action: std.posix.Sigaction = .{
+        .handler = .{ .handler = handleInteractiveSignal },
         .mask = std.posix.sigemptyset(),
         .flags = 0,
     };
-    std.posix.sigaction(.INT, &sigint_action, null);
+    var previous: std.posix.Sigaction = undefined;
+    std.posix.sigaction(signal, &action, &previous);
+    return .{ .signal = signal, .previous = previous };
 }
 
-fn handleInteractiveSigint(_: std.posix.SIG) callconv(.c) void {}
+fn handleInteractiveSignal(_: std.posix.SIG) callconv(.c) void {}
 
 fn diagnosticsResult(allocator: std.mem.Allocator, script: []const u8, diagnostics: []const parser.Diagnostic) !exec.CommandResult {
     var stderr: std.ArrayList(u8) = .empty;
@@ -2511,6 +2570,36 @@ test "interactive notify schedules editor job notification polling" {
     executor.background_jobs.items[0].state = .done;
     executor.background_jobs.items[0].notified_state = .done;
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+}
+
+test "interactive signal handlers catch interrupt quit and terminate" {
+    var handlers = installInteractiveSignalHandlers();
+    defer handlers.restore();
+
+    var current: std.posix.Sigaction = undefined;
+    std.posix.sigaction(.INT, null, &current);
+    try std.testing.expect(current.handler.handler != null);
+    try std.testing.expect(current.handler.handler.? == handleInteractiveSignal);
+    std.posix.sigaction(.QUIT, null, &current);
+    try std.testing.expect(current.handler.handler != null);
+    try std.testing.expect(current.handler.handler.? == handleInteractiveSignal);
+    std.posix.sigaction(.TERM, null, &current);
+    try std.testing.expect(current.handler.handler != null);
+    try std.testing.expect(current.handler.handler.? == handleInteractiveSignal);
+}
+
+test "interactive interrupt runs INT trap" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var setup = try runScriptWithExecutor(std.testing.allocator, &executor, "trap 'echo trapped' INT", .{ .io = std.testing.io, .allow_external = true, .interactive = true });
+    defer setup.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
+
+    var result = (try runInteractiveInterruptTrap(std.testing.io, &executor, "rush")) orelse return error.MissingTrapResult;
+    defer result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("trapped\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "command string operands set the command name and positional parameters" {

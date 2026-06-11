@@ -2410,6 +2410,11 @@ pub const Executor = struct {
         self.setLastStatus(trap_result.status);
     }
 
+    pub fn executeSignalTrap(self: *Executor, name: []const u8, options: ExecuteOptions) !?CommandResult {
+        const action = self.traps.get(name) orelse return null;
+        return try self.executeScriptSlice(action, options);
+    }
+
     fn finishExecuteProgram(self: *Executor, root_execution: bool, options: ExecuteOptions, result: CommandResult) !CommandResult {
         if (!root_execution or self.running_exit_trap) return result;
         const action = self.traps.get("EXIT") orelse return result;
@@ -3660,6 +3665,7 @@ pub const Executor = struct {
         if (pid == 0) {
             if (use_monitor_pgrp) processSetPgrp(0, 0) catch exitForkedChild(2);
             self.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
+            resetInteractiveJobSignalHandlers();
             var child_options = options;
             child_options.foreground_terminal = false;
             if (!use_monitor_pgrp) installDevNullStdin(io) catch exitForkedChild(2);
@@ -4018,6 +4024,7 @@ pub const Executor = struct {
         const pid = try forkProcess();
         if (pid == 0) {
             processSetPgrp(0, 0) catch exitForkedChild(2);
+            resetInteractiveJobSignalHandlers();
             var child_options = options;
             child_options.foreground_terminal = false;
             var status: ExitStatus = 2;
@@ -6850,6 +6857,21 @@ fn ignoreSignal(signal: std.posix.SIG) SignalActionGuard {
     var previous: std.posix.Sigaction = undefined;
     std.posix.sigaction(signal, &ignored, &previous);
     return .{ .signal = signal, .previous = previous };
+}
+
+pub fn resetInteractiveJobSignalHandlers() void {
+    defaultSignal(.INT);
+    defaultSignal(.QUIT);
+    defaultSignal(.TERM);
+}
+
+fn defaultSignal(signal: std.posix.SIG) void {
+    const action: std.posix.Sigaction = .{
+        .handler = .{ .handler = std.posix.SIG.DFL },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    std.posix.sigaction(signal, &action, null);
 }
 
 fn fileFromBytes(io: std.Io, bytes: []const u8) !std.Io.File {
@@ -11625,6 +11647,39 @@ test "executor restores trap signal handlers on clear and deinit" {
     try std.testing.expectEqual(@as(ExitStatus, 0), later_result.status);
     try std.testing.expectEqualStrings("after\n", later_result.stdout);
     try std.testing.expectEqual(@as(u8, 1), test_term_signal_count.load(.seq_cst));
+}
+
+test "interactive job signal reset restores default dispositions" {
+    const action: std.posix.Sigaction = .{
+        .handler = .{ .handler = testTermSignalHandler },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    var previous_int: std.posix.Sigaction = undefined;
+    var previous_quit: std.posix.Sigaction = undefined;
+    var previous_term: std.posix.Sigaction = undefined;
+    std.posix.sigaction(.INT, &action, &previous_int);
+    defer std.posix.sigaction(.INT, &previous_int, null);
+    std.posix.sigaction(.QUIT, &action, &previous_quit);
+    defer std.posix.sigaction(.QUIT, &previous_quit, null);
+    std.posix.sigaction(.TERM, &action, &previous_term);
+    defer std.posix.sigaction(.TERM, &previous_term, null);
+
+    resetInteractiveJobSignalHandlers();
+
+    var current: std.posix.Sigaction = undefined;
+    std.posix.sigaction(.INT, null, &current);
+    try expectDefaultSignalHandler(current);
+    std.posix.sigaction(.QUIT, null, &current);
+    try expectDefaultSignalHandler(current);
+    std.posix.sigaction(.TERM, null, &current);
+    try expectDefaultSignalHandler(current);
+}
+
+fn expectDefaultSignalHandler(action: std.posix.Sigaction) !void {
+    if (action.handler.handler) |handler| {
+        try std.testing.expect(handler == std.posix.SIG.DFL);
+    }
 }
 
 test "executor implements getopts builtin" {

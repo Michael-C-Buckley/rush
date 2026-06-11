@@ -9,6 +9,7 @@ pub const Source = enum(u32) {
     prompt_redraw,
     completion_result,
     child_signal,
+    interrupt_signal,
 };
 
 pub const Event = struct {
