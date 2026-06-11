@@ -374,6 +374,7 @@ option-set-variable-listing	options	behavior	set without operands lists shell va
 redirection-brace-group-input	redirection	behavior	input redirection on a brace group feeds commands in the group
 redirection-subshell-input	redirection	behavior	input redirection on a subshell feeds commands in the subshell
 redirection-function-call-input	redirection	behavior	input redirection on a function call feeds commands in the function body
+redirection-builtins-groups-real-fd	redirection	behavior	inherited-stdio redirections on builtins functions brace groups subshells if for while until and case commands use real shared file descriptors including arbitrary fd output and mixed builtin external stdin consumers
 builtin-env-terminator-assignment-command	builtin	behavior	env option terminator before assignment and command
 grammar-case-quoted-pattern-metacharacters	grammar	behavior	case pattern metacharacters are literal when quoted or escaped
 grammar-case-bracket-patterns	grammar	behavior	case bracket pattern expressions

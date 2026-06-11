@@ -2561,6 +2561,11 @@ pub const Executor = struct {
         if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| return self.redirectionErrorResult(wrapper, err, false)) |guard_value| {
             var guard = guard_value;
             defer guard.restore(self, options.io.?);
+            if (redirectionsAffectStdin(redirections)) {
+                child.script_stdin = null;
+                child.script_stdin_offset = 0;
+                child.script_stdin_file = std.Io.File.stdin();
+            }
             var result = try child.executeScriptSlice(subshell.body, options);
             defer result.deinit();
             writeInheritedResult(options.io.?, result) catch |err| switch (err) {
@@ -2609,6 +2614,11 @@ pub const Executor = struct {
         if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| return self.redirectionErrorResult(wrapper, err, false)) |guard_value| {
             var guard = guard_value;
             defer guard.restore(self, options.io.?);
+            if (redirectionsAffectStdin(redirections)) {
+                self.script_stdin = null;
+                self.script_stdin_offset = 0;
+                self.script_stdin_file = std.Io.File.stdin();
+            }
             var result = try self.executeScriptSlice(group.body, options);
             defer result.deinit();
             writeInheritedResult(options.io.?, result) catch |err| switch (err) {
@@ -3244,8 +3254,27 @@ pub const Executor = struct {
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
+        var real_redirections: []ir.Redirection = &.{};
+        if (options.external_stdio == .inherit and command.redirections.len != 0) real_redirections = try self.expandRedirections(command.redirections, options);
+        defer if (real_redirections.len != 0) self.freeRedirections(real_redirections);
+        const wrapper: ir.SimpleCommand = .{
+            .span = command.span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = real_redirections,
+        };
+        var real_redirection_guard: ?FdRedirectionGuard = if (real_redirections.len != 0)
+            self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| return self.redirectionErrorResult(wrapper, err, false)
+        else
+            null;
+        defer if (real_redirection_guard) |*guard| guard.restore(self, options.io.?);
+        if (real_redirection_guard != null and redirectionsAffectStdin(real_redirections)) {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = std.Io.File.stdin();
+        }
         var execution_options = options;
-        if (command.redirections.len != 0) execution_options.external_stdio = .capture;
+        if (command.redirections.len != 0 and real_redirection_guard == null) execution_options.external_stdio = .capture;
 
         const subject_words = try self.expandWords(&.{command.word}, execution_options);
         defer self.freeWords(subject_words);
@@ -3256,13 +3285,31 @@ pub const Executor = struct {
                 var pattern = try self.expandCasePattern(word, execution_options);
                 defer pattern.deinit(self.allocator);
                 if (shellCasePatternMatches(pattern, subject)) {
-                    const result = try self.executeScriptSlice(arm.body, execution_options);
+                    var result = try self.executeScriptSlice(arm.body, execution_options);
+                    if (real_redirection_guard != null) {
+                        defer result.deinit();
+                        writeInheritedResult(options.io.?, result) catch |err| switch (err) {
+                            error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                            error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
+                            else => return err,
+                        };
+                        return emptyResult(self.allocator, result.status);
+                    }
                     return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
                 }
             }
         }
 
-        const result = try emptyResult(self.allocator, 0);
+        var result = try emptyResult(self.allocator, 0);
+        if (real_redirection_guard != null) {
+            defer result.deinit();
+            writeInheritedResult(options.io.?, result) catch |err| switch (err) {
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
+                else => return err,
+            };
+            return emptyResult(self.allocator, result.status);
+        }
         return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
@@ -3308,8 +3355,27 @@ pub const Executor = struct {
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
+        var real_redirections: []ir.Redirection = &.{};
+        if (options.external_stdio == .inherit and command.redirections.len != 0) real_redirections = try self.expandRedirections(command.redirections, options);
+        defer if (real_redirections.len != 0) self.freeRedirections(real_redirections);
+        const wrapper: ir.SimpleCommand = .{
+            .span = command.span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = real_redirections,
+        };
+        var real_redirection_guard: ?FdRedirectionGuard = if (real_redirections.len != 0)
+            self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| return self.redirectionErrorResult(wrapper, err, false)
+        else
+            null;
+        defer if (real_redirection_guard) |*guard| guard.restore(self, options.io.?);
+        if (real_redirection_guard != null and redirectionsAffectStdin(real_redirections)) {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = std.Io.File.stdin();
+        }
         var execution_options = options;
-        if (command.redirections.len != 0) execution_options.external_stdio = .capture;
+        if (command.redirections.len != 0 and real_redirection_guard == null) execution_options.external_stdio = .capture;
         const expanded_words = if (command.use_positionals) &[_]ir.WordRef{} else try self.expandArgv(command.words, options);
         defer if (!command.use_positionals) self.freeWords(expanded_words);
 
@@ -3359,6 +3425,16 @@ pub const Executor = struct {
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
         };
+        if (real_redirection_guard != null) {
+            var owned_result = result;
+            defer owned_result.deinit();
+            writeInheritedResult(options.io.?, owned_result) catch |err| switch (err) {
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
+                else => return err,
+            };
+            return emptyResult(self.allocator, owned_result.status);
+        }
         return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
@@ -3387,8 +3463,27 @@ pub const Executor = struct {
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
+        var real_redirections: []ir.Redirection = &.{};
+        if (options.external_stdio == .inherit and command.redirections.len != 0) real_redirections = try self.expandRedirections(command.redirections, options);
+        defer if (real_redirections.len != 0) self.freeRedirections(real_redirections);
+        const wrapper: ir.SimpleCommand = .{
+            .span = command.span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = real_redirections,
+        };
+        var real_redirection_guard: ?FdRedirectionGuard = if (real_redirections.len != 0)
+            self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| return self.redirectionErrorResult(wrapper, err, false)
+        else
+            null;
+        defer if (real_redirection_guard) |*guard| guard.restore(self, options.io.?);
+        if (real_redirection_guard != null and redirectionsAffectStdin(real_redirections)) {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = std.Io.File.stdin();
+        }
         var execution_options = options;
-        if (command.redirections.len != 0) execution_options.external_stdio = .capture;
+        if (command.redirections.len != 0 and real_redirection_guard == null) execution_options.external_stdio = .capture;
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
         var stderr: std.ArrayList(u8) = .empty;
@@ -3432,6 +3527,16 @@ pub const Executor = struct {
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
         };
+        if (real_redirection_guard != null) {
+            var owned_result = result;
+            defer owned_result.deinit();
+            writeInheritedResult(options.io.?, owned_result) catch |err| switch (err) {
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
+                else => return err,
+            };
+            return emptyResult(self.allocator, owned_result.status);
+        }
         return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
@@ -3471,6 +3576,22 @@ pub const Executor = struct {
             if (isHereDocRedirection(redirection) or isStdinFileRedirection(redirection)) return true;
         }
         return false;
+    }
+
+    fn redirectionsAffectStdin(redirections: []const ir.Redirection) bool {
+        for (redirections) |redirection| {
+            if (redirectionAffectsStdin(redirection)) return true;
+        }
+        return false;
+    }
+
+    fn redirectionAffectsStdin(redirection: ir.Redirection) bool {
+        const default_fd: std.posix.fd_t = switch (redirection.operator) {
+            .less, .less_great, .dless, .dless_dash, .less_and => 0,
+            .greater, .dgreat, .clobber, .greater_and => 1,
+            else => return false,
+        };
+        return (redirectionFd(redirection) orelse default_fd) == 0;
     }
 
     const ScriptStdinGuard = struct {
@@ -3537,8 +3658,27 @@ pub const Executor = struct {
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
+        var real_redirections: []ir.Redirection = &.{};
+        if (options.external_stdio == .inherit and command.redirections.len != 0) real_redirections = try self.expandRedirections(command.redirections, options);
+        defer if (real_redirections.len != 0) self.freeRedirections(real_redirections);
+        const wrapper: ir.SimpleCommand = .{
+            .span = command.span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = real_redirections,
+        };
+        var real_redirection_guard: ?FdRedirectionGuard = if (real_redirections.len != 0)
+            self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| return self.redirectionErrorResult(wrapper, err, false)
+        else
+            null;
+        defer if (real_redirection_guard) |*guard| guard.restore(self, options.io.?);
+        if (real_redirection_guard != null and redirectionsAffectStdin(real_redirections)) {
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = std.Io.File.stdin();
+        }
         var execution_options = options;
-        if (command.redirections.len != 0) execution_options.external_stdio = .capture;
+        if (command.redirections.len != 0 and real_redirection_guard == null) execution_options.external_stdio = .capture;
         var stdout: std.ArrayList(u8) = .empty;
         errdefer stdout.deinit(self.allocator);
         var stderr: std.ArrayList(u8) = .empty;
@@ -3576,6 +3716,16 @@ pub const Executor = struct {
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
         };
+        if (real_redirection_guard != null) {
+            var owned_result = result;
+            defer owned_result.deinit();
+            writeInheritedResult(options.io.?, owned_result) catch |err| switch (err) {
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
+                else => return err,
+            };
+            return emptyResult(self.allocator, owned_result.status);
+        }
         return self.applyCompoundOutputRedirections(command.span, command.redirections, result, options);
     }
 
@@ -4859,20 +5009,9 @@ pub const Executor = struct {
 
         if (!options.suppress_functions and self.functions.getPtr(expanded.argv[0].text) != null) {
             const function_value = self.functions.getPtr(expanded.argv[0].text).?;
-            if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, false)) |guard_value| {
-                var guard = guard_value;
-                defer guard.restore(self, options.io.?);
-                var result = try self.executeFunctionBody(expanded, function_value, options);
-                defer result.deinit();
-                writeInheritedResult(options.io.?, result) catch |err| switch (err) {
-                    error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
-                    error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
-                    else => return err,
-                };
-                return emptyResult(self.allocator, result.status);
-            }
             var result = try self.executeFunctionBody(expanded, function_value, options);
             errdefer result.deinit();
+            if (options.external_stdio == .inherit and expanded.redirections.len != 0) return result;
             return try self.applyOutputRedirections(expanded, result, options, false);
         }
 
@@ -5066,6 +5205,17 @@ pub const Executor = struct {
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
+        var real_call_guard: ?FdRedirectionGuard = if (options.external_stdio == .inherit and command.redirections.len != 0)
+            self.applyRealFdRedirectionsIfNeeded(command, options) catch |err| return self.redirectionErrorResult(command, err, false)
+        else
+            null;
+        defer if (real_call_guard) |*guard| guard.restore(self, options.io.?);
+        if (real_call_guard != null and redirectionsAffectStdin(command.redirections)) {
+            if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = std.Io.File.stdin();
+        }
         const redirected_stdin = self.applyCompoundInputRedirections(command.span, function_value.redirections, options, &owned_stdin, &stdin_file) catch |err| return self.compoundRedirectionErrorResult(command.span, function_value.redirections, err, false);
         if (stdin_file) |file| {
             if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
@@ -5078,8 +5228,28 @@ pub const Executor = struct {
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
+        var real_definition_redirections: []ir.Redirection = &.{};
+        if (options.external_stdio == .inherit and function_value.redirections.len != 0) real_definition_redirections = try self.expandRedirections(function_value.redirections, options);
+        defer if (real_definition_redirections.len != 0) self.freeRedirections(real_definition_redirections);
+        const definition_wrapper: ir.SimpleCommand = .{
+            .span = command.span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = real_definition_redirections,
+        };
+        var real_definition_guard: ?FdRedirectionGuard = if (real_definition_redirections.len != 0)
+            self.applyRealFdRedirectionsIfNeeded(definition_wrapper, options) catch |err| return self.redirectionErrorResult(definition_wrapper, err, false)
+        else
+            null;
+        defer if (real_definition_guard) |*guard| guard.restore(self, options.io.?);
+        if (real_definition_guard != null and redirectionsAffectStdin(real_definition_redirections)) {
+            if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
+            self.script_stdin = null;
+            self.script_stdin_offset = 0;
+            self.script_stdin_file = std.Io.File.stdin();
+        }
         var execution_options = options;
-        if (function_value.redirections.len != 0) execution_options.external_stdio = .capture;
+        if (function_value.redirections.len != 0 and real_definition_guard == null) execution_options.external_stdio = .capture;
         try self.pushCallFrame(command.argv[1..]);
         defer self.popCallFrame();
         self.function_depth += 1;
@@ -5089,6 +5259,26 @@ pub const Executor = struct {
         if (self.pending_return) |status| {
             self.pending_return = null;
             result.status = status;
+        }
+        if (real_definition_guard != null) {
+            writeInheritedResult(options.io.?, result) catch |err| switch (err) {
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
+                else => return err,
+            };
+            const status = result.status;
+            result.deinit();
+            return emptyResult(self.allocator, status);
+        }
+        if (real_call_guard != null) {
+            writeInheritedResult(options.io.?, result) catch |err| switch (err) {
+                error.BadFileDescriptor => return errorResult(self.allocator, 1, "write", "bad file descriptor"),
+                error.BrokenPipe, error.NoSpaceLeft, error.InputOutput => return self.writeFailureResult(err, false),
+                else => return err,
+            };
+            const status = result.status;
+            result.deinit();
+            return emptyResult(self.allocator, status);
         }
         return self.applyCompoundOutputRedirections(command.span, function_value.redirections, result, options);
     }
@@ -6440,7 +6630,7 @@ pub const Executor = struct {
             }
         }
 
-        if (stdin_file == null and !stdin_redirected and externalStdinUsesScriptInput(options.external_stdio)) {
+        if (stdin_file == null and !stdin_redirected and (externalStdinUsesScriptInput(options.external_stdio) or self.remainingScriptStdinFile() != null)) {
             if (fallback_stdin) |stdin| {
                 stdin_file = try fileFromBytes(io, stdin);
                 if (self.script_stdin) |script_stdin| self.script_stdin_offset = script_stdin.len;

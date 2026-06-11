@@ -20,28 +20,28 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `406` rows
-- `scripts/check-posix-corpus.sh`: `396` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `225` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `278` cases, `556` comparisons across dash and bash POSIX mode
+- `scripts/check-posix-corpus.sh`: `398` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `227` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `279` cases, `558` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
 - tracked items: `406`
 - scored POSIX items: `402`
-- supported: `376`
-- baseline: `23`
+- supported: `379`
+- baseline: `20`
 - partial: `2`
 - missing: `1`
 - out of scope: `4`
-- strict supported only: `93.5%`
+- strict supported only: `94.3%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `97.7%`
+- weighted progress: `97.9%`
 
 Recent notable capabilities:
 
 - Real external command spawning with PATH lookup and foreground terminal handoff for inherited-stdio simple commands.
 - Real OS fd plumbing for external redirections, pipelines, and mixed builtin/external pipelines.
-- Real fd save/restore redirections for CLI inherited-stdio builtins, functions, subshells, brace groups, and arbitrary shell-visible fds.
+- Real fd save/restore redirections for CLI inherited-stdio builtins, functions, subshells, brace groups, if/for/while/until/case compound commands, and arbitrary shell-visible fds.
 - Redirection support for `<`, `>`, `>>`, `>|`, `<&`, `>&`, `n<&-`, `n>&-`, and `<>` baseline behavior.
 - Here-doc baseline with ordered pending bodies, quoted delimiter behavior, tab stripping for `<<-`, expansion for unquoted bodies, and safe fd materialization.
 - POSIX compound command execution baseline: `if`, `while`, `until`, `for`, `case`, functions, subshells, and brace groups.
@@ -206,7 +206,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
   - unquoted body expansion baseline
   - safe fd materialization
 - External commands use real file descriptors.
-- CLI inherited-stdio builtins, functions, subshells, and brace groups use temporary OS fd mutation and restore for supported fd forms.
+- CLI inherited-stdio builtins, functions, subshells, brace groups, and if/for/while/until/case compound commands use temporary OS fd mutation and restore for supported fd forms, including shared input offsets across mixed builtin/external consumers.
 - Shell-visible fd tracking prevents internal fds from being accidentally exposed as shell fds.
 - Non-interactive redirection error consequences are covered for ordinary builtins, external commands, compound commands, function calls and bodies, `<>`, here-doc materialization, async commands, pipelines, AND-OR lists, negation, `$?`, `errexit`, and special-builtin shell exit behavior. Rush intentionally uses non-zero status `1` for many non-special redirection failures where dash reports `2`; POSIX only requires non-zero.
 - Output write failures after redirection setup succeeds are covered in inherited-stdio unit tests with a portable broken-pipe fd harness and in a Linux-gated negative corpus case using `/dev/full` as an actual file target: regular builtins diagnose `write`, return status `1`, and let following commands run; functions and brace groups propagate the failed redirected write as their status; pipelines record the failed stage status, including `pipefail` and last-stage behavior. External command write failures remain delegated to the external utility and OS signal/write semantics.
