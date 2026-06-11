@@ -2177,7 +2177,7 @@ const SyntaxParser = struct {
             }
         }
 
-        const first_command = try self.parseSimpleCommand();
+        const first_command = try self.parseCommand();
         try pipeline_children.append(self.allocator, .{ .node = first_command });
 
         while (!self.at(.eof)) {
@@ -2193,7 +2193,7 @@ const SyntaxParser = struct {
                 try self.appendCurrentTokenChildTo(&pipeline_children);
             }
 
-            if (!self.startsSimpleCommand()) {
+            if (!self.startsCommand()) {
                 self.incomplete = true;
                 try self.diagnostics.append(self.allocator, .{
                     .kind = .parse_error,
@@ -2203,7 +2203,7 @@ const SyntaxParser = struct {
                 break;
             }
 
-            const command = try self.parseSimpleCommand();
+            const command = try self.parseCommand();
             try pipeline_children.append(self.allocator, .{ .node = command });
         }
 
@@ -2212,6 +2212,18 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, pipeline_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.pipeline, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn parseCommand(self: *SyntaxParser) anyerror!NodeId {
+        if (self.startsFunctionDefinition()) return self.parseFunctionDefinition();
+        if (self.startsBraceGroup()) return self.parseBraceGroup();
+        if (self.startsSubshell()) return self.parseSubshell();
+        if (self.startsBashTestCommand()) return self.parseBashTestCommand();
+        if (self.startsIfCommand()) return self.parseIfCommand();
+        if (self.startsLoopCommand()) return self.parseLoopCommand();
+        if (self.startsForCommand()) return self.parseForCommand();
+        if (self.startsCaseCommand()) return self.parseCaseCommand();
+        return self.parseSimpleCommand();
     }
 
     fn parseSimpleCommand(self: *SyntaxParser) !NodeId {
@@ -2463,6 +2475,10 @@ const SyntaxParser = struct {
 
     fn startsCaseCommand(self: SyntaxParser) bool {
         return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "case");
+    }
+
+    fn startsCommand(self: SyntaxParser) bool {
+        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsSimpleCommand();
     }
 
     fn startsPipeline(self: SyntaxParser) bool {

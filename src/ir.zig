@@ -35,6 +35,7 @@ pub const ListOp = enum {
 pub const Pipeline = struct {
     span: parser.Span,
     command_indexes: []usize,
+    stage_spans: []parser.Span = &.{},
     op_before: ListOp = .sequence,
     negated: bool = false,
     async_after: bool = false,
@@ -152,6 +153,7 @@ pub const Program = struct {
         }
         for (self.pipelines) |pipeline| {
             self.allocator.free(pipeline.command_indexes);
+            self.allocator.free(pipeline.stage_spans);
         }
         self.allocator.free(self.commands);
         self.allocator.free(self.pipelines);
@@ -301,11 +303,13 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     for (statement_refs.items) |statement_ref| {
         var statement: Statement = .{ .kind = statement_ref.kind, .index = statement_ref.index, .span = statementSpan(parsed, statement_ref) };
         if (previous_statement_end) |previous_end| {
-            statement.op_before = listOpBetween(parsed.tokens, previous_end, statement_ref.token_start);
+            if (previous_end <= statement_ref.token_start) {
+                statement.op_before = listOpBetween(parsed.tokens, previous_end, statement_ref.token_start);
+            }
         }
         statement.async_after = statementHasAsyncTerminator(parsed.tokens, statement_ref.token_end, nextStatementStart(parsed, statement_ref.token_end));
         if (statement.kind == .pipeline) pipelines.items[statement.index].async_after = statement.async_after;
-        previous_statement_end = statement_ref.token_end;
+        previous_statement_end = if (previous_statement_end) |previous_end| @max(previous_end, statement_ref.token_end) else statement_ref.token_end;
         try statements.append(allocator, statement);
     }
 
@@ -838,6 +842,8 @@ fn spanSlice(parsed: parser.ParseResult, token_start: usize, token_end: usize) [
 fn lowerPipeline(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node, command_indexes_by_node: []const usize, missing_command: usize) !Pipeline {
     var command_indexes: std.ArrayList(usize) = .empty;
     errdefer command_indexes.deinit(allocator);
+    var stage_spans: std.ArrayList(parser.Span) = .empty;
+    errdefer stage_spans.deinit(allocator);
     var negated = false;
 
     for (parsed.nodeChildren(node)) |child| switch (child) {
@@ -847,16 +853,19 @@ fn lowerPipeline(allocator: std.mem.Allocator, parsed: parser.ParseResult, node:
         },
         .node => |child_node_id| {
             const child_node = parsed.nodes[child_node_id.index()];
-            if (child_node.kind != .simple_command) continue;
-            const command_index = command_indexes_by_node[child_node_id.index()];
-            std.debug.assert(command_index != missing_command);
-            try command_indexes.append(allocator, command_index);
+            try stage_spans.append(allocator, child_node.span);
+            if (child_node.kind == .simple_command) {
+                const command_index = command_indexes_by_node[child_node_id.index()];
+                std.debug.assert(command_index != missing_command);
+                try command_indexes.append(allocator, command_index);
+            }
         },
     };
 
     return .{
         .span = node.span,
         .command_indexes = try command_indexes.toOwnedSlice(allocator),
+        .stage_spans = try stage_spans.toOwnedSlice(allocator),
         .negated = negated,
     };
 }

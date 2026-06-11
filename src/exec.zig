@@ -3790,6 +3790,7 @@ pub const Executor = struct {
             const io = options.io orelse return error.MissingIoForExternalCommand;
             return self.executeRealPipeline(program, pipeline, options, io);
         }
+        if (pipeline.stage_spans.len != pipeline.command_indexes.len) return self.executeSpanPipeline(program, pipeline, options);
 
         var last = try emptyResult(self.allocator, 0);
         var stdin = try self.allocator.alloc(u8, 0);
@@ -3822,6 +3823,50 @@ pub const Executor = struct {
         return last;
     }
 
+    fn executeSpanPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) anyerror!CommandResult {
+        var last = try emptyResult(self.allocator, 0);
+        var stdin = try self.allocator.alloc(u8, 0);
+        defer self.allocator.free(stdin);
+        const statuses = try self.allocator.alloc(ExitStatus, pipeline.stage_spans.len);
+        defer self.allocator.free(statuses);
+        var statuses_len: usize = 0;
+
+        for (pipeline.stage_spans, 0..) |stage_span, index| {
+            if (self.shouldSkipForNoexec(options)) break;
+            last.deinit();
+            last = try self.executePipelineStageSpan(program.source[stage_span.start..stage_span.end], stdin, options);
+            statuses[index] = last.status;
+            statuses_len = index + 1;
+            if (self.shouldSkipForNoexec(options)) break;
+
+            if (index + 1 < pipeline.stage_spans.len) {
+                self.allocator.free(stdin);
+                stdin = try self.allocator.dupe(u8, last.stdout);
+            }
+        }
+
+        last.status = self.pipelineStatus(pipeline, statuses[0..statuses_len]);
+        return last;
+    }
+
+    fn executePipelineStageSpan(self: *Executor, source: []const u8, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+        const prior_stdin = self.script_stdin;
+        const prior_stdin_offset = self.script_stdin_offset;
+        const prior_stdin_file = self.script_stdin_file;
+        defer {
+            self.script_stdin = prior_stdin;
+            self.script_stdin_offset = prior_stdin_offset;
+            self.script_stdin_file = prior_stdin_file;
+        }
+        self.script_stdin = stdin;
+        self.script_stdin_offset = 0;
+        self.script_stdin_file = null;
+
+        var stage_options = options;
+        stage_options.external_stdio = .capture;
+        return self.executeScriptSlice(source, stage_options);
+    }
+
     fn pipelineHasRedirections(program: ir.Program, pipeline: ir.Pipeline) bool {
         for (pipeline.command_indexes) |command_index| {
             if (program.commands[command_index].redirections.len != 0) return true;
@@ -3845,6 +3890,7 @@ pub const Executor = struct {
 
     fn canExecuteRealPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
         _ = self;
+        if (pipeline.stage_spans.len != pipeline.command_indexes.len) return false;
         if (!options.allow_external or options.io == null or pipeline.command_indexes.len < 2) return false;
         for (pipeline.command_indexes) |command_index| {
             const command = program.commands[command_index];
