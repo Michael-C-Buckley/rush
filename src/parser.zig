@@ -1874,6 +1874,7 @@ const SyntaxParser = struct {
         var brace_depth: usize = 0;
         var saw_open_brace = false;
         var closed = false;
+        var has_body_command = false;
         var command_position = true;
 
         while (!self.at(.eof)) {
@@ -1881,6 +1882,7 @@ const SyntaxParser = struct {
             if (token.kind == .word) {
                 const lexeme = token.lexeme(self.source);
                 if (command_position and std.mem.eql(u8, lexeme, "{")) {
+                    if (saw_open_brace) has_body_command = true;
                     saw_open_brace = true;
                     brace_depth += 1;
                 } else if (command_position and saw_open_brace and std.mem.eql(u8, lexeme, "}")) {
@@ -1888,9 +1890,11 @@ const SyntaxParser = struct {
                     closed = brace_depth == 0;
                     command_position = false;
                 } else {
+                    if (saw_open_brace and brace_depth > 0 and command_position) has_body_command = true;
                     command_position = command_position and functionBodyWordContinuesCommandPosition(lexeme);
                 }
             } else if (token.kind != .whitespace and token.kind != .comment) {
+                if (saw_open_brace and brace_depth > 0 and command_position and (token.kind == .left_paren or token.kind.isRedirectOperator())) has_body_command = true;
                 command_position = isSimpleCommandSeparator(token.kind) or token.kind == .left_paren or token.kind == .right_paren;
             }
             try self.appendCurrentTokenChildTo(&function_children);
@@ -1911,6 +1915,13 @@ const SyntaxParser = struct {
                 .kind = .incomplete_input,
                 .span = spanForTokenRange(self.tokens, token_start, self.index),
                 .message = "missing } to close function definition",
+            });
+        }
+        if (closed and !has_body_command) {
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing command in function definition",
             });
         }
 
@@ -3448,6 +3459,26 @@ test "parser reports incomplete POSIX function definitions" {
     try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
     try expectSpan(.init(0, 17), result.diagnostics[0].span);
     try std.testing.expectEqualStrings("missing } to close function definition", result.diagnostics[0].message);
+}
+
+test "parser reports empty POSIX function definition bodies" {
+    const cases = [_]struct {
+        source: []const u8,
+        span: Span,
+    }{
+        .{ .source = "f() { }", .span = .init(0, 7) },
+        .{ .source = "f() { ; }", .span = .init(0, 9) },
+    };
+
+    for (cases) |example| {
+        var result = try parse(std.testing.allocator, example.source, .{});
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+        try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+        try expectSpan(example.span, result.diagnostics[0].span);
+        try std.testing.expectEqualStrings("missing command in function definition", result.diagnostics[0].message);
+    }
 }
 
 test "parser builds POSIX case command nodes" {
