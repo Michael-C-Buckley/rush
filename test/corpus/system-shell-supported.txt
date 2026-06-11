@@ -103,6 +103,10 @@ printf "hello\n" > rw; read line <> rw; echo "$line"
 ! false | true; echo status=$?
 set -- -a value rest; while getopts a: opt; do echo "$opt/$OPTARG/$OPTIND"; done; echo end=$OPTIND
 getopts :a: opt -a; echo "$opt/$OPTARG/$OPTIND/$?"
+while getopts a: opt -avalue; do echo "$opt/$OPTARG/$OPTIND"; done; echo done=$OPTIND
+OPTARG=old; getopts a: opt -a 2>/dev/null; echo "$opt/${OPTARG-unset}/$OPTIND/$?"
+getopts :a opt -b; echo "$opt/$OPTARG/$OPTIND/$?"
+echo "optind=${OPTIND-unset}"
 set -- "$(printf 'a b')" c; echo "$#:$1:$2"
 set -- "`printf 'a b'`" c; echo "$#:$1:$2"
 trap 'echo bye' 0; echo body

@@ -1250,6 +1250,7 @@ pub const Executor = struct {
 
     pub fn initializeShellVariables(self: *Executor, io: std.Io) !void {
         try self.setEnv("IFS", " \t\n");
+        try self.setEnv("OPTIND", "1");
 
         var ppid_buffer: [32]u8 = undefined;
         const ppid = try std.fmt.bufPrint(&ppid_buffer, "{d}", .{std.posix.getppid()});
@@ -9649,7 +9650,7 @@ fn builtinGetopts(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
             try self.setEnv(name, "?");
             return emptyResult(self.allocator, 0);
         }
-        self.unsetEnv("OPTARG");
+        try unsetGetoptsOptarg(self);
         try self.setEnv(name, "?");
         const stderr = try std.fmt.allocPrint(self.allocator, "getopts: illegal option -- {c}\n", .{option});
         errdefer self.allocator.free(stderr);
@@ -9678,13 +9679,14 @@ fn builtinGetopts(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
                 try self.setEnv(name, ":");
                 return emptyResult(self.allocator, 0);
             }
+            try unsetGetoptsOptarg(self);
             try self.setEnv(name, "?");
             const stderr = try std.fmt.allocPrint(self.allocator, "getopts: option requires an argument -- {c}\n", .{option});
             errdefer self.allocator.free(stderr);
             return .{ .allocator = self.allocator, .status = 0, .stdout = try self.allocator.alloc(u8, 0), .stderr = stderr };
         }
     } else {
-        self.unsetEnv("OPTARG");
+        try unsetGetoptsOptarg(self);
         if (next_offset < arg.len) {
             self.getopts_offset = next_offset;
         } else {
@@ -9737,12 +9739,17 @@ fn setOptind(self: *Executor, optind: usize) !void {
     try self.setEnv("OPTIND", text);
 }
 
+fn unsetGetoptsOptarg(self: *Executor) !void {
+    if (self.isReadonly("OPTARG")) return error.ReadonlyVariable;
+    self.unsetEnv("OPTARG");
+}
+
 fn finishGetoptsEnd(self: *Executor, name: []const u8, optind: usize) !CommandResult {
     self.getopts_offset = 1;
     self.getopts_last_optind = optind;
     try setOptind(self, optind);
     try self.setEnv(name, "?");
-    self.unsetEnv("OPTARG");
+    try unsetGetoptsOptarg(self);
     return emptyResult(self.allocator, 1);
 }
 
@@ -12696,6 +12703,26 @@ test "executor implements getopts builtin" {
     var silent_result = try executor.executeProgram(silent.program, .{});
     defer silent_result.deinit();
     try std.testing.expectEqualStrings(":/a/2\n", silent_result.stdout);
+
+    var nonsilent_missing = try parseAndLower(std.testing.allocator,
+        \\OPTARG=old; OPTIND=1; getopts a: opt -a; echo "$opt/${OPTARG-unset}/$OPTIND/$?"
+    );
+    defer nonsilent_missing.parsed.deinit();
+    defer nonsilent_missing.program.deinit();
+    var nonsilent_missing_result = try executor.executeProgram(nonsilent_missing.program, .{});
+    defer nonsilent_missing_result.deinit();
+    try std.testing.expectEqualStrings("?/unset/2/0\n", nonsilent_missing_result.stdout);
+    try std.testing.expectEqualStrings("getopts: option requires an argument -- a\n", nonsilent_missing_result.stderr);
+
+    var readonly_optarg = try parseAndLower(std.testing.allocator,
+        \\OPTARG=old; readonly OPTARG; OPTIND=1; getopts a opt -a; echo "st=$? opt=${opt-unset} optind=$OPTIND optarg=${OPTARG-unset}"; echo after
+    );
+    defer readonly_optarg.parsed.deinit();
+    defer readonly_optarg.program.deinit();
+    var readonly_optarg_result = try executor.executeProgram(readonly_optarg.program, .{});
+    defer readonly_optarg_result.deinit();
+    try std.testing.expectEqualStrings("st=2 opt=a optind=1 optarg=old\nafter\n", readonly_optarg_result.stdout);
+    try std.testing.expectEqualStrings("getopts: readonly variable\n", readonly_optarg_result.stderr);
 }
 
 test "executor implements unset and env builtins" {

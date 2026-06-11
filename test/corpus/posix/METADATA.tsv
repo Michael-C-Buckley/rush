@@ -57,8 +57,12 @@ builtin-exec-replaces-process	builtin	builtin	-
 builtin-exit	builtin	builtin	-
 builtin-export-env	builtin	builtin	-
 builtin-getopts-argument	builtin	builtin	-
+builtin-getopts-attached-argument	builtin	behavior	getopts accepts an option-argument attached to the option character
 builtin-getopts-cluster	builtin	builtin	-
+builtin-getopts-initial-optind	builtin	behavior	OPTIND is initialized to 1 when the shell starts
+builtin-getopts-nonsilent-missing	builtin	behavior	getopts non-silent missing arguments unset OPTARG and keep status zero
 builtin-getopts-silent-missing	builtin	builtin	-
+builtin-getopts-silent-invalid	builtin	behavior	getopts silent invalid options set OPTARG without diagnostics
 builtin-loop-control	builtin	builtin	-
 builtin-printf-escapes	builtin	builtin	-
 builtin-printf-format-reuse	builtin	builtin	printf reuses the format operand until all operands are consumed
