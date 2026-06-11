@@ -1,0 +1,1 @@
+case value in ${RUSH_UNSET_FOR_TEST:?case-pattern-bad}) echo bad ;; *) echo fallback ;; esac; echo after

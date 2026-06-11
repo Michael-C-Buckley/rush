@@ -18,7 +18,12 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | `expansion-parameter-error-null` | expansion | covered baseline | null parameter with `:?` diagnostic, status 1, non-interactive execution stops |
 | `expansion-parameter-error-word-spaces` | expansion | covered baseline | unquoted multi-word diagnostic, status 1, non-interactive execution stops |
 | `expansion-parameter-error-null-spaces` | expansion | covered baseline | null parameter with unquoted multi-word diagnostic, status 1, non-interactive execution stops |
+| `expansion-redirection-target-error` | expansion | covered baseline | redirection target word expansion failure reports the diagnostic and exits non-interactive execution before running a following command |
+| `expansion-assignment-word-error` | expansion | covered baseline | assignment word expansion failure reports the diagnostic and exits non-interactive execution before applying or running a following command |
+| `expansion-for-list-error` | expansion | covered baseline | for-loop word-list expansion failure reports the diagnostic and exits non-interactive execution before running the loop body or a following command |
+| `expansion-case-subject-error` / `expansion-case-pattern-error` | expansion | covered baseline | case subject and pattern expansion failures report the diagnostic and exit non-interactive execution before selecting an arm or running a following command |
 | `expansion-command-substitution-arithmetic-error` | expansion | covered baseline | nested arithmetic diagnostic is surfaced; assignment-only status follows failed substitution |
+| `expansion-command-substitution-parameter-error` | expansion | covered baseline | nested parameter expansion diagnostics are surfaced from the command-substitution subshell; the subshell exits before later substitution commands, while the invoking shell continues and assignment-only status follows the substitution |
 | `redirection-bad-fd-duplication` | redirection | covered baseline | diagnostic, command fails, following command still runs |
 | `redirection-bad-input-fd-duplication` | redirection | covered baseline | diagnostic, command fails, following command still runs |
 | `redirection-noclobber-overwrite` | redirection | covered baseline | diagnostic, command fails, following command still runs |
@@ -52,7 +57,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | --- | --- | --- | --- | --- |
 | `errors-command-not-found` | supported | medium | POSIX and differential corpus | simple not-found and unknown wait pid behavior are covered |
 | `errors-syntax` | baseline | high | POSIX corpus and negative corpus | strict mode has initial diagnostics; recovery parser remains intentionally permissive for tooling |
-| `errors-expansion` | partial | high | nounset, `${parameter:?word}`, and arithmetic negative coverage | ordinary and special-builtin expansion failures have baseline shell-exit coverage; more expansion classes need coverage |
+| `errors-expansion` | supported | high | nounset, `${parameter:?word}`, arithmetic, redirection-target, assignment-word, for-list, case subject/pattern, command-substitution, and interactive unit coverage | expansion failures exit non-interactive execution in current-shell contexts; failures inside command-substitution subshells exit only that subshell and propagate diagnostics/status; interactive execution aborts the current command without setting shell exit |
 | `errors-special-builtin` | supported | high | assignment persistence plus negative coverage for redirection, expansion, and utility-specific failures | all 15 POSIX special builtins have audited non-interactive shell-exit consequences for invalid options or operands where applicable and utility-semantic failures |
 | `errors-nounset` | supported | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution, with default-operator and disable behavior covered separately |
 | `errors-redirection-noninteractive` | supported | high | POSIX and negative corpus | consolidated with the former `redirection-error-consequences` row; ordinary utility, compound, function, `<>`, here-doc materialization, async, pipeline, AND-OR, negation, `$?`, and `errexit` consequences are covered. Rush uses status 1 for most non-special redirection failures where dash often uses 2; both are documented as conforming non-zero statuses. |
@@ -70,7 +75,7 @@ Current coverage includes a missing pipeline command, malformed case items, malf
 
 ### Expansion errors
 
-Current coverage includes nounset and `${parameter:?word}` with diagnostic word expansion for unset and null parameters, including unquoted multi-word braced words. Arithmetic expansion syntax and unsupported semantic forms now report a shell diagnostic and stop non-interactive execution. Distinguish ordinary command failures from special builtin expansion failures because POSIX assigns different non-interactive shell consequences.
+Current coverage includes nounset and `${parameter:?word}` with diagnostic word expansion for unset and null parameters, including unquoted multi-word braced words. Arithmetic expansion syntax and unsupported semantic forms report a shell diagnostic and stop non-interactive execution. Negative corpus coverage now includes expansion failures in redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions. Command substitutions run in a subshell for error-consequence purposes: nested expansion failures stop that subshell, surface diagnostics, preserve assignment-only substitution status, and let the invoking shell continue. Unit coverage verifies interactive expansion failures abort the current command without setting `pending_exit`, allowing the prompt loop to continue.
 
 ### Redirection errors
 

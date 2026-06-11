@@ -17,6 +17,11 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `grammar-case-missing-pattern-end` | `test/corpus/posix-negative` | `grammar-case-empty-arms` | malformed case item diagnostic |
 | `grammar-case-missing-in` | `test/corpus/posix-negative` | `grammar-case` | missing `in` diagnostic for malformed case command |
 | `grammar-case-missing-esac` | `test/corpus/posix-negative` | `grammar-case` | missing `esac` diagnostic for incomplete case command |
+| `expansion-redirection-target-error` | `test/corpus/posix-negative` | `errors-expansion` | redirection target word expansion failure exits non-interactive execution |
+| `expansion-assignment-word-error` | `test/corpus/posix-negative` | `errors-expansion` | assignment word expansion failure exits non-interactive execution |
+| `expansion-for-list-error` | `test/corpus/posix-negative` | `errors-expansion` | for-loop word-list expansion failure exits non-interactive execution before running the loop body |
+| `expansion-case-subject-error` / `expansion-case-pattern-error` | `test/corpus/posix-negative` | `errors-expansion` | case subject and pattern expansion failures exit non-interactive execution before selecting/running an arm |
+| `expansion-command-substitution-parameter-error` | `test/corpus/posix-negative` | `errors-expansion` | command-substitution parameter expansion failure exits only the substitution subshell while surfacing diagnostics and assignment-only status |
 | `errors-special-builtin-expansion` | `test/corpus/posix-negative` | `errors-special-builtin-expansion` | special builtin `${parameter:?word}` expansion failure exits non-interactive execution |
 | `errors-special-builtin-expansion-{eval,export,readonly,set,unset,trap}` | `test/corpus/posix-negative` | `errors-special-builtin-expansion` | utility-specific special builtin `${parameter:?word}` expansion failures exit non-interactive execution |
 | `errors-special-builtin-nounset-{colon,eval,export,readonly,set,unset,trap}` | `test/corpus/posix-negative` | `errors-special-builtin-expansion` | utility-specific special builtin nounset expansion failures exit non-interactive execution |

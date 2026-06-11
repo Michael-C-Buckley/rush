@@ -48,6 +48,7 @@ pub const ExecuteOptions = struct {
     source_path: ?[]const u8 = null,
     suppress_functions: bool = false,
     suppress_errexit: bool = false,
+    force_noninteractive_error_consequences: bool = false,
     default_path_lookup: bool = false,
 };
 
@@ -986,6 +987,7 @@ pub const Executor = struct {
     parameter_error: expand.ParameterError = .{},
     arithmetic_error: expand.ArithmeticError = .{},
     had_expansion_error: bool = false,
+    pending_command_abort: bool = false,
     command_substitution_stderr: std.ArrayList(u8) = .empty,
     command_substitution_status: ?ExitStatus = null,
     script_stdin: ?[]const u8 = null,
@@ -2311,6 +2313,10 @@ pub const Executor = struct {
 
     pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) anyerror!CommandResult {
         const root_execution = self.execution_depth == 0;
+        if (root_execution) self.pending_command_abort = false;
+        defer {
+            if (root_execution) self.pending_command_abort = false;
+        }
         self.execution_depth += 1;
         defer self.execution_depth -= 1;
 
@@ -2337,7 +2343,7 @@ pub const Executor = struct {
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
                 self.applyErrexit(last_status, options, isFollowedByAndOrListOp(program.statements, statement_index));
-                if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
+                if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
             }
             return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
         }
@@ -2359,7 +2365,7 @@ pub const Executor = struct {
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
                 self.applyErrexit(last_status, options, isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index));
-                if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
+                if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
             }
             return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
         }
@@ -2376,14 +2382,14 @@ pub const Executor = struct {
             last_status = self.pending_exit orelse result_status;
             self.setLastStatus(last_status);
             self.applyErrexit(last_status, options, false);
-            if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
+            if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
         }
         return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
     }
 
     fn finishExpansionErrorProgram(self: *Executor, root_execution: bool, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), err: anyerror) !CommandResult {
         var failure = switch (err) {
-            error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => try self.expansionErrorResult(err),
+            error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => try self.expansionErrorResult(err, options),
             else => return err,
         };
         defer failure.deinit();
@@ -3288,7 +3294,7 @@ pub const Executor = struct {
                 try stderr.appendSlice(self.allocator, body.stderr);
                 status = body.status;
                 if (self.shouldSkipForNoexec(execution_options)) break;
-                if (self.pending_exit != null) break;
+                if (self.pending_exit != null or self.pending_command_abort) break;
                 if (self.pending_return != null) break;
                 if (self.consumeLoopControl()) |control| switch (control) {
                     .break_loop => break,
@@ -3304,7 +3310,7 @@ pub const Executor = struct {
                 try stderr.appendSlice(self.allocator, body.stderr);
                 status = body.status;
                 if (self.shouldSkipForNoexec(execution_options)) break;
-                if (self.pending_exit != null) break;
+                if (self.pending_exit != null or self.pending_command_abort) break;
                 if (self.pending_return != null) break;
                 if (self.consumeLoopControl()) |control| switch (control) {
                     .break_loop => break,
@@ -3363,6 +3369,8 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, condition.stdout);
             try stderr.appendSlice(self.allocator, condition.stderr);
             if (self.shouldSkipForNoexec(condition_options)) break;
+            if (self.pending_exit != null or self.pending_command_abort) break;
+            if (self.pending_return != null) break;
 
             const run_body = switch (command.kind) {
                 .while_loop => condition.status == 0,
@@ -3376,7 +3384,7 @@ pub const Executor = struct {
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
             if (self.shouldSkipForNoexec(execution_options)) break;
-            if (self.pending_exit != null) break;
+            if (self.pending_exit != null or self.pending_command_abort) break;
             if (self.pending_return != null) break;
             if (self.consumeLoopControl()) |control| switch (control) {
                 .break_loop => break,
@@ -3510,7 +3518,9 @@ pub const Executor = struct {
         try stderr.appendSlice(self.allocator, condition.stderr);
 
         var status: ExitStatus = 0;
-        if (condition.status == 0) {
+        if (self.pending_exit != null or self.pending_command_abort or self.pending_return != null) {
+            status = condition.status;
+        } else if (condition.status == 0) {
             var body = try self.executeScriptSlice(command.then_body, execution_options);
             defer body.deinit();
             try stdout.appendSlice(self.allocator, body.stdout);
@@ -3601,6 +3611,10 @@ pub const Executor = struct {
 
     fn executeScriptChunks(self: *Executor, script: []const u8, program: ir.Program, options: ExecuteOptions) anyerror!CommandResult {
         const root_execution = self.execution_depth == 0;
+        if (root_execution) self.pending_command_abort = false;
+        defer {
+            if (root_execution) self.pending_command_abort = false;
+        }
         self.execution_depth += 1;
         defer self.execution_depth -= 1;
 
@@ -3616,7 +3630,7 @@ pub const Executor = struct {
             var result = try self.executeScriptSlice(script[start..end], options);
             defer result.deinit();
             last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
-            if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null) break;
+            if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
         }
         var result: CommandResult = .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
         errdefer result.deinit();
@@ -4718,7 +4732,7 @@ pub const Executor = struct {
 
     fn executeSimpleCommandWithInputInner(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         const expanded = self.expandSimpleCommand(command, options) catch |err| switch (err) {
-            error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => return self.expansionErrorResult(err),
+            error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => return self.expansionErrorResult(err, options),
             error.ReadonlyVariable => return self.assignmentErrorResult(),
             else => return err,
         };
@@ -4854,33 +4868,41 @@ pub const Executor = struct {
         return errorResult(self.allocator, 2, "assignment", "readonly variable");
     }
 
-    fn expansionErrorResult(self: *Executor, err: anyerror) !CommandResult {
+    fn expansionErrorResult(self: *Executor, err: anyerror, options: ExecuteOptions) !CommandResult {
         self.had_expansion_error = true;
         return switch (err) {
             error.NounsetParameter => blk: {
-                self.pending_exit = 1;
+                self.markExpansionErrorConsequence(options, 1);
                 break :blk errorResult(self.allocator, 1, "parameter", "unset parameter");
             },
-            error.ParameterExpansionFailed => self.parameterExpansionErrorResult(),
-            error.ArithmeticExpansionFailed => self.arithmeticExpansionErrorResult(),
+            error.ParameterExpansionFailed => self.parameterExpansionErrorResult(options),
+            error.ArithmeticExpansionFailed => self.arithmeticExpansionErrorResult(options),
             else => err,
         };
     }
 
-    fn parameterExpansionErrorResult(self: *Executor) !CommandResult {
+    fn markExpansionErrorConsequence(self: *Executor, options: ExecuteOptions, status: ExitStatus) void {
+        if (options.interactive and !options.force_noninteractive_error_consequences) {
+            self.pending_command_abort = true;
+        } else {
+            self.pending_exit = status;
+        }
+    }
+
+    fn parameterExpansionErrorResult(self: *Executor, options: ExecuteOptions) !CommandResult {
         if (self.parameter_error.name.len == 0) return errorResult(self.allocator, 1, "parameter", "expansion failed");
         const name = self.parameter_error.name;
         const message = if (self.parameter_error.message.len != 0) self.parameter_error.message else "parameter null or not set";
-        self.pending_exit = 1;
+        self.markExpansionErrorConsequence(options, 1);
         errdefer self.parameter_error.clear(self.allocator);
         const result = try errorResult(self.allocator, 1, name, message);
         self.parameter_error.clear(self.allocator);
         return result;
     }
 
-    fn arithmeticExpansionErrorResult(self: *Executor) !CommandResult {
+    fn arithmeticExpansionErrorResult(self: *Executor, options: ExecuteOptions) !CommandResult {
         const message = if (self.arithmetic_error.message.len != 0) self.arithmetic_error.message else "invalid arithmetic expression";
-        self.pending_exit = 1;
+        self.markExpansionErrorConsequence(options, 1);
         errdefer self.arithmetic_error.clear(self.allocator);
         const result = try errorResult(self.allocator, 1, "arithmetic", message);
         self.arithmetic_error.clear(self.allocator);
@@ -5235,6 +5257,7 @@ pub const Executor = struct {
         defer program.deinit();
         var sub_options = substitution_context.options;
         sub_options.external_stdio = .capture_stdout;
+        sub_options.force_noninteractive_error_consequences = true;
         var child = Executor.init(substitution_context.executor.allocator);
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
@@ -13531,6 +13554,26 @@ test "executor implements set shell option baseline" {
     try std.testing.expectEqualStrings("", nounset.stdout);
     try std.testing.expect(std.mem.indexOf(u8, nounset.stderr, "unset parameter") != null);
     try std.testing.expect(executor.shell_options.nounset);
+
+    var interactive_expansion_executor = Executor.init(std.testing.allocator);
+    defer interactive_expansion_executor.deinit();
+    var interactive_expansion = try interactive_expansion_executor.executeScriptSlice("echo before; echo ${RUSH_UNSET_FOR_TEST:?interactive-bad}; echo after", .{ .interactive = true });
+    defer interactive_expansion.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), interactive_expansion.status);
+    try std.testing.expectEqualStrings("before\n", interactive_expansion.stdout);
+    try std.testing.expectEqualStrings("RUSH_UNSET_FOR_TEST: interactive-bad\n", interactive_expansion.stderr);
+    try std.testing.expectEqual(@as(?ExitStatus, null), interactive_expansion_executor.pending_exit);
+
+    var prompt_continues = try interactive_expansion_executor.executeScriptSlice("echo prompt", .{ .interactive = true });
+    defer prompt_continues.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), prompt_continues.status);
+    try std.testing.expectEqualStrings("prompt\n", prompt_continues.stdout);
+
+    var interactive_substitution = try interactive_expansion_executor.executeScriptSlice("echo before; echo $(echo ${RUSH_UNSET_FOR_TEST:?sub-bad}; echo inner); echo after", .{ .interactive = true });
+    defer interactive_substitution.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), interactive_substitution.status);
+    try std.testing.expectEqualStrings("before\n\nafter\n", interactive_substitution.stdout);
+    try std.testing.expectEqualStrings("RUSH_UNSET_FOR_TEST: sub-bad\n", interactive_substitution.stderr);
 
     var nounset_disabled_executor = Executor.init(std.testing.allocator);
     defer nounset_disabled_executor.deinit();

@@ -1,0 +1,1 @@
+X=${RUSH_UNSET_FOR_TEST:?assign-bad}; echo after

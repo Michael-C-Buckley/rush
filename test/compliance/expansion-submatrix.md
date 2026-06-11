@@ -9,7 +9,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | POSIX area | manifest rows | current status | primary gaps |
 | --- | --- | --- | --- |
 | Tilde expansion | `expansion-tilde`, `expansion-assignment-prefix-context`, `expansion-tilde-named-user` | baseline | unset HOME edge cases |
-| Parameter expansion | `expansion-parameter-*` | supported/baseline | nested word edge cases, special-builtin consequences, broad-operator audit |
+| Parameter expansion | `expansion-parameter-*` | supported/baseline | nested word edge cases and broad-operator audit |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
 | Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | baseline | nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
@@ -40,12 +40,11 @@ Manifest rows:
 - `expansion-parameter-error`
 - `expansion-parameter-error-unset`
 
-Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. Nested parameter-word hardening remains tracked by the broad baseline row.
+Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage. Nested parameter-word hardening remains tracked by the broad baseline row.
 
 Remaining high-risk gaps:
 
-- nested `word` portions need broader recursive expansion coverage;
-- special builtin expansion failures need separate consequences from ordinary command failures.
+- nested `word` portions need broader recursive expansion coverage.
 
 The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, and unquoted multi-word braced words.
 
@@ -78,7 +77,7 @@ Manifest rows:
 - `lex-command-substitution`
 - `lex-backquote`
 
-Current coverage includes `$()`, splitting of command substitution output, quoted command substitution, quoted backquotes, case-pattern parens inside `$()`, a backquote backslash fix, and propagation of nested expansion diagnostics/status from command substitutions.
+Current coverage includes `$()`, splitting of command substitution output, quoted command substitution, quoted backquotes, case-pattern parens inside `$()`, a backquote backslash fix, and propagation of nested expansion diagnostics/status from command substitutions. Command-substitution expansion failures are documented as subshell consequences: the substitution exits before later substitution commands, stderr is surfaced, assignment-only status follows the failed substitution, and the invoking shell continues.
 
 Remaining gaps:
 
@@ -90,7 +89,7 @@ Remaining gaps:
 
 Manifest row: `expansion-arithmetic`
 
-Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, and negative diagnostics for invalid or currently unsupported arithmetic forms.
+Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, and negative diagnostics for invalid or currently unsupported arithmetic forms. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
 
 Remaining gaps:
 

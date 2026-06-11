@@ -162,25 +162,22 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Pathname expansion using current directory glob support for `*`, `?`, bracket classes.
 - Quote removal baseline with POSIX double-quote backslash handling for common cases.
 - Here-doc expansion for unquoted delimiters; quoted delimiters suppress expansion.
+- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, and invalid arithmetic expansion. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
 
 ### Partial / gaps
 
 - Expansion order is modeled but still simplified around quote contexts and nested constructs.
-- Parameter expansion `word` portions are recursively expanded, but error diagnostics and shell-exit consequences are minimal.
-- Arithmetic expansion does not resolve shell variables inside arithmetic expressions.
-- Arithmetic expansion lacks assignment, logical, comparison, bitwise, and comma operators.
+- Parameter expansion `word` portions are recursively expanded, but broader nested-word edge cases remain.
 - Pathname expansion lacks full POSIX details such as slash-component behavior and locale/collation details.
 - Tilde expansion does not support `~user`.
 - Unquoted `$@`/`$*` behavior is acceptable for common cases but still needs more spec-derived edge-case coverage.
 
 ### Missing / gaps
 
-- Arithmetic variable lookup and broader arithmetic grammar.
-- Arithmetic assignment semantics and side effects on shell variables.
 - Full quote-aware expansion and field generation in all nested contexts.
 - Full pathname expansion semantics.
 - `~user` lookup.
-- POSIX-accurate diagnostics and exit behavior for expansion errors such as `${var:?word}`.
+- POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered consequence matrix.
 
 ## 4. Redirection
 
@@ -388,6 +385,9 @@ Implemented or partially implemented:
 - Redirected output write failures after successful setup/open report shell-visible `write` diagnostics for shell-implemented commands and non-zero command/stage status in the inherited-stdio executor; external utility write failures are left to the child process.
 - Nounset produces a baseline unset-parameter diagnostic and exits non-interactive execution.
 - `${parameter:?word}` expands the diagnostic word, reports the parameter name, and exits non-interactive execution.
+- Expansion failures in redirection target words, assignment words, for-loop word lists, case subjects/patterns, and invalid arithmetic expansion exit non-interactive execution in current-shell contexts.
+- Expansion failures inside command substitutions exit the substitution subshell, surface diagnostics to the invoking shell, and preserve assignment-only command-substitution status without exiting the invoking shell.
+- Interactive expansion failures abort the current command without setting `pending_exit`, allowing the prompt loop to continue.
 - Special builtin expansion, redirection, invalid option/operand, and utility-semantic failures now stop non-interactive execution for the audited POSIX special-builtin set.
 - Negative POSIX corpus covers syntax, expansion, redirection, and builtin diagnostic cases.
 
@@ -422,6 +422,6 @@ The detailed backlog lives in Tend and the machine-readable status lives in `tes
 ### Batch D: Job-control and error-consequence depth
 
 1. Deepen pipeline/asynchronous-list signal-handling edge cases beyond the supported job-control utility rows.
-2. Deepen non-special redirection and expansion consequence edge cases that remain partial.
+2. Deepen non-special redirection consequence edge cases and add expansion diagnostic wording cases beyond the supported consequence matrix.
 
 Keep adding POSIX corpus, negative corpus, and manifest evidence alongside each behavior change.
