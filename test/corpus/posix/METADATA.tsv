@@ -138,6 +138,7 @@ errexit-assignment-command-substitution	options	option	assignment-only command s
 errexit-negation-suppression	options	option	errexit is suppressed for negated pipelines
 expansion-arithmetic-precedence	expansion	behavior	-
 expansion-command-substitution-case-pattern	expansion	behavior	command substitution spans include POSIX case patterns with unbalanced closing parens
+expansion-command-substitution-recursive-contexts	expansion	behavior	nested dollar and escaped legacy backquote substitutions, legacy backquote line continuation, and compound-command substitution bodies
 expansion-command-substitution-splitting	expansion	behavior	-
 expansion-field-splitting-newline	expansion	behavior	-
 expansion-length-operator	expansion	behavior	-

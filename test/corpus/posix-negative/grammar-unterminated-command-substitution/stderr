@@ -1,0 +1,3 @@
+rush: incomplete_input: unterminated command substitution
+  echo $(unterminated
+       ^^^^^^^^^^^^^^

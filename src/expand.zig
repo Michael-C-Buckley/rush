@@ -1373,11 +1373,13 @@ fn commandSubstitutionScript(allocator: std.mem.Allocator, raw: []const u8, part
     while (index < value.len) {
         if (value[index] == '\\' and index + 1 < value.len) {
             const next = value[index + 1];
+            if (next == '\n') {
+                index += 2;
+                continue;
+            }
             // Inside "`...`" the backslash also escapes the surrounding
             // double-quote (POSIX XCU 2.2.3), so it is removed here.
-            if (next == '`' or next == '$' or next == '\\' or next == '\n' or
-                (in_double_quotes and next == '"'))
-            {
+            if (next == '`' or next == '$' or next == '\\' or (in_double_quotes and next == '"')) {
                 try output.append(allocator, next);
                 index += 2;
                 continue;
@@ -2794,6 +2796,17 @@ test "backquote escaped double-quote is unescaped only inside double quotes" {
     try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
     try std.testing.expectEqualStrings("cmd", unquoted.fields[0]);
     try std.testing.expectEqualStrings("\\\"xy\\\"", unquoted.fields[1]);
+}
+
+test "backquote command substitution removes escaped newline from script" {
+    var parts = try parseWordParts(std.testing.allocator, "`printf a\\\nb`");
+    defer parts.deinit();
+    try std.testing.expectEqual(@as(usize, 1), parts.parts.len);
+    try std.testing.expectEqual(WordPartKind.command_substitution, parts.parts[0].kind);
+
+    const script = try commandSubstitutionScript(std.testing.allocator, parts.raw, parts.parts[0], false);
+    defer std.testing.allocator.free(script);
+    try std.testing.expectEqualStrings("printf ab", script);
 }
 
 test "command substitution parses and trims callback output" {

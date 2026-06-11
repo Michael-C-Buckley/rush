@@ -11,7 +11,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | Tilde expansion | `expansion-tilde`, `expansion-assignment-prefix-context`, `expansion-tilde-named-user` | baseline | unset HOME edge cases |
 | Parameter expansion | `expansion-parameter-*`, `extensions-parameter-expansion` | supported/baseline; extensions out of scope | larger parser work and non-POSIX extension implementation tracked outside POSIX scoring |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
-| Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | baseline | nested legacy backquote behavior, parsing contexts |
+| Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | supported | none known for the tracked POSIX-first surface |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics, exact nested legacy-backquote diagnostics |
 | Field splitting | `expansion-field-splitting-*` | supported/baseline | broad interactions with special parameters |
 | Pathname expansion | `expansion-pathname-*` | supported | bytewise matching model; locale-specific collation is intentionally out of scope for current evidence |
@@ -86,13 +86,9 @@ Manifest rows:
 - `lex-command-substitution`
 - `lex-backquote`
 
-Current coverage includes `$()`, splitting of command substitution output, quoted command substitution, quoted backquotes, case-pattern parens inside `$()`, a backquote backslash fix, and propagation of nested expansion diagnostics/status from command substitutions. Command-substitution expansion failures are documented as subshell consequences: the substitution exits before later substitution commands, stderr is surfaced, assignment-only status follows the failed substitution, and the invoking shell continues.
+Current coverage includes `$()`, nested dollar-parentheses substitutions, escaped nested legacy backquote substitutions, legacy backquote backslash-newline line continuation and escape handling, splitting of command substitution output, quoted command substitution, quoted backquotes, case-pattern parens inside `$()`, compound-command substitution bodies in representative contexts, and propagation of nested expansion diagnostics/status from command substitutions. Command-substitution expansion failures are documented as subshell consequences: the substitution exits before later substitution commands, stderr is surfaced, assignment-only status follows the failed substitution, and the invoking shell continues. Unterminated dollar-parentheses and backquote substitutions have negative-corpus diagnostics.
 
-Remaining gaps:
-
-- nested command substitutions in more grammar contexts;
-- legacy backquote nesting and escape behavior;
-- diagnostics for unterminated substitutions in strict versus recovery modes.
+Remaining gaps: none known for the tracked POSIX-first command substitution surface. Undefined or extension behavior around malformed legacy backquote contents remains outside the POSIX support claim.
 
 ## Arithmetic expansion
 
