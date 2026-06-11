@@ -15368,19 +15368,19 @@ test "interactive foreground mixed pipeline stopped jobs can be resumed" {
 
 fn runStoppedForegroundMixedPipelinePtyTest(slave: c_int) anyerror!void {
     if (std.c.setsid() < 0) return error.SkipZigTest;
-    const tiocsctty = comptime blk: {
-        if (@hasDecl(std.c.T, "IOCSCTTY")) break :blk std.c.T.IOCSCTTY;
-        if (@hasDecl(std.c.T, "TIOCSCTTY")) break :blk std.c.T.TIOCSCTTY;
+    const tiocsctty: ?c_int = comptime blk: {
+        if (@hasDecl(std.c.T, "IOCSCTTY")) break :blk @as(c_int, std.c.T.IOCSCTTY);
+        if (@hasDecl(std.c.T, "TIOCSCTTY")) break :blk @as(c_int, std.c.T.TIOCSCTTY);
         break :blk null;
     };
     if (tiocsctty) |request| {
-        if (std.c.ioctl(slave, @as(c_int, @intCast(request)), @as(c_int, 0)) < 0) return error.SkipZigTest;
+        if (std.c.ioctl(slave, request, @as(c_int, 0)) < 0) return error.SkipZigTest;
     } else return error.SkipZigTest;
     if (dup2(slave, std.Io.File.stdin().handle) < 0) return error.SkipZigTest;
     if (dup2(slave, std.Io.File.stdout().handle) < 0) return error.SkipZigTest;
     if (dup2(slave, std.Io.File.stderr().handle) < 0) return error.SkipZigTest;
 
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
+    var gpa: std.heap.DebugAllocator(.{}) = .{};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
@@ -15480,7 +15480,7 @@ fn expectStoppedForegroundMixedSignal(allocator: std.mem.Allocator, executor: *E
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     const script = try std.fmt.allocPrint(allocator,
-        \\f() { /bin/sh -c 'kill -s {s} 0; printf {s}-resumed'; }
+        \\f() {{ /bin/sh -c 'kill -s {s} 0; printf {s}-resumed'; }}
         \\f | /bin/cat > {s}
     , .{ signal_name, signal_name, path });
     defer allocator.free(script);

@@ -19,6 +19,7 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
+- `scripts/check-cross-targets.sh`: passing native tests plus compile-only test builds for `x86_64-linux-gnu`, `aarch64-linux-gnu`, `x86_64-macos`, `aarch64-macos`, `x86_64-freebsd`, `x86_64-openbsd`, and `x86_64-netbsd`
 - `scripts/check-compliance-manifest.sh`: `404` rows
 - `scripts/check-posix-corpus.sh`: `370` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `216` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
@@ -28,14 +29,14 @@ Current compliance report snapshot:
 
 - tracked items: `404`
 - scored POSIX items: `401`
-- supported: `358`
-- baseline: `40`
+- supported: `359`
+- baseline: `39`
 - partial: `2`
 - missing: `1`
 - out of scope: `3`
-- strict supported only: `89.3%`
+- strict supported only: `89.5%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `96.4%`
+- weighted progress: `96.5%`
 
 Recent notable capabilities:
 
@@ -54,6 +55,7 @@ Recent notable capabilities:
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
+- Cross-target compile-only coverage is tracked by `zig build cross-check`, which runs native tests and compiles the test binary for representative Linux, macOS, FreeBSD, OpenBSD, and NetBSD targets. Foreign-target runtime validation remains separate follow-up work.
 
 ## 1. Lexical conventions and token recognition
 
@@ -424,7 +426,8 @@ The detailed backlog lives in Tend and the machine-readable status lives in `tes
 1. `#169` Import dash-derived POSIX language smoke cases.
 2. `#170` Import BusyBox ash-inspired builtin and redirection cases.
 3. `#171` Add spec-clause examples for current high-risk POSIX gaps.
-4. Keep `POSIX_AUDIT.md` as prose context and avoid duplicating generated compliance totals beyond snapshot refreshes.
+4. Add real runtime validation on Linux and BSD hosts for the cross-target portability matrix; the current supported portability row only claims compile coverage.
+5. Keep `POSIX_AUDIT.md` as prose context and avoid duplicating generated compliance totals beyond snapshot refreshes.
 
 ### Batch D: Job-control and error-consequence depth
 
