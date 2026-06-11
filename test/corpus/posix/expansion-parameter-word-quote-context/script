@@ -1,0 +1,10 @@
+unset v
+set -- ${v:-"a b"}
+printf '<%s:%s:%s>\n' "$#" "$1" "${2-unset}"
+set -- ${v:-a b}
+printf '<%s:%s:%s>\n' "$#" "$1" "${2-unset}"
+set -- ${v:-""}
+printf '<%s:%s>\n' "$#" "${1-unset}"
+touch ab
+printf '<%s>\n' ${v:-"*"}
+rm -f ab

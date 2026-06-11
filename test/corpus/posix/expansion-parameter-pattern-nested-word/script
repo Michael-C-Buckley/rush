@@ -1,0 +1,4 @@
+v='ab}cd'
+printf '<%s>\n' ${v%$(printf '}cd')}
+printf '<%s>\n' ${v%"}cd"}
+printf '<%s>\n' ${v#$(printf 'ab}')}

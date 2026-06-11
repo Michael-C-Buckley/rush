@@ -181,12 +181,20 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
                 continue;
             }
         }
-        const rendered = try renderPart(allocator, parts.raw, part, options);
-        defer allocator.free(rendered);
-        if (split) {
-            try appendSplitText(allocator, &fields, &current, rendered, ifs);
+        if (split and part.kind == .parameter) {
+            var rendered = try renderParameterSegmented(allocator, part.value(parts.raw), options);
+            defer rendered.deinit(allocator);
+            if (rendered.quoted_glob) quoted_expansion_glob = true;
+            if (rendered.force_field) force_current_field = true;
+            try appendSplitSegmentedText(allocator, &fields, &current, rendered, ifs);
         } else {
-            try current.appendSlice(allocator, rendered);
+            const rendered = try renderPart(allocator, parts.raw, part, options);
+            defer allocator.free(rendered);
+            if (split) {
+                try appendSplitText(allocator, &fields, &current, rendered, ifs);
+            } else {
+                try current.appendSlice(allocator, rendered);
+            }
         }
     }
 
@@ -277,7 +285,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                     .value_span = .init(value_start, index),
                 });
             },
-            '$' => if (arithmeticPart(raw, index) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse parameterPart(raw, index)) |part| {
+            '$' => if (arithmeticPart(raw, index) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse (try parameterPart(allocator, raw, index))) |part| {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 try parts.append(allocator, part);
                 index = part.span.end;
@@ -382,7 +390,7 @@ fn doubleQuotedSpanEnd(allocator: std.mem.Allocator, raw: []const u8, start: usi
             '"' => return index + 1,
             '\\' => index += if (index + 1 < raw.len) 2 else 1,
             '$' => {
-                const part = arithmeticPart(raw, index) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse parameterPart(raw, index);
+                const part = arithmeticPart(raw, index) orelse (try commandSubstitutionPart(allocator, raw, index)) orelse (try parameterPart(allocator, raw, index));
                 index = if (part) |p| p.span.end else index + 1;
             },
             '`' => {
@@ -395,31 +403,18 @@ fn doubleQuotedSpanEnd(allocator: std.mem.Allocator, raw: []const u8, start: usi
     return null;
 }
 
-fn parameterPart(raw: []const u8, dollar: usize) ?WordPart {
+fn parameterPart(allocator: std.mem.Allocator, raw: []const u8, dollar: usize) !?WordPart {
     std.debug.assert(raw[dollar] == '$');
     const next = dollar + 1;
     if (next >= raw.len) return null;
 
     if (raw[next] == '{') {
         const name_start = next + 1;
-        var index = name_start;
-        var depth: usize = 1;
-        while (index < raw.len) : (index += 1) {
-            if (raw[index] == '$' and index + 1 < raw.len and raw[index + 1] == '{') {
-                depth += 1;
-                index += 1;
-                continue;
-            }
-            if (raw[index] == '}') {
-                depth -= 1;
-                if (depth == 0) break;
-            }
-        }
-        if (index >= raw.len or depth != 0) return null;
+        const end = (try parser.parameterExpansionEnd(allocator, raw, raw.len, dollar)) orelse return null;
         return .{
             .kind = .parameter,
-            .span = .init(dollar, index + 1),
-            .value_span = .init(name_start, index),
+            .span = .init(dollar, end),
+            .value_span = .init(name_start, end - 1),
         };
     }
 
@@ -517,6 +512,57 @@ const ParameterExpression = struct {
     colon: bool = false,
 };
 
+const SegmentedText = struct {
+    text: []const u8,
+    split: []const bool,
+    force_field: bool = false,
+    quoted_glob: bool = false,
+
+    fn deinit(self: *SegmentedText, allocator: std.mem.Allocator) void {
+        allocator.free(self.text);
+        allocator.free(self.split);
+        self.* = undefined;
+    }
+};
+
+const SegmentedTextBuilder = struct {
+    text: std.ArrayList(u8) = .empty,
+    split: std.ArrayList(bool) = .empty,
+    force_field: bool = false,
+    quoted_glob: bool = false,
+
+    fn deinit(self: *SegmentedTextBuilder, allocator: std.mem.Allocator) void {
+        self.text.deinit(allocator);
+        self.split.deinit(allocator);
+        self.* = undefined;
+    }
+
+    fn append(self: *SegmentedTextBuilder, allocator: std.mem.Allocator, rendered: []const u8, split_enabled: bool, force_field: bool, quoted_glob: bool) !void {
+        try self.text.appendSlice(allocator, rendered);
+        for (rendered) |_| try self.split.append(allocator, split_enabled);
+        self.force_field = self.force_field or force_field;
+        self.quoted_glob = self.quoted_glob or quoted_glob;
+    }
+
+    fn appendSegmented(self: *SegmentedTextBuilder, allocator: std.mem.Allocator, rendered: SegmentedText) !void {
+        try self.text.appendSlice(allocator, rendered.text);
+        try self.split.appendSlice(allocator, rendered.split);
+        self.force_field = self.force_field or rendered.force_field;
+        self.quoted_glob = self.quoted_glob or rendered.quoted_glob;
+    }
+
+    fn toOwnedSegmented(self: *SegmentedTextBuilder, allocator: std.mem.Allocator) !SegmentedText {
+        const owned_text = try self.text.toOwnedSlice(allocator);
+        errdefer allocator.free(owned_text);
+        return .{
+            .text = owned_text,
+            .split = try self.split.toOwnedSlice(allocator),
+            .force_field = self.force_field,
+            .quoted_glob = self.quoted_glob,
+        };
+    }
+};
+
 fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
     const parsed = parseParameterExpression(expression);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
@@ -583,6 +629,100 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
         },
         .invalid => unreachable,
     }
+}
+
+fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror!SegmentedText {
+    const parsed = parseParameterExpression(expression);
+    if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
+
+    const digit_name = isDigitParameterName(parsed.name);
+    const value = if (digit_name)
+        digitParameterValue(parsed.name, options)
+    else
+        specialParameterValue(parsed.name, options) orelse options.env.get(parsed.name);
+    const is_set = value != null;
+    const is_null = if (value) |text| text.len == 0 else true;
+
+    switch (parsed.operator) {
+        .none, .length, .error_if_unset, .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
+            const rendered = try renderParameter(allocator, expression, options, false);
+            defer allocator.free(rendered);
+            return segmentedFromText(allocator, rendered, true, false, false);
+        },
+        .default_value => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(allocator, value.?, true, false, false);
+            return expandParameterWordSegmented(allocator, parsed.word, options);
+        },
+        .assign_default => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(allocator, value.?, true, false, false);
+            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
+            var expanded = try expandParameterWordSegmented(allocator, parsed.word, options);
+            errdefer expanded.deinit(allocator);
+            try options.env_set.set(parsed.name, expanded.text);
+            return expanded;
+        },
+        .alternate_value => {
+            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(allocator, "", true, false, false);
+            return expandParameterWordSegmented(allocator, parsed.word, options);
+        },
+        .invalid => unreachable,
+    }
+}
+
+fn segmentedFromText(allocator: std.mem.Allocator, text: []const u8, split_enabled: bool, force_field: bool, quoted_glob: bool) !SegmentedText {
+    const owned_text = try allocator.dupe(u8, text);
+    errdefer allocator.free(owned_text);
+    const split = try allocator.alloc(bool, owned_text.len);
+    @memset(split, split_enabled);
+    return .{
+        .text = owned_text,
+        .split = split,
+        .force_field = force_field,
+        .quoted_glob = quoted_glob,
+    };
+}
+
+fn expandParameterWordSegmented(allocator: std.mem.Allocator, word: []const u8, options: Options) anyerror!SegmentedText {
+    const tilde_expanded = try expandTilde(allocator, word, options.env);
+    defer allocator.free(tilde_expanded);
+
+    var parts = try parseWordParts(allocator, tilde_expanded);
+    defer parts.deinit();
+
+    var builder: SegmentedTextBuilder = .{};
+    errdefer builder.deinit(allocator);
+
+    for (parts.parts) |part| {
+        switch (part.kind) {
+            .unquoted => {
+                const rendered = try renderPart(allocator, parts.raw, part, options);
+                defer allocator.free(rendered);
+                try builder.append(allocator, rendered, true, false, false);
+            },
+            .escaped => {
+                const rendered = try renderPart(allocator, parts.raw, part, options);
+                defer allocator.free(rendered);
+                try builder.append(allocator, rendered, false, false, hasGlobSyntax(rendered));
+            },
+            .single_quoted, .double_quoted => {
+                const rendered = try renderPart(allocator, parts.raw, part, options);
+                defer allocator.free(rendered);
+                try builder.append(allocator, rendered, false, true, hasGlobSyntax(rendered));
+            },
+            .parameter => {
+                var rendered = try renderParameterSegmented(allocator, part.value(parts.raw), options);
+                defer rendered.deinit(allocator);
+                try builder.appendSegmented(allocator, rendered);
+            },
+            .arithmetic, .command_substitution => {
+                const rendered = try renderPart(allocator, parts.raw, part, options);
+                defer allocator.free(rendered);
+                try builder.append(allocator, rendered, true, false, false);
+            },
+        }
+    }
+
+    return builder.toOwnedSegmented(allocator);
 }
 
 fn invalidParameterExpansion(allocator: std.mem.Allocator, options: Options) anyerror {
@@ -1136,7 +1276,7 @@ fn renderDoubleQuotedContent(allocator: std.mem.Allocator, text: []const u8, opt
         }
 
         const part = switch (text[index]) {
-            '$' => arithmeticPart(text, index) orelse (try commandSubstitutionPart(allocator, text, index)) orelse parameterPart(text, index),
+            '$' => arithmeticPart(text, index) orelse (try commandSubstitutionPart(allocator, text, index)) orelse (try parameterPart(allocator, text, index)),
             '`' => backquoteCommandSubstitutionPart(text, index),
             else => null,
         } orelse {
@@ -1309,6 +1449,39 @@ fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const 
         try fields.append(allocator, try current.toOwnedSlice(allocator));
         index += 1;
         while (index < text.len and isIfsWhitespace(ifs, text[index])) index += 1;
+    }
+}
+
+fn appendSplitSegmentedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: SegmentedText, ifs: []const u8) !void {
+    std.debug.assert(text.text.len == text.split.len);
+    if (ifs.len == 0) {
+        try current.appendSlice(allocator, text.text);
+        return;
+    }
+
+    var index: usize = 0;
+    while (index < text.text.len) {
+        const c = text.text[index];
+        if (!text.split[index] or !isIfsChar(ifs, c)) {
+            try current.append(allocator, c);
+            index += 1;
+            continue;
+        }
+
+        if (isIfsWhitespace(ifs, c)) {
+            while (index < text.text.len and text.split[index] and isIfsWhitespace(ifs, text.text[index])) index += 1;
+            // Quoted bytes terminate the delimiter run: they are data even when
+            // they equal IFS characters.
+            if (index < text.text.len and text.split[index] and isIfsChar(ifs, text.text[index])) continue;
+            if (current.items.len != 0) {
+                try fields.append(allocator, try current.toOwnedSlice(allocator));
+            }
+            continue;
+        }
+
+        try fields.append(allocator, try current.toOwnedSlice(allocator));
+        index += 1;
+        while (index < text.text.len and text.split[index] and isIfsWhitespace(ifs, text.text[index])) index += 1;
     }
 }
 
@@ -1636,7 +1809,7 @@ pub fn expandHereDocBody(allocator: std.mem.Allocator, text: []const u8, options
             continue;
         }
         const part = switch (c) {
-            '$' => arithmeticPart(text, index) orelse (try commandSubstitutionPart(allocator, text, index)) orelse parameterPart(text, index),
+            '$' => arithmeticPart(text, index) orelse (try commandSubstitutionPart(allocator, text, index)) orelse (try parameterPart(allocator, text, index)),
             '`' => backquoteCommandSubstitutionPart(text, index),
             else => null,
         } orelse {
@@ -1699,17 +1872,15 @@ fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usiz
 
     if (raw[index.*] == '{') {
         const name_start = index.* + 1;
-        var name_end = name_start;
-        while (name_end < raw.len and raw[name_end] != '}') : (name_end += 1) {}
-        if (name_end >= raw.len) {
+        const end = (try parser.parameterExpansionEnd(allocator, raw, raw.len, dollar)) orelse {
             try output.appendSlice(allocator, raw[dollar..]);
             index.* = raw.len;
             return true;
-        }
-        const rendered = try renderParameter(allocator, raw[name_start..name_end], options, false);
+        };
+        const rendered = try renderParameter(allocator, raw[name_start .. end - 1], options, false);
         defer allocator.free(rendered);
         try output.appendSlice(allocator, rendered);
-        index.* = name_end + 1;
+        index.* = end;
         return true;
     }
 
@@ -1820,6 +1991,8 @@ fn isNameContinue(c: u8) bool {
 
 fn testCommandSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
     if (std.mem.eql(u8, script, "echo hi")) return allocator.dupe(u8, "hi\n\n");
+    if (std.mem.eql(u8, script, "printf 'a}b'")) return allocator.dupe(u8, "a}b");
+    if (std.mem.eql(u8, script, "printf '}cd'")) return allocator.dupe(u8, "}cd");
     return allocator.dupe(u8, "");
 }
 
@@ -1835,6 +2008,7 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
+    if (std.mem.eql(u8, name, "BRACED")) return "ab}cd";
     if (std.mem.eql(u8, name, "GLOBBY")) return "rush-quoted-glob-?.tmp";
     return null;
 }
@@ -1979,6 +2153,34 @@ test "parameter expansion supports pattern removal operators" {
     const expanded = try expandWordScalar(std.testing.allocator, "${PATHLIKE%/*}:${PATHLIKE%%/*}:${PATHLIKE#*/}:${PATHLIKE##*/}", .{ .env = test_env });
     defer std.testing.allocator.free(expanded);
     try std.testing.expectEqualStrings("/usr/local/bin::usr/local/bin/rush:rush", expanded);
+}
+
+test "parameter operator word spans skip nested substitutions and quoted braces" {
+    const nested = try expandWordScalar(std.testing.allocator, "${MISSING:-$(printf 'a}b')}:${MISSING:-${USER}}:${MISSING:-$((1 + 2))}", .{ .env = test_env, .command_substitution = test_command_substitution });
+    defer std.testing.allocator.free(nested);
+    try std.testing.expectEqualStrings("a}b:rush-user:3", nested);
+
+    const pattern = try expandWordScalar(std.testing.allocator, "${BRACED%$(printf '}cd')}:${BRACED%\"}cd\"}", .{ .env = test_env, .command_substitution = test_command_substitution });
+    defer std.testing.allocator.free(pattern);
+    try std.testing.expectEqualStrings("ab:ab", pattern);
+}
+
+test "parameter operator word quotes suppress field splitting" {
+    var quoted = try expandWord(std.testing.allocator, "${MISSING:-\"one two\"}", .{ .env = test_env });
+    defer quoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted.fields.len);
+    try std.testing.expectEqualStrings("one two", quoted.fields[0]);
+
+    var unquoted = try expandWord(std.testing.allocator, "${MISSING:-one two}", .{ .env = test_env });
+    defer unquoted.deinit();
+    try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
+    try std.testing.expectEqualStrings("one", unquoted.fields[0]);
+    try std.testing.expectEqualStrings("two", unquoted.fields[1]);
+
+    var empty = try expandWord(std.testing.allocator, "${MISSING:-\"\"}", .{ .env = test_env });
+    defer empty.deinit();
+    try std.testing.expectEqual(@as(usize, 1), empty.fields.len);
+    try std.testing.expectEqualStrings("", empty.fields[0]);
 }
 
 test "expand word returns fields through an explicit result" {

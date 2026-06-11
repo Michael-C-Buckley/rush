@@ -1,0 +1,9 @@
+unset A B C D
+B=fallback
+printf '<%s>\n' ${A:-$(printf 'a}b')}
+printf '<%s>\n' ${A:-${B:-nope}}
+printf '<%s>\n' ${A:-$((1 + 2))}
+: ${C:=$(printf 'c}d')}
+printf '<%s>\n' "$C"
+D=present
+printf '<%s>\n' ${D:+$(printf 'alt}word')}

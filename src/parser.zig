@@ -357,28 +357,12 @@ const Lexer = struct {
 
     fn consumeParameterExpansion(self: *Lexer) !void {
         const start = self.index;
-        self.index += 2;
-        var depth: usize = 1;
-        while (!self.isAtEnd()) {
-            if (self.peek() == '$' and self.index + 1 < self.source.len and self.source[self.index + 1] == '{') {
-                depth += 1;
-                self.index += 2;
-                continue;
-            }
-            if (self.peek() == '}') {
-                depth -= 1;
-                self.index += 1;
-                if (depth == 0) return;
-                continue;
-            }
-            switch (self.peek()) {
-                '\'' => try self.consumeQuoted('\'', "unterminated single quote in parameter expansion"),
-                '"' => try self.consumeDoubleQuoted(),
-                '\\' => self.consumeBackslash(),
-                else => self.index += 1,
-            }
+        if (try parameterExpansionEnd(self.allocator, self.source, self.source.len, start)) |end| {
+            self.index = end;
+            return;
         }
 
+        self.index = self.source.len;
         try self.addIncomplete(.init(start, self.source.len), "unterminated parameter expansion");
     }
 
@@ -816,6 +800,112 @@ pub fn commandSubstitutionEnd(allocator: std.mem.Allocator, source: []const u8, 
     return scanner.scan();
 }
 
+pub fn parameterExpansionEnd(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!?usize {
+    std.debug.assert(start + 1 < limit);
+    std.debug.assert(source[start] == '$');
+    std.debug.assert(source[start + 1] == '{');
+
+    var scanner: ParameterExpansionScanner = .{
+        .allocator = allocator,
+        .source = source,
+        .limit = limit,
+        .index = start + 2,
+    };
+    return scanner.scan();
+}
+
+const ParameterExpansionScanner = struct {
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    limit: usize,
+    index: usize,
+    brace_depth: usize = 1,
+
+    fn scan(self: *ParameterExpansionScanner) std.mem.Allocator.Error!?usize {
+        while (self.index < self.limit) {
+            switch (self.source[self.index]) {
+                '\\' => self.skipBackslash(),
+                '\'' => skipQuoted(self.source, self.limit, &self.index, '\''),
+                '"' => try self.skipDoubleQuoted(),
+                '`' => self.skipBackquoted(),
+                '$' => try self.skipDollarExpansion(),
+                '}' => {
+                    self.brace_depth -= 1;
+                    self.index += 1;
+                    if (self.brace_depth == 0) return self.index;
+                },
+                else => self.index += 1,
+            }
+        }
+        return null;
+    }
+
+    fn skipDollarExpansion(self: *ParameterExpansionScanner) std.mem.Allocator.Error!void {
+        if (self.index + 1 >= self.limit or self.source[self.index] != '$') {
+            self.index += 1;
+            return;
+        }
+        if (self.source[self.index + 1] == '{') {
+            self.brace_depth += 1;
+            self.index += 2;
+            return;
+        }
+        if (self.source[self.index + 1] == '(' and self.index + 2 < self.limit and self.source[self.index + 2] == '(') {
+            self.skipArithmeticExpansion();
+            return;
+        }
+        if (self.source[self.index + 1] == '(') {
+            self.index = (try commandSubstitutionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
+            return;
+        }
+        self.index += 1;
+    }
+
+    fn skipDoubleQuoted(self: *ParameterExpansionScanner) std.mem.Allocator.Error!void {
+        std.debug.assert(self.source[self.index] == '"');
+        self.index += 1;
+        while (self.index < self.limit and self.source[self.index] != '"') {
+            switch (self.source[self.index]) {
+                '\\' => self.skipBackslash(),
+                '$' => try self.skipDollarExpansion(),
+                '`' => self.skipBackquoted(),
+                else => self.index += 1,
+            }
+        }
+        if (self.index < self.limit) self.index += 1;
+    }
+
+    fn skipBackquoted(self: *ParameterExpansionScanner) void {
+        self.index += 1;
+        while (self.index < self.limit) {
+            switch (self.source[self.index]) {
+                '\\' => self.skipBackslash(),
+                '`' => {
+                    self.index += 1;
+                    return;
+                },
+                else => self.index += 1,
+            }
+        }
+    }
+
+    fn skipArithmeticExpansion(self: *ParameterExpansionScanner) void {
+        self.index += 3;
+        while (self.index + 1 < self.limit) : (self.index += 1) {
+            if (self.source[self.index] == ')' and self.source[self.index + 1] == ')') {
+                self.index += 2;
+                return;
+            }
+        }
+        self.index = self.limit;
+    }
+
+    fn skipBackslash(self: *ParameterExpansionScanner) void {
+        self.index += 1;
+        if (self.index < self.limit) self.index += 1;
+    }
+};
+
 const CasePhase = enum {
     subject,
     pattern,
@@ -1019,27 +1109,7 @@ const CommandSubstitutionScanner = struct {
     }
 
     fn skipParameterExpansion(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
-        self.index += 2;
-        var depth: usize = 1;
-        while (self.index < self.limit) {
-            if (self.source[self.index] == '$' and self.index + 1 < self.limit and self.source[self.index + 1] == '{') {
-                depth += 1;
-                self.index += 2;
-                continue;
-            }
-            if (self.source[self.index] == '}') {
-                depth -= 1;
-                self.index += 1;
-                if (depth == 0) return;
-                continue;
-            }
-            switch (self.source[self.index]) {
-                '\\' => self.skipBackslash(),
-                '\'' => skipQuoted(self.source, self.limit, &self.index, '\''),
-                '"' => try self.skipDoubleQuoted(),
-                else => self.index += 1,
-            }
-        }
+        self.index = (try parameterExpansionEnd(self.allocator, self.source, self.limit, self.index)) orelse self.limit;
     }
 
     fn skipArithmeticExpansion(self: *CommandSubstitutionScanner) void {

@@ -19,21 +19,21 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `401` rows
-- `scripts/check-posix-corpus.sh`: `361` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `195` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `251` cases, `502` comparisons across dash and bash POSIX mode
+- `scripts/check-compliance-manifest.sh`: `402` rows
+- `scripts/check-posix-corpus.sh`: `364` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `202` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `254` cases, `508` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `401`
-- scored POSIX items: `399`
-- supported: `354`
+- tracked items: `402`
+- scored POSIX items: `400`
+- supported: `355`
 - baseline: `42`
 - partial: `2`
 - missing: `1`
 - out of scope: `2`
-- strict supported only: `88.7%`
+- strict supported only: `88.8%`
 - practical supported+baseline: `99.2%`
 - weighted progress: `96.2%`
 
@@ -48,7 +48,7 @@ Recent notable capabilities:
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
-- POSIX parameter expansion operators, pattern removal, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
+- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline, IFS-aware field splitting, pathname expansion baseline, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - Baseline POSIX builtins now include `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `umask`, `wait`, `times`, `getopts`, `trap`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill`.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
@@ -170,14 +170,14 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 ### Partial / gaps
 
 - Expansion order is modeled but still simplified around quote contexts and nested constructs.
-- Parameter expansion `word` portions are recursively expanded, but broader nested-word edge cases remain.
+- Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; full parser integration for every recursive token context remains larger work.
 - Pathname expansion lacks full POSIX details such as slash-component behavior and locale/collation details.
 - Tilde expansion does not support `~user`.
 - Unquoted `$@`/`$*` behavior is acceptable for common cases but still needs more spec-derived edge-case coverage.
 
 ### Missing / gaps
 
-- Full quote-aware expansion and field generation in all nested contexts.
+- Full quote-aware expansion and field generation in all nested contexts beyond the covered parameter operator-word cases.
 - Full pathname expansion semantics.
 - `~user` lookup.
 - POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered malformed braced-parameter and arithmetic cases.

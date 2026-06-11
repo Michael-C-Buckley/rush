@@ -9,7 +9,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | POSIX area | manifest rows | current status | primary gaps |
 | --- | --- | --- | --- |
 | Tilde expansion | `expansion-tilde`, `expansion-assignment-prefix-context`, `expansion-tilde-named-user` | baseline | unset HOME edge cases |
-| Parameter expansion | `expansion-parameter-*` | supported/baseline | nested word edge cases and broad-operator audit |
+| Parameter expansion | `expansion-parameter-*` | supported/baseline | larger parser/extension work and remaining broad edge-case audit |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
 | Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | baseline | nested legacy backquote behavior, parsing contexts |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
@@ -39,17 +39,18 @@ Manifest rows:
 - `expansion-parameter-pattern` (supported)
 - `expansion-parameter-error`
 - `expansion-parameter-error-unset`
+- `expansion-parameter-word-nesting-quote-context` (supported)
 
-Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, invalid assignment attempts to positional/special parameters when `${parameter:=word}` or `${parameter=word}` would need to assign, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage. Nested parameter-word hardening remains tracked by the broad baseline row.
+Supported corpus rows include defaults, assignment, alternate/length, null-colon behavior, pattern removal, nested operator words, and `${parameter:?word}` diagnostic word expansion with non-interactive exit. The nested-word corpus covers command substitutions containing right braces, nested braced defaults, arithmetic substitutions used as word operands, assignment/alternate word operands, pattern-removal operands containing quoted right braces or command substitutions, and quoted operator words that suppress field splitting/pathname expansion for their own bytes. The `errors-expansion` row is supported by negative corpus cases for unset/null parameter errors in ordinary commands, malformed or unsupported braced substitutions such as `${}`/`${v/}`/`${v:1}`, unterminated parameter expansions whose word contains a command substitution with `}`, invalid assignment attempts to positional/special parameters when `${parameter:=word}` or `${parameter=word}` would need to assign, redirection target words, assignment words, for-loop word lists, case subjects and patterns, and command substitutions, plus representative special-builtin coverage.
 
 Remaining high-risk gaps:
 
-- nested `word` portions need broader recursive expansion coverage.
+- full parser integration for every recursive token-recognition context remains larger work.
 - larger parameter syntax work, such as substring or pattern-substitution extensions, remains outside the POSIX baseline.
 
 The `expansion-parameter-error` detailed row and `expansion-parameter-error-unset` spec row are supported by negative corpus cases covering unset and null parameters, expanded diagnostic words, unquoted multi-word braced words, focused bad-substitution diagnostics for unsupported or malformed braced forms, and cannot-assign diagnostics for assignment operators targeting positional or special parameters.
 
-Follow-up tasks: broader nested parameter-word hardening tasks.
+Follow-up tasks: broader parser and non-POSIX parameter-extension tasks.
 
 ## Special parameters and positional fields
 

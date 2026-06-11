@@ -1,0 +1,3 @@
+rush: incomplete_input: unterminated parameter expansion
+  echo ${v:-$(printf '}')
+       ^^^^^^^^^^^^^^^^^^
