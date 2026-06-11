@@ -1585,11 +1585,18 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
         if (index == selected) {
             try appendUiStyleStart(allocator, &line, theme.completion_selected);
             try line.appendSlice(allocator, "  ");
+            const kind_style = completionKindStyle(theme, candidate.kind);
+            try appendUiStyleStart(allocator, &line, kind_style);
             try appendPaddedCell(allocator, &line, label.text, label_width);
+            try appendUiStyleEnd(allocator, &line, kind_style);
+            try appendUiStyleStart(allocator, &line, theme.completion_selected);
             if (candidate.description) |description| {
                 if (description.len != 0 and description_width != 0) {
                     try line.append(allocator, ' ');
+                    try appendUiStyleStart(allocator, &line, theme.completion_description);
                     try appendTruncated(allocator, &line, description, description_width);
+                    try appendUiStyleEnd(allocator, &line, theme.completion_description);
+                    try appendUiStyleStart(allocator, &line, theme.completion_selected);
                 }
             }
             const row_width = visibleWidth(line.items, .unicode);

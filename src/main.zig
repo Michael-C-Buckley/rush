@@ -1572,8 +1572,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer allocator.free(prompt);
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
-        const cwd = if (executor.getEnv("PWD")) |pwd| if (pwd.len != 0) pwd else cwd_buffer[0..cwd_len] else cwd_buffer[0..cwd_len];
-        history.current_cwd = cwd;
+        const physical_cwd = cwd_buffer[0..cwd_len];
+        const cwd = if (executor.getEnv("PWD")) |pwd| if (pwd.len != 0) pwd else physical_cwd else physical_cwd;
+        history.current_cwd = physical_cwd;
         try terminal.reportCurrentDirectory(cwd, terminal_hostname);
         const title = try terminalTitlePath(allocator, cwd, executor.getEnv("HOME"));
         defer if (title.owned) allocator.free(title.text);
