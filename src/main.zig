@@ -1157,18 +1157,34 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
 }
 
 fn expandInteractivePathname(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, word: []const u8) !line_editor.PathExpansionMatches {
-    _ = context;
-    return viPathnameExpansions(allocator, io, word);
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    var pattern = try completion_context.executor.expandViPathnamePattern(allocator, io, word);
+    defer pattern.deinit(allocator);
+    return viPathnameExpansions(allocator, io, pattern);
 }
 
-fn viPathnameExpansions(allocator: std.mem.Allocator, io: std.Io, word: []const u8) !line_editor.PathExpansionMatches {
-    const pattern = if (expand.hasGlobSyntax(word))
-        try allocator.dupe(u8, word)
-    else
-        try std.mem.concat(allocator, u8, &.{ word, "*" });
-    defer allocator.free(pattern);
+fn viPathnameExpansionsForWord(allocator: std.mem.Allocator, io: std.Io, word: []const u8) !line_editor.PathExpansionMatches {
+    var pattern = try expand.expandWordPattern(allocator, word, .{});
+    defer pattern.deinit(allocator);
+    return viPathnameExpansions(allocator, io, pattern);
+}
 
-    const raw_matches = try expand.expandPathnamePattern(allocator, io, pattern);
+fn viPathnameExpansions(allocator: std.mem.Allocator, io: std.Io, pattern: expand.ExpansionPattern) !line_editor.PathExpansionMatches {
+    var owned_pattern: ?expand.ExpansionPattern = null;
+    defer if (owned_pattern) |*owned| owned.deinit(allocator);
+
+    const search_pattern = if (expand.patternHasGlobSyntax(pattern)) pattern else blk: {
+        const text = try std.mem.concat(allocator, u8, &.{ pattern.text, "*" });
+        errdefer allocator.free(text);
+        const special = try allocator.alloc(bool, pattern.special.len + 1);
+        errdefer allocator.free(special);
+        @memcpy(special[0..pattern.special.len], pattern.special);
+        special[pattern.special.len] = true;
+        owned_pattern = .{ .text = text, .special = special };
+        break :blk owned_pattern.?;
+    };
+
+    const raw_matches = try expand.expandPathnameExpansionPattern(allocator, io, search_pattern);
     defer {
         for (raw_matches) |match| allocator.free(match);
         allocator.free(raw_matches);
@@ -2576,16 +2592,72 @@ test "vi pathname expansions use implicit star and directory marks" {
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = file_path, .data = "" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
 
-    var implicit = try viPathnameExpansions(std.testing.allocator, std.testing.io, "rush-vi-path-expansion-");
+    var implicit = try viPathnameExpansionsForWord(std.testing.allocator, std.testing.io, "rush-vi-path-expansion-");
     defer implicit.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 2), implicit.items.len);
     try std.testing.expectEqualStrings(dir_path ++ "/", implicit.items[0]);
     try std.testing.expectEqualStrings(file_path, implicit.items[1]);
 
-    var glob = try viPathnameExpansions(std.testing.allocator, std.testing.io, "rush-vi-path-expansion-*.tmp");
+    var glob = try viPathnameExpansionsForWord(std.testing.allocator, std.testing.io, "rush-vi-path-expansion-*.tmp");
     defer glob.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 1), glob.items.len);
     try std.testing.expectEqualStrings(file_path, glob.items[0]);
+}
+
+test "vi pathname expansions honor quoted glob literals and shell expansions" {
+    const literal_star = "rush-vi-quoted-*.tmp";
+    const glob_match = "rush-vi-quoted-a.tmp";
+    const param_match = "rush-vi-param-value.tmp";
+    const arith_match = "rush-vi-arith-3.tmp";
+    const command_match = "rush-vi-command-value.tmp";
+    inline for (.{ literal_star, glob_match, param_match, arith_match, command_match }) |path| {
+        try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
+    }
+    defer {
+        inline for (.{ literal_star, glob_match, param_match, arith_match, command_match }) |path| {
+            std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+        }
+    }
+
+    var escaped = try viPathnameExpansionsForWord(std.testing.allocator, std.testing.io, "rush-vi-quoted-\\*");
+    defer escaped.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), escaped.items.len);
+    try std.testing.expectEqualStrings(literal_star, escaped.items[0]);
+
+    var single_quoted = try viPathnameExpansionsForWord(std.testing.allocator, std.testing.io, "'rush-vi-quoted-*'");
+    defer single_quoted.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), single_quoted.items.len);
+    try std.testing.expectEqualStrings(literal_star, single_quoted.items[0]);
+
+    var quoted_default = try viPathnameExpansionsForWord(std.testing.allocator, std.testing.io, "${RUSH_MISSING:-\"rush-vi-quoted-*\"}");
+    defer quoted_default.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), quoted_default.items.len);
+    try std.testing.expectEqualStrings(literal_star, quoted_default.items[0]);
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("RUSH_VI_PREFIX", "rush-vi-param-value");
+
+    var param_pattern = try executor.expandViPathnamePattern(std.testing.allocator, std.testing.io, "$RUSH_VI_PREFIX");
+    defer param_pattern.deinit(std.testing.allocator);
+    var param = try viPathnameExpansions(std.testing.allocator, std.testing.io, param_pattern);
+    defer param.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), param.items.len);
+    try std.testing.expectEqualStrings(param_match, param.items[0]);
+
+    var arith_pattern = try executor.expandViPathnamePattern(std.testing.allocator, std.testing.io, "rush-vi-arith-$((1 + 2))");
+    defer arith_pattern.deinit(std.testing.allocator);
+    var arith = try viPathnameExpansions(std.testing.allocator, std.testing.io, arith_pattern);
+    defer arith.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), arith.items.len);
+    try std.testing.expectEqualStrings(arith_match, arith.items[0]);
+
+    var command_pattern = try executor.expandViPathnamePattern(std.testing.allocator, std.testing.io, "$(printf rush-vi-command-value)");
+    defer command_pattern.deinit(std.testing.allocator);
+    var command = try viPathnameExpansions(std.testing.allocator, std.testing.io, command_pattern);
+    defer command.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), command.items.len);
+    try std.testing.expectEqualStrings(command_match, command.items[0]);
 }
 
 test "interactive semantic diagnostics render spans without message line" {

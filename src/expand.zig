@@ -837,16 +837,22 @@ fn isDigitParameterName(name: []const u8) bool {
     return true;
 }
 
-const ExpansionPattern = struct {
+pub const ExpansionPattern = struct {
     text: []const u8,
     special: []const bool,
 
-    fn deinit(self: *ExpansionPattern, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *ExpansionPattern, allocator: std.mem.Allocator) void {
         allocator.free(self.text);
         allocator.free(self.special);
         self.* = undefined;
     }
 };
+
+pub fn expandWordPattern(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPattern {
+    const tilde_expanded = try expandTilde(allocator, raw, options.env);
+    defer allocator.free(tilde_expanded);
+    return expandPatternWord(allocator, tilde_expanded, options);
+}
 
 fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionPattern {
     var parts = try parseWordParts(allocator, raw);
@@ -858,6 +864,12 @@ fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Opt
     errdefer special.deinit(allocator);
 
     for (parts.parts) |part| {
+        if (part.kind == .parameter) {
+            var rendered = try renderParameterSegmented(allocator, part.value(parts.raw), options);
+            defer rendered.deinit(allocator);
+            try appendSegmentedPatternPart(allocator, &text, &special, rendered);
+            continue;
+        }
         const rendered = try renderPart(allocator, parts.raw, part, options);
         defer allocator.free(rendered);
         const meta_active = switch (part.kind) {
@@ -868,6 +880,11 @@ fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Opt
     }
 
     return .{ .text = try text.toOwnedSlice(allocator), .special = try special.toOwnedSlice(allocator) };
+}
+
+fn appendSegmentedPatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: SegmentedText) !void {
+    try text.appendSlice(allocator, rendered.text);
+    try special.appendSlice(allocator, rendered.split);
 }
 
 fn appendPatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
@@ -1800,16 +1817,34 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
 }
 
 pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
+    const special = try allocator.alloc(bool, pattern.len);
+    defer allocator.free(special);
+    @memset(special, true);
+    return expandPathnameExpansionPattern(allocator, io, .{ .text = pattern, .special = special });
+}
+
+pub fn expandPathnameExpansionPattern(allocator: std.mem.Allocator, io: std.Io, pattern: ExpansionPattern) ![][]const u8 {
+    std.debug.assert(pattern.text.len == pattern.special.len);
+
     var prefixes: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (prefixes.items) |prefix| allocator.free(prefix);
         prefixes.deinit(allocator);
     }
-    try prefixes.append(allocator, try allocator.dupe(u8, if (std.mem.startsWith(u8, pattern, "/")) "/" else ""));
+    try prefixes.append(allocator, try allocator.dupe(u8, if (std.mem.startsWith(u8, pattern.text, "/")) "/" else ""));
 
-    var component_iter = std.mem.splitScalar(u8, pattern, '/');
-    while (component_iter.next()) |component| {
-        if (component.len == 0 and prefixes.items.len == 1 and std.mem.eql(u8, prefixes.items[0], "/")) continue;
+    var component_start: usize = 0;
+    while (component_start <= pattern.text.len) {
+        const component_end = std.mem.indexOfScalarPos(u8, pattern.text, component_start, '/') orelse pattern.text.len;
+        const component: ExpansionPattern = .{
+            .text = pattern.text[component_start..component_end],
+            .special = pattern.special[component_start..component_end],
+        };
+        if (component.text.len == 0 and prefixes.items.len == 1 and std.mem.eql(u8, prefixes.items[0], "/")) {
+            if (component_end == pattern.text.len) break;
+            component_start = component_end + 1;
+            continue;
+        }
         var next_prefixes: std.ArrayList([]const u8) = .empty;
         errdefer {
             for (next_prefixes.items) |prefix| allocator.free(prefix);
@@ -1817,10 +1852,10 @@ pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: 
         }
 
         for (prefixes.items) |prefix| {
-            if (hasGlobSyntax(component)) {
+            if (patternHasGlobSyntax(component)) {
                 try appendGlobComponentMatches(allocator, io, &next_prefixes, prefix, component);
             } else {
-                const candidate = try joinPathComponent(allocator, prefix, component);
+                const candidate = try joinPathComponent(allocator, prefix, component.text);
                 errdefer allocator.free(candidate);
                 if (try pathComponentExists(io, candidate)) try next_prefixes.append(allocator, candidate) else allocator.free(candidate);
             }
@@ -1829,13 +1864,16 @@ pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: 
         for (prefixes.items) |prefix| allocator.free(prefix);
         prefixes.deinit(allocator);
         prefixes = next_prefixes;
+
+        if (component_end == pattern.text.len) break;
+        component_start = component_end + 1;
     }
 
     std.mem.sort([]const u8, prefixes.items, {}, lessThanString);
     return prefixes.toOwnedSlice(allocator);
 }
 
-fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches: *std.ArrayList([]const u8), prefix: []const u8, component: []const u8) !void {
+fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches: *std.ArrayList([]const u8), prefix: []const u8, component: ExpansionPattern) !void {
     const dir_path = if (prefix.len == 0) "." else prefix;
     var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir => return,
@@ -1846,8 +1884,8 @@ fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches:
     var iterator = dir.iterate();
     while (try iterator.next(io)) |entry| {
         if (entry.name.len == 0) continue;
-        if (entry.name[0] == '.' and (component.len == 0 or component[0] != '.')) continue;
-        if (globMatches(component, entry.name)) {
+        if (entry.name[0] == '.' and (component.text.len == 0 or component.text[0] != '.')) continue;
+        if (globPatternMatches(component, entry.name)) {
             try matches.append(allocator, try joinPathComponent(allocator, prefix, entry.name));
         }
     }
@@ -1877,6 +1915,15 @@ fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
 pub fn hasGlobSyntax(text: []const u8) bool {
     for (text) |c| switch (c) {
         '*', '?', '[' => return true,
+        else => {},
+    };
+    return false;
+}
+
+pub fn patternHasGlobSyntax(pattern: ExpansionPattern) bool {
+    std.debug.assert(pattern.text.len == pattern.special.len);
+    for (pattern.text, 0..) |c, index| switch (c) {
+        '*', '?', '[' => if (pattern.special[index]) return true,
         else => {},
     };
     return false;

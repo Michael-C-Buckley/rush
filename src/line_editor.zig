@@ -561,6 +561,7 @@ pub const PathExpansionRequest = struct {
     word: []const u8,
     replace_start: usize,
     replace_end: usize,
+    requote_replacement: bool = false,
 
     pub fn deinit(self: PathExpansionRequest, allocator: std.mem.Allocator) void {
         allocator.free(self.word);
@@ -1140,6 +1141,7 @@ pub const LineSession = struct {
             .word = word,
             .replace_start = range.start,
             .replace_end = range.end,
+            .requote_replacement = wordContainsShellQuoting(word),
         };
         self.resetViCommandPrefix();
         self.completion_menu.clear(self.allocator);
@@ -1158,10 +1160,19 @@ pub const LineSession = struct {
 
     pub fn applyPathExpansion(self: *LineSession, request: PathExpansionRequest, matches: PathExpansionMatches) !bool {
         if (request.command == .list or matches.items.len == 0) return false;
+        var quoted_matches: ?[][]const u8 = null;
+        defer if (quoted_matches) |items| {
+            for (items) |item| self.allocator.free(item);
+            self.allocator.free(items);
+        };
+        const replacement_matches = if (request.requote_replacement) blk: {
+            quoted_matches = try quotePathExpansionMatches(self.allocator, matches.items);
+            break :blk quoted_matches.?;
+        } else matches.items;
         const replacement = switch (request.command) {
             .list => unreachable,
-            .complete => try pathExpansionCompletionReplacement(self.allocator, request.word, matches.items),
-            .expand_all => try pathExpansionAllReplacement(self.allocator, matches.items),
+            .complete => try pathExpansionCompletionReplacement(self.allocator, request.word, replacement_matches),
+            .expand_all => try pathExpansionAllReplacement(self.allocator, replacement_matches),
         };
         defer self.allocator.free(replacement);
         if (std.mem.eql(u8, request.word, replacement)) return false;
@@ -2365,17 +2376,75 @@ const ByteRange = struct {
 fn currentViBigwordRange(text: []const u8, cursor: usize) ?ByteRange {
     if (text.len == 0) return null;
 
-    var anchor = @min(cursor, text.len - 1);
-    if (isAsciiWhitespace(text[anchor])) {
-        if (anchor == 0 or isAsciiWhitespace(text[anchor - 1])) return null;
-        anchor -= 1;
-    }
+    const target = @min(cursor, text.len);
+    var index: usize = 0;
+    while (index < text.len) {
+        while (index < text.len and isAsciiWhitespace(text[index])) : (index += 1) {}
+        if (index >= text.len) return null;
 
-    var start = anchor;
-    while (start > 0 and !isAsciiWhitespace(text[start - 1])) start -= 1;
-    var end = anchor + 1;
-    while (end < text.len and !isAsciiWhitespace(text[end])) end += 1;
-    return .{ .start = start, .end = end };
+        const start = index;
+        var quote: ?u8 = null;
+        var escaped = false;
+        while (index < text.len) : (index += 1) {
+            const byte = text[index];
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (quote) |active| {
+                if (active != '\'' and byte == '\\') {
+                    escaped = true;
+                } else if (byte == active) {
+                    quote = null;
+                }
+                continue;
+            }
+            switch (byte) {
+                '\\' => escaped = true,
+                '\'', '"' => quote = byte,
+                else => if (isAsciiWhitespace(byte)) break,
+            }
+        }
+        const end = index;
+        if (target >= start and target <= end) return .{ .start = start, .end = end };
+    }
+    return null;
+}
+
+fn wordContainsShellQuoting(word: []const u8) bool {
+    for (word) |byte| switch (byte) {
+        '\'', '"', '\\' => return true,
+        else => {},
+    };
+    return false;
+}
+
+fn quotePathExpansionMatches(allocator: std.mem.Allocator, matches: []const []const u8) ![][]const u8 {
+    const quoted = try allocator.alloc([]const u8, matches.len);
+    errdefer allocator.free(quoted);
+    var initialized: usize = 0;
+    errdefer for (quoted[0..initialized]) |item| allocator.free(item);
+
+    for (matches, 0..) |match, index| {
+        quoted[index] = try shellSingleQuote(allocator, match);
+        initialized += 1;
+    }
+    return quoted;
+}
+
+fn shellSingleQuote(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    try out.append(allocator, '\'');
+    for (text) |byte| {
+        if (byte == '\'') {
+            try out.appendSlice(allocator, "'\\''");
+        } else {
+            try out.append(allocator, byte);
+        }
+    }
+    try out.append(allocator, '\'');
+    return out.toOwnedSlice(allocator);
 }
 
 fn pathExpansionCompletionReplacement(allocator: std.mem.Allocator, word: []const u8, matches: []const []const u8) ![]const u8 {
@@ -4810,6 +4879,23 @@ test "vi line session requests pathname expansion for current bigword" {
     try std.testing.expectEqual(@as(usize, "cat rush-path".len), request.replace_end);
 }
 
+test "vi line session pathname request keeps quoted shell words together" {
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "cat 'rush path" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "=" });
+
+    const request = session.takePathExpansionRequest() orelse return error.MissingPathExpansionRequest;
+    defer request.deinit(std.testing.allocator);
+    try std.testing.expectEqual(PathExpansionCommand.list, request.command);
+    try std.testing.expectEqualStrings("'rush path", request.word);
+    try std.testing.expectEqual(@as(usize, "cat ".len), request.replace_start);
+    try std.testing.expectEqual(@as(usize, "cat 'rush path".len), request.replace_end);
+    try std.testing.expect(request.requote_replacement);
+}
+
 test "vi pathname completion applies common prefixes and complete matches" {
     var common = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
     defer common.deinit();
@@ -4844,6 +4930,32 @@ test "vi pathname completion applies common prefixes and complete matches" {
         .replace_end = "cd rush-vi-dir".len,
     }, .{ .items = &.{"rush-vi-dir/"} }));
     try std.testing.expectEqualStrings("cd rush-vi-dir/", dir.editor.buffer.text());
+}
+
+test "vi pathname completion requotes replacements for quoted shell words" {
+    var file = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer file.deinit();
+    try file.editor.buffer.replace("cat 'rush vi file");
+    try std.testing.expect(try file.applyPathExpansion(.{
+        .command = .complete,
+        .word = "'rush vi file",
+        .replace_start = "cat ".len,
+        .replace_end = "cat 'rush vi file".len,
+        .requote_replacement = true,
+    }, .{ .items = &.{"rush vi file"} }));
+    try std.testing.expectEqualStrings("cat 'rush vi file' ", file.editor.buffer.text());
+
+    var all = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer all.deinit();
+    try all.editor.buffer.replace("printf rush\\ vi*");
+    try std.testing.expect(try all.applyPathExpansion(.{
+        .command = .expand_all,
+        .word = "rush\\ vi*",
+        .replace_start = "printf ".len,
+        .replace_end = "printf rush\\ vi*".len,
+        .requote_replacement = true,
+    }, .{ .items = &.{ "rush vi a", "rush vi b" } }));
+    try std.testing.expectEqualStrings("printf 'rush vi a' 'rush vi b'", all.editor.buffer.text());
 }
 
 test "vi pathname star expands all matches and listing formats matches" {

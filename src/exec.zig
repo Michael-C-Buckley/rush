@@ -3278,6 +3278,24 @@ pub const Executor = struct {
         };
     }
 
+    pub fn expandViPathnamePattern(self: *Executor, allocator: std.mem.Allocator, io: std.Io, word: []const u8) !expand.ExpansionPattern {
+        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = .{ .io = io } };
+        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
+        return expand.expandWordPattern(allocator, word, .{
+            .env = self.envLookup(),
+            .env_set = self.envSet(),
+            .arrays = self.arrayLookup(),
+            .io = io,
+            .command_substitution = commandSubstitution(&substitution_context),
+            .positionals = self.currentPositionals().params,
+            .option_flags = option_flags,
+            .nounset = self.shell_options.nounset,
+            .parameter_error = &self.parameter_error,
+            .arithmetic_error = &self.arithmetic_error,
+        });
+    }
+
     fn setFunction(self: *Executor, name: []const u8, body: []const u8, redirections: []const ir.Redirection) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
