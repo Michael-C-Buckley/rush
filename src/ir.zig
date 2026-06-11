@@ -566,8 +566,8 @@ fn lowerFunctionDefinition(allocator: std.mem.Allocator, parsed: parser.ParseRes
     }
     const name = try allocator.dupe(u8, parsed.tokens[node.token_start].lexeme(parsed.source));
     errdefer allocator.free(name);
-    const body_start = if (body_node) |body| body.token_start else if (open_brace) |index| index + 1 else node.token_end;
-    const body_end = if (body_node) |body| body.token_end else close_brace orelse node.token_end;
+    const body_start = if (open_brace) |index| index + 1 else if (body_node) |body| body.token_start else node.token_end;
+    const body_end = if (open_brace != null) close_brace orelse node.token_end else if (body_node) |body| body.token_end else node.token_end;
     var redirections = try lowerCompoundRedirections(allocator, parsed, node);
     errdefer {
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);

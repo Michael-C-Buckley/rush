@@ -1878,6 +1878,21 @@ const SyntaxParser = struct {
         var command_position = true;
 
         while (!self.at(.eof)) {
+            if (saw_open_brace and brace_depth > 0 and command_position and self.startsSubshell()) {
+                has_body_command = true;
+                const body = try self.parseSubshell();
+                try function_children.append(self.allocator, .{ .node = body });
+                command_position = false;
+                continue;
+            }
+            if (saw_open_brace and brace_depth > 0 and command_position and self.startsBraceGroup()) {
+                has_body_command = true;
+                const body = try self.parseBraceGroup();
+                try function_children.append(self.allocator, .{ .node = body });
+                command_position = false;
+                continue;
+            }
+
             const token = self.current();
             if (token.kind == .word) {
                 const lexeme = token.lexeme(self.source);
@@ -3479,6 +3494,31 @@ test "parser reports empty POSIX function definition bodies" {
         try expectSpan(example.span, result.diagnostics[0].span);
         try std.testing.expectEqualStrings("missing command in function definition", result.diagnostics[0].message);
     }
+}
+
+test "parser reports empty nested POSIX compound bodies inside function definitions" {
+    const cases = [_]struct {
+        source: []const u8,
+        span: Span,
+        message: []const u8,
+    }{
+        .{ .source = "f() { ( ); }", .span = .init(6, 9), .message = "missing command in subshell" },
+        .{ .source = "f() { { ; }; }", .span = .init(6, 11), .message = "missing command in brace group" },
+    };
+
+    for (cases) |example| {
+        var result = try parse(std.testing.allocator, example.source, .{});
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+        try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+        try expectSpan(example.span, result.diagnostics[0].span);
+        try std.testing.expectEqualStrings(example.message, result.diagnostics[0].message);
+    }
+
+    var valid = try parse(std.testing.allocator, "f() { ( : ); { :; }; }", .{});
+    defer valid.deinit();
+    try std.testing.expectEqual(@as(usize, 0), valid.diagnostics.len);
 }
 
 test "parser builds POSIX case command nodes" {
