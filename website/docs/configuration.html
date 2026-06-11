@@ -97,16 +97,27 @@
 
   <p>Interactive editor colors are configured with lowercase shell variables. Values are comma-separated style options, so normal shell expansion works before Rush stores the variable.</p>
 
-  <pre>accent=cyan
-muted=bright-black
+  <pre>rush_style() {
+  if test "$rush_color_scheme" = light; then
+    accent=blue
+    muted=black
+    flash='fg=white,bg=black'
+  else
+    accent=cyan
+    muted=bright-black
+    flash='fg=black,bg=white'
+  fi
 
-rush_style_completion_directory='fg=blue'
-rush_style_completion_selected="fg=$accent,bold"
-rush_style_completion_description="fg=$muted,dim"
-rush_style_completion_flash='fg=black,bg=white'
-rush_style_history_match='fg=yellow,bold'
-rush_style_autosuggestion='dim'
-rush_style_diagnostic_error='ul=curly,ul_color=red'</pre>
+  rush_style_completion_directory='fg=blue'
+  rush_style_completion_selected="fg=$accent,bold"
+  rush_style_completion_description="fg=$muted,dim"
+  rush_style_completion_flash="$flash"
+  rush_style_history_match='fg=yellow,bold'
+  rush_style_autosuggestion='dim'
+  rush_style_diagnostic_error='ul=curly,ul_color=red'
+}</pre>
+
+  <p>If <code>rush_style</code> is defined, Rush calls it once during interactive startup and again when the terminal reports a color-scheme change. Before each call, Rush sets the Rush-owned <code>rush_color_scheme</code> variable to <code>dark</code>, <code>light</code>, or <code>unknown</code>. Normal commands do not call <code>rush_style</code>; Rush reads the current <code>rush_style_*</code> variables before each prompt, so assignments made by commands take effect on the next prompt.</p>
 
   <p>Supported options are <code>fg=&lt;color&gt;</code>, <code>bg=&lt;color&gt;</code>, <code>ul=&lt;style&gt;</code>, <code>ul_color=&lt;color&gt;</code>, <code>bold</code>, <code>dim</code>, <code>italic</code>, <code>reverse</code>, and <code>strike</code>. Underline styles are <code>none</code>, <code>single</code>, <code>double</code>, <code>curly</code>, <code>dotted</code>, and <code>dashed</code>.</p>
 

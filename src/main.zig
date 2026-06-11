@@ -762,6 +762,29 @@ fn requestInteractivePromptRepaint(context: *anyopaque) void {
     terminal.requestPromptRedraw();
 }
 
+fn refreshInteractiveStyle(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, scheme: editor_driver.ColorScheme) !line_editor.UiTheme {
+    _ = allocator;
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    try applyInteractiveColorScheme(completion_context.executor, io, scheme);
+    return interactiveUiTheme(completion_context.executor.*);
+}
+
+fn applyInteractiveColorScheme(executor: *exec.Executor, io: std.Io, scheme: editor_driver.ColorScheme) !void {
+    try executor.setRushStateVariable("rush_color_scheme", colorSchemeName(scheme));
+    if (!executor.hasFunction("rush_style")) return;
+    const style_options: exec.ExecuteOptions = .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = executor.arg_zero };
+    var result = try executor.executeScriptSlice("rush_style", style_options);
+    defer result.deinit();
+}
+
+fn colorSchemeName(scheme: editor_driver.ColorScheme) []const u8 {
+    return switch (scheme) {
+        .dark => "dark",
+        .light => "light",
+        .unknown => "unknown",
+    };
+}
+
 fn interactiveUiTheme(executor: exec.Executor) line_editor.UiTheme {
     var theme: line_editor.UiTheme = .{};
     applyUiStyleVariable(executor, &theme.completion_selected, "rush_style_completion_selected");
@@ -1482,6 +1505,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer terminal.deinit();
     exec.setTrapSignalWakeFd(terminal.trapSignalWakeFd());
     defer exec.clearTrapSignalWakeFd(terminal.trapSignalWakeFd());
+    try applyInteractiveColorScheme(&executor, io, .unknown);
     try syncInteractiveTerminalSize(&executor, terminal);
     executor.setPromptRepaintHandler(&terminal, requestInteractivePromptRepaint);
 
@@ -1539,6 +1563,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .diagnostic_context = &completion_context,
             .diagnose = diagnoseInteractiveLine,
             .theme = ui_theme,
+            .style_context = &completion_context,
+            .refresh_style = refreshInteractiveStyle,
         });
         try syncInteractiveTerminalSize(&executor, terminal);
         const line = switch (read_result) {
@@ -3195,6 +3221,27 @@ test "prompt rendering subcommands are scoped while repaint is public" {
     defer command_result.deinit();
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), command_result.status);
     try std.testing.expectEqualStrings("prompt\n", command_result.stdout);
+}
+
+test "rush_style sees rush-owned color scheme" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.initializeShellVariables(std.testing.io);
+
+    var setup = try runScriptWithExecutor(std.testing.allocator, &executor,
+        \\readonly rush_color_scheme
+        \\rush_style() { rush_style_history_match="fg=$rush_color_scheme"; }
+    , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer setup.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
+
+    try applyInteractiveColorScheme(&executor, std.testing.io, .light);
+    try std.testing.expectEqualStrings("light", executor.getEnv("rush_color_scheme").?);
+    try std.testing.expectEqualStrings("fg=light", executor.getEnv("rush_style_history_match").?);
+
+    try applyInteractiveColorScheme(&executor, std.testing.io, .dark);
+    try std.testing.expectEqualStrings("dark", executor.getEnv("rush_color_scheme").?);
+    try std.testing.expectEqualStrings("fg=dark", executor.getEnv("rush_style_history_match").?);
 }
 
 test "repl uses rush_prompt function to build prompt text" {

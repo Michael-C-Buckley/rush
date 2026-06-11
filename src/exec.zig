@@ -2321,6 +2321,14 @@ pub const Executor = struct {
 
     pub fn setEnv(self: *Executor, name: []const u8, value: []const u8) !void {
         if (self.isReadonly(name)) return error.ReadonlyVariable;
+        try self.setEnvInternal(name, value);
+    }
+
+    pub fn setRushStateVariable(self: *Executor, name: []const u8, value: []const u8) !void {
+        try self.setEnvInternal(name, value);
+    }
+
+    fn setEnvInternal(self: *Executor, name: []const u8, value: []const u8) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const owned_value = try self.allocator.dupe(u8, value);

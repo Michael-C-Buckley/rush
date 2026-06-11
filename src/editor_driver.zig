@@ -44,8 +44,11 @@ pub const TerminalEvent = union(enum) {
     focus_out,
     resize: vaxis.Winsize,
     capability: Capability,
+    color_scheme: ColorScheme,
     prompt_redraw,
 };
+
+pub const ColorScheme = enum { dark, light, unknown };
 
 pub const Capability = enum {
     kitty_keyboard,
@@ -112,7 +115,10 @@ pub const TerminalCapabilities = struct {
                 self.unicode = true;
             },
             .da1 => self.da1 = true,
-            .color_scheme_updates => self.color_scheme_updates = true,
+            .color_scheme_updates => {
+                if (!self.color_scheme_updates) try writeTtyAll(tty, vaxis.ctlseqs.color_scheme_request ++ vaxis.ctlseqs.color_scheme_set);
+                self.color_scheme_updates = true;
+            },
             .multi_cursor => self.multi_cursor = true,
         }
     }
@@ -187,7 +193,11 @@ pub const TerminalParser = struct {
             .cap_color_scheme_updates => .{ .capability = .color_scheme_updates },
             .cap_multi_cursor => .{ .capability = .multi_cursor },
             .winsize => |winsize| .{ .resize = winsize },
-            .mouse, .mouse_leave, .color_report, .color_scheme => null,
+            .color_scheme => |scheme| .{ .color_scheme = switch (scheme) {
+                .dark => .dark,
+                .light => .light,
+            } },
+            .mouse, .mouse_leave, .color_report => null,
         };
     }
 
@@ -223,6 +233,8 @@ pub const ReadLineOptions = struct {
     diagnostic_context: ?*anyopaque = null,
     diagnose: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8) anyerror!?line_editor.DiagnosticRender = null,
     theme: line_editor.UiTheme = .{},
+    style_context: ?*anyopaque = null,
+    refresh_style: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, ColorScheme) anyerror!line_editor.UiTheme = null,
 };
 
 pub const HookResult = struct {
@@ -594,26 +606,27 @@ pub const TerminalSession = struct {
 
     pub fn readLine(self: *TerminalSession, options: ReadLineOptions) !ReadLineResult {
         if (self.reader.thread == null) try self.reader.start();
+        var read_options = options;
 
         var session = try line_editor.LineSession.initWithOptions(self.allocator, .{
-            .bytes = options.prompt,
-            .visible_width = line_editor.visibleWidth(options.prompt, self.capabilities.widthMethod()),
-        }, options.history);
+            .bytes = read_options.prompt,
+            .visible_width = line_editor.visibleWidth(read_options.prompt, self.capabilities.widthMethod()),
+        }, read_options.history);
         defer session.deinit();
 
         try writeTtyAll(&self.tty, semanticCommandStart);
-        try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
+        try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
         self.reader.arm();
-        var next_prompt_refresh_ms: ?u64 = if (options.prompt_refresh_interval_ms) |interval_ms| nowMs(self.io) + interval_ms else null;
+        var next_prompt_refresh_ms: ?u64 = if (read_options.prompt_refresh_interval_ms) |interval_ms| nowMs(self.io) + interval_ms else null;
         var next_completion_flash_clear_ms: ?u64 = null;
-        var next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
+        var next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
         while (session.state == .editing or session.state == .history_search) {
             var render_needed = false;
             var loop_events: [8]event_loop.Event = undefined;
             const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms, self.completion.debounceWaitMs(self.io), next_completion_flash_clear_ms));
             if (ready.len == 0 and next_hook_interval_ms != null and promptRefreshWaitMs(self.io, next_hook_interval_ms) == 0) {
-                if (try self.runHooks(options, &session, &render_needed)) return try self.finishInterruptedReadLine();
-                next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
+                if (try self.runHooks(read_options, &session, &render_needed)) return try self.finishInterruptedReadLine();
+                next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
             }
             if (ready.len == 0 and next_completion_flash_clear_ms != null and promptRefreshWaitMs(self.io, next_completion_flash_clear_ms) == 0) {
                 render_needed = true;
@@ -622,9 +635,9 @@ pub const TerminalSession = struct {
             if (ready.len == 0 and next_prompt_refresh_ms != null and promptRefreshWaitMs(self.io, next_prompt_refresh_ms) == 0) {
                 render_needed = true;
                 session.invalidatePrompt();
-                next_prompt_refresh_ms = nowMs(self.io) + options.prompt_refresh_interval_ms.?;
+                next_prompt_refresh_ms = nowMs(self.io) + read_options.prompt_refresh_interval_ms.?;
             }
-            try self.startReadyCompletion(options);
+            try self.startReadyCompletion(read_options);
             self.events.clearRetainingCapacity();
             var hook_ready = false;
             for (ready) |ready_event| {
@@ -650,8 +663,8 @@ pub const TerminalSession = struct {
                 }
             }
             if (hook_ready) {
-                if (try self.runHooks(options, &session, &render_needed)) return try self.finishInterruptedReadLine();
-                next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
+                if (try self.runHooks(read_options, &session, &render_needed)) return try self.finishInterruptedReadLine();
+                next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
             }
             for (self.events.items) |event| {
                 switch (event) {
@@ -659,25 +672,25 @@ pub const TerminalSession = struct {
                         render_needed = true;
                         if (isCompletionTab(key) and session.hasCompletionMenu()) {
                             try session.handleKey(.{ .key = .tab, .modifiers = key.modifiers });
-                        } else if (isCompletionTab(key) and options.complete != null and options.completion_context != null) {
-                            _ = try expandAbbreviationBeforeAccept(&session, options, false);
-                            if (options.clone_completion_context != null and options.free_completion_context != null) {
-                                try self.requestCompletion(options, session.editor.buffer.text(), session.editor.buffer.cursor_byte, .explicit);
+                        } else if (isCompletionTab(key) and read_options.complete != null and read_options.completion_context != null) {
+                            _ = try expandAbbreviationBeforeAccept(&session, read_options, false);
+                            if (read_options.clone_completion_context != null and read_options.free_completion_context != null) {
+                                try self.requestCompletion(read_options, session.editor.buffer.text(), session.editor.buffer.cursor_byte, .explicit);
                             } else {
-                                const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
+                                const application = try read_options.complete.?(read_options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                                 defer application.deinit(self.allocator);
                                 try session.applyCompletion(application);
                             }
                         } else if (key.key == .enter and !session.hasCompletionMenu()) {
-                            _ = try expandAbbreviationBeforeAccept(&session, options, false);
+                            _ = try expandAbbreviationBeforeAccept(&session, read_options, false);
                             try session.handleKey(key);
-                        } else if (isSpaceAccept(key) and try expandAbbreviationBeforeAccept(&session, options, true)) {} else if (session.hasCompletionMenu() and shouldRefreshCompletionMenu(key) and options.complete != null and options.completion_context != null) {
+                        } else if (isSpaceAccept(key) and try expandAbbreviationBeforeAccept(&session, read_options, true)) {} else if (session.hasCompletionMenu() and shouldRefreshCompletionMenu(key) and read_options.complete != null and read_options.completion_context != null) {
                             try session.handleKey(key);
                             if (session.hasCompletionMenu()) {
-                                if (options.clone_completion_context != null and options.free_completion_context != null) {
-                                    try self.requestCompletion(options, session.editor.buffer.text(), session.editor.buffer.cursor_byte, .refresh);
+                                if (read_options.clone_completion_context != null and read_options.free_completion_context != null) {
+                                    try self.requestCompletion(read_options, session.editor.buffer.text(), session.editor.buffer.cursor_byte, .refresh);
                                 } else {
-                                    const application = try options.complete.?(options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
+                                    const application = try read_options.complete.?(read_options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
                                     defer application.deinit(self.allocator);
                                     try session.applyCompletion(application);
                                 }
@@ -709,6 +722,12 @@ pub const TerminalSession = struct {
                         render_needed = true;
                         try self.capabilities.apply(self.allocator, &self.tty, capability);
                     },
+                    .color_scheme => |scheme| {
+                        if (read_options.refresh_style != null and read_options.style_context != null) {
+                            read_options.theme = try read_options.refresh_style.?(read_options.style_context.?, self.allocator, self.io, scheme);
+                            render_needed = true;
+                        }
+                    },
                     .prompt_redraw => {
                         render_needed = true;
                         session.invalidatePrompt();
@@ -717,10 +736,10 @@ pub const TerminalSession = struct {
                 }
             }
             if (session.state == .editing or session.state == .history_search) {
-                try self.startReadyCompletion(options);
+                try self.startReadyCompletion(read_options);
                 if (render_needed) {
-                    if (session.takePromptInvalidation() and options.refresh_prompt != null and options.prompt_context != null) {
-                        const prompt = try options.refresh_prompt.?(options.prompt_context.?, self.allocator, self.io);
+                    if (session.takePromptInvalidation() and read_options.refresh_prompt != null and read_options.prompt_context != null) {
+                        const prompt = try read_options.refresh_prompt.?(read_options.prompt_context.?, self.allocator, self.io);
                         defer self.allocator.free(prompt);
                         try session.replacePrompt(.{
                             .bytes = prompt,
@@ -732,7 +751,7 @@ pub const TerminalSession = struct {
                         try writeTtyAll(&self.tty, "\x1b[H\x1b[2J");
                     }
                     const rendered_completion_flash = session.hasCompletionFlash();
-                    try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
+                    try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
                     if (rendered_completion_flash) next_completion_flash_clear_ms = nowMs(self.io) + completion_flash_ms;
                 }
                 self.reader.arm();
@@ -745,7 +764,7 @@ pub const TerminalSession = struct {
                 // Accepting the line may have rewritten the buffer (e.g.
                 // abbreviation expansion on Enter); paint the final text so
                 // the scrollback shows the command that actually runs.
-                try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, options);
+                try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
                 try self.handoffSubmittedInput();
                 self.renderer.reset(self.allocator);
                 try writeTtyAll(&self.tty, semanticInputEnd ++ "\r\n");
@@ -1533,6 +1552,20 @@ test "terminal parser emits text keys" {
     try std.testing.expectEqual(@as(usize, 1), events.items.len);
     try std.testing.expectEqual(line_editor.Key.text, events.items[0].key_press.key);
     try std.testing.expectEqualStrings("a", events.items[0].key_press.text);
+}
+
+test "terminal parser emits color scheme changes" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[?997;1n", &events);
+    try parser.feed("\x1b[?997;2n", &events);
+
+    try std.testing.expectEqual(@as(usize, 2), events.items.len);
+    try std.testing.expectEqual(ColorScheme.dark, events.items[0].color_scheme);
+    try std.testing.expectEqual(ColorScheme.light, events.items[1].color_scheme);
 }
 
 test "terminal parser treats single escape chunk as escape key" {
