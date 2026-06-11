@@ -255,3 +255,4 @@ unset A B C D; B=fallback; printf '<%s>\n' ${A:-$(printf 'a}b')}; printf '<%s>\n
 v='ab}cd'; printf '<%s>\n' ${v%$(printf '}cd')}; printf '<%s>\n' ${v%"}cd"}; printf '<%s>\n' ${v#$(printf 'ab}')}
 unset v; set -- ${v:-"a b"}; printf '<%s:%s:%s>\n' "$#" "$1" "${2-unset}"; set -- ${v:-a b}; printf '<%s:%s:%s>\n' "$#" "$1" "${2-unset}"; set -- ${v:-""}; printf '<%s:%s>\n' "$#" "${1-unset}"; touch ab; printf '<%s>\n' ${v:-"*"}; rm -f ab
 unset v x; echo ${v:-$((1 + ${x:-2}))}; x=4; echo $(($x + 1)); echo $((1 + $(printf 2)))
+x=2; printf '<%s>\n' $((1 + $x)); printf '<%s>\n' $((1 + `printf 2`))

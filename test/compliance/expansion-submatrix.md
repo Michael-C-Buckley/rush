@@ -12,7 +12,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | Parameter expansion | `expansion-parameter-*` | supported/baseline | larger parser/extension work and remaining broad edge-case audit |
 | Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
 | Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | baseline | nested legacy backquote behavior, parsing contexts |
-| Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics |
+| Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics, exact nested legacy-backquote diagnostics |
 | Field splitting | `expansion-field-splitting-*` | supported/baseline | broad interactions with special parameters |
 | Pathname expansion | `expansion-pathname-*` | supported | bytewise matching model; locale-specific collation is intentionally out of scope for current evidence |
 | Quote removal | `expansion-quote-removal`, `lex-quotes` | baseline | recursive contexts, escaped newline interactions, here-doc delimiter contexts |
@@ -92,11 +92,12 @@ Remaining gaps:
 
 Manifest row: `expansion-arithmetic`
 
-Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, octal/hex constants, and POSIX arithmetic-expression preprocessing of nested parameter expansions and command substitutions before evaluation. The recursive preprocessing behavior was checked against dash, bash `--posix`, and yash for braced defaults, unbraced `$name`, command substitution output, and expression-valued parameter text. Negative coverage includes invalid operators, quoted arithmetic tokens, malformed parameter syntax inside arithmetic, and `${parameter:?word}` failures inside arithmetic. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
+Current coverage includes precedence, variable lookup, assignment side effects, compound assignment, comparisons, logical, bitwise, shifts, ternary, comma operator support, octal/hex constants, and POSIX arithmetic-expression preprocessing of nested parameter expansions and command substitutions before evaluation. The recursive preprocessing behavior was checked against dash, bash `--posix`, and yash for braced defaults, unbraced `$name`, command substitution output, legacy backquote output, backslash-newline continuation, and expression-valued parameter text. Negative coverage includes invalid operators, quoted arithmetic tokens, quote bytes that remain in the expression, escaped `$`/`${...`/backquote initiators that must stay literal, malformed parameter syntax inside arithmetic, and `${parameter:?word}` failures inside arithmetic. Invalid arithmetic expansion in a current-shell expansion context stops non-interactive execution; inside command substitution it exits only the substitution subshell and propagates diagnostics/status.
 
 Remaining gaps:
 
 - exact POSIX diagnostic wording and consequences for more arithmetic syntax failures;
+- exact diagnostic classification for an unmatched raw legacy backquote that appears after an escaped literal backquote in an arithmetic expression;
 - divide-by-zero behavior;
 - integer overflow and signedness decisions;
 - nonnumeric variable behavior is Rush/Bash-like and not fully differential-safe.

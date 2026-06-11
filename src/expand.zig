@@ -2567,6 +2567,29 @@ test "arithmetic expansion preprocesses nested expansion tokens" {
     try std.testing.expectEqualStrings("3", nested.fields[0]);
 }
 
+test "arithmetic expansion applies POSIX quote and backslash preprocessing" {
+    var continuation = try expandWord(std.testing.allocator, "$((1 + \\\n2))", .{});
+    defer continuation.deinit();
+    try std.testing.expectEqual(@as(usize, 1), continuation.fields.len);
+    try std.testing.expectEqualStrings("3", continuation.fields[0]);
+
+    var backquote = try expandWord(std.testing.allocator, "$((1 + `printf 2`))", .{ .command_substitution = test_command_substitution });
+    defer backquote.deinit();
+    try std.testing.expectEqual(@as(usize, 1), backquote.fields.len);
+    try std.testing.expectEqualStrings("3", backquote.fields[0]);
+
+    var arithmetic_error: ArithmeticError = .{};
+    defer arithmetic_error.clear(std.testing.allocator);
+
+    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((1 + \\${MISSING:-2))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectEqualStrings("$((1 + \\${MISSING:-2))", arithmetic_error.expression);
+    try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
+
+    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((\"1\" + 2))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectEqualStrings("$((\"1\" + 2))", arithmetic_error.expression);
+    try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
+}
+
 test "arithmetic expansion records diagnostics instead of leaking parser errors" {
     var arithmetic_error: ArithmeticError = .{};
     defer arithmetic_error.clear(std.testing.allocator);

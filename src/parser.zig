@@ -836,6 +836,7 @@ const ArithmeticExpansionScanner = struct {
     fn scan(self: *ArithmeticExpansionScanner) std.mem.Allocator.Error!?usize {
         while (self.index < self.limit) {
             switch (self.source[self.index]) {
+                '\\' => self.skipBackslash(),
                 '$' => try self.skipDollarExpansion(),
                 '`' => self.skipBackquoted(),
                 '(' => {
@@ -851,6 +852,13 @@ const ArithmeticExpansionScanner = struct {
             }
         }
         return null;
+    }
+
+    fn skipBackslash(self: *ArithmeticExpansionScanner) void {
+        self.index += 1;
+        if (self.index < self.limit and isArithmeticBackslashEscaped(self.source[self.index])) {
+            self.index += 1;
+        }
     }
 
     fn skipDollarExpansion(self: *ArithmeticExpansionScanner) std.mem.Allocator.Error!void {
@@ -890,6 +898,10 @@ const ArithmeticExpansionScanner = struct {
         }
     }
 };
+
+fn isArithmeticBackslashEscaped(c: u8) bool {
+    return c == '$' or c == '`' or c == '\\' or c == '\n';
+}
 
 const ParameterExpansionScanner = struct {
     allocator: std.mem.Allocator,
@@ -3514,6 +3526,31 @@ test "lexer preserves arithmetic expansion as part of a word" {
         },
         .nodes = &.{.{ .kind = .root, .span = .init(0, 15) }},
     });
+}
+
+test "arithmetic expansion scanner honors arithmetic backslash escapes" {
+    const escaped_parameter = "echo $((1 + \\${x:-2)); echo after";
+    const escaped_parameter_start = std.mem.indexOf(u8, escaped_parameter, "$((").?;
+    const escaped_parameter_end = std.mem.indexOf(u8, escaped_parameter, ")); ").? + 2;
+    try std.testing.expectEqual(
+        @as(?usize, escaped_parameter_end),
+        try arithmeticExpansionEnd(std.testing.allocator, escaped_parameter, escaped_parameter.len, escaped_parameter_start),
+    );
+
+    const escaped_backquote = "echo $((1 + \\`printf 2` + 3)); echo after";
+    const escaped_backquote_start = std.mem.indexOf(u8, escaped_backquote, "$((").?;
+    try std.testing.expectEqual(
+        @as(?usize, null),
+        try arithmeticExpansionEnd(std.testing.allocator, escaped_backquote, escaped_backquote.len, escaped_backquote_start),
+    );
+
+    const literal_backquote = "echo $((1 + \\`printf 2)); echo after";
+    const literal_backquote_start = std.mem.indexOf(u8, literal_backquote, "$((").?;
+    const literal_backquote_end = std.mem.indexOf(u8, literal_backquote, ")); ").? + 2;
+    try std.testing.expectEqual(
+        @as(?usize, literal_backquote_end),
+        try arithmeticExpansionEnd(std.testing.allocator, literal_backquote, literal_backquote.len, literal_backquote_start),
+    );
 }
 
 test "lexer preserves quoted words as one word token" {
