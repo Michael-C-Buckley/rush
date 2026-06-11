@@ -2699,7 +2699,8 @@ pub const Executor = struct {
     }
 
     fn findBackgroundJobBySpec(self: *Executor, spec: []const u8) ?*BackgroundJob {
-        const text = if (std.mem.startsWith(u8, spec, "%")) spec[1..] else spec;
+        const has_percent = std.mem.startsWith(u8, spec, "%");
+        const text = if (has_percent) spec[1..] else spec;
         if (text.len == 0 or std.mem.eql(u8, text, "+") or std.mem.eql(u8, text, "%")) {
             const id = self.current_job_id orelse return null;
             return self.findBackgroundJobById(id);
@@ -2708,8 +2709,11 @@ pub const Executor = struct {
             const id = self.previous_job_id orelse return null;
             return self.findBackgroundJobById(id);
         }
-        const id = std.fmt.parseUnsigned(usize, text, 10) catch return null;
-        return self.findBackgroundJobById(id);
+        const numeric_id: ?usize = std.fmt.parseUnsigned(usize, text, 10) catch null;
+        if (numeric_id) |id| return self.findBackgroundJobById(id);
+        if (!has_percent) return null;
+        if (std.mem.startsWith(u8, text, "?")) return self.findBackgroundJobBySubstring(text[1..]);
+        return self.findBackgroundJobByPrefix(text);
     }
 
     fn findBackgroundJobById(self: *Executor, id: usize) ?*BackgroundJob {
@@ -2717,6 +2721,52 @@ pub const Executor = struct {
             if (job.id == id) return job;
         }
         return null;
+    }
+
+    fn findBackgroundJobByPrefix(self: *Executor, prefix: []const u8) ?*BackgroundJob {
+        if (prefix.len == 0) return null;
+        var match: ?*BackgroundJob = null;
+        for (self.background_jobs.items) |*job| {
+            if (!std.mem.startsWith(u8, job.command, prefix)) continue;
+            if (match != null) return null;
+            match = job;
+        }
+        return match;
+    }
+
+    fn findBackgroundJobBySubstring(self: *Executor, needle: []const u8) ?*BackgroundJob {
+        if (needle.len == 0) return null;
+        var match: ?*BackgroundJob = null;
+        for (self.background_jobs.items) |*job| {
+            if (std.mem.indexOf(u8, job.command, needle) == null) continue;
+            if (match != null) return null;
+            match = job;
+        }
+        return match;
+    }
+
+    fn removeBackgroundJobById(self: *Executor, id: usize) void {
+        for (self.background_jobs.items, 0..) |job, index| {
+            if (job.id != id) continue;
+            self.allocator.free(job.command);
+            _ = self.background_jobs.orderedRemove(index);
+            self.repairCurrentJobsAfterRemoval(id);
+            return;
+        }
+    }
+
+    fn repairCurrentJobsAfterRemoval(self: *Executor, id: usize) void {
+        if (self.previous_job_id == id) self.previous_job_id = null;
+        if (self.current_job_id == id) {
+            self.current_job_id = self.previous_job_id;
+            self.previous_job_id = null;
+        }
+        if (self.current_job_id) |current| {
+            if (self.findBackgroundJobById(current) == null) self.current_job_id = null;
+        }
+        if (self.previous_job_id) |previous| {
+            if (self.findBackgroundJobById(previous) == null) self.previous_job_id = null;
+        }
     }
 
     fn currentBackgroundJob(self: *Executor) ?*BackgroundJob {
@@ -9372,28 +9422,45 @@ fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job: 
 fn builtinBg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
-    if (command.argv.len > 2) return errorResult(self.allocator, 2, "bg", "too many arguments");
+    if (!self.shell_options.monitor) return errorResult(self.allocator, 1, "bg", "job control disabled");
     self.refreshBackgroundJobs();
-    const job = if (command.argv.len == 1)
-        self.currentBackgroundJob() orelse return errorResult(self.allocator, 1, "bg", "no current job")
-    else
-        self.findBackgroundJobBySpec(command.argv[1].text) orelse return errorResult(self.allocator, 127, "bg", "unknown job");
-    try continueStoppedJob(job);
-    self.selectCurrentJob(job.id);
-    const stdout = try std.fmt.allocPrint(self.allocator, "[{d}] {s} &\n", .{ job.id, job.command });
-    errdefer self.allocator.free(stdout);
-    return .{ .allocator = self.allocator, .status = 0, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+
+    if (command.argv.len == 1) {
+        const job = self.currentBackgroundJob() orelse {
+            stdout.deinit(self.allocator);
+            return errorResult(self.allocator, 1, "bg", "no current job");
+        };
+        try continueStoppedJob(job);
+        self.selectCurrentJob(job.id);
+        try stdout.print(self.allocator, "[{d}] {s}\n", .{ job.id, job.command });
+    } else {
+        for (command.argv[1..]) |arg| {
+            const job = self.findBackgroundJobBySpec(arg.text) orelse {
+                stdout.deinit(self.allocator);
+                return errorResult(self.allocator, 127, "bg", "unknown job");
+            };
+            try continueStoppedJob(job);
+            self.selectCurrentJob(job.id);
+            try stdout.print(self.allocator, "[{d}] {s}\n", .{ job.id, job.command });
+        }
+    }
+
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (command.argv.len > 2) return errorResult(self.allocator, 2, "fg", "too many arguments");
+    if (!self.shell_options.monitor) return errorResult(self.allocator, 1, "fg", "job control disabled");
     self.refreshBackgroundJobs();
     const job = if (command.argv.len == 1)
         self.currentBackgroundJob() orelse return errorResult(self.allocator, 1, "fg", "no current job")
     else
         self.findBackgroundJobBySpec(command.argv[1].text) orelse return errorResult(self.allocator, 127, "fg", "unknown job");
+    const job_id = job.id;
     const stdout = try std.fmt.allocPrint(self.allocator, "{s}\n", .{job.command});
     errdefer self.allocator.free(stdout);
     const foreground_terminal = try prepareForegroundTerminal(options.foreground_terminal and options.external_stdio == .inherit and self.shell_options.monitor);
@@ -9402,6 +9469,7 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     try continueStoppedJob(job);
     self.selectCurrentJob(job.id);
     const status = try waitBackgroundJob(io, job);
+    if (job.state == .done) self.removeBackgroundJobById(job_id);
     return .{ .allocator = self.allocator, .status = status, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
 }
 
@@ -12732,7 +12800,7 @@ test "executor runs compound async jobs as waitable children" {
 }
 
 test "executor backgrounds current and selected tracked jobs" {
-    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & bg; /bin/sleep 0 & bg %2; wait");
+    var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 1 & bg; /bin/sleep 1 & /bin/sleep 1 & bg %2 %3; wait");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -12742,11 +12810,11 @@ test "executor backgrounds current and selected tracked jobs" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("[1] /bin/sleep 0 &\n[2] /bin/sleep 0 &\n", result.stdout);
+    try std.testing.expectEqualStrings("[1] /bin/sleep 1\n[2] /bin/sleep 1\n[3] /bin/sleep 1\n", result.stdout);
 }
 
 test "executor foregrounds current and selected background jobs" {
-    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & fg; /bin/sleep 0 & fg %2");
+    var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 0 & fg; /bin/sleep 0 & fg %2");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -12757,6 +12825,67 @@ test "executor foregrounds current and selected background jobs" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("/bin/sleep 0\n/bin/sleep 0\n", result.stdout);
+}
+
+test "executor rejects fg and bg when job control is disabled" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sleep 0 & fg; bg; wait");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("fg: job control disabled\nbg: job control disabled\n", result.stderr);
+}
+
+test "executor resolves POSIX job id string forms" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 1,
+        .pid = 999_991,
+        .command = try std.testing.allocator.dupe(u8, "alpha one"),
+        .child = undefined,
+    });
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 2,
+        .pid = 999_992,
+        .command = try std.testing.allocator.dupe(u8, "beta alpha"),
+        .child = undefined,
+    });
+    executor.current_job_id = 2;
+    executor.previous_job_id = 1;
+
+    try std.testing.expectEqual(@as(usize, 2), (executor.findBackgroundJobBySpec("%%") orelse return error.TestUnexpectedResult).id);
+    try std.testing.expectEqual(@as(usize, 2), (executor.findBackgroundJobBySpec("%+") orelse return error.TestUnexpectedResult).id);
+    try std.testing.expectEqual(@as(usize, 1), (executor.findBackgroundJobBySpec("%-") orelse return error.TestUnexpectedResult).id);
+    try std.testing.expectEqual(@as(usize, 1), (executor.findBackgroundJobBySpec("%1") orelse return error.TestUnexpectedResult).id);
+    try std.testing.expectEqual(@as(usize, 1), (executor.findBackgroundJobBySpec("1") orelse return error.TestUnexpectedResult).id);
+    try std.testing.expectEqual(@as(usize, 1), (executor.findBackgroundJobBySpec("%alpha") orelse return error.TestUnexpectedResult).id);
+    try std.testing.expectEqual(@as(usize, 2), (executor.findBackgroundJobBySpec("%?beta") orelse return error.TestUnexpectedResult).id);
+    try std.testing.expectEqual(@as(?*BackgroundJob, null), executor.findBackgroundJobBySpec("%?alpha"));
+}
+
+test "executor removes completed foreground jobs from the job table" {
+    var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sh -c 'exit 7' & fg; echo fg=$?; jobs; wait %1; echo wait=$?");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 0), executor.background_jobs.items.len);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "fg=7\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "wait=127\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "wait: unknown job\n") != null);
 }
 
 test "executor filters and formats jobs builtin output" {

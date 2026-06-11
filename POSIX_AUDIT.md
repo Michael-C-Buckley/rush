@@ -352,18 +352,18 @@ Implemented or partially implemented:
 - Baseline async external, builtin, and compound commands with `&`.
 - `$!` and `wait pid` for tracked background commands.
 - Visible job table through `jobs`, including `-l`, `-p`, and numeric/% job operands.
-- Baseline `fg` waits for current or explicit tracked jobs and returns their status.
-- Baseline `bg` reports current or explicit tracked jobs as backgrounded.
+- Monitor-enabled `fg` waits for current or explicit tracked jobs, returns the foreground job status, writes the command line, and removes completed foreground jobs from the waitable job table.
+- Monitor-enabled `bg` reports current, explicit, and multiple tracked jobs with the POSIX `[%d] %s` format.
 - Foreground process group handling for inherited-stdio external-only pipelines.
 - Foreground inherited-stdio mixed pipelines fork through a job-owned wrapper process group before terminal handoff, so builtin/function stages are no longer run by the parent shell while the job owns the terminal.
 - Stopped foreground inherited-stdio mixed pipelines are recorded in the job table, restore the shell foreground process group, and can be resumed through `fg` after SIGTSTP/SIGTTIN/SIGTTOU stops in the job-owned wrapper process group.
-- Monitor mode (`set -m`) puts tracked async external and forked compound/mixed-pipeline jobs in their own process groups, keeps background jobs from taking foreground terminal ownership, and lets `fg` hand the terminal to that saved process group when available.
+- Monitor mode (`set -m`) puts tracked async external and forked compound/mixed-pipeline jobs in their own process groups, keeps background jobs from taking foreground terminal ownership, lets `fg` hand the terminal to that saved process group when available, and gates `fg`/`bg` job-control behavior.
+- `jobs`, `fg`, `bg`, and `wait` resolve POSIX job IDs for current (`%%`/`%+`), previous (`%-`), numeric (`%n`), prefix (`%string`), and substring (`%?string`) forms where the match is unambiguous.
 
 ### Partial / gaps
 
 - Stopped jobs and precise job status refresh are partial rather than complete.
-- `fg`/`bg` resume tracked stopped jobs with `SIGCONT`, but broader signal and terminal edge cases remain.
-- Terminal mode save/restore and `fg`/`bg` behavior are still tracked as broader job-control rows rather than as process-group ownership gaps.
+- Stopped-job terminal mode save/restore has focused coverage for `fg`, but broader stopped-state lifecycle polish remains tracked separately from the supported `fg`/`bg` utility row.
 - Signal handling for pipelines and asynchronous lists remains conservative.
 
 ### Missing / gaps
@@ -419,8 +419,8 @@ The detailed backlog lives in Tend and the machine-readable status lives in `tes
 
 ### Batch D: Job-control and error-consequence depth
 
-1. Add stopped-job tracking and terminal mode save/restore.
-2. Deepen `fg`/`bg` to resume stopped jobs when process state is tracked.
+1. Continue stopped-job lifecycle cleanup beyond the focused `fg`/`bg` resume path.
+2. Deepen interactive notification and status-refresh edge cases for completed/stopped jobs.
 3. Add more special-builtin expansion and redirection consequence cases across utilities.
 
 Keep adding POSIX corpus, negative corpus, and manifest evidence alongside each behavior change.

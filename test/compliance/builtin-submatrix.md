@@ -60,13 +60,13 @@ Follow-up task: `#156 Model POSIX special builtin error consequences`.
 
 | utility | manifest rows | current coverage | gaps |
 | --- | --- | --- | --- |
-| `jobs` | `builtin-jobs` | visible table, `-l`, `-p`, numeric, `%`, `%+`, `%%`, and `%-` job operands; current/previous markers; nonblocking status refresh | richer job specs and interactive notifications |
-| `fg` | `job-fg-bg` | current, previous, and explicit tracked jobs wait and propagate status; stopped jobs get `SIGCONT` | full terminal handoff, richer job specs |
-| `bg` | `job-fg-bg` | current, previous, and explicit tracked jobs report as backgrounded; stopped jobs get `SIGCONT` | richer job specs and notifications |
+| `jobs` | `builtin-jobs` | visible table, `-l`, `-p`, numeric, `%`, `%+`, `%%`, `%-`, prefix, and substring job operands; current/previous markers; nonblocking status refresh | interactive notifications and completed-job cleanup |
+| `fg` | `job-fg-bg` | monitor-enabled current, previous, numeric, prefix, and substring tracked jobs wait, propagate status, get terminal handoff when a saved process group exists, send stopped jobs `SIGCONT`, and remove completed foreground jobs from the waitable table | broader stopped-state lifecycle belongs to `job-stopped-state` |
+| `bg` | `job-fg-bg` | monitor-enabled current, previous, numeric, prefix, substring, and multiple tracked jobs report with POSIX `[%d] %s` output; stopped jobs get `SIGCONT`; disabled job control reports an error | broader stopped-state notifications belong to `job-stopped-state` |
 
 Follow-up tasks:
 
-- full terminal mode restoration and interactive job notifications should be tracked separately from the baseline job-control builtins.
+- broader stopped-state lifecycle cleanup and interactive job notifications should be tracked separately from the supported `fg`/`bg` utility row.
 
 ## Negative diagnostics coverage targets
 
