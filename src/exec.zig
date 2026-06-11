@@ -5675,10 +5675,15 @@ pub const Executor = struct {
         const merged_stderr_write: ?std.Io.File = if (merged_capture) |pipe| .{ .handle = try rawDup(pipe.write.?.handle), .flags = pipe.write.?.flags } else null;
         const foreground_terminal = try prepareForegroundTerminal(options.external_stdio == .inherit and stdin_file == null and !stdin_redirected);
         try checkCanceled(options);
+
+        // Interactive command substitutions still need the shell's tty on
+        // stdin; only stdout is captured.
+        const inherit_stdin = externalStdioInheritsStdin(options.external_stdio) or
+            (options.interactive and options.external_stdio == .capture_stdout);
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_redirected) .inherit else if (stdin_file) |file| .{ .file = file } else if (externalStdioInheritsStdin(options.external_stdio)) .inherit else .close,
+            .stdin = if (stdin_redirected) .inherit else if (stdin_file) |file| .{ .file = file } else if (inherit_stdin) .inherit else .close,
             .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (merged_capture) |pipe| .{ .file = pipe.write.? } else if (manual_stdout_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stdout_pipe) .pipe else .inherit,
             .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (merged_stderr_write) |file| .{ .file = file } else if (duplicate_stderr_to_stdout) .{ .file = manual_stdout_capture.?.write.? } else if (manual_stderr_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stderr_pipe) .pipe else .inherit,
             .pgid = if (foreground_terminal != null) 0 else null,
@@ -13072,6 +13077,37 @@ test "command substitution captures external stdout while stderr remains pty" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("stderr:tty\ndup:nottyerr-simple\nstdout-dup:\norder:errout\ngroup:nottyerr-group\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "interactive command substitution preserves external stdin tty" {
+    var master: c_int = -1;
+    var slave: c_int = -1;
+    if (openpty(&master, &slave, null, null, null) != 0) return error.SkipZigTest;
+    defer _ = close(master);
+    defer _ = close(slave);
+
+    const original_stdin = dup(std.Io.File.stdin().handle);
+    if (original_stdin < 0) return error.SkipZigTest;
+    defer _ = close(original_stdin);
+    if (dup2(slave, std.Io.File.stdin().handle) < 0) return error.SkipZigTest;
+    defer _ = dup2(original_stdin, std.Io.File.stdin().handle);
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\value=$(/bin/sh -c 'if test -t 0; then printf tty; else printf notty; fi')
+        \\echo "$value"
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true, .interactive = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("tty\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
