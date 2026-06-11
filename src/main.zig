@@ -1816,6 +1816,7 @@ fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, i
         .external_stdio = external_stdio,
         .arg_zero = invocation.arg_zero,
     };
+    if (invocation.kind == .command_string) options.verbose_input_echo = false;
     const script = switch (invocation.kind) {
         .command_string => invocation.source,
         .script_file => script: {
@@ -2975,6 +2976,16 @@ test "command string invocation shell options affect execution" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), noexec.status);
     try std.testing.expectEqualStrings("", noexec.stdout);
     try std.testing.expectEqualStrings("", noexec.stderr);
+}
+
+test "command string set -v does not echo already-read input" {
+    const invocation = parseShellInvocation(&.{ "rush", "-c", "set -v\necho command-string-verbose" }) orelse return error.ExpectedInvocation;
+    var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("command-string-verbose\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "invalid arithmetic expansion returns a shell diagnostic" {

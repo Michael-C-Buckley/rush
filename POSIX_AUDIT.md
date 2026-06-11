@@ -52,7 +52,7 @@ Recent notable capabilities:
 - Non-POSIX extension forms are excluded from POSIX scoring and tracked separately in `BASH_COMPAT.md`; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - POSIX builtins now include supported `.`, `export`, `readonly`, `unset`, `umask`, `times`, `trap`, `getopts`, `eval`, and `exec` plus baseline `command`, `exit`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
-- POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
+- POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, and `xtrace`, plus supported `verbose` input echo and reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
 - Cross-target compile-only coverage is tracked by `zig build cross-check`, which runs native tests and compiles the test binary for representative Linux, macOS, FreeBSD, OpenBSD, and NetBSD targets. Foreign-target runtime validation remains separate follow-up work; use `scripts/check-runtime-portability.sh` on actual Linux/BSD hosts and record the host evidence separately from the compile-only compliance row.
 
@@ -314,7 +314,7 @@ Implemented or partially implemented:
   - `set -e` / `set +e` errexit baseline
   - `set -n` / `set -o noexec` noexec syntax-check behavior
   - `set -x` / `set +x` xtrace baseline
-  - `set -v` / `set +v` verbose baseline
+  - `set -v` / `set +v` verbose input echo as script-file and standard-input lines are read
   - `$-` reflects representative current short shell option flags
   - option parsing followed by positional operands, including `--`, `-`, and `+` terminator behavior
   - `set -o name` / `set +o name` for supported options
@@ -327,7 +327,7 @@ Implemented or partially implemented:
 ### Partial / gaps
 
 - Errexit is baseline-only and lacks many POSIX corner cases around compound commands, command substitutions, and AND-OR/pipeline contexts.
-- Xtrace/verbose exact output ordering is baseline-only.
+- Xtrace exact output ordering is baseline-only.
 - Unsupported POSIX option behavior remains:
   - `set -o vi` command-line editing mode
 

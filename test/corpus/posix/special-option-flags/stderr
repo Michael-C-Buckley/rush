@@ -1,3 +1,2 @@
-echo set-v
 + echo set-x
 + set +x

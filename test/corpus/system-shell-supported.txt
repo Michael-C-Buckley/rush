@@ -299,3 +299,4 @@ unset COLON DOT EVAL EXEC EXPORT READONLY SET SHIFT TIMES TRAP UNSET BREAK CONTI
 for x in a b; do false; done; echo explicit:$?; for x in; do false; done; echo explicit_empty:$?; set -- a b; for x; do false; done; echo implicit:$?; set --; for x; do false; done; echo implicit_empty:$?
 printf 'a\nb\n' | if read line; then echo "if-last:$line"; fi; printf 'm\n' | if read line; then echo "middle:$line"; fi | { read line; echo "if-middle:$line"; }; if true; then echo if-first; fi | { read line; echo "if-first:$line"; }
 exec 2>&1; set -x; X=v; echo "$X" suffix; set +x; echo quiet
+set -v; echo verbose-command-string; set +v; echo quiet

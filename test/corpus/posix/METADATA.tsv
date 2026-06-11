@@ -250,7 +250,7 @@ option-set-plus-o-listing	options	option	set +o lists reusable commands for ever
 option-set-positionals	options	option	set option parsing can be followed by positional operands, with --, -, and + terminators preserving POSIX operand behavior
 option-set-plus-o-reinput	options	option	set +o output can be re-input to restore representative option states, including monitor and notify
 set-o-nounset-default-operator	options	option	-
-set-verbose	options	option	-
+set-verbose	options	option	set -v in a command string does not echo already-read input; script-file input echo timing is covered by inline executor/invocation tests
 set-xtrace	options	option	-
 set-xtrace-external-pipeline	options	option	xtrace output is emitted for each optimized external-only pipeline stage before pipeline output
 set-xtrace-expanded-assignments	options	option	xtrace output is emitted before execution and after assignment and word expansion

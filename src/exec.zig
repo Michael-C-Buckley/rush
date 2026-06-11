@@ -52,6 +52,7 @@ pub const ExecuteOptions = struct {
     ignore_errexit: bool = false,
     force_noninteractive_error_consequences: bool = false,
     default_path_lookup: bool = false,
+    verbose_input_echo: bool = true,
 };
 
 const PipelineStageStdin = struct {
@@ -2367,17 +2368,22 @@ pub const Executor = struct {
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
         var last_status: ExitStatus = 0;
+        var verbose_read_offset: usize = 0;
 
         if (program.statements.len > 0) {
             for (program.statements, 0..) |statement, statement_index| {
-                if (self.shouldSkipForNoexec(options)) break;
                 try checkCanceled(options);
+                const next_start = if (statement_index + 1 < program.statements.len) program.statements[statement_index + 1].span.start else program.source.len;
+                try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, statement.span.start, next_start);
+                if (self.shouldSkipForNoexec(options)) break;
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, statement.span.start);
+                var statement_options = options;
+                statement_options.verbose_input_echo = false;
                 var result = (if (statement.async_after)
-                    self.executeAsyncStatement(program, statement, options)
+                    self.executeAsyncStatement(program, statement, statement_options)
                 else
-                    self.executeStatementSync(program, statement, options)) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
+                    self.executeStatementSync(program, statement, statement_options)) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
                 defer result.deinit();
                 try self.annotateSourcedError(program.source, statement.span.start, options, &result);
                 const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
@@ -2393,14 +2399,18 @@ pub const Executor = struct {
 
         if (program.pipelines.len > 0) {
             for (program.pipelines, 0..) |pipeline, pipeline_index| {
-                if (self.shouldSkipForNoexec(options)) break;
                 try checkCanceled(options);
+                const next_start = if (pipeline_index + 1 < program.pipelines.len) program.pipelines[pipeline_index + 1].span.start else program.source.len;
+                try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, pipeline.span.start, next_start);
+                if (self.shouldSkipForNoexec(options)) break;
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, pipeline.span.start);
+                var pipeline_options = options;
+                pipeline_options.verbose_input_echo = false;
                 var result = (if (pipeline.async_after)
-                    self.executeAsyncPipeline(program, pipeline, options)
+                    self.executeAsyncPipeline(program, pipeline, pipeline_options)
                 else
-                    self.executePipeline(program, pipeline, options)) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
+                    self.executePipeline(program, pipeline, pipeline_options)) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
                 defer result.deinit();
                 try self.annotateSourcedError(program.source, pipeline.span.start, options, &result);
                 const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
@@ -2413,11 +2423,15 @@ pub const Executor = struct {
             return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
         }
 
-        for (program.commands) |command| {
-            if (self.shouldSkipForNoexec(options)) break;
+        for (program.commands, 0..) |command, command_index| {
             try checkCanceled(options);
+            const next_start = if (command_index + 1 < program.commands.len) program.commands[command_index + 1].span.start else program.source.len;
+            try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, command.span.start, next_start);
+            if (self.shouldSkipForNoexec(options)) break;
             self.setCurrentLineNumber(program.source, command.span.start);
-            var result = self.executeSimpleCommand(command, options) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
+            var command_options = options;
+            command_options.verbose_input_echo = false;
+            var result = self.executeSimpleCommand(command, command_options) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
             defer result.deinit();
             try self.annotateSourcedError(program.source, command.span.start, options, &result);
             const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
@@ -2528,6 +2542,26 @@ pub const Executor = struct {
         }
         try stdout.appendSlice(self.allocator, result.stdout);
         try stderr.appendSlice(self.allocator, result.stderr);
+    }
+
+    fn appendOrWriteVerboseInput(self: *Executor, options: ExecuteOptions, stderr: *std.ArrayList(u8), source: []const u8, read_offset: *usize, statement_start: usize, next_start: usize) !void {
+        const read_end = @max(sourceLineReadEnd(source, statement_start), @min(next_start, source.len));
+        if (read_end <= read_offset.*) return;
+        const bytes = source[read_offset.*..read_end];
+        read_offset.* = read_end;
+        if (!options.verbose_input_echo or !self.shell_options.verbose) return;
+        if (options.external_stdio == .inherit and options.io != null) {
+            try rawWriteAll(2, bytes);
+        } else {
+            try stderr.appendSlice(self.allocator, bytes);
+        }
+    }
+
+    fn sourceLineReadEnd(source: []const u8, offset: usize) usize {
+        var end = @min(offset, source.len);
+        while (end < source.len and source[end] != '\n') : (end += 1) {}
+        if (end < source.len) end += 1;
+        return end;
     }
 
     fn appendOrWriteCommandSubstitutionStderr(self: *Executor, options: ExecuteOptions, stderr: *std.ArrayList(u8)) !void {
@@ -3766,14 +3800,15 @@ pub const Executor = struct {
     pub fn executeScriptSlice(self: *Executor, script: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         const trimmed = std.mem.trim(u8, script, " \t\r\n;");
         if (trimmed.len == 0) return emptyResult(self.allocator, 0);
-        if (containsAliasCommandToken(trimmed)) {
-            if (try self.aliasTimingChunkProgram(trimmed, options)) |chunk_program| {
+        const source = std.mem.trimStart(u8, script, " \t\r\n;");
+        if (containsAliasCommandToken(source)) {
+            if (try self.aliasTimingChunkProgram(source, options)) |chunk_program| {
                 var program = chunk_program;
                 defer program.deinit();
-                return self.executeScriptChunks(trimmed, program, options);
+                return self.executeScriptChunks(source, program, options);
             }
         }
-        const aliased = try self.expandAliasesForScript(trimmed);
+        const aliased = try self.expandAliasesForScript(source);
         defer self.allocator.free(aliased);
         var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features });
         defer parsed.deinit();
@@ -3783,11 +3818,6 @@ pub const Executor = struct {
         if (self.shouldSkipForNoexec(options)) return emptyResult(self.allocator, 0);
         var result = try self.executeProgram(program, options);
         errdefer result.deinit();
-        if (self.shell_options.verbose and !options.suppress_errexit) {
-            const stderr = try std.mem.concat(self.allocator, u8, &.{ trimmed, "\n", result.stderr });
-            self.allocator.free(result.stderr);
-            result.stderr = stderr;
-        }
         return result;
     }
 
@@ -3818,11 +3848,15 @@ pub const Executor = struct {
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
         var last_status: ExitStatus = 0;
+        var verbose_read_offset: usize = 0;
         for (program.statements, 0..) |statement, index| {
-            if (self.shouldSkipForNoexec(options)) break;
             const start = statement.span.start;
             const end = if (index + 1 < program.statements.len) program.statements[index + 1].span.start else script.len;
-            var result = try self.executeScriptSlice(script[start..end], options);
+            try self.appendOrWriteVerboseInput(options, &stderr, script, &verbose_read_offset, start, end);
+            if (self.shouldSkipForNoexec(options)) break;
+            var statement_options = options;
+            statement_options.verbose_input_echo = false;
+            var result = try self.executeScriptSlice(script[start..end], statement_options);
             defer result.deinit();
             last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
@@ -8091,6 +8125,7 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     defer self.allocator.free(contents);
     var source_options = options;
     source_options.source_path = command.argv[1].text;
+    source_options.verbose_input_echo = true;
     self.source_depth += 1;
     defer self.source_depth -= 1;
     var result = self.executeScriptSlice(contents, source_options) catch |err| switch (err) {
@@ -15273,10 +15308,23 @@ test "executor implements set shell option baseline" {
 
     var verbose_executor = Executor.init(std.testing.allocator);
     defer verbose_executor.deinit();
-    var verbose = try verbose_executor.executeScriptSlice("set -v\necho verbose\n", .{});
+    var verbose = try verbose_executor.executeScriptSlice("set -v\necho verbose\nset +v\necho quiet\n", .{});
     defer verbose.deinit();
-    try std.testing.expectEqualStrings("verbose\n", verbose.stdout);
-    try std.testing.expect(std.mem.indexOf(u8, verbose.stderr, "echo verbose") != null);
+    try std.testing.expectEqualStrings("verbose\nquiet\n", verbose.stdout);
+    try std.testing.expectEqualStrings("echo verbose\nset +v\n", verbose.stderr);
+
+    var verbose_compound = try verbose_executor.executeScriptSlice("set -v\nif true; then\necho inside\nfi\nset +v\n", .{});
+    defer verbose_compound.deinit();
+    try std.testing.expectEqualStrings("inside\n", verbose_compound.stdout);
+    try std.testing.expectEqualStrings("if true; then\necho inside\nfi\nset +v\n", verbose_compound.stderr);
+
+    const source_path = "rush-verbose-source-test.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = source_path, .data = "echo sourced\nset +v\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, source_path) catch {};
+    var verbose_source = try verbose_executor.executeScriptSlice("set -v\n. ./rush-verbose-source-test.rush\necho quiet\n", .{ .io = std.testing.io });
+    defer verbose_source.deinit();
+    try std.testing.expectEqualStrings("sourced\nquiet\n", verbose_source.stdout);
+    try std.testing.expectEqualStrings(". ./rush-verbose-source-test.rush\necho sourced\nset +v\n", verbose_source.stderr);
 }
 
 test "executor accepts obsolescent no-effect set options" {
