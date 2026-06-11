@@ -2885,6 +2885,37 @@ test "runScriptWithEnvironment imports initial shell variables" {
     try std.testing.expectEqualStrings("ppid-ok\n<present>\n< \t\n>\n<1>\npwd-ok\n", result.stdout);
 }
 
+test "runScriptWithEnvironment preserves valid inherited logical PWD" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+
+    const root = "rush-test-logical-pwd";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/real");
+    std.Io.Dir.cwd().symLink(std.testing.io, "real", root ++ "/link", .{}) catch return error.SkipZigTest;
+
+    const logical_pwd = try std.mem.concat(std.testing.allocator, u8, &.{ original_cwd, "/", root, "/link" });
+    defer std.testing.allocator.free(logical_pwd);
+    try std.process.setCurrentPath(std.testing.io, logical_pwd);
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("PWD", logical_pwd);
+
+    var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io,
+        \\case $PWD in */rush-test-logical-pwd/link) echo logical-pwd ;; *) echo bad-pwd:$PWD ;; esac
+        \\case "$(pwd -L)" in */rush-test-logical-pwd/link) echo pwd-L ;; *) echo bad-L ;; esac
+        \\case "$(pwd -P)" in */rush-test-logical-pwd/real) echo pwd-P ;; *) echo bad-P ;; esac
+    , .{ .io = std.testing.io, .allow_external = true }, &env);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("logical-pwd\npwd-L\npwd-P\n", result.stdout);
+}
+
 test "runScriptWithOptions accepts inherit mode for external commands" {
     var result = try runScriptWithOptions(std.testing.allocator, std.testing.io, "/usr/bin/true", .{
         .io = std.testing.io,

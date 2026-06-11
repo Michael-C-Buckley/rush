@@ -108,7 +108,7 @@ busybox-ash-smoke-printf-redirection	builtin	external-suite-smoke	BusyBox ash-in
 busybox-ash-smoke-read-ifs-redirection	builtin	external-suite-smoke	BusyBox ash-inspired read IFS splitting with input redirection
 busybox-ash-smoke-read-redirection	redirection	external-suite-smoke	BusyBox ash-inspired input redirection into read loop
 busybox-ash-smoke-test-redirection	builtin	external-suite-smoke	BusyBox ash-inspired test -s around redirected files
-cd-cdpath	variables	behavior	CDPATH searches relative directory operands and prints matched non-empty prefixes
+cd-cdpath	variables	behavior	CDPATH searches relative directory operands, including slash operands, skips dot/dot-dot first components, and prints matched non-empty prefixes
 cd-oldpwd-dash	variables	behavior	cd updates PWD and OLDPWD and cd - returns to OLDPWD with output
 case-default	grammar	behavior	-
 case-final-arm-no-terminator	grammar	behavior	final case arm may omit double-semicolon terminator

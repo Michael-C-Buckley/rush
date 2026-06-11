@@ -238,7 +238,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 - POSIX special builtin classification baseline.
 - POSIX special builtin error consequences are modeled for the audited XCU 2.8.1/2.15 cases: expansion/redirection failures, invalid options or operands where applicable, and utility-semantic failures stop non-interactive execution across all 15 special builtins.
 - Exit status propagation and `$?` baseline.
-- Logical `PWD`/`OLDPWD` tracking for `cd`/`pwd`.
+- Logical `PWD`/`OLDPWD` tracking for `cd`/`pwd`, including valid inherited logical `PWD`, `CDPATH`, `cd -`, and `-L`/`-P` behavior.
 - `$!` tracks the most recent real background external command pid.
 - `wait` can wait for tracked background pids and job IDs, returns operand statuses, and returns zero after waiting for all known jobs when invoked without operands.
 - `exec` replaces the Rush process image for CLI inherited-stdio external command paths, preserves assignment operands in the replacement environment, reports command-not-found and permission-denied failures with shell-exit consequences, and applies redirection-only fd changes to the current shell.

@@ -1,9 +1,27 @@
 start=$PWD
 out=$PWD/rush-cdpath.out
-mkdir -p rush-cdpath-parent/target
+mkdir -p rush-cdpath-parent/target rush-cdpath-parent/nested/sub rush-cdpath-local
 CDPATH=rush-cdpath-parent
 cd target > "$out"
 case $(cat "$out") in */rush-cdpath-parent/target) echo cdpath-output-ok ;; *) echo cdpath-output-bad ;; esac
 case $PWD in */rush-cdpath-parent/target) echo pwd-ok ;; *) echo bad-pwd:$PWD ;; esac
 case $OLDPWD in "$start") echo old-ok ;; *) echo old-bad ;; esac
+cd "$start"
+CDPATH=rush-cdpath-parent
+cd nested/sub > "$out"
+case $(cat "$out") in */rush-cdpath-parent/nested/sub) echo cdpath-slash-output-ok ;; *) echo cdpath-slash-output-bad ;; esac
+case $PWD in */rush-cdpath-parent/nested/sub) echo pwd-slash-ok ;; *) echo bad-slash-pwd:$PWD ;; esac
+cd "$start"
+CDPATH=rush-cdpath-parent
+cd . > "$out"
+if [ -s "$out" ]; then echo cd-dot-output-bad; else echo cd-dot-output-ok; fi
+case $PWD in "$start") echo cd-dot-pwd-ok ;; *) echo cd-dot-pwd-bad:$PWD ;; esac
+cd .. > "$out"
+if [ -s "$out" ]; then echo cd-dotdot-output-bad; else echo cd-dotdot-output-ok; fi
+case $PWD in "${start%/*}") echo cd-dotdot-pwd-ok ;; *) echo cd-dotdot-pwd-bad:$PWD ;; esac
+cd "$start"
+CDPATH=.
+cd rush-cdpath-local > "$out"
+case $(cat "$out") in */rush-cdpath-local) echo cdpath-dot-entry-output-ok ;; *) echo cdpath-dot-entry-output-bad ;; esac
+case $PWD in */rush-cdpath-local) echo cdpath-dot-entry-pwd-ok ;; *) echo cdpath-dot-entry-pwd-bad:$PWD ;; esac
 cd "$start"

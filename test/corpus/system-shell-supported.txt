@@ -212,6 +212,7 @@ echo "$(f() { echo inner; }; f)"; if command -v f >/dev/null; then echo leak; el
 definitely-missing-rush-command 2>/dev/null; echo status:$?
 wait --; echo status:$?
 cd -- .; echo cd:$?; pwd -- >/dev/null; echo pwd:$?; export -- X=ok; echo export:$X; readonly -- R=ok; echo readonly:$?; unset -- NO_SUCH_NAME; echo unset:$?; umask -- >/dev/null; echo umask:$?
+mkdir -p cp/dir/sub local; cdpath_out=$PWD/cdpath.out; CDPATH=cp; cd dir/sub > "$cdpath_out"; out=$(cat "$cdpath_out"); case "$out:$PWD" in */cp/dir/sub:*/cp/dir/sub) echo cdpath-slash ;; *) echo bad-slash:$out:$PWD ;; esac; cd - >/dev/null; out=$(cd .); case "$out:$PWD" in :*) echo cd-dot-skip ;; *) echo bad-dot:$out:$PWD ;; esac; CDPATH=.; cd local > "$cdpath_out"; out=$(cat "$cdpath_out"); case "$out:$PWD" in */local:*/local) echo cdpath-dot-entry ;; *) echo bad-dot-entry:$out:$PWD ;; esac
 command -V echo; echo status:$?; command -V cd; echo status:$?
 printf -- %s ok; echo :$?
 alias ll='echo ok'; unalias -- ll; alias ll >/dev/null 2>/dev/null; echo status:$?

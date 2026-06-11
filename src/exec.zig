@@ -1258,20 +1258,17 @@ pub const Executor = struct {
         const ppid = try std.fmt.bufPrint(&ppid_buffer, "{d}", .{std.posix.getppid()});
         try self.setEnv("PPID", ppid);
 
-        if (self.getEnv("PWD")) |pwd| {
-            if (try self.validLogicalPwd(io, pwd)) return;
-        }
+        if (self.getEnv("PWD")) |pwd| if (self.validLogicalPwd(pwd)) return;
         const cwd = try std.process.currentPathAlloc(io, self.allocator);
         defer self.allocator.free(cwd);
         try self.setEnv("PWD", cwd);
         try self.setExported("PWD");
     }
 
-    fn validLogicalPwd(self: *Executor, io: std.Io, pwd: []const u8) !bool {
+    fn validLogicalPwd(self: *Executor, pwd: []const u8) bool {
         if (pwd.len == 0 or pwd[0] != '/') return false;
-        const cwd = try std.process.currentPathAlloc(io, self.allocator);
-        defer self.allocator.free(cwd);
-        return std.mem.eql(u8, pwd, cwd);
+        if (pathHasDotOrDotDotComponent(pwd)) return false;
+        return sameExistingFile(self.allocator, pwd, ".") orelse false;
     }
 
     fn physicalCwd(self: *Executor, io: std.Io) ![]u8 {
@@ -2211,7 +2208,7 @@ pub const Executor = struct {
 
     fn logicalCwd(self: *Executor, io: std.Io) ![:0]u8 {
         if (self.getEnv("PWD")) |pwd| {
-            if (pwd.len > 0 and pwd[0] == '/') return self.allocator.dupeZ(u8, pwd);
+            if (self.validLogicalPwd(pwd)) return self.allocator.dupeZ(u8, pwd);
         }
         return std.process.currentPathAlloc(io, self.allocator);
     }
@@ -9488,23 +9485,39 @@ const CdTarget = struct {
 };
 
 fn resolveCdTarget(self: *Executor, io: std.Io, target: []const u8) !CdTarget {
-    if (target.len == 0 or target[0] == '/' or std.mem.indexOfScalar(u8, target, '/') != null) return .{ .path = target };
+    if (!shouldSearchCdpath(target)) return .{ .path = target };
     const cdpath = self.getEnv("CDPATH") orelse return .{ .path = target };
     var iter = std.mem.splitScalar(u8, cdpath, ':');
     while (iter.next()) |entry| {
-        const candidate = if (entry.len == 0 or std.mem.eql(u8, entry, "."))
-            try self.allocator.dupe(u8, target)
+        const candidate_owned = entry.len != 0 and !std.mem.eql(u8, entry, ".");
+        const candidate = if (candidate_owned)
+            try std.mem.concat(self.allocator, u8, &.{ entry, "/", target })
         else
-            try std.mem.concat(self.allocator, u8, &.{ entry, "/", target });
-        errdefer self.allocator.free(candidate);
+            target;
+        errdefer if (candidate_owned) self.allocator.free(candidate);
         var dir = std.Io.Dir.cwd().openDir(io, candidate, .{}) catch {
-            self.allocator.free(candidate);
+            if (candidate_owned) self.allocator.free(candidate);
             continue;
         };
         dir.close(io);
-        return .{ .path = candidate, .print_path = entry.len != 0 and !std.mem.eql(u8, entry, "."), .owned = true };
+        return .{ .path = candidate, .print_path = entry.len != 0, .owned = candidate_owned };
     }
     return .{ .path = target };
+}
+
+fn shouldSearchCdpath(target: []const u8) bool {
+    if (target.len == 0 or target[0] == '/') return false;
+    const end = std.mem.indexOfScalar(u8, target, '/') orelse target.len;
+    const first = target[0..end];
+    return !std.mem.eql(u8, first, ".") and !std.mem.eql(u8, first, "..");
+}
+
+fn pathHasDotOrDotDotComponent(path: []const u8) bool {
+    var iter = std.mem.splitScalar(u8, path, '/');
+    while (iter.next()) |component| {
+        if (std.mem.eql(u8, component, ".") or std.mem.eql(u8, component, "..")) return true;
+    }
+    return false;
 }
 
 fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
