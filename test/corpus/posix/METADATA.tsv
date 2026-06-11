@@ -350,3 +350,4 @@ redirection-compound-here-doc-input	redirection	behavior	here-doc stdin feeds if
 redirection-case-input-external-command-substitution	redirection	behavior	case input redirection feeds external command substitution stdin
 builtin-trap-signal-exit	signals	behavior	exit in a signal trap action stops the script with that status
 builtin-trap-exit-overrides-status	builtin	behavior	exit in an EXIT trap action overrides the prior shell status
+option-set-obsolescent-noop	options	behavior	set -h/+h and set -o/+o nolog are accepted as no-effect compatibility spellings

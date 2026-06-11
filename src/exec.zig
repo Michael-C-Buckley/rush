@@ -145,7 +145,7 @@ pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool 
     if (spelling.len < 2) return false;
     if (spelling[0] != '-' and spelling[0] != '+') return false;
     for (spelling[1..]) |option| switch (option) {
-        'a', 'e', 'f', 'n', 'u', 'x', 'v', 'C' => {},
+        'a', 'e', 'f', 'h', 'n', 'u', 'x', 'v', 'C' => {},
         else => return false,
     };
 
@@ -154,6 +154,7 @@ pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool 
         'a' => options.allexport = enabled,
         'e' => options.errexit = enabled,
         'f' => options.noglob = enabled,
+        'h' => {},
         'n' => options.noexec = enabled,
         'u' => options.nounset = enabled,
         'x' => options.xtrace = enabled,
@@ -183,6 +184,9 @@ pub fn applyShellOptionName(options: *ShellOptions, name: []const u8, enabled: b
     }
     if (std.mem.eql(u8, name, "noexec")) {
         options.noexec = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "nolog")) {
         return true;
     }
     if (std.mem.eql(u8, name, "nounset")) {
@@ -441,8 +445,8 @@ const builtin_names = [_][]const u8{
     "[",
 };
 
-const set_options = [_][]const u8{ "-a", "+a", "-e", "+e", "-f", "+f", "-n", "+n", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
-const set_option_names = [_][]const u8{ "allexport", "errexit", "noglob", "noclobber", "noexec", "nounset", "pipefail", "verbose", "xtrace" };
+const set_options = [_][]const u8{ "-a", "+a", "-e", "+e", "-f", "+f", "-h", "+h", "-n", "+n", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
+const set_option_names = [_][]const u8{ "allexport", "errexit", "noglob", "noclobber", "noexec", "nolog", "nounset", "pipefail", "verbose", "xtrace" };
 const signal_names = [_][]const u8{ "EXIT", "HUP", "INT", "QUIT", "ILL", "TRAP", "ABRT", "BUS", "FPE", "KILL", "USR1", "SEGV", "USR2", "PIPE", "ALRM", "TERM", "CHLD", "CONT", "STOP", "TSTP", "TTIN", "TTOU" };
 const test_operators = [_][]const u8{ "!", "(", ")", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-n", "-p", "-r", "-S", "-s", "-t", "-u", "-w", "-x", "-z", "=", "!=", "-eq", "-ne", "-gt", "-ge", "-lt", "-le" };
 
@@ -12421,6 +12425,17 @@ test "executor implements set shell option baseline" {
     try std.testing.expect(std.mem.indexOf(u8, verbose.stderr, "echo verbose") != null);
 }
 
+test "executor accepts obsolescent no-effect set options" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice("set -h\nset +h\nset -o nolog\nset +o nolog\necho ok\n", .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor exits on special builtin redirection errors" {
     const path = "rush-special-redirection-error.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
@@ -14472,6 +14487,7 @@ test "builtin completion offers option values and shell-local names" {
     try expectCandidate(set_options_candidates, "noglob", .plain);
     try expectCandidate(set_options_candidates, "noclobber", .plain);
     try expectCandidate(set_options_candidates, "noexec", .plain);
+    try expectCandidate(set_options_candidates, "nolog", .plain);
 
     const unset_functions = try executor.collectCompletionsForInput("unset -f rush_builtin", "unset -f rush_builtin".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(unset_functions);
