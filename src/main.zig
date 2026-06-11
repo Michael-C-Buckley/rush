@@ -1156,6 +1156,44 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     return completion_model.applyCandidatesForInput(allocator, source, candidates);
 }
 
+fn expandInteractivePathname(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, word: []const u8) !line_editor.PathExpansionMatches {
+    _ = context;
+    return viPathnameExpansions(allocator, io, word);
+}
+
+fn viPathnameExpansions(allocator: std.mem.Allocator, io: std.Io, word: []const u8) !line_editor.PathExpansionMatches {
+    const pattern = if (expand.hasGlobSyntax(word))
+        try allocator.dupe(u8, word)
+    else
+        try std.mem.concat(allocator, u8, &.{ word, "*" });
+    defer allocator.free(pattern);
+
+    const raw_matches = try expand.expandPathnamePattern(allocator, io, pattern);
+    defer {
+        for (raw_matches) |match| allocator.free(match);
+        allocator.free(raw_matches);
+    }
+
+    var matches: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (matches.items) |match| allocator.free(match);
+        matches.deinit(allocator);
+    }
+    for (raw_matches) |match| try matches.append(allocator, try markDirectoryPathname(allocator, io, match));
+    return .{ .items = try matches.toOwnedSlice(allocator) };
+}
+
+fn markDirectoryPathname(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]const u8 {
+    const stat = std.Io.Dir.cwd().statFile(io, path, .{}) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir => return allocator.dupe(u8, path),
+        else => return err,
+    };
+    if (stat.kind == .directory and !std.mem.endsWith(u8, path, "/")) {
+        return std.mem.concat(allocator, u8, &.{ path, "/" });
+    }
+    return allocator.dupe(u8, path);
+}
+
 fn expandInteractiveAbbreviation(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8, cursor: usize, append_space: bool) !?completion_model.Edit {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
     return completion_context.executor.expandAbbreviationForInput(allocator, source, cursor, append_space);
@@ -1646,6 +1684,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .clone_completion_context = cloneInteractiveCompletionContext,
             .free_completion_context = freeInteractiveCompletionContext,
             .expand_abbreviation = expandInteractiveAbbreviation,
+            .path_expansion_context = &completion_context,
+            .expand_pathname = expandInteractivePathname,
             .vi_alias_context = &executor,
             .lookup_vi_alias = lookupInteractiveViAlias,
             .external_editor_command = interactiveExternalEditorCommand(executor),
@@ -2523,6 +2563,29 @@ test "interactive completion uses semantic executor path for commands variables 
     const path_completions = try executor.collectCompletionsForInput("cat rush-complete", "cat rush-complete".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(path_completions);
     try std.testing.expect(hasCompletionCandidate(path_completions, path));
+}
+
+test "vi pathname expansions use implicit star and directory marks" {
+    const dir_path = "rush-vi-path-expansion-dir";
+    const file_path = "rush-vi-path-expansion-file.tmp";
+    std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = file_path, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+
+    var implicit = try viPathnameExpansions(std.testing.allocator, std.testing.io, "rush-vi-path-expansion-");
+    defer implicit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), implicit.items.len);
+    try std.testing.expectEqualStrings(dir_path ++ "/", implicit.items[0]);
+    try std.testing.expectEqualStrings(file_path, implicit.items[1]);
+
+    var glob = try viPathnameExpansions(std.testing.allocator, std.testing.io, "rush-vi-path-expansion-*.tmp");
+    defer glob.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), glob.items.len);
+    try std.testing.expectEqualStrings(file_path, glob.items[0]);
 }
 
 test "interactive semantic diagnostics render spans without message line" {

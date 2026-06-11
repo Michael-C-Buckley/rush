@@ -1782,7 +1782,7 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
 
     for (fields.items) |field| {
         if (hasGlobSyntax(field)) {
-            const matches = try globCwd(allocator, io, field);
+            const matches = try expandPathnamePattern(allocator, io, field);
             defer allocator.free(matches);
             if (matches.len != 0) {
                 allocator.free(field);
@@ -1799,7 +1799,7 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
     fields.* = expanded;
 }
 
-fn globCwd(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
+pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
     var prefixes: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (prefixes.items) |prefix| allocator.free(prefix);
@@ -1874,7 +1874,7 @@ fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
 }
 
-fn hasGlobSyntax(text: []const u8) bool {
+pub fn hasGlobSyntax(text: []const u8) bool {
     for (text) |c| switch (c) {
         '*', '?', '[' => return true,
         else => {},

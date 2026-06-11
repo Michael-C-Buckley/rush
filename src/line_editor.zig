@@ -550,6 +550,32 @@ pub const ViAliasView = struct {
     lookup: ?*const fn (*anyopaque, std.mem.Allocator, u21) anyerror!?[]const u8 = null,
 };
 
+pub const PathExpansionCommand = enum {
+    list,
+    complete,
+    expand_all,
+};
+
+pub const PathExpansionRequest = struct {
+    command: PathExpansionCommand,
+    word: []const u8,
+    replace_start: usize,
+    replace_end: usize,
+
+    pub fn deinit(self: PathExpansionRequest, allocator: std.mem.Allocator) void {
+        allocator.free(self.word);
+    }
+};
+
+pub const PathExpansionMatches = struct {
+    items: []const []const u8,
+
+    pub fn deinit(self: PathExpansionMatches, allocator: std.mem.Allocator) void {
+        for (self.items) |item| allocator.free(item);
+        allocator.free(self.items);
+    }
+};
+
 pub const ExternalEditorRequest = struct {
     text: []const u8,
     number: ?usize = null,
@@ -657,6 +683,7 @@ pub const LineSession = struct {
     state: State = .editing,
     submitted_line: ?[]const u8 = null,
     external_editor_request: ?ExternalEditorRequest = null,
+    path_expansion_request: ?PathExpansionRequest = null,
     paste_depth: usize = 0,
     clear_screen_requested: bool = false,
     completion_flash: ?CompletionFlash = null,
@@ -694,6 +721,7 @@ pub const LineSession = struct {
     pub fn deinit(self: *LineSession) void {
         if (self.submitted_line) |line| self.allocator.free(line);
         if (self.external_editor_request) |request| request.deinit(self.allocator);
+        self.clearPathExpansionRequest();
         if (self.history_search_match) |entry| entry.deinit(self.allocator);
         self.clearHistorySearchMatches();
         self.history_search_matches.deinit(self.allocator);
@@ -1065,6 +1093,9 @@ pub const LineSession = struct {
             'N' => try self.repeatViHistorySearch(true),
             '@' => self.vi_pending = .alias,
             'v' => try self.requestExternalEditor(self.takeViCount()),
+            '=' => try self.requestPathExpansion(.list),
+            '\\' => try self.requestPathExpansion(.complete),
+            '*' => try self.requestPathExpansion(.expand_all),
             '.' => try self.repeatViLastChange(),
             '#' => try self.viCommentAndSubmit(),
             else => self.resetViCommandPrefix(),
@@ -1094,6 +1125,51 @@ pub const LineSession = struct {
         self.state = .external_editor;
         self.resetViCommandPrefix();
         self.completion_menu.clear(self.allocator);
+    }
+
+    fn requestPathExpansion(self: *LineSession, command: PathExpansionCommand) !void {
+        const range = currentViBigwordRange(self.editor.buffer.text(), self.editor.buffer.cursor_byte) orelse {
+            self.resetViCommandPrefix();
+            return;
+        };
+        const word = try self.allocator.dupe(u8, self.editor.buffer.text()[range.start..range.end]);
+        errdefer self.allocator.free(word);
+        self.clearPathExpansionRequest();
+        self.path_expansion_request = .{
+            .command = command,
+            .word = word,
+            .replace_start = range.start,
+            .replace_end = range.end,
+        };
+        self.resetViCommandPrefix();
+        self.completion_menu.clear(self.allocator);
+    }
+
+    pub fn takePathExpansionRequest(self: *LineSession) ?PathExpansionRequest {
+        const request = self.path_expansion_request orelse return null;
+        self.path_expansion_request = null;
+        return request;
+    }
+
+    fn clearPathExpansionRequest(self: *LineSession) void {
+        if (self.path_expansion_request) |request| request.deinit(self.allocator);
+        self.path_expansion_request = null;
+    }
+
+    pub fn applyPathExpansion(self: *LineSession, request: PathExpansionRequest, matches: PathExpansionMatches) !bool {
+        if (request.command == .list or matches.items.len == 0) return false;
+        const replacement = switch (request.command) {
+            .list => unreachable,
+            .complete => try pathExpansionCompletionReplacement(self.allocator, request.word, matches.items),
+            .expand_all => try pathExpansionAllReplacement(self.allocator, matches.items),
+        };
+        defer self.allocator.free(replacement);
+        if (std.mem.eql(u8, request.word, replacement)) return false;
+
+        try self.saveViUndo();
+        try self.editor.buffer.replaceRange(request.replace_start, request.replace_end, replacement);
+        self.completion_menu.clear(self.allocator);
+        return true;
     }
 
     fn historyEntryByNumber(self: *LineSession, number: usize) !?HistoryView.HistoryEntry {
@@ -2280,6 +2356,73 @@ const CompletionFlash = struct {
     start: usize,
     end: usize,
 };
+
+const ByteRange = struct {
+    start: usize,
+    end: usize,
+};
+
+fn currentViBigwordRange(text: []const u8, cursor: usize) ?ByteRange {
+    if (text.len == 0) return null;
+
+    var anchor = @min(cursor, text.len - 1);
+    if (isAsciiWhitespace(text[anchor])) {
+        if (anchor == 0 or isAsciiWhitespace(text[anchor - 1])) return null;
+        anchor -= 1;
+    }
+
+    var start = anchor;
+    while (start > 0 and !isAsciiWhitespace(text[start - 1])) start -= 1;
+    var end = anchor + 1;
+    while (end < text.len and !isAsciiWhitespace(text[end])) end += 1;
+    return .{ .start = start, .end = end };
+}
+
+fn pathExpansionCompletionReplacement(allocator: std.mem.Allocator, word: []const u8, matches: []const []const u8) ![]const u8 {
+    std.debug.assert(matches.len != 0);
+    if (matches.len == 1) {
+        const match = matches[0];
+        if (std.mem.endsWith(u8, match, "/")) return allocator.dupe(u8, match);
+        return std.fmt.allocPrint(allocator, "{s} ", .{match});
+    }
+
+    const prefix = commonPathExpansionPrefix(matches);
+    if (prefix.len <= word.len) return allocator.dupe(u8, word);
+    return allocator.dupe(u8, prefix);
+}
+
+fn commonPathExpansionPrefix(matches: []const []const u8) []const u8 {
+    var prefix = matches[0];
+    for (matches[1..]) |match| {
+        var index: usize = 0;
+        const end = @min(prefix.len, match.len);
+        while (index < end and prefix[index] == match[index]) index += 1;
+        prefix = prefix[0..index];
+    }
+    return prefix;
+}
+
+fn pathExpansionAllReplacement(allocator: std.mem.Allocator, matches: []const []const u8) ![]const u8 {
+    var replacement: std.ArrayList(u8) = .empty;
+    errdefer replacement.deinit(allocator);
+    for (matches, 0..) |match, index| {
+        if (index != 0) try replacement.append(allocator, ' ');
+        try replacement.appendSlice(allocator, match);
+    }
+    return replacement.toOwnedSlice(allocator);
+}
+
+pub fn pathExpansionListOutput(allocator: std.mem.Allocator, matches: PathExpansionMatches) ![]const u8 {
+    if (matches.items.len == 0) return allocator.dupe(u8, "");
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    for (matches.items, 0..) |match, index| {
+        if (index != 0) try output.append(allocator, ' ');
+        try output.appendSlice(allocator, match);
+    }
+    try output.append(allocator, '\n');
+    return output.toOwnedSlice(allocator);
+}
 
 fn reverseViHistoryDirection(direction: ViHistoryDirection) ViHistoryDirection {
     return switch (direction) {
@@ -4649,6 +4792,75 @@ test "vi line session requests external editor for current and numbered history 
     defer numbered_request.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo two", numbered_request.text);
     try std.testing.expectEqual(@as(?usize, 2), numbered_request.number);
+}
+
+test "vi line session requests pathname expansion for current bigword" {
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "cat rush-path" });
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "=" });
+
+    const request = session.takePathExpansionRequest() orelse return error.MissingPathExpansionRequest;
+    defer request.deinit(std.testing.allocator);
+    try std.testing.expectEqual(PathExpansionCommand.list, request.command);
+    try std.testing.expectEqualStrings("rush-path", request.word);
+    try std.testing.expectEqual(@as(usize, "cat ".len), request.replace_start);
+    try std.testing.expectEqual(@as(usize, "cat rush-path".len), request.replace_end);
+}
+
+test "vi pathname completion applies common prefixes and complete matches" {
+    var common = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer common.deinit();
+    try common.editor.buffer.replace("cat rush-vi-al");
+    try std.testing.expect(try common.applyPathExpansion(.{
+        .command = .complete,
+        .word = "rush-vi-al",
+        .replace_start = "cat ".len,
+        .replace_end = "cat rush-vi-al".len,
+    }, .{ .items = &.{ "rush-vi-alpha", "rush-vi-alpine" } }));
+    try std.testing.expectEqualStrings("cat rush-vi-alp", common.editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, "cat rush-vi-alp".len), common.editor.buffer.cursor_byte);
+
+    var file = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer file.deinit();
+    try file.editor.buffer.replace("cat rush-vi-alpha");
+    try std.testing.expect(try file.applyPathExpansion(.{
+        .command = .complete,
+        .word = "rush-vi-alpha",
+        .replace_start = "cat ".len,
+        .replace_end = "cat rush-vi-alpha".len,
+    }, .{ .items = &.{"rush-vi-alpha"} }));
+    try std.testing.expectEqualStrings("cat rush-vi-alpha ", file.editor.buffer.text());
+
+    var dir = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer dir.deinit();
+    try dir.editor.buffer.replace("cd rush-vi-dir");
+    try std.testing.expect(try dir.applyPathExpansion(.{
+        .command = .complete,
+        .word = "rush-vi-dir",
+        .replace_start = "cd ".len,
+        .replace_end = "cd rush-vi-dir".len,
+    }, .{ .items = &.{"rush-vi-dir/"} }));
+    try std.testing.expectEqualStrings("cd rush-vi-dir/", dir.editor.buffer.text());
+}
+
+test "vi pathname star expands all matches and listing formats matches" {
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+    try session.editor.buffer.replace("printf rush-vi-* ");
+    try std.testing.expect(try session.applyPathExpansion(.{
+        .command = .expand_all,
+        .word = "rush-vi-*",
+        .replace_start = "printf ".len,
+        .replace_end = "printf rush-vi-*".len,
+    }, .{ .items = &.{ "rush-vi-a", "rush-vi-b/", "rush-vi-c" } }));
+    try std.testing.expectEqualStrings("printf rush-vi-a rush-vi-b/ rush-vi-c ", session.editor.buffer.text());
+
+    const output = try pathExpansionListOutput(std.testing.allocator, .{ .items = &.{ "rush-vi-a", "rush-vi-b/", "rush-vi-c" } });
+    defer std.testing.allocator.free(output);
+    try std.testing.expectEqualStrings("rush-vi-a rush-vi-b/ rush-vi-c\n", output);
 }
 
 test "vi line session renders beam block and underline cursors" {

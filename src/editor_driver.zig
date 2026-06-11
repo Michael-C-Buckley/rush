@@ -250,6 +250,8 @@ pub const ReadLineOptions = struct {
     clone_completion_context: ?*const fn (*anyopaque, std.mem.Allocator, *completion.CancellationToken) anyerror!*anyopaque = null,
     free_completion_context: ?*const fn (*anyopaque, std.mem.Allocator) void = null,
     expand_abbreviation: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize, bool) anyerror!?completion.Edit = null,
+    path_expansion_context: ?*anyopaque = null,
+    expand_pathname: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8) anyerror!line_editor.PathExpansionMatches = null,
     vi_alias_context: ?*anyopaque = null,
     lookup_vi_alias: ?*const fn (*anyopaque, std.mem.Allocator, u21) anyerror!?[]const u8 = null,
     external_editor_command: []const u8 = "vi",
@@ -744,6 +746,7 @@ pub const TerminalSession = struct {
                             } else {
                                 try session.handleKey(key);
                             }
+                            if (try self.processPathExpansionRequest(read_options, &session)) render_needed = true;
                         },
                         .paste_start => {
                             render_needed = true;
@@ -893,6 +896,28 @@ pub const TerminalSession = struct {
             session.invalidatePrompt();
         }
         return hook_result.stop;
+    }
+
+    fn processPathExpansionRequest(self: *TerminalSession, options: ReadLineOptions, session: *line_editor.LineSession) !bool {
+        const request = session.takePathExpansionRequest() orelse return false;
+        defer request.deinit(self.allocator);
+        const expand_pathname = options.expand_pathname orelse return false;
+        const context = options.path_expansion_context orelse return false;
+        const matches = try expand_pathname(context, self.allocator, self.io, request.word);
+        defer matches.deinit(self.allocator);
+
+        if (request.command == .list) {
+            const output = try line_editor.pathExpansionListOutput(self.allocator, matches);
+            defer self.allocator.free(output);
+            if (output.len != 0) {
+                try self.writeInterruptOutput(output);
+                session.invalidatePrompt();
+                return true;
+            }
+            return false;
+        }
+
+        return try session.applyPathExpansion(request, matches);
     }
 
     fn clearRenderedRowsAfterFirst(self: *TerminalSession) !void {
