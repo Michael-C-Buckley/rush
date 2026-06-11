@@ -316,6 +316,7 @@ expansion-field-splitting-generated-empty	expansion	behavior	unquoted generated 
 expansion-field-splitting-arithmetic	expansion	behavior	arithmetic expansion output undergoes field splitting with non-whitespace IFS delimiters
 lex-double-quote-backslash-specials	lexing	behavior	double-quote backslash handling preserves non-special backslashes and removes special escapes
 lex-escaped-newline-continuation	lexing	behavior	backslash-newline joins physical lines before token interpretation
+lex-quotes-word-unity	lexing	behavior	adjacent unquoted single-quoted double-quoted escaped and empty quoted segments remain one shell word where POSIX quoting requires it
 builtin-getopts-optind-reset	builtin	behavior	getopts rescans operands after OPTIND reset to 1
 builtin-exec-redirection-only	builtin	behavior	exec without command operands applies redirections to the current shell
 builtin-exec-input-fd-redirection-only	builtin	behavior	exec without command operands tracks arbitrary input fd redirections for later duplication

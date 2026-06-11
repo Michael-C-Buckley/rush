@@ -19,23 +19,23 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `407` rows
-- `scripts/check-posix-corpus.sh`: `404` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `228` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `286` cases, `572` comparisons across dash and bash POSIX mode
+- `scripts/check-compliance-manifest.sh`: `414` rows
+- `scripts/check-posix-corpus.sh`: `418` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `236` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `298` cases, `596` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `407`
-- scored POSIX items: `403`
-- supported: `386`
-- baseline: `14`
+- tracked items: `414`
+- scored POSIX items: `410`
+- supported: `403`
+- baseline: `4`
 - partial: `2`
 - missing: `1`
 - out of scope: `4`
-- strict supported only: `95.8%`
+- strict supported only: `98.3%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `98.4%`
+- weighted progress: `99.1%`
 
 Recent notable capabilities:
 
@@ -70,10 +70,10 @@ Recent notable capabilities:
   - `&`
   - `(` `)`
   - redirection operators: `<`, `>`, `<<`, `<<-`, `>>`, `<&`, `>&`, `<>`, `>|`
-- Quote recognition in expansion:
-  - single quotes
-  - double quotes
-  - backslash escapes
+- Quote tokenization and quote removal for the POSIX-first surface:
+  - single quotes, double quotes, adjacent quoted/unquoted segments, and empty quotes preserve word unity
+  - backslash escapes and backslash-newline continuation
+  - double-quoted expansion contexts suppress field splitting while retaining parameter and command substitution recognition
 - Nested command substitution CST recognition for `$()`.
 - Legacy backquote command substitution recognition in the lexer/expansion pipeline.
 - Alias expansion is integrated ahead of parser lowering for future input/script slices.
@@ -86,13 +86,10 @@ Recent notable capabilities:
   - not a complete token-recognition state machine
   - not fully recursive in all POSIX edge cases
   - reserved-word interaction needs more coverage
-- Double-quote and backslash behavior has broad baseline coverage, but more edge cases remain around recursive parsing contexts.
-- Escaped-newline handling exists in places but is not a complete token-recognition state machine.
 
 ### Missing / gaps
 
 - Full POSIX token recognition state machine:
-  - recursive quote tracking across all grammar contexts
   - here-doc token/body collection exactly at parser level
   - exact alias substitution timing and reserved-word effects
 - Strict reserved-word grammar disambiguation.
@@ -174,14 +171,14 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 ### Partial / gaps
 
 - Expansion order is modeled but still simplified around some not-yet-audited nested constructs beyond the current POSIX representative coverage.
-- Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; arithmetic-expression preprocessing now recursively handles nested parameter and command substitutions plus focused quote/backslash edge cases in representative POSIX cases. Full parser/scanner unification for recursive and extension syntax remains larger tracked work, but it is not a known POSIX gap for the supported `expansion-parameter-basic` row.
+- Parameter expansion `word` portions are recursively expanded and now preserve representative nested braced expansions, command substitutions containing right braces, arithmetic substitutions, quoted right braces, and quoted field-splitting/pathname suppression; arithmetic-expression preprocessing now recursively handles nested parameter and command substitutions plus focused quote/backslash edge cases in representative POSIX cases. Non-POSIX extension syntax remains larger tracked work, but it is not a POSIX gap for the supported parameter-expansion rows.
 - Non-POSIX extension forms are intentionally outside the POSIX claim. Rush should eventually support string-oriented substring `${parameter:offset[:length]}`, replacement `${parameter/pattern/repl}`, case modification `${parameter^}`/`${parameter,}`, and indirect/name-prefix operations `${!name}`/`${!prefix*}` in an extension mode. Bash mode has a minimal indexed-array slice for arithmetic `name[index]=word` assignment subscripts, with unquoted whitespace allowed inside the subscript, and `${name[index]}` expansion subscripts against the array runtime model; broader Bash array semantics such as compound assignment, negative relative indices, whole-array expansion, and array-specific parameter operations remain outside this baseline. Transformation flags such as `${parameter@Q}` are not in Rush's planned extension-mode scope for now; keep them as unsupported negative coverage until a concrete compatibility use case justifies design work. Representative unsupported extension forms reject with bad-substitution diagnostics and are tracked in `extensions-parameter-expansion` instead of counted as POSIX gaps; `${name[index]}` remains on that bad-substitution path outside Bash mode.
 - Pathname expansion remains bytewise; locale-specific collation, equivalence classes, and multi-character collating elements are outside the current model.
 - Unquoted `$@`/`$*` behavior is acceptable for common cases but still needs more spec-derived edge-case coverage.
 
 ### Missing / gaps
 
-- Full quote-aware expansion and field generation in all nested contexts beyond the covered parameter operator-word cases.
+- No POSIX-first quote-removal gaps are currently tracked for the supported representative rows; add narrower spec-clause rows if a new edge case is found.
 - Full pathname expansion semantics.
 - POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered malformed braced-parameter and arithmetic cases.
 

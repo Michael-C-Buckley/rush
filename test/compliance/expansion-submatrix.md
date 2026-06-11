@@ -15,7 +15,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics, exact nested legacy-backquote diagnostics |
 | Field splitting | `expansion-field-splitting-*` | supported/baseline | broad interactions with special parameters |
 | Pathname expansion | `expansion-pathname-*` | supported | bytewise matching model; locale-specific collation is intentionally out of scope for current evidence |
-| Quote removal | `expansion-quote-removal`, `lex-quotes` | baseline | recursive contexts, escaped newline interactions |
+| Quote removal | `expansion-quote-removal`, `lex-quotes` | supported | none known for the tracked POSIX-first surface |
 
 ## Tilde expansion
 
@@ -138,7 +138,7 @@ Manifest rows:
 - `expansion-quote-removal`
 - `lex-quotes`
 
-Current coverage includes single quotes, double quotes, escaped spaces, explicit quoted empty fields, double-quote backslash handling for special and non-special characters, escaped-newline continuation, quoted command substitutions including inner quotes and legacy backquotes, quote handling in nested parameter operator words, recursive function and command-substitution bodies, case and parameter pattern literalization, and here-doc delimiter quote removal including mixed quoting and preserved non-special backslashes inside double quotes.
+Current coverage includes single quotes, double quotes, escaped spaces, quote-preserved word unity, explicit quoted empty fields, double-quote backslash handling for special and non-special characters, escaped-newline continuation, quoted command substitutions including inner quotes and legacy backquotes, quote handling in nested parameter operator words, recursive function and command-substitution bodies, case and parameter pattern literalization, and here-doc delimiter quote removal including mixed quoting and preserved non-special backslashes inside double quotes.
 
 Remaining gaps:
 

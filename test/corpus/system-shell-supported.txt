@@ -31,6 +31,7 @@ cat <<'EOF'\nif then bad ; | &\n"unterminated double\n'unterminated single\n$(un
 echo 'a b $HOME'
 A=value; echo "$A and spaces"
 echo a\ b c
+A='two words'; empty=; set -- pre"$A"post "x"' y'"z" a\ b '' "$empty"; printf 'argc:%s\n' "$#"; printf '<%s>\n' "$@"
 echo before # ignored comment
 echo one\necho two
 echo if then else fi do done case esac
