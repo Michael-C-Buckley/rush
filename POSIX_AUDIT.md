@@ -277,7 +277,7 @@ Implemented or partially implemented:
 - `unset`
 - `env`
 - `set` baseline for shell options and positional parameters
-- `test` / `[` baseline
+- `test` / `[` POSIX-defined argument-count grammar, unary and binary primaries, file predicates, and diagnostics
 - `read` baseline
 - `printf` baseline
 - `command` baseline
@@ -298,7 +298,6 @@ Implemented or partially implemented:
 - `echo` has minimal behavior and intentionally avoids complex option/escape variations.
 - `read` supports simple field assignment and `-r` acceptance but not full POSIX options/IFS/backslash behavior.
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
-- `test` baseline lacks many operators and edge cases.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`vi` editing mode and complete job-control terminal semantics).
 - `env` does not support arguments/options.
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.

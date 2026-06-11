@@ -1,6 +1,10 @@
+exists=0
+directory=0
 size=0
 read=0
+write=0
 exec=1
+missing=1
 same-file=0
 different-file=1
 newer=0

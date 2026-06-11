@@ -1,7 +1,12 @@
 printf x > file
+mkdir dir
+test -e file; echo exists=$?
+test -d dir; echo directory=$?
 test -s file; echo size=$?
 test -r file; echo read=$?
+test -w file; echo write=$?
 test -x file; echo exec=$?
+test -e missing; echo missing=$?
 : > old
 : > new
 touch -t 202001010000 old

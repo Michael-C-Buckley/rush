@@ -10952,7 +10952,8 @@ fn evalFileComparisonTest(allocator: std.mem.Allocator, options: ExecuteOptions,
     if (std.mem.eql(u8, op, "-ef")) {
         const lhs = left_stat orelse return false;
         const rhs = right_stat orelse return false;
-        return lhs.inode == rhs.inode;
+        if (lhs.inode != rhs.inode) return false;
+        return sameExistingFile(allocator, left, right) orelse true;
     }
     if (std.mem.eql(u8, op, "-nt")) {
         const lhs = left_stat orelse return false;
@@ -10965,6 +10966,38 @@ fn evalFileComparisonTest(allocator: std.mem.Allocator, options: ExecuteOptions,
         return lhs.mtime.nanoseconds < rhs.mtime.nanoseconds;
     }
     unreachable;
+}
+
+const FileIdentity = struct {
+    device: u64,
+    inode: u64,
+};
+
+fn sameExistingFile(allocator: std.mem.Allocator, left: []const u8, right: []const u8) ?bool {
+    const lhs = fileIdentity(allocator, left) orelse return null;
+    const rhs = fileIdentity(allocator, right) orelse return null;
+    return lhs.device == rhs.device and lhs.inode == rhs.inode;
+}
+
+fn fileIdentity(allocator: std.mem.Allocator, path: []const u8) ?FileIdentity {
+    const path_z = allocator.dupeSentinel(u8, path, 0) catch return null;
+    defer allocator.free(path_z);
+
+    if (comptime zig_builtin.os.tag == .linux) {
+        var statx_result: std.os.linux.Statx = undefined;
+        if (std.c.statx(std.c.AT.FDCWD, path_z.ptr, 0, std.os.linux.STATX.BASIC_STATS, &statx_result) != 0) return null;
+        return .{
+            .device = (@as(u64, statx_result.dev_major) << 32) | statx_result.dev_minor,
+            .inode = statx_result.ino,
+        };
+    }
+
+    var stat_result: std.c.Stat = undefined;
+    if (std.c.fstatat(std.c.AT.FDCWD, path_z.ptr, &stat_result, 0) != 0) return null;
+    return .{
+        .device = @intCast(stat_result.dev),
+        .inode = @intCast(stat_result.ino),
+    };
 }
 
 fn statPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !std.Io.File.Stat {
@@ -12148,27 +12181,40 @@ test "executor implements test and bracket builtins" {
     const Case = struct { script: []const u8, status: ExitStatus };
     const cases = [_]Case{
         .{ .script = "test nonempty", .status = 0 },
+        .{ .script = "test", .status = 1 },
+        .{ .script = "test !", .status = 0 },
+        .{ .script = "test -n", .status = 0 },
         .{ .script = "test ''", .status = 1 },
+        .{ .script = "test ! ''", .status = 0 },
+        .{ .script = "test ! foo", .status = 1 },
         .{ .script = "test a = a", .status = 0 },
         .{ .script = "test a != a", .status = 1 },
+        .{ .script = "test ! a = b", .status = 0 },
+        .{ .script = "test ! a = a", .status = 1 },
         .{ .script = "test 3 -gt 2", .status = 0 },
         .{ .script = "test 3 -le 2", .status = 1 },
         .{ .script = "test a '<' b", .status = 0 },
         .{ .script = "test b '>' a", .status = 0 },
         .{ .script = "test ! = !", .status = 0 },
+        .{ .script = "test -d .", .status = 0 },
         .{ .script = "test -e rush-test-builtin-file.tmp", .status = 0 },
         .{ .script = "test -f rush-test-builtin-file.tmp", .status = 0 },
         .{ .script = "test -s rush-test-builtin-file.tmp", .status = 0 },
         .{ .script = "test -r rush-test-builtin-file.tmp", .status = 0 },
+        .{ .script = "test -w rush-test-builtin-file.tmp", .status = 0 },
         .{ .script = "test ! -e rush-test-missing.tmp", .status = 0 },
+        .{ .script = "test -e rush-test-missing.tmp", .status = 1 },
         .{ .script = "test rush-test-builtin-file.tmp -ef rush-test-builtin-file-hard-link.tmp", .status = 0 },
         .{ .script = "test rush-test-builtin-file.tmp -ef rush-test-builtin-older.tmp", .status = 1 },
         .{ .script = "test rush-test-builtin-newer.tmp -nt rush-test-builtin-older.tmp", .status = 0 },
         .{ .script = "test rush-test-builtin-older.tmp -ot rush-test-builtin-newer.tmp", .status = 0 },
         .{ .script = "test rush-test-builtin-newer.tmp -nt rush-test-missing.tmp", .status = 0 },
         .{ .script = "test rush-test-missing.tmp -ot rush-test-builtin-newer.tmp", .status = 0 },
+        .{ .script = "[ ]", .status = 1 },
+        .{ .script = "[ -- ]", .status = 0 },
         .{ .script = "[ a = a ]", .status = 0 },
         .{ .script = "[ a = b ]", .status = 1 },
+        .{ .script = "[ ! a = b ]", .status = 0 },
         .{ .script = "[ '(' = '(' ]", .status = 0 },
         .{ .script = "[ rush-test-builtin-older.tmp -ot rush-test-builtin-newer.tmp ]", .status = 0 },
     };
@@ -12195,6 +12241,16 @@ test "executor implements test and bracket builtins" {
     defer invalid_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 2), invalid_result.status);
     try std.testing.expectEqualStrings("test: invalid expression\n", invalid_result.stderr);
+
+    var missing_bracket = try parseAndLower(std.testing.allocator, "[ foo");
+    defer missing_bracket.parsed.deinit();
+    defer missing_bracket.program.deinit();
+    var bracket_executor = Executor.init(std.testing.allocator);
+    defer bracket_executor.deinit();
+    var bracket_result = try bracket_executor.executeProgram(missing_bracket.program, .{});
+    defer bracket_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), bracket_result.status);
+    try std.testing.expectEqualStrings("[: missing ]\n", bracket_result.stderr);
 }
 
 test "executor implements trap builtin baseline" {

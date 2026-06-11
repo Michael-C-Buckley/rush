@@ -1,0 +1,14 @@
+test; echo zero=$?
+test !; echo one-bang=$?
+test -n; echo one-unary-word=$?
+test ""; echo one-empty=$?
+test ! ""; echo two-not-empty=$?
+test ! foo; echo two-not-nonempty=$?
+test -n foo; echo unary-n=$?
+test -z ""; echo unary-z=$?
+test ! -n ""; echo three-not-unary=$?
+test ! a = b; echo four-not-binary=$?
+test ! a = a; echo four-not-binary-false=$?
+[ ]; echo bracket-zero=$?
+[ -- ]; echo bracket-one=$?
+[ ! a = b ]; echo bracket-four=$?

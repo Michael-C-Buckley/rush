@@ -76,6 +76,7 @@ builtin-read-last-variable	builtin	builtin	read assigns remaining fields and del
 builtin-return-status	builtin	builtin	-
 builtin-shift	builtin	builtin	-
 builtin-status-parameter	builtin	builtin	-
+builtin-test-argument-count-grammar	builtin	behavior	test and bracket POSIX-defined argument-count grammar including missing expression and leading negation cases
 builtin-test-file-predicates	builtin	builtin	-
 builtin-test-file-string	builtin	builtin	-
 builtin-test-integer-comparison	builtin	builtin	test integer binary comparison operators
