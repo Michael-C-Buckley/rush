@@ -483,6 +483,49 @@ const ParameterOperator = enum {
     remove_large_prefix,
 };
 
+// Syntax-level representation for the inside of `${...}`. Rendering still
+// adapts this to ParameterExpression so future extension forms can be added
+// without changing the current POSIX behavior or diagnostics.
+const ParameterTargetKind = enum {
+    name,
+    positional,
+    special,
+    unknown,
+};
+
+const ParameterTarget = struct {
+    kind: ParameterTargetKind,
+    text: []const u8,
+};
+
+const ParameterWordOperation = struct {
+    kind: ParameterOperator,
+    colon: bool,
+    word: []const u8,
+};
+
+const ParameterPatternOperation = struct {
+    kind: ParameterOperator,
+    word: []const u8,
+};
+
+const ParameterOperation = union(enum) {
+    value,
+    length,
+    word: ParameterWordOperation,
+    pattern: ParameterPatternOperation,
+};
+
+const ParameterExpansion = struct {
+    target: ParameterTarget,
+    operation: ParameterOperation,
+};
+
+const ParameterExpansionSyntax = union(enum) {
+    invalid,
+    expansion: ParameterExpansion,
+};
+
 const ParameterExpression = struct {
     name: []const u8,
     operator: ParameterOperator = .none,
@@ -853,14 +896,45 @@ fn parameterHasUsableValue(is_set: bool, is_null: bool, colon: bool) bool {
 }
 
 fn parseParameterExpression(expression: []const u8) ParameterExpression {
-    if (expression.len == 0) return .{ .name = "", .operator = .invalid };
+    const syntax = parseParameterExpansionSyntax(expression);
+    const expansion = switch (syntax) {
+        .invalid => return .{ .name = "", .operator = .invalid },
+        .expansion => |parsed| parsed,
+    };
+
+    return switch (expansion.operation) {
+        .value => .{ .name = expansion.target.text },
+        .length => .{ .name = expansion.target.text, .operator = .length },
+        .word => |operation| .{
+            .name = expansion.target.text,
+            .operator = operation.kind,
+            .word = operation.word,
+            .colon = operation.colon,
+        },
+        .pattern => |operation| .{
+            .name = expansion.target.text,
+            .operator = operation.kind,
+            .word = operation.word,
+        },
+    };
+}
+
+fn parseParameterExpansionSyntax(expression: []const u8) ParameterExpansionSyntax {
+    if (expression.len == 0) return .invalid;
 
     if (expression.len > 1 and expression[0] == '#') {
-        return .{ .name = expression[1..], .operator = .length };
+        return .{ .expansion = .{
+            .target = classifyParameterTarget(expression[1..]),
+            .operation = .length,
+        } };
     }
 
-    const name_end = parseParameterNameEnd(expression) orelse return .{ .name = "", .operator = .invalid };
-    if (name_end >= expression.len) return .{ .name = expression[0..name_end] };
+    const name_end = parseParameterNameEnd(expression) orelse return .invalid;
+    const target = classifyParameterTarget(expression[0..name_end]);
+    if (name_end >= expression.len) return .{ .expansion = .{
+        .target = target,
+        .operation = .value,
+    } };
 
     var operator_index = name_end;
     var colon = false;
@@ -875,15 +949,33 @@ fn parseParameterExpression(expression: []const u8) ParameterExpression {
         '?' => .error_if_unset,
         '%' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '%') .remove_large_suffix else .remove_small_suffix,
         '#' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '#') .remove_large_prefix else .remove_small_prefix,
-        else => return .{ .name = expression[0..name_end], .operator = .invalid },
+        else => return .invalid,
     };
     const word_start = operator_index + @as(usize, if (operator == .remove_large_suffix or operator == .remove_large_prefix) 2 else 1);
-    return .{
-        .name = expression[0..name_end],
-        .operator = operator,
-        .word = expression[word_start..],
-        .colon = colon,
-    };
+    if (operator == .remove_small_suffix or operator == .remove_large_suffix or operator == .remove_small_prefix or operator == .remove_large_prefix) {
+        return .{ .expansion = .{
+            .target = target,
+            .operation = .{ .pattern = .{
+                .kind = operator,
+                .word = expression[word_start..],
+            } },
+        } };
+    }
+    return .{ .expansion = .{
+        .target = target,
+        .operation = .{ .word = .{
+            .kind = operator,
+            .colon = colon,
+            .word = expression[word_start..],
+        } },
+    } };
+}
+
+fn classifyParameterTarget(text: []const u8) ParameterTarget {
+    if (isDigitParameterName(text)) return .{ .kind = .positional, .text = text };
+    if (text.len == 1 and isSpecialParameterChar(text[0])) return .{ .kind = .special, .text = text };
+    if (isAssignableParameterName(text)) return .{ .kind = .name, .text = text };
+    return .{ .kind = .unknown, .text = text };
 }
 
 fn parseParameterNameEnd(expression: []const u8) ?usize {
@@ -2015,6 +2107,28 @@ fn testCommaIfsLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
 
 const test_comma_ifs_env: EnvLookup = .{ .lookupFn = testCommaIfsLookup };
 
+fn expectParameterSyntax(expression: []const u8) !ParameterExpansion {
+    return switch (parseParameterExpansionSyntax(expression)) {
+        .expansion => |parsed| parsed,
+        .invalid => {
+            try std.testing.expect(false);
+            unreachable;
+        },
+    };
+}
+
+fn expectParameterTarget(target: ParameterTarget, kind: ParameterTargetKind, text: []const u8) !void {
+    try std.testing.expectEqual(kind, target.kind);
+    try std.testing.expectEqualStrings(text, target.text);
+}
+
+fn expectInvalidParameterSyntax(expression: []const u8) !void {
+    switch (parseParameterExpansionSyntax(expression)) {
+        .invalid => {},
+        .expansion => try std.testing.expect(false),
+    }
+}
+
 test "word part parser records quoted escaped and parameter regions" {
     var parts = try parseWordParts(std.testing.allocator, "a'$USER'\"$USER\"\\ b${EMPTY}");
     defer parts.deinit();
@@ -2072,6 +2186,108 @@ test "parameter expansion supports POSIX operators" {
     try std.testing.expectEqualStrings("9:0:0", lengths);
 
     try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }));
+}
+
+test "structured parameter parser classifies POSIX forms" {
+    const simple = try expectParameterSyntax("USER");
+    try expectParameterTarget(simple.target, .name, "USER");
+    switch (simple.operation) {
+        .value => {},
+        else => try std.testing.expect(false),
+    }
+
+    const positional = try expectParameterSyntax("10");
+    try expectParameterTarget(positional.target, .positional, "10");
+    switch (positional.operation) {
+        .value => {},
+        else => try std.testing.expect(false),
+    }
+
+    const special = try expectParameterSyntax("@");
+    try expectParameterTarget(special.target, .special, "@");
+    switch (special.operation) {
+        .value => {},
+        else => try std.testing.expect(false),
+    }
+
+    const length = try expectParameterSyntax("#USER");
+    try expectParameterTarget(length.target, .name, "USER");
+    switch (length.operation) {
+        .length => {},
+        else => try std.testing.expect(false),
+    }
+
+    const default = try expectParameterSyntax("USER:-${OTHER}");
+    try expectParameterTarget(default.target, .name, "USER");
+    switch (default.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.default_value, operation.kind);
+            try std.testing.expect(operation.colon);
+            try std.testing.expectEqualStrings("${OTHER}", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const assign = try expectParameterSyntax("USER=value");
+    switch (assign.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.assign_default, operation.kind);
+            try std.testing.expect(!operation.colon);
+            try std.testing.expectEqualStrings("value", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const alternate = try expectParameterSyntax("USER:+yes");
+    switch (alternate.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.alternate_value, operation.kind);
+            try std.testing.expect(operation.colon);
+            try std.testing.expectEqualStrings("yes", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const error_if_unset = try expectParameterSyntax("USER?message");
+    switch (error_if_unset.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.error_if_unset, operation.kind);
+            try std.testing.expect(!operation.colon);
+            try std.testing.expectEqualStrings("message", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const suffix = try expectParameterSyntax("PATHLIKE%%/*");
+    switch (suffix.operation) {
+        .pattern => |operation| {
+            try std.testing.expectEqual(ParameterOperator.remove_large_suffix, operation.kind);
+            try std.testing.expectEqualStrings("/*", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const prefix = try expectParameterSyntax("PATHLIKE##*/");
+    switch (prefix.operation) {
+        .pattern => |operation| {
+            try std.testing.expectEqual(ParameterOperator.remove_large_prefix, operation.kind);
+            try std.testing.expectEqualStrings("*/", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+}
+
+test "structured parameter parser rejects malformed POSIX forms" {
+    const cases = [_][]const u8{
+        "",
+        ":",
+        "USER/",
+        "USER:1",
+        "USER^",
+        "1abc",
+    };
+
+    for (cases) |case| try expectInvalidParameterSyntax(case);
 }
 
 test "parameter assignment expansion rejects non-variable targets when assignment is needed" {
