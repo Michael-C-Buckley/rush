@@ -1798,10 +1798,12 @@ const SyntaxParser = struct {
         var group_children: std.ArrayList(SyntaxChild) = .empty;
         defer group_children.deinit(self.allocator);
         var closed = false;
+        var has_body_command = false;
 
         try self.appendCurrentTokenChildTo(&group_children);
         if (!self.at(.word) or !std.mem.eql(u8, self.current().lexeme(self.source), "}")) {
             const body = try self.parseListUntil(&.{"}"}, &.{});
+            has_body_command = self.listContainsCommand(body);
             try group_children.append(self.allocator, .{ .node = body });
         }
         if (self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "}")) {
@@ -1815,6 +1817,14 @@ const SyntaxParser = struct {
                 .kind = .incomplete_input,
                 .span = spanForTokenRange(self.tokens, token_start, self.index),
                 .message = "missing } to close brace group",
+            });
+        }
+
+        if (closed and !has_body_command) {
+            try self.diagnostics.append(self.allocator, .{
+                .kind = .parse_error,
+                .span = spanForTokenRange(self.tokens, token_start, self.index),
+                .message = "missing command in brace group",
             });
         }
 
@@ -3264,6 +3274,8 @@ test "parser builds POSIX brace group nodes" {
     var result = try parse(std.testing.allocator, "{ FOO=bar; echo $FOO; } > out", .{});
     defer result.deinit();
 
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+
     var found = false;
     for (result.nodes) |node| {
         if (node.kind == .brace_group) {
@@ -3272,6 +3284,26 @@ test "parser builds POSIX brace group nodes" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "parser reports empty POSIX brace group bodies" {
+    const cases = [_]struct {
+        source: []const u8,
+        span: Span,
+    }{
+        .{ .source = "{ }", .span = .init(0, 3) },
+        .{ .source = "{ ; }", .span = .init(0, 5) },
+    };
+
+    for (cases) |example| {
+        var result = try parse(std.testing.allocator, example.source, .{});
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+        try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+        try expectSpan(example.span, result.diagnostics[0].span);
+        try std.testing.expectEqualStrings("missing command in brace group", result.diagnostics[0].message);
+    }
 }
 
 test "parser nests list bodies inside subshell and brace group CST nodes" {
