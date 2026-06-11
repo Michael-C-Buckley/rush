@@ -1,0 +1,6 @@
+/bin/sh -c 'exit 3' &
+first=$!
+/bin/sh -c 'exit 4' &
+second=$!
+wait "$first" "$second"
+echo status:$?

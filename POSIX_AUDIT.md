@@ -235,7 +235,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Exit status propagation and `$?` baseline.
 - Logical `PWD`/`OLDPWD` tracking for `cd`/`pwd`.
 - `$!` tracks the most recent real background external command pid.
-- `wait` can wait for tracked background pids and returns their statuses.
+- `wait` can wait for tracked background pids and job IDs, returns operand statuses, and returns zero after waiting for all known jobs when invoked without operands.
 
 ### Partial / gaps
 
@@ -282,7 +282,7 @@ Implemented or partially implemented:
 - `readonly` baseline
 - `shift` baseline
 - `umask` baseline
-- `wait` baseline with tracked pid operands
+- `wait` builtin with tracked pid/job operands, no-operand all-job semantics, and last-operand status
 - `times` deterministic baseline
 - `getopts` baseline
 - `trap` baseline with `EXIT` trap execution
@@ -350,7 +350,7 @@ Implemented or partially implemented:
 - Foreground process group handoff for simple inherited-stdio external commands.
 - Interactive SIGINT/interrupt handling discards the current editor line and returns to a fresh prompt without changing `$?`; an active `trap ... INT` runs instead of the plain discard path. Process-directed trapped signals wake the editor through the trap self-pipe, run the pending trap, and redraw the current input. The interactive shell catches INT/QUIT/TERM for itself, while foreground job child/wrapper processes reset those dispositions to defaults before running job-owned code.
 - Baseline async external, builtin, and compound commands with `&`.
-- `$!` and `wait pid` for tracked background commands, including brace groups, subshells, loops, and pipelines started asynchronously.
+- `$!` and `wait` for tracked background commands, including brace groups, subshells, loops, and pipelines started asynchronously.
 - Asynchronous commands use `/dev/null` as default stdin when job control is disabled, without consuming the invoking shell's stdin.
 - Forked asynchronous compound jobs inherit shell option state, reset caught traps for the subshell environment, keep nested subshell async jobs out of the parent job table, and report redirection diagnostics while remaining waitable.
 - Visible job table through `jobs`, including POSIX-spaced normal and `-l` output, `-p`, Running/Done/Done(code)/Stopped signal state strings, numeric/% job operands, empty subshell and command-substitution tables, and removal of completed jobs after their termination status is reported.
@@ -361,6 +361,7 @@ Implemented or partially implemented:
 - Foreground inherited-stdio mixed pipelines fork through a job-owned wrapper process group before terminal handoff, so builtin/function stages are no longer run by the parent shell while the job owns the terminal.
 - Stopped foreground inherited-stdio mixed pipelines are recorded in the job table, restore the shell foreground process group, and can be resumed through `fg` after SIGTSTP/SIGTTIN/SIGTTOU stops in the job-owned wrapper process group.
 - Monitor mode (`set -m`) puts tracked async external and forked compound/mixed-pipeline jobs in their own process groups, keeps background jobs from taking foreground terminal ownership, lets `fg` hand the terminal to that saved process group when available, and gates `fg`/`bg` job-control behavior.
+- `wait` with no operands waits all known jobs and returns zero unless interrupted by a trapped signal; pid/job operands return the last operand status, with invalid/unknown operands following Rush's regular builtin failure status 127 diagnostic policy.
 - `jobs`, `fg`, `bg`, `wait`, and `kill` resolve POSIX job IDs for current (`%%`/`%+`), previous (`%-`), numeric (`%n`), prefix (`%string`), and substring (`%?string`) forms where the match is unambiguous.
 - Stopped-job lifecycle coverage includes stopped status refresh and prompt notifications, 128+signal status for stopped foreground jobs, dash-compatible `wait` behavior that remains blocked while a stopped job is not continued, stopped→done refresh/notification when a stopped job is killed, saved terminal mode restore on `fg`, and the dash-compatible first `exit` warning while stopped jobs remain.
 

@@ -86,7 +86,7 @@ builtin-trap-int-signal	signals	builtin	-
 builtin-trap-list	signals	builtin	-
 builtin-umask	builtin	builtin	-
 builtin-unalias-remove	builtin	builtin	-
-builtin-wait	builtin	builtin	-
+builtin-wait	builtin	builtin	wait with no operands waits all known jobs and returns zero
 busybox-ash-smoke-printf-redirection	builtin	external-suite-smoke	BusyBox ash-inspired printf with output redirection
 busybox-ash-smoke-read-ifs-redirection	builtin	external-suite-smoke	BusyBox ash-inspired read IFS splitting with input redirection
 busybox-ash-smoke-read-redirection	redirection	external-suite-smoke	BusyBox ash-inspired input redirection into read loop
@@ -337,6 +337,8 @@ builtin-trap-option-terminator	builtin	behavior	trap accepts option terminator b
 builtin-trap-subshell-reset	signals	behavior	Subshell environments reset caught parent EXIT traps instead of running them on subshell exit
 builtin-trap-invalid-signal	builtin	behavior	trap rejects invalid signal specifications with a non-zero status
 builtin-wait-job-spec	builtin	behavior	wait accepts a job-control job ID operand
+builtin-wait-job-spec-forms	builtin	behavior	wait accepts current (%%/%+), previous, prefix, and substring POSIX job ID operands
+builtin-wait-multiple-operands	builtin	behavior	wait returns the status of the last operand
 option-set-hyphen	options	behavior	set - disables xtrace and verbose without changing positional parameters
 option-set-variable-listing	options	behavior	set without operands lists shell variables
 redirection-brace-group-input	redirection	behavior	input redirection on a brace group feeds commands in the group

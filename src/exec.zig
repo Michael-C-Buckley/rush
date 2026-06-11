@@ -9924,12 +9924,11 @@ fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     if (operand_start >= command.argv.len and self.background_jobs.items.len == 0) return emptyResult(self.allocator, 0);
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (operand_start >= command.argv.len) {
-        var status: ExitStatus = 0;
         for (self.background_jobs.items) |*job| {
-            status = try waitBackgroundJob(io, job, true);
+            const status = try waitBackgroundJob(io, job, true);
             if (pending_trap_signal.load(.seq_cst) != 0) return emptyResult(self.allocator, status);
         }
-        return emptyResult(self.allocator, status);
+        return emptyResult(self.allocator, 0);
     }
 
     var status: ExitStatus = 0;
@@ -14106,6 +14105,73 @@ test "executor waits for background pid operands" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("status=7\n", result.stdout);
+}
+
+test "wait with no operands returns zero after all jobs" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'exit 7' & wait; echo status=$?; set -e; /bin/sh -c 'exit 8' & wait; echo errexit-ok");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status=0\nerrexit-ok\n", result.stdout);
+}
+
+test "wait returns the status of the last operand" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'exit 3' & first=$!; /bin/sh -c 'exit 4' & second=$!; wait \"$first\" \"$second\"; echo status=$?");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status=4\n", result.stdout);
+}
+
+test "wait builtin resolves POSIX job operand forms" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\/bin/sh -c 'exit 4' & /bin/sh -c 'exit 5' &
+        \\wait %% ; echo current=$?
+        \\wait %- ; echo previous=$?
+        \\jobs >/dev/null
+        \\/bin/sh -c 'exit 6' & wait %+; echo plus=$?
+        \\jobs >/dev/null
+        \\/usr/bin/false & wait %/usr/bin/false; echo prefix=$?
+        \\jobs >/dev/null
+        \\/usr/bin/printf '' & wait %?printf; echo substring=$?
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("current=5\nprevious=4\nplus=6\nprefix=1\nsubstring=0\n", result.stdout);
+}
+
+test "wait reports unknown pid after the job status report is consumed" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'exit 7' & pid=$!; wait \"$pid\"; jobs >/dev/null; wait \"$pid\"; echo status=$?");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status=127\n", result.stdout);
+    try std.testing.expectEqualStrings("wait: unknown pid\n", result.stderr);
 }
 
 test "wait builtin interrupted by trapped signal returns signal status" {
