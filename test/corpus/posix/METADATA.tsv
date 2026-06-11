@@ -18,6 +18,10 @@ assignment-command-substitution-status	variables	behavior	assignment-only comman
 async-builtin-fallback	job_control	job	-
 async-builtin-job-wait	job_control	job	-
 async-compound-job-wait	job_control	job	-
+async-compound-forms	job_control	job	representative brace, subshell, loop, and pipeline asynchronous jobs are waitable and preserve status
+async-compound-options	job_control	job	asynchronous compound jobs inherit shell option state
+async-compound-parent-state	job_control	job	nested asynchronous jobs in a subshell do not clobber the parent last-background pid or job table
+async-compound-redirection-diagnostics	job_control	job;negative	asynchronous compound redirection failures report diagnostics and remain waitable
 async-external-fd-duplication	redirection	job;behavior	async external command can write an arbitrary fd duplicated from stdout in the same command
 async-external-pid	job_control	job	-
 async-wait-last-pid	job_control	job	-

@@ -2491,11 +2491,7 @@ pub const Executor = struct {
             child.script_stdin_offset = 0;
             child.script_stdin_file = null;
         }
-        if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
-            error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
-            error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(wrapper), "bad file descriptor"),
-            else => return err,
-        }) |guard_value| {
+        if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| return self.redirectionErrorResult(wrapper, err, false)) |guard_value| {
             var guard = guard_value;
             defer guard.restore(self, options.io.?);
             var result = try child.executeScriptSlice(subshell.body, options);
@@ -2542,11 +2538,7 @@ pub const Executor = struct {
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
-        if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| switch (err) {
-            error.PathAlreadyExists => return errorResult(self.allocator, 1, noclobberTargetName(wrapper), "cannot overwrite existing file"),
-            error.BadFileDescriptor => return errorResult(self.allocator, 1, badFdTargetName(wrapper), "bad file descriptor"),
-            else => return err,
-        }) |guard_value| {
+        if (self.applyRealFdRedirectionsIfNeeded(wrapper, options) catch |err| return self.redirectionErrorResult(wrapper, err, false)) |guard_value| {
             var guard = guard_value;
             defer guard.restore(self, options.io.?);
             var result = try self.executeScriptSlice(group.body, options);
@@ -3606,8 +3598,10 @@ pub const Executor = struct {
         const pid = try forkProcess();
         if (pid == 0) {
             if (use_monitor_pgrp) processSetPgrp(0, 0) catch exitForkedChild(2);
+            self.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
             var child_options = options;
-            if (use_monitor_pgrp) child_options.foreground_terminal = false;
+            child_options.foreground_terminal = false;
+            if (!use_monitor_pgrp) installDevNullStdin(io) catch exitForkedChild(2);
             var status: ExitStatus = 2;
             var child_result = switch (kind) {
                 .statement => |statement| self.executeStatementSync(program, statement, child_options),
@@ -4019,7 +4013,7 @@ pub const Executor = struct {
     fn redirectionFailureDiagnostic(self: *Executor, command: ir.SimpleCommand, err: anyerror) !?[]u8 {
         const name, const message = switch (err) {
             error.BadFileDescriptor => .{ badFdTargetName(command), "bad file descriptor" },
-            error.FileNotFound => .{ inputTargetName(command), "no such file or directory" },
+            error.FileNotFound => .{ redirectionTargetName(command), "no such file or directory" },
             error.IsDir => .{ redirectionTargetName(command), "is a directory" },
             error.PathAlreadyExists => .{ noclobberTargetName(command), "cannot overwrite existing file" },
             else => return null,
@@ -4708,7 +4702,7 @@ pub const Executor = struct {
         const result = switch (err) {
             error.PathAlreadyExists => try errorResult(self.allocator, 1, noclobberTargetName(command), "cannot overwrite existing file"),
             error.BadFileDescriptor => try errorResult(self.allocator, 1, badFdTargetName(command), "bad file descriptor"),
-            error.FileNotFound => try errorResult(self.allocator, 1, inputTargetName(command), "no such file or directory"),
+            error.FileNotFound => try errorResult(self.allocator, 1, redirectionTargetName(command), "no such file or directory"),
             error.IsDir => try errorResult(self.allocator, 1, redirectionTargetName(command), "is a directory"),
             else => return err,
         };
@@ -5370,6 +5364,16 @@ pub const Executor = struct {
         var redirected = result;
         errdefer redirected.deinit();
 
+        self.validateFdDuplicationTargets(command.redirections) catch |err| switch (err) {
+            error.BadFileDescriptor => {
+                redirected.deinit();
+                const failure = try errorResult(self.allocator, 1, badFdTargetName(command), "bad file descriptor");
+                if (special_exit) self.pending_exit = failure.status;
+                return failure;
+            },
+            else => return err,
+        };
+
         var stdout_sink: OutputSink = .stdout;
         var stderr_sink: OutputSink = .stderr;
         var next_file_id: usize = 1;
@@ -5382,6 +5386,12 @@ pub const Executor = struct {
                     error.PathAlreadyExists => {
                         redirected.deinit();
                         const failure = try errorResult(self.allocator, 1, targetName(redirection), "cannot overwrite existing file");
+                        if (special_exit) self.pending_exit = failure.status;
+                        return failure;
+                    },
+                    error.FileNotFound => {
+                        redirected.deinit();
+                        const failure = try errorResult(self.allocator, 1, targetName(redirection), "no such file or directory");
                         if (special_exit) self.pending_exit = failure.status;
                         return failure;
                     },
@@ -5585,6 +5595,8 @@ pub const Executor = struct {
         var inherited_redirections = try FdRedirectionGuard.init(self.allocator, io);
         defer inherited_redirections.restore(self, io);
         var stdin_redirected = false;
+        var default_stdin_file: ?std.Io.File = null;
+        defer if (default_stdin_file) |file| file.close(io);
 
         // The diagnostic is reported but the async command itself still
         // yields status 0, matching the status of a successful spawn.
@@ -5670,12 +5682,16 @@ pub const Executor = struct {
             }
         }
 
+        if (!stdin_redirected and !self.monitorProcessGroupsEnabled()) {
+            default_stdin_file = try openDevNullRead(io);
+        }
+
         var child_env = try self.buildProcessEnv(command.assignments);
         defer child_env.deinit();
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_redirected or options.external_stdio == .inherit) .inherit else .close,
+            .stdin = if (stdin_redirected) .inherit else if (default_stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
             .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .pgid = if (self.monitorProcessGroupsEnabled()) 0 else null,
@@ -6459,6 +6475,22 @@ fn dupFileExcept(file: std.Io.File, excluded_fd: std.posix.fd_t) !std.Io.File {
     };
     rawClose(first) catch {};
     return .{ .handle = second, .flags = file.flags };
+}
+
+fn openDevNullRead(io: std.Io) !std.Io.File {
+    var file = try std.Io.Dir.cwd().openFile(io, "/dev/null", .{});
+    if (file.handle > 2) return file;
+
+    const duplicate = try rawDup(file.handle);
+    const flags = file.flags;
+    file.close(io);
+    return .{ .handle = duplicate, .flags = flags };
+}
+
+fn installDevNullStdin(io: std.Io) !void {
+    var file = try openDevNullRead(io);
+    defer file.close(io);
+    try installRedirectionFile(file, 0);
 }
 
 fn installRedirectionFile(file: std.Io.File, fd: std.posix.fd_t) !void {
@@ -12822,6 +12854,73 @@ test "executor runs compound async jobs as waitable children" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("compound\n", result.stdout);
+}
+
+test "executor waits for representative asynchronous compound forms" {
+    const path = "rush-async-compound-options.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    const trap_path = "rush-async-compound-traps.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, trap_path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\{ /bin/sh -c 'exit 3'; } & p=$!; echo group-pid=${p:+set}; wait "$p"; echo group=$?
+        \\( /bin/sh -c 'exit 4' ) & p=$!; wait "$p"; echo subshell=$?
+        \\i=0; while test "$i" = 0; do i=1; /bin/sh -c 'exit 5'; done & p=$!; wait "$p"; echo while=$?
+        \\/usr/bin/printf x | /bin/sh -c '/bin/cat >/dev/null; exit 6' & p=$!; wait "$p"; echo pipeline=$?
+        \\set -f; { case $- in *f*) echo options-ok > rush-async-compound-options.tmp;; *) echo options-missing > rush-async-compound-options.tmp;; esac; } & p=$!; wait "$p"; option_status=$?; /bin/cat rush-async-compound-options.tmp; echo options=$option_status
+        \\trap 'echo term' TERM; { trap > rush-async-compound-traps.tmp; } & p=$!; wait "$p"; trap_status=$?; if test ! -s rush-async-compound-traps.tmp; then echo traps-reset; fi; echo traps=$trap_status
+        \\( /bin/sleep 0 & wait $! ) & p=$!; echo parent-visible=${p:+yes}; wait "$p"; test "$p" = "$!" && echo parent-last-ok
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        "group-pid=set\ngroup=3\nsubshell=4\nwhile=5\npipeline=6\noptions-ok\noptions=0\ntraps-reset\ntraps=0\nparent-visible=yes\nparent-last-ok\n",
+        result.stdout,
+    );
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "async jobs use dev null stdin when job control is disabled" {
+    const cases = [_]struct {
+        path: []const u8,
+        script: []const u8,
+    }{
+        .{
+            .path = "rush-async-external-dev-null-stdin.tmp",
+            .script = "/bin/sh -c 'test /dev/null -ef /dev/fd/0; echo external=$? > rush-async-external-dev-null-stdin.tmp' & wait $!",
+        },
+        .{
+            .path = "rush-async-compound-dev-null-stdin.tmp",
+            .script = "{ /bin/sh -c 'test /dev/null -ef /dev/fd/0; echo compound=$? > rush-async-compound-dev-null-stdin.tmp'; } & wait $!",
+        },
+    };
+
+    var stdout: std.ArrayList(u8) = .empty;
+    defer stdout.deinit(std.testing.allocator);
+    for (cases) |case| {
+        defer std.Io.Dir.cwd().deleteFile(std.testing.io, case.path) catch {};
+        var lowered = try parseAndLower(std.testing.allocator, case.script);
+        defer lowered.parsed.deinit();
+        defer lowered.program.deinit();
+
+        var executor = Executor.init(std.testing.allocator);
+        defer executor.deinit();
+        var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+        const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, case.path, std.testing.allocator, .unlimited);
+        defer std.testing.allocator.free(output);
+        try stdout.appendSlice(std.testing.allocator, output);
+    }
+    try std.testing.expectEqualStrings("external=0\ncompound=0\n", stdout.items);
 }
 
 test "executor backgrounds current and selected tracked jobs" {

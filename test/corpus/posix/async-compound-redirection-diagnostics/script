@@ -1,0 +1,9 @@
+{ echo bad; } 3>&9 &
+wait $!
+echo group=$?
+while false; do :; done 3>&9 &
+wait $!
+echo while=$?
+{ echo bad; } >/no/such/rush-async-compound-out &
+wait $!
+echo output=$?
