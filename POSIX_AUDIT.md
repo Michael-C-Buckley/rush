@@ -20,9 +20,9 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `417` rows
-- `scripts/check-posix-corpus.sh`: `425` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `237` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `303` cases, `606` comparisons across dash and bash POSIX mode
+- `scripts/check-posix-corpus.sh`: `427` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `242` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `305` cases, `610` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
@@ -157,6 +157,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
   - expression text is preprocessed for nested parameter expansion, command substitution, and arithmetic expansion results before arithmetic evaluation in the dash/bash/yash-compatible cases covered by corpus tests
   - shell variable values used by identifier are accepted when they form POSIX integer constants; unset or null variables evaluate as zero, while nonnumeric values, expression-valued strings such as `1 + 2`, and literal nested substitution text in variable values produce arithmetic diagnostics instead of being recursively evaluated
   - arithmetic-expression backslash processing follows the POSIX double-quote-like subset in representative cases: backslash-newline is removed, escaped `$` remains literal instead of starting a nested expansion, legacy backquotes still perform command substitution, unmatched raw legacy backquotes after escaped literal backquotes are classified as backquote substitution syntax errors, and quote bytes that remain in the arithmetic expression produce invalid-expression diagnostics rather than being quote-removed
+  - representative arithmetic syntax diagnostics cover invalid operators, missing operands, malformed parentheses, malformed conditional and comma forms, and assignment-word expansion consequences
 - Command substitution with `$()` including nested parsing and executor-backed execution.
 - Legacy backquote command substitution, including escaped nested backquotes and backslash-newline line continuation in representative cases.
 - Command substitution inside double quotes, preserving the quoted field.
@@ -164,7 +165,7 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Pathname expansion using current directory glob support for `*`, `?`, ranges, negated bracket expressions, and ASCII POSIX character classes.
 - Quote removal after expansions, including single and double quotes, escaped spaces and escaped newlines, explicit empty fields, field-splitting suppression, quoted command substitutions including inner quotes and legacy backquotes, nested parameter operator words, recursive function and command-substitution bodies, and case/parameter pattern literalization.
 - Here-doc expansion for unquoted delimiters; quoted delimiters suppress expansion.
-- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, malformed or unsupported braced parameter substitutions, invalid `${parameter:=word}` / `${parameter=word}` assignment attempts to positional or special parameters, invalid arithmetic expansion, and invalid arithmetic variable values. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
+- Expansion error consequences are covered for current-shell contexts including ordinary words, redirection targets, assignment words, for-loop word lists, case subjects and patterns, nounset, `${parameter:?word}`, malformed or unsupported braced parameter substitutions, invalid `${parameter:=word}` / `${parameter=word}` assignment attempts to positional or special parameters, invalid arithmetic syntax, invalid arithmetic expansion, and invalid arithmetic variable values. Command-substitution expansion failures exit only the substitution subshell while surfacing diagnostics and assignment-only status. Interactive expansion failures abort the current command without exiting the prompt loop.
 
 Shell comparison note: dash, bash, and yash agree that assignment forms such as `${1:=x}` and `${10:=x}` are errors when the positional parameter is unset or null, but they expand normally when the parameter already has a usable value. `${1=x}` similarly errors only when the positional is unset. Special parameters follow the same assignment-needed rule in the portable subset Rush now covers; comparison shells differ on some extension edge cases such as empty `$@` with the no-colon form, so Rush keeps focused negative coverage on assignment-needed cases.
 
@@ -180,7 +181,7 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 
 - No POSIX-first quote-removal gaps are currently tracked for the supported representative rows; add narrower spec-clause rows if a new edge case is found.
 - Full pathname expansion semantics.
-- POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered malformed braced-parameter and arithmetic cases.
+- POSIX-accurate diagnostics for additional expansion error forms beyond the currently covered malformed braced-parameter and representative arithmetic cases.
 
 ## 4. Redirection
 
