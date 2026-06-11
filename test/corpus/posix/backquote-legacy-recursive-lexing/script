@@ -1,0 +1,5 @@
+printf '<%s>\n' "\`echo not-substituted\`"
+printf '<%s>\n' "`printf "%s" "a b"`"
+printf '<%s>\n' `printf '[%s]' \`printf 'a b'\``
+printf '<%s>\n' `printf first
+printf second`
