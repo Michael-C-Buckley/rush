@@ -8764,7 +8764,7 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         if (!isShellName(name_word.text)) return errorResult(self.allocator, 2, "read", "invalid variable name");
     }
 
-    const read_input = try nextReadInput(self, stdin, read_options);
+    const read_input = try nextReadInput(self, stdin, read_options, options);
     defer read_input.deinit(self.allocator);
     const status = read_input.status;
     const raw_line = read_input.line;
@@ -8787,6 +8787,11 @@ fn builtinRead(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 const ReadOptions = struct {
     raw_mode: bool = false,
     delimiter: u8 = '\n',
+};
+
+const ReadPrompt = struct {
+    active: bool = false,
+    text: []const u8 = "",
 };
 
 fn parseReadOptions(command: ir.SimpleCommand, arg_start: *usize, features: compat.Features) !ReadOptions {
@@ -8846,22 +8851,33 @@ const ReadInput = struct {
     }
 };
 
-fn nextReadInput(self: *Executor, stdin: []const u8, options: ReadOptions) !ReadInput {
-    if (stdin.len != 0) return try readInputFromSlice(self.allocator, stdin, options);
+fn nextReadInput(self: *Executor, stdin: []const u8, read_options: ReadOptions, execute_options: ExecuteOptions) !ReadInput {
+    if (stdin.len != 0) return try readInputFromSlice(self.allocator, stdin, read_options);
     if (pipeline_stage_stdin.active) {
-        if (pipeline_stage_stdin.file) |file| return try readInputFromFile(self, file, options);
+        if (pipeline_stage_stdin.file) |file| return try readInputFromFile(self, file, read_options, .{});
         return .{ .line = "", .status = 1 };
     }
-    if (self.script_stdin_file) |file| return try readInputFromFile(self, file, options);
-    const script_stdin = self.script_stdin orelse return .{ .line = "", .status = 1 };
+    if (self.script_stdin_file) |file| return try readInputFromFile(self, file, read_options, readContinuationPrompt(self, file, execute_options));
+    const script_stdin = self.script_stdin orelse {
+        if (!execute_options.interactive) return .{ .line = "", .status = 1 };
+        const file = std.Io.File.stdin();
+        return try readInputFromFile(self, file, read_options, readContinuationPrompt(self, file, execute_options));
+    };
     if (self.script_stdin_offset >= script_stdin.len) return .{ .line = "", .status = 1 };
     const remaining = script_stdin[self.script_stdin_offset..];
-    const input = try readInputFromSlice(self.allocator, remaining, options);
+    const input = try readInputFromSlice(self.allocator, remaining, read_options);
     self.script_stdin_offset += input.consumed;
     return input;
 }
 
-fn readInputFromFile(self: *Executor, file: std.Io.File, options: ReadOptions) !ReadInput {
+fn readContinuationPrompt(self: *Executor, file: std.Io.File, options: ExecuteOptions) ReadPrompt {
+    if (!options.interactive) return .{};
+    const io = options.io orelse return .{};
+    if (!(file.isTty(io) catch false)) return .{};
+    return .{ .active = true, .text = self.getEnv("PS2") orelse "> " };
+}
+
+fn readInputFromFile(self: *Executor, file: std.Io.File, options: ReadOptions, prompt: ReadPrompt) !ReadInput {
     var line: std.ArrayList(u8) = .empty;
     errdefer line.deinit(self.allocator);
     var byte: [1]u8 = undefined;
@@ -8877,6 +8893,7 @@ fn readInputFromFile(self: *Executor, file: std.Io.File, options: ReadOptions) !
             trimReadCarriageReturnInPlace(&line);
             if (delimiter == '\n' and !options.raw_mode and readLineContinues(line.items)) {
                 line.items.len -= 1;
+                if (prompt.active) try rawWriteAll(2, prompt.text);
                 continue;
             }
             const owned = try line.toOwnedSlice(self.allocator);
@@ -13068,6 +13085,40 @@ test "executor implements read and printf builtins" {
     try std.testing.expectEqualStrings("read: invalid variable name\n", invalid_name_result.stderr);
 }
 
+test "interactive read consumes terminal stdin and prompts for cooked continuations" {
+    var master: c_int = -1;
+    var slave: c_int = -1;
+    if (openpty(&master, &slave, null, null, null) != 0) return error.SkipZigTest;
+    defer _ = close(master);
+
+    const output_path = "rush-interactive-read-pty-output.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+
+    const child_pid = fork();
+    if (child_pid < 0) return error.SkipZigTest;
+    if (child_pid == 0) {
+        _ = close(master);
+        runInteractiveReadPtyTest(slave, output_path) catch |err| switch (err) {
+            error.SkipZigTest => exitForkedChild(77),
+            else => exitForkedChild(1),
+        };
+        exitForkedChild(0);
+    }
+    _ = close(slave);
+
+    try rawWriteAll(master, "one\\\ntwo three\n");
+    try expectPtyTestChildSucceeded(child_pid);
+
+    const terminal_output = try readPtyMasterOutput(std.testing.allocator, master);
+    defer std.testing.allocator.free(terminal_output);
+    try std.testing.expect(std.mem.indexOf(u8, terminal_output, "more> ") != null);
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, output_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("<onetwo><three>\n", contents);
+}
+
 test "executor implements pwd cd and export builtins" {
     const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
     defer std.testing.allocator.free(original_cwd);
@@ -15758,6 +15809,44 @@ fn runStoppedForegroundMixedPipelinePtyTest(slave: c_int) anyerror!void {
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TTOU", .TTOU);
 }
 
+fn runInteractiveReadPtyTest(slave: c_int, output_path: []const u8) anyerror!void {
+    if (std.c.setsid() < 0) return error.SkipZigTest;
+    const tiocsctty: ?c_int = comptime blk: {
+        if (@hasDecl(std.c.T, "IOCSCTTY")) break :blk @as(c_int, std.c.T.IOCSCTTY);
+        if (@hasDecl(std.c.T, "TIOCSCTTY")) break :blk @as(c_int, std.c.T.TIOCSCTTY);
+        break :blk null;
+    };
+    if (tiocsctty) |request| {
+        if (std.c.ioctl(slave, request, @as(c_int, 0)) < 0) return error.SkipZigTest;
+    } else return error.SkipZigTest;
+    if (dup2(slave, std.Io.File.stdin().handle) < 0) return error.SkipZigTest;
+    if (dup2(slave, std.Io.File.stdout().handle) < 0) return error.SkipZigTest;
+    if (dup2(slave, std.Io.File.stderr().handle) < 0) return error.SkipZigTest;
+    if (slave > 2) _ = close(slave);
+
+    const shell_pgrp = processGetPgrp(0) catch return error.SkipZigTest;
+    try terminalSetPgrp(std.Io.File.stdin().handle, shell_pgrp);
+
+    var gpa: std.heap.DebugAllocator(.{}) = .{};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var executor = Executor.init(allocator);
+    defer executor.deinit();
+    try executor.setEnv("PS2", "more> ");
+    const script = try std.fmt.allocPrint(allocator,
+        \\read first rest
+        \\printf '<%s><%s>\n' "$first" "$rest" > {s}
+    , .{output_path});
+    defer allocator.free(script);
+
+    var result = try executor.executeScriptSlice(script, .{ .io = std.testing.io, .interactive = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 fn expectMonitorAsyncJobKeepsShellForeground(allocator: std.mem.Allocator, executor: *Executor, shell_pgrp: std.posix.pid_t) anyerror!void {
     const path = "rush-monitor-async-terminal-pgrp.tmp";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
@@ -15810,6 +15899,21 @@ fn readPtyTestFileEventually(allocator: std.mem.Allocator, path: []const u8) ![]
         sleepPtyTestPollInterval();
     }
     return error.TestTimedOut;
+}
+
+fn readPtyMasterOutput(allocator: std.mem.Allocator, master: std.posix.fd_t) ![]u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    var buffer: [1024]u8 = undefined;
+    while (true) {
+        const read_len = std.posix.read(master, &buffer) catch |err| switch (err) {
+            error.InputOutput => break,
+            else => return err,
+        };
+        if (read_len == 0) break;
+        try output.appendSlice(allocator, buffer[0..read_len]);
+    }
+    return output.toOwnedSlice(allocator);
 }
 
 fn waitForJobState(executor: *Executor, job: *BackgroundJob, state: JobState) !void {
