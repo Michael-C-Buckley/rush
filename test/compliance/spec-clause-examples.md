@@ -39,6 +39,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `redirection-errexit{,-suppressed-contexts}` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | `errexit` fires for ordinary redirection failures except in suppressed AND-OR and negation contexts |
 | `redirection-pipeline-missing-input-last` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | last-stage pipeline redirection failure determines pipeline status |
 | `redirection-{,async-}heredoc-materialization-failure` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | here-doc fd materialization failure path reports a redirection diagnostic |
+| `output-write-failure-dev-full-statuses` | `test/corpus/posix-negative` | `errors-output-write-failure` | Linux-gated `/dev/full` actual file target write failures preserve builtin, function, compound, external, and pipeline statuses |
 | `errors-special-builtin-redirection-{output,append}-directory` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | special builtin directory output redirection failures exit non-interactive execution |
 | `errexit-negation-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for negated pipelines |
 | `errexit-and-or-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for commands before `&&` and `||` in AND-OR lists |

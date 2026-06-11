@@ -19,23 +19,23 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `399` rows
+- `scripts/check-compliance-manifest.sh`: `400` rows
 - `scripts/check-posix-corpus.sh`: `360` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `184` expected-error POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `185` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
 - `scripts/check-system-shell-corpus.sh`: `250` cases, `500` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `399`
-- scored POSIX items: `397`
-- supported: `351`
+- tracked items: `400`
+- scored POSIX items: `398`
+- supported: `352`
 - baseline: `42`
 - partial: `3`
 - missing: `1`
 - out of scope: `2`
 - strict supported only: `88.4%`
 - practical supported+baseline: `99.0%`
-- weighted progress: `96.0%`
+- weighted progress: `96.1%`
 
 Recent notable capabilities:
 
@@ -206,12 +206,12 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - CLI inherited-stdio builtins, functions, subshells, and brace groups use temporary OS fd mutation and restore for supported fd forms.
 - Shell-visible fd tracking prevents internal fds from being accidentally exposed as shell fds.
 - Non-interactive redirection error consequences are covered for ordinary builtins, external commands, compound commands, function calls and bodies, `<>`, here-doc materialization, async commands, pipelines, AND-OR lists, negation, `$?`, `errexit`, and special-builtin shell exit behavior. Rush intentionally uses non-zero status `1` for many non-special redirection failures where dash reports `2`; POSIX only requires non-zero.
-- Output write failures after redirection setup succeeds are covered in inherited-stdio unit tests with a portable broken-pipe fd harness rather than `/dev/full`: regular builtins diagnose `write`, return status `1`, and let following commands run; functions and brace groups propagate the failed redirected write as their status; pipelines record the failed stage status, including `pipefail` and last-stage behavior. External command write failures remain delegated to the external utility and OS signal/write semantics.
+- Output write failures after redirection setup succeeds are covered in inherited-stdio unit tests with a portable broken-pipe fd harness and in a Linux-gated negative corpus case using `/dev/full` as an actual file target: regular builtins diagnose `write`, return status `1`, and let following commands run; functions and brace groups propagate the failed redirected write as their status; pipelines record the failed stage status, including `pipefail` and last-stage behavior. External command write failures remain delegated to the external utility and OS signal/write semantics.
 
 ### Partial / gaps
 
 - Capture-mode tests still use captured-result modeling in some paths instead of true inherited process fds.
-- `/dev/full`-style file targets are intentionally not in the cross-platform corpus because macOS lacks `/dev/full`; the portable synthetic fd tests cover Rush's shell-implemented write-failure consequences without making corpus validation platform-specific.
+- `/dev/full`-style file targets are represented by a Linux-gated negative corpus case; macOS validation skips that case while the portable synthetic fd tests keep cross-platform coverage of Rush's shell-implemented write-failure consequences.
 - Here-doc materialization is fd-backed but full parser-level here-doc token/body integration is still simplified.
 
 ## 5. Command search and execution environment
@@ -393,7 +393,7 @@ Implemented or partially implemented:
 
 ### Partial / gaps
 
-- Cross-platform corpus coverage for `/dev/full`-style file write failures remains deferred; current evidence is portable inherited-fd unit coverage so macOS validation stays stable.
+- `/dev/full`-style file write failures now have Linux-gated negative corpus coverage, while portable inherited-fd unit coverage keeps macOS validation stable.
 - Some CLI inherited-stdio paths now write per-command output directly; capture-mode tests still intentionally model output through `CommandResult`.
 
 ## 10. Recommended next roadmap batches

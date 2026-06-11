@@ -8,6 +8,30 @@ if [ -n "${RUSH_CORPUS_WORKER:-}" ]; then
   name=$1
   case_dir=$CORPUS_DIR/$name
 
+  requirements_status() {
+    [ -f "$case_dir/requires" ] || return 0
+
+    status=0
+    while IFS= read -r requirement || [ -n "$requirement" ]; do
+      case "$requirement" in
+        ''|'#'*) ;;
+        os:linux)
+          [ "$(uname -s)" = Linux ] || status=1
+          ;;
+        path:*)
+          path=${requirement#path:}
+          [ -e "$path" ] || status=1
+          ;;
+        *)
+          echo "FAIL [$name]: unsupported requirement: $requirement" >"$FAILDIR/$name"
+          return 2
+          ;;
+      esac
+    done <"$case_dir/requires"
+
+    return "$status"
+  }
+
   times_stdout_matches() {
     [ "$(wc -l <"$1" | tr -d ' ')" -eq 2 ] || return 1
     grep -Eq '^[0-9]+m[0-9]+\.[0-9][0-9]s [0-9]+m[0-9]+\.[0-9][0-9]s$' "$1"
@@ -19,6 +43,16 @@ if [ -n "${RUSH_CORPUS_WORKER:-}" ]; then
       exit 1
     fi
   done
+
+  requirements=0
+  requirements_status || requirements=$?
+  if [ "$requirements" -eq 2 ]; then
+    exit 1
+  fi
+  if [ "$requirements" -ne 0 ]; then
+    echo "SKIP [$name]: unmet requirements" >"$SKIPDIR/$name"
+    exit 0
+  fi
 
   tmp=$(mktemp -d)
   actual_stdout=$tmp/stdout
@@ -71,7 +105,9 @@ fi
 
 workdir=$(mktemp -d)
 FAILDIR=$workdir/failures
+SKIPDIR=$workdir/skips
 mkdir "$FAILDIR"
+mkdir "$SKIPDIR"
 trap 'rm -rf "$workdir"' EXIT
 
 metadata=$CORPUS_DIR/METADATA.tsv
@@ -124,7 +160,7 @@ fi
 cases=$(wc -l <"$workdir/case-names" | tr -d ' ')
 
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
-export CORPUS_DIR RUSH FAILDIR
+export CORPUS_DIR RUSH FAILDIR SKIPDIR
 
 if [ "$cases" -gt 0 ]; then
   xargs -P "$JOBS" -n 1 env RUSH_CORPUS_WORKER=1 sh "$0" <"$workdir/case-names" || true
@@ -137,4 +173,9 @@ if [ "$failures" -ne 0 ]; then
   exit 1
 fi
 
-echo "$CORPUS_LABEL passed ($cases cases)"
+skips=$(find "$SKIPDIR" -type f | wc -l | tr -d ' ')
+if [ "$skips" -ne 0 ]; then
+  echo "$CORPUS_LABEL passed ($cases cases, $skips skipped)"
+else
+  echo "$CORPUS_LABEL passed ($cases cases)"
+fi
