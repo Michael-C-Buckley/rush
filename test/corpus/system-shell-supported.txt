@@ -307,3 +307,4 @@ alias say='echo parser-ok'\nFOO=bar say\nif say; then echo if-ok; fi
 alias say='echo subst-ok'\nalias body='echo bad'\necho "$(say)"\nread value <<EOF2\nbody\nEOF2\necho "$value"
 alias start='if'\nstart true\nthen echo alias-if-ok\nfi\nalias loop='while '\ncount=0\nloop [ "$count" -lt 1 ]\ndo echo alias-while-ok; count=$((count + 1))\ndone
 eval "alias say='echo eval-ok'"\nsay\nprintf '%s\n' "alias dot='echo dot-ok'" > alias-dot-source\n. ./alias-dot-source\ndot
+alias echo='echo alias-ok'; echo same-line; echo same-line2\necho next-line

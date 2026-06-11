@@ -3365,6 +3365,24 @@ test "aliases defined by eval and dot affect later complete commands" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "aliases defined on a read line affect only later read lines" {
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, "rush-alias-read-line-source") catch {};
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias zzsamecmd='echo same-ok'; zzsamecmd; echo same-line:$?
+        \\zzsamecmd
+        \\eval "alias zzevalcmd='echo eval-ok'"; zzevalcmd; echo eval-line:$?
+        \\zzevalcmd
+        \\printf '%s\n' "alias zzdotcmd='echo dot-ok'" > rush-alias-read-line-source
+        \\. ./rush-alias-read-line-source; zzdotcmd; echo dot-line:$?
+        \\zzdotcmd
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("same-line:127\nsame-ok\neval-line:127\neval-ok\ndot-line:127\ndot-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("zzsamecmd: command not found\nzzevalcmd: command not found\nzzdotcmd: command not found\n", result.stderr);
+}
+
 test "prompt rendering subcommands are scoped while repaint is public" {
     var prompt_result = try runScript(std.testing.allocator, std.testing.io, "prompt text hi");
     defer prompt_result.deinit();

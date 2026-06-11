@@ -1,0 +1,7 @@
+alias zzsamecmd='echo same-ok'; zzsamecmd; echo same-line:$?
+zzsamecmd
+eval "alias zzevalcmd='echo eval-ok'"; zzevalcmd; echo eval-line:$?
+zzevalcmd
+printf '%s\n' "alias zzdotcmd='echo dot-ok'" > alias-read-line-source
+. ./alias-read-line-source; zzdotcmd; echo dot-line:$?
+zzdotcmd

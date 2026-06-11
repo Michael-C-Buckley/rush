@@ -4,6 +4,7 @@ alias-eval-dot-later-command	lexing	behavior	Aliases defined by eval and dot com
 alias-function-definition-protection	lexing	behavior	-
 alias-later-complete-command	lexing	behavior	Alias defined by an earlier complete command affects a later command
 alias-parser-command-word-contexts	lexing	behavior	Parser-recognized command-name positions include assignment-prefixed, redirection-prefixed, and compound-list commands
+alias-read-line-definition-timing	lexing	behavior	Alias definitions from alias, eval, and dot do not affect later commands on the same read line, but do affect later read lines
 alias-recursive-expansion	lexing	behavior	Recursive alias substitution for command-position aliases
 alias-reserved-word-compound	lexing	behavior	Alias values that produce reserved words are reparsed with following tokens to form compound commands
 alias-reserved-word-protection	lexing	behavior	-

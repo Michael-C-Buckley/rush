@@ -54,6 +54,7 @@ pub const ExecuteOptions = struct {
     force_noninteractive_error_consequences: bool = false,
     default_path_lookup: bool = false,
     verbose_input_echo: bool = true,
+    alias_timing_chunks: bool = true,
 };
 
 const PipelineStageStdin = struct {
@@ -3892,7 +3893,7 @@ pub const Executor = struct {
         const trimmed = std.mem.trim(u8, script, " \t\r\n;");
         if (trimmed.len == 0) return emptyResult(self.allocator, 0);
         const source = std.mem.trimStart(u8, script, " \t\r\n;");
-        if (containsAliasTimingCommandToken(source)) {
+        if (options.alias_timing_chunks and containsAliasTimingCommandToken(source)) {
             if (try self.aliasTimingChunkProgram(source, options)) |chunk_program| {
                 var program = chunk_program;
                 defer program.deinit();
@@ -3943,7 +3944,9 @@ pub const Executor = struct {
         var statement_index: usize = 0;
         execute_chunks: while (statement_index < program.statements.len) {
             const start = program.statements[statement_index].span.start;
-            var end_statement_index = statement_index;
+            // Alias definitions become visible only after the next input line is
+            // read; keep same-line statements in one parse with the prior alias table.
+            var end_statement_index = lastStatementOnReadLine(script, program, statement_index);
             while (true) {
                 const end = if (end_statement_index + 1 < program.statements.len) program.statements[end_statement_index + 1].span.start else script.len;
                 if (try self.scriptSliceParsesWithCurrentAliases(script[start..end], options.features)) {
@@ -3951,6 +3954,7 @@ pub const Executor = struct {
                     if (self.shouldSkipForNoexec(options)) break :execute_chunks;
                     var statement_options = options;
                     statement_options.verbose_input_echo = false;
+                    statement_options.alias_timing_chunks = false;
                     var result = try self.executeScriptSlice(script[start..end], statement_options);
                     defer result.deinit();
                     last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
@@ -3960,6 +3964,7 @@ pub const Executor = struct {
                 }
                 if (end_statement_index + 1 >= program.statements.len) return error.ParseError;
                 end_statement_index += 1;
+                end_statement_index = lastStatementOnReadLine(script, program, end_statement_index);
             }
         }
         var result: CommandResult = .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
@@ -8118,6 +8123,15 @@ fn canExecuteAsAliasTimingChunks(program: ir.Program) bool {
         previous_end = statement.span.end;
     }
     return true;
+}
+
+fn lastStatementOnReadLine(script: []const u8, program: ir.Program, first_statement_index: usize) usize {
+    std.debug.assert(first_statement_index < program.statements.len);
+    const start = program.statements[first_statement_index].span.start;
+    const line_end = if (std.mem.findScalar(u8, script[start..], '\n')) |offset| start + offset else script.len;
+    var index = first_statement_index;
+    while (index + 1 < program.statements.len and program.statements[index + 1].span.start < line_end) : (index += 1) {}
+    return index;
 }
 
 fn isAliasWordBoundary(byte: u8) bool {
