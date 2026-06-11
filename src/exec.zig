@@ -12389,6 +12389,14 @@ test "executor parses and executes POSIX shell functions" {
     const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(contents);
     try std.testing.expectEqualStrings("inner\nouter\n", contents);
+
+    var spaced = try parseAndLower(std.testing.allocator, "a () { echo a; }; b( ) { echo b; }; c ( ) { echo c; }; a; b; c");
+    defer spaced.parsed.deinit();
+    defer spaced.program.deinit();
+    var spaced_result = try executor.executeProgram(spaced.program, .{});
+    defer spaced_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), spaced_result.status);
+    try std.testing.expectEqualStrings("a\nb\nc\n", spaced_result.stdout);
 }
 
 test "executor accepts compound commands as POSIX function bodies" {

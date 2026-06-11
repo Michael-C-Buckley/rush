@@ -1851,9 +1851,10 @@ const SyntaxParser = struct {
         var function_children: std.ArrayList(SyntaxChild) = .empty;
         defer function_children.deinit(self.allocator);
 
-        try self.appendCurrentTokenChildTo(&function_children);
-        try self.appendCurrentTokenChildTo(&function_children);
-        try self.appendCurrentTokenChildTo(&function_children);
+        const header_end = self.functionDefinitionHeaderEnd() orelse self.index;
+        while (self.index < header_end) {
+            try self.appendCurrentTokenChildTo(&function_children);
+        }
 
         while (self.current().kind.isTrivia()) {
             try self.appendCurrentTokenChildTo(&function_children);
@@ -2591,9 +2592,19 @@ const SyntaxParser = struct {
     }
 
     fn startsFunctionDefinition(self: SyntaxParser) bool {
-        if (!self.at(.word) or self.index + 2 >= self.tokens.len) return false;
-        if (!isName(self.current().lexeme(self.source))) return false;
-        return self.tokens[self.index + 1].kind == .left_paren and self.tokens[self.index + 2].kind == .right_paren;
+        return self.functionDefinitionHeaderEnd() != null;
+    }
+
+    fn functionDefinitionHeaderEnd(self: SyntaxParser) ?usize {
+        if (!self.at(.word) or self.index + 2 >= self.tokens.len) return null;
+        if (!isName(self.current().lexeme(self.source))) return null;
+        var index = self.index + 1;
+        while (index < self.tokens.len and self.tokens[index].kind == .whitespace) : (index += 1) {}
+        if (index >= self.tokens.len or self.tokens[index].kind != .left_paren) return null;
+        index += 1;
+        while (index < self.tokens.len and self.tokens[index].kind == .whitespace) : (index += 1) {}
+        if (index >= self.tokens.len or self.tokens[index].kind != .right_paren) return null;
+        return index + 1;
     }
 
     fn startsBashTestCommand(self: SyntaxParser) bool {
@@ -3376,17 +3387,26 @@ test "parser reports incomplete POSIX brace groups" {
 }
 
 test "parser builds POSIX function definition nodes" {
-    var result = try parse(std.testing.allocator, "greet() { echo hi; }", .{});
-    defer result.deinit();
+    const cases = [_][]const u8{
+        "greet() { echo hi; }",
+        "greet () { echo hi; }",
+        "greet( ) { echo hi; }",
+        "greet ( ) { echo hi; }",
+    };
 
-    var found = false;
-    for (result.nodes) |node| {
-        if (node.kind == .function_definition) {
-            found = true;
-            try expectSpan(.init(0, 20), node.span);
+    for (cases) |source| {
+        var result = try parse(std.testing.allocator, source, .{});
+        defer result.deinit();
+
+        var found = false;
+        for (result.nodes) |node| {
+            if (node.kind == .function_definition) {
+                found = true;
+                try expectSpan(.init(0, source.len), node.span);
+            }
         }
+        try std.testing.expect(found);
     }
-    try std.testing.expect(found);
 }
 
 test "parser keeps nested brace groups inside POSIX function definitions" {

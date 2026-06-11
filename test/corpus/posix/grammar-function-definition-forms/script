@@ -1,0 +1,11 @@
+a(){ echo no-space; }
+a
+b () { echo space-before; }
+b
+c( ) { echo space-inside; }
+c
+d ( ) { echo spaces-both; }
+d
+e()
+{ echo newline-body; }
+e

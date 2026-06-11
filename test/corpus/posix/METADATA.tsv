@@ -159,7 +159,9 @@ quote-removal-recursive-contexts	expansion	behavior	quote removal applies in fun
 fg-current-job	job_control	job	fg waits for the current background job
 for-loop	grammar	behavior	-
 for-nested-if	grammar	behavior	-
-grammar-function-compound-body	grammar	behavior	function definitions accept subshell, if, for, and nested brace-group bodies
+grammar-function-definition-forms	grammar	behavior	function definitions accept POSIX header spacing forms and linebreak before the function body
+grammar-function-compound-body	grammar	behavior	function definitions accept subshell, if, for, while, until, case, and nested brace-group bodies
+function-current-shell-effects	grammar	behavior	function calls execute in the current shell environment
 function-local-positionals	grammar	behavior	-
 function-positionals	grammar	behavior	-
 function-return-status	grammar	behavior	-

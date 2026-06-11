@@ -1,0 +1,4 @@
+f() { A=inner; }
+A=outer
+f
+echo "$A"
