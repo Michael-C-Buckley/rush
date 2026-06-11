@@ -1,0 +1,5 @@
+/bin/cat < missing && echo bad
+printf "and=%s\n" "$?"
+/bin/cat < missing || printf "or=%s\n" "$?"
+! /bin/cat < missing
+printf "not=%s\n" "$?"

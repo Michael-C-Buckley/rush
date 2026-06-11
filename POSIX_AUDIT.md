@@ -1,6 +1,6 @@
 # POSIX Shell Audit
 
-Date: 2026-06-08
+Date: 2026-06-11
 
 This audit compares Rush's current implementation against the POSIX Shell Command Language at a practical feature level. It is a gap analysis for implementation planning, not a normative copy of the specification.
 
@@ -18,25 +18,24 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 
 Validated for this audit refresh:
 
-- `zig build compliance --summary all`: passing
-- `zig build test --summary all`: `251/251` passing
-- `zig build corpus --summary all`: `122` cases, `488` comparisons across available comparison shells
-- `zig build posix-corpus --summary all`: `153` expected-output POSIX cases
-- `zig build posix-negative-corpus --summary all`: `15` expected-error POSIX cases
-- `zig build cross-check --summary all`: passing for Linux/macOS/BSD compile checks
+- `zig build test --summary none`: passing
+- `scripts/check-compliance-manifest.sh`: `399` rows
+- `scripts/check-posix-corpus.sh`: `360` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `184` expected-error POSIX cases
+- `scripts/check-system-shell-corpus.sh`: `250` cases, `500` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `110`
-- scored POSIX items: `108`
-- supported: `15`
-- baseline: `78`
-- partial: `11`
-- missing: `4`
+- tracked items: `399`
+- scored POSIX items: `397`
+- supported: `351`
+- baseline: `42`
+- partial: `3`
+- missing: `1`
 - out of scope: `2`
-- strict supported only: `13.9%`
-- practical supported+baseline: `86.1%`
-- weighted progress: `67.5%`
+- strict supported only: `88.4%`
+- practical supported+baseline: `99.0%`
+- weighted progress: `96.0%`
 
 Recent notable capabilities:
 
@@ -206,11 +205,12 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - External commands use real file descriptors.
 - CLI inherited-stdio builtins, functions, subshells, and brace groups use temporary OS fd mutation and restore for supported fd forms.
 - Shell-visible fd tracking prevents internal fds from being accidentally exposed as shell fds.
+- Non-interactive redirection error consequences are covered for ordinary builtins, external commands, compound commands, function calls and bodies, `<>`, here-doc materialization, async commands, pipelines, AND-OR lists, negation, `$?`, `errexit`, and special-builtin shell exit behavior. Rush intentionally uses non-zero status `1` for many non-special redirection failures where dash reports `2`; POSIX only requires non-zero.
 
 ### Partial / gaps
 
 - Capture-mode tests still use captured-result modeling in some paths instead of true inherited process fds.
-- More obscure redirection ordering/error interactions remain to be audited under the consolidated `errors-redirection-noninteractive` consequence row.
+- Portable output write-failure cases such as `/dev/full` remain separate from the supported open/redirection-error consequence matrix because they are platform-dependent and are not represented on macOS.
 - Here-doc materialization is fd-backed but full parser-level here-doc token/body integration is still simplified.
 
 ## 5. Command search and execution environment
@@ -383,6 +383,7 @@ Implemented or partially implemented:
 - Command-not-found returns `127` in simple commands and failed pipeline stage spawn.
 - Missing pipeline stage spawn cleanup.
 - Redirection failures for bad fd duplication and noclobber are shell-visible errors.
+- Non-interactive redirection failures now have negative-corpus coverage for ordinary utility continuation, compound and function redirections, status propagation, `errexit`, pipelines, `<>`, here-doc materialization, and special-builtin shell exit behavior.
 - Nounset produces a baseline unset-parameter diagnostic and exits non-interactive execution.
 - `${parameter:?word}` expands the diagnostic word, reports the parameter name, and exits non-interactive execution.
 - Special builtin expansion, redirection, invalid option/operand, and utility-semantic failures now stop non-interactive execution for the audited POSIX special-builtin set.
@@ -390,7 +391,7 @@ Implemented or partially implemented:
 
 ### Partial / gaps
 
-- Redirection error consequences outside the special-builtin baseline need stricter context modeling; the former redirection-area consequence row is consolidated into `errors-redirection-noninteractive` so status propagation and shell-exit behavior stay in one matrix.
+- Output write-failure diagnostics after a redirection has opened successfully still need a portable cross-platform strategy; `/dev/full` is useful on Linux but not available in the macOS validation environment.
 - Some CLI inherited-stdio paths now write per-command output directly; capture-mode tests still intentionally model output through `CommandResult`.
 
 ## 10. Recommended next roadmap batches

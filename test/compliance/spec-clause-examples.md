@@ -31,6 +31,14 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `redirection-input-missing` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | ordinary command missing input redirection reports an error and continues |
 | `redirection-bad-input-fd-duplication` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | ordinary command bad input fd duplication reports an error and continues |
 | `redirection-{output,append}-directory` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | ordinary command directory output redirections report an error and continue |
+| `redirection-compound-missing-input` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | brace group, if, while, and for input redirection failures fail the compound command without exiting |
+| `redirection-function-call-vs-body` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | function call/definition redirection failure is distinct from redirection failure inside the function body |
+| `redirection-read-write-missing-parent` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | `<>` open failure for non-special builtin and external commands fails the command and continues |
+| `errors-special-builtin-redirection-read-write-missing-parent` | `test/corpus/posix-negative` | `errors-redirection-noninteractive`; `errors-special-builtin-redirection` | `<>` open failure on a special builtin exits non-interactive execution |
+| `redirection-status-propagation` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | redirection failure status through AND-OR lists, negation, and `$?` |
+| `redirection-errexit{,-suppressed-contexts}` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | `errexit` fires for ordinary redirection failures except in suppressed AND-OR and negation contexts |
+| `redirection-pipeline-missing-input-last` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | last-stage pipeline redirection failure determines pipeline status |
+| `redirection-{,async-}heredoc-materialization-failure` | `test/corpus/posix-negative` | `errors-redirection-noninteractive` | here-doc fd materialization failure path reports a redirection diagnostic |
 | `errors-special-builtin-redirection-{output,append}-directory` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | special builtin directory output redirection failures exit non-interactive execution |
 | `errexit-negation-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for negated pipelines |
 | `errexit-and-or-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for commands before `&&` and `||` in AND-OR lists |

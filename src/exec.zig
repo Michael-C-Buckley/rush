@@ -2497,7 +2497,7 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = redirections,
         };
-        const redirected_stdin = try self.applyInputRedirections(wrapper, "", options, &owned_stdin, &stdin_file);
+        const redirected_stdin = self.applyInputRedirections(wrapper, "", options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(wrapper, err, false);
         if (stdin_file) |file| {
             child.script_stdin = null;
             child.script_stdin_offset = 0;
@@ -2544,7 +2544,7 @@ pub const Executor = struct {
             .argv = &.{},
             .redirections = redirections,
         };
-        const redirected_stdin = try self.applyInputRedirections(wrapper, "", options, &owned_stdin, &stdin_file);
+        const redirected_stdin = self.applyInputRedirections(wrapper, "", options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(wrapper, err, false);
         if (stdin_file) |file| {
             self.script_stdin = null;
             self.script_stdin_offset = 0;
@@ -3181,7 +3181,7 @@ pub const Executor = struct {
             self.script_stdin_offset = prior_stdin_offset;
             self.script_stdin_file = prior_stdin_file;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file);
+        const redirected_stdin = self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file) catch |err| return self.compoundRedirectionErrorResult(command.span, command.redirections, err, false);
         if (stdin_file) |file| {
             self.script_stdin = null;
             self.script_stdin_offset = 0;
@@ -3245,7 +3245,7 @@ pub const Executor = struct {
             self.script_stdin_offset = prior_stdin_offset;
             self.script_stdin_file = prior_stdin_file;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file);
+        const redirected_stdin = self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file) catch |err| return self.compoundRedirectionErrorResult(command.span, command.redirections, err, false);
         if (stdin_file) |file| {
             self.script_stdin = null;
             self.script_stdin_offset = 0;
@@ -3324,7 +3324,7 @@ pub const Executor = struct {
             self.script_stdin_offset = prior_stdin_offset;
             self.script_stdin_file = prior_stdin_file;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file);
+        const redirected_stdin = self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file) catch |err| return self.compoundRedirectionErrorResult(command.span, command.redirections, err, false);
         if (stdin_file) |file| {
             self.script_stdin = null;
             self.script_stdin_offset = 0;
@@ -3472,7 +3472,7 @@ pub const Executor = struct {
             self.script_stdin_offset = prior_stdin_offset;
             self.script_stdin_file = prior_stdin_file;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file);
+        const redirected_stdin = self.applyCompoundInputRedirections(command.span, command.redirections, options, &owned_stdin, &stdin_file) catch |err| return self.compoundRedirectionErrorResult(command.span, command.redirections, err, false);
         if (stdin_file) |file| {
             self.script_stdin = null;
             self.script_stdin_offset = 0;
@@ -3649,7 +3649,10 @@ pub const Executor = struct {
         const expanded = try self.expandSimpleCommand(command, options);
         defer self.freeExpandedCommand(expanded);
         if (expanded.argv.len == 0) return emptyResult(self.allocator, 0);
-        return self.executeExternalAsync(expanded, options.io.?, options);
+        return self.executeExternalAsync(expanded, options.io.?, options) catch |err| switch (err) {
+            error.BadFileDescriptor, error.FileNotFound, error.IsDir, error.PathAlreadyExists => return self.asyncRedirectionErrorResult(expanded, err),
+            else => return err,
+        };
     }
 
     fn executeAsyncPipelineFallback(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) !CommandResult {
@@ -4013,10 +4016,15 @@ pub const Executor = struct {
         }
         for (threads.items) |thread| thread.join();
         for (contexts.items) |context| {
-            defer self.allocator.destroy(context);
-            if (context.err) |err| return err;
+            if (context.err) |err| {
+                for (contexts.items) |owned_context| self.allocator.destroy(owned_context);
+                contexts.clearRetainingCapacity();
+                return err;
+            }
             statuses[context.stage_index] = context.status;
         }
+        for (contexts.items) |context| self.allocator.destroy(context);
+        contexts.clearRetainingCapacity();
 
         var stderr_output = try multi_reader.toOwnedSlice(1);
         errdefer self.allocator.free(stderr_output);
@@ -4103,6 +4111,17 @@ pub const Executor = struct {
             else => return null,
         };
         return try std.fmt.allocPrint(self.allocator, "{s}: {s}\n", .{ name, message });
+    }
+
+    fn asyncRedirectionErrorResult(self: *Executor, command: ir.SimpleCommand, err: anyerror) !CommandResult {
+        const diagnostic = (try self.redirectionFailureDiagnostic(command, err)) orelse return err;
+        errdefer self.allocator.free(diagnostic);
+        return .{
+            .allocator = self.allocator,
+            .status = 0,
+            .stdout = try self.allocator.alloc(u8, 0),
+            .stderr = diagnostic,
+        };
     }
 
     fn pipelineSpawnFailureResult(self: *Executor, io: std.Io, name: []const u8, children: []std.process.Child, threads: *std.ArrayList(std.Thread), contexts: []const *BuiltinPipelineContext) !CommandResult {
@@ -4506,8 +4525,13 @@ pub const Executor = struct {
 
     fn runBuiltinPipelineStage(context: *BuiltinPipelineContext) void {
         runBuiltinPipelineStageFallible(context) catch |err| {
-            context.err = err;
-            context.status = 2;
+            switch (err) {
+                error.BrokenPipe, error.WriteFailed => context.status = 1,
+                else => {
+                    context.err = err;
+                    context.status = 2;
+                },
+            }
         };
     }
 
@@ -4774,12 +4798,22 @@ pub const Executor = struct {
                 synthetic_failure = true;
                 break :blk try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found");
             },
-            error.BadFileDescriptor => return self.redirectionErrorResult(expanded, err, false),
+            error.BadFileDescriptor, error.FileNotFound, error.IsDir, error.PathAlreadyExists => return self.redirectionErrorResult(expanded, err, false),
             else => return err,
         };
         errdefer external_result.deinit();
         if (synthetic_failure) return try self.applyOutputRedirections(expanded, external_result, options, false);
         return try self.applyExternalPostRedirections(expanded, external_result, options);
+    }
+
+    fn compoundRedirectionErrorResult(self: *Executor, span: parser.Span, redirections: []ir.Redirection, err: anyerror, special_builtin: bool) !CommandResult {
+        const wrapper: ir.SimpleCommand = .{
+            .span = span,
+            .assignments = &.{},
+            .argv = &.{},
+            .redirections = redirections,
+        };
+        return self.redirectionErrorResult(wrapper, err, special_builtin);
     }
 
     fn redirectionErrorResult(self: *Executor, command: ir.SimpleCommand, err: anyerror, special_builtin: bool) !CommandResult {
@@ -4882,7 +4916,7 @@ pub const Executor = struct {
             self.script_stdin_offset = prior_stdin_offset;
             self.script_stdin_file = prior_stdin_file;
         }
-        const call_stdin = try self.applyInputRedirections(command, "", options, &owned_stdin, &stdin_file);
+        const call_stdin = self.applyInputRedirections(command, "", options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(command, err, false);
         if (stdin_file) |file| {
             if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
             self.script_stdin = null;
@@ -4894,7 +4928,7 @@ pub const Executor = struct {
             self.script_stdin_offset = 0;
             self.script_stdin_file = null;
         }
-        const redirected_stdin = try self.applyCompoundInputRedirections(command.span, function_value.redirections, options, &owned_stdin, &stdin_file);
+        const redirected_stdin = self.applyCompoundInputRedirections(command.span, function_value.redirections, options, &owned_stdin, &stdin_file) catch |err| return self.compoundRedirectionErrorResult(command.span, function_value.redirections, err, false);
         if (stdin_file) |file| {
             if (pipeline_stdin_guard == null) pipeline_stdin_guard = suspendPipelineStageStdin();
             self.script_stdin = null;

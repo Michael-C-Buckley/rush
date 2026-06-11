@@ -1,0 +1,6 @@
+f() { echo body; }
+f < missing; echo call=$?
+g() { cat < missing; echo body=$?; }
+g; echo after=$?
+h() { echo definition; } < missing
+h; echo definition=$?
