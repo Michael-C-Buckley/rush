@@ -20,8 +20,8 @@ Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
 - `scripts/check-compliance-manifest.sh`: `418` rows
-- `scripts/check-posix-corpus.sh`: `427` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `244` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-posix-corpus.sh`: `428` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `245` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
 - `scripts/check-system-shell-corpus.sh`: `305` cases, `610` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
@@ -155,9 +155,10 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 - Arithmetic expansion baseline for integer expressions:
   - `+`, `-`, `*`, `/`, `%`, parentheses, unary `+`/`-`
   - expression text is preprocessed for nested parameter expansion, command substitution, and arithmetic expansion results before arithmetic evaluation in the dash/bash/yash-compatible cases covered by corpus tests
+  - Rush's POSIX arithmetic policy is signed 64-bit: constants and variable values must fit the signed range, signed overflow reports `arithmetic overflow`, and bitwise/shift operators expose two's-complement signed results with masked shift counts
   - shell variable values used by identifier are accepted when they form POSIX integer constants; unset or null variables evaluate as zero, while nonnumeric values, expression-valued strings such as `1 + 2`, and literal nested substitution text in variable values produce arithmetic diagnostics instead of being recursively evaluated
   - arithmetic-expression backslash processing follows the POSIX double-quote-like subset in representative cases: backslash-newline is removed, escaped `$` remains literal instead of starting a nested expansion, legacy backquotes still perform command substitution, unmatched raw legacy backquotes after escaped literal backquotes are classified as backquote substitution syntax errors, and quote bytes that remain in the arithmetic expression produce invalid-expression diagnostics rather than being quote-removed
-  - representative arithmetic diagnostics cover invalid operators, missing operands, malformed parentheses, malformed conditional and comma forms, division and remainder by zero, and assignment-word expansion consequences
+  - representative arithmetic diagnostics cover invalid operators, missing operands, malformed parentheses, malformed conditional and comma forms, signed overflow, division and remainder by zero, and assignment-word expansion consequences
 - Command substitution with `$()` including nested parsing and executor-backed execution.
 - Legacy backquote command substitution, including escaped nested backquotes and backslash-newline line continuation in representative cases.
 - Command substitution inside double quotes, preserving the quoted field.
@@ -383,7 +384,7 @@ Implemented or partially implemented:
 - Nounset produces a baseline unset-parameter diagnostic and exits non-interactive execution.
 - `${parameter:?word}` expands the diagnostic word, reports the parameter name, and exits non-interactive execution.
 - `${parameter:=word}` / `${parameter=word}` report a parameter diagnostic and exit non-interactive execution when they would need to assign to a positional or special parameter; set/non-null positional parameters continue to expand normally, including braced multi-digit positionals.
-- Expansion failures in redirection target words, assignment words, for-loop word lists, case subjects/patterns, and invalid arithmetic expansion exit non-interactive execution in current-shell contexts.
+- Expansion failures in redirection target words, assignment words, for-loop word lists, case subjects/patterns, signed arithmetic overflow, and invalid arithmetic expansion exit non-interactive execution in current-shell contexts.
 - Expansion failures inside command substitutions exit the substitution subshell, surface diagnostics to the invoking shell, and preserve assignment-only command-substitution status without exiting the invoking shell.
 - Interactive expansion failures abort the current command without setting `pending_exit`, allowing the prompt loop to continue.
 - Special builtin expansion, redirection, invalid option/operand, and utility-semantic failures now stop non-interactive execution for the audited POSIX special-builtin set.

@@ -1089,16 +1089,14 @@ const ArithmeticParser = struct {
                 const rhs = try self.parseAssignment();
                 const value = switch (op) {
                     .assign => rhs,
-                    .add_assign => try self.lookupNumber(name) + rhs,
-                    .sub_assign => try self.lookupNumber(name) - rhs,
-                    .mul_assign => try self.lookupNumber(name) * rhs,
+                    .add_assign => try checkedAdd(try self.lookupNumber(name), rhs),
+                    .sub_assign => try checkedSub(try self.lookupNumber(name), rhs),
+                    .mul_assign => try checkedMul(try self.lookupNumber(name), rhs),
                     .div_assign => blk: {
-                        if (rhs == 0) return error.DivisionByZero;
-                        break :blk @divTrunc(try self.lookupNumber(name), rhs);
+                        break :blk try checkedDiv(try self.lookupNumber(name), rhs);
                     },
                     .mod_assign => blk: {
-                        if (rhs == 0) return error.DivisionByZero;
-                        break :blk @rem(try self.lookupNumber(name), rhs);
+                        break :blk try checkedRem(try self.lookupNumber(name), rhs);
                     },
                 };
                 try self.setNumber(name, value);
@@ -1234,9 +1232,9 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.eat('+')) {
-                value += try self.parseTerm();
+                value = try checkedAdd(value, try self.parseTerm());
             } else if (self.eat('-')) {
-                value -= try self.parseTerm();
+                value = try checkedSub(value, try self.parseTerm());
             } else return value;
         }
     }
@@ -1246,15 +1244,11 @@ const ArithmeticParser = struct {
         while (true) {
             self.skipSpace();
             if (self.eat('*')) {
-                value *= try self.parseFactor();
+                value = try checkedMul(value, try self.parseFactor());
             } else if (self.eat('/')) {
-                const rhs = try self.parseFactor();
-                if (rhs == 0) return error.DivisionByZero;
-                value = @divTrunc(value, rhs);
+                value = try checkedDiv(value, try self.parseFactor());
             } else if (self.eat('%')) {
-                const rhs = try self.parseFactor();
-                if (rhs == 0) return error.DivisionByZero;
-                value = @rem(value, rhs);
+                value = try checkedRem(value, try self.parseFactor());
             } else return value;
         }
     }
@@ -1262,7 +1256,10 @@ const ArithmeticParser = struct {
     fn parseFactor(self: *ArithmeticParser) anyerror!i64 {
         self.skipSpace();
         if (self.eat('+')) return self.parseFactor();
-        if (self.eat('-')) return -(try self.parseFactor());
+        if (self.eat('-')) {
+            if (try self.parseNegativeNumber()) |value| return value;
+            return checkedNeg(try self.parseFactor());
+        }
         if (self.eat('!')) return if ((try self.parseFactor()) == 0) 1 else 0;
         if (self.eat('~')) return ~(try self.parseFactor());
         if (self.eat('(')) {
@@ -1297,14 +1294,16 @@ const ArithmeticParser = struct {
     fn parseNumber(self: *ArithmeticParser) anyerror!i64 {
         self.skipSpace();
         const start = self.index;
-        if (self.startsWith("0x") or self.startsWith("0X")) {
-            self.index += 2;
-            while (self.index < self.input.len and std.ascii.isHex(self.input[self.index])) : (self.index += 1) {}
-        } else {
-            while (self.index < self.input.len and std.ascii.isDigit(self.input[self.index])) : (self.index += 1) {}
-        }
-        if (start == self.index) return error.InvalidArithmetic;
+        self.index = numberEnd(self.input, self.index) orelse return error.InvalidArithmetic;
         return parseIntegerConstant(self.input[start..self.index]);
+    }
+
+    fn parseNegativeNumber(self: *ArithmeticParser) anyerror!?i64 {
+        self.skipSpace();
+        const start = self.index;
+        const end = numberEnd(self.input, start) orelse return null;
+        self.index = end;
+        return try parseSignedIntegerConstant(self.input[start..end], true);
     }
 
     fn skipSpace(self: *ArithmeticParser) void {
@@ -1330,8 +1329,60 @@ const ArithmeticParser = struct {
     }
 };
 
+fn checkedAdd(lhs: i64, rhs: i64) error{Overflow}!i64 {
+    const result = @addWithOverflow(lhs, rhs);
+    if (result[1] != 0) return error.Overflow;
+    return result[0];
+}
+
+fn checkedSub(lhs: i64, rhs: i64) error{Overflow}!i64 {
+    const result = @subWithOverflow(lhs, rhs);
+    if (result[1] != 0) return error.Overflow;
+    return result[0];
+}
+
+fn checkedMul(lhs: i64, rhs: i64) error{Overflow}!i64 {
+    const result = @mulWithOverflow(lhs, rhs);
+    if (result[1] != 0) return error.Overflow;
+    return result[0];
+}
+
+fn checkedNeg(value: i64) error{Overflow}!i64 {
+    return checkedSub(0, value);
+}
+
+fn checkedDiv(lhs: i64, rhs: i64) error{ DivisionByZero, Overflow }!i64 {
+    if (rhs == 0) return error.DivisionByZero;
+    if (lhs == std.math.minInt(i64) and rhs == -1) return error.Overflow;
+    return @divTrunc(lhs, rhs);
+}
+
+fn checkedRem(lhs: i64, rhs: i64) error{ DivisionByZero, Overflow }!i64 {
+    if (rhs == 0) return error.DivisionByZero;
+    if (lhs == std.math.minInt(i64) and rhs == -1) return error.Overflow;
+    return @rem(lhs, rhs);
+}
+
 fn shiftAmount(value: i64) u6 {
-    return @intCast(@as(u64, @intCast(if (value < 0) -value else value)) & 63);
+    const magnitude: u64 = if (value >= 0) @intCast(value) else magnitudeTwosComplement(value);
+    return @intCast(magnitude & 63);
+}
+
+fn magnitudeTwosComplement(value: i64) u64 {
+    const bits: u64 = @bitCast(value);
+    return @subWithOverflow(@as(u64, 0), bits)[0];
+}
+
+fn numberEnd(input: []const u8, start: usize) ?usize {
+    var end = start;
+    if (end + 2 <= input.len and (std.mem.eql(u8, input[end .. end + 2], "0x") or std.mem.eql(u8, input[end .. end + 2], "0X"))) {
+        end += 2;
+        while (end < input.len and std.ascii.isHex(input[end])) : (end += 1) {}
+        return end;
+    }
+    while (end < input.len and std.ascii.isDigit(input[end])) : (end += 1) {}
+    if (end == start) return null;
+    return end;
 }
 
 /// Parse a POSIX arithmetic integer constant as in C: decimal, octal with a
@@ -1343,18 +1394,29 @@ fn parseIntegerConstant(text: []const u8) error{ InvalidArithmetic, Overflow }!i
         negative = rest[0] == '-';
         rest = rest[1..];
     }
+    return parseSignedIntegerConstant(rest, negative);
+}
+
+fn parseSignedIntegerConstant(rest: []const u8, negative: bool) error{ InvalidArithmetic, Overflow }!i64 {
     if (rest.len == 0) return error.InvalidArithmetic;
     const magnitude = blk: {
         if (rest.len > 2 and (std.mem.startsWith(u8, rest, "0x") or std.mem.startsWith(u8, rest, "0X")) and std.ascii.isHex(rest[2])) {
-            break :blk std.fmt.parseInt(i64, rest[2..], 16);
+            break :blk std.fmt.parseInt(u64, rest[2..], 16);
         }
-        if (rest.len > 1 and rest[0] == '0') break :blk std.fmt.parseInt(i64, rest, 8);
-        break :blk std.fmt.parseInt(i64, rest, 10);
+        if (rest.len > 1 and rest[0] == '0') break :blk std.fmt.parseInt(u64, rest, 8);
+        break :blk std.fmt.parseInt(u64, rest, 10);
     } catch |err| switch (err) {
         error.Overflow => return error.Overflow,
         error.InvalidCharacter => return error.InvalidArithmetic,
     };
-    return if (negative) -magnitude else magnitude;
+    const max_positive: u64 = @intCast(std.math.maxInt(i64));
+    if (negative) {
+        if (magnitude == max_positive + 1) return std.math.minInt(i64);
+        if (magnitude > max_positive) return error.Overflow;
+        return -@as(i64, @intCast(magnitude));
+    }
+    if (magnitude > max_positive) return error.Overflow;
+    return @intCast(magnitude);
 }
 
 pub fn evalArithmetic(input: []const u8, env: EnvLookup, env_set: EnvSet) anyerror!i64 {
@@ -2179,6 +2241,7 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "HOME")) return "/home/rush";
     if (std.mem.eql(u8, name, "USER")) return "rush-user";
     if (std.mem.eql(u8, name, "USER_NUM")) return "3";
+    if (std.mem.eql(u8, name, "MIN_INT")) return "-9223372036854775808";
     if (std.mem.eql(u8, name, "OCTAL_NUM")) return "010";
     if (std.mem.eql(u8, name, "HEX_NUM")) return "0x2f";
     if (std.mem.eql(u8, name, "NEGATIVE_OCTAL_NUM")) return "-010";
@@ -2840,12 +2903,19 @@ test "arithmetic expansion evaluates integer expressions" {
     try std.testing.expectEqual(@as(i64, -4), try evalArithmetic("-8 / 2", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 5), try evalArithmetic("USER_NUM + 2", test_env, .{}));
     try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("UNKNOWN + EMPTY", test_env, .{}));
+    try std.testing.expectEqual(std.math.maxInt(i64), try evalArithmetic("9223372036854775807", .{}, .{}));
+    try std.testing.expectEqual(std.math.minInt(i64), try evalArithmetic("-9223372036854775808", .{}, .{}));
+    try std.testing.expectEqual(std.math.minInt(i64), try evalArithmetic("-9223372036854775807 - 1", .{}, .{}));
+    try std.testing.expectEqual(std.math.maxInt(i64), try evalArithmetic("0x7fffffffffffffff", .{}, .{}));
+    try std.testing.expectEqual(std.math.minInt(i64), try evalArithmetic("MIN_INT", test_env, .{}));
     try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("3 > 2", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("3 == 2", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 || 0", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("1 && 0", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 5), try evalArithmetic("(5 & 3) | 4", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 16), try evalArithmetic("1 << 4", .{}, .{}));
+    try std.testing.expectEqual(std.math.minInt(i64), try evalArithmetic("1 << 63", .{}, .{}));
+    try std.testing.expectEqual(@as(i64, -1), try evalArithmetic("-1 >> 1", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("0 ? 1 : 7", .{}, .{}));
     try std.testing.expectEqual(@as(i64, 9), try evalArithmetic("1, 2, 9", .{}, .{}));
     try std.testing.expectEqual(@as(i64, -6), try evalArithmetic("~5", .{}, .{}));
@@ -2943,6 +3013,17 @@ test "arithmetic expansion records diagnostics instead of leaking parser errors"
     try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((1 % 0))", .{ .arithmetic_error = &arithmetic_error }));
     try std.testing.expectEqualStrings("$((1 % 0))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("division by zero", arithmetic_error.message);
+
+    try std.testing.expectError(error.Overflow, evalArithmetic("9223372036854775807 + 1", .{}, .{}));
+    try std.testing.expectError(error.Overflow, evalArithmetic("-9223372036854775808 - 1", .{}, .{}));
+    try std.testing.expectError(error.Overflow, evalArithmetic("3037000500 * 3037000500", .{}, .{}));
+    try std.testing.expectError(error.Overflow, evalArithmetic("-(-9223372036854775808)", .{}, .{}));
+    try std.testing.expectError(error.Overflow, evalArithmetic("(-9223372036854775808) / -1", .{}, .{}));
+    try std.testing.expectError(error.Overflow, evalArithmetic("0x8000000000000000", .{}, .{}));
+
+    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((9223372036854775807 + 1))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectEqualStrings("$((9223372036854775807 + 1))", arithmetic_error.expression);
+    try std.testing.expectEqualStrings("arithmetic overflow", arithmetic_error.message);
 }
 
 test "word part parser records arithmetic expansion regions" {
