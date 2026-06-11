@@ -200,7 +200,7 @@ pub const ReadLineOptions = struct {
     prompt: []const u8,
     prompt_refresh_interval_ms: ?u64 = null,
     hook_context: ?*anyopaque = null,
-    run_hooks: ?*const fn (*anyopaque, std.Io) anyerror!void = null,
+    run_hooks: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror!HookResult = null,
     next_hook_interval_ms: ?*const fn (*anyopaque, std.Io) anyerror!?u64 = null,
     prompt_context: ?*anyopaque = null,
     refresh_prompt: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror![]const u8 = null,
@@ -212,6 +212,11 @@ pub const ReadLineOptions = struct {
     expand_abbreviation: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize, bool) anyerror!?completion.Edit = null,
     diagnostic_context: ?*anyopaque = null,
     diagnose: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8) anyerror!?line_editor.DiagnosticRender = null,
+};
+
+pub const HookResult = struct {
+    output: []const u8,
+    refresh_prompt: bool = true,
 };
 
 pub const ReadLineResult = union(enum) {
@@ -566,9 +571,15 @@ pub const TerminalSession = struct {
             var loop_events: [8]event_loop.Event = undefined;
             const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms, self.completion.debounceWaitMs(self.io)));
             if (ready.len == 0 and next_hook_interval_ms != null and promptRefreshWaitMs(self.io, next_hook_interval_ms) == 0) {
-                if (options.run_hooks != null and options.hook_context != null) try options.run_hooks.?(options.hook_context.?, self.io);
-                render_needed = true;
-                session.invalidatePrompt();
+                if (options.run_hooks != null and options.hook_context != null) {
+                    const hook_result = try options.run_hooks.?(options.hook_context.?, self.allocator, self.io);
+                    defer self.allocator.free(hook_result.output);
+                    if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
+                    if (hook_result.refresh_prompt or hook_result.output.len != 0) {
+                        render_needed = true;
+                        session.invalidatePrompt();
+                    }
+                }
                 next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
             }
             if (ready.len == 0 and next_prompt_refresh_ms != null and promptRefreshWaitMs(self.io, next_prompt_refresh_ms) == 0) {
@@ -710,6 +721,14 @@ pub const TerminalSession = struct {
         const handoff = try self.renderer.submittedHandoff(self.allocator);
         defer self.allocator.free(handoff);
         try writeTtyAll(&self.tty, handoff);
+    }
+
+    fn writeInterruptOutput(self: *TerminalSession, output: []const u8) !void {
+        const prefix = try self.renderer.interruptOutputPrefix(self.allocator);
+        defer self.allocator.free(prefix);
+        try writeTtyAll(&self.tty, prefix);
+        self.renderer.reset(self.allocator);
+        try writeTtyText(&self.tty, output);
     }
 
     fn processTtyInput(self: *TerminalSession) !void {
@@ -882,6 +901,15 @@ fn appendOscText(writer: *std.Io.Writer, text: []const u8) !void {
 fn writeTtyAll(tty: *vaxis.tty.PosixTty, bytes: []const u8) !void {
     try tty.writer().writeAll(bytes);
     try tty.writer().flush();
+}
+
+fn writeTtyText(tty: *vaxis.tty.PosixTty, bytes: []const u8) !void {
+    var writer = tty.writer();
+    for (bytes) |byte| {
+        if (byte == '\n') try writer.writeByte('\r');
+        try writer.writeByte(byte);
+    }
+    try writer.flush();
 }
 
 pub const Pipe = struct {

@@ -34,6 +34,7 @@ const embedded_config = @embedFile("default_config");
 const embedded_config_path = "embedded:config.rush";
 const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 const ignoreeof_message = "Use \"exit\" to leave the shell.\r\n";
+const immediate_notify_poll_ms = 50;
 
 const InvocationKind = enum { command_string, script_file, standard_input };
 
@@ -761,14 +762,23 @@ fn requestInteractivePromptRepaint(context: *anyopaque) void {
     terminal.requestPromptRedraw();
 }
 
-fn runInteractiveIntervalHooks(context: *anyopaque, io: std.Io) !void {
+fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor_driver.HookResult {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    const refresh_prompt = if (completion_context.executor.promptIntervalWaitMs(io)) |wait_ms| wait_ms == 0 else false;
     try completion_context.executor.runDuePromptIntervals(io);
+    if (!completion_context.executor.shell_options.notify) return .{ .output = try allocator.alloc(u8, 0), .refresh_prompt = refresh_prompt };
+    const notifications = try completion_context.executor.drainJobNotifications();
+    defer completion_context.executor.allocator.free(notifications);
+    return .{ .output = try allocator.dupe(u8, notifications), .refresh_prompt = refresh_prompt };
 }
 
 fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    return completion_context.executor.promptIntervalWaitMs(io);
+    var wait_ms = completion_context.executor.promptIntervalWaitMs(io);
+    if (completion_context.executor.wantsImmediateJobNotificationPoll()) {
+        wait_ms = if (wait_ms) |current| @min(current, immediate_notify_poll_ms) else immediate_notify_poll_ms;
+    }
+    return wait_ms;
 }
 
 const CompletionScriptLoader = struct {
@@ -2462,6 +2472,40 @@ test "runReplInput stops when exit builtin requests shell exit" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 7), result.status);
     try std.testing.expectEqualStrings("$ before\n$ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "interactive notify schedules editor job notification polling" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    var context: InteractiveCompletionContext = .{
+        .executor = &executor,
+        .history = &history,
+        .cache = &cache,
+        .loader = &loader,
+        .io = std.testing.io,
+    };
+
+    try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 1,
+        .pid = 999_999,
+        .command = try std.testing.allocator.dupe(u8, "sleep 1"),
+        .child = undefined,
+    });
+    try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+
+    executor.shell_options.notify = true;
+    try std.testing.expectEqual(@as(?u64, immediate_notify_poll_ms), try nextInteractiveIntervalMs(&context, std.testing.io));
+
+    executor.background_jobs.items[0].state = .done;
+    executor.background_jobs.items[0].notified_state = .done;
+    try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
 }
 
 test "command string operands set the command name and positional parameters" {

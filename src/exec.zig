@@ -2774,6 +2774,15 @@ pub const Executor = struct {
         return output.toOwnedSlice(self.allocator);
     }
 
+    pub fn wantsImmediateJobNotificationPoll(self: Executor) bool {
+        if (!self.shell_options.notify) return false;
+        if (self.pending_job_notifications.items.len != 0) return true;
+        for (self.background_jobs.items) |job| {
+            if (job.state != .done or job.notified_state != job.state) return true;
+        }
+        return false;
+    }
+
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
         var output: std.ArrayList(u8) = .empty;
         errdefer output.deinit(self.allocator);
@@ -12637,6 +12646,30 @@ test "executor drains interactive stopped and done job notifications once" {
     const done = try executor.drainJobNotifications();
     defer std.testing.allocator.free(done);
     try std.testing.expectEqualStrings("[1] Done sleep 1\n", done);
+}
+
+test "executor polls immediate job notifications only for notify jobs" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 1,
+        .pid = 999_999,
+        .command = try std.testing.allocator.dupe(u8, "sleep 1"),
+        .child = undefined,
+    });
+
+    try std.testing.expect(!executor.wantsImmediateJobNotificationPoll());
+    executor.shell_options.notify = true;
+    try std.testing.expect(executor.wantsImmediateJobNotificationPoll());
+
+    executor.background_jobs.items[0].state = .done;
+    try std.testing.expect(executor.wantsImmediateJobNotificationPoll());
+    try executor.queueJobNotification(&executor.background_jobs.items[0]);
+    const done = try executor.drainJobNotifications();
+    defer std.testing.allocator.free(done);
+    try std.testing.expectEqualStrings("[1] Done sleep 1\n", done);
+    try std.testing.expect(!executor.wantsImmediateJobNotificationPoll());
 }
 
 test "executor restores saved pty terminal modes before continuing stopped job" {

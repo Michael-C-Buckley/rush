@@ -1027,6 +1027,25 @@ pub const FrameRenderer = struct {
         return output.toOwnedSlice(allocator);
     }
 
+    pub fn interruptOutputPrefix(self: FrameRenderer, allocator: std.mem.Allocator) ![]const u8 {
+        const previous = self.previous orelse return allocator.dupe(u8, "");
+
+        var output: std.ArrayList(u8) = .empty;
+        errdefer output.deinit(allocator);
+        var current_row = previous.cursor_row;
+        for (0..previous.lines.len) |row| {
+            const move = try cursorMoveFrom(current_row, row, 0, allocator);
+            defer allocator.free(move);
+            try output.appendSlice(allocator, move);
+            try output.appendSlice(allocator, "\x1b[2K");
+            current_row = row;
+        }
+        const restore = try cursorMoveFrom(current_row, 0, 0, allocator);
+        defer allocator.free(restore);
+        try output.appendSlice(allocator, restore);
+        return output.toOwnedSlice(allocator);
+    }
+
     pub fn submittedHandoff(self: FrameRenderer, allocator: std.mem.Allocator) ![]const u8 {
         const previous = self.previous orelse return allocator.dupe(u8, "");
         const input_line_count = @min(@max(previous.input_line_count, 1), previous.lines.len);
@@ -2863,6 +2882,28 @@ test "frame renderer diffs changed input line" {
     try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[2K$ ab") != null);
     try std.testing.expect(std.mem.indexOf(u8, second_output, "\r\x1b[0C") == null);
     try std.testing.expect(std.mem.indexOf(u8, second_output, "\r\x1b[4C") != null);
+}
+
+test "frame renderer clears current frame before interrupt output" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    var frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
+    defer frame.deinit(std.testing.allocator);
+    const rendered = try renderer.render(std.testing.allocator, frame, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+
+    const prefix = try renderer.interruptOutputPrefix(std.testing.allocator);
+    defer std.testing.allocator.free(prefix);
+    try std.testing.expectEqual(frame.lines.len, std.mem.count(u8, prefix, "\x1b[2K"));
+    try std.testing.expect(std.mem.endsWith(u8, prefix, "\r"));
 }
 
 test "frame renderer redraws when frame adds lines" {

@@ -294,7 +294,7 @@ Implemented or partially implemented:
 - `read` supports simple field assignment and `-r` acceptance but not full POSIX options/IFS/backslash behavior.
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
 - `test` baseline lacks many operators and edge cases.
-- `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`-b`, `-m`, `vi`).
+- `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `notify` polling for background job status while the editor is active, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (`-m`, `vi`).
 - `env` does not support arguments/options.
 - `times` currently emits a deterministic baseline instead of real process usage.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
@@ -333,9 +333,8 @@ Implemented or partially implemented:
 
 - Errexit is baseline-only and lacks many POSIX corner cases around compound commands, command substitutions, and AND-OR/pipeline contexts.
 - Xtrace/verbose exact output ordering is baseline-only.
-- Unsupported POSIX options remain:
-  - `-b` notification timing for job control
-  - `-m` / `set -o monitor` job-control mode toggling
+- Unsupported POSIX option behavior remains:
+  - `-m` / `set -o monitor` process-group semantics beyond option state
   - `set -o vi` command-line editing mode
 
 ## 8. Interactive behavior and job control
