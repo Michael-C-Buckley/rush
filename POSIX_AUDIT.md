@@ -294,7 +294,7 @@ Implemented or partially implemented:
 - `read` supports simple field assignment and `-r` acceptance but not full POSIX options/IFS/backslash behavior.
 - `printf` supports common conversions/escapes, but not full POSIX format grammar.
 - `test` baseline lacks many operators and edge cases.
-- `set` has key POSIX options and positional handling, but not full option surface (`-a`, `-b`, `-m`, `-n`, etc.).
+- `set` has key POSIX options and positional handling, but not full option surface (`-b`, `-m`, `-h`, etc.).
 - `env` does not support arguments/options.
 - `times` currently emits a deterministic baseline instead of real process usage.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
@@ -317,6 +317,7 @@ Implemented or partially implemented:
   - `set -C` / `set +C` noclobber
   - `set -u` / `set +u` nounset
   - `set -e` / `set +e` errexit baseline
+  - `set -n` / `set -o noexec` noexec syntax-check behavior
   - `set -x` / `set +x` xtrace baseline
   - `set -v` / `set +v` verbose baseline
   - `set -o name` / `set +o name` for supported options

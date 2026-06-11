@@ -94,6 +94,7 @@ pub const ShellOptions = struct {
     pipefail: bool = false,
     noglob: bool = false,
     noclobber: bool = false,
+    noexec: bool = false,
     nounset: bool = false,
     errexit: bool = false,
     xtrace: bool = false,
@@ -101,7 +102,7 @@ pub const ShellOptions = struct {
     allexport: bool = false,
 };
 
-const shell_option_flags_max = 7;
+const shell_option_flags_max = 8;
 
 fn shellOptionFlags(options: ShellOptions, buffer: *[shell_option_flags_max]u8) []const u8 {
     var len: usize = 0;
@@ -119,6 +120,10 @@ fn shellOptionFlags(options: ShellOptions, buffer: *[shell_option_flags_max]u8) 
     }
     if (options.noglob) {
         buffer[len] = 'f';
+        len += 1;
+    }
+    if (options.noexec) {
+        buffer[len] = 'n';
         len += 1;
     }
     if (options.nounset) {
@@ -140,7 +145,7 @@ pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool 
     if (spelling.len < 2) return false;
     if (spelling[0] != '-' and spelling[0] != '+') return false;
     for (spelling[1..]) |option| switch (option) {
-        'a', 'e', 'f', 'u', 'x', 'v', 'C' => {},
+        'a', 'e', 'f', 'n', 'u', 'x', 'v', 'C' => {},
         else => return false,
     };
 
@@ -149,6 +154,7 @@ pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool 
         'a' => options.allexport = enabled,
         'e' => options.errexit = enabled,
         'f' => options.noglob = enabled,
+        'n' => options.noexec = enabled,
         'u' => options.nounset = enabled,
         'x' => options.xtrace = enabled,
         'v' => options.verbose = enabled,
@@ -173,6 +179,10 @@ pub fn applyShellOptionName(options: *ShellOptions, name: []const u8, enabled: b
     }
     if (std.mem.eql(u8, name, "noclobber")) {
         options.noclobber = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "noexec")) {
+        options.noexec = enabled;
         return true;
     }
     if (std.mem.eql(u8, name, "nounset")) {
@@ -431,8 +441,8 @@ const builtin_names = [_][]const u8{
     "[",
 };
 
-const set_options = [_][]const u8{ "-a", "+a", "-e", "+e", "-f", "+f", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
-const set_option_names = [_][]const u8{ "allexport", "errexit", "noglob", "noclobber", "nounset", "pipefail", "verbose", "xtrace" };
+const set_options = [_][]const u8{ "-a", "+a", "-e", "+e", "-f", "+f", "-n", "+n", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
+const set_option_names = [_][]const u8{ "allexport", "errexit", "noglob", "noclobber", "noexec", "nounset", "pipefail", "verbose", "xtrace" };
 const signal_names = [_][]const u8{ "EXIT", "HUP", "INT", "QUIT", "ILL", "TRAP", "ABRT", "BUS", "FPE", "KILL", "USR1", "SEGV", "USR2", "PIPE", "ALRM", "TERM", "CHLD", "CONT", "STOP", "TSTP", "TTIN", "TTOU" };
 const test_operators = [_][]const u8{ "!", "(", ")", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-n", "-p", "-r", "-S", "-s", "-t", "-u", "-w", "-x", "-z", "=", "!=", "-eq", "-ne", "-gt", "-ge", "-lt", "-le" };
 
@@ -2256,6 +2266,10 @@ pub const Executor = struct {
         self.queueVariableHook(name);
     }
 
+    fn shouldSkipForNoexec(self: Executor, options: ExecuteOptions) bool {
+        return self.shell_options.noexec and !options.interactive;
+    }
+
     pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) anyerror!CommandResult {
         const root_execution = self.execution_depth == 0;
         self.execution_depth += 1;
@@ -2269,6 +2283,7 @@ pub const Executor = struct {
 
         if (program.statements.len > 0) {
             for (program.statements, 0..) |statement, statement_index| {
+                if (self.shouldSkipForNoexec(options)) break;
                 try checkCanceled(options);
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, statement.span.start);
@@ -2290,6 +2305,7 @@ pub const Executor = struct {
 
         if (program.pipelines.len > 0) {
             for (program.pipelines, 0..) |pipeline, pipeline_index| {
+                if (self.shouldSkipForNoexec(options)) break;
                 try checkCanceled(options);
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, pipeline.span.start);
@@ -2310,6 +2326,7 @@ pub const Executor = struct {
         }
 
         for (program.commands) |command| {
+            if (self.shouldSkipForNoexec(options)) break;
             try checkCanceled(options);
             self.setCurrentLineNumber(program.source, command.span.start);
             var result = self.executeSimpleCommand(command, options) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
@@ -3070,6 +3087,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, body.stdout);
                 try stderr.appendSlice(self.allocator, body.stderr);
                 status = body.status;
+                if (self.shouldSkipForNoexec(execution_options)) break;
                 if (self.pending_exit != null) break;
                 if (self.pending_return != null) break;
                 if (self.consumeLoopControl()) |control| switch (control) {
@@ -3085,6 +3103,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, body.stdout);
                 try stderr.appendSlice(self.allocator, body.stderr);
                 status = body.status;
+                if (self.shouldSkipForNoexec(execution_options)) break;
                 if (self.pending_exit != null) break;
                 if (self.pending_return != null) break;
                 if (self.consumeLoopControl()) |control| switch (control) {
@@ -3143,6 +3162,7 @@ pub const Executor = struct {
             defer condition.deinit();
             try stdout.appendSlice(self.allocator, condition.stdout);
             try stderr.appendSlice(self.allocator, condition.stderr);
+            if (self.shouldSkipForNoexec(condition_options)) break;
 
             const run_body = switch (command.kind) {
                 .while_loop => condition.status == 0,
@@ -3155,6 +3175,7 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
+            if (self.shouldSkipForNoexec(execution_options)) break;
             if (self.pending_exit != null) break;
             if (self.pending_return != null) break;
             if (self.consumeLoopControl()) |control| switch (control) {
@@ -3354,6 +3375,7 @@ pub const Executor = struct {
         if (parsed.diagnostics.len != 0) return error.ParseError;
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         defer program.deinit();
+        if (self.shouldSkipForNoexec(options)) return emptyResult(self.allocator, 0);
         var result = try self.executeProgram(program, options);
         errdefer result.deinit();
         if (self.shell_options.verbose and !options.suppress_errexit) {
@@ -3388,6 +3410,7 @@ pub const Executor = struct {
         errdefer stderr.deinit(self.allocator);
         var last_status: ExitStatus = 0;
         for (program.statements, 0..) |statement, index| {
+            if (self.shouldSkipForNoexec(options)) break;
             const start = statement.span.start;
             const end = if (index + 1 < program.statements.len) program.statements[index + 1].span.start else script.len;
             var result = try self.executeScriptSlice(script[start..end], options);
@@ -3497,6 +3520,7 @@ pub const Executor = struct {
     }
 
     fn executePipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) anyerror!CommandResult {
+        if (self.shouldSkipForNoexec(options)) return emptyResult(self.allocator, 0);
         if (self.canExecuteRealPipeline(program, pipeline, options)) {
             const io = options.io orelse return error.MissingIoForExternalCommand;
             return self.executeRealPipeline(program, pipeline, options, io);
@@ -3507,11 +3531,15 @@ pub const Executor = struct {
         defer self.allocator.free(stdin);
         const statuses = try self.allocator.alloc(ExitStatus, pipeline.command_indexes.len);
         defer self.allocator.free(statuses);
+        var statuses_len: usize = 0;
 
         for (pipeline.command_indexes, 0..) |command_index, index| {
+            if (self.shouldSkipForNoexec(options)) break;
             last.deinit();
             last = try self.executeSimpleCommandWithInput(program.commands[command_index], stdin, options);
             statuses[index] = last.status;
+            statuses_len = index + 1;
+            if (self.shouldSkipForNoexec(options)) break;
 
             if (index + 1 < pipeline.command_indexes.len) {
                 self.allocator.free(stdin);
@@ -3519,7 +3547,7 @@ pub const Executor = struct {
             }
         }
 
-        last.status = self.pipelineStatus(pipeline, statuses);
+        last.status = self.pipelineStatus(pipeline, statuses[0..statuses_len]);
         return last;
     }
 
@@ -9295,7 +9323,6 @@ fn returnUsageError(self: *Executor, message: []const u8) !CommandResult {
 
 fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
-    _ = options;
 
     if (command.argv.len == 1) return printShellVariables(self);
     if (command.argv.len >= 2 and std.mem.eql(u8, command.argv[1].text, "--")) {
@@ -9308,6 +9335,7 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
         return emptyResult(self.allocator, 0);
     }
     if (command.argv.len == 2 and applyShellOptionShort(&self.shell_options, command.argv[1].text)) {
+        if (options.interactive) self.shell_options.noexec = false;
         return emptyResult(self.allocator, 0);
     }
     if (command.argv.len == 2 and std.mem.eql(u8, command.argv[1].text, "-o")) return printShellOptions(self, false);
@@ -9315,6 +9343,7 @@ fn builtinSet(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     if (command.argv.len == 3 and (std.mem.eql(u8, command.argv[1].text, "-o") or std.mem.eql(u8, command.argv[1].text, "+o"))) {
         const enabled = command.argv[1].text[0] == '-';
         if (applyShellOptionName(&self.shell_options, command.argv[2].text, enabled)) {
+            if (options.interactive) self.shell_options.noexec = false;
             return emptyResult(self.allocator, 0);
         }
         return setUsageError(self, "unknown option name");
@@ -9356,9 +9385,9 @@ fn printShellVariables(self: *Executor) !CommandResult {
 
 fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
     const stdout = if (reusable)
-        try std.fmt.allocPrint(self.allocator, "set {s}o allexport\nset {s}o errexit\nset {s}o noclobber\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\nset {s}o verbose\nset {s}o xtrace\n", .{ if (self.shell_options.allexport) "-" else "+", if (self.shell_options.errexit) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+", if (self.shell_options.verbose) "-" else "+", if (self.shell_options.xtrace) "-" else "+" })
+        try std.fmt.allocPrint(self.allocator, "set {s}o allexport\nset {s}o errexit\nset {s}o noclobber\nset {s}o noexec\nset {s}o noglob\nset {s}o nounset\nset {s}o pipefail\nset {s}o verbose\nset {s}o xtrace\n", .{ if (self.shell_options.allexport) "-" else "+", if (self.shell_options.errexit) "-" else "+", if (self.shell_options.noclobber) "-" else "+", if (self.shell_options.noexec) "-" else "+", if (self.shell_options.noglob) "-" else "+", if (self.shell_options.nounset) "-" else "+", if (self.shell_options.pipefail) "-" else "+", if (self.shell_options.verbose) "-" else "+", if (self.shell_options.xtrace) "-" else "+" })
     else
-        try std.fmt.allocPrint(self.allocator, "allexport\t{s}\nerrexit\t{s}\nnoclobber\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\nverbose\t{s}\nxtrace\t{s}\n", .{ if (self.shell_options.allexport) "on" else "off", if (self.shell_options.errexit) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off", if (self.shell_options.verbose) "on" else "off", if (self.shell_options.xtrace) "on" else "off" });
+        try std.fmt.allocPrint(self.allocator, "allexport\t{s}\nerrexit\t{s}\nnoclobber\t{s}\nnoexec\t{s}\nnoglob\t{s}\nnounset\t{s}\npipefail\t{s}\nverbose\t{s}\nxtrace\t{s}\n", .{ if (self.shell_options.allexport) "on" else "off", if (self.shell_options.errexit) "on" else "off", if (self.shell_options.noclobber) "on" else "off", if (self.shell_options.noexec) "on" else "off", if (self.shell_options.noglob) "on" else "off", if (self.shell_options.nounset) "on" else "off", if (self.shell_options.pipefail) "on" else "off", if (self.shell_options.verbose) "on" else "off", if (self.shell_options.xtrace) "on" else "off" });
     errdefer self.allocator.free(stdout);
     return .{
         .allocator = self.allocator,
@@ -12176,7 +12205,7 @@ test "executor implements set shell option baseline" {
     var show = try executor.executeProgram(show_lowered.program, .{});
     defer show.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), show.status);
-    try std.testing.expectEqualStrings("allexport\toff\nerrexit\toff\nnoclobber\toff\nnoglob\toff\nnounset\toff\npipefail\toff\nverbose\toff\nxtrace\toff\n", show.stdout);
+    try std.testing.expectEqualStrings("allexport\toff\nerrexit\toff\nnoclobber\toff\nnoexec\toff\nnoglob\toff\nnounset\toff\npipefail\toff\nverbose\toff\nxtrace\toff\n", show.stdout);
 
     var enable_lowered = try parseAndLower(std.testing.allocator, "set -o pipefail; false | true");
     defer enable_lowered.parsed.deinit();
@@ -12191,7 +12220,37 @@ test "executor implements set shell option baseline" {
     defer reusable_lowered.program.deinit();
     var reusable = try executor.executeProgram(reusable_lowered.program, .{});
     defer reusable.deinit();
-    try std.testing.expectEqualStrings("set +o allexport\nset +o errexit\nset +o noclobber\nset +o noglob\nset +o nounset\nset -o pipefail\nset +o verbose\nset +o xtrace\n", reusable.stdout);
+    try std.testing.expectEqualStrings("set +o allexport\nset +o errexit\nset +o noclobber\nset +o noexec\nset +o noglob\nset +o nounset\nset -o pipefail\nset +o verbose\nset +o xtrace\n", reusable.stdout);
+
+    var noexec_executor = Executor.init(std.testing.allocator);
+    defer noexec_executor.deinit();
+    var noexec = try noexec_executor.executeScriptSlice("set -n\necho bad\n", .{});
+    defer noexec.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), noexec.status);
+    try std.testing.expectEqualStrings("", noexec.stdout);
+    try std.testing.expectEqualStrings("", noexec.stderr);
+    try std.testing.expect(noexec_executor.shell_options.noexec);
+    var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+    try std.testing.expectEqualStrings("n", shellOptionFlags(noexec_executor.shell_options, &option_flags_buffer));
+
+    var noexec_name_executor = Executor.init(std.testing.allocator);
+    defer noexec_name_executor.deinit();
+    var noexec_name = try noexec_name_executor.executeScriptSlice("set -o noexec\necho bad\n", .{});
+    defer noexec_name.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), noexec_name.status);
+    try std.testing.expectEqualStrings("", noexec_name.stdout);
+    try std.testing.expect(noexec_name_executor.shell_options.noexec);
+
+    var noexec_parse_executor = Executor.init(std.testing.allocator);
+    defer noexec_parse_executor.deinit();
+    try std.testing.expectError(error.ParseError, noexec_parse_executor.executeScriptSlice("set -n\nif\n", .{}));
+
+    var interactive_noexec_executor = Executor.init(std.testing.allocator);
+    defer interactive_noexec_executor.deinit();
+    var interactive_noexec = try interactive_noexec_executor.executeScriptSlice("set -n\necho interactive\n", .{ .interactive = true });
+    defer interactive_noexec.deinit();
+    try std.testing.expectEqualStrings("interactive\n", interactive_noexec.stdout);
+    try std.testing.expect(!interactive_noexec_executor.shell_options.noexec);
 
     var disable_lowered = try parseAndLower(std.testing.allocator, "set +o pipefail; false | true");
     defer disable_lowered.parsed.deinit();
@@ -14352,6 +14411,7 @@ test "builtin completion offers option values and shell-local names" {
     defer executor.freeCompletions(set_options_candidates);
     try expectCandidate(set_options_candidates, "noglob", .plain);
     try expectCandidate(set_options_candidates, "noclobber", .plain);
+    try expectCandidate(set_options_candidates, "noexec", .plain);
 
     const unset_functions = try executor.collectCompletionsForInput("unset -f rush_builtin", "unset -f rush_builtin".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(unset_functions);

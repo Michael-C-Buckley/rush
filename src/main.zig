@@ -1669,6 +1669,7 @@ fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, scr
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
     executor.shell_options = shell_options;
+    if (interactive_options != null) executor.shell_options.noexec = false;
     if (positionals.len != 0) try executor.global_positionals.set(allocator, positionals);
     if (interactive_options) |startup_options| try loadInteractiveConfig(allocator, io, &executor, startup_options);
 
@@ -2617,6 +2618,23 @@ test "command string invocation shell options affect execution" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), flags.status);
     try std.testing.expectEqualStrings("<eu>\n", flags.stdout);
     try std.testing.expectEqualStrings("", flags.stderr);
+
+    const noexec_invocation = parseCommandStringInvocation(&.{ "rush", "-n", "-c", "echo unreached" }) orelse return error.ExpectedInvocation;
+    var noexec = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        noexec_invocation.source,
+        .{ .io = std.testing.io, .arg_zero = noexec_invocation.arg_zero },
+        null,
+        noexec_invocation.positionals,
+        null,
+        noexec_invocation.shell_options,
+    );
+    defer noexec.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), noexec.status);
+    try std.testing.expectEqualStrings("", noexec.stdout);
+    try std.testing.expectEqualStrings("", noexec.stderr);
 }
 
 test "invalid arithmetic expansion returns a shell diagnostic" {

@@ -205,6 +205,8 @@ set-nounset	options	option	-
 set-o-errexit-condition	options	option	-
 set-o-noclobber	options	option	-
 set-o-noglob	options	option	-
+option-set-noexec	options	option	set -n parses remaining input without executing subsequent commands
+option-set-o-noexec	options	option	set -o noexec parses remaining input without executing subsequent commands
 set-o-nounset-default-operator	options	option	-
 set-verbose	options	option	-
 set-xtrace	options	option	-
