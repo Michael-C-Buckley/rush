@@ -5586,17 +5586,20 @@ pub const Executor = struct {
         defer if (resolved_executable) |executable| self.allocator.free(executable);
         if (resolved_executable) |executable| argv[0] = executable;
 
+        var stdin_file: ?std.Io.File = null;
+        defer if (stdin_file) |file| file.close(io);
         var stdout_file: ?std.Io.File = null;
         defer if (stdout_file) |file| file.close(io);
         var stderr_file: ?std.Io.File = null;
         defer if (stderr_file) |file| file.close(io);
+        var stdin_closed = false;
         var stdout_closed = false;
         var stderr_closed = false;
         var inherited_redirections = try FdRedirectionGuard.init(self.allocator, io);
         defer inherited_redirections.restore(self, io);
-        var stdin_redirected = false;
-        var default_stdin_file: ?std.Io.File = null;
-        defer if (default_stdin_file) |file| file.close(io);
+        if (!self.monitorProcessGroupsEnabled()) {
+            stdin_file = try openDevNullRead(io);
+        }
 
         // The diagnostic is reported but the async command itself still
         // yields status 0, matching the status of a successful spawn.
@@ -5608,22 +5611,25 @@ pub const Executor = struct {
             if (redirection.operator == .less_and) {
                 const from_fd = redirectionFd(redirection) orelse 0;
                 if (from_fd > 2) {
-                    try self.applyAsyncExternalNonStdioDuplication(&stdout_file, &stderr_file, &inherited_redirections, io, redirection, from_fd);
+                    try self.applyAsyncExternalNonStdioDuplication(&stdin_file, &stdout_file, &stderr_file, &inherited_redirections, io, redirection, from_fd);
                     continue;
                 }
             }
             if (isInputFdRedirection(redirection)) {
                 const fd = redirectionFd(redirection) orelse 0;
-                if (fd > 2) try moveAsyncExternalRedirectionHandles(&stdout_file, &stderr_file, io, fd);
+                if (fd == 0) {
+                    try self.applyAsyncExternalStdinRedirection(&stdin_file, &stdout_file, &stderr_file, io, redirection, &stdin_closed);
+                    continue;
+                }
+                if (fd > 2) try moveAsyncExternalRedirectionHandles(&stdin_file, &stdout_file, &stderr_file, io, fd);
                 try inherited_redirections.apply(self, io, redirection);
-                if (fd == 0) stdin_redirected = true;
                 continue;
             }
             if (isFileOutputRedirection(redirection)) {
                 const target = redirection.target orelse continue;
                 const fd = redirectionFd(redirection) orelse 1;
                 if (fd > 2) {
-                    try moveAsyncExternalRedirectionHandles(&stdout_file, &stderr_file, io, fd);
+                    try moveAsyncExternalRedirectionHandles(&stdin_file, &stdout_file, &stderr_file, io, fd);
                     try inherited_redirections.apply(self, io, redirection);
                     continue;
                 }
@@ -5647,7 +5653,7 @@ pub const Executor = struct {
                 const from_fd = redirectionFd(redirection) orelse 1;
                 const target = redirection.target orelse continue;
                 if (from_fd > 2) {
-                    try self.applyAsyncExternalNonStdioDuplication(&stdout_file, &stderr_file, &inherited_redirections, io, redirection, from_fd);
+                    try self.applyAsyncExternalNonStdioDuplication(&stdin_file, &stdout_file, &stderr_file, &inherited_redirections, io, redirection, from_fd);
                     continue;
                 }
                 if (std.mem.eql(u8, target.text, "-")) {
@@ -5682,16 +5688,12 @@ pub const Executor = struct {
             }
         }
 
-        if (!stdin_redirected and !self.monitorProcessGroupsEnabled()) {
-            default_stdin_file = try openDevNullRead(io);
-        }
-
         var child_env = try self.buildProcessEnv(command.assignments);
         defer child_env.deinit();
         var child = std.process.spawn(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_redirected) .inherit else if (default_stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
+            .stdin = if (stdin_closed) .close else if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
             .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .pgid = if (self.monitorProcessGroupsEnabled()) 0 else null,
@@ -5700,6 +5702,10 @@ pub const Executor = struct {
             else => return err,
         };
         inherited_redirections.restore(self, io);
+        if (stdin_file) |file| {
+            file.close(io);
+            stdin_file = null;
+        }
         if (stdout_file) |file| {
             file.close(io);
             stdout_file = null;
@@ -5725,8 +5731,52 @@ pub const Executor = struct {
         return emptyResult(self.allocator, 0);
     }
 
+    fn applyAsyncExternalStdinRedirection(
+        self: Executor,
+        stdin_file: *?std.Io.File,
+        stdout_file: *?std.Io.File,
+        stderr_file: *?std.Io.File,
+        io: std.Io,
+        redirection: ir.Redirection,
+        stdin_closed: *bool,
+    ) !void {
+        if (redirection.operator == .dless or redirection.operator == .dless_dash) {
+            const file = try fileFromBytes(io, redirection.here_doc orelse "");
+            if (stdin_file.*) |old| old.close(io);
+            stdin_file.* = file;
+            stdin_closed.* = false;
+            return;
+        }
+        if (redirection.operator == .less or redirection.operator == .less_great) {
+            const target = redirection.target orelse return;
+            const file = if (redirection.operator == .less_great)
+                try openReadWriteRedirectionFile(io, target.text)
+            else
+                try std.Io.Dir.cwd().openFile(io, target.text, .{});
+            if (stdin_file.*) |old| old.close(io);
+            stdin_file.* = file;
+            stdin_closed.* = false;
+            return;
+        }
+        if (redirection.operator == .less_and) {
+            const target = redirection.target orelse return;
+            if (std.mem.eql(u8, target.text, "-")) {
+                if (stdin_file.*) |file| file.close(io);
+                stdin_file.* = null;
+                stdin_closed.* = true;
+                return;
+            }
+            const to_fd = parseFd(target.text) orelse return;
+            const file = try self.asyncExternalSourceFile(stdin_file.*, stdout_file.*, stderr_file.*, to_fd);
+            if (stdin_file.*) |old| old.close(io);
+            stdin_file.* = file;
+            stdin_closed.* = false;
+        }
+    }
+
     fn applyAsyncExternalNonStdioDuplication(
         self: *Executor,
+        stdin_file: *?std.Io.File,
         stdout_file: *?std.Io.File,
         stderr_file: *?std.Io.File,
         inherited_redirections: *FdRedirectionGuard,
@@ -5734,7 +5784,7 @@ pub const Executor = struct {
         redirection: ir.Redirection,
         from_fd: std.posix.fd_t,
     ) !void {
-        try moveAsyncExternalRedirectionHandles(stdout_file, stderr_file, io, from_fd);
+        try moveAsyncExternalRedirectionHandles(stdin_file, stdout_file, stderr_file, io, from_fd);
 
         const target = redirection.target orelse return;
         if (std.mem.eql(u8, target.text, "-")) {
@@ -5743,12 +5793,12 @@ pub const Executor = struct {
         }
 
         const to_fd = parseFd(target.text) orelse return;
-        const source_file: ?std.Io.File = if (to_fd == 1)
-            stdout_file.*
-        else if (to_fd == 2)
-            stderr_file.*
-        else
-            null;
+        const source_file: ?std.Io.File = switch (to_fd) {
+            0 => stdin_file.*,
+            1 => stdout_file.*,
+            2 => stderr_file.*,
+            else => null,
+        };
         if (source_file) |file| {
             try self.applyExternalInheritedFile(inherited_redirections, from_fd, file);
         } else {
@@ -5756,7 +5806,16 @@ pub const Executor = struct {
         }
     }
 
-    fn moveAsyncExternalRedirectionHandles(stdout_file: *?std.Io.File, stderr_file: *?std.Io.File, io: std.Io, fd: std.posix.fd_t) !void {
+    fn asyncExternalSourceFile(self: Executor, stdin_file: ?std.Io.File, stdout_file: ?std.Io.File, stderr_file: ?std.Io.File, fd: std.posix.fd_t) !std.Io.File {
+        if (fd == 0) if (stdin_file) |file| return dupFile(file);
+        if (fd == 1) if (stdout_file) |file| return dupFile(file);
+        if (fd == 2) if (stderr_file) |file| return dupFile(file);
+        if (!self.isShellFdOpen(fd)) return error.BadFileDescriptor;
+        return .{ .handle = try rawDup(fd), .flags = .{ .nonblocking = false } };
+    }
+
+    fn moveAsyncExternalRedirectionHandles(stdin_file: *?std.Io.File, stdout_file: *?std.Io.File, stderr_file: *?std.Io.File, io: std.Io, fd: std.posix.fd_t) !void {
+        try moveExternalFileHandle(stdin_file, io, fd);
         try moveExternalFileHandle(stdout_file, io, fd);
         try moveExternalFileHandle(stderr_file, io, fd);
     }
@@ -12921,6 +12980,36 @@ test "async jobs use dev null stdin when job control is disabled" {
         try stdout.appendSlice(std.testing.allocator, output);
     }
     try std.testing.expectEqualStrings("external=0\ncompound=0\n", stdout.items);
+}
+
+test "async external fd duplication orders implicit and explicit stdin" {
+    const input_path = "rush-async-stdin-fd-dup-input.tmp";
+    const before_path = "rush-async-stdin-fd-dup-before.tmp";
+    const after_path = "rush-async-stdin-fd-dup-after.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = "from-file\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, before_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, after_path) catch {};
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\/bin/sh -c 'test /dev/null -ef /dev/fd/3; fd3=$?; IFS= read line; printf "before fd3=%s stdin=%s\n" "$fd3" "$line" > rush-async-stdin-fd-dup-before.tmp' 3<&0 <rush-async-stdin-fd-dup-input.tmp &
+        \\wait $!
+        \\/bin/sh -c 'IFS= read line <&3; printf "after fd3=%s\n" "$line" > rush-async-stdin-fd-dup-after.tmp' <rush-async-stdin-fd-dup-input.tmp 3<&0 &
+        \\wait $!
+        \\/bin/cat rush-async-stdin-fd-dup-before.tmp
+        \\/bin/cat rush-async-stdin-fd-dup-after.tmp
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("before fd3=0 stdin=from-file\nafter fd3=from-file\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor backgrounds current and selected tracked jobs" {
