@@ -49,6 +49,7 @@ pub const ExecuteOptions = struct {
     suppress_functions: bool = false,
     suppress_special_builtin_properties: bool = false,
     suppress_errexit: bool = false,
+    ignore_errexit: bool = false,
     force_noninteractive_error_consequences: bool = false,
     default_path_lookup: bool = false,
 };
@@ -2383,7 +2384,8 @@ pub const Executor = struct {
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
-                self.applyErrexit(last_status, options, isFollowedByAndOrListOp(program.statements, statement_index));
+                const negated_pipeline = statement.kind == .pipeline and program.pipelines[statement.index].negated;
+                self.applyErrexit(last_status, options, negated_pipeline or isFollowedByAndOrListOp(program.statements, statement_index));
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
             }
             return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
@@ -2405,7 +2407,7 @@ pub const Executor = struct {
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
-                self.applyErrexit(last_status, options, isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index));
+                self.applyErrexit(last_status, options, pipeline.negated or isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index));
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
             }
             return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
@@ -2499,9 +2501,9 @@ pub const Executor = struct {
         return final;
     }
 
-    fn applyErrexit(self: *Executor, status: ExitStatus, options: ExecuteOptions, followed_by_and_or: bool) void {
-        if (!self.shell_options.errexit or options.suppress_errexit or status == 0) return;
-        if (followed_by_and_or) return;
+    fn applyErrexit(self: *Executor, status: ExitStatus, options: ExecuteOptions, suppressed_context: bool) void {
+        if (!self.shell_options.errexit or options.suppress_errexit or options.ignore_errexit or status == 0) return;
+        if (suppressed_context) return;
         self.pending_exit = status;
     }
 
@@ -3944,12 +3946,14 @@ pub const Executor = struct {
     }
 
     fn executePipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) anyerror!CommandResult {
-        if (self.shouldSkipForNoexec(options)) return emptyResult(self.allocator, 0);
-        if (self.canExecuteRealPipeline(program, pipeline, options)) {
-            const io = options.io orelse return error.MissingIoForExternalCommand;
-            return self.executeRealPipeline(program, pipeline, options, io);
+        var pipeline_options = options;
+        if (pipeline.negated) pipeline_options.ignore_errexit = true;
+        if (self.shouldSkipForNoexec(pipeline_options)) return emptyResult(self.allocator, 0);
+        if (self.canExecuteRealPipeline(program, pipeline, pipeline_options)) {
+            const io = pipeline_options.io orelse return error.MissingIoForExternalCommand;
+            return self.executeRealPipeline(program, pipeline, pipeline_options, io);
         }
-        if (pipeline.stage_spans.len != pipeline.command_indexes.len) return self.executeSpanPipeline(program, pipeline, options);
+        if (pipeline.stage_spans.len != pipeline.command_indexes.len) return self.executeSpanPipeline(program, pipeline, pipeline_options);
 
         var last = try emptyResult(self.allocator, 0);
         var stdin = try self.allocator.alloc(u8, 0);
@@ -3959,13 +3963,13 @@ pub const Executor = struct {
         var statuses_len: usize = 0;
 
         for (pipeline.command_indexes, 0..) |command_index, index| {
-            if (self.shouldSkipForNoexec(options)) break;
+            if (self.shouldSkipForNoexec(pipeline_options)) break;
             last.deinit();
             const is_last = index + 1 == pipeline.command_indexes.len;
-            last = try self.executeSimplePipelineStage(program.commands[command_index], stdin, options, is_last, index > 0);
+            last = try self.executeSimplePipelineStage(program.commands[command_index], stdin, pipeline_options, is_last, index > 0);
             statuses[index] = last.status;
             statuses_len = index + 1;
-            if (self.shouldSkipForNoexec(options)) break;
+            if (self.shouldSkipForNoexec(pipeline_options)) break;
 
             if (index + 1 < pipeline.command_indexes.len) {
                 self.allocator.free(stdin);
@@ -15153,6 +15157,16 @@ test "executor implements set shell option baseline" {
     defer and_or_suppressed.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), and_or_suppressed.status);
     try std.testing.expectEqualStrings("ok\nafter\n", and_or_suppressed.stdout);
+
+    var negated_errexit_executor = Executor.init(std.testing.allocator);
+    defer negated_errexit_executor.deinit();
+    var negated_errexit_lowered = try parseAndLower(std.testing.allocator, "set -e; ! true; echo after-true:$?; ! false; echo after-false:$?; ! { false; echo inner; }; echo after-compound:$?");
+    defer negated_errexit_lowered.parsed.deinit();
+    defer negated_errexit_lowered.program.deinit();
+    var negated_errexit = try negated_errexit_executor.executeProgram(negated_errexit_lowered.program, .{});
+    defer negated_errexit.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), negated_errexit.status);
+    try std.testing.expectEqualStrings("after-true:1\nafter-false:0\ninner\nafter-compound:1\n", negated_errexit.stdout);
 
     var and_or_last_executor = Executor.init(std.testing.allocator);
     defer and_or_last_executor.deinit();

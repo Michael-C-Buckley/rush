@@ -1,1 +1,4 @@
-after
+after-true:1
+after-false:0
+inner
+after-compound:1
