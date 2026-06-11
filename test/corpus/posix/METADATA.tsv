@@ -359,6 +359,8 @@ grammar-for-quoted-at-words	grammar	behavior	for word lists preserve quoted at p
 grammar-loop-exit-status	grammar	behavior	while and until exit statuses follow body execution
 builtin-loop-control-status	builtin	behavior	break and continue determine loop command status
 grammar-if-exit-status	grammar	behavior	if compound command exit status
+grammar-brace-group-pipeline-stage	grammar	behavior	brace groups execute exactly once as first and non-first pipeline stages
+grammar-brace-group-separators	grammar	behavior	brace group opening and closing reserved words are recognized with POSIX separators
 grammar-brace-group-status	grammar	behavior	brace group exit status follows last command
 function-set-positionals-local	grammar	behavior	set positional parameters inside functions is local to the function call
 function-shift-positionals-local	grammar	behavior	shift inside functions is local to the function call

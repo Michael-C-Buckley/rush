@@ -12015,6 +12015,28 @@ test "executor executes POSIX brace groups in current shell" {
     try std.testing.expectEqualStrings("inner\nouter\n", nested_result.stdout);
 }
 
+test "executor executes POSIX brace groups as pipeline stages once" {
+    var lowered = try parseAndLower(std.testing.allocator, "echo x | { read line; echo \"$line\"; }");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("x\n", result.stdout);
+
+    var both_groups = try parseAndLower(std.testing.allocator, "{ echo y; } | { read line; echo \"$line\"; }");
+    defer both_groups.parsed.deinit();
+    defer both_groups.program.deinit();
+    var both_groups_result = try executor.executeProgram(both_groups.program, .{});
+    defer both_groups_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), both_groups_result.status);
+    try std.testing.expectEqualStrings("y\n", both_groups_result.stdout);
+}
+
 test "executor implements source and dot builtins" {
     const path = "rush-source-test.sh";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};

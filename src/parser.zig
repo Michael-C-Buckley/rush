@@ -1577,6 +1577,11 @@ const SyntaxParser = struct {
 
             if (self.startsBraceGroup()) {
                 const brace_group = try self.parseBraceGroup();
+                if (self.nextNonWhitespaceIsPipe()) {
+                    const pipeline = try self.parsePipelineAfterFirstCommand(brace_group);
+                    try list_children.append(self.allocator, .{ .node = pipeline });
+                    continue;
+                }
                 try list_children.append(self.allocator, .{ .node = brace_group });
                 continue;
             }
@@ -2218,6 +2223,46 @@ const SyntaxParser = struct {
         return self.addNode(.pipeline, span, token_start, token_end, child_start, self.children.items.len);
     }
 
+    fn parsePipelineAfterFirstCommand(self: *SyntaxParser, first_command: NodeId) !NodeId {
+        const token_start = self.nodes.items[first_command.index()].token_start;
+        var pipeline_children: std.ArrayList(SyntaxChild) = .empty;
+        defer pipeline_children.deinit(self.allocator);
+
+        try pipeline_children.append(self.allocator, .{ .node = first_command });
+        while (!self.at(.eof)) {
+            while (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(&pipeline_children);
+            }
+
+            if (!self.at(.pipe)) break;
+            const pipe_span = self.current().span;
+            try self.appendCurrentTokenChildTo(&pipeline_children);
+
+            while (self.current().kind == .whitespace) {
+                try self.appendCurrentTokenChildTo(&pipeline_children);
+            }
+
+            if (!self.startsCommand()) {
+                self.incomplete = true;
+                try self.diagnostics.append(self.allocator, .{
+                    .kind = .parse_error,
+                    .span = pipe_span,
+                    .message = "missing command after pipeline operator",
+                });
+                break;
+            }
+
+            const command = try self.parseCommand();
+            try pipeline_children.append(self.allocator, .{ .node = command });
+        }
+
+        const token_end = self.index;
+        const child_start = self.children.items.len;
+        try self.children.appendSlice(self.allocator, pipeline_children.items);
+        const span = spanForTokenRange(self.tokens, token_start, token_end);
+        return self.addNode(.pipeline, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
     fn parseCommand(self: *SyntaxParser) anyerror!NodeId {
         if (self.startsFunctionDefinition()) return self.parseFunctionDefinition();
         if (self.startsBraceGroup()) return self.parseBraceGroup();
@@ -2447,6 +2492,12 @@ const SyntaxParser = struct {
 
     fn startsBraceGroup(self: SyntaxParser) bool {
         return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), "{");
+    }
+
+    fn nextNonWhitespaceIsPipe(self: SyntaxParser) bool {
+        var index = self.index;
+        while (index < self.tokens.len and self.tokens[index].kind == .whitespace) : (index += 1) {}
+        return index < self.tokens.len and self.tokens[index].kind == .pipe;
     }
 
     fn startsSubshell(self: SyntaxParser) bool {

@@ -239,6 +239,7 @@ while false; do echo bad; done; echo while_empty:$?; until true; do echo bad; do
 while true; do break; false; done; echo break:$?; i=0; while [ $i -lt 1 ]; do i=$((i+1)); continue; false; done; echo continue:$?; for x in a; do break; false; done; echo for_break:$?
 if false; then true; fi; echo no_else:$?; if true; then false; else true; fi; echo then_status:$?; if false; then true; else false; fi; echo else_status:$?; if false; then true; elif true; then false; else true; fi; echo elif_status:$?
 { false; }; echo status:$?; { true; false; }; echo last:$?
+{ echo semicolon-close;} ; { echo newline-close\n}; { echo pipe-source; } | { read line; echo "pipe:$line"; }
 f(){ set -- inner; echo in:$#:$1; }; set -- outer; f; echo out:$#:$1
 f(){ shift; echo in:$#:$1; }; set -- outer; f inner extra; echo out:$#:$1
 f(){ echo in:$A; }; A=outer; A=tmp f

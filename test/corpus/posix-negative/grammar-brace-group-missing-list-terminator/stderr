@@ -1,0 +1,3 @@
+rush: incomplete_input: missing } to close brace group
+  { echo ok }
+  ^^^^^^^^^^^

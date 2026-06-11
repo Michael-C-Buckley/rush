@@ -16,9 +16,12 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `case-subject-esac-word` | `test/corpus/posix` | `grammar-case` | `esac` may be the case subject word before the delimiter `in` |
 | `grammar-case-character-classes` | `test/corpus/posix` | `grammar-case`, `grammar-case-pattern-list`, `grammar-case-bracket-patterns` | POSIX character classes inside case bracket patterns |
 | `grammar-case-empty-list` | `test/corpus/posix` | `grammar-case` | case command with no case items exits successfully |
+| `grammar-brace-group-separators` | `test/corpus/posix` | `grammar-brace-group` | brace groups recognize `{` and `}` as reserved words when separated by POSIX separators, including semicolon and newline before `}` |
+| `grammar-brace-group-pipeline-stage` | `test/corpus/posix` | `grammar-brace-group` | brace groups execute exactly once as first and non-first pipeline stages |
 | `expansion-parameter-pattern-character-classes` | `test/corpus/posix` | `expansion-parameter-pattern`, `expansion-parameter-pattern-bracket-expression` | POSIX character classes inside parameter pattern-removal operands |
 | `pathname-character-classes` | `test/corpus/posix` | `expansion-pathname`, `expansion-pathname-bracket-expressions` | POSIX character classes inside pathname bracket patterns |
 | `strict-syntax-stops-execution` | `test/corpus/posix` | `errors-syntax` | strict POSIX syntax diagnostics return status 2 and prevent non-interactive execution before or after the malformed command |
+| `grammar-brace-group-missing-list-terminator` | `test/corpus/posix-negative` | `grammar-brace-group`, `grammar-grouping-strict-diagnostics` | missing semicolon or newline before `}` is diagnosed as an incomplete brace group in strict POSIX mode |
 | `grammar-case-missing-pattern-end` | `test/corpus/posix-negative` | `grammar-case-empty-arms` | malformed case item diagnostic |
 | `grammar-case-missing-in` | `test/corpus/posix-negative` | `grammar-case` | missing `in` diagnostic for malformed case command |
 | `grammar-case-missing-esac` | `test/corpus/posix-negative` | `grammar-case` | missing `esac` diagnostic for incomplete case command |
