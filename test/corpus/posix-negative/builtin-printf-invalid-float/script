@@ -1,0 +1,3 @@
+printf '%f\n' nope
+echo status:$?
+echo after

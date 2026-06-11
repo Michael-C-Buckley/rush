@@ -16,6 +16,7 @@ extern "c" fn dup(fd: c_int) c_int;
 extern "c" fn dup2(oldfd: c_int, newfd: c_int) c_int;
 extern "c" fn fork() std.c.pid_t;
 extern "c" fn pause() c_int;
+extern "c" fn snprintf(s: [*]u8, n: usize, format: [*:0]const u8, ...) c_int;
 
 var pending_trap_signal: std.atomic.Value(u8) = .init(0);
 var trap_signal_wake_fd: std.atomic.Value(std.posix.fd_t) = .init(-1);
@@ -9585,6 +9586,9 @@ const PrintfSpec = struct {
     spec: u8,
     left_adjust: bool = false,
     zero_pad: bool = false,
+    sign_plus: bool = false,
+    sign_space: bool = false,
+    alternate: bool = false,
     width: ?usize = null,
     precision: ?usize = null,
 };
@@ -9650,7 +9654,9 @@ fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
         switch (format[index.*]) {
             '-' => result.left_adjust = true,
             '0' => result.zero_pad = true,
-            '+', ' ', '#' => {},
+            '+' => result.sign_plus = true,
+            ' ' => result.sign_space = true,
+            '#' => result.alternate = true,
             else => break,
         }
         index.* += 1;
@@ -9673,6 +9679,11 @@ fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
 }
 
 fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, spec: PrintfSpec, arg: []const u8) !bool {
+    if (isPrintfFloatSpec(spec.spec)) {
+        try appendPrintfFloatConversion(allocator, stdout, stderr, status, spec, arg);
+        return true;
+    }
+
     const rendered: []u8 = switch (spec.spec) {
         's' => try formatPrintfString(allocator, arg, spec.precision),
         'b' => blk: {
@@ -9717,6 +9728,78 @@ fn appendPadded(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: 
     if (spec.left_adjust) try stdout.appendNTimes(allocator, ' ', pad_len);
 }
 
+fn isPrintfFloatSpec(spec: u8) bool {
+    return switch (spec) {
+        'a', 'A', 'e', 'E', 'f', 'F', 'g', 'G' => true,
+        else => false,
+    };
+}
+
+fn appendPrintfFloatConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, spec: PrintfSpec, arg: []const u8) !void {
+    const value = try parsePrintfFloat(allocator, stderr, status, arg);
+
+    var format_buffer: [64]u8 = undefined;
+    const c_format = printfCFormat(&format_buffer, spec) catch unreachable;
+
+    var stack_buffer: [128]u8 = undefined;
+    const stack_len = snprintf(stack_buffer[0..].ptr, stack_buffer.len, c_format.ptr, value);
+    if (stack_len < 0) {
+        try printfDiagnostic(allocator, stderr, status, "invalid conversion");
+        return;
+    }
+    const needed: usize = @intCast(stack_len);
+    if (needed < stack_buffer.len) {
+        try stdout.appendSlice(allocator, stack_buffer[0..needed]);
+        return;
+    }
+
+    const heap_buffer = try allocator.alloc(u8, needed + 1);
+    defer allocator.free(heap_buffer);
+    const heap_len = snprintf(heap_buffer.ptr, heap_buffer.len, c_format.ptr, value);
+    if (heap_len < 0) {
+        try printfDiagnostic(allocator, stderr, status, "invalid conversion");
+        return;
+    }
+    try stdout.appendSlice(allocator, heap_buffer[0..@min(@as(usize, @intCast(heap_len)), needed)]);
+}
+
+fn printfCFormat(buffer: []u8, spec: PrintfSpec) ![:0]u8 {
+    var flags_buffer: [5]u8 = undefined;
+    var flags_len: usize = 0;
+    if (spec.left_adjust) {
+        flags_buffer[flags_len] = '-';
+        flags_len += 1;
+    }
+    if (spec.sign_plus) {
+        flags_buffer[flags_len] = '+';
+        flags_len += 1;
+    }
+    if (spec.sign_space) {
+        flags_buffer[flags_len] = ' ';
+        flags_len += 1;
+    }
+    if (spec.alternate) {
+        flags_buffer[flags_len] = '#';
+        flags_len += 1;
+    }
+    if (spec.zero_pad) {
+        flags_buffer[flags_len] = '0';
+        flags_len += 1;
+    }
+    const flags = flags_buffer[0..flags_len];
+
+    if (spec.width) |width| {
+        if (spec.precision) |precision| {
+            return std.fmt.bufPrintSentinel(buffer, "%{s}{d}.{d}{c}", .{ flags, width, precision, spec.spec }, 0);
+        }
+        return std.fmt.bufPrintSentinel(buffer, "%{s}{d}{c}", .{ flags, width, spec.spec }, 0);
+    }
+    if (spec.precision) |precision| {
+        return std.fmt.bufPrintSentinel(buffer, "%{s}.{d}{c}", .{ flags, precision, spec.spec }, 0);
+    }
+    return std.fmt.bufPrintSentinel(buffer, "%{s}{c}", .{ flags, spec.spec }, 0);
+}
+
 fn parsePrintfSigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, arg: []const u8) !i64 {
     return std.fmt.parseInt(i64, arg, 0) catch {
         try printfDiagnostic(allocator, stderr, status, "numeric argument required");
@@ -9731,6 +9814,14 @@ fn parsePrintfUnsigned(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8),
             return 0;
         };
         break :blk @bitCast(signed);
+    };
+}
+
+fn parsePrintfFloat(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, arg: []const u8) !f64 {
+    if (arg.len == 0) return 0;
+    return std.fmt.parseFloat(f64, arg) catch {
+        try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+        return 0;
     };
 }
 
@@ -13869,6 +13960,23 @@ test "executor implements read and printf builtins" {
     var width_result = try executor.executeProgram(width_lowered.program, .{});
     defer width_result.deinit();
     try std.testing.expectEqualStrings("[    a][b    ][abc][0007][12][ff][FF]", width_result.stdout);
+
+    var float_lowered = try parseAndLower(std.testing.allocator, "printf '%5.2f|%e|%g|%G|%a|%A' 3.14159 2.5 1234567 0.0000123 3.5 3.5");
+    defer float_lowered.parsed.deinit();
+    defer float_lowered.program.deinit();
+    var float_result = try executor.executeProgram(float_lowered.program, .{});
+    defer float_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), float_result.status);
+    try std.testing.expectEqualStrings(" 3.14|2.500000e+00|1.23457e+06|1.23E-05|0x1.cp+1|0X1.CP+1", float_result.stdout);
+
+    var invalid_float_lowered = try parseAndLower(std.testing.allocator, "printf '%f' nope");
+    defer invalid_float_lowered.parsed.deinit();
+    defer invalid_float_lowered.program.deinit();
+    var invalid_float_result = try executor.executeProgram(invalid_float_lowered.program, .{});
+    defer invalid_float_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), invalid_float_result.status);
+    try std.testing.expectEqualStrings("0.000000", invalid_float_result.stdout);
+    try std.testing.expectEqualStrings("printf: numeric argument required\n", invalid_float_result.stderr);
 
     var escaped_lowered = try parseAndLower(std.testing.allocator, "printf '%b' 'x\\ny'");
     defer escaped_lowered.parsed.deinit();
