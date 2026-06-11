@@ -5310,6 +5310,50 @@ pub const Executor = struct {
         return null;
     }
 
+    fn findReplacementExecutable(self: *Executor, io: std.Io, name: []const u8, use_default_path: bool) ![]const u8 {
+        const path_value = if (use_default_path) "/bin:/usr/bin" else self.getEnv("PATH") orelse return error.CommandNotFound;
+        return self.findReplacementExecutableInPathValue(io, name, path_value);
+    }
+
+    fn findReplacementExecutableInPathValue(self: *Executor, io: std.Io, name: []const u8, path_value: []const u8) ![]const u8 {
+        if (std.mem.indexOfScalar(u8, name, '/') != null) {
+            return self.executableReplacementPath(io, name);
+        }
+
+        var permission_denied = false;
+        var parts = std.mem.splitScalar(u8, path_value, ':');
+        while (parts.next()) |part| {
+            const dir = if (part.len == 0) "." else part;
+            const candidate = try std.mem.concat(self.allocator, u8, &.{ dir, "/", name });
+            errdefer self.allocator.free(candidate);
+            std.Io.Dir.cwd().access(io, candidate, .{ .execute = true }) catch |err| switch (err) {
+                error.FileNotFound => {
+                    self.allocator.free(candidate);
+                    continue;
+                },
+                error.AccessDenied, error.PermissionDenied => {
+                    permission_denied = true;
+                    self.allocator.free(candidate);
+                    continue;
+                },
+                else => return err,
+            };
+            return candidate;
+        }
+
+        if (permission_denied) return error.AccessDenied;
+        return error.CommandNotFound;
+    }
+
+    fn executableReplacementPath(self: *Executor, io: std.Io, path: []const u8) ![]const u8 {
+        std.Io.Dir.cwd().access(io, path, .{ .execute = true }) catch |err| switch (err) {
+            error.FileNotFound => return error.CommandNotFound,
+            error.AccessDenied, error.PermissionDenied => return error.AccessDenied,
+            else => return err,
+        };
+        return self.allocator.dupe(u8, path);
+    }
+
     fn readSourceFile(self: *Executor, io: std.Io, name: []const u8) ![]const u8 {
         if (std.mem.indexOfScalar(u8, name, '/') != null) {
             return std.Io.Dir.cwd().readFileAlloc(io, name, self.allocator, .unlimited);
@@ -5934,10 +5978,11 @@ pub const Executor = struct {
     }
 
     fn replaceWithExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
-        const executable = if (options.default_path_lookup)
-            try self.findExecutableInDefaultPath(io, command.argv[0].text) orelse return errorResult(self.allocator, 127, command.argv[0].text, "command not found")
-        else
-            try self.findExecutableInPath(io, command.argv[0].text) orelse return errorResult(self.allocator, 127, command.argv[0].text, "command not found");
+        const executable = self.findReplacementExecutable(io, command.argv[0].text, options.default_path_lookup) catch |err| switch (err) {
+            error.CommandNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+            error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
+            else => return err,
+        };
         defer self.allocator.free(executable);
 
         var child_env = try self.buildProcessEnv(command.assignments);

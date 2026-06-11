@@ -52,7 +52,7 @@ Recent notable capabilities:
 - POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes, arithmetic baseline with nested parameter/command preprocessing plus representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
 - Non-POSIX extension forms are excluded from POSIX scoring and tracked separately in `BASH_COMPAT.md`; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
-- POSIX builtins now include supported `export`, `unset`, `umask`, `times`, `trap`, and `getopts` plus baseline `command`, `eval`, `exec`, `exit`, `readonly`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
+- POSIX builtins now include supported `export`, `unset`, `umask`, `times`, `trap`, `getopts`, and `exec` plus baseline `command`, `eval`, `exit`, `readonly`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, `verbose`, and `xtrace`, plus reusable supported-option listing.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.
 - Cross-target compile-only coverage is tracked by `zig build cross-check`, which runs native tests and compiles the test binary for representative Linux, macOS, FreeBSD, OpenBSD, and NetBSD targets. Foreign-target runtime validation remains separate follow-up work; use `scripts/check-runtime-portability.sh` on actual Linux/BSD hosts and record the host evidence separately from the compile-only compliance row.
@@ -242,18 +242,16 @@ Shell comparison note: dash, bash, and yash agree that assignment forms such as 
 - Logical `PWD`/`OLDPWD` tracking for `cd`/`pwd`.
 - `$!` tracks the most recent real background external command pid.
 - `wait` can wait for tracked background pids and job IDs, returns operand statuses, and returns zero after waiting for all known jobs when invoked without operands.
+- `exec` replaces the Rush process image for CLI inherited-stdio external command paths, preserves assignment operands in the replacement environment, reports command-not-found and permission-denied failures with shell-exit consequences, and applies redirection-only fd changes to the current shell.
 
 ### Partial / gaps
 
 - `command -v` and command lookup controls are baseline-only.
-- `exec` currently executes and exits through Rush's process model; it does not replace the Rush process image with `execve` yet.
 - PATH hashing/caching and POSIX command search edge cases are missing.
 - Background job metadata is enough for `$!`/`wait`, but not for full job control.
 
 ### Missing / gaps
 
-- Real `execve` replacement semantics for `exec` in CLI mode.
-- Additional implementation-specific `exec` replacement and command-search edge cases.
 - Full signal environment semantics.
 - Command search cache/hash behavior if desired later.
 
@@ -282,7 +280,7 @@ Implemented or partially implemented:
 - `printf` baseline
 - `command` baseline
 - `eval` baseline
-- `exec` baseline
+- `exec` utility behavior, including process replacement for CLI inherited external commands, assignment environment, non-interactive shell-exit failures, permission-denied status, no-return function context, and redirection-only current-shell fd changes
 - `exit` baseline
 - `readonly` baseline
 - `shift` baseline
@@ -302,7 +300,6 @@ Implemented or partially implemented:
 - `env` does not support arguments/options.
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
-- `exec` is not a true process replacement.
 - Full POSIX alias substitution token timing remains partial; the builtin `alias`/`unalias` utility row is supported separately from those parser-level timing edge cases.
 
 ## 7. Shell options and modes

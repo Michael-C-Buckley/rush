@@ -270,3 +270,4 @@ unset v x; echo ${v:-$((1 + ${x:-2}))}; x=4; echo $(($x + 1)); echo $((1 + $(pri
 x=2; printf '<%s>\n' $((1 + $x)); printf '<%s>\n' $((1 + `printf 2`))
 old=$(umask); umask 077; ( umask 022 ); echo parent:$(umask); umask 022; umask 077 | /bin/cat >/dev/null; echo pipeline:$(umask); umask 077; : >umask_file; mkdir umask_dir; ls -ld umask_file umask_dir | sed 's/ .*//'; umask "$old"; rm -rf umask_file umask_dir
 v="a b"; HOME=/tmp/rush-home; export RUSH_DECL=$v RUSH_TILDE=~; printf '<%s>\n' "$RUSH_DECL" "$RUSH_TILDE"; export RUSH_MARKED; case "$(export -p)" in *"export RUSH_MARKED"*) echo marked;; *) echo missing;; esac
+f() { exec /bin/sh -c 'printf exec-function-ok'; echo nope; }; f; echo nope
