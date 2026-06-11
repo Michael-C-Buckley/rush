@@ -10,6 +10,7 @@ pub const Source = enum(u32) {
     completion_result,
     child_signal,
     interrupt_signal,
+    trap_signal,
 };
 
 pub const Event = struct {

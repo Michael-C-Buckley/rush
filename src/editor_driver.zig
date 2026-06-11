@@ -225,11 +225,13 @@ pub const ReadLineOptions = struct {
 pub const HookResult = struct {
     output: []const u8,
     refresh_prompt: bool = true,
+    stop: bool = false,
 };
 
 pub const ReadLineResult = union(enum) {
     submitted: []const u8,
     canceled,
+    interrupted,
     eof,
 };
 
@@ -414,6 +416,7 @@ pub fn readLineFromTty(allocator: std.mem.Allocator, io: std.Io, options: ReadLi
     return switch (try session.readLine(options)) {
         .submitted => |line| line,
         .canceled => try allocator.dupe(u8, ""),
+        .interrupted => error.Interrupted,
         .eof => null,
     };
 }
@@ -426,6 +429,7 @@ pub const TerminalSession = struct {
     wake: Pipe,
     prompt_redraw: Pipe,
     completion_wake: Pipe,
+    trap_signal: Pipe,
     resize: ResizeSignalSource,
     child_signal: ChildSignalSource,
     interrupt_signal: InterruptSignalSource,
@@ -454,6 +458,10 @@ pub const TerminalSession = struct {
         errdefer completion_wake.close(io);
         try setNonBlocking(completion_wake.read.handle);
         try setNonBlocking(completion_wake.write.handle);
+        var trap_signal = try makePipe(io);
+        errdefer trap_signal.close(io);
+        try setNonBlocking(trap_signal.read.handle);
+        try setNonBlocking(trap_signal.write.handle);
         var resize = try ResizeSignalSource.init(io);
         errdefer resize.deinitUnregistered(io);
         var child_signal = try ChildSignalSource.init(io);
@@ -465,6 +473,7 @@ pub const TerminalSession = struct {
         try loop.addReadFd(wake.read.handle, .tty_input);
         try loop.addReadFd(prompt_redraw.read.handle, .prompt_redraw);
         try loop.addReadFd(completion_wake.read.handle, .completion_result);
+        try loop.addReadFd(trap_signal.read.handle, .trap_signal);
         try loop.addReadFd(resize.readFd(), .resize);
         try loop.addReadFd(child_signal.readFd(), .child_signal);
         try loop.addReadFd(interrupt_signal.readFd(), .interrupt_signal);
@@ -483,6 +492,7 @@ pub const TerminalSession = struct {
             .wake = wake,
             .prompt_redraw = prompt_redraw,
             .completion_wake = completion_wake,
+            .trap_signal = trap_signal,
             .resize = resize,
             .child_signal = child_signal,
             .interrupt_signal = interrupt_signal,
@@ -507,6 +517,7 @@ pub const TerminalSession = struct {
         self.child_signal.deinit(self.io, &self.loop);
         self.resize.deinit(self.io, &self.loop);
         self.loop.deinit();
+        self.trap_signal.close(self.io);
         self.completion_wake.close(self.io);
         self.prompt_redraw.close(self.io);
         self.wake.read.close(self.io);
@@ -566,6 +577,10 @@ pub const TerminalSession = struct {
         rawWriteAll(self.prompt_redraw.write.handle, "p") catch {};
     }
 
+    pub fn trapSignalWakeFd(self: TerminalSession) std.posix.fd_t {
+        return self.trap_signal.write.handle;
+    }
+
     pub fn finishSemanticCommand(self: *TerminalSession, status: u8) !void {
         const sequence = try std.fmt.allocPrint(self.allocator, "\x1b]133;D;{d}\x07", .{status});
         defer self.allocator.free(sequence);
@@ -591,15 +606,7 @@ pub const TerminalSession = struct {
             var loop_events: [8]event_loop.Event = undefined;
             const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms, self.completion.debounceWaitMs(self.io)));
             if (ready.len == 0 and next_hook_interval_ms != null and promptRefreshWaitMs(self.io, next_hook_interval_ms) == 0) {
-                if (options.run_hooks != null and options.hook_context != null) {
-                    const hook_result = try options.run_hooks.?(options.hook_context.?, self.allocator, self.io);
-                    defer self.allocator.free(hook_result.output);
-                    if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
-                    if (hook_result.refresh_prompt or hook_result.output.len != 0) {
-                        render_needed = true;
-                        session.invalidatePrompt();
-                    }
-                }
+                if (try self.runHooks(options, &session, &render_needed)) return try self.finishInterruptedReadLine();
                 next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
             }
             if (ready.len == 0 and next_prompt_refresh_ms != null and promptRefreshWaitMs(self.io, next_prompt_refresh_ms) == 0) {
@@ -609,7 +616,7 @@ pub const TerminalSession = struct {
             }
             try self.startReadyCompletion(options);
             self.events.clearRetainingCapacity();
-            var child_signal_ready = false;
+            var hook_ready = false;
             for (ready) |ready_event| {
                 switch (ready_event.source) {
                     .tty_input => try self.processTtyInput(),
@@ -620,22 +627,20 @@ pub const TerminalSession = struct {
                     },
                     .child_signal => {
                         self.processChildSignal();
-                        child_signal_ready = true;
+                        hook_ready = true;
                     },
                     .interrupt_signal => {
                         self.processInterruptSignal();
                         try session.cancel();
                     },
+                    .trap_signal => {
+                        self.processTrapSignal();
+                        hook_ready = true;
+                    },
                 }
             }
-            if (child_signal_ready and options.run_hooks != null and options.hook_context != null) {
-                const hook_result = try options.run_hooks.?(options.hook_context.?, self.allocator, self.io);
-                defer self.allocator.free(hook_result.output);
-                if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
-                if (hook_result.refresh_prompt or hook_result.output.len != 0) {
-                    render_needed = true;
-                    session.invalidatePrompt();
-                }
+            if (hook_ready) {
+                if (try self.runHooks(options, &session, &render_needed)) return try self.finishInterruptedReadLine();
                 next_hook_interval_ms = try nextHookIntervalDeadlineMs(options, self.io);
             }
             for (self.events.items) |event| {
@@ -750,6 +755,25 @@ pub const TerminalSession = struct {
         }
     }
 
+    fn finishInterruptedReadLine(self: *TerminalSession) !ReadLineResult {
+        try self.clearRenderedRowsAfterFirst();
+        self.renderer.reset(self.allocator);
+        try writeTtyAll(&self.tty, semanticInputCancel ++ "\r\n");
+        return .interrupted;
+    }
+
+    fn runHooks(self: *TerminalSession, options: ReadLineOptions, session: *line_editor.LineSession, render_needed: *bool) !bool {
+        if (options.run_hooks == null or options.hook_context == null) return false;
+        const hook_result = try options.run_hooks.?(options.hook_context.?, self.allocator, self.io);
+        defer self.allocator.free(hook_result.output);
+        if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
+        if (hook_result.refresh_prompt or hook_result.output.len != 0) {
+            render_needed.* = true;
+            session.invalidatePrompt();
+        }
+        return hook_result.stop;
+    }
+
     fn clearRenderedRowsAfterFirst(self: *TerminalSession) !void {
         const clear = try self.renderer.clearRowsAfterFirst(self.allocator);
         defer self.allocator.free(clear);
@@ -800,6 +824,11 @@ pub const TerminalSession = struct {
 
     fn processChildSignal(self: *TerminalSession) void {
         self.child_signal.drain();
+    }
+
+    fn processTrapSignal(self: *TerminalSession) void {
+        var buffer: [64]u8 = undefined;
+        _ = rawRead(self.trap_signal.read.handle, &buffer) catch {};
     }
 
     fn processInterruptSignal(self: *TerminalSession) void {

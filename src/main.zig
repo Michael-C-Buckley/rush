@@ -766,10 +766,30 @@ fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
     const refresh_prompt = if (completion_context.executor.promptIntervalWaitMs(io)) |wait_ms| wait_ms == 0 else false;
     try completion_context.executor.runDuePromptIntervals(io);
-    if (!completion_context.executor.shell_options.notify) return .{ .output = try allocator.alloc(u8, 0), .refresh_prompt = refresh_prompt };
-    const notifications = try completion_context.executor.drainJobNotifications();
-    defer completion_context.executor.allocator.free(notifications);
-    return .{ .output = try allocator.dupe(u8, notifications), .refresh_prompt = refresh_prompt };
+
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    var should_refresh_prompt = refresh_prompt;
+
+    if (try completion_context.executor.executePendingSignalTrap(.{ .io = io, .allow_external = true, .interactive = true, .arg_zero = completion_context.arg_zero })) |trap_result| {
+        var result = trap_result;
+        defer result.deinit();
+        try output.appendSlice(allocator, result.stdout);
+        try output.appendSlice(allocator, result.stderr);
+        should_refresh_prompt = true;
+    }
+
+    if (completion_context.executor.shell_options.notify) {
+        const notifications = try completion_context.executor.drainJobNotifications();
+        defer completion_context.executor.allocator.free(notifications);
+        try output.appendSlice(allocator, notifications);
+    }
+
+    return .{
+        .output = try output.toOwnedSlice(allocator),
+        .refresh_prompt = should_refresh_prompt,
+        .stop = completion_context.executor.pending_exit != null,
+    };
 }
 
 fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
@@ -1439,6 +1459,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try loadInteractiveConfig(allocator, io, &executor, options);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
+    exec.setTrapSignalWakeFd(terminal.trapSignalWakeFd());
+    defer exec.clearTrapSignalWakeFd(terminal.trapSignalWakeFd());
     try syncInteractiveTerminalSize(&executor, terminal);
     executor.setPromptRepaintHandler(&terminal, requestInteractivePromptRepaint);
 
@@ -1519,6 +1541,13 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
                     try terminal.enterEditorMode();
                     editor_mode_left = false;
+                }
+                continue;
+            },
+            .interrupted => {
+                if (executor.pending_exit) |status| {
+                    last_status = status;
+                    break;
                 }
                 continue;
             },
@@ -2570,6 +2599,36 @@ test "interactive notify schedules editor job notification polling" {
     executor.background_jobs.items[0].state = .done;
     executor.background_jobs.items[0].notified_state = .done;
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+}
+
+test "interactive hooks dispatch pending real signal trap" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var setup = try runScriptWithExecutor(std.testing.allocator, &executor, "trap 'echo term-trap' TERM", .{ .io = std.testing.io, .allow_external = true, .interactive = true });
+    defer setup.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    var context: InteractiveCompletionContext = .{
+        .executor = &executor,
+        .history = &history,
+        .cache = &cache,
+        .loader = &loader,
+        .io = std.testing.io,
+    };
+
+    try std.posix.raise(.TERM);
+    const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(hook_result.output);
+
+    try std.testing.expectEqualStrings("term-trap\n", hook_result.output);
+    try std.testing.expect(hook_result.refresh_prompt);
+    try std.testing.expect(!hook_result.stop);
 }
 
 test "interactive signal handlers catch interrupt quit and terminate" {

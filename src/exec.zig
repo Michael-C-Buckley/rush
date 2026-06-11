@@ -18,6 +18,7 @@ extern "c" fn fork() std.c.pid_t;
 extern "c" fn pause() c_int;
 
 var pending_trap_signal: std.atomic.Value(u8) = .init(0);
+var trap_signal_wake_fd: std.atomic.Value(std.posix.fd_t) = .init(-1);
 var test_term_signal_count: std.atomic.Value(u8) = .init(0);
 
 pub const ExitStatus = u8;
@@ -2398,16 +2399,21 @@ pub const Executor = struct {
         result.stderr = annotated;
     }
 
-    fn dispatchPendingSignalTrap(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)) !void {
+    pub fn executePendingSignalTrap(self: *Executor, options: ExecuteOptions) !?CommandResult {
         const raw = pending_trap_signal.swap(0, .seq_cst);
-        if (raw == 0) return;
-        const name = signalNameFromNumber(raw) orelse return;
-        const action = self.traps.get(name) orelse return;
-        var trap_result = try self.executeScriptSlice(action, options);
+        if (raw == 0) return null;
+        const name = signalNameFromNumber(raw) orelse return null;
+        const action = self.traps.get(name) orelse return null;
+        const trap_result = try self.executeScriptSlice(action, options);
+        self.setLastStatus(trap_result.status);
+        return trap_result;
+    }
+
+    fn dispatchPendingSignalTrap(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)) !void {
+        var trap_result = (try self.executePendingSignalTrap(options)) orelse return;
         defer trap_result.deinit();
         try stdout.appendSlice(self.allocator, trap_result.stdout);
         try stderr.appendSlice(self.allocator, trap_result.stderr);
-        self.setLastStatus(trap_result.status);
     }
 
     pub fn executeSignalTrap(self: *Executor, name: []const u8, options: ExecuteOptions) !?CommandResult {
@@ -6797,6 +6803,16 @@ fn restoreForegroundTerminal(terminal: ?ForegroundTerminal) void {
 
 fn trapSignalHandler(signal: std.posix.SIG) callconv(.c) void {
     pending_trap_signal.store(@intCast(@intFromEnum(signal)), .seq_cst);
+    const fd = trap_signal_wake_fd.load(.acquire);
+    if (fd != -1) _ = std.c.write(fd, "t", 1);
+}
+
+pub fn setTrapSignalWakeFd(fd: std.posix.fd_t) void {
+    trap_signal_wake_fd.store(fd, .release);
+}
+
+pub fn clearTrapSignalWakeFd(fd: std.posix.fd_t) void {
+    if (trap_signal_wake_fd.load(.acquire) == fd) trap_signal_wake_fd.store(-1, .release);
 }
 
 fn testTermSignalHandler(signal: std.posix.SIG) callconv(.c) void {
@@ -11647,6 +11663,26 @@ test "executor restores trap signal handlers on clear and deinit" {
     try std.testing.expectEqual(@as(ExitStatus, 0), later_result.status);
     try std.testing.expectEqualStrings("after\n", later_result.stdout);
     try std.testing.expectEqual(@as(u8, 1), test_term_signal_count.load(.seq_cst));
+}
+
+test "trap signal handler wakes configured fd" {
+    pending_trap_signal.store(0, .seq_cst);
+    defer pending_trap_signal.store(0, .seq_cst);
+
+    var pipe = try makePipelinePipe(std.testing.io);
+    defer pipe.close(std.testing.io);
+    const read_file = pipe.read.?;
+    const write_file = pipe.write.?;
+    setTrapSignalWakeFd(write_file.handle);
+    defer clearTrapSignalWakeFd(write_file.handle);
+
+    trapSignalHandler(.TERM);
+
+    try std.testing.expectEqual(@as(u8, @intCast(@intFromEnum(std.posix.SIG.TERM))), pending_trap_signal.load(.seq_cst));
+    var buffer: [1]u8 = undefined;
+    const read_len = try std.posix.read(read_file.handle, &buffer);
+    try std.testing.expectEqual(@as(usize, 1), read_len);
+    try std.testing.expectEqual(@as(u8, 't'), buffer[0]);
 }
 
 test "interactive job signal reset restores default dispositions" {

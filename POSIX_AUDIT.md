@@ -299,7 +299,7 @@ Implemented or partially implemented:
 - `times` currently emits a deterministic baseline instead of real process usage.
 - `command` supports baseline `-v`, but not the full POSIX option/lookup behavior.
 - `exec` is not a true process replacement.
-- `trap` has baseline real-signal dispatch for common catchable signals between commands; broader signal timing, inheritance, and ignored-signal semantics remain limited outside the focused interactive/job-control coverage below.
+- `trap` has baseline real-signal dispatch for common catchable signals between commands and wakes the interactive editor promptly for process-directed trapped signals; broader inheritance and ignored-signal semantics remain limited outside the focused interactive/job-control coverage below.
 - `alias`/`unalias` have baseline parser integration but not full POSIX recursive/timing edge cases.
 
 ## 7. Shell options and modes
@@ -348,7 +348,7 @@ Implemented or partially implemented:
 - Persistent REPL executor state for functions, aliases, options, and environment.
 - External simple commands inherit terminal stdio in CLI/REPL mode.
 - Foreground process group handoff for simple inherited-stdio external commands.
-- Interactive SIGINT/interrupt handling discards the current editor line and returns to a fresh prompt without changing `$?`; an active `trap ... INT` runs instead of the plain discard path. The interactive shell catches INT/QUIT/TERM for itself, while foreground job child/wrapper processes reset those dispositions to defaults before running job-owned code.
+- Interactive SIGINT/interrupt handling discards the current editor line and returns to a fresh prompt without changing `$?`; an active `trap ... INT` runs instead of the plain discard path. Process-directed trapped signals wake the editor through the trap self-pipe, run the pending trap, and redraw the current input. The interactive shell catches INT/QUIT/TERM for itself, while foreground job child/wrapper processes reset those dispositions to defaults before running job-owned code.
 - Baseline async external, builtin, and compound commands with `&`.
 - `$!` and `wait pid` for tracked background commands, including brace groups, subshells, loops, and pipelines started asynchronously.
 - Asynchronous commands use `/dev/null` as default stdin when job control is disabled, without consuming the invoking shell's stdin.
