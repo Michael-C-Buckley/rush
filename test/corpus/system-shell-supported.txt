@@ -303,3 +303,5 @@ for x in a b; do false; done; echo explicit:$?; for x in; do false; done; echo e
 printf 'a\nb\n' | if read line; then echo "if-last:$line"; fi; printf 'm\n' | if read line; then echo "middle:$line"; fi | { read line; echo "if-middle:$line"; }; if true; then echo if-first; fi | { read line; echo "if-first:$line"; }
 exec 2>&1; set -x; X=v; echo "$X" suffix; set +x; echo quiet
 set -v; echo verbose-command-string; set +v; echo quiet
+alias say='echo parser-ok'\nFOO=bar say\nif say; then echo if-ok; fi
+alias say='echo subst-ok'\nalias body='echo bad'\necho "$(say)"\nread value <<EOF2\nbody\nEOF2\necho "$value"

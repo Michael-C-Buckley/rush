@@ -1866,7 +1866,7 @@ fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor,
 }
 
 fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
-    const aliased = try executor.expandAliasesForScript(script);
+    const aliased = try executor.expandAliasesForScriptWithFeatures(script, options.features);
     defer allocator.free(aliased);
     var parsed = try parser.parse(allocator, aliased, .{ .features = options.features });
     defer parsed.deinit();
@@ -3293,6 +3293,40 @@ test "alias timing chunks keep multi-line here-doc bodies intact" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("alias-ok\nhello\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "aliases expand at parser-recognized command word positions" {
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, "rush-alias-redir.tmp") catch {};
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias say='echo parser-ok'
+        \\FOO=bar say
+        \\> rush-alias-redir.tmp say
+        \\if say; then echo if-ok; fi
+        \\read redirected < rush-alias-redir.tmp
+        \\echo "$redirected"
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("parser-ok\nparser-ok\nif-ok\nparser-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "aliases expand inside command substitutions without touching here-doc bodies" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\alias say='echo subst-ok'
+        \\alias body='echo bad'
+        \\echo "$(say)"
+        \\read value <<EOF
+        \\body
+        \\EOF
+        \\echo "$value"
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("subst-ok\nbody\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

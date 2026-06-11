@@ -3038,12 +3038,101 @@ pub const Executor = struct {
     }
 
     pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
+        return self.expandAliasesForScriptWithFeatures(script, .{});
+    }
+
+    pub fn expandAliasesForScriptWithFeatures(self: *Executor, script: []const u8, features: compat.Features) ![]const u8 {
         var output: std.ArrayList(u8) = .empty;
         errdefer output.deinit(self.allocator);
         var active_aliases: std.ArrayList([]const u8) = .empty;
         defer active_aliases.deinit(self.allocator);
-        _ = try self.expandAliasesInto(script, &output, &active_aliases, true);
+        _ = try self.expandAliasesIntoParsedScript(script, features, &output, &active_aliases);
         return output.toOwnedSlice(self.allocator);
+    }
+
+    fn expandAliasesIntoParsedScript(
+        self: *Executor,
+        script: []const u8,
+        features: compat.Features,
+        output: *std.ArrayList(u8),
+        active_aliases: *std.ArrayList([]const u8),
+    ) !bool {
+        var parsed = try parser.parse(self.allocator, script, .{ .features = features });
+        defer parsed.deinit();
+        if (parsed.diagnostics.len != 0) return self.expandAliasesInto(script, output, active_aliases, true);
+
+        var command_word_spans: std.ArrayList(parser.Span) = .empty;
+        defer command_word_spans.deinit(self.allocator);
+        var skipped_spans: std.ArrayList(parser.Span) = .empty;
+        defer skipped_spans.deinit(self.allocator);
+
+        for (parsed.nodes) |node| switch (node.kind) {
+            .command_word => try command_word_spans.append(self.allocator, node.span),
+            .here_doc_body => try skipped_spans.append(self.allocator, node.span),
+            else => {},
+        };
+        std.mem.sort(parser.Span, command_word_spans.items, {}, lessThanSpanStart);
+        std.mem.sort(parser.Span, skipped_spans.items, {}, lessThanSpanStart);
+
+        return self.expandAliasesIntoParserSpans(script, features, command_word_spans.items, skipped_spans.items, output, active_aliases);
+    }
+
+    fn expandAliasesIntoParserSpans(
+        self: *Executor,
+        script: []const u8,
+        features: compat.Features,
+        command_word_spans: []const parser.Span,
+        skipped_spans: []const parser.Span,
+        output: *std.ArrayList(u8),
+        active_aliases: *std.ArrayList([]const u8),
+    ) !bool {
+        var index: usize = 0;
+        var command_span_index: usize = 0;
+        var skipped_span_index: usize = 0;
+        var continued_alias_position = false;
+
+        while (index < script.len) {
+            while (skipped_span_index < skipped_spans.len and skipped_spans[skipped_span_index].end <= index) : (skipped_span_index += 1) {}
+            if (skipped_span_index < skipped_spans.len and skipped_spans[skipped_span_index].start <= index and index < skipped_spans[skipped_span_index].end) {
+                const end = skipped_spans[skipped_span_index].end;
+                try output.appendSlice(self.allocator, script[index..end]);
+                index = end;
+                continued_alias_position = false;
+                continue;
+            }
+
+            const byte = script[index];
+            if (isAliasWordBoundary(byte)) {
+                try output.append(self.allocator, byte);
+                index += 1;
+                if (isShellSeparatorByte(byte)) continued_alias_position = false;
+                continue;
+            }
+
+            const start = index;
+            while (index < script.len and !isAliasWordBoundary(script[index])) : (index += 1) {}
+            const end = index;
+            const word = script[start..end];
+
+            while (command_span_index < command_word_spans.len and command_word_spans[command_span_index].end <= start) : (command_span_index += 1) {}
+            const parser_command_word = command_span_index < command_word_spans.len and command_word_spans[command_span_index].start == start and command_word_spans[command_span_index].end == end;
+            if ((parser_command_word or continued_alias_position) and !isReservedAliasWord(word) and !looksLikeFunctionDefinitionName(script, end)) {
+                if (self.aliases.get(word)) |value| {
+                    if (!isActiveAlias(active_aliases.items, word)) {
+                        try active_aliases.append(self.allocator, word);
+                        const nested_continues = try self.expandAliasesIntoParsedScript(value, features, output, active_aliases);
+                        _ = active_aliases.pop();
+                        continued_alias_position = nested_continues or (value.len > 0 and isAliasTrailingBlank(value[value.len - 1]));
+                        continue;
+                    }
+                }
+            }
+
+            try output.appendSlice(self.allocator, word);
+            continued_alias_position = false;
+        }
+
+        return continued_alias_position;
     }
 
     fn expandAliasesInto(
@@ -3810,7 +3899,7 @@ pub const Executor = struct {
                 return self.executeScriptChunks(source, program, options);
             }
         }
-        const aliased = try self.expandAliasesForScript(source);
+        const aliased = try self.expandAliasesForScriptWithFeatures(source, options.features);
         defer self.allocator.free(aliased);
         var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features });
         defer parsed.deinit();
@@ -5874,10 +5963,6 @@ pub const Executor = struct {
 
     fn runCommandSubstitution(context: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
         const substitution_context: *CommandSubstitutionContext = @ptrCast(@alignCast(context.?));
-        var parsed = try @import("parser.zig").parse(substitution_context.executor.allocator, script, .{ .features = substitution_context.options.features });
-        defer parsed.deinit();
-        var program = try ir.lowerSimpleCommands(substitution_context.executor.allocator, parsed);
-        defer program.deinit();
         var sub_options = substitution_context.options;
         sub_options.external_stdio = .capture_stdout;
         sub_options.force_noninteractive_error_consequences = true;
@@ -5899,7 +5984,7 @@ pub const Executor = struct {
         if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
         if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
         child.pending_exit = null;
-        var result = try child.executeProgram(program, sub_options);
+        var result = try child.executeScriptSlice(script, sub_options);
         defer result.deinit();
         substitution_context.executor.command_substitution_status = result.status;
         if (child.had_expansion_error) {
@@ -8028,6 +8113,11 @@ fn isActiveAlias(active_aliases: []const []const u8, word: []const u8) bool {
         if (std.mem.eql(u8, active, word)) return true;
     }
     return false;
+}
+
+fn lessThanSpanStart(context: void, lhs: parser.Span, rhs: parser.Span) bool {
+    _ = context;
+    return lhs.start < rhs.start or (lhs.start == rhs.start and lhs.end < rhs.end);
 }
 
 fn commandAbbreviationSpan(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !?parser.Span {
