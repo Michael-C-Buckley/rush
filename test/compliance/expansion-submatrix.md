@@ -10,7 +10,7 @@ POSIX expansion order is broadly: tilde expansion, parameter expansion, command 
 | --- | --- | --- | --- |
 | Tilde expansion | `expansion-tilde`, `expansion-assignment-prefix-context`, `expansion-tilde-named-user` | baseline | unset HOME edge cases |
 | Parameter expansion | `expansion-parameter-*`, `extensions-parameter-expansion` | supported/baseline; extensions out of scope | larger parser work and non-POSIX extension implementation tracked outside POSIX scoring |
-| Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported/baseline | broad positional row remains baseline because unquoted `$*` empty-field behavior diverges across shells |
+| Special parameters | `expansion-special-params`, `expansion-positionals-*` | supported | none known for the tracked POSIX-first surface |
 | Command substitution | `expansion-command-substitution`, `expansion-command-substitution-newline-trim`, `lex-backquote` | supported | none known for the tracked POSIX-first surface |
 | Arithmetic expansion | `expansion-arithmetic` | baseline | POSIX diagnostic behavior for invalid/nonnumeric expressions, overflow semantics, exact nested legacy-backquote diagnostics |
 | Field splitting | `expansion-field-splitting-*` | supported/baseline | broad interactions with special parameters |
@@ -71,12 +71,13 @@ Manifest rows:
 
 Rush has supported spec-clause coverage for `$?`, `$$`, `$!`, `$0`, braced multi-digit positional parameters such as `${10}`, quoted `$@`, quoted `$*`, and unquoted `$@`/`$*` with custom IFS. The braced multi-digit coverage also guards that unbraced `$10` remains `$1` followed by literal `0`, mixed malformed forms such as `${1abc}` stay on the bad-substitution diagnostics path, and assignment operators reject positional/special targets only when an assignment would actually be needed.
 
-Remaining high-risk gaps:
+Rush retains empty fields for unquoted `$*` when non-whitespace IFS delimiters are produced by empty positional parameters. POSIX.1-2024 permits empty fields from `@` and `*` expansion to be discarded in field-splitting contexts, so this behavior is tracked in POSIX-only corpus rather than differential comparison-shell corpus because dash/yash/ksh discard those fields while bash and Rush retain them.
 
-- the broad `expansion-positionals` row remains baseline because unquoted `$*` empty-field behavior diverges across comparison shells;
+Remaining broader expansion work:
+
 - deeper interactions with field splitting and quote removal still belong to broader expansion audits.
 
-Follow-up work should add narrower spec-clause rows if these edge cases need separate scoring.
+Future positional-specific edge cases should get narrower spec-clause rows if they need separate scoring.
 
 ## Command substitution
 

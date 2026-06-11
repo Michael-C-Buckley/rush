@@ -260,6 +260,7 @@ unquoted-at-embedded-positionals	expansion	behavior	embedded unquoted $@ applies
 unquoted-at-empty-positionals	expansion	behavior	unquoted $@ removes empty positional fields during field splitting
 unquoted-at-zero-positionals	expansion	behavior	unquoted $@ with no positional parameters produces no fields
 unquoted-star-custom-ifs	expansion	behavior	unquoted $* joins with custom IFS then splits
+unquoted-star-empty-fields	expansion	behavior	unquoted $* with empty positional parameters follows Rush's POSIX-permitted empty-field retention under non-whitespace IFS
 until-true	grammar	behavior	-
 while-false	grammar	behavior	-
 while-read-redirection	grammar	behavior	while loop condition reads from loop input redirection

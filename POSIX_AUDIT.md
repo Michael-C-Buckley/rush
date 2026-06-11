@@ -19,23 +19,23 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `406` rows
-- `scripts/check-posix-corpus.sh`: `401` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `227` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `282` cases, `564` comparisons across dash and bash POSIX mode
+- `scripts/check-compliance-manifest.sh`: `407` rows
+- `scripts/check-posix-corpus.sh`: `403` expected-output POSIX cases
+- `scripts/check-posix-negative-corpus.sh`: `228` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
+- `scripts/check-system-shell-corpus.sh`: `286` cases, `572` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `406`
-- scored POSIX items: `402`
-- supported: `382`
-- baseline: `17`
+- tracked items: `407`
+- scored POSIX items: `403`
+- supported: `385`
+- baseline: `15`
 - partial: `2`
 - missing: `1`
 - out of scope: `4`
-- strict supported only: `95.0%`
+- strict supported only: `95.5%`
 - practical supported+baseline: `99.3%`
-- weighted progress: `98.1%`
+- weighted progress: `98.3%`
 
 Recent notable capabilities:
 
@@ -48,7 +48,7 @@ Recent notable capabilities:
 - Structured CST nodes for key compound forms including `case_item` arms.
 - POSIX pipeline negation with `!`.
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
-- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes including representative nested and compound-command contexts, arithmetic baseline with nested parameter/command preprocessing plus representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` baseline field behavior.
+- POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes including representative nested and compound-command contexts, arithmetic baseline with nested parameter/command preprocessing plus representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` positional field behavior including POSIX-permitted unquoted `$*` empty-field retention.
 - Non-POSIX extension forms are excluded from POSIX scoring and tracked separately in `BASH_COMPAT.md`; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
 - Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - POSIX builtins now include supported `.`, `export`, `readonly`, `unset`, `umask`, `times`, `trap`, `getopts`, `eval`, and `exec` plus baseline `command`, `exit`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
@@ -133,12 +133,14 @@ POSIX expansion order broadly includes tilde expansion, parameter expansion, com
 ### Supported / baseline
 
 - Tilde expansion for `~` and `~/...` using `HOME`.
-- Parameter expansion baseline:
+- Parameter expansion:
   - `$name`
   - `${name}`
   - global and function positional parameters `$1`, `$#`, `$@`, `$*`
+  - `set --` global positional assignment and function-local positional frames, including function-local `set --` and `shift`
   - quoted `$@` multi-field behavior
   - quoted `$*` joining with first `IFS` character
+  - unquoted `$@`/`$*` field behavior, including embedded, zero, empty-parameter, custom-IFS, and POSIX-permitted unquoted `$*` empty-field retention cases
   - core special parameters `$?`, `$$`, `$!`, `$0`
   - `${var:-word}`
   - `${var-word}`
@@ -409,8 +411,7 @@ The detailed backlog lives in Tend and the machine-readable status lives in `tes
 ### Batch B: Pathname and expansion edge cases
 
 1. `#159` Deepen pathname expansion POSIX edge cases, especially slash components, dotfiles, and unmatched patterns.
-2. Add narrower spec-clause rows if embedded or empty positional-parameter behavior needs separate scoring beyond `#160`.
-3. Keep diagnostics and shell-error consequences in the negative corpus when they are not differential-safe.
+2. Keep diagnostics and shell-error consequences in the negative corpus when they are not differential-safe.
 
 ### Batch C: Compliance evidence growth
 

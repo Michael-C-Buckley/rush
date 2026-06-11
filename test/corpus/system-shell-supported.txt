@@ -84,6 +84,9 @@ f() { false; return 7; echo never; }; f; echo $?
 export EXPORTED=value; env | grep ^EXPORTED=
 set -- "a b" c ""; echo "$1/$2/$#"; for x in "$@"; do echo "<$x>"; done; IFS=:; echo "<$*>"; shift; echo "$1/$#"
 set -- a b; set --; echo "$#/${1:-unset}"; for x in "$@"; do echo bad; done; echo done
+set -- 'a,b' c; IFS=,; for arg in $@; do printf '<%s>\n' "$arg"; done; for arg in $*; do printf '[%s]\n' "$arg"; done
+set -- "a b" "" c; for arg in pre$@post; do printf '<%s>\n' "$arg"; done; for arg in pre$*post; do printf '[%s]\n' "$arg"; done
+set -- "" x; for arg in $@; do printf '<%s>\n' "$arg"; done; set --; for arg in $@; do echo bad; done; echo zero
 touch rush-noglob-a.tmp; set -f; echo rush-noglob-?.tmp; set +f; echo rush-noglob-?.tmp
 touch rush-noglob-b.tmp; set -o noglob; echo rush-noglob-?.tmp; set +o noglob; echo rush-noglob-?.tmp
 set -o nounset; echo ${RUSH_UNSET_FOR_TEST:-fallback}; echo ${RUSH_UNSET_FOR_TEST+yes}
