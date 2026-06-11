@@ -631,8 +631,7 @@ pub const LineSession = struct {
         try self.editor.buffer.insertText(pasted);
         self.completion_menu.clear(self.allocator);
         if (self.state == .history_search) {
-            try self.syncHistorySearchQueryFromBuffer();
-            try self.refreshHistorySearch(null);
+            if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
         }
     }
 
@@ -807,48 +806,43 @@ pub const LineSession = struct {
             .up => self.selectPreviousHistorySearchMatch(),
             .backspace => {
                 self.editor.buffer.deletePrevious();
-                try self.syncHistorySearchQueryFromBuffer();
-                try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             .delete => {
                 self.editor.buffer.deleteNext();
-                try self.syncHistorySearchQueryFromBuffer();
-                try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             .text => {
                 if (event.text.len == 0) return;
                 try self.editor.handleKey(event);
-                try self.syncHistorySearchQueryFromBuffer();
-                try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             .left, .right, .home, .end, .word_left, .word_right => try self.editor.handleKey(event),
             .delete_to_start => {
                 self.editor.buffer.deleteToStart();
-                try self.syncHistorySearchQueryFromBuffer();
-                try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             .delete_to_end => {
                 self.editor.buffer.deleteToEnd();
-                try self.syncHistorySearchQueryFromBuffer();
-                try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             .delete_previous_word => {
                 self.editor.buffer.deletePreviousWord();
-                try self.syncHistorySearchQueryFromBuffer();
-                try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             .delete_next_word => {
                 self.editor.buffer.deleteNextWord();
-                try self.syncHistorySearchQueryFromBuffer();
-                try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             else => {},
         }
     }
 
-    fn syncHistorySearchQueryFromBuffer(self: *LineSession) !void {
+    fn syncHistorySearchQueryFromBuffer(self: *LineSession) !bool {
+        if (std.mem.eql(u8, self.history_search_query.items, self.editor.buffer.text())) return false;
         self.history_search_query.clearRetainingCapacity();
         try self.history_search_query.appendSlice(self.allocator, self.editor.buffer.text());
+        return true;
     }
 
     fn refreshHistorySearch(self: *LineSession, before: ?i64) !void {
@@ -2924,6 +2918,25 @@ test "history search ignores modifier-only text events" {
     try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
     try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
     try std.testing.expectEqualStrings("git", session.editor.buffer.text());
+}
+
+test "history search refreshes only when query changes" {
+    const entries = [_][]const u8{ "git status", "git diff", "git show" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try session.handleKey(.{ .key = .tab });
+    try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
+
+    try session.handleKey(.{ .key = .delete });
+
+    try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
+    try std.testing.expectEqualStrings("git", session.history_search_query.items);
 }
 
 test "history search shift tab clamps at first match" {
