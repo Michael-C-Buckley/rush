@@ -816,6 +816,7 @@ pub const LineSession = struct {
                 try self.refreshHistorySearch(null);
             },
             .text => {
+                if (event.text.len == 0) return;
                 try self.editor.handleKey(event);
                 try self.syncHistorySearchQueryFromBuffer();
                 try self.refreshHistorySearch(null);
@@ -1599,8 +1600,7 @@ fn appendCompletionMenuLines(allocator: std.mem.Allocator, lines: *std.ArrayList
                     try appendUiStyleStart(allocator, &line, theme.completion_selected);
                 }
             }
-            const row_width = visibleWidth(line.items, .unicode);
-            if (row_width < width) try line.appendNTimes(allocator, ' ', @as(usize, @intCast(width - row_width)));
+            try line.appendSlice(allocator, "  ");
             try appendUiStyleEnd(allocator, &line, theme.completion_selected);
         } else {
             try line.appendSlice(allocator, "  ");
@@ -2905,6 +2905,25 @@ test "history search menu caps visible candidates at sixteen rows" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "cmd02") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "cmd01") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 1-16 of 18") != null);
+}
+
+test "history search ignores modifier-only text events" {
+    const entries = [_][]const u8{ "git status", "git diff", "git show" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try session.handleKey(.{ .key = .tab });
+    try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
+
+    try session.handleKey(.{ .key = .text, .text = "", .modifiers = .{ .shift = true } });
+
+    try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
+    try std.testing.expectEqualStrings("git", session.editor.buffer.text());
 }
 
 test "history search shift tab clamps at first match" {
