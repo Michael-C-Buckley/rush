@@ -2617,7 +2617,7 @@ test "command string invocation shell options affect execution" {
     try std.testing.expectEqualStrings("", nounset.stdout);
     try std.testing.expect(std.mem.indexOf(u8, nounset.stderr, "unset parameter") != null);
 
-    const flags_invocation = parseCommandStringInvocation(&.{ "rush", "-e", "-o", "nounset", "-c", "printf '<%s>\\n' \"$-\"" }) orelse return error.ExpectedInvocation;
+    const flags_invocation = parseCommandStringInvocation(&.{ "rush", "-bem", "-o", "nounset", "-c", "printf '<%s>\\n' \"$-\"" }) orelse return error.ExpectedInvocation;
     var flags = try runCommandStringWithEnvironment(
         std.testing.allocator,
         std.testing.io,
@@ -2631,7 +2631,7 @@ test "command string invocation shell options affect execution" {
     defer flags.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), flags.status);
-    try std.testing.expectEqualStrings("<eu>\n", flags.stdout);
+    try std.testing.expectEqualStrings("<bemu>\n", flags.stdout);
     try std.testing.expectEqualStrings("", flags.stderr);
 
     const noexec_invocation = parseCommandStringInvocation(&.{ "rush", "-n", "-c", "echo unreached" }) orelse return error.ExpectedInvocation;

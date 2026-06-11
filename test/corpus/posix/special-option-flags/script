@@ -7,6 +7,13 @@ set -e
 case $- in *e*) echo set-e ;; *) echo missing-e ;; esac
 set +e
 case $- in *e*) echo stale-e ;; *) echo cleared-e ;; esac
+set -bm
+case $- in *b*) echo set-b ;; *) echo missing-b ;; esac
+case $- in *m*) echo set-m ;; *) echo missing-m ;; esac
+set +b
+case $- in *b*) echo stale-b ;; *) echo cleared-b ;; esac
+set +o monitor
+case $- in *m*) echo stale-m ;; *) echo cleared-m ;; esac
 set -o nounset
 case $- in *u*) echo set-u ;; *) echo missing-u ;; esac
 set +o nounset

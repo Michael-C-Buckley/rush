@@ -1,9 +1,11 @@
 set +o allexport
 set +o errexit
 set +o ignoreeof
+set +o monitor
 set +o noclobber
 set +o noexec
 set +o noglob
+set +o notify
 set +o nounset
 set +o pipefail
 set +o verbose

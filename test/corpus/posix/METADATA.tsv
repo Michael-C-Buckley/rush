@@ -206,19 +206,19 @@ set-o-errexit-condition	options	option	-
 option-set-ignoreeof	options	option	set -o ignoreeof toggles the interactive EOF guard option and set +o disables it
 set-o-noclobber	options	option	-
 set-o-noglob	options	option	-
-option-set-o-listing	options	option	set -o lists current supported shell option states in Rush's stable human-readable format
+option-set-o-listing	options	option	set -o lists current supported shell option states, including monitor and notify, in Rush's stable human-readable format
 option-set-noexec	options	option	set -n parses remaining input without executing subsequent commands
 option-set-o-noexec	options	option	set -o noexec parses remaining input without executing subsequent commands
-option-set-plus-o-listing	options	option	set +o lists reusable commands for every supported shell option
+option-set-plus-o-listing	options	option	set +o lists reusable commands for every supported shell option, including monitor and notify
 option-set-positionals	options	option	set option parsing can be followed by positional operands, with --, -, and + terminators preserving POSIX operand behavior
-option-set-plus-o-reinput	options	option	set +o output can be re-input to restore representative option states
+option-set-plus-o-reinput	options	option	set +o output can be re-input to restore representative option states, including monitor and notify
 set-o-nounset-default-operator	options	option	-
 set-verbose	options	option	-
 set-xtrace	options	option	-
 simple-echo	lexing	behavior	-
 special-builtin-assignment-prefix	variables	behavior	-
 special-last-background	job_control	behavior	-
-special-option-flags	variables	behavior	$- reflects representative current short shell option flags, including allexport, errexit, nounset, noglob, noclobber, verbose, and xtrace
+special-option-flags	variables	behavior	$- reflects representative current short shell option flags, including allexport, notify, errexit, monitor, nounset, noglob, noclobber, verbose, and xtrace
 special-pid	variables	behavior	-
 special-status	variables	behavior	-
 startup-maintained-variables	variables	behavior	startup IFS PPID and PWD shell-maintained variables

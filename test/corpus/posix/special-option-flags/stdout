@@ -3,6 +3,10 @@ set-a
 cleared-a
 set-e
 cleared-e
+set-b
+set-m
+cleared-b
+cleared-m
 set-u
 set-f
 set-C

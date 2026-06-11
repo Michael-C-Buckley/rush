@@ -1,9 +1,11 @@
 allexport	off
 errexit	off
 ignoreeof	off
+monitor	off
 noclobber	off
 noexec	off
 noglob	off
+notify	off
 nounset	off
 pipefail	off
 verbose	off
