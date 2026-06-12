@@ -3109,6 +3109,18 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
             index += 2;
             continue;
         }
+        if (text[index] == '$' or text[index] == '`') {
+            if (try substitutionPart(allocator, text, index)) |part| {
+                switch (part.kind) {
+                    .arithmetic, .command_substitution => {
+                        index = part.span.end;
+                        continue;
+                    },
+                    .parameter => {},
+                    else => unreachable,
+                }
+            }
+        }
         if (try quotedPositionalSliceAt(allocator, text, index, options)) |special| {
             try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
             const values = try positionalSliceValues(allocator, special.expansion.operation, options);

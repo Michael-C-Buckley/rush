@@ -16344,6 +16344,25 @@ test "executor expands command substitutions inside double quotes" {
     try std.testing.expectEqualStrings("2:a b:c\n", result.stdout);
 }
 
+test "executor keeps recursive command substitution contexts inside double quotes" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\A=outer
+        \\printf '<%s>\n' "$(A=inner; printf '%s' "$A")"
+        \\printf '<%s>\n' "$A"
+        \\printf '<%s>\n' "$(for x in a b; do printf "%s" "$x"; done)"
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<inner>\n<outer>\n<ab>\n", result.stdout);
+}
+
 test "executor expands command substitutions recursively" {
     var lowered = try parseAndLower(std.testing.allocator, "echo before-$(echo hi)-after");
     defer lowered.parsed.deinit();
