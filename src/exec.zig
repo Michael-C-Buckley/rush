@@ -489,6 +489,7 @@ const builtin_names = [_][]const u8{
     "shift",
     "export",
     "getopts",
+    "hash",
     "fg",
     "jobs",
     "unset",
@@ -964,6 +965,7 @@ pub const Executor = struct {
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged(FunctionValue) = .empty,
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
+    command_hash: std.StringHashMapUnmanaged([]const u8) = .empty,
     abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     trap_signal_actions: std.ArrayList(TrapSignalAction) = .empty,
@@ -1318,6 +1320,21 @@ pub const Executor = struct {
         var exported_iter = self.exported.iterator();
         while (exported_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
         self.exported.clearRetainingCapacity();
+        self.clearCommandHash();
+    }
+
+    fn clearCommandHash(self: *Executor) void {
+        var iter = self.command_hash.iterator();
+        while (iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.command_hash.clearRetainingCapacity();
+    }
+
+    fn deinitCommandHash(self: *Executor) void {
+        self.clearCommandHash();
+        self.command_hash.deinit(self.allocator);
     }
 
     pub fn setLastStatus(self: *Executor, status: ExitStatus) void {
@@ -1382,6 +1399,7 @@ pub const Executor = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.aliases.deinit(self.allocator);
+        self.deinitCommandHash();
         var abbr_iter = self.abbreviations.iterator();
         while (abbr_iter.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -2312,6 +2330,7 @@ pub const Executor = struct {
         if (self.env.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
+            if (std.mem.eql(u8, name, "PATH")) self.clearCommandHash();
             self.queueVariableHook(name);
         }
     }
@@ -2375,6 +2394,7 @@ pub const Executor = struct {
         } else {
             result.value_ptr.* = owned_value;
         }
+        if (std.mem.eql(u8, name, "PATH")) self.clearCommandHash();
         self.queueVariableHook(name);
     }
 
@@ -2767,6 +2787,8 @@ pub const Executor = struct {
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body, entry.value_ptr.redirections);
         var alias_iter = other.aliases.iterator();
         while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
+        var command_hash_iter = other.command_hash.iterator();
+        while (command_hash_iter.next()) |entry| try self.rememberCommandHash(entry.key_ptr.*, entry.value_ptr.*);
         var abbr_iter = other.abbreviations.iterator();
         while (abbr_iter.next()) |entry| try self.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
         for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
@@ -5905,11 +5927,39 @@ pub const Executor = struct {
         return null;
     }
 
+    fn commandHashEligible(command: ir.SimpleCommand, use_default_path: bool) bool {
+        if (use_default_path) return false;
+        if (command.argv.len == 0) return false;
+        if (std.mem.indexOfScalar(u8, command.argv[0].text, '/') != null) return false;
+        for (command.assignments) |assignment| {
+            const parsed = envAssignment(assignment.text) orelse continue;
+            if (std.mem.eql(u8, parsed.name, "PATH")) return false;
+        }
+        return true;
+    }
+
+    fn rememberCommandHash(self: *Executor, name: []const u8, path: []const u8) !void {
+        if (self.command_hash.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value);
+        }
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_path = try self.allocator.dupe(u8, path);
+        errdefer self.allocator.free(owned_path);
+        try self.command_hash.put(self.allocator, owned_name, owned_path);
+    }
+
     fn findReplacementExecutable(self: *Executor, io: std.Io, command: ir.SimpleCommand, use_default_path: bool) ![]const u8 {
         const name = command.argv[0].text;
         if (std.mem.indexOfScalar(u8, name, '/') != null) return self.executableReplacementPath(io, name);
+        const cacheable = commandHashEligible(command, use_default_path);
+        if (cacheable) if (self.command_hash.get(name)) |path| return self.allocator.dupe(u8, path);
         const path_value = if (use_default_path) "/bin:/usr/bin" else self.commandLookupPath(command) orelse return error.CommandNotFound;
-        return self.findReplacementExecutableInPathValue(io, name, path_value);
+        const executable = try self.findReplacementExecutableInPathValue(io, name, path_value);
+        errdefer self.allocator.free(executable);
+        if (cacheable) try self.rememberCommandHash(name, executable);
+        return executable;
     }
 
     fn commandLookupPath(self: Executor, command: ir.SimpleCommand) ?[]const u8 {
@@ -8331,6 +8381,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "export")) return builtinExport;
     if (std.mem.eql(u8, name, "event")) return builtinEvent;
     if (std.mem.eql(u8, name, "getopts")) return builtinGetopts;
+    if (std.mem.eql(u8, name, "hash")) return builtinHash;
     if (std.mem.eql(u8, name, "fg")) return builtinFg;
     if (std.mem.eql(u8, name, "jobs")) return builtinJobs;
     if (std.mem.eql(u8, name, "kill")) return builtinKill;
@@ -8437,6 +8488,75 @@ fn builtinType(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     if (index >= command.argv.len) return errorResult(self.allocator, 2, "type", "missing operand");
     if (!option_terminated and std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return errorResult(self.allocator, 2, "type", "unsupported option");
     return commandLookupMany(self, options, command.argv[index..], false, .verbose);
+}
+
+fn builtinHash(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    var reset = false;
+    var index: usize = 1;
+    while (index < command.argv.len and command.argv[index].text.len > 1 and command.argv[index].text[0] == '-') {
+        const option = command.argv[index].text;
+        index += 1;
+        if (std.mem.eql(u8, option, "--")) break;
+        for (option[1..]) |flag| switch (flag) {
+            'r' => reset = true,
+            else => return errorResult(self.allocator, 2, "hash", "unsupported option"),
+        };
+    }
+
+    if (reset) self.clearCommandHash();
+    if (index >= command.argv.len) return printCommandHash(self);
+
+    const io = options.io orelse return error.MissingIoForBuiltin;
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(self.allocator);
+
+    var status: ExitStatus = 0;
+    for (command.argv[index..]) |arg| {
+        const name = arg.text;
+        if (self.functions.get(name) != null or builtinForName(self.*, name) != null) continue;
+        if (std.mem.indexOfScalar(u8, name, '/') != null) continue;
+        const found = try self.findExecutableInPath(io, name);
+        if (found) |path| {
+            defer self.allocator.free(path);
+            try self.rememberCommandHash(name, path);
+            continue;
+        }
+        status = 1;
+        const diagnostic = try std.fmt.allocPrint(self.allocator, "hash: {s}: not found\n", .{name});
+        defer self.allocator.free(diagnostic);
+        try stderr.appendSlice(self.allocator, diagnostic);
+    }
+
+    return .{
+        .allocator = self.allocator,
+        .status = status,
+        .stdout = try self.allocator.alloc(u8, 0),
+        .stderr = try stderr.toOwnedSlice(self.allocator),
+    };
+}
+
+fn printCommandHash(self: *Executor) !CommandResult {
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(self.allocator);
+
+    var iter = self.command_hash.iterator();
+    while (iter.next()) |entry| try names.append(self.allocator, entry.key_ptr.*);
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (names.items) |name| {
+        try stdout.appendSlice(self.allocator, self.command_hash.get(name).?);
+        try stdout.append(self.allocator, '\n');
+    }
+
+    return .{
+        .allocator = self.allocator,
+        .status = 0,
+        .stdout = try stdout.toOwnedSlice(self.allocator),
+        .stderr = try self.allocator.alloc(u8, 0),
+    };
 }
 
 const CommandLookupMode = enum { none, terse, verbose };
@@ -14096,7 +14216,7 @@ test "executor classifies POSIX special builtins" {
         "alias", "cd",      "command", "echo", "env",  "false",
         "pwd",   "read",    "source",  "test", "true", "umask",
         "wait",  "printf",  "getopts", "jobs", "fg",   "bg",
-        "kill",  "unalias",
+        "kill",  "unalias", "hash",
     };
     for (&regular_names) |name| try std.testing.expect(!isSpecialBuiltin(name));
 }
@@ -14278,6 +14398,64 @@ test "executor implements command eval exec and exit builtins" {
     defer exec_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), exec_result.status);
     try std.testing.expectEqualStrings("exec-ok\n", exec_result.stdout);
+}
+
+test "executor implements hash builtin command location cache" {
+    const first_dir = "rush-hash-path-one";
+    const second_dir = "rush-hash-path-two";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, first_dir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, second_dir) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, first_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, second_dir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = first_dir ++ "/rush-hash-tool", .data = "printf 'external-ok\\n'\n" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = second_dir ++ "/rush-hash-other", .data = "printf 'other-ok\\n'\n" });
+    const chmod_first = try std.process.run(std.testing.allocator, std.testing.io, .{ .argv = &.{ "/bin/chmod", "755", first_dir ++ "/rush-hash-tool" } });
+    defer std.testing.allocator.free(chmod_first.stdout);
+    defer std.testing.allocator.free(chmod_first.stderr);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, chmod_first.term);
+    const chmod_second = try std.process.run(std.testing.allocator, std.testing.io, .{ .argv = &.{ "/bin/chmod", "755", second_dir ++ "/rush-hash-other" } });
+    defer std.testing.allocator.free(chmod_second.stdout);
+    defer std.testing.allocator.free(chmod_second.stderr);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, chmod_second.term);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", first_dir);
+
+    var result = try executor.executeScriptSlice(
+        \\hash
+        \\printf 'empty:%s\n' "$?"
+        \\hash rush-hash-tool
+        \\hash
+        \\hash -r
+        \\printf 'reset:\n'
+        \\hash
+        \\rush-hash-tool
+        \\hash
+        \\PATH=rush-hash-path-two
+        \\printf 'after-path:\n'
+        \\hash
+        \\rush_hash_fn() { :; }
+        \\hash hash rush_hash_fn rush-hash-other
+        \\hash rush-hash-missing
+        \\printf 'missing:%s\n' "$?"
+        \\hash
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        \\empty:0
+        \\rush-hash-path-one/rush-hash-tool
+        \\reset:
+        \\external-ok
+        \\rush-hash-path-one/rush-hash-tool
+        \\after-path:
+        \\missing:1
+        \\rush-hash-path-two/rush-hash-other
+        \\
+    , result.stdout);
+    try std.testing.expectEqualStrings("hash: rush-hash-missing: not found\n", result.stderr);
 }
 
 test "executor implements read and printf builtins" {
