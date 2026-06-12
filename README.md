@@ -72,8 +72,13 @@ complete git --option --short p --long porcelain --exclusive-group output --desc
   value.
 - `--description TEXT` shows help text in completion menus.
 - `--no-space` avoids inserting a trailing space after accepting the option.
+- `--repeatable` keeps the option available after it has already appeared;
+  non-repeatable options are suppressed after use and repeated uses are reported
+  in completion diagnostics.
 - `--exclusive-group NAME` hides other options in the same group after one is
   already present and reports conflicting combinations in completion diagnostics.
+- `--terminates-options` marks an option that stops later words from being
+  parsed as options. A bare `--` always terminates option parsing.
 
 ### Dynamic providers
 
@@ -129,7 +134,7 @@ Provider functions can emit candidates directly:
 
 ```sh
 completion candidate VALUE [--display TEXT] [--description TEXT] [--kind KIND] [--no-space]
-completion option [--long NAME] [--short C] [--argument NAME] [--exclusive-group NAME] [--description TEXT]
+completion option [--long NAME] [--short C] [--argument NAME] [--repeatable] [--exclusive-group NAME] [--terminates-options] [--description TEXT]
 ```
 
 Candidate kinds include `command`, `builtin`, `function`, `file`, `directory`,

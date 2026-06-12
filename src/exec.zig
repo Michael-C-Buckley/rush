@@ -389,6 +389,8 @@ pub const CompletionBuilder = struct {
                 .short = if (option.short) |short| try self.dupeField(allocator, short) else null,
                 .argument = if (option.argument) |argument| try self.dupeField(allocator, argument) else null,
                 .exclusive_group = if (option.exclusive_group) |group| try self.dupeField(allocator, group) else null,
+                .repeatable = option.repeatable,
+                .terminates_options = option.terminates_options,
                 .no_space = option.no_space,
             };
         }
@@ -445,10 +447,14 @@ pub const CompletionOptionValue = struct {
 pub const CompletionParsedOption = struct {
     spelling: []const u8,
     name: []const u8,
+    key: []const u8,
     exclusive_group: ?[]const u8 = null,
+    repeatable: bool = false,
+    terminates_options: bool = false,
 };
 
 pub const CompletionOptionSuppressionReason = enum {
+    already_present,
     exclusive_group,
 };
 
@@ -496,6 +502,7 @@ pub const CompletionSemanticContext = struct {
     argument_index: usize = 0,
     argument_state: ?[]const u8 = null,
     parsed_options: []const CompletionParsedOption = &.{},
+    options_terminated: bool = false,
     previous: []const u8 = "",
     position: CompletionSemanticPosition = .command,
     option_value: ?CompletionOptionValue = null,
@@ -524,6 +531,7 @@ pub const CompletionDiagnosticKind = enum {
     unknown_subcommand,
     unknown_option,
     missing_option_value,
+    repeated_option,
     conflicting_option,
 };
 
@@ -635,8 +643,11 @@ const MatchedCompletionOption = struct {
     takes_value: bool,
     attached_value: bool,
     name: []const u8,
+    key: []const u8,
     spelling: []const u8,
     exclusive_group: ?[]const u8 = null,
+    repeatable: bool = false,
+    terminates_options: bool = false,
 };
 
 const ShortOptionCluster = struct {
@@ -691,18 +702,19 @@ fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: 
     for (rules) |rule| {
         if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextAppliesToPath(rule, root, path)) continue;
         const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
+        const key = completionOptionKey(rule.option) orelse continue;
         if (rule.option.long) |long| {
             var spelling_buffer: [256]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = long, .spelling = word, .exclusive_group = rule.option.exclusive_group };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = long, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
             if (takes_value and std.mem.startsWith(u8, word, spelling) and word.len > spelling.len and word[spelling.len] == '=') {
-                return .{ .takes_value = true, .attached_value = true, .name = long, .spelling = word[0..spelling.len], .exclusive_group = rule.option.exclusive_group };
+                return .{ .takes_value = true, .attached_value = true, .name = long, .key = key, .spelling = word[0..spelling.len], .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
             }
         }
         if (rule.option.short) |short| {
             var spelling_buffer: [32]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = short, .spelling = word, .exclusive_group = rule.option.exclusive_group };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = short, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
         }
     }
     return null;
@@ -714,7 +726,8 @@ fn findShortCompletionOption(rules: []const completion.Rule, root: []const u8, p
         const option_short = rule.option.short orelse continue;
         if (option_short.len != 1 or option_short[0] != short) continue;
         const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
-        return .{ .takes_value = takes_value, .attached_value = false, .name = option_short, .spelling = option_short, .exclusive_group = rule.option.exclusive_group };
+        const key = completionOptionKey(rule.option) orelse option_short;
+        return .{ .takes_value = takes_value, .attached_value = false, .name = option_short, .key = key, .spelling = option_short, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
     }
     return null;
 }
@@ -729,6 +742,17 @@ fn analyzeShortOptionCluster(rules: []const completion.Rule, root: []const u8, p
         }
     }
     return .{ .valid = true };
+}
+
+fn shortCompletionClusterTerminatesOptions(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) bool {
+    if (!isShortOptionCluster(word)) return false;
+    var index: usize = 1;
+    while (index < word.len) : (index += 1) {
+        const matched = findShortCompletionOption(rules, root, path, word[index]) orelse return false;
+        if (matched.terminates_options) return true;
+        if (matched.takes_value) return false;
+    }
+    return false;
 }
 
 fn findCompletionSubcommand(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) bool {
@@ -780,9 +804,16 @@ fn completionOptionPrefixMatches(rules: []const completion.Rule, root: []const u
 }
 
 pub fn completionOptionSuppressionForOption(context: CompletionSemanticContext, option: completion.Option) ?CompletionOptionSuppression {
+    const key = completionOptionKey(option);
+    if (key != null and !option.repeatable) {
+        for (context.parsed_options) |parsed| {
+            if (std.mem.eql(u8, parsed.key, key.?)) return .{ .reason = .already_present, .by = parsed.spelling };
+        }
+    }
     const group = option.exclusive_group orelse return null;
     for (context.parsed_options) |parsed| {
         const parsed_group = parsed.exclusive_group orelse continue;
+        if (key != null and option.repeatable and std.mem.eql(u8, parsed.key, key.?)) continue;
         if (std.mem.eql(u8, parsed_group, group)) return .{ .reason = .exclusive_group, .by = parsed.spelling, .group = group };
     }
     return null;
@@ -791,19 +822,37 @@ pub fn completionOptionSuppressionForOption(context: CompletionSemanticContext, 
 pub fn completionOptionCandidateSuppression(rules: []const completion.Rule, context: CompletionSemanticContext, candidate: completion.Candidate) ?CompletionOptionSuppression {
     if (candidate.kind != .option) return null;
     const option = candidate.option orelse return null;
-    if (completionOptionSuppressionForOption(context, option)) |suppression| return suppression;
-    const inherited_group = completionRuleExclusiveGroupForCandidate(rules, context.root, context.path, candidate) orelse return null;
+    const inherited_metadata = completionRuleOptionMetadataForCandidate(rules, context.root, context.path, candidate);
     var inherited_option = option;
-    inherited_option.exclusive_group = inherited_group;
+    if (inherited_metadata) |metadata| {
+        if (inherited_option.exclusive_group == null) inherited_option.exclusive_group = metadata.exclusive_group;
+        inherited_option.repeatable = inherited_option.repeatable or metadata.repeatable;
+        inherited_option.terminates_options = inherited_option.terminates_options or metadata.terminates_options;
+    }
     return completionOptionSuppressionForOption(context, inherited_option);
 }
 
-fn completionRuleExclusiveGroupForCandidate(rules: []const completion.Rule, root: []const u8, path: []const []const u8, candidate: completion.Candidate) ?[]const u8 {
+const CompletionOptionMetadata = struct {
+    exclusive_group: ?[]const u8 = null,
+    repeatable: bool = false,
+    terminates_options: bool = false,
+};
+
+fn completionRuleOptionMetadataForCandidate(rules: []const completion.Rule, root: []const u8, path: []const []const u8, candidate: completion.Candidate) ?CompletionOptionMetadata {
     for (rules) |rule| {
         if (rule.kind != .option or !completionRuleContextAppliesToPath(rule, root, path)) continue;
-        const group = rule.option.exclusive_group orelse continue;
-        if (completionOptionSpellingMatches(rule.option, candidate.value)) return group;
+        if (completionOptionSpellingMatches(rule.option, candidate.value)) return .{
+            .exclusive_group = rule.option.exclusive_group,
+            .repeatable = rule.option.repeatable,
+            .terminates_options = rule.option.terminates_options,
+        };
     }
+    return null;
+}
+
+fn completionOptionKey(option: completion.Option) ?[]const u8 {
+    if (option.long) |long| return long;
+    if (option.short) |short| return short;
     return null;
 }
 
@@ -825,17 +874,40 @@ fn appendParsedCompletionOption(allocator: std.mem.Allocator, parsed_options: *s
     try parsed_options.append(allocator, .{
         .spelling = matched.spelling,
         .name = matched.name,
+        .key = matched.key,
         .exclusive_group = matched.exclusive_group,
+        .repeatable = matched.repeatable,
+        .terminates_options = matched.terminates_options,
     });
 }
 
 fn matchedCompletionOptionSuppression(parsed_options: []const CompletionParsedOption, matched: MatchedCompletionOption) ?CompletionOptionSuppression {
+    if (!matched.repeatable) {
+        for (parsed_options) |parsed| {
+            if (std.mem.eql(u8, parsed.key, matched.key)) return .{ .reason = .already_present, .by = parsed.spelling };
+        }
+    }
     const group = matched.exclusive_group orelse return null;
     for (parsed_options) |parsed| {
         const parsed_group = parsed.exclusive_group orelse continue;
+        if (matched.repeatable and std.mem.eql(u8, parsed.key, matched.key)) continue;
         if (std.mem.eql(u8, parsed_group, group)) return .{ .reason = .exclusive_group, .by = parsed.spelling, .group = group };
     }
     return null;
+}
+
+fn completionDiagnosticKindForOptionSuppression(suppression: CompletionOptionSuppression) CompletionDiagnosticKind {
+    return switch (suppression.reason) {
+        .already_present => .repeated_option,
+        .exclusive_group => .conflicting_option,
+    };
+}
+
+fn completionDiagnosticMessageForOptionSuppression(suppression: CompletionOptionSuppression) []const u8 {
+    return switch (suppression.reason) {
+        .already_present => "option may not be repeated",
+        .exclusive_group => "option conflicts with previous option",
+    };
 }
 
 fn appendShortCompletionClusterParsedOptions(allocator: std.mem.Allocator, parsed_options: *std.ArrayList(CompletionParsedOption), rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) !?CompletionOptionSuppression {
@@ -848,7 +920,10 @@ fn appendShortCompletionClusterParsedOptions(allocator: std.mem.Allocator, parse
         try parsed_options.append(allocator, .{
             .spelling = word,
             .name = matched.name,
+            .key = matched.key,
             .exclusive_group = matched.exclusive_group,
+            .repeatable = matched.repeatable,
+            .terminates_options = matched.terminates_options,
         });
         if (matched.takes_value) return first_suppression;
     }
@@ -1792,6 +1867,8 @@ pub const Executor = struct {
                 .short = if (rule.option.short) |short| try self.allocator.dupe(u8, short) else null,
                 .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
                 .exclusive_group = if (rule.option.exclusive_group) |group| try self.allocator.dupe(u8, group) else null,
+                .repeatable = rule.option.repeatable,
+                .terminates_options = rule.option.terminates_options,
                 .no_space = rule.option.no_space,
             },
             .argument = .{
@@ -2052,6 +2129,7 @@ pub const Executor = struct {
         var suspicious: ?parser.Span = null;
         var option_value: ?CompletionOptionValue = null;
         var stop_after_unknown_option = false;
+        var options_terminated = false;
         while (index < words.items.len) {
             const token = words.items[index].token;
             const is_current = token.span.start == parser_context.span.start and clamped_cursor <= token.span.end;
@@ -2060,7 +2138,13 @@ pub const Executor = struct {
             previous = word;
             if (stop_after_unknown_option and !findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) break;
             stop_after_unknown_option = false;
-            if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
+            if (options_terminated) {
+                previous_argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+                previous_argument = word;
+                argument_index += 1;
+            } else if (std.mem.eql(u8, word, "--")) {
+                options_terminated = true;
+            } else if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
                 try appendParsedCompletionOption(self.allocator, &parsed_options, matched);
                 if (matched.takes_value and !matched.attached_value) {
                     if (index + 1 < words.items.len) {
@@ -2076,12 +2160,14 @@ pub const Executor = struct {
                         option_value = .{ .name = matched.name, .spelling = matched.spelling };
                     }
                 }
+                if (matched.terminates_options) options_terminated = true;
             } else if (analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word)) |cluster| {
                 if (!cluster.valid) {
                     suspicious = token.span;
                     stop_after_unknown_option = true;
                 } else if (cluster.takes_next_value) {
                     _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word);
+                    if (shortCompletionClusterTerminatesOptions(self.completion_rules.items, root, path.items, word)) options_terminated = true;
                     if (index + 1 < words.items.len) {
                         const value_token = words.items[index + 1].token;
                         const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
@@ -2092,6 +2178,7 @@ pub const Executor = struct {
                     }
                 } else {
                     _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word);
+                    if (shortCompletionClusterTerminatesOptions(self.completion_rules.items, root, path.items, word)) options_terminated = true;
                 }
             } else if (isOptionLike(word)) {
                 suspicious = token.span;
@@ -2135,6 +2222,8 @@ pub const Executor = struct {
             .command
         else if (parser_context.kind == .command)
             .command
+        else if (options_terminated)
+            .argument
         else if (std.mem.startsWith(u8, semantic_prefix, "-"))
             .option
         else if (argument_state == null and (semantic_prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completion_rules.items, root, path.items)))
@@ -2149,6 +2238,7 @@ pub const Executor = struct {
             .root = root,
             .path = owned_path,
             .parsed_options = owned_parsed_options,
+            .options_terminated = options_terminated,
             .prefix = semantic_prefix,
             .argument_index = argument_index,
             .argument_state = argument_state,
@@ -2209,20 +2299,25 @@ pub const Executor = struct {
         var parsed_options: std.ArrayList(CompletionParsedOption) = .empty;
         defer parsed_options.deinit(self.allocator);
         var index: usize = 1;
+        var options_terminated = false;
         while (index < words.items.len) : (index += 1) {
             const token = words.items[index];
             if (token.span.end > clamped_cursor) break;
             const word = token.lexeme(source);
             const word_complete = token.span.end < clamped_cursor;
             const has_option_rules = completionContextHasOptions(self.completion_rules.items, root, path.items);
-            if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
-                if (matchedCompletionOptionSuppression(parsed_options.items, matched)) |_| {
+            if (options_terminated) {
+                continue;
+            } else if (std.mem.eql(u8, word, "--")) {
+                options_terminated = true;
+            } else if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
+                if (matchedCompletionOptionSuppression(parsed_options.items, matched)) |suppression| {
                     try diagnostics.append(self.allocator, .{
-                        .kind = .conflicting_option,
+                        .kind = completionDiagnosticKindForOptionSuppression(suppression),
                         .severity = .err,
                         .start = token.span.start,
                         .end = token.span.end,
-                        .message = "option conflicts with previous option",
+                        .message = completionDiagnosticMessageForOptionSuppression(suppression),
                     });
                 }
                 try appendParsedCompletionOption(self.allocator, &parsed_options, matched);
@@ -2239,6 +2334,7 @@ pub const Executor = struct {
                         index += 1;
                     }
                 }
+                if (matched.terminates_options) options_terminated = true;
             } else if (if (has_option_rules) analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word) else null) |cluster| {
                 if (!cluster.valid) {
                     if (word_complete) {
@@ -2251,15 +2347,16 @@ pub const Executor = struct {
                         });
                     }
                 } else {
-                    if (try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word)) |_| {
+                    if (try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word)) |suppression| {
                         try diagnostics.append(self.allocator, .{
-                            .kind = .conflicting_option,
+                            .kind = completionDiagnosticKindForOptionSuppression(suppression),
                             .severity = .err,
                             .start = token.span.start,
                             .end = token.span.end,
-                            .message = "option conflicts with previous option",
+                            .message = completionDiagnosticMessageForOptionSuppression(suppression),
                         });
                     }
+                    if (shortCompletionClusterTerminatesOptions(self.completion_rules.items, root, path.items, word)) options_terminated = true;
                     if (cluster.takes_next_value) {
                         if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
                             try diagnostics.append(self.allocator, .{
@@ -9546,6 +9643,8 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing exclusive group name");
             rule.option.exclusive_group = command.argv[index].text;
             index += 1;
+        } else if (std.mem.eql(u8, option, "--terminates-options")) {
+            rule.option.terminates_options = true;
         } else if (std.mem.eql(u8, option, "--index")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing argument index");
             rule.argument.index = std.fmt.parseInt(usize, command.argv[index].text, 10) catch return errorResult(self.allocator, 2, "complete", "invalid argument index");
@@ -9563,7 +9662,7 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
             rule.argument.after_value = command.argv[index].text;
             index += 1;
         } else if (std.mem.eql(u8, option, "--repeatable")) {
-            rule.argument.repeatable = true;
+            if (rule.kind == .option) rule.option.repeatable = true else rule.argument.repeatable = true;
         } else if (std.mem.eql(u8, option, "--list-separator") or std.mem.eql(u8, option, "--value-list-separator")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing list separator");
             rule.value_grammar.list_separator = parseCompletionValueSeparator(command.argv[index].text) orelse return errorResult(self.allocator, 2, "complete", "value separator must be one byte");
@@ -9586,6 +9685,7 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
         if (rule.kind == .option and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
         if (rule.kind == .dynamic_option_value and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
         if (rule.option.exclusive_group != null and rule.kind != .option) return errorResult(self.allocator, 2, "complete", "exclusive groups require --option");
+        if ((rule.option.repeatable or rule.option.terminates_options) and rule.kind != .option) return errorResult(self.allocator, 2, "complete", "option occurrence flags require --option");
         if (rule.argument.hasSelector() and rule.kind != .dynamic_argument) return errorResult(self.allocator, 2, "complete", "argument state options require --argument");
         if ((rule.argument.after_state != null or rule.argument.after_value != null) and rule.argument.state == null) return errorResult(self.allocator, 2, "complete", "argument transitions require --state");
         if (rule.kind == .dynamic_subcommands or rule.kind == .dynamic_options or rule.kind == .dynamic_argument or rule.kind == .dynamic_option_value) {
@@ -9762,6 +9862,10 @@ fn builtinCompletionOption(self: *Executor, builder: *CompletionBuilder, command
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing exclusive group name");
             option.exclusive_group = command.argv[index].text;
             index += 1;
+        } else if (std.mem.eql(u8, arg, "--repeatable")) {
+            option.repeatable = true;
+        } else if (std.mem.eql(u8, arg, "--terminates-options")) {
+            option.terminates_options = true;
         } else if (std.mem.eql(u8, arg, "--description")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing description text");
             description = command.argv[index].text;
@@ -20493,6 +20597,187 @@ test "completion diagnostics report conflicting option groups" {
     try std.testing.expectEqual(CompletionDiagnosticKind.conflicting_option, diagnostics[0].kind);
     try std.testing.expectEqual(CompletionDiagnosticSeverity.err, diagnostics[0].severity);
     try std.testing.expectEqualStrings("option conflicts with previous option", diagnostics[0].message);
+}
+
+test "non-repeatable options are suppressed after use while repeatable options remain" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --short v --long verbose
+        \\complete tool --option --long include --repeatable
+        \\complete tool --option --long tag --exclusive-group filter --repeatable
+        \\complete tool --option --long other-tag --exclusive-group filter
+        \\complete tool --option --long color
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const long_candidates = try executor.collectCompletionsForInput("tool --verbose --", "tool --verbose --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(long_candidates);
+    try expectNoCandidate(long_candidates, "--verbose");
+    try expectCandidate(long_candidates, "--include", .option);
+    try expectCandidate(long_candidates, "--color", .option);
+
+    const short_candidates = try executor.collectCompletionsForInput("tool --verbose -", "tool --verbose -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(short_candidates);
+    try expectNoCandidate(short_candidates, "-v");
+
+    const short_used = try executor.collectCompletionsForInput("tool -v --", "tool -v --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(short_used);
+    try expectNoCandidate(short_used, "--verbose");
+
+    const repeated = try executor.collectCompletionsForInput("tool --include --", "tool --include --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(repeated);
+    try expectCandidate(repeated, "--include", .option);
+
+    const repeatable_group = try executor.collectCompletionsForInput("tool --tag --", "tool --tag --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(repeatable_group);
+    try expectCandidate(repeatable_group, "--tag", .option);
+    try expectNoCandidate(repeatable_group, "--other-tag");
+}
+
+test "option occurrence suppression applies to inherited parent options" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --option --long global
+        \\complete git --option --long config --repeatable
+        \\complete git --subcommand commit
+        \\complete 'git commit' --option --long amend
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git commit --global --config --", "git commit --global --config --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "--global");
+    try expectCandidate(candidates, "--config", .option);
+    try expectCandidate(candidates, "--amend", .option);
+}
+
+test "bare option terminator ends option parsing for completion and diagnostics" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --long flag
+        \\complete tool --subcommand run
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    var analysis = try executor.analyzeCompletionsForInput("tool -- -", "tool -- -".len);
+    defer analysis.deinit();
+    try std.testing.expect(analysis.options_terminated);
+    try std.testing.expectEqual(CompletionSemanticPosition.argument, analysis.position);
+    try std.testing.expectEqualStrings("-", analysis.prefix);
+
+    const candidates = try executor.collectCompletionsForInput("tool -- --", "tool -- --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "--flag");
+    try expectNoCandidate(candidates, "run");
+
+    const diagnostics = try executor.completionDiagnosticsForInput("tool -- --flag ", "tool -- --flag ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.len);
+}
+
+test "declared option terminators end later option parsing" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --long passthrough --terminates-options
+        \\complete tool --option --long flag
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    var analysis = try executor.analyzeCompletionsForInput("tool --passthrough --", "tool --passthrough --".len);
+    defer analysis.deinit();
+    try std.testing.expect(analysis.options_terminated);
+    try std.testing.expectEqual(CompletionSemanticPosition.argument, analysis.position);
+    try std.testing.expectEqualStrings("--", analysis.prefix);
+
+    const candidates = try executor.collectCompletionsForInput("tool --passthrough --", "tool --passthrough --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "--flag");
+
+    const diagnostics = try executor.completionDiagnosticsForInput("tool --passthrough --flag ", "tool --passthrough --flag ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.len);
+}
+
+test "completion diagnostics report repeated non-repeatable options" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --short v --long verbose
+        \\complete tool --option --long include --repeatable
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const repeated_long = try executor.completionDiagnosticsForInput("tool --verbose -v ", "tool --verbose -v ".len);
+    defer std.testing.allocator.free(repeated_long);
+    try std.testing.expectEqual(@as(usize, 1), repeated_long.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.repeated_option, repeated_long[0].kind);
+    try std.testing.expectEqualStrings("option may not be repeated", repeated_long[0].message);
+
+    const repeated_cluster = try executor.completionDiagnosticsForInput("tool -vv ", "tool -vv ".len);
+    defer std.testing.allocator.free(repeated_cluster);
+    try std.testing.expectEqual(@as(usize, 1), repeated_cluster.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.repeated_option, repeated_cluster[0].kind);
+
+    const repeatable = try executor.completionDiagnosticsForInput("tool --include --include ", "tool --include --include ".len);
+    defer std.testing.allocator.free(repeatable);
+    try std.testing.expectEqual(@as(usize, 0), repeatable.len);
+}
+
+test "dynamic option candidates inherit occurrence metadata from static overlaps" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_options() {
+        \\  completion option --long verbose --description dynamic
+        \\  completion option --long tag --description dynamic-repeatable
+        \\}
+        \\complete tool --option --long verbose --description static
+        \\complete tool --option --long tag --repeatable --description static-repeatable
+        \\complete tool --options --function __tool_options
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const suppressed = try executor.collectCompletionsForInput("tool --verbose --", "tool --verbose --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(suppressed);
+    try expectNoCandidate(suppressed, "--verbose");
+
+    const repeatable = try executor.collectCompletionsForInput("tool --tag --", "tool --tag --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(repeatable);
+    try expectCandidate(repeatable, "--tag", .option);
 }
 
 test "dynamic structured completion merges with static subcommands" {

@@ -1388,6 +1388,8 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
         if (manifestString(option.get("long"))) |long| rule.option.long = long;
         if (manifestString(option.get("short"))) |short| rule.option.short = short;
         if (manifestString(option.get("exclusiveGroup"))) |group| rule.option.exclusive_group = group;
+        rule.option.repeatable = manifestBool(option.get("repeatable"));
+        rule.option.terminates_options = manifestBool(option.get("terminatesOptions"));
         if (option.get("value")) |value| {
             if (manifestValueName(value)) |name| rule.option.argument = name;
         }
@@ -2540,6 +2542,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  prefix: {s}
         \\  argument-index: {d}
         \\  argument-state: {s}
+        \\  options-terminated: {}
         \\  value-segment: {s}
         \\  value-separator: {s}
         \\  value-position: {s}
@@ -2547,7 +2550,6 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  replace: {d}..{d}
         \\  parser-position: {s}
         \\  parser-offset: {d}
-        \\rules:
     , .{
         semantic.root,
         semantic_path,
@@ -2555,6 +2557,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         semantic.prefix,
         semantic.argument_index,
         semantic.argument_state orelse "",
+        semantic.options_terminated,
         if (semantic.value_segment) |segment| segment.segment else "",
         semantic_value_separator,
         if (semantic.value_segment) |segment| @tagName(segment.position) else "",
@@ -2564,6 +2567,18 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         @tagName(semantic.parser_position),
         semantic.parser_source_offset,
     });
+    try out.writer.print("  parsed-options:\n", .{});
+    for (semantic.parsed_options) |option| {
+        try out.writer.print("    - spelling: {s}\n      name: {s}\n      key: {s}\n      repeatable: {}\n      terminates-options: {}\n      exclusive-group: {s}\n", .{
+            option.spelling,
+            option.name,
+            option.key,
+            option.repeatable,
+            option.terminates_options,
+            option.exclusive_group orelse "",
+        });
+    }
+    try out.writer.print("rules:\n", .{});
     for (executor.completionRules()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
         try out.writer.print("  - kind: {s}\n    source: {s}\n    root: {s}\n    path:", .{
@@ -2632,11 +2647,13 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
             completionRankScore(history, cwd, candidate.value),
         });
         if (candidate.option) |option| {
-            try out.writer.print("    option:\n      long: {s}\n      short: {s}\n      argument: {s}\n      exclusive-group: {s}\n", .{
+            try out.writer.print("    option:\n      long: {s}\n      short: {s}\n      argument: {s}\n      exclusive-group: {s}\n      repeatable: {}\n      terminates-options: {}\n", .{
                 option.long orelse "",
                 option.short orelse "",
                 option.argument orelse "",
                 option.exclusive_group orelse "",
+                option.repeatable,
+                option.terminates_options,
             });
         }
     }
@@ -2823,6 +2840,8 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.write(context.argument_index);
     try json.objectField("argumentState");
     try json.write(context.argument_state);
+    try json.objectField("optionsTerminated");
+    try json.write(context.options_terminated);
     try json.objectField("parsedOptions");
     try json.beginArray();
     for (context.parsed_options) |option| {
@@ -2831,8 +2850,14 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
         try json.write(option.spelling);
         try json.objectField("name");
         try json.write(option.name);
+        try json.objectField("key");
+        try json.write(option.key);
         try json.objectField("exclusiveGroup");
         try json.write(option.exclusive_group);
+        try json.objectField("repeatable");
+        try json.write(option.repeatable);
+        try json.objectField("terminatesOptions");
+        try json.write(option.terminates_options);
         try json.endObject();
     }
     try json.endArray();
@@ -2893,6 +2918,10 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.write(rule.option.argument);
     try json.objectField("exclusiveGroup");
     try json.write(rule.option.exclusive_group);
+    try json.objectField("repeatable");
+    try json.write(rule.option.repeatable);
+    try json.objectField("terminatesOptions");
+    try json.write(rule.option.terminates_options);
     try json.objectField("noSpace");
     try json.write(rule.option.no_space);
     try json.endObject();
@@ -2993,6 +3022,10 @@ fn writeCompletionCandidateJson(allocator: std.mem.Allocator, json: *std.json.St
         try json.write(option.argument);
         try json.objectField("exclusiveGroup");
         try json.write(option.exclusive_group);
+        try json.objectField("repeatable");
+        try json.write(option.repeatable);
+        try json.objectField("terminatesOptions");
+        try json.write(option.terminates_options);
         try json.objectField("noSpace");
         try json.write(option.no_space);
         try json.endObject();
@@ -4593,7 +4626,9 @@ test "completion manifests lazy-load static subcommands and options" {
         \\  "command": {
         \\    "name": "tool",
         \\    "options": [
-        \\      { "long": "verbose", "short": "v", "description": "show more output" }
+        \\      { "long": "verbose", "short": "v", "description": "show more output" },
+        \\      { "long": "include", "repeatable": true },
+        \\      { "long": "passthrough", "terminatesOptions": true }
         \\    ],
         \\    "subcommands": [
         \\      {
@@ -4619,18 +4654,31 @@ test "completion manifests lazy-load static subcommands and options" {
     try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
 
     const rules = executor.completionRules();
-    try std.testing.expectEqual(@as(usize, 3), rules.len);
+    try std.testing.expectEqual(@as(usize, 5), rules.len);
     try std.testing.expectEqualStrings("tool", rules[0].root);
     try std.testing.expectEqual(completion_model.RuleKind.option, rules[0].kind);
     try std.testing.expectEqualStrings("verbose", rules[0].option.long.?);
     try std.testing.expectEqualStrings("v", rules[0].option.short.?);
     try std.testing.expectEqualStrings("show more output", rules[0].description.?);
-    try std.testing.expectEqual(completion_model.RuleKind.subcommand, rules[1].kind);
-    try std.testing.expectEqualStrings("run", rules[1].value.?);
-    try std.testing.expectEqual(completion_model.RuleKind.option, rules[2].kind);
-    try std.testing.expectEqualStrings("run", rules[2].path[0]);
-    try std.testing.expectEqualStrings("file", rules[2].option.long.?);
-    try std.testing.expectEqualStrings("path", rules[2].option.argument.?);
+    try std.testing.expectEqualStrings("include", rules[1].option.long.?);
+    try std.testing.expect(rules[1].option.repeatable);
+    try std.testing.expectEqualStrings("passthrough", rules[2].option.long.?);
+    try std.testing.expect(rules[2].option.terminates_options);
+    try std.testing.expectEqual(completion_model.RuleKind.subcommand, rules[3].kind);
+    try std.testing.expectEqualStrings("run", rules[3].value.?);
+    try std.testing.expectEqual(completion_model.RuleKind.option, rules[4].kind);
+    try std.testing.expectEqualStrings("run", rules[4].path[0]);
+    try std.testing.expectEqualStrings("file", rules[4].option.long.?);
+    try std.testing.expectEqualStrings("path", rules[4].option.argument.?);
+
+    const suppressed = try executor.collectCompletionsForInput("tool --verbose --include --", "tool --verbose --include --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(suppressed);
+    try expectNoCompletionCandidate(suppressed, "--verbose");
+    try expectCompletionCandidate(suppressed, "--include");
+
+    const terminated = try executor.collectCompletionsForInput("tool --passthrough --", "tool --passthrough --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(terminated);
+    try expectNoCompletionCandidate(terminated, "--verbose");
 }
 
 test "completion manifest semantic validation accepts resolved providers groups and reachable arguments" {
@@ -5297,6 +5345,12 @@ test "completion debug output exposes manifest source and JSON decision state" {
     try std.testing.expectEqualStrings("alreadyPresent", suppressed[0].object.get("reason").?.string);
     try std.testing.expectEqualStrings("--release", suppressed[1].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("exclusiveGroup", suppressed[1].object.get("reason").?.string);
+
+    const terminated_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool run -- --debug");
+    defer std.testing.allocator.free(terminated_output);
+    var terminated = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, terminated_output, .{});
+    defer terminated.deinit();
+    try std.testing.expect(terminated.value.object.get("semantic").?.object.get("optionsTerminated").?.bool);
 }
 
 test "completion debug output exposes active structured value segment" {

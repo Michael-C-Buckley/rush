@@ -182,6 +182,8 @@ pub const Option = struct {
     short: ?[]const u8 = null,
     argument: ?[]const u8 = null,
     exclusive_group: ?[]const u8 = null,
+    repeatable: bool = false,
+    terminates_options: bool = false,
     no_space: bool = false,
 };
 
@@ -726,6 +728,8 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
             .short = if (option.short) |short| try allocator.dupe(u8, short) else null,
             .argument = if (option.argument) |argument| try allocator.dupe(u8, argument) else null,
             .exclusive_group = if (option.exclusive_group) |group| try allocator.dupe(u8, group) else null,
+            .repeatable = option.repeatable,
+            .terminates_options = option.terminates_options,
             .no_space = option.no_space,
         };
     }

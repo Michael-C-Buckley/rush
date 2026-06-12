@@ -93,6 +93,7 @@
 <span class="cmd">complete</span> <span class="str">'git commit'</span> <span class="opt">--option</span> <span class="opt">--short</span> m <span class="opt">--long</span> message <span class="opt">--value-name</span> text <span class="opt">--description</span> <span class="str">'use text as message'</span></pre>
 
   <p>The first word is the command. Extra words scope the rule to a subcommand path.</p>
+  <p>Options are non-repeatable by default: after a known option is already present, Rush suppresses that option and reports repeated uses in completion diagnostics. Add <code>--repeatable</code> for options that may occur more than once. A bare <code>--</code> always ends option parsing; use <code>--terminates-options</code> for command-specific option terminators.</p>
 
   <h2 id="dynamic-completions"><a href="#dynamic-completions">Dynamic completions</a></h2>
 
@@ -133,6 +134,7 @@
 
   <pre><span class="cmd">__rush_complete_tool</span>() {
   <span class="cmd">completion</span> option <span class="opt">--long</span> verbose <span class="opt">--description</span> <span class="str">'show verbose output'</span>
+  <span class="cmd">completion</span> option <span class="opt">--long</span> include <span class="opt">--repeatable</span> <span class="opt">--description</span> <span class="str">'include a path'</span>
   <span class="cmd">completion</span> option <span class="opt">--short</span> o <span class="opt">--long</span> output <span class="opt">--argument</span> file <span class="opt">--description</span> <span class="str">'write to file'</span>
 }
 
