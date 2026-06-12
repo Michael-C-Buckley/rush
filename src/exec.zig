@@ -13983,6 +13983,10 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     std.process.setCurrentPath(io, chdir_path) catch |err| {
         const message = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ cd_target.path, cdErrorMessage(err) });
         defer self.allocator.free(message);
+        if (new_pwd) |pwd| {
+            self.allocator.free(pwd);
+            new_pwd = null;
+        }
         return errorResult(self.allocator, 1, "cd", message);
     };
     if (physical) new_pwd = try self.physicalCwd(io);
@@ -19930,6 +19934,49 @@ test "cd -L resolves dot-dot against logical symlink paths before chdir" {
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings(expected_stdout, result.stdout);
     try std.testing.expectEqualStrings("cd: missing/..: no such file or directory\n", result.stderr);
+}
+
+test "cd missing directory frees normalized logical path" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+
+    const root = "rush-cd-missing-normalized.tmp";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    const missing_path = if (std.mem.eql(u8, original_cwd, "/"))
+        try std.mem.concat(std.testing.allocator, u8, &.{ "/", root })
+    else
+        try std.mem.concat(std.testing.allocator, u8, &.{ original_cwd, "/", root });
+    defer std.testing.allocator.free(missing_path);
+
+    var script: std.ArrayList(u8) = .empty;
+    defer script.deinit(std.testing.allocator);
+    try script.appendSlice(std.testing.allocator, "cd ");
+    try appendShellQuoted(std.testing.allocator, &script, missing_path);
+    try script.appendSlice(std.testing.allocator,
+        \\
+        \\status=$?
+        \\printf 'status=%s\n' "$status"
+        \\
+    );
+
+    var lowered = try parseAndLower(std.testing.allocator, script.items);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    const expected_stderr = try std.fmt.allocPrint(std.testing.allocator, "cd: {s}: no such file or directory\n", .{missing_path});
+    defer std.testing.allocator.free(expected_stderr);
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status=1\n", result.stdout);
+    try std.testing.expectEqualStrings(expected_stderr, result.stderr);
 }
 
 test "executor expands arithmetic expressions in argv" {
