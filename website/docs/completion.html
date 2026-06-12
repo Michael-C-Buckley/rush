@@ -314,15 +314,18 @@
   <pre>context:             <span class="comment"># provider-facing values: prefix, position, option value, value segment</span>
 matcher-policy:      <span class="comment"># active filtering policy</span>
 semantic:            <span class="comment"># parsed command path, options, operands, argument state</span>
+manifest:            <span class="comment"># loaded manifest, command path, parsed state, providers, fallback</span>
 rules:               <span class="comment"># matching rules and whether they came from .rush or a manifest</span>
 suppressed-options:  <span class="comment"># repeat/exclusive-group suppression reasons</span>
 candidates:          <span class="comment"># candidate edit spans, insertion text, match rank, ranking score</span>
 provider-diagnostics:<span class="comment"># missing functions, non-zero provider exits, stderr</span>
 application:         <span class="comment"># edit Rush would apply, or ambiguous/none</span></pre>
 
-  <p>For machine-readable output, use the current JSON debug form:</p>
+  <p>The <code>manifest</code> section is present even when no manifest applies. It shows whether a manifest was loaded, which command path was selected, manifest-parsed options and active argument state, matched providers with candidate counts, suppressed options, and fallback behavior when no manifest provider applies or a provider returns no candidates.</p>
 
-  <pre><span class="prompt">$</span> rush complete --debug-json <span class="str">'git diff --cached ma'</span></pre>
+  <p>For machine-readable output, use the JSON trace form:</p>
+
+  <pre><span class="prompt">$</span> rush complete trace <span class="opt">--json</span> <span class="str">'git diff --cached ma'</span></pre>
 
   <p>A practical authoring loop is: add the smallest static rule, run <code>rush complete trace</code> for the target cursor position, confirm <code>semantic.position</code> and <code>argument-state</code>, add a provider only if static candidates are insufficient, then check provider diagnostics and candidate replacement spans. Use <code>rush complete validate path/to/file.rush</code> to parse-check <code>.rush</code> completion scripts.</p>
 

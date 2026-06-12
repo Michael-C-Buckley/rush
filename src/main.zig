@@ -25,6 +25,7 @@ const usage =
     \\       rush complete --debug INPUT
     \\       rush complete --debug-json INPUT
     \\       rush complete trace INPUT
+    \\       rush complete trace --json INPUT
     \\       rush complete validate [PATH]
     \\       rush --help
     \\
@@ -87,6 +88,11 @@ pub fn main(init: std.process.Init) !u8 {
 
     if (args.len == 4 and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "trace")) {
         try debugCompletion(allocator, init.io, init.environ_map, args[3], .text);
+        return 0;
+    }
+
+    if (args.len == 5 and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "trace") and std.mem.eql(u8, args[3], "--json")) {
+        try debugCompletion(allocator, init.io, init.environ_map, args[4], .json);
         return 0;
     }
 
@@ -3201,6 +3207,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     try writeCompletionParsedOptionsText(&out.writer, semantic.parsed_options, "    ");
     try out.writer.print("  operands:\n", .{});
     try writeCompletionOperandsText(&out.writer, semantic.operands, "    ");
+    try writeCompletionManifestTraceText(allocator, io, &out.writer, executor, source, semantic, candidates);
     try out.writer.print("rules:\n", .{});
     for (executor.completionRules()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
@@ -3398,7 +3405,7 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     try json.objectField("semantic");
     try writeCompletionSemanticContextJson(&json, semantic, semantic_path);
     try json.objectField("manifest");
-    try writeCompletionManifestTraceJson(allocator, io, &json, executor, source, semantic);
+    try writeCompletionManifestTraceJson(allocator, io, &json, executor, source, semantic, candidates);
     try json.objectField("matchedRules");
     try json.beginArray();
     for (executor.completionRules()) |rule| {
@@ -3873,12 +3880,281 @@ const ManifestCompletionTrace = struct {
     }
 };
 
-fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext) !void {
+fn writeCompletionManifestTraceText(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext, candidates: []const completion_model.Candidate) !void {
     const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
     const manifest_state = executor.completionManifestCommandState(semantic.root);
     const variant_state = executor.completionVariantProbeState(semantic.root);
+    const loaded = manifest_source != null or manifest_state != null;
+
+    try writer.print("manifest:\n  loaded: {}\n", .{loaded});
+    try writer.print("  path: {s}\n", .{if (manifest_source) |rule_source| rule_source.manifest_path orelse "" else if (manifest_state) |state| state.manifest_path orelse "" else ""});
+    if (manifest_source) |rule_source| {
+        try writer.print("  manifest-version: {d}\n", .{rule_source.manifest_version orelse 0});
+    } else if (manifest_state) |state| {
+        try writer.print("  manifest-version: {d}\n", .{state.manifest_version orelse 0});
+    } else {
+        try writer.print("  manifest-version: \n", .{});
+    }
+    try writer.print("  command-path:", .{});
+    if (semantic.root.len != 0) try writer.print(" {s}", .{semantic.root});
+    for (semantic.path) |segment| try writer.print(" {s}", .{segment});
+    try writer.print("\n  platform-gate:\n    platform: {s}\n    allowed: {}\n", .{
+        if (manifest_state) |state| state.platform else completionManifestCurrentPlatform(),
+        if (manifest_state) |state| state.platform_allowed else true,
+    });
+    try writer.print("  variant:\n    selected: {s}\n    probed: {}\n    cached: {}\n    skipped-shadow: {}\n", .{
+        if (variant_state) |state| state.selected orelse "" else "",
+        if (variant_state) |state| state.last_probed else false,
+        if (variant_state) |state| state.last_cached else false,
+        if (variant_state) |state| state.skipped_shadow else false,
+    });
+
+    const source_info = manifest_source orelse {
+        try writeEmptyManifestTraceText(writer, "noManifest", "no manifest-backed rule matched; using Rush/default completion fallback");
+        return;
+    };
+    const path = source_info.manifest_path orelse {
+        try writeEmptyManifestTraceText(writer, "noManifestPath", "manifest rule did not retain a source path; structured manifest trace unavailable");
+        return;
+    };
+
+    const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch {
+        try writeEmptyManifestTraceText(writer, "manifestUnavailable", "manifest file could not be read for trace rendering");
+        return;
+    };
+    defer allocator.free(contents);
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, contents, .{}) catch {
+        try writeEmptyManifestTraceText(writer, "manifestParseFailed", "manifest file could not be parsed for trace rendering");
+        return;
+    };
+    defer parsed.deinit();
+
+    const root = switch (parsed.value) {
+        .object => |object| object,
+        else => {
+            try writeEmptyManifestTraceText(writer, "manifestInvalid", "manifest root was not an object during trace rendering");
+            return;
+        },
+    };
+    const command_value = root.get("command") orelse {
+        try writeEmptyManifestTraceText(writer, "manifestInvalid", "manifest command object was missing during trace rendering");
+        return;
+    };
+    const root_command = switch (command_value) {
+        .object => |object| object,
+        else => {
+            try writeEmptyManifestTraceText(writer, "manifestInvalid", "manifest command was not an object during trace rendering");
+            return;
+        },
+    };
+    const active_command = manifestCommandForPath(root_command, semantic.path) orelse root_command;
+    var trace = try analyzeManifestCompletionTrace(allocator, source, semantic, root_command, active_command);
+    defer trace.deinit(allocator);
+    var active_options: std.ArrayList(std.json.ObjectMap) = .empty;
+    defer active_options.deinit(allocator);
+    try appendManifestOptionsForPath(allocator, &active_options, root_command, semantic.path);
+
+    try writer.print("  parsed-options:\n", .{});
+    try writeManifestParsedOptionsText(writer, trace.parsed_options.items, "    ");
+    try writer.print("  terminator:\n    defined: {}\n    value: {s}\n    seen: {}\n", .{ trace.terminator_value != null, trace.terminator_value orelse "", trace.terminator_seen });
+    try writer.print("  active-argument-state:\n", .{});
+    if (trace.active_argument_state) |state| {
+        try writeManifestArgumentStateText(writer, state, trace.active_argument_index, "    ");
+    } else {
+        try writer.print("    none\n", .{});
+    }
+    try writer.print("  matched-providers:\n", .{});
+    const provider_count = try writeManifestProvidersText(writer, semantic, active_command, active_options.items, trace, candidates, "    ");
+    try writer.print("  suppressed-options:\n", .{});
+    try writeManifestSuppressedOptionsText(writer, active_options.items, trace.parsed_options.items, "    ");
+    try writeManifestFallbackText(writer, manifestFallbackKind(loaded, provider_count, candidates), manifestFallbackReason(loaded, provider_count, candidates));
+}
+
+fn writeEmptyManifestTraceText(writer: *std.Io.Writer, fallback_kind: []const u8, fallback_reason: []const u8) !void {
+    try writer.print(
+        \\  parsed-options:
+        \\  terminator:
+        \\    defined: false
+        \\    value:
+        \\    seen: false
+        \\  active-argument-state:
+        \\    none
+        \\  matched-providers:
+        \\  suppressed-options:
+        \\
+    , .{});
+    try writeManifestFallbackText(writer, fallback_kind, fallback_reason);
+}
+
+fn writeManifestFallbackText(writer: *std.Io.Writer, kind: []const u8, reason: []const u8) !void {
+    try writer.print("  fallback:\n    kind: {s}\n    reason: {s}\n", .{ kind, reason });
+}
+
+fn writeManifestParsedOptionsText(writer: *std.Io.Writer, options: []const ManifestParsedOption, indent: []const u8) !void {
+    for (options) |option| {
+        var spelling_buffer: [2]u8 = undefined;
+        try writer.print("{s}- spelling: {s}\n{s}  from: {s}\n{s}  name: {s}\n{s}  value: {s}\n{s}  exclusive-group: {s}\n{s}  repeatable: {}\n", .{
+            indent,
+            option.displaySpelling(&spelling_buffer),
+            indent,
+            option.from orelse "",
+            indent,
+            option.name,
+            indent,
+            option.value orelse "",
+            indent,
+            option.exclusive_group orelse "",
+            indent,
+            option.repeatable,
+        });
+    }
+}
+
+fn writeManifestArgumentStateText(writer: *std.Io.Writer, state: std.json.ObjectMap, active_index: usize, indent: []const u8) !void {
+    var provider_buffer: [128]u8 = undefined;
+    try writer.print("{s}name: {s}\n{s}index: {d}\n{s}repeatable: {}\n{s}provider: {s}\n", .{
+        indent,
+        manifestString(state.get("name")) orelse "",
+        indent,
+        if (manifestInteger(state.get("index"))) |index| if (index >= 0) @as(usize, @intCast(index)) else active_index else active_index,
+        indent,
+        manifestBool(state.get("repeatable")),
+        indent,
+        if (state.get("provider")) |provider| manifestProviderRefLabel(provider, &provider_buffer) orelse "" else "",
+    });
+}
+
+fn writeManifestProvidersText(writer: *std.Io.Writer, semantic: exec.CompletionSemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace, candidates: []const completion_model.Candidate, indent: []const u8) !usize {
+    var count: usize = 0;
+    if (trace.active_argument_state) |state| {
+        if (state.get("provider")) |provider| {
+            try writeManifestProviderEntryText(writer, provider, "argumentState", candidates, indent);
+            count += 1;
+        }
+    }
+    if (semantic.option_value) |option_value| {
+        if (findManifestOptionByName(active_options, option_value.name)) |option| {
+            if (option.get("value")) |value| {
+                if (value == .object) {
+                    if (value.object.get("provider")) |provider| {
+                        try writeManifestProviderEntryText(writer, provider, "optionValue", candidates, indent);
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+    if (semantic.position == .subcommand) {
+        if (active_command.get("dynamicSubcommands")) |providers| count += try writeManifestProviderArrayEntriesText(writer, providers, "dynamicSubcommands", candidates, indent);
+    }
+    if (semantic.position == .option) {
+        if (active_command.get("dynamicOptions")) |providers| count += try writeManifestProviderArrayEntriesText(writer, providers, "dynamicOptions", candidates, indent);
+    }
+    return count;
+}
+
+fn writeManifestProviderArrayEntriesText(writer: *std.Io.Writer, providers_value: std.json.Value, reason: []const u8, candidates: []const completion_model.Candidate, indent: []const u8) !usize {
+    const providers = switch (providers_value) {
+        .array => |array| array,
+        else => return 0,
+    };
+    for (providers.items) |provider| try writeManifestProviderEntryText(writer, provider, reason, candidates, indent);
+    return providers.items.len;
+}
+
+fn writeManifestProviderEntryText(writer: *std.Io.Writer, provider: std.json.Value, reason: []const u8, candidates: []const completion_model.Candidate, indent: []const u8) !void {
+    var provider_buffer: [128]u8 = undefined;
+    try writer.print("{s}- id: {s}\n{s}  reason: {s}\n{s}  candidate-count: {d}\n", .{
+        indent,
+        manifestProviderRefLabel(provider, &provider_buffer) orelse "",
+        indent,
+        reason,
+        indent,
+        manifestProviderCandidateCount(candidates, reason),
+    });
+}
+
+fn writeManifestSuppressedOptionsText(writer: *std.Io.Writer, options: []const std.json.ObjectMap, parsed_options: []const ManifestParsedOption, indent: []const u8) !void {
+    for (options) |option| {
+        const spelling = manifestOptionPrimarySpelling(option) orelse continue;
+        if (manifestParsedOptionForOption(parsed_options, option)) |parsed| {
+            var parsed_spelling_buffer: [2]u8 = undefined;
+            if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionText(writer, spelling, "alreadyPresent", parsed.displaySpelling(&parsed_spelling_buffer), null, indent);
+            continue;
+        }
+        const group = manifestString(option.get("exclusiveGroup")) orelse continue;
+        for (parsed_options) |parsed| {
+            if (parsed.exclusive_group) |parsed_group| {
+                if (std.mem.eql(u8, group, parsed_group)) {
+                    var parsed_spelling_buffer: [2]u8 = undefined;
+                    try writeManifestSuppressedOptionText(writer, spelling, "exclusiveGroup", parsed.displaySpelling(&parsed_spelling_buffer), group, indent);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+fn writeManifestSuppressedOptionText(writer: *std.Io.Writer, spelling_name: []const u8, reason: []const u8, by: []const u8, group: ?[]const u8, indent: []const u8) !void {
+    if (spelling_name.len == 1) {
+        try writer.print("{s}- spelling: -{s}\n", .{ indent, spelling_name });
+    } else {
+        try writer.print("{s}- spelling: --{s}\n", .{ indent, spelling_name });
+    }
+    try writer.print("{s}  reason: {s}\n{s}  by: {s}\n{s}  group: {s}\n", .{ indent, reason, indent, by, indent, group orelse "" });
+}
+
+fn manifestProviderRefLabel(provider: std.json.Value, buffer: *[128]u8) ?[]const u8 {
+    switch (provider) {
+        .string => |id| return id,
+        .object => |object| {
+            if (manifestString(object.get("builtin"))) |builtin| return std.fmt.bufPrint(buffer, "builtin.{s}", .{builtin}) catch builtin;
+            if (manifestString(object.get("function"))) |function| return function;
+            return null;
+        },
+        else => return null,
+    }
+}
+
+fn manifestProviderCandidateCount(candidates: []const completion_model.Candidate, reason: []const u8) usize {
+    if (std.mem.eql(u8, reason, "dynamicSubcommands")) return countCandidatesOfKind(candidates, .subcommand);
+    if (std.mem.eql(u8, reason, "dynamicOptions")) return countCandidatesOfKind(candidates, .option);
+    return candidates.len;
+}
+
+fn countCandidatesOfKind(candidates: []const completion_model.Candidate, kind: completion_model.Kind) usize {
+    var count: usize = 0;
+    for (candidates) |candidate| {
+        if (candidate.kind == kind) count += 1;
+    }
+    return count;
+}
+
+fn manifestFallbackKind(loaded: bool, provider_count: usize, candidates: []const completion_model.Candidate) []const u8 {
+    if (!loaded) return "noManifest";
+    if (provider_count == 0 and candidates.len != 0) return "staticCandidates";
+    if (provider_count == 0) return "noProvider";
+    if (candidates.len == 0) return "providerNoCandidates";
+    return "none";
+}
+
+fn manifestFallbackReason(loaded: bool, provider_count: usize, candidates: []const completion_model.Candidate) []const u8 {
+    if (!loaded) return "no manifest-backed rule matched; using Rush/default completion fallback";
+    if (provider_count == 0 and candidates.len != 0) return "no manifest provider matched this cursor; static manifest candidates matched";
+    if (provider_count == 0) return "no manifest provider matched this cursor; default fallback was considered";
+    if (candidates.len == 0) return "matched manifest provider returned no candidates";
+    return "manifest provider or static manifest candidates matched";
+}
+
+fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext, candidates: []const completion_model.Candidate) !void {
+    const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
+    const manifest_state = executor.completionManifestCommandState(semantic.root);
+    const variant_state = executor.completionVariantProbeState(semantic.root);
+    const loaded = manifest_source != null or manifest_state != null;
 
     try json.beginObject();
+    try json.objectField("loaded");
+    try json.write(loaded);
     try json.objectField("path");
     try json.write(if (manifest_source) |rule_source| rule_source.manifest_path else if (manifest_state) |state| state.manifest_path else @as(?[]const u8, null));
     try json.objectField("manifestVersion");
@@ -3905,24 +4181,24 @@ fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, js
     try json.endObject();
 
     const source_info = manifest_source orelse {
-        try writeEmptyManifestDecisionJson(json);
+        try writeEmptyManifestDecisionJson(json, "noManifest", "no manifest-backed rule matched; using Rush/default completion fallback");
         try json.endObject();
         return;
     };
     const path = source_info.manifest_path orelse {
-        try writeEmptyManifestDecisionJson(json);
+        try writeEmptyManifestDecisionJson(json, "noManifestPath", "manifest rule did not retain a source path; structured manifest trace unavailable");
         try json.endObject();
         return;
     };
 
     const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch {
-        try writeEmptyManifestDecisionJson(json);
+        try writeEmptyManifestDecisionJson(json, "manifestUnavailable", "manifest file could not be read for trace rendering");
         try json.endObject();
         return;
     };
     defer allocator.free(contents);
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, contents, .{}) catch {
-        try writeEmptyManifestDecisionJson(json);
+        try writeEmptyManifestDecisionJson(json, "manifestParseFailed", "manifest file could not be parsed for trace rendering");
         try json.endObject();
         return;
     };
@@ -3931,20 +4207,20 @@ fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, js
     const root = switch (parsed.value) {
         .object => |object| object,
         else => {
-            try writeEmptyManifestDecisionJson(json);
+            try writeEmptyManifestDecisionJson(json, "manifestInvalid", "manifest root was not an object during trace rendering");
             try json.endObject();
             return;
         },
     };
     const command_value = root.get("command") orelse {
-        try writeEmptyManifestDecisionJson(json);
+        try writeEmptyManifestDecisionJson(json, "manifestInvalid", "manifest command object was missing during trace rendering");
         try json.endObject();
         return;
     };
     const root_command = switch (command_value) {
         .object => |object| object,
         else => {
-            try writeEmptyManifestDecisionJson(json);
+            try writeEmptyManifestDecisionJson(json, "manifestInvalid", "manifest command was not an object during trace rendering");
             try json.endObject();
             return;
         },
@@ -3995,13 +4271,15 @@ fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, js
     }
 
     try json.objectField("matchedProviders");
-    try writeManifestProvidersJson(json, semantic, active_command, active_options.items, trace);
+    const provider_count = try writeManifestProvidersJson(json, semantic, active_command, active_options.items, trace, candidates);
     try json.objectField("suppressedOptions");
     try writeManifestSuppressedOptionsJson(json, active_options.items, trace.parsed_options.items);
+    try json.objectField("fallback");
+    try writeManifestFallbackJson(json, manifestFallbackKind(loaded, provider_count, candidates), manifestFallbackReason(loaded, provider_count, candidates));
     try json.endObject();
 }
 
-fn writeEmptyManifestDecisionJson(json: *std.json.Stringify) !void {
+fn writeEmptyManifestDecisionJson(json: *std.json.Stringify, fallback_kind: []const u8, fallback_reason: []const u8) !void {
     try json.objectField("parsedOptions");
     try json.beginArray();
     try json.endArray();
@@ -4022,6 +4300,17 @@ fn writeEmptyManifestDecisionJson(json: *std.json.Stringify) !void {
     try json.objectField("suppressedOptions");
     try json.beginArray();
     try json.endArray();
+    try json.objectField("fallback");
+    try writeManifestFallbackJson(json, fallback_kind, fallback_reason);
+}
+
+fn writeManifestFallbackJson(json: *std.json.Stringify, kind: []const u8, reason: []const u8) !void {
+    try json.beginObject();
+    try json.objectField("kind");
+    try json.write(kind);
+    try json.objectField("reason");
+    try json.write(reason);
+    try json.endObject();
 }
 
 fn primaryManifestRuleSource(rules: []const completion_model.Rule, semantic: exec.CompletionSemanticContext) ?completion_model.RuleSource {
@@ -4380,43 +4669,54 @@ fn writeManifestArgumentStateJson(json: *std.json.Stringify, state: std.json.Obj
     try json.endObject();
 }
 
-fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: exec.CompletionSemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace) !void {
+fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: exec.CompletionSemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace, candidates: []const completion_model.Candidate) !usize {
+    var count: usize = 0;
     try json.beginArray();
     if (trace.active_argument_state) |state| {
-        if (state.get("provider")) |provider| try writeManifestProviderEntryJson(json, provider, "argumentState");
+        if (state.get("provider")) |provider| {
+            try writeManifestProviderEntryJson(json, provider, "argumentState", candidates);
+            count += 1;
+        }
     }
     if (semantic.option_value) |option_value| {
         if (findManifestOptionByName(active_options, option_value.name)) |option| {
             if (option.get("value")) |value| {
                 if (value == .object) {
-                    if (value.object.get("provider")) |provider| try writeManifestProviderEntryJson(json, provider, "optionValue");
+                    if (value.object.get("provider")) |provider| {
+                        try writeManifestProviderEntryJson(json, provider, "optionValue", candidates);
+                        count += 1;
+                    }
                 }
             }
         }
     }
     if (semantic.position == .subcommand) {
-        if (active_command.get("dynamicSubcommands")) |providers| try writeManifestProviderArrayEntriesJson(json, providers, "dynamicSubcommands");
+        if (active_command.get("dynamicSubcommands")) |providers| count += try writeManifestProviderArrayEntriesJson(json, providers, "dynamicSubcommands", candidates);
     }
     if (semantic.position == .option) {
-        if (active_command.get("dynamicOptions")) |providers| try writeManifestProviderArrayEntriesJson(json, providers, "dynamicOptions");
+        if (active_command.get("dynamicOptions")) |providers| count += try writeManifestProviderArrayEntriesJson(json, providers, "dynamicOptions", candidates);
     }
     try json.endArray();
+    return count;
 }
 
-fn writeManifestProviderArrayEntriesJson(json: *std.json.Stringify, providers_value: std.json.Value, reason: []const u8) !void {
+fn writeManifestProviderArrayEntriesJson(json: *std.json.Stringify, providers_value: std.json.Value, reason: []const u8, candidates: []const completion_model.Candidate) !usize {
     const providers = switch (providers_value) {
         .array => |array| array,
-        else => return,
+        else => return 0,
     };
-    for (providers.items) |provider| try writeManifestProviderEntryJson(json, provider, reason);
+    for (providers.items) |provider| try writeManifestProviderEntryJson(json, provider, reason, candidates);
+    return providers.items.len;
 }
 
-fn writeManifestProviderEntryJson(json: *std.json.Stringify, provider: std.json.Value, reason: []const u8) !void {
+fn writeManifestProviderEntryJson(json: *std.json.Stringify, provider: std.json.Value, reason: []const u8, candidates: []const completion_model.Candidate) !void {
     try json.beginObject();
     try json.objectField("id");
     try writeManifestProviderRefValue(json, provider);
     try json.objectField("reason");
     try json.write(reason);
+    try json.objectField("candidateCount");
+    try json.write(manifestProviderCandidateCount(candidates, reason));
     try json.endObject();
 }
 
@@ -7259,6 +7559,12 @@ test "completion debug output exposes manifest source and JSON decision state" {
     try std.testing.expect(std.mem.indexOf(u8, text_output, "source: manifest") != null);
     try std.testing.expect(std.mem.indexOf(u8, text_output, "manifest-path: " ++ root ++ "/rush/completions/tool.json") != null);
     try std.testing.expect(std.mem.indexOf(u8, text_output, "manifest-version: 1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "manifest:\n  loaded: true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "command-path: tool run") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "active-argument-state:\n    name: target") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "matched-providers:\n    - id: tool.targets") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "candidate-count: 0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "fallback:\n    kind: providerNoCandidates") != null);
 
     const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool run --debug ta");
     defer std.testing.allocator.free(json_output);
@@ -7266,6 +7572,7 @@ test "completion debug output exposes manifest source and JSON decision state" {
     defer parsed.deinit();
     const object = parsed.value.object;
     const manifest = object.get("manifest").?.object;
+    try std.testing.expect(manifest.get("loaded").?.bool);
     try std.testing.expectEqualStrings(root ++ "/rush/completions/tool.json", manifest.get("path").?.string);
     try std.testing.expectEqual(@as(i64, 1), manifest.get("manifestVersion").?.integer);
     try std.testing.expect(manifest.get("platformGate").?.object.get("allowed").?.bool);
@@ -7277,6 +7584,8 @@ test "completion debug output exposes manifest source and JSON decision state" {
     try std.testing.expectEqualStrings("--debug", manifest.get("parsedOptions").?.array.items[0].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("target", manifest.get("activeArgumentState").?.object.get("name").?.string);
     try std.testing.expectEqualStrings("tool.targets", manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
+    try std.testing.expectEqual(@as(i64, 0), manifest.get("matchedProviders").?.array.items[0].object.get("candidateCount").?.integer);
+    try std.testing.expectEqualStrings("providerNoCandidates", manifest.get("fallback").?.object.get("kind").?.string);
     const generic_suppressed = object.get("suppressedOptions").?.array.items;
     try std.testing.expectEqualStrings("--release", generic_suppressed[1].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("exclusive_group", generic_suppressed[1].object.get("reason").?.string);

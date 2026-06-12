@@ -263,9 +263,9 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <h2 id="trace"><a href="#trace">Trace workflow</a></h2>
 
-  <p>Use <code>rush complete trace INPUT</code> when authoring or debugging a manifest-backed completion. Text trace output shows matching manifest rules with <code>source: manifest</code>, the manifest path and version, parsed options, suppressed options, active argument state, value grammar, provider diagnostics, candidate match rank, and the insertion edit.</p>
+  <p>Use <code>rush complete trace INPUT</code> when authoring or debugging a manifest-backed completion. Text trace output includes a dedicated <code>manifest</code> section with the loaded path/version, selected command path, platform and variant state, manifest-parsed options, active argument state, matched providers with candidate counts, suppressed options, and fallback behavior when no manifest/provider applies or a provider returns no candidates. The rest of the trace shows matching rules with <code>source: manifest</code>, value grammar, provider diagnostics, candidate match rank, and the insertion edit.</p>
 
-  <p>Use <code>rush complete --debug-json INPUT</code> for machine-readable output. Its <code>manifest</code> object includes the loaded manifest path/version, command path, parsed manifest options, active argument state, matched providers, and manifest-level suppressed options.</p>
+  <p>Use <code>rush complete trace --json INPUT</code> for machine-readable output. Its <code>manifest</code> object is emitted from the same trace model as the text renderer and includes <code>loaded</code>, path/version, command path, parsed manifest options, active argument state, matched providers with <code>candidateCount</code>, manifest-level suppressed options, and a fallback object.</p>
 
   <h2 id="validation"><a href="#validation">Validation</a></h2>
 

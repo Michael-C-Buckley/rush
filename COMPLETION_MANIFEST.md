@@ -644,31 +644,39 @@ The provider example assumes future parsed context queries from task #577.
 
 ## Trace integration
 
-`rush complete trace --json` should expose manifest-derived state:
+`rush complete trace INPUT` exposes manifest-derived state in a dedicated
+`manifest` text section. `rush complete trace --json INPUT` exposes the same
+model in the top-level `manifest` object:
 
 ```json
 {
-  "manifest": "share/rush/completions/git.json",
+  "loaded": true,
+  "path": "share/rush/completions/git.json",
   "manifestVersion": 1,
   "commandPath": ["git", "diff"],
-  "position": "argument",
-  "options": {
-    "cached": { "present": true, "spelling": "--cached" }
-  },
-  "terminatorSeen": false,
-  "argumentState": "rev-or-path",
-  "matchedProviders": ["git.refs"],
+  "parsedOptions": [
+    { "spelling": "--cached", "name": "cached", "exclusiveGroup": "diff-source" }
+  ],
+  "terminator": { "defined": false, "value": null, "seen": false },
+  "activeArgumentState": { "name": "rev-or-path", "index": 0, "provider": "git.refs" },
+  "matchedProviders": [
+    { "id": "git.refs", "reason": "argumentState", "candidateCount": 3 }
+  ],
   "suppressedOptions": [
     {
-      "option": "--no-index",
-      "reason": "exclusive group diff-source already satisfied by --cached"
+      "spelling": "--no-index",
+      "reason": "exclusiveGroup",
+      "by": "--cached",
+      "group": "diff-source"
     }
-  ]
+  ],
+  "fallback": { "kind": "none", "reason": "manifest provider or static manifest candidates matched" }
 }
 ```
 
-Trace output should make it clear whether a rule came from `.rush` declarations
-or from a manifest.
+Trace output makes it clear whether a rule came from `.rush` declarations or
+from a manifest, which providers were selected for the cursor position, and
+which fallback path applied when no manifest/provider match produced candidates.
 
 ## Implementation follow-up tasks
 
@@ -681,7 +689,7 @@ Create follow-up Tend tasks after this design is accepted:
 4. Bind manifest provider IDs to companion `.rush` functions and built-in
    providers.
 5. Add lazy companion provider sourcing if feasible.
-6. Add manifest-aware completion trace output, including JSON trace fields.
+6. Add manifest-aware completion trace output, including JSON trace fields. (done)
 7. Add a small Git-slice manifest fixture for engine validation.
 8. Migrate one small first-party completion to prove the format before touching
    `git`.

@@ -61,6 +61,7 @@ rush [-i] [--posix-strict] [set-options] SCRIPT_FILE [ARGS...]
 rush complete --debug INPUT
 rush complete --debug-json INPUT
 rush complete trace INPUT
+rush complete trace --json INPUT
 rush complete validate [PATH]
 rush --help
 ```
@@ -194,6 +195,13 @@ option value, parsed option state, and structured value segment/key data.
 Parameterized queries such as `completion option-present --long NAME`,
 `completion option-values --long NAME`, and `completion operands` remain
 available when a provider needs list data.
+
+Use `rush complete trace INPUT` to debug completion resolution. The text trace
+includes the manifest path/version, selected command path, parsed options and
+operands, active argument state, provider decisions with candidate counts,
+suppressed options, fallback reason, candidate filtering, provider diagnostics,
+and the edit Rush would apply. Use `rush complete trace --json INPUT` for the
+same manifest trace data in the `manifest` JSON object.
 
 For the full completion reference, see
 [`website/docs/completion.html`](website/docs/completion.html). The manifest
