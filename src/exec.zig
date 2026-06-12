@@ -16331,6 +16331,35 @@ test "executor supports Bash string parameter operations" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "executor supports Bash positional parameter slices" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\set -- "a b" "" c d
+        \\printf 'slice-at:'
+        \\printf '<%s>' "${@:1:3}"
+        \\printf '\n'
+        \\printf 'slice-zero:'
+        \\printf '<%s>' "${@:0:2}"
+        \\printf '\n'
+        \\IFS=,
+        \\printf 'slice-star:<%s>\n' "${*:1:3}"
+        \\printf 'slice-embedded:'
+        \\printf '<%s>' pre"${@:2:2}"post
+        \\printf '\n'
+        \\printf 'slice-empty:<%s>\n' "${@:99:2}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("slice-at:<a b><><c>\nslice-zero:<rush><a b>\nslice-star:<a b,,c>\nslice-embedded:<pre><cpost>\nslice-empty:<>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor diagnoses Bash negative substring lengths before the start" {
     const cases = [_]struct {
         script: []const u8,
@@ -16339,6 +16368,8 @@ test "executor diagnoses Bash negative substring lengths before the start" {
         .{ .script = "value=abcdefg; printf '<%s>\\n' \"${value:5:-3}\"; echo after", .stderr = "-3: substring expression < 0\n" },
         .{ .script = "set -- abcdefg; printf '<%s>\\n' \"${1:5:-3}\"; echo after", .stderr = "-3: substring expression < 0\n" },
         .{ .script = "set -fC; printf '<%s>\\n' \"${-:1:-2}\"; echo after", .stderr = "-2: substring expression < 0\n" },
+        .{ .script = "set -- a b c; printf '<%s>\\n' \"${@:2:-1}\"; echo after", .stderr = "-1: substring expression < 0\n" },
+        .{ .script = "set -- a b c; printf '<%s>\\n' \"${*:4:-2}\"; echo after", .stderr = "-2: substring expression < 0\n" },
     };
 
     for (cases) |case| {
@@ -16451,6 +16482,8 @@ test "executor keeps Bash array operation forms on POSIX bad-substitution path" 
         "echo ${!prefix*}; echo after",
         "echo ${value:1}; echo after",
         "echo ${value:1:-1}; echo after",
+        "echo ${@:1:2}; echo after",
+        "echo ${*:1:2}; echo after",
         "echo ${value/a/b}; echo after",
         "echo ${value^^}; echo after",
         "echo ${value^^[a]}; echo after",

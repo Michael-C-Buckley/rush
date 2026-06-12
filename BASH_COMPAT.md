@@ -64,10 +64,15 @@ plans separately from POSIX compliance. POSIX status remains tracked in
     from the end of the string. Bash mode reports
     `length: substring expression < 0` when the computed end precedes the
     start. Rush targets modern Bash 5.x behavior here; macOS Bash 3.2 was
-    observed to reject negative scalar lengths. The offset delimiter scanner
-    skips nested parameter, command, arithmetic, and quoted constructs,
-    including arithmetic ternary `:` operands. Field-producing Bash slices for
-    `${@:offset:length}` and `${*:offset:length}` are tracked separately
+    observed to reject negative scalar lengths. For `@` and `*`,
+    `${@:offset:length}` and `${*:offset:length}` expand positional parameter
+    slices instead of substrings: quoted `@` emits one field per selected
+    positional, quoted `*` joins selected positionals with the first byte of
+    `IFS`, unquoted forms remain subject to field splitting, offset `0`
+    prefixes `$0`, and negative lengths are stopping expansion errors unless
+    the offset is out of range and the slice is empty. The offset delimiter
+    scanner skips nested parameter, command, arithmetic, and quoted constructs,
+    including arithmetic ternary `:` operands
   - replacement `${parameter/pattern/repl}`, global `${parameter//pattern/repl}`,
     anchored-prefix `${parameter/#pattern/repl}`, and anchored-suffix
     `${parameter/%pattern/repl}` using Rush's existing shell glob pattern matcher;
@@ -141,8 +146,6 @@ Current examples:
   - array slicing and transformation forms
 - Remaining string parameter expansion edge cases:
   - array-wide or element-specific string operations
-  - field-producing `${@:offset:length}` and `${*:offset:length}` positional
-    slices
   - replacement `&` expansion and any remaining replacement/pattern delimiter
     edge cases not covered by quoted or nested `/` constructs
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
