@@ -2479,6 +2479,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     try rankCompletionCandidates(allocator, candidates, history, cwd, source, matcher_policy);
     const application = try completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
     defer application.deinit(allocator);
+    var effective_value_separator_buffer: [1]u8 = undefined;
+    const effective_value_separator = completionValueSegmentSeparatorSlice(effective_context.value_segment, &effective_value_separator_buffer);
+    var semantic_value_separator_buffer: [1]u8 = undefined;
+    const semantic_value_separator = completionValueSegmentSeparatorSlice(semantic.value_segment, &semantic_value_separator_buffer);
 
     var out: std.Io.Writer.Allocating = .init(allocator);
     defer out.deinit();
@@ -2492,6 +2496,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  position: {s}
         \\  option-name: {s}
         \\  option-spelling: {s}
+        \\  value-segment: {s}
+        \\  value-separator: {s}
+        \\  value-position: {s}
+        \\  value-key: {s}
         \\  replace: {d}..{d}
         \\matcher-policy:
         \\  source: engine-default
@@ -2504,6 +2512,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  path: {s}
         \\  position: {s}
         \\  prefix: {s}
+        \\  value-segment: {s}
+        \\  value-separator: {s}
+        \\  value-position: {s}
+        \\  value-key: {s}
         \\  replace: {d}..{d}
         \\  parser-position: {s}
         \\  parser-offset: {d}
@@ -2518,6 +2530,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         if (effective_context.option_value != null) "option_value" else @tagName(effective_context.position),
         if (effective_context.option_value) |option_value| option_value.name else "",
         if (effective_context.option_value) |option_value| option_value.spelling else "",
+        if (effective_context.value_segment) |segment| segment.segment else "",
+        effective_value_separator,
+        if (effective_context.value_segment) |segment| @tagName(segment.position) else "",
+        if (effective_context.value_segment) |segment| segment.key else "",
         effective_context.replace_start,
         effective_context.replace_end,
         @tagName(matcher_policy.case_sensitivity),
@@ -2528,6 +2544,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         semantic_path,
         @tagName(semantic.position),
         semantic.prefix,
+        if (semantic.value_segment) |segment| segment.segment else "",
+        semantic_value_separator,
+        if (semantic.value_segment) |segment| @tagName(segment.position) else "",
+        if (semantic.value_segment) |segment| segment.key else "",
         semantic.replace_start,
         semantic.replace_end,
         @tagName(semantic.parser_position),
@@ -2546,6 +2566,16 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
             try out.writer.print("    manifest-path: {s}\n    manifest-version: {d}\n", .{
                 rule.source.manifest_path orelse "",
                 rule.source.manifest_version orelse 0,
+            });
+        }
+        if (!rule.value_grammar.isEmpty()) {
+            var list_separator_buffer: [1]u8 = undefined;
+            const list_separator = completionSeparatorSlice(rule.value_grammar.list_separator, &list_separator_buffer);
+            var key_value_separator_buffer: [1]u8 = undefined;
+            const key_value_separator = completionSeparatorSlice(rule.value_grammar.key_value_separator, &key_value_separator_buffer);
+            try out.writer.print("    value-grammar:\n      list-separator: {s}\n      key-value-separator: {s}\n", .{
+                list_separator,
+                key_value_separator,
             });
         }
     }
@@ -2705,6 +2735,14 @@ fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.Compl
     try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
     try json.objectField("optionSpelling");
     try json.write(if (context.option_value) |option_value| option_value.spelling else @as(?[]const u8, null));
+    try json.objectField("valueSegment");
+    try json.write(if (context.value_segment) |segment| segment.segment else @as(?[]const u8, null));
+    try json.objectField("valueSeparator");
+    try writeCompletionSeparatorJson(json, if (context.value_segment) |segment| segment.activeSeparator() else null);
+    try json.objectField("valuePosition");
+    try json.write(if (context.value_segment) |segment| @tagName(segment.position) else @as(?[]const u8, null));
+    try json.objectField("valueKey");
+    try json.write(if (context.value_segment) |segment| segment.key else @as(?[]const u8, null));
     try json.objectField("replaceStart");
     try json.write(context.replace_start);
     try json.objectField("replaceEnd");
@@ -2747,6 +2785,14 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
     try json.objectField("optionSpelling");
     try json.write(if (context.option_value) |option_value| option_value.spelling else @as(?[]const u8, null));
+    try json.objectField("valueSegment");
+    try json.write(if (context.value_segment) |segment| segment.segment else @as(?[]const u8, null));
+    try json.objectField("valueSeparator");
+    try writeCompletionSeparatorJson(json, if (context.value_segment) |segment| segment.activeSeparator() else null);
+    try json.objectField("valuePosition");
+    try json.write(if (context.value_segment) |segment| @tagName(segment.position) else @as(?[]const u8, null));
+    try json.objectField("valueKey");
+    try json.write(if (context.value_segment) |segment| segment.key else @as(?[]const u8, null));
     try json.objectField("replaceStart");
     try json.write(context.replace_start);
     try json.objectField("replaceEnd");
@@ -2792,6 +2838,13 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.write(rule.option.argument);
     try json.objectField("noSpace");
     try json.write(rule.option.no_space);
+    try json.endObject();
+    try json.objectField("valueGrammar");
+    try json.beginObject();
+    try json.objectField("listSeparator");
+    try writeCompletionSeparatorJson(json, rule.value_grammar.list_separator);
+    try json.objectField("keyValueSeparator");
+    try writeCompletionSeparatorJson(json, rule.value_grammar.key_value_separator);
     try json.endObject();
     try json.endObject();
 }
@@ -2854,6 +2907,42 @@ fn writeCompletionCandidateJson(allocator: std.mem.Allocator, json: *std.json.St
 
 fn matchRankName(rank: ?completion_model.MatchRank) []const u8 {
     return if (rank) |value| @tagName(value) else "";
+}
+
+fn completionValueSegmentSeparatorText(segment: ?exec.CompletionValueSegment) []const u8 {
+    return completionSeparatorText(if (segment) |value| value.activeSeparator() else null);
+}
+
+fn completionValueSegmentSeparatorSlice(segment: ?exec.CompletionValueSegment, buffer: *[1]u8) []const u8 {
+    return completionSeparatorSlice(if (segment) |value| value.activeSeparator() else null, buffer);
+}
+
+fn completionSeparatorSlice(separator: ?u8, buffer: *[1]u8) []const u8 {
+    const value = separator orelse return "";
+    buffer[0] = value;
+    return buffer[0..1];
+}
+
+fn completionSeparatorText(separator: ?u8) []const u8 {
+    const value = separator orelse return "";
+    return switch (value) {
+        ',' => ",",
+        '=' => "=",
+        ':' => ":",
+        ';' => ";",
+        '|' => "|",
+        '/' => "/",
+        else => "",
+    };
+}
+
+fn writeCompletionSeparatorJson(json: *std.json.Stringify, separator: ?u8) !void {
+    const value = separator orelse {
+        try json.write(@as(?[]const u8, null));
+        return;
+    };
+    const text: [1]u8 = .{value};
+    try json.write(text[0..]);
 }
 
 fn matchSuppressionReasonName(reason: ?completion_model.MatchSuppressionReason) []const u8 {
@@ -5075,6 +5164,41 @@ test "completion debug output exposes manifest source and JSON decision state" {
     try std.testing.expectEqualStrings("alreadyPresent", suppressed[0].object.get("reason").?.string);
     try std.testing.expectEqualStrings("--release", suppressed[1].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("exclusiveGroup", suppressed[1].object.get("reason").?.string);
+}
+
+test "completion debug output exposes active structured value segment" {
+    const root = "rush-debug-value-segment-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data =
+        \\__tool_modes() {
+        \\  completion candidate slow
+        \\}
+        \\complete tool --option --long mode --value-name mode
+        \\complete tool --option-value --long mode --function __tool_modes --list-separator ,
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_DATA_DIRS", "");
+    try env.put("XDG_DATA_HOME", root);
+
+    const source = "tool --mode=fast,sl";
+    const text_output = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, source);
+    defer std.testing.allocator.free(text_output);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "value-segment: sl") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "value-separator: ,") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "list-separator: ,") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "replace: 17..19") != null);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, source);
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+    const object = parsed.value.object;
+    try std.testing.expectEqualStrings("sl", object.get("context").?.object.get("valueSegment").?.string);
+    try std.testing.expectEqualStrings(",", object.get("semantic").?.object.get("valueSeparator").?.string);
+    try std.testing.expectEqual(@as(i64, 17), object.get("application").?.object.get("replaceStart").?.integer);
 }
 
 test "interactive highlight renderer uses parser classifications" {

@@ -184,6 +184,15 @@ pub const Option = struct {
     no_space: bool = false,
 };
 
+pub const ValueGrammar = struct {
+    list_separator: ?u8 = null,
+    key_value_separator: ?u8 = null,
+
+    pub fn isEmpty(self: ValueGrammar) bool {
+        return self.list_separator == null and self.key_value_separator == null;
+    }
+};
+
 pub const RuleKind = enum {
     dynamic_subcommands,
     dynamic_options,
@@ -210,6 +219,7 @@ pub const Rule = struct {
     kind: RuleKind,
     value: ?[]const u8 = null,
     option: Option = .{},
+    value_grammar: ValueGrammar = .{},
     description: ?[]const u8 = null,
     source: RuleSource = .{},
 };

@@ -430,6 +430,7 @@ pub const CompletionEvalContext = struct {
     previous: []const u8 = "",
     position: parser.CompletionKind = .command,
     option_value: ?CompletionOptionValue = null,
+    value_segment: ?CompletionValueSegment = null,
     replace_start: usize = 0,
     replace_end: usize = 0,
 };
@@ -437,6 +438,27 @@ pub const CompletionEvalContext = struct {
 pub const CompletionOptionValue = struct {
     name: []const u8,
     spelling: []const u8,
+};
+
+pub const CompletionValuePosition = enum {
+    item,
+    key,
+    value,
+};
+
+pub const CompletionValueSegment = struct {
+    segment: []const u8,
+    list_separator: ?u8 = null,
+    key_value_separator: ?u8 = null,
+    position: CompletionValuePosition = .item,
+    key: []const u8 = "",
+
+    pub fn activeSeparator(self: CompletionValueSegment) ?u8 {
+        return switch (self.position) {
+            .value => self.key_value_separator orelse self.list_separator,
+            .item, .key => self.list_separator,
+        };
+    }
 };
 
 pub const CompletionSemanticPosition = enum {
@@ -456,6 +478,7 @@ pub const CompletionSemanticContext = struct {
     previous: []const u8 = "",
     position: CompletionSemanticPosition = .command,
     option_value: ?CompletionOptionValue = null,
+    value_segment: ?CompletionValueSegment = null,
     replace_start: usize = 0,
     replace_end: usize = 0,
     suspicious_start: ?usize = null,
@@ -601,6 +624,12 @@ const AttachedCompletionOptionValue = struct {
 };
 
 fn attachedCompletionOptionValue(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?AttachedCompletionOptionValue {
+    if (attachedLongCompletionOptionValue(rules, root, path, word)) |attached| return attached;
+    if (attachedShortCompletionOptionValue(rules, root, path, word)) |attached| return attached;
+    return null;
+}
+
+fn attachedLongCompletionOptionValue(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?AttachedCompletionOptionValue {
     const equals_index = std.mem.indexOfScalar(u8, word, '=') orelse return null;
     if (equals_index == 0) return null;
     const spelling = word[0..equals_index];
@@ -611,6 +640,23 @@ fn attachedCompletionOptionValue(rules: []const completion.Rule, root: []const u
         .spelling = spelling,
         .value_offset = equals_index + 1,
     };
+}
+
+fn attachedShortCompletionOptionValue(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?AttachedCompletionOptionValue {
+    if (!isShortOptionCluster(word)) return null;
+    var index: usize = 1;
+    while (index < word.len) : (index += 1) {
+        const matched = findShortCompletionOption(rules, root, path, word[index]) orelse return null;
+        if (matched.takes_value) {
+            if (index + 1 >= word.len) return null;
+            return .{
+                .name = matched.name,
+                .spelling = word[0 .. index + 1],
+                .value_offset = index + 1,
+            };
+        }
+    }
+    return null;
 }
 
 fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?MatchedCompletionOption {
@@ -744,6 +790,66 @@ fn completionOptionValueMatches(rule: completion.Rule, option_value: ?Completion
     if (rule.option.long) |long| if (std.mem.eql(u8, active.name, long)) return true;
     if (rule.option.short) |short| if (std.mem.eql(u8, active.name, short)) return true;
     return rule.option.long == null and rule.option.short == null;
+}
+
+fn completionValueGrammarForOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, option_value: CompletionOptionValue) completion.ValueGrammar {
+    for (rules) |rule| {
+        if (rule.value_grammar.isEmpty()) continue;
+        if (rule.kind != .option and rule.kind != .dynamic_option_value) continue;
+        if (!completionRuleContextMatches(rule, root, path)) continue;
+        if (!completionOptionValueMatches(rule, option_value)) continue;
+        return rule.value_grammar;
+    }
+    return .{};
+}
+
+const ActiveCompletionValueSegment = struct {
+    prefix: []const u8,
+    replace_start: usize,
+    context: CompletionValueSegment,
+};
+
+fn activeCompletionValueSegment(prefix: []const u8, replace_start: usize, grammar: completion.ValueGrammar) ActiveCompletionValueSegment {
+    var segment_start: usize = 0;
+    if (grammar.list_separator) |separator| {
+        if (std.mem.findScalarLast(u8, prefix, separator)) |index| segment_start = index + 1;
+    }
+
+    const item = prefix[segment_start..];
+    var segment = item;
+    var segment_replace_start = replace_start + segment_start;
+    var position: CompletionValuePosition = if (grammar.key_value_separator == null) .item else .key;
+    var key: []const u8 = "";
+    if (grammar.key_value_separator) |separator| {
+        if (std.mem.indexOfScalar(u8, item, separator)) |index| {
+            position = .value;
+            key = item[0..index];
+            segment = item[index + 1 ..];
+            segment_replace_start += index + 1;
+        }
+    }
+
+    return .{
+        .prefix = segment,
+        .replace_start = segment_replace_start,
+        .context = .{
+            .segment = segment,
+            .list_separator = grammar.list_separator,
+            .key_value_separator = grammar.key_value_separator,
+            .position = position,
+            .key = key,
+        },
+    };
+}
+
+fn completionEvalContextWithValueGrammar(context: CompletionEvalContext, grammar: completion.ValueGrammar) CompletionEvalContext {
+    if (grammar.isEmpty()) return context;
+    var segmented = context;
+    const active = activeCompletionValueSegment(context.prefix, context.replace_start, grammar);
+    segmented.prefix = active.prefix;
+    segmented.replace_start = active.replace_start;
+    segmented.value_segment = active.context;
+    return segmented;
 }
 
 // Completion candidates are deduplicated by the edit they would apply:
@@ -1520,6 +1626,7 @@ pub const Executor = struct {
                 .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
                 .no_space = rule.option.no_space,
             },
+            .value_grammar = rule.value_grammar,
             .description = if (rule.description) |description| try self.allocator.dupe(u8, description) else null,
             .source = .{
                 .kind = rule.source.kind,
@@ -1681,6 +1788,7 @@ pub const Executor = struct {
         context.prefix = semantic.prefix;
         context.previous = semantic.previous;
         context.option_value = semantic.option_value;
+        context.value_segment = semantic.value_segment;
         context.replace_start = semantic.replace_start;
         context.replace_end = semantic.replace_end;
         context.position = switch (semantic.position) {
@@ -1806,11 +1914,21 @@ pub const Executor = struct {
 
         var semantic_prefix = prefix;
         var semantic_replace_start = replace_start;
+        var value_segment: ?CompletionValueSegment = null;
         if (option_value == null) {
             if (attachedCompletionOptionValue(self.completion_rules.items, root, path.items, semantic_prefix)) |attached| {
                 option_value = .{ .name = attached.name, .spelling = attached.spelling };
                 semantic_prefix = semantic_prefix[attached.value_offset..];
                 semantic_replace_start += attached.value_offset;
+            }
+        }
+        if (option_value) |active_option_value| {
+            const grammar = completionValueGrammarForOption(self.completion_rules.items, root, path.items, active_option_value);
+            if (!grammar.isEmpty()) {
+                const active = activeCompletionValueSegment(semantic_prefix, semantic_replace_start, grammar);
+                semantic_prefix = active.prefix;
+                semantic_replace_start = active.replace_start;
+                value_segment = active.context;
             }
         }
         const position: CompletionSemanticPosition = if (option_value != null)
@@ -1835,6 +1953,7 @@ pub const Executor = struct {
             .previous = previous,
             .position = position,
             .option_value = option_value,
+            .value_segment = value_segment,
             .replace_start = semantic_replace_start,
             .replace_end = replace_end,
             .suspicious_start = if (suspicious) |span| view.offset + span.start else null,
@@ -2294,6 +2413,9 @@ pub const Executor = struct {
                 .dynamic_option_value => .argument,
                 else => provider_context.position,
             };
+            if (rule.kind == .dynamic_argument and !rule.value_grammar.isEmpty()) {
+                provider_context = completionEvalContextWithValueGrammar(provider_context, rule.value_grammar);
+            }
             const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options);
             defer self.freeCompletions(candidates);
             for (candidates) |candidate| {
@@ -9187,6 +9309,14 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing value name");
             rule.option.argument = command.argv[index].text;
             index += 1;
+        } else if (std.mem.eql(u8, option, "--list-separator") or std.mem.eql(u8, option, "--value-list-separator")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing list separator");
+            rule.value_grammar.list_separator = parseCompletionValueSeparator(command.argv[index].text) orelse return errorResult(self.allocator, 2, "complete", "value separator must be one byte");
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--key-value-separator") or std.mem.eql(u8, option, "--value-key-value-separator")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing key/value separator");
+            rule.value_grammar.key_value_separator = parseCompletionValueSeparator(command.argv[index].text) orelse return errorResult(self.allocator, 2, "complete", "value separator must be one byte");
+            index += 1;
         } else if (std.mem.eql(u8, option, "--description")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing description text");
             rule.description = command.argv[index].text;
@@ -9209,6 +9339,11 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
         return errorResult(self.allocator, 2, "complete", "missing completion rule");
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn parseCompletionValueSeparator(separator: []const u8) ?u8 {
+    if (separator.len != 1) return null;
+    return separator[0];
 }
 
 const CompletionPattern = struct {
@@ -9263,6 +9398,10 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     }
     if (std.mem.eql(u8, subcommand, "option-name")) return completionOptionContextLine(self, subcommand, .name);
     if (std.mem.eql(u8, subcommand, "option-spelling")) return completionOptionContextLine(self, subcommand, .spelling);
+    if (std.mem.eql(u8, subcommand, "value-segment")) return completionValueSegmentContextLine(self, subcommand, .segment);
+    if (std.mem.eql(u8, subcommand, "value-separator")) return completionValueSegmentContextLine(self, subcommand, .separator);
+    if (std.mem.eql(u8, subcommand, "value-position")) return completionValueSegmentContextLine(self, subcommand, .position);
+    if (std.mem.eql(u8, subcommand, "value-key")) return completionValueSegmentContextLine(self, subcommand, .key);
     if (std.mem.eql(u8, subcommand, "files")) return builtinCompletionFiles(self, builder, command, options, false);
     if (std.mem.eql(u8, subcommand, "directories")) return builtinCompletionFiles(self, builder, command, options, true);
     if (std.mem.eql(u8, subcommand, "executables")) return builtinCompletionExecutables(self, builder, command, options);
@@ -9406,6 +9545,18 @@ fn completionOptionContextLine(self: *Executor, name: []const u8, field: enum { 
         .name => option_value.name,
         .spelling => option_value.spelling,
     }, 0);
+}
+
+fn completionValueSegmentContextLine(self: *Executor, name: []const u8, field: enum { segment, separator, position, key }) !CommandResult {
+    _ = name;
+    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const segment = context.value_segment orelse return errorResult(self.allocator, 2, "completion", "missing active value segment");
+    return switch (field) {
+        .segment => stdoutLine(self.allocator, segment.segment, 0),
+        .separator => if (segment.activeSeparator()) |separator| stdoutLineFmt(self.allocator, "{c}", .{separator}, 0) else stdoutLine(self.allocator, "", 0),
+        .position => stdoutLine(self.allocator, @tagName(segment.position), 0),
+        .key => stdoutLine(self.allocator, segment.key, 0),
+    };
 }
 
 fn updateCompletionOptionValueContext(self: *Executor, option: completion.Option) bool {
@@ -20486,6 +20637,131 @@ test "completion detects short option value slots" {
     try std.testing.expectEqualStrings("-m", candidates[0].display.?);
     try std.testing.expectEqual(@as(usize, "git -m ".len), candidates[0].replace_start);
     try std.testing.expectEqual(@as(usize, source.len), candidates[0].replace_end);
+}
+
+test "structured option value grammars replace only active list elements" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_modes() {
+        \\  completion candidate slow --description "$(completion value-position):$(completion value-segment):$(completion value-separator):$(completion value-key)"
+        \\}
+        \\complete tool --option --short m --long mode --value-name mode
+        \\complete tool --option-value --long mode --function __tool_modes --list-separator ,
+        \\complete tool --option-value --short m --function __tool_modes --list-separator ,
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const attached_long_source = "tool --mode=fast,sl";
+    const attached_long = try executor.collectCompletionsForInput(attached_long_source, attached_long_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(attached_long);
+    const attached_long_slow = findCandidate(attached_long, "slow") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("item:sl:,:", attached_long_slow.description.?);
+    try std.testing.expectEqual(@as(usize, "tool --mode=fast,".len), attached_long_slow.replace_start);
+    try std.testing.expectEqual(@as(usize, attached_long_source.len), attached_long_slow.replace_end);
+    const attached_long_application = try completion.applyCandidatesForInput(std.testing.allocator, attached_long_source, &.{attached_long_slow});
+    defer attached_long_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("slow", attached_long_application.edit.replacement);
+    try std.testing.expectEqual(@as(usize, "tool --mode=fast,".len), attached_long_application.edit.replace_start);
+
+    const detached_source = "tool --mode fast,sl";
+    const detached = try executor.collectCompletionsForInput(detached_source, detached_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(detached);
+    const detached_slow = findCandidate(detached, "slow") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "tool --mode fast,".len), detached_slow.replace_start);
+    try std.testing.expectEqual(@as(usize, detached_source.len), detached_slow.replace_end);
+
+    const empty_element_source = "tool --mode=fast,";
+    const empty_element = try executor.collectCompletionsForInput(empty_element_source, empty_element_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(empty_element);
+    const empty_slow = findCandidate(empty_element, "slow") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("item::,:", empty_slow.description.?);
+    try std.testing.expectEqual(@as(usize, empty_element_source.len), empty_slow.replace_start);
+    try std.testing.expectEqual(@as(usize, empty_element_source.len), empty_slow.replace_end);
+}
+
+test "structured key value grammars handle attached and detached option values" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_pairs() {
+        \\  if test "$(completion value-position)" = value; then
+        \\    completion candidate one --description "$(completion value-position):$(completion value-segment):$(completion value-separator):$(completion value-key)"
+        \\  else
+        \\    completion candidate alpha --description "$(completion value-position):$(completion value-segment):$(completion value-separator):$(completion value-key)"
+        \\  fi
+        \\}
+        \\complete tool --option --short D --long define --value-name pair
+        \\complete tool --option-value --long define --function __tool_pairs --key-value-separator =
+        \\complete tool --option-value --short D --function __tool_pairs --key-value-separator =
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const key_source = "tool --define al";
+    const key_candidates = try executor.collectCompletionsForInput(key_source, key_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(key_candidates);
+    const alpha = findCandidate(key_candidates, "alpha") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("key:al::", alpha.description.?);
+    try std.testing.expectEqual(@as(usize, "tool --define ".len), alpha.replace_start);
+
+    const detached_source = "tool --define alpha=o";
+    const detached = try executor.collectCompletionsForInput(detached_source, detached_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(detached);
+    const detached_one = findCandidate(detached, "one") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("value:o:=:alpha", detached_one.description.?);
+    try std.testing.expectEqual(@as(usize, "tool --define alpha=".len), detached_one.replace_start);
+
+    const attached_long_source = "tool --define=alpha=o";
+    const attached_long = try executor.collectCompletionsForInput(attached_long_source, attached_long_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(attached_long);
+    const attached_long_one = findCandidate(attached_long, "one") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("value:o:=:alpha", attached_long_one.description.?);
+    try std.testing.expectEqual(@as(usize, "tool --define=alpha=".len), attached_long_one.replace_start);
+    const attached_long_application = try completion.applyCandidatesForInput(std.testing.allocator, attached_long_source, &.{attached_long_one});
+    defer attached_long_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("one", attached_long_application.edit.replacement);
+
+    const attached_short_source = "tool -Dalpha=o";
+    const attached_short = try executor.collectCompletionsForInput(attached_short_source, attached_short_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(attached_short);
+    const attached_short_one = findCandidate(attached_short, "one") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("value:o:=:alpha", attached_short_one.description.?);
+    try std.testing.expectEqual(@as(usize, "tool -Dalpha=".len), attached_short_one.replace_start);
+}
+
+test "structured operand value grammars replace only active list elements" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_operands() {
+        \\  completion candidate blue --description "$(completion value-position):$(completion value-segment):$(completion value-separator)"
+        \\}
+        \\complete tool --argument --function __tool_operands --list-separator ,
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const source = "tool red,bl";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    const blue = findCandidate(candidates, "blue") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("item:bl:,", blue.description.?);
+    try std.testing.expectEqual(@as(usize, "tool red,".len), blue.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), blue.replace_end);
 }
 
 test "root command completion includes builtins functions aliases and executables" {
