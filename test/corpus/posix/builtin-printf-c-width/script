@@ -1,0 +1,1 @@
+printf '[%5c][%-5c][%*c][%-*c]\n' abc Z 4 xy 4 q

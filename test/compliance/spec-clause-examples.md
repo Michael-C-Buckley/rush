@@ -71,6 +71,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `builtin-printf-floating-format-flags` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-floating-conversions`, `builtin-printf-floating-format-flags` | floating conversions honor representative sign/space/alternate flags with C-locale radix output |
 | `builtin-printf-string-width-precision` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-width-precision` | string conversions combine width, precision, left adjustment, and zero precision |
 | `builtin-printf-b-precision` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-b-c-conversions`, `builtin-printf-b-precision`, `builtin-printf-width-precision` | `%b` applies precision after escape expansion before width and left-adjust padding |
+| `builtin-printf-c-width` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-b-c-conversions`, `builtin-printf-c-width` | `%c` emits the first character while accepting static and dynamic field widths with left adjustment |
 | `errexit-negation-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for negated pipelines |
 | `errexit-and-or-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for commands before `&&` and `||` in AND-OR lists |
 | `errexit-and-or-final-exits` | `test/corpus/posix` | `option-errexit-conditions` | final failing AND-OR list commands still exit non-interactive execution |

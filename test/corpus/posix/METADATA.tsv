@@ -430,6 +430,7 @@ builtin-trap-reusable-listing	builtin	behavior	trap listing output can be re-inp
 builtin-wait-job-spec	builtin	behavior	wait accepts a job-control job ID operand
 builtin-wait-job-spec-forms	builtin	behavior	wait accepts current (%%/%+), previous, prefix, and substring POSIX job ID operands
 builtin-wait-multiple-operands	builtin	behavior	wait returns the status of the last operand
+builtin-printf-c-width	builtin	behavior	printf %c conversion accepts static and dynamic field widths with left adjustment
 option-set-hyphen	options	behavior	set - disables xtrace and verbose without changing positional parameters
 option-set-variable-listing	options	behavior	set without operands lists shell variables
 redirection-brace-group-input	redirection	behavior	input redirection on a brace group feeds commands in the group
