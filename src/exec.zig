@@ -5570,6 +5570,7 @@ pub const Executor = struct {
         const command = program.commands[pipeline.command_indexes[0]];
         if (command.argv.len == 0 or builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) return self.executeAsyncPipelineFallback(program, pipeline, options);
         if (commandNameNeedsRuntimeExpansion(command)) return self.executeAsyncPipelineFallback(program, pipeline, options);
+        if (hasPathOpeningRedirection(command.redirections)) return self.executeAsyncPipelineFallback(program, pipeline, options);
         const expanded = try self.expandSimpleCommand(command, options);
         defer self.freeExpandedCommand(expanded);
         if (expanded.argv.len == 0) return emptyResult(self.allocator, 0);
@@ -6969,9 +6970,9 @@ pub const Executor = struct {
         var stdin_file: ?std.Io.File = null;
         defer if (stdin_file) |file| file.close(options.io.?);
         const input_special_builtin = expanded.argv.len > 0 and specialBuiltinPropertiesApply(options, expanded.argv[0].text);
-        const effective_stdin = self.applyInputRedirections(expanded, stdin, options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(expanded, err, input_special_builtin);
 
         if (expanded.argv.len == 0) {
+            _ = self.applyInputRedirections(expanded, stdin, options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(expanded, err, input_special_builtin);
             self.applyAssignments(expanded.assignments, options.features) catch |err| switch (err) {
                 error.ReadonlyVariable => return self.assignmentErrorResult(),
                 else => return err,
@@ -6996,6 +6997,7 @@ pub const Executor = struct {
         if (builtinForName(self.*, expanded.argv[0].text)) |builtin| {
             const builtin_name = expanded.argv[0].text;
             const special_builtin = specialBuiltinPropertiesApply(options, builtin_name);
+            const effective_stdin = self.applyInputRedirections(expanded, stdin, options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(expanded, err, special_builtin);
             if (self.applyRealFdRedirectionsIfNeeded(expanded, options) catch |err| return self.redirectionErrorResult(expanded, err, special_builtin)) |guard_value| {
                 var guard = guard_value;
                 defer guard.restore(self, options.io.?);
@@ -7025,7 +7027,7 @@ pub const Executor = struct {
 
         const io = options.io orelse return error.MissingIoForExternalCommand;
         var synthetic_failure = false;
-        const external_stdin = if (stdin.len != 0 or force_stdin or hasInputRedirection(expanded.redirections)) effective_stdin else self.remainingScriptStdin();
+        const external_stdin = if (stdin.len != 0 or force_stdin) stdin else if (hasInputRedirection(expanded.redirections)) null else self.remainingScriptStdin();
         var external_result = self.executeExternal(expanded, io, options, external_stdin) catch |err| switch (err) {
             error.CommandNotFound => blk: {
                 synthetic_failure = true;
@@ -15741,6 +15743,20 @@ fn isStdinFileRedirection(redirection: ir.Redirection) bool {
     return fd == 0 and (redirection.operator == .less or redirection.operator == .less_great);
 }
 
+fn hasPathOpeningRedirection(redirections: []const ir.Redirection) bool {
+    for (redirections) |redirection| {
+        if (redirectionOpensPath(redirection)) return true;
+    }
+    return false;
+}
+
+fn redirectionOpensPath(redirection: ir.Redirection) bool {
+    return switch (redirection.operator) {
+        .less, .less_great, .greater, .dgreat, .clobber => true,
+        else => false,
+    };
+}
+
 fn redirectionOpensFd(redirection: ir.Redirection) ?std.posix.fd_t {
     return switch (redirection.operator) {
         .less, .less_great, .dless, .dless_dash => redirectionFd(redirection) orelse 0,
@@ -20150,6 +20166,30 @@ test "async external fd duplication orders implicit and explicit stdin" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "external stdin FIFO redirection is opened once" {
+    const fifo_path = "rush-external-stdin-fifo.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, fifo_path) catch {};
+    try makeTestFifo(fifo_path);
+
+    try expectForkedScriptCompletes(
+        "echo viafifo > rush-external-stdin-fifo.tmp & /bin/cat < rush-external-stdin-fifo.tmp; wait",
+        "viafifo\n",
+    );
+}
+
+test "async external FIFO input redirection opens in job process" {
+    const fifo_path = "rush-async-external-stdin-fifo.tmp";
+    const output_path = "rush-async-external-stdin-fifo.out";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, fifo_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+    try makeTestFifo(fifo_path);
+
+    try expectForkedScriptCompletes(
+        "/bin/cat < rush-async-external-stdin-fifo.tmp > rush-async-external-stdin-fifo.out & echo data > rush-async-external-stdin-fifo.tmp; wait; /bin/cat rush-async-external-stdin-fifo.out",
+        "data\n",
+    );
+}
+
 test "executor backgrounds current and selected tracked jobs" {
     var lowered = try parseAndLower(std.testing.allocator, "set -m; /bin/sleep 0.1 & bg; /bin/sleep 0.1 & /bin/sleep 0.1 & bg %2 %3; wait");
     defer lowered.parsed.deinit();
@@ -21716,6 +21756,66 @@ fn expectStoppedForegroundMixedSignal(allocator: std.mem.Allocator, executor: *E
     const expected = try std.fmt.allocPrint(allocator, "{s}-resumed", .{signal_name});
     defer allocator.free(expected);
     try std.testing.expectEqualStrings(expected, contents);
+}
+
+fn makeTestFifo(path: []const u8) !void {
+    var child = std.process.spawn(std.testing.io, .{ .argv = &.{ "mkfifo", path } }) catch |err| switch (err) {
+        error.FileNotFound => return error.SkipZigTest,
+        else => return err,
+    };
+    const term = try child.wait(std.testing.io);
+    switch (term) {
+        .exited => |status| if (status == 0) return,
+        else => {},
+    }
+    return error.SkipZigTest;
+}
+
+fn expectForkedScriptCompletes(script: []const u8, expected_stdout: []const u8) !void {
+    const child_pid = forkProcess() catch return error.SkipZigTest;
+    if (child_pid == 0) {
+        processSetPgrp(0, 0) catch exitForkedChild(77);
+        runForkedScriptExpectation(script, expected_stdout) catch |err| switch (err) {
+            error.SkipZigTest => exitForkedChild(77),
+            else => exitForkedChild(1),
+        };
+        exitForkedChild(0);
+    }
+
+    var attempts: usize = 0;
+    while (attempts < 500) : (attempts += 1) {
+        var status: c_int = 0;
+        const result = std.c.waitpid(child_pid, &status, @intCast(std.posix.W.NOHANG));
+        if (result == child_pid) {
+            const wait_status: u32 = @bitCast(status);
+            if (std.posix.W.IFEXITED(wait_status) and std.posix.W.EXITSTATUS(wait_status) == 77) return error.SkipZigTest;
+            try std.testing.expect(std.posix.W.IFEXITED(wait_status));
+            try std.testing.expectEqual(@as(u8, 0), std.posix.W.EXITSTATUS(wait_status));
+            return;
+        }
+        if (result < 0) return error.SkipZigTest;
+        sleepPtyTestPollInterval();
+    }
+
+    std.posix.kill(-child_pid, .KILL) catch {};
+    _ = std.c.waitpid(child_pid, null, 0);
+    return error.TestTimedOut;
+}
+
+fn runForkedScriptExpectation(script: []const u8, expected_stdout: []const u8) !void {
+    const allocator = std.heap.page_allocator;
+    var lowered = try parseAndLower(allocator, script);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(expected_stdout, result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 fn expectPtyTestChildSucceeded(child_pid: std.c.pid_t) !void {
