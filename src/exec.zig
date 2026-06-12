@@ -455,6 +455,21 @@ pub const CompletionEvalContext = struct {
 pub const CompletionOptionValue = struct {
     name: []const u8,
     spelling: []const u8,
+    from: ?[]const u8 = null,
+    from_offset: ?usize = null,
+
+    pub fn displaySpelling(self: CompletionOptionValue, buffer: *[2]u8) []const u8 {
+        if (self.from_offset) |offset| {
+            if (self.from) |from| {
+                if (offset < from.len) {
+                    buffer[0] = '-';
+                    buffer[1] = from[offset];
+                    return buffer[0..2];
+                }
+            }
+        }
+        return self.spelling;
+    }
 };
 
 pub const CompletionParsedOption = struct {
@@ -462,9 +477,24 @@ pub const CompletionParsedOption = struct {
     name: []const u8,
     key: []const u8,
     value: ?[]const u8 = null,
+    from: ?[]const u8 = null,
+    from_offset: ?usize = null,
     exclusive_group: ?[]const u8 = null,
     repeatable: bool = false,
     terminates_options: bool = false,
+
+    pub fn displaySpelling(self: CompletionParsedOption, buffer: *[2]u8) []const u8 {
+        if (self.from_offset) |offset| {
+            if (self.from) |from| {
+                if (offset < from.len) {
+                    buffer[0] = '-';
+                    buffer[1] = from[offset];
+                    return buffer[0..2];
+                }
+            }
+        }
+        return self.spelling;
+    }
 };
 
 pub const CompletionParsedOperand = struct {
@@ -736,6 +766,7 @@ const MatchedCompletionOption = struct {
 const ShortOptionCluster = struct {
     valid: bool,
     takes_next_value: bool = false,
+    value_offset: ?usize = null,
     unknown_offset: ?usize = null,
 };
 
@@ -743,6 +774,8 @@ const AttachedCompletionOptionValue = struct {
     name: []const u8,
     spelling: []const u8,
     value_offset: usize,
+    from: ?[]const u8 = null,
+    from_offset: ?usize = null,
 };
 
 fn attachedCompletionOptionValue(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?AttachedCompletionOptionValue {
@@ -766,6 +799,7 @@ fn attachedLongCompletionOptionValue(rules: []const completion.Rule, root: []con
 
 fn attachedShortCompletionOptionValue(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?AttachedCompletionOptionValue {
     if (!isShortOptionCluster(word)) return null;
+    if (findCompletionOption(rules, root, path, word) != null) return null;
     var index: usize = 1;
     while (index < word.len) : (index += 1) {
         const matched = findShortCompletionOption(rules, root, path, word[index]) orelse return null;
@@ -773,8 +807,10 @@ fn attachedShortCompletionOptionValue(rules: []const completion.Rule, root: []co
             if (index + 1 >= word.len) return null;
             return .{
                 .name = matched.name,
-                .spelling = word[0 .. index + 1],
+                .spelling = word,
                 .value_offset = index + 1,
+                .from = word,
+                .from_offset = index,
             };
         }
     }
@@ -821,7 +857,7 @@ fn analyzeShortOptionCluster(rules: []const completion.Rule, root: []const u8, p
     while (index < word.len) : (index += 1) {
         const matched = findShortCompletionOption(rules, root, path, word[index]) orelse return .{ .valid = false, .unknown_offset = index };
         if (matched.takes_value) {
-            return .{ .valid = true, .takes_next_value = index + 1 == word.len };
+            return .{ .valid = true, .takes_next_value = index + 1 == word.len, .value_offset = index };
         }
     }
     return .{ .valid = true };
@@ -1039,6 +1075,8 @@ fn appendShortCompletionClusterParsedOptions(allocator: std.mem.Allocator, parse
             .name = matched.name,
             .key = matched.key,
             .value = if (matched.takes_value and index + 1 < word.len) word[index + 1 ..] else null,
+            .from = word,
+            .from_offset = index,
             .exclusive_group = matched.exclusive_group,
             .repeatable = matched.repeatable,
             .terminates_options = matched.terminates_options,
@@ -2558,6 +2596,7 @@ pub const Executor = struct {
                 } else if (cluster.takes_next_value) {
                     _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word);
                     if (shortCompletionClusterTerminatesOptions(self.completion_rules.items, root, path.items, word)) options_terminated = true;
+                    var consumed_next_value = false;
                     if (index + 1 < words.items.len) {
                         const value_token = words.items[index + 1].token;
                         const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
@@ -2565,6 +2604,14 @@ pub const Executor = struct {
                             index += 1;
                             previous = value_token.lexeme(view.source);
                             setLastParsedCompletionOptionValue(&parsed_options, previous);
+                            consumed_next_value = true;
+                        }
+                    }
+                    if (!consumed_next_value) {
+                        if (cluster.value_offset) |value_offset| {
+                            if (findShortCompletionOption(self.completion_rules.items, root, path.items, word[value_offset])) |matched| {
+                                option_value = .{ .name = matched.name, .spelling = word, .from = word, .from_offset = value_offset };
+                            }
                         }
                     }
                 } else {
@@ -2593,7 +2640,7 @@ pub const Executor = struct {
         var value_segment: ?CompletionValueSegment = null;
         if (option_value == null) {
             if (attachedCompletionOptionValue(self.completion_rules.items, root, path.items, semantic_prefix)) |attached| {
-                option_value = .{ .name = attached.name, .spelling = attached.spelling };
+                option_value = .{ .name = attached.name, .spelling = attached.spelling, .from = attached.from, .from_offset = attached.from_offset };
                 semantic_prefix = semantic_prefix[attached.value_offset..];
                 semantic_replace_start += attached.value_offset;
             }
@@ -10840,8 +10887,9 @@ fn setCompletionContextVariables(self: *Executor, context: CompletionEvalContext
     try self.setEnv("rush_completion_operand_state", context.argument_state orelse "");
     try self.setEnv("rush_completion_options_terminated", if (context.options_terminated) "true" else "false");
     if (context.option_value) |option_value| {
+        var spelling_buffer: [2]u8 = undefined;
         try self.setEnv("rush_completion_option_name", option_value.name);
-        try self.setEnv("rush_completion_option_spelling", option_value.spelling);
+        try self.setEnv("rush_completion_option_spelling", option_value.displaySpelling(&spelling_buffer));
     } else {
         try self.setEnv("rush_completion_option_name", "");
         try self.setEnv("rush_completion_option_spelling", "");
@@ -10883,9 +10931,10 @@ fn completionOptionContextLine(self: *Executor, name: []const u8, field: enum { 
     _ = name;
     const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
     const option_value = context.option_value orelse return errorResult(self.allocator, 2, "completion", "missing active option");
+    var spelling_buffer: [2]u8 = undefined;
     return stdoutLine(self.allocator, switch (field) {
         .name => option_value.name,
-        .spelling => option_value.spelling,
+        .spelling => option_value.displaySpelling(&spelling_buffer),
     }, 0);
 }
 
@@ -21979,6 +22028,166 @@ test "completion diagnostics handle value-taking short options in clusters" {
     defer std.testing.allocator.free(missing);
     try std.testing.expectEqual(@as(usize, 1), missing.len);
     try std.testing.expectEqual(CompletionDiagnosticKind.missing_option_value, missing[0].kind);
+}
+
+test "completion analysis decomposes clustered short option occurrences" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --short a --long all
+        \\complete tool --option --short v --long verbose
+        \\complete tool --option --short i --long include --repeatable
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    var analysis = try executor.analyzeCompletionsForInput("tool -av target ", "tool -av target ".len);
+    defer analysis.deinit();
+    try std.testing.expectEqual(@as(usize, 2), analysis.parsed_options.len);
+    var spelling_buffer: [2]u8 = undefined;
+    try std.testing.expectEqualStrings("-a", analysis.parsed_options[0].displaySpelling(&spelling_buffer));
+    try std.testing.expectEqualStrings("-av", analysis.parsed_options[0].from.?);
+    try std.testing.expectEqualStrings("all", analysis.parsed_options[0].key);
+    try std.testing.expectEqualStrings("-v", analysis.parsed_options[1].displaySpelling(&spelling_buffer));
+    try std.testing.expectEqualStrings("verbose", analysis.parsed_options[1].key);
+    try std.testing.expectEqual(@as(usize, 1), analysis.argument_index);
+    try std.testing.expectEqual(@as(usize, 1), analysis.operands.len);
+    try std.testing.expectEqualStrings("target", analysis.operands[0].value);
+
+    const candidates = try executor.collectCompletionsForInput("tool -av -", "tool -av -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "-a");
+    try expectNoCandidate(candidates, "--all");
+    try expectNoCandidate(candidates, "-v");
+    try expectNoCandidate(candidates, "--verbose");
+    try expectCandidate(candidates, "-i", .option);
+}
+
+test "completion analysis handles attached and detached cluster values" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete grep --option --short n
+        \\complete grep --option --short e --value-name pattern --repeatable
+        \\complete grep --argument --state path --function __grep_paths
+        \\__grep_paths() { completion candidate file; }
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    var attached = try executor.analyzeCompletionsForInput("grep -nefoo target ", "grep -nefoo target ".len);
+    defer attached.deinit();
+    try std.testing.expectEqual(@as(usize, 2), attached.parsed_options.len);
+    try std.testing.expectEqualStrings("n", attached.parsed_options[0].name);
+    try std.testing.expectEqualStrings("e", attached.parsed_options[1].name);
+    try std.testing.expectEqualStrings("foo", attached.parsed_options[1].value.?);
+    try std.testing.expectEqual(@as(usize, 1), attached.argument_index);
+    try std.testing.expectEqualStrings("target", attached.operands[0].value);
+
+    var detached = try executor.analyzeCompletionsForInput("grep -ne foo target ", "grep -ne foo target ".len);
+    defer detached.deinit();
+    try std.testing.expectEqual(@as(usize, 2), detached.parsed_options.len);
+    try std.testing.expectEqualStrings("foo", detached.parsed_options[1].value.?);
+    try std.testing.expectEqual(@as(usize, 1), detached.argument_index);
+    try std.testing.expectEqualStrings("target", detached.operands[0].value);
+
+    var active = try executor.analyzeCompletionsForInput("grep -ne f", "grep -ne f".len);
+    defer active.deinit();
+    try std.testing.expectEqual(CompletionSemanticPosition.option_value, active.position);
+    try std.testing.expectEqualStrings("e", active.option_value.?.name);
+    var spelling_buffer: [2]u8 = undefined;
+    try std.testing.expectEqualStrings("-e", active.option_value.?.displaySpelling(&spelling_buffer));
+    try std.testing.expectEqualStrings("f", active.prefix);
+
+    var missing = try executor.analyzeCompletionsForInput("grep -ne ", "grep -ne ".len);
+    defer missing.deinit();
+    try std.testing.expectEqual(CompletionSemanticPosition.option_value, missing.position);
+    try std.testing.expectEqualStrings("e", missing.option_value.?.name);
+}
+
+test "completion analysis applies exclusions from clustered short options" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --short j --long json --exclusive-group output
+        \\complete tool --option --short p --long porcelain --exclusive-group output
+        \\complete tool --option --short c --long color
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const diagnostics = try executor.completionDiagnosticsForInput("tool -jp ", "tool -jp ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.conflicting_option, diagnostics[0].kind);
+
+    const candidates = try executor.collectCompletionsForInput("tool -j -", "tool -j -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "-p");
+    try expectNoCandidate(candidates, "--porcelain");
+    try expectCandidate(candidates, "-c", .option);
+}
+
+test "completion analysis rejects unknown short cluster members without partial occurrences" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete ls --option --short a
+        \\complete ls --option --short l
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    var analysis = try executor.analyzeCompletionsForInput("ls -alz file ", "ls -alz file ".len);
+    defer analysis.deinit();
+    try std.testing.expectEqual(@as(usize, 0), analysis.parsed_options.len);
+    try std.testing.expect(analysis.suspicious_start != null);
+    try std.testing.expectEqual(@as(usize, 0), analysis.argument_index);
+}
+
+test "completion analysis gives literal short spellings precedence over clusters" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete find --option --short iname --value-name pattern
+        \\complete find --option --short i
+        \\complete find --option --short n
+        \\complete find --option --short a
+        \\complete find --option --short m
+        \\complete find --option --short e
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    var analysis = try executor.analyzeCompletionsForInput("find -iname needle path ", "find -iname needle path ".len);
+    defer analysis.deinit();
+    try std.testing.expectEqual(@as(usize, 1), analysis.parsed_options.len);
+    try std.testing.expectEqualStrings("-iname", analysis.parsed_options[0].spelling);
+    try std.testing.expect(analysis.parsed_options[0].from == null);
+    try std.testing.expectEqualStrings("iname", analysis.parsed_options[0].name);
+    try std.testing.expectEqualStrings("needle", analysis.parsed_options[0].value.?);
+    try std.testing.expectEqual(@as(usize, 1), analysis.argument_index);
+    try std.testing.expectEqualStrings("path", analysis.operands[0].value);
 }
 
 test "structured completion rules emit subcommand and option candidates" {

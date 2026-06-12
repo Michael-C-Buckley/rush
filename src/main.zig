@@ -3108,6 +3108,8 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     const effective_value_separator = completionValueSegmentSeparatorSlice(effective_context.value_segment, &effective_value_separator_buffer);
     var semantic_value_separator_buffer: [1]u8 = undefined;
     const semantic_value_separator = completionValueSegmentSeparatorSlice(semantic.value_segment, &semantic_value_separator_buffer);
+    var effective_option_spelling_buffer: [2]u8 = undefined;
+    const effective_option_spelling = if (effective_context.option_value) |option_value| option_value.displaySpelling(&effective_option_spelling_buffer) else "";
 
     var out: std.Io.Writer.Allocating = .init(allocator);
     defer out.deinit();
@@ -3146,7 +3148,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         effective_context.options_terminated,
         if (effective_context.option_value != null) "option_value" else @tagName(effective_context.position),
         if (effective_context.option_value) |option_value| option_value.name else "",
-        if (effective_context.option_value) |option_value| option_value.spelling else "",
+        effective_option_spelling,
         if (effective_context.value_segment) |segment| segment.segment else "",
         effective_value_separator,
         if (effective_context.value_segment) |segment| @tagName(segment.position) else "",
@@ -3300,9 +3302,13 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
 
 fn writeCompletionParsedOptionsText(writer: *std.Io.Writer, options: []const exec.CompletionParsedOption, indent: []const u8) !void {
     for (options) |option| {
-        try writer.print("{s}- spelling: {s}\n{s}  name: {s}\n{s}  key: {s}\n{s}  value: {s}\n{s}  repeatable: {}\n{s}  terminates-options: {}\n{s}  exclusive-group: {s}\n", .{
+        var spelling_buffer: [2]u8 = undefined;
+        const spelling = option.displaySpelling(&spelling_buffer);
+        try writer.print("{s}- spelling: {s}\n{s}  from: {s}\n{s}  name: {s}\n{s}  key: {s}\n{s}  value: {s}\n{s}  repeatable: {}\n{s}  terminates-options: {}\n{s}  exclusive-group: {s}\n", .{
             indent,
-            option.spelling,
+            spelling,
+            indent,
+            option.from orelse "",
             indent,
             option.name,
             indent,
@@ -3459,7 +3465,12 @@ fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.Compl
     try json.objectField("optionName");
     try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
     try json.objectField("optionSpelling");
-    try json.write(if (context.option_value) |option_value| option_value.spelling else @as(?[]const u8, null));
+    if (context.option_value) |option_value| {
+        var spelling_buffer: [2]u8 = undefined;
+        try json.write(option_value.displaySpelling(&spelling_buffer));
+    } else {
+        try json.write(@as(?[]const u8, null));
+    }
     try json.objectField("valueSegment");
     try json.write(if (context.value_segment) |segment| segment.segment else @as(?[]const u8, null));
     try json.objectField("valueSeparator");
@@ -3519,7 +3530,12 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.objectField("optionName");
     try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
     try json.objectField("optionSpelling");
-    try json.write(if (context.option_value) |option_value| option_value.spelling else @as(?[]const u8, null));
+    if (context.option_value) |option_value| {
+        var spelling_buffer: [2]u8 = undefined;
+        try json.write(option_value.displaySpelling(&spelling_buffer));
+    } else {
+        try json.write(@as(?[]const u8, null));
+    }
     try json.objectField("valueSegment");
     try json.write(if (context.value_segment) |segment| segment.segment else @as(?[]const u8, null));
     try json.objectField("valueSeparator");
@@ -3546,9 +3562,12 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
 fn writeCompletionParsedOptionsJson(json: *std.json.Stringify, options: []const exec.CompletionParsedOption) !void {
     try json.beginArray();
     for (options) |option| {
+        var spelling_buffer: [2]u8 = undefined;
         try json.beginObject();
         try json.objectField("spelling");
-        try json.write(option.spelling);
+        try json.write(option.displaySpelling(&spelling_buffer));
+        try json.objectField("from");
+        try json.write(option.from);
         try json.objectField("name");
         try json.write(option.name);
         try json.objectField("key");
@@ -3815,8 +3834,23 @@ const ManifestParsedOption = struct {
     spelling: []const u8,
     name: []const u8,
     value: ?[]const u8 = null,
+    from: ?[]const u8 = null,
+    from_offset: ?usize = null,
     exclusive_group: ?[]const u8 = null,
     repeatable: bool = false,
+
+    fn displaySpelling(self: ManifestParsedOption, buffer: *[2]u8) []const u8 {
+        if (self.from_offset) |offset| {
+            if (self.from) |from| {
+                if (offset < from.len) {
+                    buffer[0] = '-';
+                    buffer[1] = from[offset];
+                    return buffer[0..2];
+                }
+            }
+        }
+        return self.spelling;
+    }
 };
 
 const ManifestOptionMatch = struct {
@@ -3925,9 +3959,12 @@ fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, js
     try json.objectField("parsedOptions");
     try json.beginArray();
     for (trace.parsed_options.items) |option| {
+        var spelling_buffer: [2]u8 = undefined;
         try json.beginObject();
         try json.objectField("spelling");
-        try json.write(option.spelling);
+        try json.write(option.displaySpelling(&spelling_buffer));
+        try json.objectField("from");
+        try json.write(option.from);
         try json.objectField("name");
         try json.write(option.name);
         try json.objectField("value");
@@ -4102,6 +4139,37 @@ fn analyzeManifestCompletionTrace(allocator: std.mem.Allocator, source: []const 
                 word_index += 1;
                 continue;
             }
+            if (analyzeManifestShortOptionCluster(root_command, semantic.path, word)) |cluster| {
+                if (cluster.valid) {
+                    var offset: usize = 1;
+                    while (offset < word.len) : (offset += 1) {
+                        const matched = findManifestShortOptionForPath(root_command, semantic.path, word[offset]) orelse break;
+                        var parsed_option: ManifestParsedOption = .{
+                            .spelling = word,
+                            .name = matched.name,
+                            .value = if (manifestOptionTakesValue(matched.option) and offset + 1 < word.len) word[offset + 1 ..] else null,
+                            .from = word,
+                            .from_offset = offset,
+                            .exclusive_group = manifestString(matched.option.get("exclusiveGroup")),
+                            .repeatable = manifestBool(matched.option.get("repeatable")),
+                        };
+                        if (manifestBool(matched.option.get("terminatesOptions"))) trace.terminator_seen = true;
+                        if (manifestOptionTakesValue(matched.option)) {
+                            if (parsed_option.value == null) {
+                                if (nextCompleteWord(parsed, source, parser_context, token_index)) |next| {
+                                    parsed_option.value = next.word;
+                                    token_index = next.token_index;
+                                }
+                            }
+                            try trace.parsed_options.append(allocator, parsed_option);
+                            break;
+                        }
+                        try trace.parsed_options.append(allocator, parsed_option);
+                    }
+                    word_index += 1;
+                    continue;
+                }
+            }
             if (std.mem.startsWith(u8, word, "-")) {
                 word_index += 1;
                 continue;
@@ -4165,6 +4233,32 @@ fn findManifestOptionForPath(root_command: std.json.ObjectMap, path: []const []c
     return null;
 }
 
+const ManifestShortOptionCluster = struct {
+    valid: bool,
+    unknown_offset: ?usize = null,
+};
+
+fn analyzeManifestShortOptionCluster(root_command: std.json.ObjectMap, path: []const []const u8, word: []const u8) ?ManifestShortOptionCluster {
+    if (word.len <= 2 or word[0] != '-' or word[1] == '-') return null;
+    var offset: usize = 1;
+    while (offset < word.len) : (offset += 1) {
+        const matched = findManifestShortOptionForPath(root_command, path, word[offset]) orelse return .{ .valid = false, .unknown_offset = offset };
+        if (manifestOptionTakesValue(matched.option)) return .{ .valid = true };
+    }
+    return .{ .valid = true };
+}
+
+fn findManifestShortOptionForPath(root_command: std.json.ObjectMap, path: []const []const u8, short: u8) ?ManifestOptionMatch {
+    var options: [128]std.json.ObjectMap = undefined;
+    var len: usize = 0;
+    appendManifestOptionsForPathBounded(&options, &len, root_command, path);
+    for (options[0..len]) |option| {
+        const option_short = manifestString(option.get("short")) orelse continue;
+        if (option_short.len == 1 and option_short[0] == short) return .{ .option = option, .spelling = option_short, .name = option_short };
+    }
+    return null;
+}
+
 fn appendManifestOptionsForPathBounded(buffer: []std.json.ObjectMap, len: *usize, root_command: std.json.ObjectMap, path: []const []const u8) void {
     appendManifestCommandOptionsBounded(buffer, len, root_command);
     var command = root_command;
@@ -4199,9 +4293,9 @@ fn manifestOptionMatchesWord(option: std.json.ObjectMap, word: []const u8) ?Mani
             return .{ .option = option, .spelling = spelling, .name = name, .value = if (equals_index) |index| body[index + 1 ..] else null, .attached_value = equals_index != null };
         }
     }
-    if (std.mem.startsWith(u8, word, "-") and word.len == 2) {
+    if (std.mem.startsWith(u8, word, "-") and !std.mem.startsWith(u8, word, "--")) {
         const short = manifestString(option.get("short")) orelse return null;
-        if (short.len == 1 and short[0] == word[1]) return .{ .option = option, .spelling = word, .name = short };
+        if (word.len == short.len + 1 and std.mem.eql(u8, word[1..], short)) return .{ .option = option, .spelling = word, .name = short };
     }
     return null;
 }
@@ -4362,14 +4456,16 @@ fn writeManifestSuppressedOptionsJson(json: *std.json.Stringify, options: []cons
     for (options) |option| {
         const spelling = manifestOptionPrimarySpelling(option) orelse continue;
         if (manifestParsedOptionForOption(parsed_options, option)) |parsed| {
-            if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionJson(json, spelling, "alreadyPresent", parsed.spelling, null);
+            var parsed_spelling_buffer: [2]u8 = undefined;
+            if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionJson(json, spelling, "alreadyPresent", parsed.displaySpelling(&parsed_spelling_buffer), null);
             continue;
         }
         const group = manifestString(option.get("exclusiveGroup")) orelse continue;
         for (parsed_options) |parsed| {
             if (parsed.exclusive_group) |parsed_group| {
                 if (std.mem.eql(u8, group, parsed_group)) {
-                    try writeManifestSuppressedOptionJson(json, spelling, "exclusiveGroup", parsed.spelling, group);
+                    var parsed_spelling_buffer: [2]u8 = undefined;
+                    try writeManifestSuppressedOptionJson(json, spelling, "exclusiveGroup", parsed.displaySpelling(&parsed_spelling_buffer), group);
                     break;
                 }
             }
@@ -7013,6 +7109,32 @@ test "completion debug output exposes active argument state" {
     const context_operands = object.get("context").?.object.get("operands").?.array.items;
     try std.testing.expectEqualStrings("create", context_operands[0].object.get("value").?.string);
     try std.testing.expectEqualStrings("action", context_operands[0].object.get("state").?.string);
+}
+
+test "completion debug JSON reports decomposed short option cluster sources" {
+    const root = "rush-debug-short-cluster-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data =
+        \\complete tool --option --short a --long all
+        \\complete tool --option --short b --long brief
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool -ab ");
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+    const semantic_options = parsed.value.object.get("semantic").?.object.get("parsedOptions").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), semantic_options.len);
+    try std.testing.expectEqualStrings("-a", semantic_options[0].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("-ab", semantic_options[0].object.get("from").?.string);
+    try std.testing.expectEqualStrings("all", semantic_options[0].object.get("key").?.string);
+    try std.testing.expectEqualStrings("-b", semantic_options[1].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("-ab", semantic_options[1].object.get("from").?.string);
 }
 
 test "completion debug output reports dynamic provider failures" {

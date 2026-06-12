@@ -311,6 +311,16 @@ when separating canonical name from aliases is clearer.
 Options have `short` and/or `long`. Long names are stored without `--`; short
 names are stored without `-`.
 
+Completion parsing recognizes POSIX-style clustered short options by default for
+declared one-byte short spellings. A completed token such as `-abc` is treated
+as `-a -b -c` only when every character resolves in the effective command scope;
+otherwise the whole token remains unrecognized. A declared whole-token spelling
+always wins, so an option declared as `{ "short": "iname" }` is parsed as
+`-iname` rather than as `-i -n -a -m -e`. Short options that take values end a
+cluster and consume the rest of the token, or the next word when no rest is
+attached. This behavior is engine-owned and has no manifest v1 knob; add an
+opt-out only if real command data shows default clustering is harmful.
+
 Parent options are inherited into subcommand contexts by default. Set
 `"inherit": false` for options that are only valid before selecting a
 subcommand, such as Git's global `-C` and `-c` options, so subcommands may reuse
