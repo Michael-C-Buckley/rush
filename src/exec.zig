@@ -388,6 +388,7 @@ pub const CompletionBuilder = struct {
                 .long = if (option.long) |long| try self.dupeField(allocator, long) else null,
                 .short = if (option.short) |short| try self.dupeField(allocator, short) else null,
                 .argument = if (option.argument) |argument| try self.dupeField(allocator, argument) else null,
+                .exclusive_group = if (option.exclusive_group) |group| try self.dupeField(allocator, group) else null,
                 .no_space = option.no_space,
             };
         }
@@ -441,6 +442,22 @@ pub const CompletionOptionValue = struct {
     spelling: []const u8,
 };
 
+pub const CompletionParsedOption = struct {
+    spelling: []const u8,
+    name: []const u8,
+    exclusive_group: ?[]const u8 = null,
+};
+
+pub const CompletionOptionSuppressionReason = enum {
+    exclusive_group,
+};
+
+pub const CompletionOptionSuppression = struct {
+    reason: CompletionOptionSuppressionReason,
+    by: []const u8,
+    group: ?[]const u8 = null,
+};
+
 pub const CompletionValuePosition = enum {
     item,
     key,
@@ -478,6 +495,7 @@ pub const CompletionSemanticContext = struct {
     prefix: []const u8 = "",
     argument_index: usize = 0,
     argument_state: ?[]const u8 = null,
+    parsed_options: []const CompletionParsedOption = &.{},
     previous: []const u8 = "",
     position: CompletionSemanticPosition = .command,
     option_value: ?CompletionOptionValue = null,
@@ -491,6 +509,7 @@ pub const CompletionSemanticContext = struct {
 
     pub fn deinit(self: *CompletionSemanticContext) void {
         self.allocator.free(self.path);
+        self.allocator.free(self.parsed_options);
         self.* = undefined;
     }
 };
@@ -505,6 +524,7 @@ pub const CompletionDiagnosticKind = enum {
     unknown_subcommand,
     unknown_option,
     missing_option_value,
+    conflicting_option,
 };
 
 pub const CompletionDiagnostic = struct {
@@ -603,6 +623,7 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.option.long) |long| allocator.free(long);
     if (rule.option.short) |short| allocator.free(short);
     if (rule.option.argument) |argument| allocator.free(argument);
+    if (rule.option.exclusive_group) |group| allocator.free(group);
     if (rule.argument.state) |state| allocator.free(state);
     if (rule.argument.after_state) |state| allocator.free(state);
     if (rule.argument.after_value) |value| allocator.free(value);
@@ -615,6 +636,7 @@ const MatchedCompletionOption = struct {
     attached_value: bool,
     name: []const u8,
     spelling: []const u8,
+    exclusive_group: ?[]const u8 = null,
 };
 
 const ShortOptionCluster = struct {
@@ -667,20 +689,20 @@ fn attachedShortCompletionOptionValue(rules: []const completion.Rule, root: []co
 
 fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?MatchedCompletionOption {
     for (rules) |rule| {
-        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextMatches(rule, root, path)) continue;
+        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextAppliesToPath(rule, root, path)) continue;
         const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
         if (rule.option.long) |long| {
             var spelling_buffer: [256]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = long, .spelling = word };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = long, .spelling = word, .exclusive_group = rule.option.exclusive_group };
             if (takes_value and std.mem.startsWith(u8, word, spelling) and word.len > spelling.len and word[spelling.len] == '=') {
-                return .{ .takes_value = true, .attached_value = true, .name = long, .spelling = word[0..spelling.len] };
+                return .{ .takes_value = true, .attached_value = true, .name = long, .spelling = word[0..spelling.len], .exclusive_group = rule.option.exclusive_group };
             }
         }
         if (rule.option.short) |short| {
             var spelling_buffer: [32]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = short, .spelling = word };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = short, .spelling = word, .exclusive_group = rule.option.exclusive_group };
         }
     }
     return null;
@@ -688,11 +710,11 @@ fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: 
 
 fn findShortCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, short: u8) ?MatchedCompletionOption {
     for (rules) |rule| {
-        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextMatches(rule, root, path)) continue;
+        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextAppliesToPath(rule, root, path)) continue;
         const option_short = rule.option.short orelse continue;
         if (option_short.len != 1 or option_short[0] != short) continue;
         const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
-        return .{ .takes_value = takes_value, .attached_value = false, .name = option_short, .spelling = option_short };
+        return .{ .takes_value = takes_value, .attached_value = false, .name = option_short, .spelling = option_short, .exclusive_group = rule.option.exclusive_group };
     }
     return null;
 }
@@ -755,6 +777,82 @@ fn completionOptionPrefixMatches(rules: []const completion.Rule, root: []const u
         }
     }
     return false;
+}
+
+pub fn completionOptionSuppressionForOption(context: CompletionSemanticContext, option: completion.Option) ?CompletionOptionSuppression {
+    const group = option.exclusive_group orelse return null;
+    for (context.parsed_options) |parsed| {
+        const parsed_group = parsed.exclusive_group orelse continue;
+        if (std.mem.eql(u8, parsed_group, group)) return .{ .reason = .exclusive_group, .by = parsed.spelling, .group = group };
+    }
+    return null;
+}
+
+pub fn completionOptionCandidateSuppression(rules: []const completion.Rule, context: CompletionSemanticContext, candidate: completion.Candidate) ?CompletionOptionSuppression {
+    if (candidate.kind != .option) return null;
+    const option = candidate.option orelse return null;
+    if (completionOptionSuppressionForOption(context, option)) |suppression| return suppression;
+    const inherited_group = completionRuleExclusiveGroupForCandidate(rules, context.root, context.path, candidate) orelse return null;
+    var inherited_option = option;
+    inherited_option.exclusive_group = inherited_group;
+    return completionOptionSuppressionForOption(context, inherited_option);
+}
+
+fn completionRuleExclusiveGroupForCandidate(rules: []const completion.Rule, root: []const u8, path: []const []const u8, candidate: completion.Candidate) ?[]const u8 {
+    for (rules) |rule| {
+        if (rule.kind != .option or !completionRuleContextAppliesToPath(rule, root, path)) continue;
+        const group = rule.option.exclusive_group orelse continue;
+        if (completionOptionSpellingMatches(rule.option, candidate.value)) return group;
+    }
+    return null;
+}
+
+fn completionOptionSpellingMatches(option: completion.Option, value: []const u8) bool {
+    if (option.long) |long| {
+        var spelling_buffer: [256]u8 = undefined;
+        const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return false;
+        if (std.mem.eql(u8, spelling, value)) return true;
+    }
+    if (option.short) |short| {
+        var spelling_buffer: [32]u8 = undefined;
+        const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return false;
+        if (std.mem.eql(u8, spelling, value)) return true;
+    }
+    return false;
+}
+
+fn appendParsedCompletionOption(allocator: std.mem.Allocator, parsed_options: *std.ArrayList(CompletionParsedOption), matched: MatchedCompletionOption) !void {
+    try parsed_options.append(allocator, .{
+        .spelling = matched.spelling,
+        .name = matched.name,
+        .exclusive_group = matched.exclusive_group,
+    });
+}
+
+fn matchedCompletionOptionSuppression(parsed_options: []const CompletionParsedOption, matched: MatchedCompletionOption) ?CompletionOptionSuppression {
+    const group = matched.exclusive_group orelse return null;
+    for (parsed_options) |parsed| {
+        const parsed_group = parsed.exclusive_group orelse continue;
+        if (std.mem.eql(u8, parsed_group, group)) return .{ .reason = .exclusive_group, .by = parsed.spelling, .group = group };
+    }
+    return null;
+}
+
+fn appendShortCompletionClusterParsedOptions(allocator: std.mem.Allocator, parsed_options: *std.ArrayList(CompletionParsedOption), rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) !?CompletionOptionSuppression {
+    if (!isShortOptionCluster(word)) return null;
+    var first_suppression: ?CompletionOptionSuppression = null;
+    var index: usize = 1;
+    while (index < word.len) : (index += 1) {
+        const matched = findShortCompletionOption(rules, root, path, word[index]) orelse return first_suppression;
+        if (first_suppression == null) first_suppression = matchedCompletionOptionSuppression(parsed_options.items, matched);
+        try parsed_options.append(allocator, .{
+            .spelling = word,
+            .name = matched.name,
+            .exclusive_group = matched.exclusive_group,
+        });
+        if (matched.takes_value) return first_suppression;
+    }
+    return first_suppression;
 }
 
 fn builtinCompletionSawWord(context: CompletionSemanticContext, word: []const u8) bool {
@@ -1693,6 +1791,7 @@ pub const Executor = struct {
                 .long = if (rule.option.long) |long| try self.allocator.dupe(u8, long) else null,
                 .short = if (rule.option.short) |short| try self.allocator.dupe(u8, short) else null,
                 .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
+                .exclusive_group = if (rule.option.exclusive_group) |group| try self.allocator.dupe(u8, group) else null,
                 .no_space = rule.option.no_space,
             },
             .argument = .{
@@ -1930,6 +2029,7 @@ pub const Executor = struct {
             return .{
                 .allocator = self.allocator,
                 .path = try self.allocator.alloc([]const u8, 0),
+                .parsed_options = try self.allocator.alloc(CompletionParsedOption, 0),
                 .prefix = prefix,
                 .position = completionPositionForParserContext(parser_context, prefix),
                 .replace_start = replace_start,
@@ -1942,6 +2042,8 @@ pub const Executor = struct {
         const root = words.items[0].token.lexeme(view.source);
         var path: std.ArrayList([]const u8) = .empty;
         errdefer path.deinit(self.allocator);
+        var parsed_options: std.ArrayList(CompletionParsedOption) = .empty;
+        errdefer parsed_options.deinit(self.allocator);
         var index: usize = 1;
         var argument_index: usize = 0;
         var previous_argument: []const u8 = "";
@@ -1959,6 +2061,7 @@ pub const Executor = struct {
             if (stop_after_unknown_option and !findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) break;
             stop_after_unknown_option = false;
             if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
+                try appendParsedCompletionOption(self.allocator, &parsed_options, matched);
                 if (matched.takes_value and !matched.attached_value) {
                     if (index + 1 < words.items.len) {
                         const value_token = words.items[index + 1].token;
@@ -1978,6 +2081,7 @@ pub const Executor = struct {
                     suspicious = token.span;
                     stop_after_unknown_option = true;
                 } else if (cluster.takes_next_value) {
+                    _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word);
                     if (index + 1 < words.items.len) {
                         const value_token = words.items[index + 1].token;
                         const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
@@ -1986,6 +2090,8 @@ pub const Executor = struct {
                             previous = value_token.lexeme(view.source);
                         }
                     }
+                } else {
+                    _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word);
                 }
             } else if (isOptionLike(word)) {
                 suspicious = token.span;
@@ -2035,10 +2141,14 @@ pub const Executor = struct {
             .subcommand
         else
             .argument;
+        const owned_path = try path.toOwnedSlice(self.allocator);
+        errdefer self.allocator.free(owned_path);
+        const owned_parsed_options = try parsed_options.toOwnedSlice(self.allocator);
         return .{
             .allocator = self.allocator,
             .root = root,
-            .path = try path.toOwnedSlice(self.allocator),
+            .path = owned_path,
+            .parsed_options = owned_parsed_options,
             .prefix = semantic_prefix,
             .argument_index = argument_index,
             .argument_state = argument_state,
@@ -2096,6 +2206,8 @@ pub const Executor = struct {
 
         var path: std.ArrayList([]const u8) = .empty;
         defer path.deinit(self.allocator);
+        var parsed_options: std.ArrayList(CompletionParsedOption) = .empty;
+        defer parsed_options.deinit(self.allocator);
         var index: usize = 1;
         while (index < words.items.len) : (index += 1) {
             const token = words.items[index];
@@ -2104,6 +2216,16 @@ pub const Executor = struct {
             const word_complete = token.span.end < clamped_cursor;
             const has_option_rules = completionContextHasOptions(self.completion_rules.items, root, path.items);
             if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
+                if (matchedCompletionOptionSuppression(parsed_options.items, matched)) |_| {
+                    try diagnostics.append(self.allocator, .{
+                        .kind = .conflicting_option,
+                        .severity = .err,
+                        .start = token.span.start,
+                        .end = token.span.end,
+                        .message = "option conflicts with previous option",
+                    });
+                }
+                try appendParsedCompletionOption(self.allocator, &parsed_options, matched);
                 if (matched.takes_value and !matched.attached_value) {
                     if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
                         try diagnostics.append(self.allocator, .{
@@ -2128,17 +2250,28 @@ pub const Executor = struct {
                             .message = "unknown option",
                         });
                     }
-                } else if (cluster.takes_next_value) {
-                    if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
+                } else {
+                    if (try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word)) |_| {
                         try diagnostics.append(self.allocator, .{
-                            .kind = .missing_option_value,
-                            .severity = .warning,
+                            .kind = .conflicting_option,
+                            .severity = .err,
                             .start = token.span.start,
                             .end = token.span.end,
-                            .message = "option requires a value",
+                            .message = "option conflicts with previous option",
                         });
-                    } else if (words.items[index + 1].span.end <= clamped_cursor) {
-                        index += 1;
+                    }
+                    if (cluster.takes_next_value) {
+                        if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
+                            try diagnostics.append(self.allocator, .{
+                                .kind = .missing_option_value,
+                                .severity = .warning,
+                                .start = token.span.start,
+                                .end = token.span.end,
+                                .message = "option requires a value",
+                            });
+                        } else if (words.items[index + 1].span.end <= clamped_cursor) {
+                            index += 1;
+                        }
                     }
                 }
             } else if (isOptionLike(word)) {
@@ -2314,12 +2447,14 @@ pub const Executor = struct {
                         if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
                     } else if (!completionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
                     if (rule.option.long) |long| {
+                        if (completionOptionSuppressionForOption(context, rule.option) != null) continue;
                         var spelling_buffer: [256]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
                         try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
                     }
                     if (rule.option.short) |short| {
                         if (rule.option.long != null and context.prefix.len == 0) continue;
+                        if (completionOptionSuppressionForOption(context, rule.option) != null) continue;
                         var spelling_buffer: [32]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch continue;
                         try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
@@ -2511,6 +2646,7 @@ pub const Executor = struct {
             const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options);
             defer self.freeCompletions(candidates);
             for (candidates) |candidate| {
+                if (completionOptionCandidateSuppression(self.completion_rules.items, semantic, candidate) != null) continue;
                 try builder.appendCandidateIfMissing(self.allocator, candidate);
             }
         }
@@ -2557,6 +2693,7 @@ pub const Executor = struct {
                 if (option.long) |long| self.allocator.free(long);
                 if (option.short) |short| self.allocator.free(short);
                 if (option.argument) |argument| self.allocator.free(argument);
+                if (option.exclusive_group) |group| self.allocator.free(group);
             }
         }
         self.allocator.free(candidates);
@@ -9405,6 +9542,10 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing value name");
             rule.option.argument = command.argv[index].text;
             index += 1;
+        } else if (std.mem.eql(u8, option, "--exclusive-group")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing exclusive group name");
+            rule.option.exclusive_group = command.argv[index].text;
+            index += 1;
         } else if (std.mem.eql(u8, option, "--index")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing argument index");
             rule.argument.index = std.fmt.parseInt(usize, command.argv[index].text, 10) catch return errorResult(self.allocator, 2, "complete", "invalid argument index");
@@ -9444,6 +9585,7 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
     if (rule_set) {
         if (rule.kind == .option and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
         if (rule.kind == .dynamic_option_value and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
+        if (rule.option.exclusive_group != null and rule.kind != .option) return errorResult(self.allocator, 2, "complete", "exclusive groups require --option");
         if (rule.argument.hasSelector() and rule.kind != .dynamic_argument) return errorResult(self.allocator, 2, "complete", "argument state options require --argument");
         if ((rule.argument.after_state != null or rule.argument.after_value != null) and rule.argument.state == null) return errorResult(self.allocator, 2, "complete", "argument transitions require --state");
         if (rule.kind == .dynamic_subcommands or rule.kind == .dynamic_options or rule.kind == .dynamic_argument or rule.kind == .dynamic_option_value) {
@@ -9615,6 +9757,10 @@ fn builtinCompletionOption(self: *Executor, builder: *CompletionBuilder, command
         } else if (std.mem.eql(u8, arg, "--argument")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing argument name");
             option.argument = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--exclusive-group")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing exclusive group name");
+            option.exclusive_group = command.argv[index].text;
             index += 1;
         } else if (std.mem.eql(u8, arg, "--description")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing description text");
@@ -20246,6 +20392,107 @@ test "structured completion keeps parent options available in subcommand context
     defer executor.freeCompletions(candidates);
     try expectCandidate(candidates, "--verbose", .option);
     try expectCandidate(candidates, "--amend", .option);
+}
+
+test "exclusive option groups suppress static long and short candidates" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --short j --long json --exclusive-group output
+        \\complete tool --option --short p --long porcelain --exclusive-group output
+        \\complete tool --option --long color
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const long_candidates = try executor.collectCompletionsForInput("tool --json --", "tool --json --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(long_candidates);
+    try expectNoCandidate(long_candidates, "--json");
+    try expectNoCandidate(long_candidates, "--porcelain");
+    try expectCandidate(long_candidates, "--color", .option);
+
+    const short_candidates = try executor.collectCompletionsForInput("tool --json -", "tool --json -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(short_candidates);
+    try expectNoCandidate(short_candidates, "-p");
+
+    const cluster_candidates = try executor.collectCompletionsForInput("tool -jp --", "tool -jp --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(cluster_candidates);
+    try expectNoCandidate(cluster_candidates, "--json");
+    try expectNoCandidate(cluster_candidates, "--porcelain");
+    try expectCandidate(cluster_candidates, "--color", .option);
+}
+
+test "exclusive option groups apply to inherited parent options" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete git --option --long json --exclusive-group output
+        \\complete git --option --long porcelain --exclusive-group output
+        \\complete git --subcommand commit
+        \\complete 'git commit' --option --long amend
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("git commit --json --", "git commit --json --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "--porcelain");
+    try expectCandidate(candidates, "--amend", .option);
+}
+
+test "exclusive option groups suppress dynamic and static overlap" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_options() {
+        \\  completion option --long porcelain --description dynamic-overlap
+        \\  completion option --long xml --exclusive-group output
+        \\}
+        \\complete tool --option --long json --exclusive-group output
+        \\complete tool --option --long porcelain --exclusive-group output --description static
+        \\complete tool --options --function __tool_options
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("tool --json --", "tool --json --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "--porcelain");
+    try expectNoCandidate(candidates, "--xml");
+}
+
+test "completion diagnostics report conflicting option groups" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --long json --exclusive-group output
+        \\complete tool --option --short p --long porcelain --exclusive-group output
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const diagnostics = try executor.completionDiagnosticsForInput("tool --json -p ", "tool --json -p ".len);
+    defer std.testing.allocator.free(diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqual(CompletionDiagnosticKind.conflicting_option, diagnostics[0].kind);
+    try std.testing.expectEqual(CompletionDiagnosticSeverity.err, diagnostics[0].severity);
+    try std.testing.expectEqualStrings("option conflicts with previous option", diagnostics[0].message);
 }
 
 test "dynamic structured completion merges with static subcommands" {

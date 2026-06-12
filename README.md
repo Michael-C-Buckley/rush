@@ -57,6 +57,10 @@ complete 'git commit' --option --short m --value-name message --description 'com
 # Options on the root command can consume values before subcommand analysis.
 complete git --option --short C --value-name path --description 'run as if git started in path'
 complete git --option --long git-dir --value-name path --description 'path to the repository'
+
+# Mutually exclusive option groups suppress conflicting option candidates.
+complete git --option --long json --exclusive-group output --description 'JSON output'
+complete git --option --short p --long porcelain --exclusive-group output --description 'porcelain output'
 ```
 
 `--option` rules require at least one spelling:
@@ -68,6 +72,8 @@ complete git --option --long git-dir --value-name path --description 'path to th
   value.
 - `--description TEXT` shows help text in completion menus.
 - `--no-space` avoids inserting a trailing space after accepting the option.
+- `--exclusive-group NAME` hides other options in the same group after one is
+  already present and reports conflicting combinations in completion diagnostics.
 
 ### Dynamic providers
 
@@ -123,7 +129,7 @@ Provider functions can emit candidates directly:
 
 ```sh
 completion candidate VALUE [--display TEXT] [--description TEXT] [--kind KIND] [--no-space]
-completion option [--long NAME] [--short C] [--argument NAME] [--description TEXT]
+completion option [--long NAME] [--short C] [--argument NAME] [--exclusive-group NAME] [--description TEXT]
 ```
 
 Candidate kinds include `command`, `builtin`, `function`, `file`, `directory`,

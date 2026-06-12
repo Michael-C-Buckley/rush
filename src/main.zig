@@ -1387,6 +1387,7 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
         var rule: completion_model.Rule = .{ .root = root, .path = path, .kind = .option, .description = manifestString(option.get("description")), .source = source };
         if (manifestString(option.get("long"))) |long| rule.option.long = long;
         if (manifestString(option.get("short"))) |short| rule.option.short = short;
+        if (manifestString(option.get("exclusiveGroup"))) |group| rule.option.exclusive_group = group;
         if (option.get("value")) |value| {
             if (manifestValueName(value)) |name| rule.option.argument = name;
         }
@@ -2547,7 +2548,6 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  parser-position: {s}
         \\  parser-offset: {d}
         \\rules:
-        \\candidates:
     , .{
         semantic.root,
         semantic_path,
@@ -2601,6 +2601,15 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
             });
         }
     }
+    try out.writer.print("suppressed-options:\n", .{});
+    for (executor.completionRules()) |rule| {
+        if (!debugCompletionRuleMatches(rule, semantic)) continue;
+        if (rule.kind != .option) continue;
+        const suppression = exec.completionOptionSuppressionForOption(semantic, rule.option) orelse continue;
+        if (rule.option.long) |long| try out.writer.print("  - spelling: --{s}\n    reason: {s}\n    by: {s}\n    group: {s}\n", .{ long, @tagName(suppression.reason), suppression.by, suppression.group orelse "" });
+        if (rule.option.short) |short| try out.writer.print("  - spelling: -{s}\n    reason: {s}\n    by: {s}\n    group: {s}\n", .{ short, @tagName(suppression.reason), suppression.by, suppression.group orelse "" });
+    }
+    try out.writer.print("candidates:\n", .{});
     for (candidates) |candidate| {
         const insert = try completion_model.candidateReplacementForInput(allocator, source, candidate);
         defer allocator.free(insert);
@@ -2623,10 +2632,11 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
             completionRankScore(history, cwd, candidate.value),
         });
         if (candidate.option) |option| {
-            try out.writer.print("    option:\n      long: {s}\n      short: {s}\n      argument: {s}\n", .{
+            try out.writer.print("    option:\n      long: {s}\n      short: {s}\n      argument: {s}\n      exclusive-group: {s}\n", .{
                 option.long orelse "",
                 option.short orelse "",
                 option.argument orelse "",
+                option.exclusive_group orelse "",
             });
         }
     }
@@ -2709,6 +2719,8 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
         try writeCompletionRuleJson(&json, rule);
     }
     try json.endArray();
+    try json.objectField("suppressedOptions");
+    try writeCompletionSuppressedOptionsJson(&json, executor.completionRules(), semantic);
     try json.objectField("candidates");
     try json.beginArray();
     for (candidates) |candidate| try writeCompletionCandidateJson(allocator, &json, history, cwd, source, candidate, matcher_policy);
@@ -2811,6 +2823,19 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.write(context.argument_index);
     try json.objectField("argumentState");
     try json.write(context.argument_state);
+    try json.objectField("parsedOptions");
+    try json.beginArray();
+    for (context.parsed_options) |option| {
+        try json.beginObject();
+        try json.objectField("spelling");
+        try json.write(option.spelling);
+        try json.objectField("name");
+        try json.write(option.name);
+        try json.objectField("exclusiveGroup");
+        try json.write(option.exclusive_group);
+        try json.endObject();
+    }
+    try json.endArray();
     try json.objectField("optionName");
     try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
     try json.objectField("optionSpelling");
@@ -2866,6 +2891,8 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.write(rule.option.short);
     try json.objectField("argument");
     try json.write(rule.option.argument);
+    try json.objectField("exclusiveGroup");
+    try json.write(rule.option.exclusive_group);
     try json.objectField("noSpace");
     try json.write(rule.option.no_space);
     try json.endObject();
@@ -2889,6 +2916,31 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.objectField("keyValueSeparator");
     try writeCompletionSeparatorJson(json, rule.value_grammar.key_value_separator);
     try json.endObject();
+    try json.endObject();
+}
+
+fn writeCompletionSuppressedOptionsJson(json: *std.json.Stringify, rules: []const completion_model.Rule, semantic: exec.CompletionSemanticContext) !void {
+    try json.beginArray();
+    for (rules) |rule| {
+        if (rule.kind != .option or !debugCompletionRuleMatches(rule, semantic)) continue;
+        const suppression = exec.completionOptionSuppressionForOption(semantic, rule.option) orelse continue;
+        if (rule.option.long) |long| try writeCompletionSuppressedOptionJson(json, "--", long, suppression);
+        if (rule.option.short) |short| try writeCompletionSuppressedOptionJson(json, "-", short, suppression);
+    }
+    try json.endArray();
+}
+
+fn writeCompletionSuppressedOptionJson(json: *std.json.Stringify, prefix: []const u8, name: []const u8, suppression: exec.CompletionOptionSuppression) !void {
+    try json.beginObject();
+    try json.objectField("spelling");
+    var buffer: [256]u8 = undefined;
+    try json.write(std.fmt.bufPrint(&buffer, "{s}{s}", .{ prefix, name }) catch name);
+    try json.objectField("reason");
+    try json.write(@tagName(suppression.reason));
+    try json.objectField("by");
+    try json.write(suppression.by);
+    try json.objectField("group");
+    try json.write(suppression.group);
     try json.endObject();
 }
 
@@ -2939,6 +2991,8 @@ fn writeCompletionCandidateJson(allocator: std.mem.Allocator, json: *std.json.St
         try json.write(option.short);
         try json.objectField("argument");
         try json.write(option.argument);
+        try json.objectField("exclusiveGroup");
+        try json.write(option.exclusive_group);
         try json.objectField("noSpace");
         try json.write(option.no_space);
         try json.endObject();
@@ -5228,9 +5282,16 @@ test "completion debug output exposes manifest source and JSON decision state" {
     const manifest = object.get("manifest").?.object;
     try std.testing.expectEqualStrings(root ++ "/rush/completions/tool.json", manifest.get("path").?.string);
     try std.testing.expectEqual(@as(i64, 1), manifest.get("manifestVersion").?.integer);
+    const semantic_options = object.get("semantic").?.object.get("parsedOptions").?.array.items;
+    try std.testing.expectEqualStrings("--debug", semantic_options[0].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("mode", semantic_options[0].object.get("exclusiveGroup").?.string);
     try std.testing.expectEqualStrings("--debug", manifest.get("parsedOptions").?.array.items[0].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("target", manifest.get("activeArgumentState").?.object.get("name").?.string);
     try std.testing.expectEqualStrings("tool.targets", manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
+    const generic_suppressed = object.get("suppressedOptions").?.array.items;
+    try std.testing.expectEqualStrings("--release", generic_suppressed[1].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("exclusive_group", generic_suppressed[1].object.get("reason").?.string);
+    try std.testing.expectEqualStrings("mode", generic_suppressed[1].object.get("group").?.string);
     const suppressed = manifest.get("suppressedOptions").?.array.items;
     try std.testing.expectEqualStrings("--debug", suppressed[0].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("alreadyPresent", suppressed[0].object.get("reason").?.string);

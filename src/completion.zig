@@ -181,6 +181,7 @@ pub const Option = struct {
     long: ?[]const u8 = null,
     short: ?[]const u8 = null,
     argument: ?[]const u8 = null,
+    exclusive_group: ?[]const u8 = null,
     no_space: bool = false,
 };
 
@@ -274,6 +275,7 @@ fn freeCandidateFields(allocator: std.mem.Allocator, candidate: Candidate) void 
         if (option.long) |long| allocator.free(long);
         if (option.short) |short| allocator.free(short);
         if (option.argument) |argument| allocator.free(argument);
+        if (option.exclusive_group) |group| allocator.free(group);
     }
 }
 
@@ -723,6 +725,7 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
             .long = if (option.long) |long| try allocator.dupe(u8, long) else null,
             .short = if (option.short) |short| try allocator.dupe(u8, short) else null,
             .argument = if (option.argument) |argument| try allocator.dupe(u8, argument) else null,
+            .exclusive_group = if (option.exclusive_group) |group| try allocator.dupe(u8, group) else null,
             .no_space = option.no_space,
         };
     }
@@ -730,6 +733,7 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
         if (option.long) |long| allocator.free(long);
         if (option.short) |short| allocator.free(short);
         if (option.argument) |argument| allocator.free(argument);
+        if (option.exclusive_group) |group| allocator.free(group);
     };
     return cloned;
 }
