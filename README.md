@@ -164,16 +164,27 @@ completion command         # root command, such as `git`
 completion command-path    # root plus resolved subcommand path, such as `git commit`
 completion argument-index  # zero-based semantic argument index
 completion argument-state  # active named argument state, if one matched
+completion operand-index   # alias for the active semantic argument index
+completion operand-state   # alias for the active named argument state
+completion operands        # completed operands, one per line
+completion operand N       # completed operand at zero-based semantic index N
 completion previous        # previous semantic word
 completion position        # command, subcommand, option, argument, or option_value
 completion option-name     # active option's declared name during option-value completion
 completion option-spelling # active spelling, such as `-C` or `--git-dir`
+completion option-present --long NAME   # true if a parsed option is present
+completion option-present --short C     # true if a parsed short option is present
+completion option-values --long NAME    # parsed option values, one per line
+completion option-values --short C      # parsed short-option values, one per line
+completion options-terminated           # true after bare -- or a terminator option
 ```
 
 These queries are based on Rush's semantic completion analysis, not simple word
 splitting. Registered structured rules let Rush skip option values, understand
-nested subcommands, and generate semantic diagnostics and underlines for unknown
-commands, subcommands, options, and missing option values.
+nested subcommands, expose attached and detached option values, keep operands
+before and after `--` distinct from options, and generate semantic diagnostics
+and underlines for unknown commands, subcommands, options, and missing option
+values.
 
 ### Mixed static and dynamic example
 

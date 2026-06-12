@@ -161,10 +161,17 @@
   <pre><span class="cmd">completion</span> prefix          <span class="comment"># text being completed</span>
 <span class="cmd">completion</span> command         <span class="comment"># root command</span>
 <span class="cmd">completion</span> argument-index  <span class="comment"># zero-based argument index</span>
+<span class="cmd">completion</span> operand-index   <span class="comment"># alias for active argument index</span>
+<span class="cmd">completion</span> operands        <span class="comment"># completed operands, one per line</span>
 <span class="cmd">completion</span> previous        <span class="comment"># previous word</span>
 <span class="cmd">completion</span> position        <span class="comment"># command, subcommand, option, option_value, argument</span>
 <span class="cmd">completion</span> option-name     <span class="comment"># active option name, in option_value position</span>
-<span class="cmd">completion</span> option-spelling <span class="comment"># active spelling, such as --color or -o</span></pre>
+<span class="cmd">completion</span> option-spelling <span class="comment"># active spelling, such as --color or -o</span>
+<span class="cmd">completion</span> option-present <span class="opt">--long</span> NAME
+<span class="cmd">completion</span> option-values <span class="opt">--long</span> NAME
+<span class="cmd">completion</span> options-terminated</pre>
+
+  <p>Context queries use Rush's semantic completion analysis. Providers can branch on parsed option presence, attached or detached option values, completed operands, and whether a bare <code>--</code> or terminator option ended option parsing.</p>
 
   <h2 id="helper-completions"><a href="#helper-completions">Helper completions</a></h2>
 

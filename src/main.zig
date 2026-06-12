@@ -2480,6 +2480,9 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     effective_context.command_path = semantic_path;
     effective_context.argument_index = semantic.argument_index;
     effective_context.argument_state = semantic.argument_state;
+    effective_context.parsed_options = semantic.parsed_options;
+    effective_context.operands = semantic.operands;
+    effective_context.options_terminated = semantic.options_terminated;
     const matcher_policy = completion_model.MatcherPolicy.engineDefault();
     try rankCompletionCandidates(allocator, candidates, history, cwd, source, matcher_policy);
     const application = try completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
@@ -2499,6 +2502,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  previous: {s}
         \\  argument-index: {d}
         \\  argument-state: {s}
+        \\  options-terminated: {}
         \\  position: {s}
         \\  option-name: {s}
         \\  option-spelling: {s}
@@ -2521,6 +2525,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         effective_context.previous,
         effective_context.argument_index,
         effective_context.argument_state orelse "",
+        effective_context.options_terminated,
         if (effective_context.option_value != null) "option_value" else @tagName(effective_context.position),
         if (effective_context.option_value) |option_value| option_value.name else "",
         if (effective_context.option_value) |option_value| option_value.spelling else "",
@@ -2535,6 +2540,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         @tagName(matcher_policy.separators),
         @tagName(matcher_policy.path_segments),
     });
+    try out.writer.print("  parsed-options:\n", .{});
+    try writeCompletionParsedOptionsText(&out.writer, effective_context.parsed_options, "    ");
+    try out.writer.print("  operands:\n", .{});
+    try writeCompletionOperandsText(&out.writer, effective_context.operands, "    ");
     try out.writer.print(
         \\  root: {s}
         \\  path: {s}
@@ -2568,16 +2577,9 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         semantic.parser_source_offset,
     });
     try out.writer.print("  parsed-options:\n", .{});
-    for (semantic.parsed_options) |option| {
-        try out.writer.print("    - spelling: {s}\n      name: {s}\n      key: {s}\n      repeatable: {}\n      terminates-options: {}\n      exclusive-group: {s}\n", .{
-            option.spelling,
-            option.name,
-            option.key,
-            option.repeatable,
-            option.terminates_options,
-            option.exclusive_group orelse "",
-        });
-    }
+    try writeCompletionParsedOptionsText(&out.writer, semantic.parsed_options, "    ");
+    try out.writer.print("  operands:\n", .{});
+    try writeCompletionOperandsText(&out.writer, semantic.operands, "    ");
     try out.writer.print("rules:\n", .{});
     for (executor.completionRules()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
@@ -2673,6 +2675,42 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     return out.toOwnedSlice();
 }
 
+fn writeCompletionParsedOptionsText(writer: *std.Io.Writer, options: []const exec.CompletionParsedOption, indent: []const u8) !void {
+    for (options) |option| {
+        try writer.print("{s}- spelling: {s}\n{s}  name: {s}\n{s}  key: {s}\n{s}  value: {s}\n{s}  repeatable: {}\n{s}  terminates-options: {}\n{s}  exclusive-group: {s}\n", .{
+            indent,
+            option.spelling,
+            indent,
+            option.name,
+            indent,
+            option.key,
+            indent,
+            option.value orelse "",
+            indent,
+            option.repeatable,
+            indent,
+            option.terminates_options,
+            indent,
+            option.exclusive_group orelse "",
+        });
+    }
+}
+
+fn writeCompletionOperandsText(writer: *std.Io.Writer, operands: []const exec.CompletionParsedOperand, indent: []const u8) !void {
+    for (operands) |operand| {
+        try writer.print("{s}- value: {s}\n{s}  index: {d}\n{s}  state: {s}\n{s}  after-terminator: {}\n", .{
+            indent,
+            operand.value,
+            indent,
+            operand.index,
+            indent,
+            operand.state orelse "",
+            indent,
+            operand.after_terminator,
+        });
+    }
+}
+
 fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, source: []const u8) ![]const u8 {
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
@@ -2706,6 +2744,9 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     effective_context.command_path = semantic_path;
     effective_context.argument_index = semantic.argument_index;
     effective_context.argument_state = semantic.argument_state;
+    effective_context.parsed_options = semantic.parsed_options;
+    effective_context.operands = semantic.operands;
+    effective_context.options_terminated = semantic.options_terminated;
     const matcher_policy = completion_model.MatcherPolicy.engineDefault();
     try rankCompletionCandidates(allocator, candidates, history, cwd, source, matcher_policy);
     const application = try completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
@@ -2784,6 +2825,12 @@ fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.Compl
     try json.write(context.argument_index);
     try json.objectField("argumentState");
     try json.write(context.argument_state);
+    try json.objectField("optionsTerminated");
+    try json.write(context.options_terminated);
+    try json.objectField("parsedOptions");
+    try writeCompletionParsedOptionsJson(json, context.parsed_options);
+    try json.objectField("operands");
+    try writeCompletionOperandsJson(json, context.operands);
     try json.objectField("position");
     try json.write(if (context.option_value != null) "option_value" else @tagName(context.position));
     try json.objectField("optionName");
@@ -2843,24 +2890,9 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.objectField("optionsTerminated");
     try json.write(context.options_terminated);
     try json.objectField("parsedOptions");
-    try json.beginArray();
-    for (context.parsed_options) |option| {
-        try json.beginObject();
-        try json.objectField("spelling");
-        try json.write(option.spelling);
-        try json.objectField("name");
-        try json.write(option.name);
-        try json.objectField("key");
-        try json.write(option.key);
-        try json.objectField("exclusiveGroup");
-        try json.write(option.exclusive_group);
-        try json.objectField("repeatable");
-        try json.write(option.repeatable);
-        try json.objectField("terminatesOptions");
-        try json.write(option.terminates_options);
-        try json.endObject();
-    }
-    try json.endArray();
+    try writeCompletionParsedOptionsJson(json, context.parsed_options);
+    try json.objectField("operands");
+    try writeCompletionOperandsJson(json, context.operands);
     try json.objectField("optionName");
     try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
     try json.objectField("optionSpelling");
@@ -2886,6 +2918,46 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.objectField("parserSourceOffset");
     try json.write(context.parser_source_offset);
     try json.endObject();
+}
+
+fn writeCompletionParsedOptionsJson(json: *std.json.Stringify, options: []const exec.CompletionParsedOption) !void {
+    try json.beginArray();
+    for (options) |option| {
+        try json.beginObject();
+        try json.objectField("spelling");
+        try json.write(option.spelling);
+        try json.objectField("name");
+        try json.write(option.name);
+        try json.objectField("key");
+        try json.write(option.key);
+        try json.objectField("value");
+        try json.write(option.value);
+        try json.objectField("exclusiveGroup");
+        try json.write(option.exclusive_group);
+        try json.objectField("repeatable");
+        try json.write(option.repeatable);
+        try json.objectField("terminatesOptions");
+        try json.write(option.terminates_options);
+        try json.endObject();
+    }
+    try json.endArray();
+}
+
+fn writeCompletionOperandsJson(json: *std.json.Stringify, operands: []const exec.CompletionParsedOperand) !void {
+    try json.beginArray();
+    for (operands) |operand| {
+        try json.beginObject();
+        try json.objectField("value");
+        try json.write(operand.value);
+        try json.objectField("index");
+        try json.write(operand.index);
+        try json.objectField("state");
+        try json.write(operand.state);
+        try json.objectField("afterTerminator");
+        try json.write(operand.after_terminator);
+        try json.endObject();
+    }
+    try json.endArray();
 }
 
 fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rule) !void {
@@ -5240,6 +5312,9 @@ test "completion debug output exposes active argument state" {
     const object = parsed.value.object;
     try std.testing.expectEqualStrings("name", object.get("context").?.object.get("argumentState").?.string);
     try std.testing.expectEqualStrings("name", object.get("semantic").?.object.get("argumentState").?.string);
+    const context_operands = object.get("context").?.object.get("operands").?.array.items;
+    try std.testing.expectEqualStrings("create", context_operands[0].object.get("value").?.string);
+    try std.testing.expectEqualStrings("action", context_operands[0].object.get("state").?.string);
 }
 
 test "completion debug output reports dynamic provider failures" {
@@ -5333,6 +5408,8 @@ test "completion debug output exposes manifest source and JSON decision state" {
     const semantic_options = object.get("semantic").?.object.get("parsedOptions").?.array.items;
     try std.testing.expectEqualStrings("--debug", semantic_options[0].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("mode", semantic_options[0].object.get("exclusiveGroup").?.string);
+    const context_options = object.get("context").?.object.get("parsedOptions").?.array.items;
+    try std.testing.expectEqualStrings("--debug", context_options[0].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("--debug", manifest.get("parsedOptions").?.array.items[0].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("target", manifest.get("activeArgumentState").?.object.get("name").?.string);
     try std.testing.expectEqualStrings("tool.targets", manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);

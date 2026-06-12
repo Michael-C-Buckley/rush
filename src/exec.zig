@@ -431,6 +431,9 @@ pub const CompletionEvalContext = struct {
     command_path: []const u8 = "",
     argument_index: usize = 0,
     argument_state: ?[]const u8 = null,
+    parsed_options: []const CompletionParsedOption = &.{},
+    operands: []const CompletionParsedOperand = &.{},
+    options_terminated: bool = false,
     previous: []const u8 = "",
     position: parser.CompletionKind = .command,
     option_value: ?CompletionOptionValue = null,
@@ -448,9 +451,17 @@ pub const CompletionParsedOption = struct {
     spelling: []const u8,
     name: []const u8,
     key: []const u8,
+    value: ?[]const u8 = null,
     exclusive_group: ?[]const u8 = null,
     repeatable: bool = false,
     terminates_options: bool = false,
+};
+
+pub const CompletionParsedOperand = struct {
+    value: []const u8,
+    index: usize,
+    state: ?[]const u8 = null,
+    after_terminator: bool = false,
 };
 
 pub const CompletionOptionSuppressionReason = enum {
@@ -502,6 +513,7 @@ pub const CompletionSemanticContext = struct {
     argument_index: usize = 0,
     argument_state: ?[]const u8 = null,
     parsed_options: []const CompletionParsedOption = &.{},
+    operands: []const CompletionParsedOperand = &.{},
     options_terminated: bool = false,
     previous: []const u8 = "",
     position: CompletionSemanticPosition = .command,
@@ -517,6 +529,7 @@ pub const CompletionSemanticContext = struct {
     pub fn deinit(self: *CompletionSemanticContext) void {
         self.allocator.free(self.path);
         self.allocator.free(self.parsed_options);
+        self.allocator.free(self.operands);
         self.* = undefined;
     }
 };
@@ -645,6 +658,7 @@ const MatchedCompletionOption = struct {
     name: []const u8,
     key: []const u8,
     spelling: []const u8,
+    value: ?[]const u8 = null,
     exclusive_group: ?[]const u8 = null,
     repeatable: bool = false,
     terminates_options: bool = false,
@@ -708,7 +722,7 @@ fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: 
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return null;
             if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = long, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
             if (takes_value and std.mem.startsWith(u8, word, spelling) and word.len > spelling.len and word[spelling.len] == '=') {
-                return .{ .takes_value = true, .attached_value = true, .name = long, .key = key, .spelling = word[0..spelling.len], .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+                return .{ .takes_value = true, .attached_value = true, .name = long, .key = key, .spelling = word[0..spelling.len], .value = word[spelling.len + 1 ..], .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
             }
         }
         if (rule.option.short) |short| {
@@ -875,10 +889,16 @@ fn appendParsedCompletionOption(allocator: std.mem.Allocator, parsed_options: *s
         .spelling = matched.spelling,
         .name = matched.name,
         .key = matched.key,
+        .value = matched.value,
         .exclusive_group = matched.exclusive_group,
         .repeatable = matched.repeatable,
         .terminates_options = matched.terminates_options,
     });
+}
+
+fn setLastParsedCompletionOptionValue(parsed_options: *std.ArrayList(CompletionParsedOption), value: []const u8) void {
+    if (parsed_options.items.len == 0) return;
+    parsed_options.items[parsed_options.items.len - 1].value = value;
 }
 
 fn matchedCompletionOptionSuppression(parsed_options: []const CompletionParsedOption, matched: MatchedCompletionOption) ?CompletionOptionSuppression {
@@ -921,6 +941,7 @@ fn appendShortCompletionClusterParsedOptions(allocator: std.mem.Allocator, parse
             .spelling = word,
             .name = matched.name,
             .key = matched.key,
+            .value = if (matched.takes_value and index + 1 < word.len) word[index + 1 ..] else null,
             .exclusive_group = matched.exclusive_group,
             .repeatable = matched.repeatable,
             .terminates_options = matched.terminates_options,
@@ -2040,6 +2061,9 @@ pub const Executor = struct {
         context.prefix = semantic.prefix;
         context.argument_index = semantic.argument_index;
         context.argument_state = semantic.argument_state;
+        context.parsed_options = semantic.parsed_options;
+        context.operands = semantic.operands;
+        context.options_terminated = semantic.options_terminated;
         context.previous = semantic.previous;
         context.option_value = semantic.option_value;
         context.value_segment = semantic.value_segment;
@@ -2107,6 +2131,7 @@ pub const Executor = struct {
                 .allocator = self.allocator,
                 .path = try self.allocator.alloc([]const u8, 0),
                 .parsed_options = try self.allocator.alloc(CompletionParsedOption, 0),
+                .operands = try self.allocator.alloc(CompletionParsedOperand, 0),
                 .prefix = prefix,
                 .position = completionPositionForParserContext(parser_context, prefix),
                 .replace_start = replace_start,
@@ -2121,6 +2146,8 @@ pub const Executor = struct {
         errdefer path.deinit(self.allocator);
         var parsed_options: std.ArrayList(CompletionParsedOption) = .empty;
         errdefer parsed_options.deinit(self.allocator);
+        var operands: std.ArrayList(CompletionParsedOperand) = .empty;
+        errdefer operands.deinit(self.allocator);
         var index: usize = 1;
         var argument_index: usize = 0;
         var previous_argument: []const u8 = "";
@@ -2139,7 +2166,9 @@ pub const Executor = struct {
             if (stop_after_unknown_option and !findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) break;
             stop_after_unknown_option = false;
             if (options_terminated) {
-                previous_argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+                try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = true });
+                previous_argument_state = operand_state;
                 previous_argument = word;
                 argument_index += 1;
             } else if (std.mem.eql(u8, word, "--")) {
@@ -2153,6 +2182,7 @@ pub const Executor = struct {
                         if (!value_is_current and value_token.span.end <= clamped_cursor) {
                             index += 1;
                             previous = value_token.lexeme(view.source);
+                            setLastParsedCompletionOptionValue(&parsed_options, previous);
                         } else {
                             option_value = .{ .name = matched.name, .spelling = matched.spelling };
                         }
@@ -2174,6 +2204,7 @@ pub const Executor = struct {
                         if (!value_is_current and value_token.span.end <= clamped_cursor) {
                             index += 1;
                             previous = value_token.lexeme(view.source);
+                            setLastParsedCompletionOptionValue(&parsed_options, previous);
                         }
                     }
                 } else {
@@ -2186,7 +2217,9 @@ pub const Executor = struct {
             } else if (argument_index == 0 and findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) {
                 try path.append(self.allocator, word);
             } else {
-                previous_argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+                try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = false });
+                previous_argument_state = operand_state;
                 previous_argument = word;
                 argument_index += 1;
             }
@@ -2233,11 +2266,14 @@ pub const Executor = struct {
         const owned_path = try path.toOwnedSlice(self.allocator);
         errdefer self.allocator.free(owned_path);
         const owned_parsed_options = try parsed_options.toOwnedSlice(self.allocator);
+        errdefer self.allocator.free(owned_parsed_options);
+        const owned_operands = try operands.toOwnedSlice(self.allocator);
         return .{
             .allocator = self.allocator,
             .root = root,
             .path = owned_path,
             .parsed_options = owned_parsed_options,
+            .operands = owned_operands,
             .options_terminated = options_terminated,
             .prefix = semantic_prefix,
             .argument_index = argument_index,
@@ -2453,7 +2489,10 @@ pub const Executor = struct {
         provider.completion_builder = null;
         errdefer builder.deinit(self.allocator);
         const final_context = provider.completion_context orelse context;
-        self.last_completion_context = final_context;
+        var stored_context = final_context;
+        stored_context.parsed_options = &.{};
+        stored_context.operands = &.{};
+        self.last_completion_context = stored_context;
         provider.completion_context = null;
 
         if (result.status != 0) {
@@ -9749,9 +9788,27 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
         const text = try std.fmt.allocPrint(self.allocator, "{d}\n", .{context.argument_index});
         return .{ .allocator = self.allocator, .status = 0, .stdout = text, .stderr = try self.allocator.alloc(u8, 0) };
     }
+    if (std.mem.eql(u8, subcommand, "operand-index")) {
+        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const text = try std.fmt.allocPrint(self.allocator, "{d}\n", .{context.argument_index});
+        return .{ .allocator = self.allocator, .status = 0, .stdout = text, .stderr = try self.allocator.alloc(u8, 0) };
+    }
     if (std.mem.eql(u8, subcommand, "argument-state")) {
         const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         return stdoutLine(self.allocator, context.argument_state orelse "", 0);
+    }
+    if (std.mem.eql(u8, subcommand, "operand-state")) {
+        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        return stdoutLine(self.allocator, context.argument_state orelse "", 0);
+    }
+    if (std.mem.eql(u8, subcommand, "option-present")) return builtinCompletionOptionPresent(self, command);
+    if (std.mem.eql(u8, subcommand, "option-values")) return builtinCompletionOptionValues(self, command);
+    if (std.mem.eql(u8, subcommand, "operands")) return builtinCompletionOperands(self, command);
+    if (std.mem.eql(u8, subcommand, "operand")) return builtinCompletionOperand(self, command);
+    if (std.mem.eql(u8, subcommand, "options-terminated")) {
+        if (command.argv.len != 2) return errorResult(self.allocator, 2, "completion", "unsupported context option");
+        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        return stdoutLine(self.allocator, if (context.options_terminated) "true" else "false", 0);
     }
     if (std.mem.eql(u8, subcommand, "previous")) return completionContextLine(self, subcommand, completionContextValue(self.*, .previous));
     if (std.mem.eql(u8, subcommand, "position")) {
@@ -9804,6 +9861,109 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     if (!value_set) return errorResult(self.allocator, 2, "completion", "missing candidate value");
     try builder.appendCandidate(self.allocator, candidate);
     return emptyResult(self.allocator, 0);
+}
+
+const CompletionOptionSelector = struct {
+    kind: enum { long, short },
+    name: []const u8,
+};
+
+fn builtinCompletionOptionPresent(self: *Executor, command: ir.SimpleCommand) !CommandResult {
+    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const selector = completionOptionSelectorFromCommand(command, 2) catch |err| return completionOptionSelectorErrorResult(self, err);
+    return stdoutLine(self.allocator, if (completionParsedOptionMatchesSelector(self.*, context, selector) != null) "true" else "false", 0);
+}
+
+fn builtinCompletionOptionValues(self: *Executor, command: ir.SimpleCommand) !CommandResult {
+    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const selector = completionOptionSelectorFromCommand(command, 2) catch |err| return completionOptionSelectorErrorResult(self, err);
+    const selector_key = completionOptionSelectorKey(self.*, context, selector);
+
+    var out: std.Io.Writer.Allocating = .init(self.allocator);
+    errdefer out.deinit();
+    for (context.parsed_options) |option| {
+        if (!completionParsedOptionMatchesSelectorKey(option, selector, selector_key)) continue;
+        const value = option.value orelse continue;
+        try out.writer.print("{s}\n", .{value});
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try out.toOwnedSlice(), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn builtinCompletionOperands(self: *Executor, command: ir.SimpleCommand) !CommandResult {
+    if (command.argv.len != 2) return errorResult(self.allocator, 2, "completion", "unsupported context option");
+    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+
+    var out: std.Io.Writer.Allocating = .init(self.allocator);
+    errdefer out.deinit();
+    for (context.operands) |operand| try out.writer.print("{s}\n", .{operand.value});
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try out.toOwnedSlice(), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn builtinCompletionOperand(self: *Executor, command: ir.SimpleCommand) !CommandResult {
+    if (command.argv.len != 3) return errorResult(self.allocator, 2, "completion", "missing operand index");
+    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const requested = std.fmt.parseInt(usize, command.argv[2].text, 10) catch return errorResult(self.allocator, 2, "completion", "invalid operand index");
+    for (context.operands) |operand| {
+        if (operand.index == requested) return stdoutLine(self.allocator, operand.value, 0);
+    }
+    return stdoutLine(self.allocator, "", 0);
+}
+
+fn completionOptionSelectorFromCommand(command: ir.SimpleCommand, start: usize) !CompletionOptionSelector {
+    if (command.argv.len != start + 2) return error.InvalidCompletionOptionSelector;
+    const flag = command.argv[start].text;
+    const name = command.argv[start + 1].text;
+    if (name.len == 0) return error.InvalidCompletionOptionSelector;
+    if (std.mem.eql(u8, flag, "--long")) return .{ .kind = .long, .name = name };
+    if (std.mem.eql(u8, flag, "--short")) return .{ .kind = .short, .name = name };
+    return error.InvalidCompletionOptionSelector;
+}
+
+fn completionOptionSelectorErrorResult(self: *Executor, err: anyerror) !CommandResult {
+    return switch (err) {
+        error.InvalidCompletionOptionSelector => errorResult(self.allocator, 2, "completion", "expected --long NAME or --short C"),
+        else => err,
+    };
+}
+
+fn completionParsedOptionMatchesSelector(self: Executor, context: CompletionEvalContext, selector: CompletionOptionSelector) ?CompletionParsedOption {
+    const selector_key = completionOptionSelectorKey(self, context, selector);
+    for (context.parsed_options) |option| {
+        if (completionParsedOptionMatchesSelectorKey(option, selector, selector_key)) return option;
+    }
+    return null;
+}
+
+fn completionParsedOptionMatchesSelectorKey(option: CompletionParsedOption, selector: CompletionOptionSelector, selector_key: []const u8) bool {
+    if (std.mem.eql(u8, option.key, selector_key)) return true;
+    return switch (selector.kind) {
+        .long => std.mem.eql(u8, option.name, selector.name) and std.mem.startsWith(u8, option.spelling, "--"),
+        .short => std.mem.eql(u8, option.name, selector.name) and std.mem.startsWith(u8, option.spelling, "-"),
+    };
+}
+
+fn completionOptionSelectorKey(self: Executor, context: CompletionEvalContext, selector: CompletionOptionSelector) []const u8 {
+    for (self.completion_rules.items) |rule| {
+        if (rule.kind != .option and rule.kind != .dynamic_option_value) continue;
+        if (!std.mem.eql(u8, rule.root, context.command)) continue;
+        if (!completionEvalRuleAppliesToPath(rule, context.command_path)) continue;
+        switch (selector.kind) {
+            .long => if (rule.option.long) |long| if (std.mem.eql(u8, long, selector.name)) return completionOptionKey(rule.option) orelse selector.name,
+            .short => if (rule.option.short) |short| if (std.mem.eql(u8, short, selector.name)) return completionOptionKey(rule.option) orelse selector.name,
+        }
+    }
+    return selector.name;
+}
+
+fn completionEvalRuleAppliesToPath(rule: completion.Rule, command_path: []const u8) bool {
+    if (rule.path.len == 0) return true;
+    const path_start = if (std.mem.indexOfScalar(u8, command_path, ' ')) |space| space + 1 else return false;
+    var segments = std.mem.splitScalar(u8, command_path[path_start..], ' ');
+    for (rule.path) |expected| {
+        const actual = segments.next() orelse return false;
+        if (!std.mem.eql(u8, expected, actual)) return false;
+    }
+    return true;
 }
 
 fn builtinCompletionCandidates(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand, stdin: []const u8) !CommandResult {
@@ -20722,6 +20882,53 @@ test "declared option terminators end later option parsing" {
     try std.testing.expectEqual(@as(usize, 0), diagnostics.len);
 }
 
+test "completion semantic context records parsed options values operands and terminator" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_first() { completion candidate first; }
+        \\__tool_rest() { completion candidate rest; }
+        \\complete tool --option --short v --long verbose
+        \\complete tool --option --short c --long config --value-name name --repeatable
+        \\complete tool --argument --state first --function __tool_first
+        \\complete tool --argument --state rest --after-state first --repeatable --function __tool_rest
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const source = "tool --verbose -v --config=one -c two before -- --after ";
+    var analysis = try executor.analyzeCompletionsForInput(source, source.len);
+    defer analysis.deinit();
+
+    try std.testing.expect(analysis.options_terminated);
+    try std.testing.expectEqual(@as(usize, 4), analysis.parsed_options.len);
+    try std.testing.expectEqualStrings("--verbose", analysis.parsed_options[0].spelling);
+    try std.testing.expectEqualStrings("verbose", analysis.parsed_options[0].key);
+    try std.testing.expect(analysis.parsed_options[0].value == null);
+    try std.testing.expectEqualStrings("-v", analysis.parsed_options[1].spelling);
+    try std.testing.expectEqualStrings("verbose", analysis.parsed_options[1].key);
+    try std.testing.expectEqualStrings("--config", analysis.parsed_options[2].spelling);
+    try std.testing.expectEqualStrings("one", analysis.parsed_options[2].value.?);
+    try std.testing.expectEqualStrings("-c", analysis.parsed_options[3].spelling);
+    try std.testing.expectEqualStrings("two", analysis.parsed_options[3].value.?);
+
+    try std.testing.expectEqual(@as(usize, 2), analysis.operands.len);
+    try std.testing.expectEqualStrings("before", analysis.operands[0].value);
+    try std.testing.expectEqual(@as(usize, 0), analysis.operands[0].index);
+    try std.testing.expectEqualStrings("first", analysis.operands[0].state.?);
+    try std.testing.expect(!analysis.operands[0].after_terminator);
+    try std.testing.expectEqualStrings("--after", analysis.operands[1].value);
+    try std.testing.expectEqual(@as(usize, 1), analysis.operands[1].index);
+    try std.testing.expectEqualStrings("rest", analysis.operands[1].state.?);
+    try std.testing.expect(analysis.operands[1].after_terminator);
+    try std.testing.expectEqual(@as(usize, 2), analysis.argument_index);
+    try std.testing.expectEqualStrings("rest", analysis.argument_state.?);
+}
+
 test "completion diagnostics report repeated non-repeatable options" {
     var setup = try parseAndLower(std.testing.allocator,
         \\complete tool --option --short v --long verbose
@@ -21197,6 +21404,46 @@ test "completion context helpers expose semantic option value context in scoped 
     try std.testing.expectEqualStrings("option_value", attached_candidate.display.?);
     try std.testing.expectEqualStrings("author:--author", attached_candidate.description.?);
     try std.testing.expectEqual(@as(usize, "git commit --author=".len), attached_candidate.replace_start);
+}
+
+test "completion context helpers expose parsed options operands and terminator to providers" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_context() {
+        \\  if test "$(completion option-present --long verbose)" = true; then completion candidate verbose-long; fi
+        \\  if test "$(completion option-present --short v)" = true; then completion candidate verbose-short; fi
+        \\  for value in $(completion option-values --long config); do completion candidate "config:$value"; done
+        \\  for operand in $(completion operands); do completion candidate "operand:$operand"; done
+        \\  completion candidate "operand0:$(completion operand 0)"
+        \\  completion candidate "terminated:$(completion options-terminated)"
+        \\  completion candidate "active:$(completion operand-index):$(completion operand-state)"
+        \\}
+        \\complete tool --option --short v --long verbose
+        \\complete tool --option --long config --value-name name --repeatable
+        \\complete tool --argument --state first --function __tool_context
+        \\complete tool --argument --state rest --after-state first --repeatable --function __tool_context
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const source = "tool -v --config=one --config two before -- after ";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+
+    try expectCandidate(candidates, "verbose-long", .plain);
+    try expectCandidate(candidates, "verbose-short", .plain);
+    try expectCandidate(candidates, "config:one", .plain);
+    try expectCandidate(candidates, "config:two", .plain);
+    try expectCandidate(candidates, "operand:before", .plain);
+    try expectCandidate(candidates, "operand:after", .plain);
+    try expectCandidate(candidates, "operand0:before", .plain);
+    try expectCandidate(candidates, "terminated:true", .plain);
+    try expectCandidate(candidates, "active:2:rest", .plain);
 }
 
 test "completion candidate is scoped to completion evaluation" {
