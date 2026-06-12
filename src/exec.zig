@@ -16360,6 +16360,43 @@ test "executor supports Bash positional parameter slices" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "executor supports Bash field producers in parameter operator words" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\set -- "a b" "" c d
+        \\arr=([0]=zero [2]="two words" [3]=three [5]=five)
+        \\printf 'default-unquoted:'
+        \\printf '<%s>' ${missing:-${@:1:3}}
+        \\printf '\n'
+        \\printf 'default-quoted:'
+        \\printf '<%s>' "${missing:-${@:1:3}}"
+        \\printf '\n'
+        \\printf 'default-embedded:'
+        \\printf '<%s>' pre"${missing:-${@:2:2}}"post
+        \\printf '\n'
+        \\present=x
+        \\printf 'alternate-quoted:'
+        \\printf '<%s>' "${present:+${@:1:3}}"
+        \\printf '\n'
+        \\printf 'at-word:'
+        \\printf '<%s>' "${missing:-$@}"
+        \\printf '\n'
+        \\printf 'array-default:'
+        \\printf '<%s>' "${missing:-${arr[@]}}"
+        \\printf '\n'
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("default-unquoted:<a><b><c>\ndefault-quoted:<a b><><c>\ndefault-embedded:<pre><cpost>\nalternate-quoted:<a b><><c>\nat-word:<a b><><c><d>\narray-default:<zero><two words><three><five>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor diagnoses Bash negative substring lengths before the start" {
     const cases = [_]struct {
         script: []const u8,
@@ -16484,6 +16521,7 @@ test "executor keeps Bash array operation forms on POSIX bad-substitution path" 
         "echo ${value:1:-1}; echo after",
         "echo ${@:1:2}; echo after",
         "echo ${*:1:2}; echo after",
+        "echo ${missing:-${@:1:2}}; echo after",
         "echo ${value/a/b}; echo after",
         "echo ${value^^}; echo after",
         "echo ${value^^[a]}; echo after",

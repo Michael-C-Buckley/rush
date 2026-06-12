@@ -214,6 +214,17 @@ pub const ExpansionResult = struct {
     }
 };
 
+const ExpandedWordFields = struct {
+    fields: []const []const u8,
+    quoted_glob: bool = false,
+
+    fn deinit(self: *ExpandedWordFields, allocator: std.mem.Allocator) void {
+        for (self.fields) |field| allocator.free(field);
+        allocator.free(self.fields);
+        self.* = undefined;
+    }
+};
+
 pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpansionResult {
     _ = options.features;
     const tilde_expanded = try expandTilde(allocator, raw, options.env);
@@ -234,78 +245,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
     var quoted_expansion_glob = false;
 
     const ifs = options.env.get("IFS") orelse " \t\n";
-    for (parts.parts) |part| {
-        if (part.kind == .double_quoted) {
-            try appendDoubleQuotedText(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, part.value(parts.raw), options, ifs);
-            continue;
-        }
-        if (part.kind == .single_quoted) force_current_field = true;
-        if (part.kind == .dollar_single_quoted) force_current_field = true;
-        const split = part.kind == .parameter or part.kind == .command_substitution or part.kind == .arithmetic;
-        if (part.kind == .parameter) {
-            const parameter = part.value(parts.raw);
-            if (std.mem.eql(u8, parameter, "@")) {
-                try appendUnquotedAt(allocator, &fields, &current, options.positionals, ifs);
-                continue;
-            }
-            if (std.mem.eql(u8, parameter, "*")) {
-                try appendUnquotedStar(allocator, &fields, &current, options.positionals, ifs);
-                continue;
-            }
-            if (bashPositionalSliceExpansion(parameter, options.features)) |slice| {
-                const values = try positionalSliceValues(allocator, slice.operation, options);
-                defer allocator.free(values);
-                switch (slice.kind) {
-                    .at => try appendUnquotedAt(allocator, &fields, &current, values, ifs),
-                    .star => try appendUnquotedStar(allocator, &fields, &current, values, ifs),
-                }
-                continue;
-            }
-            if (bashWholeArrayExpansion(parameter, options.features)) |array_expansion| {
-                switch (array_expansion.kind) {
-                    .values => switch (array_expansion.whole) {
-                        .at => try appendUnquotedArrayValues(allocator, &fields, &current, array_expansion.name, options, ifs),
-                        .star => try appendUnquotedArrayValuesStar(allocator, &fields, &current, array_expansion.name, options, ifs),
-                    },
-                    .keys => switch (array_expansion.whole) {
-                        .at => try appendUnquotedArrayKeys(allocator, &fields, &current, array_expansion.name, options, ifs),
-                        .star => try appendUnquotedArrayKeysStar(allocator, &fields, &current, array_expansion.name, options, ifs),
-                    },
-                }
-                continue;
-            }
-            if (try bashIndirectWholeArrayExpansion(allocator, parameter, options)) |array_expansion| {
-                switch (array_expansion.whole) {
-                    .at => try appendUnquotedArrayValues(allocator, &fields, &current, array_expansion.name, options, ifs),
-                    .star => try appendUnquotedArrayValuesStar(allocator, &fields, &current, array_expansion.name, options, ifs),
-                }
-                continue;
-            }
-            if (bashNamePrefixExpansion(parameter, options.features)) |prefix_expansion| {
-                switch (prefix_expansion.kind) {
-                    .at => try appendUnquotedNamePrefixAt(allocator, &fields, &current, prefix_expansion.prefix, options, ifs),
-                    .star => try appendUnquotedNamePrefixStar(allocator, &fields, &current, prefix_expansion.prefix, options, ifs),
-                }
-                continue;
-            }
-        }
-        if (split and part.kind == .parameter) {
-            var rendered = try renderParameterSegmented(allocator, part.value(parts.raw), options);
-            defer rendered.deinit(allocator);
-            if (rendered.quoted_glob) quoted_expansion_glob = true;
-            if (rendered.force_field) force_current_field = true;
-            try appendSplitSegmentedText(allocator, &fields, &current, rendered, ifs);
-        } else {
-            const rendered = try renderPart(allocator, parts.raw, part, options);
-            defer allocator.free(rendered);
-            if (split) {
-                try appendSplitText(allocator, &fields, &current, rendered, ifs);
-            } else {
-                if (part.kind == .dollar_single_quoted and hasGlobSyntax(rendered)) quoted_expansion_glob = true;
-                try current.appendSlice(allocator, rendered);
-            }
-        }
-    }
+    try appendWordPartsUnquoted(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, parts, options, ifs, false);
 
     if (current.items.len != 0 or force_current_field) {
         try fields.append(allocator, try current.toOwnedSlice(allocator));
@@ -321,6 +261,61 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
         .allocator = allocator,
         .fields = try fields.toOwnedSlice(allocator),
     };
+}
+
+fn expandWordFieldsNoPathname(allocator: std.mem.Allocator, raw: []const u8, options: Options) !ExpandedWordFields {
+    const tilde_expanded = try expandTilde(allocator, raw, options.env);
+    defer allocator.free(tilde_expanded);
+
+    var parts = try parseWordParts(allocator, tilde_expanded);
+    defer parts.deinit();
+
+    var fields: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (fields.items) |field| allocator.free(field);
+        fields.deinit(allocator);
+    }
+    var current: std.ArrayList(u8) = .empty;
+    defer current.deinit(allocator);
+    var force_current_field = false;
+    var quoted_expansion_glob = false;
+
+    const ifs = options.env.get("IFS") orelse " \t\n";
+    try appendWordPartsUnquoted(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, parts, options, ifs, true);
+
+    if (current.items.len != 0 or force_current_field) {
+        try fields.append(allocator, try current.toOwnedSlice(allocator));
+    }
+
+    return .{
+        .fields = try fields.toOwnedSlice(allocator),
+        .quoted_glob = quoted_expansion_glob,
+    };
+}
+
+fn appendWordPartsUnquoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_expansion_glob: *bool, parts: WordParts, options: Options, ifs: []const u8, operator_word: bool) !void {
+    for (parts.parts) |part| {
+        if (part.kind == .double_quoted) {
+            try appendDoubleQuotedText(allocator, fields, current, force_current_field, quoted_expansion_glob, part.value(parts.raw), options, ifs);
+            continue;
+        }
+        if (part.kind == .single_quoted) force_current_field.* = true;
+        if (part.kind == .dollar_single_quoted) force_current_field.* = true;
+        const split = part.kind == .parameter or part.kind == .command_substitution or part.kind == .arithmetic or (operator_word and part.kind == .unquoted);
+        if (part.kind == .parameter) {
+            try appendParameterExpansionUnquoted(allocator, fields, current, force_current_field, quoted_expansion_glob, part.value(parts.raw), options, ifs);
+            continue;
+        }
+
+        const rendered = try renderPart(allocator, parts.raw, part, options);
+        defer allocator.free(rendered);
+        if (split) {
+            try appendSplitText(allocator, fields, current, rendered, ifs);
+        } else {
+            if (part.kind == .dollar_single_quoted and hasGlobSyntax(rendered)) quoted_expansion_glob.* = true;
+            try current.appendSlice(allocator, rendered);
+        }
+    }
 }
 
 pub fn expandWordScalar(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {
@@ -2930,6 +2925,124 @@ fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, pa
     };
 }
 
+fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parameter: []const u8, options: Options, ifs: []const u8) anyerror!void {
+    if (std.mem.eql(u8, parameter, "@")) {
+        try appendUnquotedAt(allocator, fields, current, options.positionals, ifs);
+        return;
+    }
+    if (std.mem.eql(u8, parameter, "*")) {
+        try appendUnquotedStar(allocator, fields, current, options.positionals, ifs);
+        return;
+    }
+    if (bashPositionalSliceExpansion(parameter, options.features)) |slice| {
+        const values = try positionalSliceValues(allocator, slice.operation, options);
+        defer allocator.free(values);
+        switch (slice.kind) {
+            .at => try appendUnquotedAt(allocator, fields, current, values, ifs),
+            .star => try appendUnquotedStar(allocator, fields, current, values, ifs),
+        }
+        return;
+    }
+    if (bashWholeArrayExpansion(parameter, options.features)) |array_expansion| {
+        switch (array_expansion.kind) {
+            .values => switch (array_expansion.whole) {
+                .at => try appendUnquotedArrayValues(allocator, fields, current, array_expansion.name, options, ifs),
+                .star => try appendUnquotedArrayValuesStar(allocator, fields, current, array_expansion.name, options, ifs),
+            },
+            .keys => switch (array_expansion.whole) {
+                .at => try appendUnquotedArrayKeys(allocator, fields, current, array_expansion.name, options, ifs),
+                .star => try appendUnquotedArrayKeysStar(allocator, fields, current, array_expansion.name, options, ifs),
+            },
+        }
+        return;
+    }
+    if (try bashIndirectWholeArrayExpansion(allocator, parameter, options)) |array_expansion| {
+        switch (array_expansion.whole) {
+            .at => try appendUnquotedArrayValues(allocator, fields, current, array_expansion.name, options, ifs),
+            .star => try appendUnquotedArrayValuesStar(allocator, fields, current, array_expansion.name, options, ifs),
+        }
+        return;
+    }
+    if (bashNamePrefixExpansion(parameter, options.features)) |prefix_expansion| {
+        switch (prefix_expansion.kind) {
+            .at => try appendUnquotedNamePrefixAt(allocator, fields, current, prefix_expansion.prefix, options, ifs),
+            .star => try appendUnquotedNamePrefixStar(allocator, fields, current, prefix_expansion.prefix, options, ifs),
+        }
+        return;
+    }
+
+    const parsed = parseParameterExpression(parameter, options.features);
+    if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
+    if (isFieldAwareParameterWordOperator(parsed)) {
+        try appendParameterWordOperatorUnquoted(allocator, fields, current, force_current_field, quoted_glob, parsed, options, ifs);
+        return;
+    }
+
+    var rendered = try renderParameterSegmented(allocator, parameter, options);
+    defer rendered.deinit(allocator);
+    if (rendered.quoted_glob) quoted_glob.* = true;
+    if (rendered.force_field) force_current_field.* = true;
+    try appendSplitSegmentedText(allocator, fields, current, rendered, ifs);
+}
+
+fn appendParameterWordOperatorUnquoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parsed: ParameterExpression, options: Options, ifs: []const u8) anyerror!void {
+    const value = parameterValue(parsed.name, options);
+    const is_set = value != null;
+    const is_null = if (value) |text| text.len == 0 else true;
+
+    switch (parsed.operator) {
+        .default_value => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) {
+                try appendSplitText(allocator, fields, current, value.?, ifs);
+                return;
+            }
+            var expanded = try expandWordFieldsNoPathname(allocator, parsed.word, options);
+            defer expanded.deinit(allocator);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        .assign_default => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) {
+                try appendSplitText(allocator, fields, current, value.?, ifs);
+                return;
+            }
+            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
+            var expanded = try expandWordFieldsNoPathname(allocator, parsed.word, options);
+            defer expanded.deinit(allocator);
+            const assigned = try joinPositionals(allocator, expanded.fields, " ");
+            defer allocator.free(assigned);
+            try options.env_set.set(parsed.name, assigned);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        .alternate_value => {
+            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return;
+            var expanded = try expandWordFieldsNoPathname(allocator, parsed.word, options);
+            defer expanded.deinit(allocator);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        else => unreachable,
+    }
+}
+
+fn appendExpandedFields(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, expanded_fields: []const []const u8) !void {
+    for (expanded_fields, 0..) |field, index| {
+        try current.appendSlice(allocator, field);
+        if (index + 1 < expanded_fields.len) {
+            try fields.append(allocator, try current.toOwnedSlice(allocator));
+            force_current_field.* = false;
+        }
+    }
+    if (expanded_fields.len != 0 and expanded_fields[expanded_fields.len - 1].len == 0) force_current_field.* = true;
+}
+
+fn isFieldAwareParameterWordOperator(parsed: ParameterExpression) bool {
+    if (parsed.name_prefix != null or parsed.indirect or parsed.array_keys != null or parsed.array_whole != null or parsed.array_index != null) return false;
+    if (parsed.substring != null or parsed.replacement != null or parsed.case_modification != null) return false;
+    return parsed.operator == .default_value or parsed.operator == .assign_default or parsed.operator == .alternate_value;
+}
+
 fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, text: []const u8, options: Options, ifs: []const u8) !void {
     force_current_field.* = true;
     var index: usize = 0;
@@ -2997,6 +3110,13 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
             segment_start = index;
             continue;
         }
+        if (try quotedParameterExpansionAt(allocator, text, index)) |special| {
+            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            try appendParameterExpansionQuoted(allocator, fields, current, force_current_field, quoted_glob, special.expression, options, ifs, false);
+            index = special.end;
+            segment_start = index;
+            continue;
+        }
         index += 1;
     }
     try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..], options);
@@ -3048,6 +3168,163 @@ fn quotedPositionalSliceAt(allocator: std.mem.Allocator, text: []const u8, index
     if (part.kind != .parameter) return null;
     const expansion = bashPositionalSliceExpansion(part.value(text), options.features) orelse return null;
     return .{ .expansion = expansion, .end = part.span.end };
+}
+
+fn quotedParameterExpansionAt(allocator: std.mem.Allocator, text: []const u8, index: usize) !?struct { expression: []const u8, end: usize } {
+    if (index >= text.len or text[index] != '$') return null;
+    const part = (try substitutionPart(allocator, text, index)) orelse return null;
+    if (part.kind != .parameter) return null;
+    return .{ .expression = part.value(text), .end = part.span.end };
+}
+
+fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parameter: []const u8, options: Options, ifs: []const u8, empty_at_removes_field: bool) anyerror!void {
+    if (std.mem.eql(u8, parameter, "@")) {
+        try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, options.positionals, empty_at_removes_field);
+        return;
+    }
+    if (std.mem.eql(u8, parameter, "*")) {
+        try appendQuotedStar(allocator, current, quoted_glob, options.positionals, ifs);
+        return;
+    }
+    if (bashPositionalSliceExpansion(parameter, options.features)) |slice| {
+        const values = try positionalSliceValues(allocator, slice.operation, options);
+        defer allocator.free(values);
+        switch (slice.kind) {
+            .at => try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, values, false),
+            .star => try appendQuotedStar(allocator, current, quoted_glob, values, ifs),
+        }
+        return;
+    }
+    if (bashWholeArrayExpansion(parameter, options.features)) |array_expansion| {
+        switch (array_expansion.kind) {
+            .values => switch (array_expansion.whole) {
+                .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, array_expansion.name, options),
+                .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, array_expansion.name, options, ifs),
+            },
+            .keys => switch (array_expansion.whole) {
+                .at => try appendQuotedArrayKeys(allocator, fields, current, force_current_field, array_expansion.name, options),
+                .star => try appendQuotedArrayKeysStar(allocator, current, array_expansion.name, options, ifs),
+            },
+        }
+        return;
+    }
+    if (try bashIndirectWholeArrayExpansion(allocator, parameter, options)) |array_expansion| {
+        switch (array_expansion.whole) {
+            .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, array_expansion.name, options),
+            .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, array_expansion.name, options, ifs),
+        }
+        return;
+    }
+    if (bashNamePrefixExpansion(parameter, options.features)) |prefix_expansion| {
+        switch (prefix_expansion.kind) {
+            .at => try appendQuotedNamePrefixAt(allocator, fields, current, force_current_field, prefix_expansion.prefix, options),
+            .star => try appendQuotedNamePrefixStar(allocator, current, prefix_expansion.prefix, options, ifs),
+        }
+        return;
+    }
+
+    const parsed = parseParameterExpression(parameter, options.features);
+    if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
+    if (isFieldAwareParameterWordOperator(parsed)) {
+        try appendParameterWordOperatorQuoted(allocator, fields, current, force_current_field, quoted_glob, parsed, options, ifs);
+        return;
+    }
+
+    const rendered = try renderParameter(allocator, parameter, options, true);
+    defer allocator.free(rendered);
+    if (hasGlobSyntax(rendered)) quoted_glob.* = true;
+    try current.appendSlice(allocator, rendered);
+    force_current_field.* = true;
+}
+
+fn appendParameterWordOperatorQuoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parsed: ParameterExpression, options: Options, ifs: []const u8) anyerror!void {
+    const value = parameterValue(parsed.name, options);
+    const is_set = value != null;
+    const is_null = if (value) |text| text.len == 0 else true;
+
+    switch (parsed.operator) {
+        .default_value => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) {
+                if (hasGlobSyntax(value.?)) quoted_glob.* = true;
+                try current.appendSlice(allocator, value.?);
+                force_current_field.* = true;
+                return;
+            }
+            var expanded = try expandParameterWordQuotedFields(allocator, parsed.word, options, ifs);
+            defer expanded.deinit(allocator);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        .assign_default => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) {
+                if (hasGlobSyntax(value.?)) quoted_glob.* = true;
+                try current.appendSlice(allocator, value.?);
+                force_current_field.* = true;
+                return;
+            }
+            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
+            var expanded = try expandParameterWordQuotedFields(allocator, parsed.word, options, ifs);
+            defer expanded.deinit(allocator);
+            const assigned = try joinPositionals(allocator, expanded.fields, arrayJoinSeparatorFromIfs(ifs));
+            defer allocator.free(assigned);
+            try options.env_set.set(parsed.name, assigned);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        .alternate_value => {
+            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return;
+            var expanded = try expandParameterWordQuotedFields(allocator, parsed.word, options, ifs);
+            defer expanded.deinit(allocator);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        else => unreachable,
+    }
+}
+
+fn expandParameterWordQuotedFields(allocator: std.mem.Allocator, word: []const u8, options: Options, ifs: []const u8) anyerror!ExpandedWordFields {
+    var parts = try parseWordParts(allocator, word);
+    defer parts.deinit();
+
+    var fields: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (fields.items) |field| allocator.free(field);
+        fields.deinit(allocator);
+    }
+    var current: std.ArrayList(u8) = .empty;
+    defer current.deinit(allocator);
+    var force_current_field = true;
+    var quoted_expansion_glob = false;
+
+    for (parts.parts) |part| {
+        switch (part.kind) {
+            .parameter => try appendParameterExpansionQuoted(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, part.value(parts.raw), options, ifs, false),
+            .double_quoted => try appendDoubleQuotedText(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, part.value(parts.raw), options, ifs),
+            .unquoted, .single_quoted, .dollar_single_quoted, .escaped => {
+                const rendered = try renderPart(allocator, parts.raw, part, options);
+                defer allocator.free(rendered);
+                if (part.kind == .dollar_single_quoted and hasGlobSyntax(rendered)) quoted_expansion_glob = true;
+                try current.appendSlice(allocator, rendered);
+                force_current_field = true;
+            },
+            .arithmetic, .command_substitution => {
+                const rendered = try renderDoubleQuotedExpansion(allocator, parts.raw, part, options);
+                defer allocator.free(rendered);
+                if (hasGlobSyntax(rendered)) quoted_expansion_glob = true;
+                try current.appendSlice(allocator, rendered);
+                force_current_field = true;
+            },
+        }
+    }
+
+    if (current.items.len != 0 or force_current_field) {
+        try fields.append(allocator, try current.toOwnedSlice(allocator));
+    }
+
+    return .{
+        .fields = try fields.toOwnedSlice(allocator),
+        .quoted_glob = quoted_expansion_glob,
+    };
 }
 
 fn quotedWholeArrayExpansionAt(text: []const u8, index: usize, features: compat.Features) ?struct { expansion: BashWholeArrayExpansion, end: usize } {
@@ -4698,6 +4975,7 @@ test "parameter expansion rejects malformed braced forms" {
         "${USER:1:-1}",
         "${@:1:2}",
         "${*:1:2}",
+        "${MISSING:-${@:1:2}}",
         "${USER^}",
         "${1abc}",
         "${!USER_REF}",
@@ -4904,6 +5182,53 @@ test "parameter expansion supports Bash positional slice fields" {
     const scalar = try expandWordScalar(std.testing.allocator, "${@:1:3}:${*:2:2}", .{ .positionals = &params, .features = compat.Features.bash() });
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("a b  c: c", scalar);
+}
+
+test "parameter expansion supports Bash field producers in operator words" {
+    const params = [_][]const u8{ "a b", "", "c", "d" };
+
+    var unquoted_default = try expandWord(std.testing.allocator, "${missing:-${@:1:3}}", .{ .positionals = &params, .features = compat.Features.bash() });
+    defer unquoted_default.deinit();
+    try std.testing.expectEqual(@as(usize, 3), unquoted_default.fields.len);
+    try std.testing.expectEqualStrings("a", unquoted_default.fields[0]);
+    try std.testing.expectEqualStrings("b", unquoted_default.fields[1]);
+    try std.testing.expectEqualStrings("c", unquoted_default.fields[2]);
+
+    var quoted_default = try expandWord(std.testing.allocator, "\"${missing:-${@:1:3}}\"", .{ .positionals = &params, .features = compat.Features.bash() });
+    defer quoted_default.deinit();
+    try std.testing.expectEqual(@as(usize, 3), quoted_default.fields.len);
+    try std.testing.expectEqualStrings("a b", quoted_default.fields[0]);
+    try std.testing.expectEqualStrings("", quoted_default.fields[1]);
+    try std.testing.expectEqualStrings("c", quoted_default.fields[2]);
+
+    var embedded_quoted_default = try expandWord(std.testing.allocator, "pre\"${missing:-${@:2:2}}\"post", .{ .positionals = &params, .features = compat.Features.bash() });
+    defer embedded_quoted_default.deinit();
+    try std.testing.expectEqual(@as(usize, 2), embedded_quoted_default.fields.len);
+    try std.testing.expectEqualStrings("pre", embedded_quoted_default.fields[0]);
+    try std.testing.expectEqualStrings("cpost", embedded_quoted_default.fields[1]);
+
+    var quoted_alternate = try expandWord(std.testing.allocator, "\"${USER:+${@:1:3}}\"", .{ .env = test_env, .positionals = &params, .features = compat.Features.bash() });
+    defer quoted_alternate.deinit();
+    try std.testing.expectEqual(@as(usize, 3), quoted_alternate.fields.len);
+    try std.testing.expectEqualStrings("a b", quoted_alternate.fields[0]);
+    try std.testing.expectEqualStrings("", quoted_alternate.fields[1]);
+    try std.testing.expectEqualStrings("c", quoted_alternate.fields[2]);
+
+    var quoted_at_word = try expandWord(std.testing.allocator, "\"${missing:-$@}\"", .{ .positionals = &params, .features = compat.Features.bash() });
+    defer quoted_at_word.deinit();
+    try std.testing.expectEqual(@as(usize, 4), quoted_at_word.fields.len);
+    try std.testing.expectEqualStrings("a b", quoted_at_word.fields[0]);
+    try std.testing.expectEqualStrings("", quoted_at_word.fields[1]);
+    try std.testing.expectEqualStrings("c", quoted_at_word.fields[2]);
+    try std.testing.expectEqualStrings("d", quoted_at_word.fields[3]);
+
+    var quoted_array_default = try expandWord(std.testing.allocator, "\"${missing:-${arr[@]}}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_array_default.deinit();
+    try std.testing.expectEqual(@as(usize, 4), quoted_array_default.fields.len);
+    try std.testing.expectEqualStrings("zero", quoted_array_default.fields[0]);
+    try std.testing.expectEqualStrings("two words", quoted_array_default.fields[1]);
+    try std.testing.expectEqualStrings("three", quoted_array_default.fields[2]);
+    try std.testing.expectEqualStrings("five", quoted_array_default.fields[3]);
 }
 
 test "parameter expansion diagnoses Bash negative substring lengths before the start" {

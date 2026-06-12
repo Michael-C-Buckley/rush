@@ -31,6 +31,8 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - `${name[index]}` expansion against Rush's array runtime
   - whole-array value expansion with `${name[@]}` and `${name[*]}`
   - quoted whole-array expansion semantics for `"${name[@]}"` and `"${name[*]}"`
+  - whole-array `@`/`*` forms remain field-aware when used inside default and
+    alternate parameter operator words such as `${missing:-${name[@]}}`
   - array length and key operations: `${#name[@]}`, `${#name[index]}`,
     and `${!name[@]}` / `${!name[*]}`
   - `unset 'name[index]'` for individual indexed array elements
@@ -70,9 +72,12 @@ plans separately from POSIX compliance. POSIX status remains tracked in
     positional, quoted `*` joins selected positionals with the first byte of
     `IFS`, unquoted forms remain subject to field splitting, offset `0`
     prefixes `$0`, and negative lengths are stopping expansion errors unless
-    the offset is out of range and the slice is empty. The offset delimiter
-    scanner skips nested parameter, command, arithmetic, and quoted constructs,
-    including arithmetic ternary `:` operands
+    the offset is out of range and the slice is empty. Positional `@`/`*`
+    forms, including `$@`, `$*`, and `${@:offset[:length]}` /
+    `${*:offset[:length]}`, remain field-aware when used inside default and
+    alternate parameter operator words such as `${missing:-${@:1:2}}`. The
+    offset delimiter scanner skips nested parameter, command, arithmetic, and
+    quoted constructs, including arithmetic ternary `:` operands
   - replacement `${parameter/pattern/repl}`, global `${parameter//pattern/repl}`,
     anchored-prefix `${parameter/#pattern/repl}`, and anchored-suffix
     `${parameter/%pattern/repl}` using Rush's existing shell glob pattern matcher;
