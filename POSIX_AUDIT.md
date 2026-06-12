@@ -77,13 +77,13 @@ Recent notable capabilities:
   - double-quoted expansion contexts suppress field splitting while retaining parameter and command substitution recognition
 - Nested command substitution CST recognition for `$()`.
 - Legacy backquote command substitution recognition in the lexer/expansion pipeline.
-- Alias expansion is integrated ahead of parser lowering for future input/script slices, using parser-recognized command-word spans for representative assignment-prefixed, redirection-prefixed, compound-list, command-substitution, alias-produced reserved-word compound-command, eval/dot dynamic-definition, and same-read-line definition-timing contexts while preserving here-doc body text.
+- Alias expansion is owned by the parser token stream for future input/script slices, covering representative assignment-prefixed, redirection-prefixed, compound-list, command-substitution, alias-produced reserved-word compound-command, eval/dot dynamic-definition, recursive/trailing-blank, and same-read-line definition-timing contexts while preserving here-doc body text.
 
 ### Partial / gaps
 
 - Reserved words are recognized mostly by parser context/string matching rather than a fully POSIX grammar phase.
 - Newline/list handling works for common constructs, but the parser remains permissive and recovery-oriented rather than a strict POSIX grammar.
-- Alias substitution is still not a complete token-recognition state machine; remaining work is exact parser/token-state integration beyond the covered parser-command-word, recursive/trailing-blank, alias-produced reserved-word, eval/dot dynamic-definition, and same-read-line timing slices.
+- Misplaced reserved-word syntax diagnostics are incomplete; for example, protected reserved words outside valid grammar contexts may still fall through to command lookup instead of a POSIX syntax error.
 
 ### Missing / gaps
 
@@ -294,7 +294,7 @@ Implemented or partially implemented:
 - `printf` supports common conversions/escapes including representative floating-point conversions, but not POSIX C integer constants or full format grammar details.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `vi` command-line editing mode, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (complete job-control terminal semantics).
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
-- Full POSIX alias substitution token timing remains partial after the parser-command-word, alias-produced reserved-word, eval/dot dynamic-definition, and same-read-line definition-timing slices; the builtin `alias`/`unalias` utility row is supported separately from remaining parser-level timing edge cases.
+- Full POSIX alias substitution token timing remains partial only at the broad reserved-word interaction boundary after the parser-owned token-stream substitution, parser-command-word, alias-produced reserved-word, eval/dot dynamic-definition, and same-read-line definition-timing slices; the builtin `alias`/`unalias` utility row is supported separately.
 
 ## 7. Shell options and modes
 

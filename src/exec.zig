@@ -3079,159 +3079,11 @@ pub const Executor = struct {
     }
 
     pub fn expandAliasesForScriptWithFeatures(self: *Executor, script: []const u8, features: compat.Features) ![]const u8 {
-        var output: std.ArrayList(u8) = .empty;
-        errdefer output.deinit(self.allocator);
-        var active_aliases: std.ArrayList([]const u8) = .empty;
-        defer active_aliases.deinit(self.allocator);
-        _ = try self.expandAliasesIntoParsedScript(script, features, &output, &active_aliases);
-        return output.toOwnedSlice(self.allocator);
-    }
-
-    fn expandAliasesIntoParsedScript(
-        self: *Executor,
-        script: []const u8,
-        features: compat.Features,
-        output: *std.ArrayList(u8),
-        active_aliases: *std.ArrayList([]const u8),
-    ) !bool {
-        var parsed = try parser.parse(self.allocator, script, .{ .features = features });
-        defer parsed.deinit();
-        if (parsed.diagnostics.len != 0) return self.expandAliasesInto(script, output, active_aliases, true);
-
-        var command_word_spans: std.ArrayList(parser.Span) = .empty;
-        defer command_word_spans.deinit(self.allocator);
-        var skipped_spans: std.ArrayList(parser.Span) = .empty;
-        defer skipped_spans.deinit(self.allocator);
-
-        for (parsed.nodes) |node| switch (node.kind) {
-            .command_word => try command_word_spans.append(self.allocator, node.span),
-            .here_doc_body => try skipped_spans.append(self.allocator, node.span),
-            else => {},
-        };
-        std.mem.sort(parser.Span, command_word_spans.items, {}, lessThanSpanStart);
-        std.mem.sort(parser.Span, skipped_spans.items, {}, lessThanSpanStart);
-
-        return self.expandAliasesIntoParserSpans(script, features, command_word_spans.items, skipped_spans.items, output, active_aliases);
-    }
-
-    fn expandAliasesIntoParserSpans(
-        self: *Executor,
-        script: []const u8,
-        features: compat.Features,
-        command_word_spans: []const parser.Span,
-        skipped_spans: []const parser.Span,
-        output: *std.ArrayList(u8),
-        active_aliases: *std.ArrayList([]const u8),
-    ) !bool {
-        var index: usize = 0;
-        var command_span_index: usize = 0;
-        var skipped_span_index: usize = 0;
-        var continued_alias_position = false;
-
-        while (index < script.len) {
-            while (skipped_span_index < skipped_spans.len and skipped_spans[skipped_span_index].end <= index) : (skipped_span_index += 1) {}
-            if (skipped_span_index < skipped_spans.len and skipped_spans[skipped_span_index].start <= index and index < skipped_spans[skipped_span_index].end) {
-                const end = skipped_spans[skipped_span_index].end;
-                try output.appendSlice(self.allocator, script[index..end]);
-                index = end;
-                continued_alias_position = false;
-                continue;
-            }
-
-            const byte = script[index];
-            if (isAliasWordBoundary(byte)) {
-                try output.append(self.allocator, byte);
-                index += 1;
-                if (isShellSeparatorByte(byte)) continued_alias_position = false;
-                continue;
-            }
-
-            const start = index;
-            while (index < script.len and !isAliasWordBoundary(script[index])) : (index += 1) {}
-            const end = index;
-            const word = script[start..end];
-
-            while (command_span_index < command_word_spans.len and command_word_spans[command_span_index].end <= start) : (command_span_index += 1) {}
-            const parser_command_word = command_span_index < command_word_spans.len and command_word_spans[command_span_index].start == start and command_word_spans[command_span_index].end == end;
-            if ((parser_command_word or continued_alias_position) and !isReservedAliasWord(word) and !looksLikeFunctionDefinitionName(script, end)) {
-                if (self.aliases.get(word)) |value| {
-                    if (!isActiveAlias(active_aliases.items, word)) {
-                        try active_aliases.append(self.allocator, word);
-                        const nested_continues = try self.expandAliasesIntoParsedScript(value, features, output, active_aliases);
-                        _ = active_aliases.pop();
-                        continued_alias_position = nested_continues or (value.len > 0 and isAliasTrailingBlank(value[value.len - 1]));
-                        continue;
-                    }
-                }
-            }
-
-            try output.appendSlice(self.allocator, word);
-            continued_alias_position = false;
-        }
-
-        return continued_alias_position;
-    }
-
-    fn expandAliasesInto(
-        self: *Executor,
-        script: []const u8,
-        output: *std.ArrayList(u8),
-        active_aliases: *std.ArrayList([]const u8),
-        initial_command_position: bool,
-    ) !bool {
-        var index: usize = 0;
-        var command_position = initial_command_position;
-        while (index < script.len) {
-            const byte = script[index];
-            if (byte == '\'' or byte == '"') {
-                const start = index;
-                index += 1;
-                while (index < script.len and script[index] != byte) {
-                    if (script[index] == '\\' and index + 1 < script.len) index += 2 else index += 1;
-                }
-                if (index < script.len) index += 1;
-                try output.appendSlice(self.allocator, script[start..index]);
-                command_position = false;
-                continue;
-            }
-            if (isShellSeparatorByte(byte)) {
-                try output.append(self.allocator, byte);
-                command_position = true;
-                index += 1;
-                continue;
-            }
-            if (byte == ' ' or byte == '\t' or byte == '\r') {
-                try output.append(self.allocator, byte);
-                index += 1;
-                continue;
-            }
-            if (isAliasWordBoundary(byte)) {
-                try output.append(self.allocator, byte);
-                index += 1;
-                command_position = false;
-                continue;
-            }
-            const start = index;
-            while (index < script.len and !isAliasWordBoundary(script[index])) : (index += 1) {}
-            const word = script[start..index];
-            if (command_position and !isReservedAliasWord(word) and !looksLikeFunctionDefinitionName(script, index)) {
-                if (self.aliases.get(word)) |value| {
-                    if (!isActiveAlias(active_aliases.items, word)) {
-                        try active_aliases.append(self.allocator, word);
-                        _ = try self.expandAliasesInto(value, output, active_aliases, true);
-                        _ = active_aliases.pop();
-                        command_position = value.len > 0 and isAliasTrailingBlank(value[value.len - 1]);
-                        continue;
-                    }
-                    try output.appendSlice(self.allocator, word);
-                    command_position = false;
-                    continue;
-                }
-            }
-            try output.appendSlice(self.allocator, word);
-            command_position = false;
-        }
-        return command_position;
+        return parser.expandAliases(self.allocator, script, .{
+            .features = features,
+            .context = self,
+            .lookup = lookupAliasForParser,
+        });
     }
 
     fn setAlias(self: *Executor, name: []const u8, value: []const u8) !void {
@@ -8334,8 +8186,9 @@ fn argvForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![][]
     return argv;
 }
 
-fn isShellSeparatorByte(byte: u8) bool {
-    return byte == '\n' or byte == ';' or byte == '&' or byte == '|';
+fn lookupAliasForParser(context: *anyopaque, name: []const u8) ?[]const u8 {
+    const self: *Executor = @ptrCast(@alignCast(context));
+    return self.aliases.get(name);
 }
 
 fn containsAliasTimingCommandToken(script: []const u8) bool {
@@ -8376,22 +8229,6 @@ fn isAliasWordBoundary(byte: u8) bool {
     return byte == ' ' or byte == '\t' or byte == '\r' or byte == '\n' or byte == ';' or byte == '&' or byte == '|' or byte == '(' or byte == ')' or byte == '<' or byte == '>';
 }
 
-fn isAliasTrailingBlank(byte: u8) bool {
-    return byte == ' ' or byte == '\t';
-}
-
-fn isActiveAlias(active_aliases: []const []const u8, word: []const u8) bool {
-    for (active_aliases) |active| {
-        if (std.mem.eql(u8, active, word)) return true;
-    }
-    return false;
-}
-
-fn lessThanSpanStart(context: void, lhs: parser.Span, rhs: parser.Span) bool {
-    _ = context;
-    return lhs.start < rhs.start or (lhs.start == rhs.start and lhs.end < rhs.end);
-}
-
 fn commandAbbreviationSpan(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !?parser.Span {
     const clamped_cursor = @min(cursor, source.len);
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = clamped_cursor });
@@ -8405,34 +8242,6 @@ fn commandAbbreviationSpan(allocator: std.mem.Allocator, source: []const u8, cur
         selected = highlight.span;
     }
     return selected;
-}
-
-fn isReservedAliasWord(word: []const u8) bool {
-    return std.mem.eql(u8, word, "if") or
-        std.mem.eql(u8, word, "then") or
-        std.mem.eql(u8, word, "else") or
-        std.mem.eql(u8, word, "elif") or
-        std.mem.eql(u8, word, "fi") or
-        std.mem.eql(u8, word, "do") or
-        std.mem.eql(u8, word, "done") or
-        std.mem.eql(u8, word, "case") or
-        std.mem.eql(u8, word, "esac") or
-        std.mem.eql(u8, word, "for") or
-        std.mem.eql(u8, word, "while") or
-        std.mem.eql(u8, word, "until") or
-        std.mem.eql(u8, word, "in") or
-        std.mem.eql(u8, word, "{") or
-        std.mem.eql(u8, word, "}") or
-        std.mem.eql(u8, word, "!");
-}
-
-fn looksLikeFunctionDefinitionName(script: []const u8, after_word: usize) bool {
-    var index = after_word;
-    while (index < script.len and (script[index] == ' ' or script[index] == '\t' or script[index] == '\r')) : (index += 1) {}
-    if (index >= script.len or script[index] != '(') return false;
-    index += 1;
-    while (index < script.len and (script[index] == ' ' or script[index] == '\t' or script[index] == '\r')) : (index += 1) {}
-    return index < script.len and script[index] == ')';
 }
 
 fn shouldSkipPipeline(op: ir.ListOp, previous_status: ExitStatus) bool {
@@ -8653,7 +8462,7 @@ fn commandLookup(self: *Executor, options: ExecuteOptions, name: []const u8, use
         }
         return stdoutLineFmt(self.allocator, "{s} is an alias for {s}", .{ name, value }, 0);
     }
-    if (isReservedAliasWord(name)) {
+    if (parser.isAliasReservedWord(name)) {
         return if (mode == .terse)
             stdoutLine(self.allocator, name, 0)
         else

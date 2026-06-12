@@ -507,6 +507,14 @@ pub const ParseOptions = struct {
     features: compat.Features = .{},
 };
 
+pub const AliasLookupFn = *const fn (context: *anyopaque, name: []const u8) ?[]const u8;
+
+pub const AliasExpansionOptions = struct {
+    features: compat.Features = .{},
+    context: ?*anyopaque = null,
+    lookup: ?AliasLookupFn = null,
+};
+
 pub const HighlightKind = enum {
     invalid,
     eof,
@@ -1523,6 +1531,230 @@ fn maskSourceRanges(allocator: std.mem.Allocator, source: []const u8, ranges: []
         }
     }
     return masked;
+}
+
+pub fn expandAliases(allocator: std.mem.Allocator, source: []const u8, options: AliasExpansionOptions) ![]const u8 {
+    if (options.context == null or options.lookup == null) return allocator.dupe(u8, source);
+
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    var active_aliases: std.ArrayList([]const u8) = .empty;
+    defer active_aliases.deinit(allocator);
+    _ = try expandAliasesIntoParsedSource(allocator, source, options, &output, &active_aliases);
+    return output.toOwnedSlice(allocator);
+}
+
+fn expandAliasesIntoParsedSource(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    options: AliasExpansionOptions,
+    output: *std.ArrayList(u8),
+    active_aliases: *std.ArrayList([]const u8),
+) !bool {
+    var parsed = try parse(allocator, source, .{ .features = options.features });
+    defer parsed.deinit();
+
+    var skipped_spans: std.ArrayList(Span) = .empty;
+    defer skipped_spans.deinit(allocator);
+    for (parsed.nodes) |node| {
+        if (node.kind == .here_doc_body) try skipped_spans.append(allocator, node.span);
+    }
+    std.mem.sort(Span, skipped_spans.items, {}, lessThanSpanStart);
+
+    if (parsed.diagnostics.len != 0) {
+        return expandAliasesIntoLexedSource(allocator, source, options, skipped_spans.items, output, active_aliases, true);
+    }
+
+    return expandAliasesIntoParsedTokens(allocator, parsed, options, skipped_spans.items, output, active_aliases);
+}
+
+fn expandAliasesIntoParsedTokens(
+    allocator: std.mem.Allocator,
+    parsed: ParseResult,
+    options: AliasExpansionOptions,
+    skipped_spans: []const Span,
+    output: *std.ArrayList(u8),
+    active_aliases: *std.ArrayList([]const u8),
+) !bool {
+    var copied_until: usize = 0;
+    var skipped_span_index: usize = 0;
+    var continued_alias_position = false;
+
+    for (parsed.tokens, 0..) |token, token_index| {
+        if (token.kind == .eof) break;
+        if (token.span.end <= copied_until) continue;
+
+        if (try appendSkippedAliasSpan(allocator, parsed.source, skipped_spans, &skipped_span_index, &copied_until, token.span.start, output)) {
+            continued_alias_position = false;
+            if (token.span.end <= copied_until) continue;
+        }
+
+        if (copied_until < token.span.start) try output.appendSlice(allocator, parsed.source[copied_until..token.span.start]);
+
+        if (token.kind == .word) {
+            const parser_command_word = tokenHasNodeKind(parsed, token_index, .command_word);
+            if (parser_command_word or continued_alias_position) {
+                if (try appendAliasExpansion(allocator, token.lexeme(parsed.source), parsed.source, token.span.end, options, output, active_aliases)) |continues| {
+                    copied_until = token.span.end;
+                    continued_alias_position = continues;
+                    continue;
+                }
+            }
+        }
+
+        try output.appendSlice(allocator, token.lexeme(parsed.source));
+        copied_until = token.span.end;
+        if (isListSeparator(token.kind)) continued_alias_position = false;
+    }
+
+    if (copied_until < parsed.source.len) try output.appendSlice(allocator, parsed.source[copied_until..]);
+    return continued_alias_position;
+}
+
+fn expandAliasesIntoLexedSource(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    options: AliasExpansionOptions,
+    skipped_spans: []const Span,
+    output: *std.ArrayList(u8),
+    active_aliases: *std.ArrayList([]const u8),
+    initial_command_position: bool,
+) !bool {
+    var lex_result = try lex(allocator, source);
+    defer lex_result.deinit();
+
+    var copied_until: usize = 0;
+    var skipped_span_index: usize = 0;
+    var command_position = initial_command_position;
+
+    for (lex_result.tokens) |token| {
+        if (token.kind == .eof) break;
+        if (token.span.end <= copied_until) continue;
+
+        if (try appendSkippedAliasSpan(allocator, source, skipped_spans, &skipped_span_index, &copied_until, token.span.start, output)) {
+            command_position = false;
+            if (token.span.end <= copied_until) continue;
+        }
+
+        if (copied_until < token.span.start) try output.appendSlice(allocator, source[copied_until..token.span.start]);
+
+        if (token.kind == .word and command_position) {
+            if (try appendAliasExpansion(allocator, token.lexeme(source), source, token.span.end, options, output, active_aliases)) |continues| {
+                copied_until = token.span.end;
+                command_position = continues;
+                continue;
+            }
+        }
+
+        try output.appendSlice(allocator, token.lexeme(source));
+        copied_until = token.span.end;
+        command_position = aliasTokenLeavesCommandPosition(token.kind, command_position);
+    }
+
+    if (copied_until < source.len) try output.appendSlice(allocator, source[copied_until..]);
+    return command_position;
+}
+
+fn appendSkippedAliasSpan(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    skipped_spans: []const Span,
+    skipped_span_index: *usize,
+    copied_until: *usize,
+    token_start: usize,
+    output: *std.ArrayList(u8),
+) !bool {
+    while (skipped_span_index.* < skipped_spans.len and skipped_spans[skipped_span_index.*].end <= copied_until.*) : (skipped_span_index.* += 1) {}
+    if (skipped_span_index.* >= skipped_spans.len) return false;
+
+    const skipped = skipped_spans[skipped_span_index.*];
+    if (skipped.start > token_start) return false;
+
+    const end = skipped.end;
+    if (copied_until.* < end) try output.appendSlice(allocator, source[copied_until.*..end]);
+    copied_until.* = end;
+    skipped_span_index.* += 1;
+    return true;
+}
+
+fn appendAliasExpansion(
+    allocator: std.mem.Allocator,
+    word: []const u8,
+    source: []const u8,
+    after_word: usize,
+    options: AliasExpansionOptions,
+    output: *std.ArrayList(u8),
+    active_aliases: *std.ArrayList([]const u8),
+) !?bool {
+    if (isAliasReservedWord(word) or looksLikeFunctionDefinitionName(source, after_word)) return null;
+    const value = lookupAlias(options, word) orelse return null;
+    if (isActiveAlias(active_aliases.items, word)) return null;
+
+    try active_aliases.append(allocator, word);
+    const nested_continues = try expandAliasesIntoParsedSource(allocator, value, options, output, active_aliases);
+    _ = active_aliases.pop();
+    return nested_continues or (value.len > 0 and isAliasTrailingBlank(value[value.len - 1]));
+}
+
+fn lookupAlias(options: AliasExpansionOptions, word: []const u8) ?[]const u8 {
+    return options.lookup.?(options.context.?, word);
+}
+
+fn tokenHasNodeKind(result: ParseResult, token_index: usize, kind: NodeKind) bool {
+    for (result.nodes) |node| {
+        if (node.kind == kind and token_index >= node.token_start and token_index < node.token_end) return true;
+    }
+    return false;
+}
+
+fn aliasTokenLeavesCommandPosition(kind: TokenKind, prior: bool) bool {
+    if (kind == .whitespace) return prior;
+    if (kind == .newline or kind == .pipe or isListSeparator(kind)) return true;
+    return false;
+}
+
+fn isAliasTrailingBlank(byte: u8) bool {
+    return byte == ' ' or byte == '\t';
+}
+
+fn isActiveAlias(active_aliases: []const []const u8, word: []const u8) bool {
+    for (active_aliases) |active| {
+        if (std.mem.eql(u8, active, word)) return true;
+    }
+    return false;
+}
+
+fn lessThanSpanStart(context: void, lhs: Span, rhs: Span) bool {
+    _ = context;
+    return lhs.start < rhs.start or (lhs.start == rhs.start and lhs.end < rhs.end);
+}
+
+pub fn isAliasReservedWord(word: []const u8) bool {
+    return std.mem.eql(u8, word, "if") or
+        std.mem.eql(u8, word, "then") or
+        std.mem.eql(u8, word, "else") or
+        std.mem.eql(u8, word, "elif") or
+        std.mem.eql(u8, word, "fi") or
+        std.mem.eql(u8, word, "do") or
+        std.mem.eql(u8, word, "done") or
+        std.mem.eql(u8, word, "case") or
+        std.mem.eql(u8, word, "esac") or
+        std.mem.eql(u8, word, "for") or
+        std.mem.eql(u8, word, "while") or
+        std.mem.eql(u8, word, "until") or
+        std.mem.eql(u8, word, "in") or
+        std.mem.eql(u8, word, "{") or
+        std.mem.eql(u8, word, "}") or
+        std.mem.eql(u8, word, "!");
+}
+
+fn looksLikeFunctionDefinitionName(source: []const u8, after_word: usize) bool {
+    var index = after_word;
+    while (index < source.len and (source[index] == ' ' or source[index] == '\t' or source[index] == '\r')) : (index += 1) {}
+    if (index >= source.len or source[index] != '(') return false;
+    index += 1;
+    while (index < source.len and (source[index] == ' ' or source[index] == '\t' or source[index] == '\r')) : (index += 1) {}
+    return index < source.len and source[index] == ')';
 }
 
 const PendingHereDoc = struct {
