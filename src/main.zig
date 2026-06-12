@@ -9176,6 +9176,36 @@ test "runScriptWithEnvironment imports initial shell variables" {
     try std.testing.expectEqualStrings("ppid-ok\n<present>\n< \t\n>\n<1>\npwd-ok\n", result.stdout);
 }
 
+test "runScriptWithEnvironment initializes and exports SHLVL" {
+    const ShellLevelCase = struct {
+        inherited: ?[]const u8,
+        expected: []const u8,
+    };
+    const cases = [_]ShellLevelCase{
+        .{ .inherited = null, .expected = "1" },
+        .{ .inherited = "5", .expected = "6" },
+        .{ .inherited = "not-a-number", .expected = "1" },
+    };
+
+    for (cases) |case| {
+        var env = std.process.Environ.Map.init(std.testing.allocator);
+        defer env.deinit();
+        if (case.inherited) |level| try env.put("SHLVL", level);
+
+        var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io,
+            \\printf '<%s>\n' "$SHLVL"
+            \\env | while IFS= read -r line; do case $line in SHLVL=*) printf 'exported:%s\n' "${line#SHLVL=}" ;; esac; done
+        , .{ .io = std.testing.io, .allow_external = true }, &env);
+        defer result.deinit();
+
+        const expected = try std.fmt.allocPrint(std.testing.allocator, "<{s}>\nexported:{s}\n", .{ case.expected, case.expected });
+        defer std.testing.allocator.free(expected);
+        try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+        try std.testing.expectEqualStrings(expected, result.stdout);
+        try std.testing.expectEqualStrings("", result.stderr);
+    }
+}
+
 test "runScriptWithEnvironment preserves valid inherited logical PWD" {
     const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
     defer std.testing.allocator.free(original_cwd);

@@ -2070,6 +2070,7 @@ pub const Executor = struct {
     }
 
     pub fn initializeShellVariables(self: *Executor, io: std.Io) !void {
+        try self.initializeShellLevel();
         try self.setEnv("IFS", " \t\n");
         try self.setEnv("OPTIND", "1");
 
@@ -2082,6 +2083,32 @@ pub const Executor = struct {
         defer self.allocator.free(cwd);
         try self.setEnv("PWD", cwd);
         try self.setExported("PWD");
+    }
+
+    fn initializeShellLevel(self: *Executor) !void {
+        const level = nextStartupShellLevel(self.getEnv("SHLVL"));
+        var buffer: [32]u8 = undefined;
+        const text = try std.fmt.bufPrint(&buffer, "{d}", .{level});
+        try self.setEnv("SHLVL", text);
+        try self.setExported("SHLVL");
+    }
+
+    fn nextStartupShellLevel(inherited: ?[]const u8) i64 {
+        const level = if (inherited) |text| parseShellLevel(text) orelse return 1 else return 1;
+        return std.math.add(i64, level, 1) catch 1;
+    }
+
+    fn parseShellLevel(text: []const u8) ?i64 {
+        if (text.len == 0) return null;
+        var index: usize = 0;
+        if (text[0] == '+' or text[0] == '-') {
+            if (text.len == 1) return null;
+            index = 1;
+        }
+        while (index < text.len) : (index += 1) {
+            if (!std.ascii.isDigit(text[index])) return null;
+        }
+        return std.fmt.parseInt(i64, text, 10) catch null;
     }
 
     fn validLogicalPwd(self: *Executor, pwd: []const u8) bool {
