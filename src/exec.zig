@@ -7896,6 +7896,54 @@ pub const Executor = struct {
         return &self.global_positionals;
     }
 
+    const TemporaryPositionalsGuard = struct {
+        executor: *Executor,
+        frame_index: ?usize,
+        saved: PositionalParams = .{},
+        active: bool = false,
+
+        fn inactive() TemporaryPositionalsGuard {
+            return .{ .executor = undefined, .frame_index = null };
+        }
+
+        fn restore(self: *TemporaryPositionalsGuard) void {
+            if (!self.active) return;
+            const target = self.executor.positionalsForFrameIndex(self.frame_index);
+            target.deinit(self.executor.allocator);
+            target.* = self.saved;
+            self.saved = .{};
+            self.active = false;
+        }
+    };
+
+    fn pushTemporaryPositionals(self: *Executor, args: []const ir.WordRef) !TemporaryPositionalsGuard {
+        const frame_index = if (self.call_frames.items.len == 0) null else self.call_frames.items.len - 1;
+        const target = self.positionalsForFrameIndex(frame_index);
+        var guard: TemporaryPositionalsGuard = .{ .executor = self, .frame_index = frame_index };
+        errdefer guard.saved.deinit(self.allocator);
+
+        try guard.saved.set(self.allocator, target.params);
+        var values = try self.allocator.alloc([]const u8, args.len);
+        defer self.allocator.free(values);
+        for (args, 0..) |arg, index| values[index] = arg.text;
+        var replacement: PositionalParams = .{};
+        errdefer replacement.deinit(self.allocator);
+        try replacement.set(self.allocator, values);
+        target.deinit(self.allocator);
+        target.* = replacement;
+        replacement = .{};
+        guard.active = true;
+        return guard;
+    }
+
+    fn positionalsForFrameIndex(self: *Executor, frame_index: ?usize) *PositionalParams {
+        if (frame_index) |index| {
+            std.debug.assert(index < self.call_frames.items.len);
+            return &self.call_frames.items[index].positionals;
+        }
+        return &self.global_positionals;
+    }
+
     const CommandSubstitutionContext = struct {
         executor: *Executor,
         options: ExecuteOptions,
@@ -10499,7 +10547,7 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     _ = stdin;
     const io = options.io orelse return error.MissingIoForBuiltin;
     if (command.argv.len < 2) return sourceUsageError(self, command.argv[0].text, 2, "missing file operand");
-    if (command.argv.len > 2) return sourceUsageError(self, command.argv[0].text, 2, "arguments are not implemented yet");
+    if (command.argv.len > 2 and !options.features.isBash()) return sourceUsageError(self, command.argv[0].text, 2, "arguments are not implemented yet");
     const posix_dot = std.mem.eql(u8, command.argv[0].text, ".");
     const contents = self.readSourceFile(io, command.argv[1].text, posix_dot) catch |err| switch (err) {
         error.FileNotFound => return sourceUsageError(self, command.argv[0].text, 1, "file not found"),
@@ -10516,6 +10564,8 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     var source_options = options;
     source_options.source_path = command.argv[1].text;
     source_options.verbose_input_echo = true;
+    var source_positionals = if (command.argv.len > 2) try self.pushTemporaryPositionals(command.argv[2..]) else Executor.TemporaryPositionalsGuard.inactive();
+    defer source_positionals.restore();
     self.source_depth += 1;
     defer self.source_depth -= 1;
     var result = self.executeScriptSlice(contents, source_options) catch |err| switch (err) {
@@ -16526,6 +16576,102 @@ test "executor implements source and dot builtins" {
     var source_result = try executor.executeProgram(source_lowered.program, .{ .io = std.testing.io });
     defer source_result.deinit();
     try std.testing.expectEqualStrings("from-source\n", source_result.stdout);
+}
+
+test "executor supports Bash source operands as temporary positionals" {
+    const inner_path = "rush-source-positionals-inner.rush";
+    const outer_path = "rush-source-positionals-outer.rush";
+    const no_args_path = "rush-source-positionals-no-args.rush";
+    const func_path = "rush-source-positionals-func.rush";
+    const bad_path = "rush-source-positionals-bad.rush";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, inner_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, outer_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, no_args_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, func_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, bad_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = inner_path, .data =
+        \\printf 'inner:%s:%s:%s\n' "$#" "$1" "$2"
+        \\set -- inner-mutated
+        \\
+    });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = outer_path, .data =
+        \\printf 'outer-before:%s:%s:%s\n' "$#" "$1" "$2"
+        \\. ./rush-source-positionals-inner.rush nested-one nested-two
+        \\printf 'outer-after-inner:%s:%s:%s\n' "$#" "$1" "$2"
+        \\set -- outer-mutated
+        \\
+    });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = no_args_path, .data =
+        \\printf 'noargs-before:%s:%s:%s\n' "$#" "$1" "$2"
+        \\set -- noargs-mutated
+        \\
+    });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = func_path, .data =
+        \\printf 'func-source:%s:%s:%s\n' "$#" "$1" "$2"
+        \\return 7
+        \\
+    });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = bad_path, .data = "if\n" });
+
+    var default_executor = Executor.init(std.testing.allocator);
+    defer default_executor.deinit();
+    var default_rejection = try default_executor.executeScriptSlice(". ./rush-source-positionals-outer.rush arg; echo after", .{ .io = std.testing.io });
+    defer default_rejection.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), default_rejection.status);
+    try std.testing.expectEqualStrings("", default_rejection.stdout);
+    try std.testing.expectEqualStrings(".: arguments are not implemented yet\n", default_rejection.stderr);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.global_positionals.set(std.testing.allocator, &.{ "global one", "global two" });
+    var nested = try executor.executeScriptSlice(
+        \\. ./rush-source-positionals-outer.rush source-one "source two"
+        \\printf 'caller-after:%s:%s:%s\n' "$#" "$1" "$2"
+        \\
+    , .{ .io = std.testing.io, .features = compat.Features.bash() });
+    defer nested.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), nested.status);
+    try std.testing.expectEqualStrings(
+        "outer-before:2:source-one:source two\ninner:2:nested-one:nested-two\nouter-after-inner:2:source-one:source two\ncaller-after:2:global one:global two\n",
+        nested.stdout,
+    );
+    try std.testing.expectEqualStrings("", nested.stderr);
+
+    var no_args = try executor.executeScriptSlice(
+        \\. ./rush-source-positionals-no-args.rush
+        \\printf 'noargs-after:%s:%s\n' "$#" "$1"
+        \\
+    , .{ .io = std.testing.io, .features = compat.Features.bash() });
+    defer no_args.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), no_args.status);
+    try std.testing.expectEqualStrings("noargs-before:2:global one:global two\nnoargs-after:1:noargs-mutated\n", no_args.stdout);
+
+    var function_executor = Executor.init(std.testing.allocator);
+    defer function_executor.deinit();
+    var function_source = try function_executor.executeScriptSlice(
+        \\set -- global
+        \\f() {
+        \\  printf 'func-before:%s:%s\n' "$#" "$1"
+        \\  . ./rush-source-positionals-func.rush source-a source-b
+        \\  printf 'func-status:%s\n' "$?"
+        \\  printf 'func-after:%s:%s\n' "$#" "$1"
+        \\}
+        \\f func-arg
+        \\printf 'global-after:%s:%s\n' "$#" "$1"
+        \\
+    , .{ .io = std.testing.io, .features = compat.Features.bash() });
+    defer function_source.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), function_source.status);
+    try std.testing.expectEqualStrings("func-before:1:func-arg\nfunc-source:2:source-a:source-b\nfunc-status:7\nfunc-after:1:func-arg\nglobal-after:1:global\n", function_source.stdout);
+
+    var error_executor = Executor.init(std.testing.allocator);
+    defer error_executor.deinit();
+    try error_executor.global_positionals.set(std.testing.allocator, &.{"outer"});
+    var parse_error = try error_executor.executeScriptSlice(". ./rush-source-positionals-bad.rush temp", .{ .io = std.testing.io, .features = compat.Features.bash() });
+    defer parse_error.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), parse_error.status);
+    try std.testing.expectEqual(@as(usize, 1), error_executor.global_positionals.params.len);
+    try std.testing.expectEqualStrings("outer", error_executor.global_positionals.params[0]);
 }
 
 test "dot builtin maps source path open errors to builtin diagnostics" {

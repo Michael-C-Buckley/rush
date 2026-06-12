@@ -133,6 +133,13 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
   - empty delimiter operand as NUL
+- `. file args...` / `source file args...` temporary positional operands:
+  - extra operands replace `$1`, `$2`, `$#`, `$@`, and `$*` only while the
+    sourced file runs
+  - the caller's positional parameters are restored after normal completion,
+    `return`, and source-script parse/runtime errors
+  - omitting extra operands keeps the sourced file on the caller's current
+    positional parameter frame
 
 ## Bash-version-specific diagnostics
 

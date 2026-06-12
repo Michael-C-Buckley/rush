@@ -8921,6 +8921,32 @@ test "command string operands set the command name and positional parameters" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "command string Bash source operands temporarily override positionals" {
+    const path = "rush-command-string-source-positionals.rush";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data =
+        \\printf 'source:%s:%s:%s:%s\n' "$0" "$#" "$1" "$2"
+        \\set -- changed
+        \\
+    });
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        ". ./rush-command-string-source-positionals.rush sourced 'two words'; printf 'after:%s:%s:%s:%s\n' \"$0\" \"$#\" \"$1\" \"$2\"",
+        .{ .io = std.testing.io, .arg_zero = "myname", .features = compat.Features.bash() },
+        null,
+        &.{ "caller one", "caller two" },
+        null,
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("source:myname:2:sourced:two words\nafter:myname:2:caller one:caller two\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "script file invocation sets command name and positional parameters" {
     const path = "rush-script-invocation-test.rush";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
