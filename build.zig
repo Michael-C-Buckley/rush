@@ -175,7 +175,9 @@ pub fn build(b: *std.Build) void {
     check_step.dependOn(&corpus_check.step);
 
     const posix_corpus_step = b.step("posix-corpus", "Run spec-derived POSIX expected-output corpus");
-    const posix_corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-posix-corpus.sh" });
+    const posix_corpus_check = b.addSystemCommand(&.{"env"});
+    posix_corpus_check.addPrefixedArtifactArg("RUSH=", exe);
+    posix_corpus_check.addArgs(&.{ "sh", "scripts/check-posix-corpus.sh" });
     posix_corpus_check.step.dependOn(&exe.step);
     posix_corpus_check.step.dependOn(fmt_step);
     posix_corpus_check.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
@@ -195,7 +197,9 @@ pub fn build(b: *std.Build) void {
     check_step.dependOn(&completion_manifest_schema_check.step);
 
     const posix_negative_corpus_step = b.step("posix-negative-corpus", "Run POSIX negative diagnostics corpus");
-    const posix_negative_corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-posix-negative-corpus.sh" });
+    const posix_negative_corpus_check = b.addSystemCommand(&.{"env"});
+    posix_negative_corpus_check.addPrefixedArtifactArg("RUSH=", exe);
+    posix_negative_corpus_check.addArgs(&.{ "sh", "scripts/check-posix-negative-corpus.sh" });
     posix_negative_corpus_check.step.dependOn(&exe.step);
     posix_negative_corpus_check.step.dependOn(fmt_step);
     posix_negative_corpus_check.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
