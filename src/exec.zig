@@ -7663,7 +7663,7 @@ pub const Executor = struct {
             const parsed = envAssignment(assignment.text) orelse continue;
             if (std.mem.eql(u8, parsed.name, "PATH")) path_value = parsed.value;
         }
-        return path_value orelse self.getEnv("PATH") orelse "/bin:/usr/bin";
+        return path_value orelse self.getEnv("PATH");
     }
 
     fn findReplacementExecutableInPathValue(self: *Executor, io: std.Io, name: []const u8, path_value: []const u8) ![]const u8 {
@@ -19149,6 +19149,34 @@ test "executor resolves external commands from shell PATH" {
     try std.testing.expectEqualStrings("ok", result.stdout);
 }
 
+test "executor does not search default PATH when PATH is unset" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var missing_result = try executor.executeScriptSlice(
+        \\unset PATH
+        \\sh -c 'printf unexpected'
+        \\printf 'status:%s\n' "$?"
+        \\command -v sh
+        \\printf 'lookup:%s\n' "$?"
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer missing_result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), missing_result.status);
+    try std.testing.expectEqualStrings("status:127\nlookup:127\n", missing_result.stdout);
+    try std.testing.expectEqualStrings("sh: command not found\n", missing_result.stderr);
+
+    var absolute_result = try executor.executeScriptSlice(
+        \\unset PATH
+        \\/bin/sh -c 'printf absolute'
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer absolute_result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), absolute_result.status);
+    try std.testing.expectEqualStrings("absolute", absolute_result.stdout);
+    try std.testing.expectEqualStrings("", absolute_result.stderr);
+}
+
 test "executor falls back to sh for executable scripts without shebang" {
     const root = "rush-enoexec-fallback-test";
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
@@ -20077,7 +20105,7 @@ test "executor implements set shell option baseline" {
     defer reusable.deinit();
     try std.testing.expectEqualStrings("set +o allexport\nset -o emacs\nset +o errexit\nset -o ignoreeof\nset +o monitor\nset +o noclobber\nset +o noexec\nset +o noglob\nset +o notify\nset +o nounset\nset -o pipefail\nset +o vi\nset +o verbose\nset +o xtrace\n", reusable.stdout);
 
-    var vi_lowered = try parseAndLower(std.testing.allocator, "set -o vi; set -o | grep '^vi[[:space:]]*on' >/dev/null && set -o | grep '^emacs[[:space:]]*off' >/dev/null && echo vi:on; set +o vi; set -o | grep '^vi[[:space:]]*off' >/dev/null && set -o | grep '^emacs[[:space:]]*on' >/dev/null && echo vi:off");
+    var vi_lowered = try parseAndLower(std.testing.allocator, "set -o vi; set -o | /usr/bin/grep '^vi[[:space:]]*on' >/dev/null && set -o | /usr/bin/grep '^emacs[[:space:]]*off' >/dev/null && echo vi:on; set +o vi; set -o | /usr/bin/grep '^vi[[:space:]]*off' >/dev/null && set -o | /usr/bin/grep '^emacs[[:space:]]*on' >/dev/null && echo vi:off");
     defer vi_lowered.parsed.deinit();
     defer vi_lowered.program.deinit();
     var vi_result = try executor.executeProgram(vi_lowered.program, .{ .io = std.testing.io, .allow_external = true });
@@ -20086,7 +20114,7 @@ test "executor implements set shell option baseline" {
     try std.testing.expect(!executor.shell_options.vi);
     try std.testing.expect(executor.shell_options.emacs);
 
-    var emacs_lowered = try parseAndLower(std.testing.allocator, "set -o vi; set -o emacs; set -o | grep '^emacs[[:space:]]*on' >/dev/null && set -o | grep '^vi[[:space:]]*off' >/dev/null && echo emacs:on; set +o emacs; set -o | grep '^emacs[[:space:]]*off' >/dev/null && set -o | grep '^vi[[:space:]]*off' >/dev/null && echo emacs:off");
+    var emacs_lowered = try parseAndLower(std.testing.allocator, "set -o vi; set -o emacs; set -o | /usr/bin/grep '^emacs[[:space:]]*on' >/dev/null && set -o | /usr/bin/grep '^vi[[:space:]]*off' >/dev/null && echo emacs:on; set +o emacs; set -o | /usr/bin/grep '^emacs[[:space:]]*off' >/dev/null && set -o | /usr/bin/grep '^vi[[:space:]]*off' >/dev/null && echo emacs:off");
     defer emacs_lowered.parsed.deinit();
     defer emacs_lowered.program.deinit();
     var emacs_result = try executor.executeProgram(emacs_lowered.program, .{ .io = std.testing.io, .allow_external = true });

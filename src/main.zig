@@ -9364,7 +9364,7 @@ test "executor smoke corpus returns expected statuses and output fragments" {
         .{ .script = "true", .status = 0 },
         .{ .script = "false", .status = 1 },
         .{ .script = "echo smoke", .status = 0, .stdout_contains = "smoke\n" },
-        .{ .script = "echo smoke | cat", .status = 0, .stdout_contains = "smoke\n" },
+        .{ .script = "echo smoke | /bin/cat", .status = 0, .stdout_contains = "smoke\n" },
         .{ .script = "false || echo recovered", .status = 0, .stdout_contains = "recovered\n" },
         .{ .script = "true && echo ok", .status = 0, .stdout_contains = "ok\n" },
         .{ .script = "missing-command", .status = 127, .stderr_contains = "command not found" },
@@ -10162,7 +10162,7 @@ test "login shell detection follows argv0 dash convention" {
 test "integration harness compares selected scripts with /bin/sh" {
     try expectMatchesSh("echo hello");
     try expectMatchesSh("false");
-    try expectMatchesSh("echo hello | cat");
+    try expectMatchesSh("echo hello | /bin/cat");
     try expectMatchesSh("false || echo yes");
     try expectMatchesSh("true && echo ok");
     try expectMatchesSh("/usr/bin/printf external");
