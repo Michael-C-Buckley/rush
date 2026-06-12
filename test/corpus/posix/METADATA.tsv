@@ -86,6 +86,7 @@ builtin-getopts-silent-missing	builtin	builtin	-
 builtin-getopts-silent-invalid	builtin	behavior	getopts silent invalid options set OPTARG without diagnostics
 builtin-loop-control	builtin	builtin	-
 builtin-printf-dynamic-combined-width-precision	builtin	behavior	printf accepts combined dynamic asterisk width and precision for representative string and signed integer conversions
+builtin-printf-negative-dynamic-width-precision	builtin	behavior	printf treats negative dynamic asterisk field widths as left adjustment and negative dynamic asterisk precisions as omitted for representative string and signed integer conversions
 builtin-printf-dynamic-width-precision	builtin	behavior	printf accepts dynamic asterisk width and precision arguments for representative string and integer conversions
 builtin-printf-escapes	builtin	builtin	-
 builtin-printf-floating-conversions	builtin	behavior	printf formats representative POSIX floating-point conversions

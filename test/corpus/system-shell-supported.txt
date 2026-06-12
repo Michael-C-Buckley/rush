@@ -326,4 +326,5 @@ printf '[%.s][%4.s][%-.s][%.d][%5.d][%#.o]\n' hidden pad left 0 0 0
 printf '[%8u][%-8u][%.4u][%8.4u][%08u][%08.4u]\n' 7 7 7 7 7 7; printf '[%8o][%-8o][%.4o][%8.4o][%08o][%08.4o]\n' 10 10 10 10 10 10; printf '[%8x][%-8x][%.4x][%8.4x][%08x][%08.4x]\n' 255 255 255 255 255 255
 printf '[%0+6d][%+ 6d][%-06d][%#08x][%0#8x][%#-8x]\n' 7 7 7 255 255 255
 printf '[%*s][%.*s][%*.*d][%-*s]\n' 5 a 3 abcdef 6 4 7 5 left
+printf '[%*s][%*d][%.*s][%*.*s]\n' -5 a -5 7 -3 abc -6 -3 abc
 printf '[%.3b][%6.3b][%-6.3b][%.4b]\n' abcdef 'a\\nbcd' abcdef 'x\\141yz'
