@@ -3195,6 +3195,7 @@ fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
     var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .features = completion_context.features });
     defer parsed.deinit();
+    if (parsed.incomplete) return null;
     if (parsed.diagnostics.len != 0) {
         const diagnostic = parsed.diagnostics[0];
         return .{
@@ -5469,7 +5470,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var completion_loader = CompletionScriptLoader.init(allocator);
     defer completion_loader.deinit();
 
-    while (true) {
+    repl_loop: while (true) {
         terminal.refreshWinsize();
         try syncInteractiveTerminalSize(&executor, terminal);
         const notifications = try executor.drainJobNotifications();
@@ -5494,7 +5495,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         try terminal.reportWindowTitle(title.text);
         var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
         const ui_theme = interactiveUiTheme(executor);
-        const read_result = try terminal.readLine(.{
+        const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt,
             .editing_mode = interactiveEditingMode(executor.shell_options),
             .prompt_refresh_interval_ms = executor.promptRefreshIntervalMs(),
@@ -5530,7 +5531,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             .style_context = &completion_context,
             .refresh_style = refreshInteractiveStyle,
             .refresh_color_report = refreshInteractiveColorReport,
-        });
+        };
+        const read_result = try terminal.readLine(read_options);
         try syncInteractiveTerminalSize(&executor, terminal);
         const line = switch (read_result) {
             .submitted => |line| line,
@@ -5572,7 +5574,67 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             },
         };
         defer allocator.free(line);
-        if (std.mem.eql(u8, line, "exit")) {
+
+        var command: std.ArrayList(u8) = .empty;
+        defer command.deinit(allocator);
+        try command.appendSlice(allocator, line);
+
+        while (try interactiveInputNeedsContinuation(allocator, command.items, options.features)) {
+            var continuation_options = read_options;
+            continuation_options.prompt = executor.getEnv("PS2") orelse "> ";
+            continuation_options.prompt_refresh_interval_ms = null;
+            continuation_options.prompt_context = null;
+            continuation_options.refresh_prompt = null;
+            continuation_options.diagnostic_context = null;
+            continuation_options.diagnose = null;
+            const continuation_read_result = try terminal.readLine(continuation_options);
+            try syncInteractiveTerminalSize(&executor, terminal);
+            const continuation_line = switch (continuation_read_result) {
+                .submitted => |continuation_line| continuation_line,
+                .canceled => {
+                    if (try runInteractiveInterruptTrap(io, &executor, options.arg_zero, options.features)) |result| {
+                        var trap_result = result;
+                        defer trap_result.deinit();
+                        try terminal.leaveEditorMode();
+                        var editor_mode_left = true;
+                        defer if (editor_mode_left) terminal.enterEditorMode() catch {};
+
+                        try writeAll(io, .stdout, trap_result.stdout);
+                        try writeAll(io, .stderr, trap_result.stderr);
+                        if (outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
+                        last_status = trap_result.status;
+                        try terminal.finishSemanticCommand(trap_result.status);
+                        if (executor.pending_exit) |status| {
+                            last_status = status;
+                            editor_mode_left = false;
+                            break :repl_loop;
+                        }
+
+                        try terminal.enterEditorMode();
+                        editor_mode_left = false;
+                    }
+                    continue :repl_loop;
+                },
+                .interrupted => {
+                    if (executor.pending_exit) |status| {
+                        last_status = status;
+                        break :repl_loop;
+                    }
+                    continue :repl_loop;
+                },
+                .eof => {
+                    try terminal.finishSemanticCommand(2);
+                    last_status = 2;
+                    continue :repl_loop;
+                },
+            };
+            defer allocator.free(continuation_line);
+            try command.append(allocator, '\n');
+            try command.appendSlice(allocator, continuation_line);
+        }
+
+        const input = command.items;
+        if (std.mem.eql(u8, input, "exit")) {
             if (executor.shouldWarnBeforeExitWithStoppedJobs()) {
                 try terminal.finishSemanticCommand(0);
                 try writeAll(io, .stderr, exec.stopped_jobs_exit_warning);
@@ -5581,7 +5643,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             try terminal.finishSemanticCommand(0);
             break;
         }
-        if (line.len == 0) {
+        if (input.len == 0) {
             try terminal.finishSemanticCommand(0);
             continue;
         }
@@ -5593,8 +5655,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
-            try executor.runPromptEventHooks(io, "preexec", &.{line});
-            var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
+            try executor.runPromptEventHooks(io, "preexec", &.{input});
+            var result = try runScriptWithExecutor(allocator, &executor, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
             defer result.deinit();
             try writeAll(io, .stdout, result.stdout);
@@ -5602,10 +5664,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             if (outputNeedsNewlineMarker(result.stdout, result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
             last_status = result.status;
             executor.setLastCommandDuration(command_duration_ms);
-            if (!executor.consumeSuppressNextInteractiveHistoryAppend()) try history.addCommand(io, line, result.status, command_started_at, command_duration_ms);
+            if (!executor.consumeSuppressNextInteractiveHistoryAppend()) try history.addCommand(io, input, result.status, command_started_at, command_duration_ms);
             var status_buffer: [3]u8 = undefined;
             const status_text = try std.fmt.bufPrint(&status_buffer, "{d}", .{result.status});
-            try executor.runPromptEventHooks(io, "postexec", &.{ line, status_text });
+            try executor.runPromptEventHooks(io, "postexec", &.{ input, status_text });
             try terminal.finishSemanticCommand(result.status);
             completion_cache.clear();
             if (executor.pending_exit) |status| {
@@ -5620,6 +5682,36 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     }
 
     return last_status;
+}
+
+fn interactiveInputNeedsContinuation(allocator: std.mem.Allocator, source: []const u8, features: compat.Features) !bool {
+    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .features = features });
+    defer parsed.deinit();
+    if (parsed.incomplete) return true;
+    var index = parsed.tokens.len;
+    while (index > 0) {
+        index -= 1;
+        const kind = parsed.tokens[index].kind;
+        if (kind == .eof or kind.isTrivia()) continue;
+        return switch (kind) {
+            .pipe, .and_if, .or_if => true,
+            else => false,
+        };
+    }
+    return false;
+}
+
+test "interactive incomplete input requests continuation until complete" {
+    try std.testing.expect(try interactiveInputNeedsContinuation(std.testing.allocator, "echo \"abc", .{}));
+    try std.testing.expect(!try interactiveInputNeedsContinuation(std.testing.allocator, "echo \"abc\"", .{}));
+    try std.testing.expect(try interactiveInputNeedsContinuation(std.testing.allocator, "for i in 1 2", .{}));
+    try std.testing.expect(!try interactiveInputNeedsContinuation(std.testing.allocator, "for i in 1 2\ndo echo $i\ndone", .{}));
+    try std.testing.expect(try interactiveInputNeedsContinuation(std.testing.allocator, "echo one |", .{}));
+    try std.testing.expect(!try interactiveInputNeedsContinuation(std.testing.allocator, "echo one | wc -c", .{}));
+    try std.testing.expect(try interactiveInputNeedsContinuation(std.testing.allocator, "echo one &&", .{}));
+    try std.testing.expect(!try interactiveInputNeedsContinuation(std.testing.allocator, "echo one && echo two", .{}));
+    try std.testing.expect(try interactiveInputNeedsContinuation(std.testing.allocator, "cat <<EOF", .{}));
+    try std.testing.expect(!try interactiveInputNeedsContinuation(std.testing.allocator, "cat <<EOF\nbody\nEOF", .{}));
 }
 
 fn interactiveEditingMode(options: exec.ShellOptions) line_editor.EditingMode {
@@ -8134,6 +8226,21 @@ test "interactive semantic diagnostics render spans without message line" {
     try std.testing.expectEqual(@as(usize, 4), diagnostic.spans[0].start);
     try std.testing.expectEqual(@as(usize, 9), diagnostic.spans[0].end);
     try std.testing.expectEqual(line_editor.DiagnosticSeverity.err, diagnostic.spans[0].severity);
+}
+
+test "interactive diagnostics leave incomplete input for PS2 continuation" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &cache, .loader = &loader, .io = std.testing.io, .cwd = "." };
+
+    try std.testing.expect(try diagnoseInteractiveLine(&completion_context, std.testing.allocator, std.testing.io, "echo \"abc") == null);
+    try std.testing.expect(try diagnoseInteractiveLine(&completion_context, std.testing.allocator, std.testing.io, "echo one |") == null);
 }
 
 fn hasCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) bool {
