@@ -5569,10 +5569,15 @@ pub const Executor = struct {
         return if (script.len == 0) 0 else @intFromPtr(script.ptr);
     }
 
+    fn trimShellSeparators(text: []const u8) []const u8 {
+        return std.mem.trim(u8, text, " \t\r\n;");
+    }
+
     fn cachedParsedBodyProgram(self: *Executor, script: []const u8) ?ir.Program {
-        const ptr = scriptSlicePtr(script);
+        const key = trimShellSeparators(script);
+        const ptr = scriptSlicePtr(key);
         for (self.parsed_body_programs.items) |entry| {
-            if (entry.ptr == ptr and entry.len == script.len and entry.alias_generation == self.alias_generation) {
+            if (entry.ptr == ptr and entry.len == key.len and entry.alias_generation == self.alias_generation) {
                 self.parsed_body_cache_hits += 1;
                 return entry.program;
             }
@@ -5581,9 +5586,10 @@ pub const Executor = struct {
     }
 
     fn parsedBodyProgramCached(self: Executor, script: []const u8) bool {
-        const ptr = scriptSlicePtr(script);
+        const key = trimShellSeparators(script);
+        const ptr = scriptSlicePtr(key);
         for (self.parsed_body_programs.items) |entry| {
-            if (entry.ptr == ptr and entry.len == script.len and entry.alias_generation == self.alias_generation) return true;
+            if (entry.ptr == ptr and entry.len == key.len and entry.alias_generation == self.alias_generation) return true;
         }
         return false;
     }
@@ -5591,7 +5597,8 @@ pub const Executor = struct {
     fn populateParsedBodyProgramCache(self: *Executor, parsed: parser.ParseResult) !void {
         for (parsed.nodes) |node| {
             if (node.kind != .list or node.span.start >= node.span.end) continue;
-            const source = parsed.source[node.span.start..node.span.end];
+            const source = trimShellSeparators(parsed.source[node.span.start..node.span.end]);
+            if (source.len == 0) continue;
             if (containsAliasTimingCommandToken(source)) continue;
             if (self.parsedBodyProgramCached(source)) continue;
             var program = try ir.lowerParsedList(self.allocator, parsed, node);
@@ -17340,6 +17347,30 @@ test "executor reuses parsed programs for nested compound bodies" {
     try std.testing.expectEqualStrings("deep\n", result.stdout);
     try std.testing.expect(executor.parsed_body_cache_inserts >= depth);
     try std.testing.expect(executor.parsed_body_cache_hits >= depth);
+}
+
+test "executor reuses parsed compound body cache with trailing separators" {
+    const iterations = 128;
+    var script: std.ArrayList(u8) = .empty;
+    defer script.deinit(std.testing.allocator);
+    try script.appendSlice(std.testing.allocator, "for i in");
+    for (0..iterations) |index| {
+        const word = try std.fmt.allocPrint(std.testing.allocator, " {d}", .{index});
+        defer std.testing.allocator.free(word);
+        try script.appendSlice(std.testing.allocator, word);
+    }
+    try script.appendSlice(std.testing.allocator, "; do :; done");
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(script.items, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(executor.parsed_body_cache_inserts < 16);
+    try std.testing.expect(executor.parsed_body_cache_hits >= iterations);
 }
 
 test "executor keeps alias timing semantics for uncached compound bodies" {
