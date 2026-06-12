@@ -1707,8 +1707,92 @@ fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, p
             if (index >= 0) argument.index = @intCast(index);
         }
         if (state.get("after")) |after| argument.after_state = manifestConditionPreviousState(after);
+        var require_option_values: std.ArrayList(completion_model.OptionValueCondition) = .empty;
+        defer require_option_values.deinit(executor.allocator);
+        defer freeManifestOptionValueConditionSlices(executor.allocator, require_option_values.items);
+        var reject_option_values: std.ArrayList(completion_model.OptionValueCondition) = .empty;
+        defer reject_option_values.deinit(executor.allocator);
+        defer freeManifestOptionValueConditionSlices(executor.allocator, reject_option_values.items);
+        if (state.get("when")) |condition| try appendCompletionManifestOptionValueConditions(executor.allocator, &require_option_values, condition, root, path, executor.completionRules());
+        if (state.get("after")) |condition| try appendCompletionManifestOptionValueConditions(executor.allocator, &require_option_values, condition, root, path, executor.completionRules());
+        if (state.get("until")) |condition| try appendCompletionManifestOptionValueConditions(executor.allocator, &reject_option_values, condition, root, path, executor.completionRules());
+        argument.require_option_values = require_option_values.items;
+        argument.reject_option_values = reject_option_values.items;
         try registerCompletionManifestProviderRule(executor, root, path, .dynamic_argument, provider, .{}, argument, 0, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source, variant, disabled);
     }
+}
+
+fn freeManifestOptionValueConditionSlices(allocator: std.mem.Allocator, conditions: []const completion_model.OptionValueCondition) void {
+    for (conditions) |condition| allocator.free(condition.values);
+}
+
+fn appendCompletionManifestOptionValueConditions(allocator: std.mem.Allocator, conditions: *std.ArrayList(completion_model.OptionValueCondition), condition_value: std.json.Value, root: []const u8, path: []const []const u8, rules: []const completion_model.Rule) !void {
+    const condition = switch (condition_value) {
+        .object => |object| object,
+        else => return,
+    };
+    const option_value = switch (condition.get("optionValue") orelse return) {
+        .object => |object| object,
+        else => return,
+    };
+    var iter = option_value.iterator();
+    while (iter.next()) |entry| {
+        const selector = entry.key_ptr.*;
+        const key = manifestCompletionOptionSelectorKey(rules, root, path, selector) orelse manifestOptionSelectorName(selector) orelse continue;
+        var values: std.ArrayList([]const u8) = .empty;
+        defer values.deinit(allocator);
+        switch (entry.value_ptr.*) {
+            .string => |literal| try values.append(allocator, literal),
+            .array => |array| for (array.items) |item| if (manifestString(item)) |literal| try values.append(allocator, literal),
+            else => continue,
+        }
+        const owned_values = try values.toOwnedSlice(allocator);
+        errdefer allocator.free(owned_values);
+        try conditions.append(allocator, .{ .key = key, .values = owned_values });
+    }
+}
+
+fn manifestCompletionOptionSelectorKey(rules: []const completion_model.Rule, root: []const u8, path: []const []const u8, selector: []const u8) ?[]const u8 {
+    const name = manifestOptionSelectorName(selector) orelse return null;
+    const kind: CompletionManifestOptionSpellingKind = if (std.mem.startsWith(u8, selector, "--")) .long else .short;
+    for (rules) |rule| {
+        if (rule.kind != .option and rule.kind != .dynamic_option_value) continue;
+        if (!completionManifestRuleOptionAppliesToPath(rule, root, path)) continue;
+        switch (kind) {
+            .long => if (rule.option.long) |long| if (std.mem.eql(u8, long, name)) return manifestCompletionOptionKey(rule.option),
+            .short => if (rule.option.short) |short| if (std.mem.eql(u8, short, name)) return manifestCompletionOptionKey(rule.option),
+        }
+    }
+    return null;
+}
+
+fn completionManifestRuleOptionAppliesToPath(rule: completion_model.Rule, root: []const u8, path: []const []const u8) bool {
+    if (rule.disabled) return false;
+    if (!std.mem.eql(u8, rule.root, root)) return false;
+    if (rule.option.inherit) {
+        if (rule.path.len > path.len) return false;
+        for (rule.path, path[0..rule.path.len]) |expected, actual| {
+            if (!std.mem.eql(u8, expected, actual)) return false;
+        }
+        return true;
+    }
+    if (rule.path.len != path.len) return false;
+    for (rule.path, path) |expected, actual| {
+        if (!std.mem.eql(u8, expected, actual)) return false;
+    }
+    return true;
+}
+
+fn manifestCompletionOptionKey(option: completion_model.Option) []const u8 {
+    if (option.long) |long| return long;
+    if (option.short) |short| return short;
+    return "";
+}
+
+fn manifestOptionSelectorName(selector: []const u8) ?[]const u8 {
+    if (std.mem.startsWith(u8, selector, "--") and selector.len > 2) return selector[2..];
+    if (std.mem.startsWith(u8, selector, "-") and selector.len == 2) return selector[1..];
+    return null;
 }
 
 fn registerCompletionManifestProviderRule(
@@ -1800,11 +1884,56 @@ fn manifestConditionPreviousState(value: std.json.Value) ?[]const u8 {
     return manifestString(condition.get("previousState"));
 }
 
+fn manifestOptionEnumValues(option: std.json.ObjectMap, providers: []const CompletionManifestProviderInfo) ?std.json.Array {
+    const value = switch (option.get("value") orelse return null) {
+        .object => |object| object,
+        else => return null,
+    };
+    if (value.get("grammar")) |grammar_value| {
+        const grammar = switch (grammar_value) {
+            .object => |object| object,
+            else => return null,
+        };
+        if (manifestString(grammar.get("kind"))) |kind| {
+            if (std.mem.eql(u8, kind, "enum")) {
+                return switch (grammar.get("values") orelse return null) {
+                    .array => |array| array,
+                    else => null,
+                };
+            }
+        }
+    }
+    if (value.get("provider")) |provider_ref| return manifestProviderStaticValues(provider_ref, providers);
+    return null;
+}
+
+fn manifestProviderStaticValues(provider_ref: std.json.Value, providers: []const CompletionManifestProviderInfo) ?std.json.Array {
+    switch (provider_ref) {
+        .string => |provider_id| return if (findCompletionManifestProviderInfo(providers, provider_id)) |provider| provider.static_values else null,
+        .object => |provider| {
+            return switch (provider.get("values") orelse return null) {
+                .array => |array| array,
+                else => null,
+            };
+        },
+        else => return null,
+    }
+}
+
 fn manifestString(value: ?std.json.Value) ?[]const u8 {
     return switch (value orelse return null) {
         .string => |string| string,
         else => null,
     };
+}
+
+fn manifestFirstString(value: ?std.json.Value) ?[]const u8 {
+    const array = switch (value orelse return null) {
+        .array => |array| array,
+        else => return null,
+    };
+    if (array.items.len == 0) return null;
+    return manifestString(array.items[0]);
 }
 
 fn completionManifestCurrentPlatform() []const u8 {
@@ -1909,6 +2038,14 @@ const CompletionManifestOptionSpellingKind = enum { short, long };
 const CompletionManifestOptionSpelling = struct {
     kind: CompletionManifestOptionSpellingKind,
     value: []const u8,
+    key: []const u8,
+    takes_value: bool = false,
+    enum_values: ?std.json.Array = null,
+};
+
+const CompletionManifestProviderInfo = struct {
+    id: []const u8,
+    static_values: ?std.json.Array = null,
 };
 
 fn validateCompletionManifestContents(allocator: std.mem.Allocator, contents: []const u8) !CompletionManifestDiagnostics {
@@ -1975,7 +2112,7 @@ fn validateManifestCommand(
     allocator: std.mem.Allocator,
     diagnostics: *CompletionManifestDiagnostics,
     command_value: std.json.Value,
-    inherited_providers: []const []const u8,
+    inherited_providers: []const CompletionManifestProviderInfo,
     inherited_options: []const CompletionManifestOptionSpelling,
     inherited_groups: []const []const u8,
     path: []const u8,
@@ -1995,7 +2132,7 @@ fn validateManifestCommand(
     }
     if (command.get("platforms")) |platforms| try validateManifestPlatforms(allocator, diagnostics, platforms, try manifestFieldPath(allocator, path, "platforms"));
 
-    var providers: std.ArrayList([]const u8) = .empty;
+    var providers: std.ArrayList(CompletionManifestProviderInfo) = .empty;
     defer providers.deinit(allocator);
     try providers.appendSlice(allocator, inherited_providers);
     if (command.get("providers")) |providers_value| {
@@ -2011,7 +2148,7 @@ fn validateManifestCommand(
                 const child_path = try manifestFieldPath(allocator, provider_path, entry.key_ptr.*);
                 defer allocator.free(child_path);
                 try validateManifestProvider(allocator, diagnostics, entry.value_ptr.*, child_path);
-                try providers.append(allocator, entry.key_ptr.*);
+                try providers.append(allocator, completionManifestProviderInfo(entry.key_ptr.*, entry.value_ptr.*));
             }
         }
     }
@@ -2105,7 +2242,7 @@ fn validateManifestCommand(
     if (command.get("variantProbe")) |probe| try validateManifestVariantProbe(allocator, diagnostics, probe, command.get("variants"), try manifestFieldPath(allocator, path, "variantProbe"));
 }
 
-fn validateManifestVariants(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, command: std.json.ObjectMap, variants_value: std.json.Value, providers: []const []const u8, inherited_options: []const CompletionManifestOptionSpelling, groups: []const []const u8, path: []const u8) anyerror!void {
+fn validateManifestVariants(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, command: std.json.ObjectMap, variants_value: std.json.Value, providers: []const CompletionManifestProviderInfo, inherited_options: []const CompletionManifestOptionSpelling, groups: []const []const u8, path: []const u8) anyerror!void {
     defer allocator.free(path);
     _ = command;
     const variants = switch (variants_value) {
@@ -2129,9 +2266,9 @@ fn validateManifestVariants(allocator: std.mem.Allocator, diagnostics: *Completi
     }
 }
 
-fn validateManifestCommandOverlay(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, overlay: std.json.ObjectMap, inherited_providers: []const []const u8, inherited_options: []const CompletionManifestOptionSpelling, inherited_groups: []const []const u8, path: []const u8) anyerror!void {
+fn validateManifestCommandOverlay(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, overlay: std.json.ObjectMap, inherited_providers: []const CompletionManifestProviderInfo, inherited_options: []const CompletionManifestOptionSpelling, inherited_groups: []const []const u8, path: []const u8) anyerror!void {
     if (overlay.get("platforms")) |platforms| try validateManifestPlatforms(allocator, diagnostics, platforms, try manifestFieldPath(allocator, path, "platforms"));
-    var providers: std.ArrayList([]const u8) = .empty;
+    var providers: std.ArrayList(CompletionManifestProviderInfo) = .empty;
     defer providers.deinit(allocator);
     try providers.appendSlice(allocator, inherited_providers);
     if (overlay.get("providers")) |providers_value| {
@@ -2143,7 +2280,7 @@ fn validateManifestCommandOverlay(allocator: std.mem.Allocator, diagnostics: *Co
                 const child_path = try manifestFieldPath(allocator, provider_path, entry.key_ptr.*);
                 defer allocator.free(child_path);
                 try validateManifestProvider(allocator, diagnostics, entry.value_ptr.*, child_path);
-                try providers.append(allocator, entry.key_ptr.*);
+                try providers.append(allocator, completionManifestProviderInfo(entry.key_ptr.*, entry.value_ptr.*));
             }
         }
     }
@@ -2222,7 +2359,7 @@ fn validateManifestOption(
     allocator: std.mem.Allocator,
     diagnostics: *CompletionManifestDiagnostics,
     option_value: std.json.Value,
-    providers: []const []const u8,
+    providers: []const CompletionManifestProviderInfo,
     options: *std.ArrayList(CompletionManifestOptionSpelling),
     child_options: *std.ArrayList(CompletionManifestOptionSpelling),
     groups: []const []const u8,
@@ -2235,15 +2372,18 @@ fn validateManifestOption(
     if (option.get("platforms")) |platforms| try validateManifestPlatforms(allocator, diagnostics, platforms, try manifestFieldPath(allocator, path, "platforms"));
 
     var has_spelling = false;
+    const takes_value = option.get("value") != null;
+    const option_key = manifestString(option.get("long")) orelse manifestString(option.get("short")) orelse manifestFirstString(option.get("aliases")) orelse "";
+    const enum_values = manifestOptionEnumValues(option, providers);
     const inherit = manifestBoolDefault(option.get("inherit"), true);
     if (manifestString(option.get("short"))) |short| {
         has_spelling = true;
-        const spelling: CompletionManifestOptionSpelling = .{ .kind = .short, .value = short };
+        const spelling: CompletionManifestOptionSpelling = .{ .kind = .short, .value = short, .key = option_key, .takes_value = takes_value, .enum_values = enum_values };
         if (try appendManifestOptionSpelling(diagnostics, options, spelling, path) and inherit) try child_options.append(diagnostics.allocator, spelling);
     }
     if (manifestString(option.get("long"))) |long| {
         has_spelling = true;
-        const spelling: CompletionManifestOptionSpelling = .{ .kind = .long, .value = long };
+        const spelling: CompletionManifestOptionSpelling = .{ .kind = .long, .value = long, .key = option_key, .takes_value = takes_value, .enum_values = enum_values };
         if (try appendManifestOptionSpelling(diagnostics, options, spelling, path) and inherit) try child_options.append(diagnostics.allocator, spelling);
     }
     if (option.get("aliases")) |aliases_value| {
@@ -2259,7 +2399,7 @@ fn validateManifestOption(
                 const alias_path = try manifestIndexPath(allocator, aliases_path, index);
                 defer allocator.free(alias_path);
                 has_spelling = true;
-                const spelling: CompletionManifestOptionSpelling = .{ .kind = .long, .value = alias };
+                const spelling: CompletionManifestOptionSpelling = .{ .kind = .long, .value = alias, .key = option_key, .takes_value = takes_value, .enum_values = enum_values };
                 if (try appendManifestOptionSpelling(diagnostics, options, spelling, alias_path) and inherit) try child_options.append(diagnostics.allocator, spelling);
             }
         }
@@ -2279,7 +2419,7 @@ fn validateManifestOption(
     }
 }
 
-fn validateManifestOptionValue(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const []const u8, path: []const u8) anyerror!void {
+fn validateManifestOptionValue(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const CompletionManifestProviderInfo, path: []const u8) anyerror!void {
     switch (value) {
         .object => try validateManifestValueObject(allocator, diagnostics, value, providers, path),
         .array => |array| {
@@ -2336,7 +2476,7 @@ fn validateManifestArguments(
     allocator: std.mem.Allocator,
     diagnostics: *CompletionManifestDiagnostics,
     arguments_value: std.json.Value,
-    providers: []const []const u8,
+    providers: []const CompletionManifestProviderInfo,
     options: []const CompletionManifestOptionSpelling,
     path: []const u8,
 ) !void {
@@ -2457,6 +2597,11 @@ fn validateManifestCondition(
             try validateManifestOptionSelectorOrSelectors(allocator, diagnostics, selector_or_selectors, options, selector_path);
         }
     }
+    if (condition.get("optionValue")) |option_value| {
+        const option_value_path = try manifestFieldPath(allocator, path, "optionValue");
+        defer allocator.free(option_value_path);
+        try validateManifestOptionValueCondition(allocator, diagnostics, option_value, options, option_value_path);
+    }
     inline for (&.{ "all", "any" }) |field| {
         if (condition.get(field)) |children| {
             const children_array = switch (children) {
@@ -2481,7 +2626,59 @@ fn validateManifestCondition(
     }
 }
 
-fn validateManifestValueObject(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const []const u8, path: []const u8) anyerror!void {
+fn validateManifestOptionValueCondition(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, options: []const CompletionManifestOptionSpelling, path: []const u8) !void {
+    const object = switch (value) {
+        .object => |object| object,
+        else => return,
+    };
+    if (object.count() != 1) try diagnostics.add(.err, "{s}: optionValue condition must map exactly one option selector", .{path});
+    var iter = object.iterator();
+    while (iter.next()) |entry| {
+        const selector = entry.key_ptr.*;
+        const selector_path = try manifestFieldPath(allocator, path, selector);
+        defer allocator.free(selector_path);
+        const option = findManifestOptionSelector(options, selector) orelse {
+            try validateManifestOptionSelector(diagnostics, selector, options, selector_path);
+            continue;
+        };
+        if (!option.takes_value) {
+            try diagnostics.add(.err, "{s}: option selector '{s}' does not take a value", .{ selector_path, selector });
+        }
+        switch (entry.value_ptr.*) {
+            .string => |literal| try validateManifestOptionValueLiteral(diagnostics, option, literal, selector_path),
+            .array => |array| {
+                for (array.items, 0..) |item, index| {
+                    const literal = manifestString(item) orelse continue;
+                    const literal_path = try manifestIndexPath(allocator, selector_path, index);
+                    defer allocator.free(literal_path);
+                    try validateManifestOptionValueLiteral(diagnostics, option, literal, literal_path);
+                }
+            },
+            else => {},
+        }
+    }
+}
+
+fn validateManifestOptionValueLiteral(diagnostics: *CompletionManifestDiagnostics, option: CompletionManifestOptionSpelling, literal: []const u8, path: []const u8) !void {
+    const enum_values = option.enum_values orelse return;
+    if (!manifestEnumValuesContain(enum_values, literal)) {
+        try diagnostics.add(.err, "{s}: option value literal '{s}' is not in the option enum", .{ path, literal });
+    }
+}
+
+fn manifestEnumValuesContain(values: std.json.Array, literal: []const u8) bool {
+    for (values.items) |value| {
+        const choice = switch (value) {
+            .string => |string| string,
+            .object => |object| manifestString(object.get("value")) orelse continue,
+            else => continue,
+        };
+        if (std.mem.eql(u8, choice, literal)) return true;
+    }
+    return false;
+}
+
+fn validateManifestValueObject(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const CompletionManifestProviderInfo, path: []const u8) anyerror!void {
     const object = switch (value) {
         .object => |object| object,
         else => return,
@@ -2498,7 +2695,7 @@ fn validateManifestValueObject(allocator: std.mem.Allocator, diagnostics: *Compl
     }
 }
 
-fn validateManifestValueGrammar(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, grammar: std.json.Value, providers: []const []const u8, path: []const u8) anyerror!void {
+fn validateManifestValueGrammar(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, grammar: std.json.Value, providers: []const CompletionManifestProviderInfo, path: []const u8) anyerror!void {
     const object = switch (grammar) {
         .object => |object| object,
         else => return,
@@ -2517,7 +2714,7 @@ fn validateManifestValueGrammar(allocator: std.mem.Allocator, diagnostics: *Comp
     }
 }
 
-fn validateManifestProviderRefArray(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const []const u8, path: []const u8) !void {
+fn validateManifestProviderRefArray(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const CompletionManifestProviderInfo, path: []const u8) !void {
     defer allocator.free(path);
     const array = switch (value) {
         .array => |array| array,
@@ -2530,16 +2727,37 @@ fn validateManifestProviderRefArray(allocator: std.mem.Allocator, diagnostics: *
     }
 }
 
-fn validateManifestProviderRef(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const []const u8, path: []const u8) !void {
+fn validateManifestProviderRef(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const CompletionManifestProviderInfo, path: []const u8) !void {
     switch (value) {
         .string => |provider_id| {
-            if (!manifestStringListContains(providers, provider_id)) {
+            if (findCompletionManifestProviderInfo(providers, provider_id) == null) {
                 try diagnostics.add(.err, "{s}: unknown provider '{s}'", .{ path, provider_id });
             }
         },
         .object => try validateManifestProvider(allocator, diagnostics, value, path),
         else => {},
     }
+}
+
+fn completionManifestProviderInfo(id: []const u8, value: std.json.Value) CompletionManifestProviderInfo {
+    const provider = switch (value) {
+        .object => |object| object,
+        else => return .{ .id = id },
+    };
+    const values = switch (provider.get("values") orelse return .{ .id = id }) {
+        .array => |array| array,
+        else => return .{ .id = id },
+    };
+    return .{ .id = id, .static_values = values };
+}
+
+fn findCompletionManifestProviderInfo(providers: []const CompletionManifestProviderInfo, provider_id: []const u8) ?CompletionManifestProviderInfo {
+    var index = providers.len;
+    while (index > 0) {
+        index -= 1;
+        if (std.mem.eql(u8, providers[index].id, provider_id)) return providers[index];
+    }
+    return null;
 }
 
 fn validateManifestProvider(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, path: []const u8) !void {
@@ -2711,16 +2929,21 @@ fn validateManifestOptionSelectorOrSelectors(allocator: std.mem.Allocator, diagn
 }
 
 fn validateManifestOptionSelector(diagnostics: *CompletionManifestDiagnostics, selector: []const u8, options: []const CompletionManifestOptionSpelling, path: []const u8) !void {
-    const spelling: CompletionManifestOptionSpelling = if (std.mem.startsWith(u8, selector, "--"))
-        .{ .kind = .long, .value = selector[2..] }
-    else if (std.mem.startsWith(u8, selector, "-") and selector.len == 2)
-        .{ .kind = .short, .value = selector[1..] }
-    else
-        return;
-    for (options) |option| {
-        if (option.kind == spelling.kind and std.mem.eql(u8, option.value, spelling.value)) return;
-    }
+    if (findManifestOptionSelector(options, selector) != null) return;
     try diagnostics.add(.err, "{s}: unknown option selector '{s}'", .{ path, selector });
+}
+
+fn findManifestOptionSelector(options: []const CompletionManifestOptionSpelling, selector: []const u8) ?CompletionManifestOptionSpelling {
+    const spelling: CompletionManifestOptionSpelling = if (std.mem.startsWith(u8, selector, "--"))
+        .{ .kind = .long, .value = selector[2..], .key = selector[2..] }
+    else if (std.mem.startsWith(u8, selector, "-") and selector.len == 2)
+        .{ .kind = .short, .value = selector[1..], .key = selector[1..] }
+    else
+        return null;
+    for (options) |option| {
+        if (option.kind == spelling.kind and std.mem.eql(u8, option.value, spelling.value)) return option;
+    }
+    return null;
 }
 
 fn manifestFieldPath(allocator: std.mem.Allocator, path: []const u8, field: []const u8) ![]const u8 {
@@ -4356,7 +4579,7 @@ fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, js
 
     try json.objectField("activeArgumentState");
     if (trace.active_argument_state) |state| {
-        try writeManifestArgumentStateJson(json, state, trace.active_argument_index);
+        try writeManifestArgumentStateJson(json, state, trace.active_argument_index, trace.terminator_seen, trace.parsed_options.items);
     } else {
         try json.write(@as(?[]const u8, null));
     }
@@ -4560,7 +4783,7 @@ fn analyzeManifestCompletionTrace(allocator: std.mem.Allocator, source: []const 
     }
 
     if (semantic.position == .argument or semantic.position == .subcommand) {
-        trace.active_argument_state = manifestActiveArgumentState(active_command, trace.active_argument_index, trace.terminator_seen);
+        trace.active_argument_state = manifestActiveArgumentState(active_command, trace.active_argument_index, trace.terminator_seen, trace.parsed_options.items);
     }
     return trace;
 }
@@ -4697,7 +4920,7 @@ fn manifestOptionTakesValue(option: std.json.ObjectMap) bool {
     return option.get("value") != null;
 }
 
-fn manifestActiveArgumentState(command: std.json.ObjectMap, active_index: usize, terminator_seen: bool) ?std.json.ObjectMap {
+fn manifestActiveArgumentState(command: std.json.ObjectMap, active_index: usize, terminator_seen: bool, parsed_options: []const ManifestParsedOption) ?std.json.ObjectMap {
     const arguments_value = command.get("arguments") orelse return null;
     const arguments = switch (arguments_value) {
         .object => |object| object,
@@ -4714,7 +4937,7 @@ fn manifestActiveArgumentState(command: std.json.ObjectMap, active_index: usize,
             .object => |object| object,
             else => continue,
         };
-        if (!manifestStateConditionsAllow(state, terminator_seen)) continue;
+        if (!manifestStateConditionsAllow(state, terminator_seen, parsed_options)) continue;
         const explicit_index = manifestInteger(state.get("index"));
         if (explicit_index) |index| if (index < 0) continue;
         const state_index: usize = if (explicit_index) |index| @intCast(index) else next_index;
@@ -4729,25 +4952,106 @@ fn manifestActiveArgumentState(command: std.json.ObjectMap, active_index: usize,
     return null;
 }
 
-fn manifestStateConditionsAllow(state: std.json.ObjectMap, terminator_seen: bool) bool {
+fn manifestStateConditionsAllow(state: std.json.ObjectMap, terminator_seen: bool, parsed_options: []const ManifestParsedOption) bool {
+    if (state.get("when")) |condition| {
+        if (!manifestConditionAllows(condition, terminator_seen, parsed_options)) return false;
+    }
     if (state.get("after")) |condition| {
-        if (manifestConditionTerminatorSeen(condition) == true and !terminator_seen) return false;
+        if (!manifestConditionAllows(condition, terminator_seen, parsed_options)) return false;
     }
     if (state.get("until")) |condition| {
-        if (manifestConditionTerminatorSeen(condition) == true and terminator_seen) return false;
+        if (manifestConditionAllows(condition, terminator_seen, parsed_options)) return false;
     }
     return true;
 }
 
-fn manifestConditionTerminatorSeen(condition_value: std.json.Value) ?bool {
+fn manifestConditionAllows(condition_value: std.json.Value, terminator_seen: bool, parsed_options: []const ManifestParsedOption) bool {
     const condition = switch (condition_value) {
         .object => |object| object,
-        else => return null,
+        else => return true,
     };
-    return if (condition.get("terminatorSeen")) |value| manifestBool(value) else null;
+    if (condition.get("all")) |children| {
+        const array = switch (children) {
+            .array => |array| array,
+            else => return true,
+        };
+        for (array.items) |child| {
+            if (!manifestConditionAllows(child, terminator_seen, parsed_options)) return false;
+        }
+        return true;
+    }
+    if (condition.get("any")) |children| {
+        const array = switch (children) {
+            .array => |array| array,
+            else => return true,
+        };
+        for (array.items) |child| {
+            if (manifestConditionAllows(child, terminator_seen, parsed_options)) return true;
+        }
+        return false;
+    }
+    if (condition.get("not")) |child| return !manifestConditionAllows(child, terminator_seen, parsed_options);
+    if (condition.get("terminatorSeen")) |value| {
+        if (value == .bool) return value.bool == terminator_seen;
+    }
+    if (condition.get("optionPresent")) |selector_or_selectors| return manifestConditionOptionPresence(selector_or_selectors, parsed_options, true);
+    if (condition.get("optionAbsent")) |selector_or_selectors| return manifestConditionOptionPresence(selector_or_selectors, parsed_options, false);
+    if (condition.get("optionValue")) |option_value| return manifestConditionOptionValue(option_value, parsed_options);
+    return true;
 }
 
-fn writeManifestArgumentStateJson(json: *std.json.Stringify, state: std.json.ObjectMap, active_index: usize) !void {
+fn manifestConditionOptionPresence(selector_or_selectors: std.json.Value, parsed_options: []const ManifestParsedOption, expected: bool) bool {
+    switch (selector_or_selectors) {
+        .string => |selector| return manifestParsedOptionsContainSelector(parsed_options, selector) == expected,
+        .array => |array| {
+            for (array.items) |item| {
+                const selector = manifestString(item) orelse continue;
+                if ((manifestParsedOptionsContainSelector(parsed_options, selector) == expected) != true) return false;
+            }
+            return true;
+        },
+        else => return true,
+    }
+}
+
+fn manifestConditionOptionValue(option_value: std.json.Value, parsed_options: []const ManifestParsedOption) bool {
+    const object = switch (option_value) {
+        .object => |object| object,
+        else => return true,
+    };
+    var iter = object.iterator();
+    while (iter.next()) |entry| {
+        const selector = entry.key_ptr.*;
+        for (parsed_options) |parsed| {
+            if (!manifestParsedOptionMatchesSelector(parsed, selector)) continue;
+            const value = parsed.value orelse continue;
+            switch (entry.value_ptr.*) {
+                .string => |literal| if (std.mem.eql(u8, value, literal)) return true,
+                .array => |array| for (array.items) |item| {
+                    const literal = manifestString(item) orelse continue;
+                    if (std.mem.eql(u8, value, literal)) return true;
+                },
+                else => {},
+            }
+        }
+    }
+    return false;
+}
+
+fn manifestParsedOptionsContainSelector(parsed_options: []const ManifestParsedOption, selector: []const u8) bool {
+    for (parsed_options) |parsed| {
+        if (manifestParsedOptionMatchesSelector(parsed, selector)) return true;
+    }
+    return false;
+}
+
+fn manifestParsedOptionMatchesSelector(parsed: ManifestParsedOption, selector: []const u8) bool {
+    if (std.mem.startsWith(u8, selector, "--")) return std.mem.eql(u8, parsed.name, selector[2..]);
+    if (std.mem.startsWith(u8, selector, "-") and selector.len == 2) return std.mem.eql(u8, parsed.name, selector[1..]);
+    return false;
+}
+
+fn writeManifestArgumentStateJson(json: *std.json.Stringify, state: std.json.ObjectMap, active_index: usize, terminator_seen: bool, parsed_options: []const ManifestParsedOption) !void {
     try json.beginObject();
     try json.objectField("name");
     try json.write(manifestString(state.get("name")) orelse "");
@@ -4757,7 +5061,65 @@ fn writeManifestArgumentStateJson(json: *std.json.Stringify, state: std.json.Obj
     try json.write(manifestBool(state.get("repeatable")));
     try json.objectField("provider");
     if (state.get("provider")) |provider| try writeManifestProviderRefValue(json, provider) else try json.write(@as(?[]const u8, null));
+    try json.objectField("conditionResults");
+    try writeManifestArgumentConditionResultsJson(json, state, terminator_seen, parsed_options);
     try json.endObject();
+}
+
+fn writeManifestArgumentConditionResultsJson(json: *std.json.Stringify, state: std.json.ObjectMap, terminator_seen: bool, parsed_options: []const ManifestParsedOption) !void {
+    try json.beginArray();
+    inline for (&.{ "when", "after", "until" }) |field| {
+        if (state.get(field)) |condition| try writeManifestConditionOptionValueResultsJson(json, field, condition, terminator_seen, parsed_options);
+    }
+    try json.endArray();
+}
+
+fn writeManifestConditionOptionValueResultsJson(json: *std.json.Stringify, field: []const u8, condition_value: std.json.Value, terminator_seen: bool, parsed_options: []const ManifestParsedOption) !void {
+    const condition = switch (condition_value) {
+        .object => |object| object,
+        else => return,
+    };
+    if (condition.get("optionValue")) |option_value| {
+        const object = switch (option_value) {
+            .object => |object| object,
+            else => return,
+        };
+        var iter = object.iterator();
+        while (iter.next()) |entry| {
+            try json.beginObject();
+            try json.objectField("field");
+            try json.write(field);
+            try json.objectField("kind");
+            try json.write("optionValue");
+            try json.objectField("selector");
+            try json.write(entry.key_ptr.*);
+            try json.objectField("values");
+            try writeManifestConditionValueLiteralsJson(json, entry.value_ptr.*);
+            try json.objectField("matched");
+            try json.write(manifestConditionOptionValue(option_value, parsed_options));
+            try json.endObject();
+        }
+    }
+    inline for (&.{ "all", "any" }) |nested_field| {
+        if (condition.get(nested_field)) |children| {
+            const array = switch (children) {
+                .array => |array| array,
+                else => return,
+            };
+            for (array.items) |child| try writeManifestConditionOptionValueResultsJson(json, field, child, terminator_seen, parsed_options);
+        }
+    }
+    if (condition.get("not")) |child| try writeManifestConditionOptionValueResultsJson(json, field, child, terminator_seen, parsed_options);
+}
+
+fn writeManifestConditionValueLiteralsJson(json: *std.json.Stringify, value: std.json.Value) !void {
+    try json.beginArray();
+    switch (value) {
+        .string => |literal| try json.write(literal),
+        .array => |array| for (array.items) |item| if (manifestString(item)) |literal| try json.write(literal),
+        else => {},
+    }
+    try json.endArray();
 }
 
 fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: exec.CompletionSemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace, candidates: []const completion_model.Candidate) !usize {
@@ -6185,6 +6547,90 @@ test "completion manifest multi-value options select each provider and preserve 
     try std.testing.expectEqualStrings("target", context.argument_state.?);
 }
 
+test "completion manifest argument states branch on option values" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.jsonArgs": { "values": ["jq-filter"] },
+        \\      "tool.tableArgs": { "values": ["column"] },
+        \\      "tool.defaultArgs": { "values": ["input"] }
+        \\    },
+        \\    "options": [
+        \\      { "short": "f", "long": "format", "value": { "name": "format", "grammar": { "kind": "enum", "values": ["json", "table"] } } }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "json-arg", "provider": "tool.jsonArgs", "when": { "optionValue": { "--format": "json" } } },
+        \\        { "name": "table-arg", "provider": "tool.tableArgs", "when": { "optionValue": { "-f": ["table"] } } },
+        \\        { "name": "default-arg", "provider": "tool.defaultArgs" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+
+    var json_analysis = try executor.analyzeCompletionsForInput("tool --format json ", "tool --format json ".len);
+    defer json_analysis.deinit();
+    try std.testing.expectEqualStrings("json-arg", json_analysis.argument_state.?);
+    const json_candidates = try executor.collectCompletionsForInput("tool --format json ", "tool --format json ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(json_candidates);
+    try expectCompletionCandidate(json_candidates, "jq-filter");
+    try expectNoCompletionCandidate(json_candidates, "column");
+
+    var table_analysis = try executor.analyzeCompletionsForInput("tool --format table ", "tool --format table ".len);
+    defer table_analysis.deinit();
+    try std.testing.expectEqualStrings("table-arg", table_analysis.argument_state.?);
+    const table_candidates = try executor.collectCompletionsForInput("tool --format table ", "tool --format table ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(table_candidates);
+    try expectCompletionCandidate(table_candidates, "column");
+    try expectNoCompletionCandidate(table_candidates, "jq-filter");
+
+    var missing_analysis = try executor.analyzeCompletionsForInput("tool ", "tool ".len);
+    defer missing_analysis.deinit();
+    try std.testing.expectEqualStrings("default-arg", missing_analysis.argument_state.?);
+}
+
+test "completion manifest optionValue conditions match any repeatable occurrence" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.matched": { "values": ["matched"] },
+        \\      "tool.default": { "values": ["default"] }
+        \\    },
+        \\    "options": [
+        \\      { "long": "include", "repeatable": true, "value": { "name": "path" } }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "matched", "provider": "tool.matched", "when": { "optionValue": { "--include": ["src", "lib"] } } },
+        \\        { "name": "default", "provider": "tool.default" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+
+    var any_match = try executor.analyzeCompletionsForInput("tool --include other --include src ", "tool --include other --include src ".len);
+    defer any_match.deinit();
+    try std.testing.expectEqualStrings("matched", any_match.argument_state.?);
+
+    var no_match = try executor.analyzeCompletionsForInput("tool --include other ", "tool --include other ".len);
+    defer no_match.deinit();
+    try std.testing.expectEqualStrings("default", no_match.argument_state.?);
+}
+
 test "completion manifest variants select lazily and cache probe result" {
     const platform = completionManifestCurrentPlatform();
     const manifest = try std.fmt.allocPrint(std.testing.allocator,
@@ -6701,6 +7147,39 @@ test "completion manifest semantic validation rejects invalid static enum provid
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.providers.tool.empty.values: static provider values must not be empty");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.providers.tool.duplicate.values[1]: duplicate static provider value 'auto'");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.providers.tool.mixed: provider must define exactly one of function, builtin, or values");
+}
+
+test "completion manifest semantic validation checks optionValue conditions" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.formats": { "values": ["json", { "value": "table" }] },
+        \\      "tool.args": { "values": ["arg"] }
+        \\    },
+        \\    "options": [
+        \\      { "long": "verbose" },
+        \\      { "long": "format", "value": { "name": "format", "grammar": { "kind": "enum", "values": ["json", "table"] } } },
+        \\      { "long": "provider-format", "value": { "name": "format", "provider": "tool.formats" } }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "bad-flag", "provider": "tool.args", "when": { "optionValue": { "--verbose": "json" } } },
+        \\        { "name": "bad-grammar", "provider": "tool.args", "when": { "optionValue": { "--format": "yaml" } } },
+        \\        { "name": "bad-provider", "provider": "tool.args", "when": { "optionValue": { "--provider-format": ["xml"] } } }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try std.testing.expect(diagnostics.hasErrors());
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.arguments.states[0].when.optionValue.--verbose: option selector '--verbose' does not take a value");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.arguments.states[1].when.optionValue.--format: option value literal 'yaml' is not in the option enum");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.arguments.states[2].when.optionValue.--provider-format[0]: option value literal 'xml' is not in the option enum");
 }
 
 test "completion manifest semantic validation reports clear invalid manifest diagnostics" {
@@ -7827,6 +8306,52 @@ test "completion debug output exposes manifest source and JSON decision state" {
     var terminated = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, terminated_output, .{});
     defer terminated.deinit();
     try std.testing.expect(terminated.value.object.get("semantic").?.object.get("optionsTerminated").?.bool);
+}
+
+test "completion debug JSON traces manifest optionValue condition results" {
+    const root = "rush-debug-manifest-option-value-condition-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.jsonArgs": { "values": ["jq-filter"] },
+        \\      "tool.defaultArgs": { "values": ["input"] }
+        \\    },
+        \\    "options": [
+        \\      { "long": "format", "value": { "name": "format", "grammar": { "kind": "enum", "values": ["json", "table"] } } }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "json-arg", "provider": "tool.jsonArgs", "when": { "optionValue": { "--format": ["json"] } } },
+        \\        { "name": "default-arg", "provider": "tool.defaultArgs" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_DATA_DIRS", "");
+    try env.put("XDG_DATA_HOME", root);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool --format json jq");
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+
+    const active_state = parsed.value.object.get("manifest").?.object.get("activeArgumentState").?.object;
+    try std.testing.expectEqualStrings("json-arg", active_state.get("name").?.string);
+    const condition = active_state.get("conditionResults").?.array.items[0].object;
+    try std.testing.expectEqualStrings("when", condition.get("field").?.string);
+    try std.testing.expectEqualStrings("optionValue", condition.get("kind").?.string);
+    try std.testing.expectEqualStrings("--format", condition.get("selector").?.string);
+    try std.testing.expectEqualStrings("json", condition.get("values").?.array.items[0].string);
+    try std.testing.expect(condition.get("matched").?.bool);
 }
 
 test "completion debug JSON reports manifest variant selection" {

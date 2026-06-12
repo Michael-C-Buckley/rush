@@ -728,10 +728,22 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.argument.state) |state| allocator.free(state);
     if (rule.argument.after_state) |state| allocator.free(state);
     if (rule.argument.after_value) |value| allocator.free(value);
+    freeOptionValueConditions(allocator, rule.argument.require_option_values);
+    freeOptionValueConditions(allocator, rule.argument.reject_option_values);
     if (rule.description) |description| allocator.free(description);
     if (rule.source.manifest_path) |path| allocator.free(path);
     if (rule.source.companion_path) |path| allocator.free(path);
     if (rule.variant) |variant| allocator.free(variant);
+}
+
+fn freeOptionValueConditions(allocator: std.mem.Allocator, conditions: []const completion.OptionValueCondition) void {
+    if (conditions.len == 0) return;
+    for (conditions) |condition| {
+        allocator.free(condition.key);
+        for (condition.values) |value| allocator.free(value);
+        allocator.free(condition.values);
+    }
+    allocator.free(conditions);
 }
 
 fn freeCompletionManifestCommandState(allocator: std.mem.Allocator, state: CompletionManifestCommandState) void {
@@ -790,6 +802,37 @@ fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const comple
             .removable_suffix = value.removable_suffix,
             .append_space = value.append_space,
         };
+        initialized += 1;
+    }
+    return owned;
+}
+
+fn dupeOptionValueConditions(allocator: std.mem.Allocator, conditions: []const completion.OptionValueCondition) ![]const completion.OptionValueCondition {
+    if (conditions.len == 0) return &.{};
+    const owned = try allocator.alloc(completion.OptionValueCondition, conditions.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned[0..initialized]) |condition| {
+            allocator.free(condition.key);
+            for (condition.values) |value| allocator.free(value);
+            allocator.free(condition.values);
+        }
+        allocator.free(owned);
+    }
+    for (conditions, 0..) |condition, index| {
+        const key = try allocator.dupe(u8, condition.key);
+        errdefer allocator.free(key);
+        const values = try allocator.alloc([]const u8, condition.values.len);
+        var value_count: usize = 0;
+        errdefer {
+            for (values[0..value_count]) |value| allocator.free(value);
+            allocator.free(values);
+        }
+        for (condition.values, 0..) |value, value_index| {
+            values[value_index] = try allocator.dupe(u8, value);
+            value_count += 1;
+        }
+        owned[index] = .{ .key = key, .values = values };
         initialized += 1;
     }
     return owned;
@@ -1231,20 +1274,43 @@ fn completionArgumentRuleMatches(rule: completion.Rule, context: CompletionSeman
     return true;
 }
 
-fn completionActiveArgumentState(rules: []const completion.Rule, root: []const u8, path: []const []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8) ?[]const u8 {
+fn completionActiveArgumentState(rules: []const completion.Rule, root: []const u8, path: []const []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8, parsed_options: []const CompletionParsedOption) ?[]const u8 {
     for (rules, 0..) |rule, rule_index| {
         const state = completionArgumentStateForRule(rules, root, path, rule, rule_index) orelse continue;
+        if (!completionArgumentOptionValueConditionsAllow(rule.argument, parsed_options)) continue;
         if (completionExplicitArgumentStateMatches(rule.argument, state, argument_index, previous_state, previous_argument)) return state;
     }
 
     var implicit_index: usize = 0;
     for (rules, 0..) |rule, rule_index| {
         const state = completionArgumentStateForRule(rules, root, path, rule, rule_index) orelse continue;
+        if (!completionArgumentOptionValueConditionsAllow(rule.argument, parsed_options)) continue;
         if (completionArgumentStateHasExplicitTransition(rule.argument)) continue;
         if (argument_index == implicit_index or (rule.argument.repeatable and argument_index >= implicit_index)) return state;
         implicit_index += 1;
     }
     return null;
+}
+
+fn completionArgumentOptionValueConditionsAllow(argument: completion.Argument, parsed_options: []const CompletionParsedOption) bool {
+    for (argument.require_option_values) |condition| {
+        if (!completionOptionValueConditionMatches(condition, parsed_options)) return false;
+    }
+    for (argument.reject_option_values) |condition| {
+        if (completionOptionValueConditionMatches(condition, parsed_options)) return false;
+    }
+    return true;
+}
+
+fn completionOptionValueConditionMatches(condition: completion.OptionValueCondition, parsed_options: []const CompletionParsedOption) bool {
+    for (parsed_options) |parsed| {
+        if (!std.mem.eql(u8, parsed.key, condition.key)) continue;
+        const value = parsed.value orelse continue;
+        for (condition.values) |allowed| {
+            if (std.mem.eql(u8, value, allowed)) return true;
+        }
+    }
+    return false;
 }
 
 fn completionArgumentStateForRule(rules: []const completion.Rule, root: []const u8, path: []const []const u8, rule: completion.Rule, rule_index: usize) ?[]const u8 {
@@ -2189,6 +2255,8 @@ pub const Executor = struct {
                 .after_state = if (rule.argument.after_state) |state| try self.allocator.dupe(u8, state) else null,
                 .after_value = if (rule.argument.after_value) |value| try self.allocator.dupe(u8, value) else null,
                 .repeatable = rule.argument.repeatable,
+                .require_option_values = try dupeOptionValueConditions(self.allocator, rule.argument.require_option_values),
+                .reject_option_values = try dupeOptionValueConditions(self.allocator, rule.argument.reject_option_values),
             },
             .value_index = rule.value_index,
             .value_grammar = rule.value_grammar,
@@ -2656,7 +2724,7 @@ pub const Executor = struct {
             if (stop_after_unknown_option and !findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) break;
             stop_after_unknown_option = false;
             if (options_terminated) {
-                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
                 try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = true });
                 previous_argument_state = operand_state;
                 previous_argument = word;
@@ -2702,7 +2770,7 @@ pub const Executor = struct {
             } else if (argument_index == 0 and findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) {
                 try path.append(self.allocator, word);
             } else {
-                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
                 try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = false });
                 previous_argument_state = operand_state;
                 previous_argument = word;
@@ -2711,7 +2779,7 @@ pub const Executor = struct {
             index += 1;
         }
 
-        const argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+        const argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
 
         var semantic_prefix = prefix;
         var semantic_replace_start = replace_start;

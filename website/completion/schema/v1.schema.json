@@ -490,6 +490,9 @@
         "optionAbsent": {
           "$ref": "#/$defs/optionSelectorOrSelectors"
         },
+        "optionValue": {
+          "$ref": "#/$defs/optionValueCondition"
+        },
         "terminatorSeen": {
           "type": "boolean"
         },
@@ -515,6 +518,25 @@
     "optionSelector": {
       "type": "string",
       "pattern": "^(--[A-Za-z0-9][A-Za-z0-9_-]*|-[^-\\s])$"
+    },
+    "optionValueCondition": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/optionSelector"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" },
+            "uniqueItems": true
+          }
+        ]
+      }
     },
     "nameOrNames": {
       "oneOf": [

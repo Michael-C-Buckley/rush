@@ -241,7 +241,25 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   }
 }</pre>
 
-  <p>The schema also supports <code>terminator</code> on <code>arguments</code> and structured conditions such as <code>terminatorSeen</code>. The current semantic engine always treats a bare <code>--</code> as ending option parsing; manifest terminators and richer conditions are surfaced in trace output and are being kept schema-compatible for generated manifests.</p>
+  <p>The schema also supports <code>terminator</code> on <code>arguments</code> and structured conditions such as <code>terminatorSeen</code> and <code>optionValue</code>. <code>optionValue</code> maps exactly one option selector to a string or array of strings and is true when any parsed occurrence of that value-taking option exactly equals one listed literal. Missing options and valueless occurrences are false; repeatable options use any-match semantics. When the option value is constrained by enum grammar or a static enum provider, compared literals must be enum members. Equality is the only comparison form; use a provider for glob, pattern, or expression logic.</p>
+
+  <pre>{
+  <span class="str">"options"</span>: [
+    {
+      <span class="str">"long"</span>: <span class="str">"format"</span>,
+      <span class="str">"value"</span>: {
+        <span class="str">"name"</span>: <span class="str">"format"</span>,
+        <span class="str">"grammar"</span>: { <span class="str">"kind"</span>: <span class="str">"enum"</span>, <span class="str">"values"</span>: [<span class="str">"json"</span>, <span class="str">"table"</span>] }
+      }
+    }
+  ],
+  <span class="str">"arguments"</span>: {
+    <span class="str">"states"</span>: [
+      { <span class="str">"name"</span>: <span class="str">"json-filter"</span>, <span class="str">"provider"</span>: <span class="str">"tool.jsonFilters"</span>, <span class="str">"when"</span>: { <span class="str">"optionValue"</span>: { <span class="str">"--format"</span>: <span class="str">"json"</span> } } },
+      { <span class="str">"name"</span>: <span class="str">"table-column"</span>, <span class="str">"provider"</span>: <span class="str">"tool.tableColumns"</span>, <span class="str">"when"</span>: { <span class="str">"optionValue"</span>: { <span class="str">"--format"</span>: [<span class="str">"table"</span>] } } }
+    ]
+  }
+}</pre>
 
   <h2 id="value-grammars"><a href="#value-grammars">Value grammars</a></h2>
 
@@ -277,13 +295,13 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <p>Use <code>rush complete trace INPUT</code> when authoring or debugging a manifest-backed completion. Text trace output includes a dedicated <code>manifest</code> section with the loaded path/version, selected command path, active option name/value index, platform and variant state, manifest-parsed options, active argument state, matched providers with candidate counts, suppressed options, and fallback behavior when no manifest/provider applies or a provider returns no candidates. The rest of the trace shows matching rules with <code>source: manifest</code>, value grammar, provider diagnostics, candidate match rank, and the insertion edit.</p>
 
-  <p>Use <code>rush complete trace --json INPUT</code> for machine-readable output. Its <code>manifest</code> object is emitted from the same trace model as the text renderer and includes <code>loaded</code>, path/version, command path, active option name and <code>optionValueIndex</code> when completing an option value, parsed manifest options, active argument state, matched providers with <code>candidateCount</code>, manifest-level suppressed options, and a fallback object.</p>
+  <p>Use <code>rush complete trace --json INPUT</code> for machine-readable output. Its <code>manifest</code> object is emitted from the same trace model as the text renderer and includes <code>loaded</code>, path/version, command path, active option name and <code>optionValueIndex</code> when completing an option value, parsed manifest options, active argument state with evaluated <code>conditionResults</code>, matched providers with <code>candidateCount</code>, manifest-level suppressed options, and a fallback object.</p>
 
   <h2 id="validation"><a href="#validation">Validation</a></h2>
 
   <p>The JSON Schema validates the shape of the manifest: required fields, field types, enum values, option spelling syntax, provider object shapes, and unknown fields.</p>
 
-  <p>Rush also performs semantic validation that JSON Schema cannot express well: supported manifest version, schema-version mismatch warnings, duplicate options, duplicate subcommands, invalid provider references, invalid option groups, unreachable argument states, ambiguous transitions, and invalid provider shapes. Missing Rush functions are provider diagnostics because companions are sourced lazily.</p>
+  <p>Rush also performs semantic validation that JSON Schema cannot express well: supported manifest version, schema-version mismatch warnings, duplicate options, duplicate subcommands, invalid provider references, invalid option groups, unreachable argument states, ambiguous transitions, invalid provider shapes, invalid <code>optionValue</code> selectors, and compared literals outside enum-constrained option values. Missing Rush functions are provider diagnostics because companions are sourced lazily.</p>
 
   <h2 id="status"><a href="#status">Status</a></h2>
 

@@ -422,6 +422,46 @@ structured rather than expression strings:
 }
 ```
 
+Argument-state conditions can also branch on a parsed option value with
+`optionValue`. The value is an object with exactly one option selector mapped to
+either one string or an array of strings. The condition is true when any parsed
+occurrence of that option has a value exactly equal to one of the listed
+literals. Missing options and valueless occurrences are false; repeatable
+options use any-match semantics. Equality is the only supported comparison — use
+a provider when a branch needs glob, pattern, or expression logic.
+
+```json
+{
+  "options": [
+    {
+      "long": "format",
+      "value": {
+        "name": "format",
+        "grammar": { "kind": "enum", "values": ["json", "table"] }
+      }
+    }
+  ],
+  "arguments": {
+    "states": [
+      {
+        "name": "json-filter",
+        "provider": "tool.jsonFilters",
+        "when": { "optionValue": { "--format": "json" } }
+      },
+      {
+        "name": "table-column",
+        "provider": "tool.tableColumns",
+        "when": { "optionValue": { "--format": ["table"] } }
+      }
+    ]
+  }
+}
+```
+
+`optionValue` selectors must resolve to value-taking options in the effective
+scope. If the selected option value is constrained by enum grammar or by a
+static enum provider, every compared literal must be a member of that enum.
+
 If the state logic becomes too complex, the manifest should select a provider
 and the provider should branch using parsed completion context queries.
 
@@ -686,7 +726,12 @@ model in the top-level `manifest` object:
     { "spelling": "--cached", "name": "cached", "exclusiveGroup": "diff-source" }
   ],
   "terminator": { "defined": false, "value": null, "seen": false },
-  "activeArgumentState": { "name": "rev-or-path", "index": 0, "provider": "git.refs" },
+  "activeArgumentState": {
+    "name": "rev-or-path",
+    "index": 0,
+    "provider": "git.refs",
+    "conditionResults": []
+  },
   "matchedProviders": [
     { "id": "git.refs", "reason": "argumentState", "candidateCount": 3 }
   ],
