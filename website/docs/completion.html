@@ -145,7 +145,7 @@
   <pre><span class="cmd">__rush_complete_tool</span>() {
   <span class="cmd">completion</span> option <span class="opt">--long</span> color <span class="opt">--argument</span> when <span class="opt">--description</span> <span class="str">'when to use color'</span>
 
-  <span class="kw">if</span> test <span class="str">"$(completion position)"</span> = option_value; <span class="kw">then</span>
+  <span class="kw">if</span> test <span class="str">"$rush_completion_position"</span> = option_value; <span class="kw">then</span>
     <span class="cmd">completion</span> candidate auto
     <span class="cmd">completion</span> candidate always
     <span class="cmd">completion</span> candidate never
@@ -156,7 +156,24 @@
 
   <h2 id="context"><a href="#context">Context</a></h2>
 
-  <p>Completion functions can ask Rush about the current command line.</p>
+  <p>Completion functions can inspect Rush's parsed view of the current command line. Prefer the lowercase <code>rush_completion_*</code> variables for scalar context values; they avoid command substitutions in hot completion providers.</p>
+
+  <pre><span class="var">$rush_completion_prefix</span>              <span class="comment"># text being completed</span>
+<span class="var">$rush_completion_command</span>             <span class="comment"># root command</span>
+<span class="var">$rush_completion_command_path</span>        <span class="comment"># root plus matched subcommand path</span>
+<span class="var">$rush_completion_previous</span>            <span class="comment"># previous word</span>
+<span class="var">$rush_completion_position</span>            <span class="comment"># command, subcommand, option, option_value, argument</span>
+<span class="var">$rush_completion_argument_index</span>      <span class="comment"># zero-based active argument index</span>
+<span class="var">$rush_completion_argument_state</span>      <span class="comment"># active structured argument state, if any</span>
+<span class="var">$rush_completion_options_terminated</span>  <span class="comment"># true after -- or a terminator option</span>
+<span class="var">$rush_completion_option_name</span>         <span class="comment"># active option name, in option_value position</span>
+<span class="var">$rush_completion_option_spelling</span>     <span class="comment"># active spelling, such as --color or -o</span>
+<span class="var">$rush_completion_value_segment</span>       <span class="comment"># active structured value segment</span>
+<span class="var">$rush_completion_value_separator</span>     <span class="comment"># active structured value separator</span>
+<span class="var">$rush_completion_value_position</span>      <span class="comment"># key or value in structured values</span>
+<span class="var">$rush_completion_value_key</span>           <span class="comment"># key for structured key/value completions</span></pre>
+
+  <p>Use parameterized helpers for queries that need arguments or return lists. <code>completion option-present</code> exits successfully when the option is present and unsuccessfully otherwise, so it can be used directly in <code>if</code>.</p>
 
   <pre><span class="cmd">completion</span> prefix          <span class="comment"># text being completed</span>
 <span class="cmd">completion</span> command         <span class="comment"># root command</span>
@@ -170,6 +187,10 @@
 <span class="cmd">completion</span> option-present <span class="opt">--long</span> NAME
 <span class="cmd">completion</span> option-values <span class="opt">--long</span> NAME
 <span class="cmd">completion</span> options-terminated</pre>
+
+  <pre><span class="kw">if</span> <span class="cmd">completion</span> option-present <span class="opt">--long</span> staged; <span class="kw">then</span>
+  <span class="cmd">completion</span> candidate staged-file <span class="opt">--kind</span> file
+<span class="kw">fi</span></pre>
 
   <p>Context queries use Rush's semantic completion analysis. Providers can branch on parsed option presence, attached or detached option values, completed operands, and whether a bare <code>--</code> or terminator option ended option parsing.</p>
 

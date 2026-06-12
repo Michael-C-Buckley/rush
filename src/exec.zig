@@ -2497,6 +2497,7 @@ pub const Executor = struct {
         const function_value = provider.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
         provider.completion_builder = .{};
         provider.completion_context = context;
+        try setCompletionContextVariables(&provider, context);
         errdefer {
             if (provider.completion_builder) |*completion_builder| {
                 completion_builder.deinit(self.allocator);
@@ -6799,9 +6800,6 @@ pub const Executor = struct {
         var sub_options = substitution_context.options;
         sub_options.external_stdio = .capture_stdout;
         sub_options.force_noninteractive_error_consequences = true;
-        if (std.mem.startsWith(u8, std.mem.trim(u8, script, " \t\r\n"), "completion ")) {
-            return runCompletionCommandSubstitution(substitution_context, allocator, script, sub_options);
-        }
         var child = Executor.init(substitution_context.executor.allocator);
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
@@ -6820,24 +6818,6 @@ pub const Executor = struct {
         if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
         if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
         child.pending_exit = null;
-        var result = try child.executeScriptSlice(script, sub_options);
-        defer result.deinit();
-        substitution_context.executor.command_substitution_status = result.status;
-        if (child.had_expansion_error) {
-            substitution_context.executor.had_expansion_error = true;
-            try substitution_context.executor.command_substitution_stderr.appendSlice(substitution_context.executor.allocator, result.stderr);
-        }
-        return allocator.dupe(u8, result.stdout);
-    }
-
-    fn runCompletionCommandSubstitution(substitution_context: *CommandSubstitutionContext, allocator: std.mem.Allocator, script: []const u8, sub_options: ExecuteOptions) ![]const u8 {
-        var child = Executor.init(substitution_context.executor.allocator);
-        defer child.deinit();
-        child.completion_builder = .{};
-        child.completion_context = substitution_context.executor.completion_context;
-        child.last_completion_context = substitution_context.executor.last_completion_context;
-        for (substitution_context.executor.completion_rules.items) |rule| try child.registerCompletionRule(rule);
-
         var result = try child.executeScriptSlice(script, sub_options);
         defer result.deinit();
         substitution_context.executor.command_substitution_status = result.status;
@@ -9985,7 +9965,8 @@ const CompletionOptionSelector = struct {
 fn builtinCompletionOptionPresent(self: *Executor, command: ir.SimpleCommand) !CommandResult {
     const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
     const selector = completionOptionSelectorFromCommand(command, 2) catch |err| return completionOptionSelectorErrorResult(self, err);
-    return stdoutLine(self.allocator, if (completionParsedOptionMatchesSelector(self.*, context, selector) != null) "true" else "false", 0);
+    const present = completionParsedOptionMatchesSelector(self.*, context, selector) != null;
+    return stdoutLine(self.allocator, if (present) "true" else "false", if (present) 0 else 1);
 }
 
 fn builtinCompletionOptionValues(self: *Executor, command: ir.SimpleCommand) !CommandResult {
@@ -10165,6 +10146,44 @@ fn builtinCompletionOption(self: *Executor, builder: *CompletionBuilder, command
 }
 
 const CompletionContextField = enum { prefix, command, command_path, previous };
+
+fn setCompletionContextVariables(self: *Executor, context: CompletionEvalContext) !void {
+    var argument_index_buffer: [64]u8 = undefined;
+    const argument_index = try std.fmt.bufPrint(&argument_index_buffer, "{d}", .{context.argument_index});
+    try self.setEnv("rush_completion_prefix", context.prefix);
+    try self.setEnv("rush_completion_command", context.command);
+    try self.setEnv("rush_completion_command_path", if (context.command_path.len != 0) context.command_path else context.command);
+    try self.setEnv("rush_completion_previous", context.previous);
+    try self.setEnv("rush_completion_position", if (context.option_value != null) "option_value" else @tagName(context.position));
+    try self.setEnv("rush_completion_argument_index", argument_index);
+    try self.setEnv("rush_completion_operand_index", argument_index);
+    try self.setEnv("rush_completion_argument_state", context.argument_state orelse "");
+    try self.setEnv("rush_completion_operand_state", context.argument_state orelse "");
+    try self.setEnv("rush_completion_options_terminated", if (context.options_terminated) "true" else "false");
+    if (context.option_value) |option_value| {
+        try self.setEnv("rush_completion_option_name", option_value.name);
+        try self.setEnv("rush_completion_option_spelling", option_value.spelling);
+    } else {
+        try self.setEnv("rush_completion_option_name", "");
+        try self.setEnv("rush_completion_option_spelling", "");
+    }
+    if (context.value_segment) |segment| {
+        var separator_buffer: [1]u8 = undefined;
+        const separator = if (segment.activeSeparator()) |value| separator: {
+            separator_buffer[0] = value;
+            break :separator separator_buffer[0..];
+        } else "";
+        try self.setEnv("rush_completion_value_segment", segment.segment);
+        try self.setEnv("rush_completion_value_separator", separator);
+        try self.setEnv("rush_completion_value_position", @tagName(segment.position));
+        try self.setEnv("rush_completion_value_key", segment.key);
+    } else {
+        try self.setEnv("rush_completion_value_segment", "");
+        try self.setEnv("rush_completion_value_separator", "");
+        try self.setEnv("rush_completion_value_position", "");
+        try self.setEnv("rush_completion_value_key", "");
+    }
+}
 
 fn completionContextValue(self: Executor, field: CompletionContextField) ?[]const u8 {
     const context = self.completion_context orelse return null;

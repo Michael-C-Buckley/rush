@@ -6,11 +6,22 @@
     "description": "focused Git-shaped completion fixture",
     "providers": {
       "git.refs": { "function": "__rush_complete_git_fixture_refs" },
+      "git.branches": { "function": "__rush_complete_git_fixture_branches" },
+      "git.tags": { "function": "__rush_complete_git_fixture_tags" },
       "git.diff-sources": { "function": "__rush_complete_git_fixture_diff_sources" },
       "git.tree-files": { "function": "__rush_complete_git_fixture_tree_files" },
+      "git.staged-files": { "function": "__rush_complete_git_fixture_staged_files" },
+      "git.worktree-files": { "function": "__rush_complete_git_fixture_worktree_files" },
       "git.changed-files": { "function": "__rush_complete_git_fixture_changed_files" },
+      "git.untracked-files": { "function": "__rush_complete_git_fixture_untracked_files" },
+      "git.ignored-files": { "function": "__rush_complete_git_fixture_ignored_files" },
       "git.remotes": { "function": "__rush_complete_git_fixture_remotes" },
-      "git.remote-urls": { "function": "__rush_complete_git_fixture_remote_urls" }
+      "git.remote-urls": { "function": "__rush_complete_git_fixture_remote_urls" },
+      "git.remote-refs": { "function": "__rush_complete_git_fixture_remote_refs" },
+      "git.restore-paths": { "function": "__rush_complete_git_fixture_restore_paths" },
+      "git.reset-arguments": { "function": "__rush_complete_git_fixture_reset_arguments" },
+      "git.clean-paths": { "function": "__rush_complete_git_fixture_clean_paths" },
+      "git.push-arguments": { "function": "__rush_complete_git_fixture_push_arguments" }
     },
     "subcommands": [
       {
@@ -28,18 +39,11 @@
           "terminator": "--",
           "states": [
             {
-              "name": "source",
+              "name": "target",
               "index": 0,
+              "repeatable": true,
               "provider": "git.diff-sources",
               "description": "revision or --no-index filesystem path"
-            },
-            {
-              "name": "pathspec",
-              "index": 1,
-              "repeatable": true,
-              "provider": "git.changed-files",
-              "after": { "terminatorSeen": true },
-              "description": "post-terminator changed path"
             }
           ]
         }
@@ -89,8 +93,75 @@
           { "long": "worktree" }
         ],
         "arguments": {
+          "terminator": "--",
           "states": [
-            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.changed-files" }
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.restore-paths" }
+          ]
+        }
+      },
+      {
+        "name": "reset",
+        "description": "reset current HEAD",
+        "optionGroups": [
+          { "name": "reset-mode", "exclusive": true }
+        ],
+        "options": [
+          { "long": "soft", "exclusiveGroup": "reset-mode" },
+          { "long": "mixed", "exclusiveGroup": "reset-mode" },
+          { "long": "hard", "exclusiveGroup": "reset-mode" },
+          { "long": "merge", "exclusiveGroup": "reset-mode" },
+          { "long": "keep", "exclusiveGroup": "reset-mode" },
+          { "long": "patch", "short": "p" },
+          { "long": "quiet", "short": "q" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "target", "index": 0, "repeatable": true, "provider": "git.reset-arguments" }
+          ]
+        }
+      },
+      {
+        "name": "clean",
+        "description": "remove untracked files from the working tree",
+        "optionGroups": [
+          { "name": "clean-ignored", "exclusive": true }
+        ],
+        "options": [
+          { "long": "force", "short": "f", "repeatable": true },
+          { "long": "dry-run", "short": "n" },
+          { "long": "quiet", "short": "q" },
+          { "long": "directories", "short": "d" },
+          { "short": "x", "exclusiveGroup": "clean-ignored" },
+          { "short": "X", "exclusiveGroup": "clean-ignored" },
+          { "long": "exclude", "short": "e", "value": { "name": "pattern" } }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.clean-paths" }
+          ]
+        }
+      },
+      {
+        "name": "push",
+        "description": "update remote refs",
+        "optionGroups": [
+          { "name": "push-mode", "exclusive": true }
+        ],
+        "options": [
+          { "long": "set-upstream", "short": "u" },
+          { "long": "delete", "short": "d", "exclusiveGroup": "push-mode" },
+          { "long": "all", "exclusiveGroup": "push-mode" },
+          { "long": "mirror", "exclusiveGroup": "push-mode" },
+          { "long": "repo", "value": { "name": "repository", "provider": "git.remotes" } },
+          { "long": "force", "short": "f" },
+          { "long": "dry-run", "short": "n" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "remote-or-refspec", "index": 0, "provider": "git.push-arguments", "grammar": { "kind": "keyValue", "separator": ":", "keyPrefix": "+" } },
+            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.push-arguments", "grammar": { "kind": "keyValue", "separator": ":", "keyPrefix": "+" } }
           ]
         }
       },
