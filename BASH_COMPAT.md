@@ -12,7 +12,8 @@ plans separately from POSIX compliance. POSIX status remains tracked in
 
 - `[[ ... ]]` conditional command baseline:
   - string equality / inequality
-  - glob-style string matching for `==`
+  - glob-style string matching for `==`, including `shopt -s extglob`
+    pattern operators in Bash mode
   - basic integer comparisons
   - unary `!` forms covered by executor tests
 - Indexed array assignment and expansion baseline:
@@ -98,10 +99,11 @@ plans separately from POSIX compliance. POSIX status remains tracked in
     removed instead of preserved literally
   - `dotglob` is default-off; when enabled, pathname patterns can match hidden
     directory entries even when the pattern component does not begin with `.`
-  - `extglob` is default-off; when enabled in Bash mode, pathname and
-    parameter pattern matching recognize `@(pattern-list)`, `?(pattern-list)`,
-    `*(pattern-list)`, `+(pattern-list)`, and `!(pattern-list)` with `|`
-    alternatives, including nested extglob groups in Rush's bytewise matcher
+  - `extglob` is default-off; when enabled in Bash mode, pathname, parameter,
+    `case`, and `[[ string == pattern ]]`/`!=` pattern matching recognize
+    `@(pattern-list)`, `?(pattern-list)`, `*(pattern-list)`,
+    `+(pattern-list)`, and `!(pattern-list)` with `|` alternatives, including
+    nested extglob groups in Rush's bytewise matcher
   - these options are reflected by `shopt`, `shopt -p`, named queries, and
     `shopt -q`, and affect subsequent argv and Bash compound indexed-array
     element pathname expansion
@@ -109,7 +111,9 @@ plans separately from POSIX compliance. POSIX status remains tracked in
     runtime `shopt -s extglob` can affect later commands in Rush's parse-ahead
     execution model. With `extglob` disabled those words are treated as literal
     patterns at expansion time; this differs from Bash scripts that require the
-    option to be enabled before parsing extglob syntax.
+    option to be enabled before parsing extglob syntax. Command-substitution
+    span scanning also treats extglob groups as word content so their `(`, `)`,
+    and `|` bytes are not mistaken for `$()` structure.
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`

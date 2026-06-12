@@ -4058,9 +4058,19 @@ fn startsExtglobOperator(pattern: []const u8, special: ?[]const bool, index: usi
     };
 }
 
-const GlobMatchOptions = struct {
+pub const PatternMatchOptions = struct {
     extglob: bool = false,
 };
+
+const GlobMatchOptions = PatternMatchOptions;
+
+pub fn patternTextMatches(pattern: []const u8, text: []const u8, options: PatternMatchOptions) bool {
+    return globMatchesAt(pattern, null, options, 0, text, 0);
+}
+
+pub fn patternMatches(pattern: ExpansionPattern, text: []const u8, options: PatternMatchOptions) bool {
+    return globPatternMatchesWithOptions(pattern, text, options);
+}
 
 fn globMatches(pattern: []const u8, text: []const u8) bool {
     return globMatchesAt(pattern, null, .{}, 0, text, 0);

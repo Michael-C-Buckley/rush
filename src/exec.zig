@@ -3615,7 +3615,8 @@ pub const Executor = struct {
     fn executeBashTestCommand(self: *Executor, command: ir.BashTestCommand, options: ExecuteOptions) !CommandResult {
         const args = try self.expandWords(command.args, options);
         defer self.freeWords(args);
-        const matched = evalBashTest(self.allocator, options, args) catch return errorResult(self.allocator, 2, "[[", "invalid expression");
+        const extglob = options.features.isBash() and self.shell_options.shopt.extglob;
+        const matched = evalBashTest(self.allocator, options, args, extglob) catch return errorResult(self.allocator, 2, "[[", "invalid expression");
         return emptyResult(self.allocator, if (matched) 0 else 1);
     }
 
@@ -4263,7 +4264,7 @@ pub const Executor = struct {
             for (arm.patterns) |word| {
                 var pattern = try self.expandCasePattern(word, execution_options);
                 defer pattern.deinit(self.allocator);
-                if (shellCasePatternMatches(pattern, subject)) {
+                if (expand.patternMatches(pattern, subject, .{ .extglob = execution_options.features.isBash() and self.shell_options.shopt.extglob })) {
                     var result = try self.executeScriptSlice(arm.body, execution_options);
                     if (real_redirection_guard != null) {
                         defer result.deinit();
@@ -6761,31 +6762,12 @@ pub const Executor = struct {
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
-    fn expandCasePattern(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !CasePattern {
-        var parts = try expand.parseWordParts(self.allocator, word.raw);
-        defer parts.deinit();
-
-        var text: std.ArrayList(u8) = .empty;
-        errdefer text.deinit(self.allocator);
-        var special: std.ArrayList(bool) = .empty;
-        errdefer special.deinit(self.allocator);
-
+    fn expandCasePattern(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !expand.ExpansionPattern {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
         const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
-
-        for (parts.parts) |part| {
-            const rendered = try expand.expandWordScalar(self.allocator, part.source(parts.raw), expansion_options);
-            defer self.allocator.free(rendered);
-            const meta_active = switch (part.kind) {
-                .unquoted, .parameter, .arithmetic, .command_substitution => true,
-                .single_quoted, .dollar_single_quoted, .double_quoted, .escaped => false,
-            };
-            try appendCasePatternPart(self.allocator, &text, &special, rendered, meta_active);
-        }
-
-        return .{ .text = try text.toOwnedSlice(self.allocator), .special = try special.toOwnedSlice(self.allocator) };
+        return expand.expandWordPattern(self.allocator, word.raw, expansion_options);
     }
 
     fn expandAssignmentWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -14680,20 +14662,20 @@ fn builtinTest(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     return emptyResult(self.allocator, if (matched) 0 else 1);
 }
 
-fn evalBashTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []const ir.WordRef) !bool {
+fn evalBashTest(allocator: std.mem.Allocator, options: ExecuteOptions, args: []const ir.WordRef, extglob: bool) !bool {
     return switch (args.len) {
         0 => false,
         1 => args[0].text.len != 0,
         2 => try evalUnaryTest(allocator, options, args[0].text, args[1].text),
         3 => if (std.mem.eql(u8, args[0].text, "!"))
-            !(try evalBashTest(allocator, options, args[1..]))
+            !(try evalBashTest(allocator, options, args[1..], extglob))
         else if (std.mem.eql(u8, args[1].text, "==") or std.mem.eql(u8, args[1].text, "="))
-            shellPatternMatches(args[2].text, args[0].text)
+            expand.patternTextMatches(args[2].text, args[0].text, .{ .extglob = extglob })
         else if (std.mem.eql(u8, args[1].text, "!="))
-            !shellPatternMatches(args[2].text, args[0].text)
+            !expand.patternTextMatches(args[2].text, args[0].text, .{ .extglob = extglob })
         else
             try evalBinaryTest(allocator, options, args[0].text, args[1].text, args[2].text),
-        4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalBashTest(allocator, options, args[1..])) else error.InvalidTestExpression,
+        4 => if (std.mem.eql(u8, args[0].text, "!")) !(try evalBashTest(allocator, options, args[1..], extglob)) else error.InvalidTestExpression,
         else => error.InvalidTestExpression,
     };
 }
@@ -15098,136 +15080,6 @@ fn errorResult(allocator: std.mem.Allocator, status: ExitStatus, command: []cons
         .stdout = try allocator.alloc(u8, 0),
         .stderr = stderr,
     };
-}
-
-const CasePattern = struct {
-    text: []const u8,
-    special: []const bool,
-
-    fn deinit(self: *CasePattern, allocator: std.mem.Allocator) void {
-        allocator.free(self.text);
-        allocator.free(self.special);
-        self.* = undefined;
-    }
-};
-
-fn appendCasePatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
-    try text.appendSlice(allocator, rendered);
-    for (rendered) |_| {
-        try special.append(allocator, meta_active);
-    }
-}
-
-fn shellPatternMatches(pattern: []const u8, text: []const u8) bool {
-    return shellPatternMatchesFrom(pattern, null, text, 0, 0);
-}
-
-fn shellCasePatternMatches(pattern: CasePattern, text: []const u8) bool {
-    std.debug.assert(pattern.text.len == pattern.special.len);
-    return shellPatternMatchesFrom(pattern.text, pattern.special, text, 0, 0);
-}
-
-fn isSpecialPatternByte(special: ?[]const bool, index: usize) bool {
-    return if (special) |mask| mask[index] else true;
-}
-
-fn shellPatternMatchesFrom(pattern: []const u8, special: ?[]const bool, text: []const u8, pattern_index: usize, text_index: usize) bool {
-    if (pattern_index == pattern.len) return text_index == text.len;
-    if (pattern[pattern_index] == '*' and isSpecialPatternByte(special, pattern_index)) {
-        var next_text = text_index;
-        while (next_text <= text.len) : (next_text += 1) {
-            if (shellPatternMatchesFrom(pattern, special, text, pattern_index + 1, next_text)) return true;
-        }
-        return false;
-    }
-    if (text_index >= text.len) return false;
-    if (pattern[pattern_index] == '[' and isSpecialPatternByte(special, pattern_index)) {
-        if (matchShellBracket(pattern, special, pattern_index, text[text_index])) |matched| {
-            return matched.ok and shellPatternMatchesFrom(pattern, special, text, matched.next_pattern, text_index + 1);
-        }
-    }
-    if ((pattern[pattern_index] == '?' and isSpecialPatternByte(special, pattern_index)) or pattern[pattern_index] == text[text_index]) {
-        return shellPatternMatchesFrom(pattern, special, text, pattern_index + 1, text_index + 1);
-    }
-    return false;
-}
-
-const ShellBracketMatch = struct { ok: bool, next_pattern: usize };
-
-fn matchShellBracket(pattern: []const u8, special: ?[]const bool, pattern_index: usize, text: u8) ?ShellBracketMatch {
-    var index = pattern_index + 1;
-    if (index >= pattern.len) return null;
-    const negated = pattern[index] == '!' or pattern[index] == '^';
-    if (negated) index += 1;
-
-    var matched = false;
-    var first_expression = true;
-    while (index < pattern.len) : (index += 1) {
-        if (pattern[index] == ']' and !first_expression and isSpecialPatternByte(special, index)) {
-            return .{ .ok = if (negated) !matched else matched, .next_pattern = index + 1 };
-        }
-        first_expression = false;
-
-        if (matchShellBracketCharacterClass(pattern, special, index, text)) |class| {
-            if (class.ok) matched = true;
-            index = class.end_index;
-            continue;
-        }
-
-        if (index + 2 < pattern.len and pattern[index + 1] == '-' and isSpecialPatternByte(special, index + 1) and pattern[index + 2] != ']') {
-            const start = pattern[index];
-            const end = pattern[index + 2];
-            if (start <= text and text <= end) matched = true;
-            index += 2;
-            continue;
-        }
-
-        if (pattern[index] == text) matched = true;
-    }
-
-    return null;
-}
-
-const ShellBracketCharacterClassMatch = struct { ok: bool, end_index: usize };
-
-fn matchShellBracketCharacterClass(pattern: []const u8, special: ?[]const bool, index: usize, text: u8) ?ShellBracketCharacterClassMatch {
-    if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
-
-    const name_start = index + 2;
-    var name_end = name_start;
-    while (name_end + 1 < pattern.len) : (name_end += 1) {
-        if (pattern[name_end] == ':' and pattern[name_end + 1] == ']') {
-            if (!shellPatternBytesAreSpecial(special, index, name_end + 2)) return null;
-            const class_name = pattern[name_start..name_end];
-            const ok = shellCharacterClassMatches(class_name, text) orelse return null;
-            return .{ .ok = ok, .end_index = name_end + 1 };
-        }
-    }
-    return null;
-}
-
-fn shellPatternBytesAreSpecial(special: ?[]const bool, start: usize, end: usize) bool {
-    var index = start;
-    while (index < end) : (index += 1) {
-        if (!isSpecialPatternByte(special, index)) return false;
-    }
-    return true;
-}
-
-fn shellCharacterClassMatches(class_name: []const u8, text: u8) ?bool {
-    if (std.mem.eql(u8, class_name, "alnum")) return std.ascii.isAlphanumeric(text);
-    if (std.mem.eql(u8, class_name, "alpha")) return std.ascii.isAlphabetic(text);
-    if (std.mem.eql(u8, class_name, "blank")) return text == ' ' or text == '\t';
-    if (std.mem.eql(u8, class_name, "cntrl")) return std.ascii.isControl(text);
-    if (std.mem.eql(u8, class_name, "digit")) return std.ascii.isDigit(text);
-    if (std.mem.eql(u8, class_name, "graph")) return std.ascii.isGraphical(text);
-    if (std.mem.eql(u8, class_name, "lower")) return std.ascii.isLower(text);
-    if (std.mem.eql(u8, class_name, "print")) return std.ascii.isPrint(text);
-    if (std.mem.eql(u8, class_name, "punct")) return std.ascii.isPunctuation(text);
-    if (std.mem.eql(u8, class_name, "space")) return std.ascii.isWhitespace(text);
-    if (std.mem.eql(u8, class_name, "upper")) return std.ascii.isUpper(text);
-    if (std.mem.eql(u8, class_name, "xdigit")) return std.ascii.isHex(text);
-    return null;
 }
 
 fn exitStatusFromTerm(term: std.process.Child.Term) ExitStatus {
@@ -20467,10 +20319,14 @@ test "executor implements shopt extglob for Bash pathname and parameter patterns
         \\printf 'enabled:%s\n' rush-exec-extglob-@(a|b).tmp
         \\VALUE=rush-user
         \\printf 'param:%s|%s\n' "${VALUE#@(rush|bash)-}" "${VALUE/@(rush|bash)/X}"
+        \\case $VALUE in @(rush|bash)-*) echo case-enabled ;; *) echo case-disabled ;; esac
+        \\[[ $VALUE == @(rush|bash)-* ]]; echo test-enabled=$?
         \\shopt -q extglob
         \\echo query=$?
         \\shopt -u extglob
         \\printf 'disabled:%s\n' rush-exec-extglob-@(a|b).tmp
+        \\case $VALUE in @(rush|bash)-*) echo case-still-enabled ;; *) echo case-disabled ;; esac
+        \\[[ $VALUE == @(rush|bash)-* ]]; echo test-disabled=$?
         \\shopt -p extglob
         \\:
     , .{ .features = compat.Features.bash() });
@@ -20488,8 +20344,12 @@ test "executor implements shopt extglob for Bash pathname and parameter patterns
             "enabled:rush-exec-extglob-a.tmp\n" ++
             "enabled:rush-exec-extglob-b.tmp\n" ++
             "param:user|X-user\n" ++
+            "case-enabled\n" ++
+            "test-enabled=0\n" ++
             "query=0\n" ++
             "disabled:rush-exec-extglob-@(a|b).tmp\n" ++
+            "case-disabled\n" ++
+            "test-disabled=1\n" ++
             "shopt -u extglob\n",
         result.stdout,
     );

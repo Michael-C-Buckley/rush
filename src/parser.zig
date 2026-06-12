@@ -1334,6 +1334,12 @@ const CommandSubstitutionScanner = struct {
                     keyword_possible = false;
                     if (self.skipDollarSingleQuoted()) {} else if (!try self.skipDollarExpansion()) self.index += 1;
                 },
+                '@', '!', '+', '*', '?' => if (self.startsExtglob()) {
+                    keyword_possible = false;
+                    try self.skipExtglob();
+                } else {
+                    self.index += 1;
+                },
                 else => self.index += 1,
             }
         }
@@ -1421,6 +1427,39 @@ const CommandSubstitutionScanner = struct {
         return true;
     }
 
+    fn startsExtglob(self: CommandSubstitutionScanner) bool {
+        return startsExtglobOperatorInSource(self.source, self.limit, self.index);
+    }
+
+    fn skipExtglob(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
+        std.debug.assert(self.startsExtglob());
+        self.index += 2;
+        var depth: usize = 0;
+        while (self.index < self.limit) {
+            switch (self.source[self.index]) {
+                '\\' => self.skipBackslash(),
+                '\'' => skipQuoted(self.source, self.limit, &self.index, '\''),
+                '"' => try self.skipDoubleQuoted(),
+                '`' => self.skipBackquoted(),
+                '$' => {
+                    if (self.skipDollarSingleQuoted()) {} else if (!try self.skipDollarExpansion()) self.index += 1;
+                },
+                '@', '!', '+', '*', '?' => if (self.startsExtglob()) {
+                    depth += 1;
+                    self.index += 2;
+                } else {
+                    self.index += 1;
+                },
+                ')' => {
+                    self.index += 1;
+                    if (depth == 0) return;
+                    depth -= 1;
+                },
+                else => self.index += 1,
+            }
+        }
+    }
+
     fn skipDoubleQuoted(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!void {
         std.debug.assert(self.source[self.index] == '"');
         self.index += 1;
@@ -1488,6 +1527,15 @@ const CommandSubstitutionScanner = struct {
 fn isCommandSubstitutionWordBoundary(c: u8) bool {
     return switch (c) {
         ' ', '\t', '\r', '\n', '|', '&', ';', '(', ')', '<', '>' => true,
+        else => false,
+    };
+}
+
+fn startsExtglobOperatorInSource(source: []const u8, limit: usize, index: usize) bool {
+    if (index + 1 >= limit) return false;
+    if (source[index + 1] != '(') return false;
+    return switch (source[index]) {
+        '@', '!', '+', '*', '?' => true,
         else => false,
     };
 }
@@ -4777,6 +4825,25 @@ test "parser scans case pattern parens inside command substitution" {
     var optional = try parse(std.testing.allocator, "echo \"$(case x in (x) echo optional ;; esac)\"", .{});
     defer optional.deinit();
     try std.testing.expectEqual(@as(usize, 0), optional.diagnostics.len);
+}
+
+test "parser scans extglob groups inside command substitution" {
+    const script = "echo \"$(printf %s @(a|+(b|c)))\"";
+    var result = try parse(std.testing.allocator, script, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try std.testing.expectEqual(TokenKind.word, result.tokens[2].kind);
+    try expectSpan(.init(5, script.len), result.tokens[2].span);
+
+    var found = false;
+    for (result.nodes) |node| {
+        if (node.kind == .command_substitution) {
+            found = true;
+            try expectSpan(.init(6, script.len - 1), node.span);
+        }
+    }
+    try std.testing.expect(found);
 }
 
 test "shared shell substitution scanner recognizes recursive spans" {
