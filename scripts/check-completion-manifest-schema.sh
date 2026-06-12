@@ -74,14 +74,39 @@ def check_provider(value, path):
         return
     has_function = "function" in value
     has_builtin = "builtin" in value
-    if has_function == has_builtin:
-        errors.append(f"{path}: provider must have exactly one of function or builtin")
+    has_values = "values" in value
+    if sum((has_function, has_builtin, has_values)) != 1:
+        errors.append(f"{path}: provider must have exactly one of function, builtin, or values")
     if has_function and not function_re.match(str(value["function"])):
         errors.append(f"{path}.function: invalid function name")
     if has_builtin and value["builtin"] not in allowed_builtin:
         errors.append(f"{path}.builtin: invalid builtin provider {value['builtin']!r}")
     if has_builtin and "options" in value:
         errors.append(f"{path}.options: builtin provider options are not supported in v1")
+    if has_values:
+        check_static_provider_values(value["values"], path_join(path, "values"))
+
+
+def check_static_provider_values(values, path):
+    if not isinstance(values, list) or not values:
+        errors.append(f"{path}: static provider values must be a non-empty array")
+        return
+    seen = set()
+    for i, value in enumerate(values):
+        value_path = path_join(path, i)
+        if isinstance(value, str):
+            choice = value
+        elif isinstance(value, dict):
+            choice = value.get("value")
+            if not isinstance(choice, str):
+                errors.append(f"{value_path}.value: static provider value is required")
+                continue
+        else:
+            errors.append(f"{value_path}: static provider value must be a string or object")
+            continue
+        if choice in seen:
+            errors.append(f"{value_path}: duplicate static provider value {choice!r}")
+        seen.add(choice)
 
 
 def check_value(value, providers, path):

@@ -211,8 +211,13 @@ type ArgumentState = {
 type Provider =
   | { function: string, description?: string, lazy?: boolean }
   | { builtin: "files" | "directories" | "executables" | "variables", description?: string }
+  | { values: EnumValue[], description?: string }
 
 type ProviderRef = string | Provider
+
+type EnumValue =
+  | string
+  | { value: string, description?: string, display?: string, noSpace?: boolean }
 ```
 
 The initial implementation may omit `dynamicSubcommands`, `dynamicOptions`,
@@ -373,6 +378,30 @@ Builtin providers have fixed v1 behavior and do not accept provider `options`:
 slashes and no inserted space, `executables` searches `PATH`, and `variables`
 uses shell variables. Add a Rush function provider when a completion needs
 filtering or behavior beyond those fixed builtins.
+
+Static enum providers keep small, fixed option-value or argument candidate sets
+in the manifest instead of a companion Rush function:
+
+```json
+{
+  "providers": {
+    "git.colorModes": { "values": ["always", "auto", "never"] },
+    "git.cleanupModes": {
+      "values": [
+        { "value": "strip", "description": "strip leading/trailing empty lines, comments, and collapse empties" },
+        { "value": "whitespace", "description": "strip leading/trailing empty lines" },
+        "verbatim"
+      ]
+    }
+  }
+}
+```
+
+Each value emits a plain candidate. Object entries may set a display label,
+description, and `noSpace` for prefix-like values such as `format:`. Static enum
+providers are lexically scoped and may be referenced anywhere a provider ID is
+accepted; they are intended for finite enum-like values, not dynamic repository
+or filesystem data.
 
 ## Provider context API dependency
 

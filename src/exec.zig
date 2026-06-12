@@ -643,6 +643,14 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     for (rule.path) |segment| allocator.free(segment);
     allocator.free(rule.path);
     if (rule.value) |value| allocator.free(value);
+    if (rule.static_values.len != 0) {
+        for (rule.static_values) |value| {
+            allocator.free(value.value);
+            if (value.display) |display| allocator.free(display);
+            if (value.description) |description| allocator.free(description);
+        }
+        allocator.free(rule.static_values);
+    }
     if (rule.option.long) |long| allocator.free(long);
     if (rule.option.short) |short| allocator.free(short);
     if (rule.option.argument) |argument| allocator.free(argument);
@@ -653,6 +661,35 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.description) |description| allocator.free(description);
     if (rule.source.manifest_path) |path| allocator.free(path);
     if (rule.source.companion_path) |path| allocator.free(path);
+}
+
+fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const completion.StaticProviderValue) ![]const completion.StaticProviderValue {
+    if (values.len == 0) return &.{};
+    const owned = try allocator.alloc(completion.StaticProviderValue, values.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned[0..initialized]) |value| {
+            allocator.free(value.value);
+            if (value.display) |display| allocator.free(display);
+            if (value.description) |description| allocator.free(description);
+        }
+        allocator.free(owned);
+    }
+    for (values, 0..) |value, index| {
+        const owned_value = allocator.dupe(u8, value.value) catch |err| return err;
+        const owned_display = if (value.display) |display| allocator.dupe(u8, display) catch |err| {
+            allocator.free(owned_value);
+            return err;
+        } else null;
+        const owned_description = if (value.description) |description| allocator.dupe(u8, description) catch |err| {
+            allocator.free(owned_value);
+            if (owned_display) |display| allocator.free(display);
+            return err;
+        } else null;
+        owned[index] = .{ .value = owned_value, .display = owned_display, .description = owned_description, .append_space = value.append_space };
+        initialized += 1;
+    }
+    return owned;
 }
 
 const MatchedCompletionOption = struct {
@@ -1932,6 +1969,7 @@ pub const Executor = struct {
             },
         };
         errdefer freeCompletionRule(self.allocator, owned_rule);
+        owned_rule.static_values = try dupeStaticProviderValues(self.allocator, rule.static_values);
         var path: std.ArrayList([]const u8) = .empty;
         errdefer {
             for (path.items) |segment| self.allocator.free(segment);
@@ -2842,14 +2880,36 @@ pub const Executor = struct {
                 .builtin_files, .builtin_directories, .builtin_executables, .builtin_variables => {
                     try self.appendBuiltinProviderCompletionCandidates(builder, rule.provider_kind, provider_context, options);
                 },
+                .static_enum => try self.appendStaticProviderCompletionCandidates(builder, rule.static_values, provider_context, rule.kind),
             }
+        }
+    }
+
+    fn appendStaticProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, values: []const completion.StaticProviderValue, context: CompletionEvalContext, rule_kind: completion.RuleKind) !void {
+        self.last_completion_context = context;
+        const kind: completion.Kind = switch (rule_kind) {
+            .dynamic_subcommands => .subcommand,
+            else => .plain,
+        };
+        for (values) |value| {
+            const candidate: completion.Candidate = .{
+                .value = value.value,
+                .display = value.display,
+                .description = value.description,
+                .kind = kind,
+                .replace_start = context.replace_start,
+                .replace_end = context.replace_end,
+                .append_space = value.append_space,
+            };
+            if (completion.candidateFuzzyMatchRank(candidate, context.prefix) == null) continue;
+            try builder.appendCandidateIfMissing(self.allocator, candidate);
         }
     }
 
     fn appendBuiltinProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, provider_kind: completion.ProviderKind, context: CompletionEvalContext, options: ExecuteOptions) !void {
         self.last_completion_context = context;
         switch (provider_kind) {
-            .function => {},
+            .function, .static_enum => {},
             .builtin_files => {
                 const io = options.io orelse return;
                 try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false);

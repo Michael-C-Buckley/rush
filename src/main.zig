@@ -1316,7 +1316,8 @@ fn completionManifestCompanionPath(allocator: std.mem.Allocator, path: []const u
 const CompletionManifestProviderBinding = struct {
     id: ?[]const u8 = null,
     kind: completion_model.ProviderKind,
-    value: []const u8,
+    value: ?[]const u8 = null,
+    static_values: ?std.json.Array = null,
 };
 
 fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8, inherited_providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) anyerror!void {
@@ -1373,6 +1374,13 @@ fn completionManifestProviderBinding(provider_value: std.json.Value) !Completion
     }
     if (manifestString(provider.get("builtin"))) |builtin| {
         return .{ .kind = completionManifestBuiltinProviderKind(builtin) orelse return error.UnsupportedCompletionManifestBuiltinProvider, .value = builtin };
+    }
+    if (provider.get("values")) |values_value| {
+        const values = switch (values_value) {
+            .array => |array| array,
+            else => return error.CompletionManifestStaticProviderValuesMustBeArray,
+        };
+        return .{ .kind = .static_enum, .static_values = values };
     }
     return error.CompletionManifestProviderMissingBinding;
 }
@@ -1568,18 +1576,40 @@ fn registerCompletionManifestProviderRule(
     description: ?[]const u8,
     source: completion_model.RuleSource,
 ) !void {
+    var static_values: std.ArrayList(completion_model.StaticProviderValue) = .empty;
+    defer static_values.deinit(executor.allocator);
+    if (provider.static_values) |values| {
+        for (values.items) |value| try static_values.append(executor.allocator, try manifestStaticProviderValue(value));
+    }
     try executor.registerCompletionRule(.{
         .root = root,
         .path = path,
         .kind = kind,
         .value = provider.value,
         .provider_kind = provider.kind,
+        .static_values = static_values.items,
         .option = option,
         .argument = argument,
         .value_grammar = value_grammar,
         .description = description,
         .source = source,
     });
+}
+
+fn manifestStaticProviderValue(value: std.json.Value) !completion_model.StaticProviderValue {
+    switch (value) {
+        .string => |string| return .{ .value = string },
+        .object => |object| {
+            const choice = manifestString(object.get("value")) orelse return error.CompletionManifestStaticProviderValueMissingValue;
+            return .{
+                .value = choice,
+                .display = manifestString(object.get("display")),
+                .description = manifestString(object.get("description")),
+                .append_space = !manifestBool(object.get("noSpace")),
+            };
+        },
+        else => return error.CompletionManifestStaticProviderValueMustBeStringOrObject,
+    }
 }
 
 fn manifestValueGrammar(value: ?std.json.Value) completion_model.ValueGrammar {
@@ -1771,7 +1801,7 @@ fn validateManifestCommand(
             while (iter.next()) |entry| {
                 const child_path = try manifestFieldPath(allocator, provider_path, entry.key_ptr.*);
                 defer allocator.free(child_path);
-                try validateManifestProvider(diagnostics, entry.value_ptr.*, child_path);
+                try validateManifestProvider(allocator, diagnostics, entry.value_ptr.*, child_path);
                 try providers.append(allocator, entry.key_ptr.*);
             }
         }
@@ -2128,21 +2158,22 @@ fn validateManifestProviderRef(allocator: std.mem.Allocator, diagnostics: *Compl
                 try diagnostics.add(.err, "{s}: unknown provider '{s}'", .{ path, provider_id });
             }
         },
-        .object => try validateManifestProvider(diagnostics, value, path),
+        .object => try validateManifestProvider(allocator, diagnostics, value, path),
         else => {},
     }
-    _ = allocator;
 }
 
-fn validateManifestProvider(diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, path: []const u8) !void {
+fn validateManifestProvider(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, path: []const u8) !void {
     const provider = switch (value) {
         .object => |object| object,
         else => return,
     };
     const has_function = provider.get("function") != null;
     const has_builtin = provider.get("builtin") != null;
-    if (has_function == has_builtin) {
-        try diagnostics.add(.err, "{s}: provider must define exactly one of function or builtin", .{path});
+    const has_values = provider.get("values") != null;
+    const binding_count = @as(u8, if (has_function) 1 else 0) + @as(u8, if (has_builtin) 1 else 0) + @as(u8, if (has_values) 1 else 0);
+    if (binding_count != 1) {
+        try diagnostics.add(.err, "{s}: provider must define exactly one of function, builtin, or values", .{path});
     }
     if (provider.get("function")) |function| {
         if (manifestString(function) == null) try diagnostics.add(.err, "{s}.function: provider function must be a string", .{path});
@@ -2157,6 +2188,44 @@ fn validateManifestProvider(diagnostics: *CompletionManifestDiagnostics, value: 
         }
         if (provider.get("options") != null) {
             try diagnostics.add(.err, "{s}.options: builtin provider options are not supported in completion manifest v1", .{path});
+        }
+    }
+    if (provider.get("values")) |values| {
+        const values_path = try manifestFieldPath(allocator, path, "values");
+        defer allocator.free(values_path);
+        try validateManifestStaticProviderValues(allocator, diagnostics, values, values_path);
+    }
+}
+
+fn validateManifestStaticProviderValues(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, values_value: std.json.Value, path: []const u8) !void {
+    const values = switch (values_value) {
+        .array => |array| array,
+        else => {
+            try diagnostics.add(.err, "{s}: static provider values must be an array", .{path});
+            return;
+        },
+    };
+    if (values.items.len == 0) try diagnostics.add(.err, "{s}: static provider values must not be empty", .{path});
+    var seen: std.StringHashMapUnmanaged(void) = .empty;
+    defer seen.deinit(allocator);
+    for (values.items, 0..) |value, index| {
+        const value_path = try manifestIndexPath(allocator, path, index);
+        defer allocator.free(value_path);
+        const choice = switch (value) {
+            .string => |string| string,
+            .object => |object| manifestString(object.get("value")) orelse {
+                try diagnostics.add(.err, "{s}.value: static provider value is required", .{value_path});
+                continue;
+            },
+            else => {
+                try diagnostics.add(.err, "{s}: static provider value must be a string or object", .{value_path});
+                continue;
+            },
+        };
+        if (seen.contains(choice)) {
+            try diagnostics.add(.err, "{s}: duplicate static provider value '{s}'", .{ value_path, choice });
+        } else {
+            try seen.put(allocator, choice, {});
         }
     }
 }
@@ -5071,6 +5140,52 @@ test "completion manifests bind companion function providers and builtin provide
     try expectCompletionCandidate(variable_candidates, "RUSH_MANIFEST_PROVIDER_VAR");
 }
 
+test "completion manifest static enum providers emit scoped candidates" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.modes": {
+        \\        "values": [
+        \\          "auto",
+        \\          { "value": "always", "description": "always enable mode" },
+        \\          { "value": "format:", "display": "custom format", "noSpace": true }
+        \\        ]
+        \\      }
+        \\    },
+        \\    "options": [
+        \\      { "long": "mode", "value": { "name": "mode", "provider": "tool.modes" } }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "mode", "index": 0, "provider": "tool.modes" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+
+    const option_candidates = try executor.collectCompletionsForInput("tool --mode al", "tool --mode al".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(option_candidates);
+    const always = findCompletionCandidate(option_candidates, "always") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("always enable mode", always.description.?);
+
+    const display_candidates = try executor.collectCompletionsForInput("tool --mode custom", "tool --mode custom".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(display_candidates);
+    const format = findCompletionCandidate(display_candidates, "format:") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("custom format", format.display.?);
+    try std.testing.expect(!format.append_space);
+
+    const argument_candidates = try executor.collectCompletionsForInput("tool au", "tool au".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(argument_candidates);
+    try expectCompletionCandidate(argument_candidates, "auto");
+}
+
 test "Git manifest fixture selects representative zsh-class providers" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
@@ -5396,6 +5511,33 @@ test "completion manifest semantic validation rejects builtin provider options" 
 
     try std.testing.expect(diagnostics.hasErrors());
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.providers.builtin.files.options: builtin provider options are not supported in completion manifest v1");
+}
+
+test "completion manifest semantic validation rejects invalid static enum providers" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.empty": { "values": [] },
+        \\      "tool.duplicate": { "values": ["auto", { "value": "auto" }] },
+        \\      "tool.mixed": { "function": "__tool_modes", "values": ["auto"] }
+        \\    },
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "mode", "provider": "tool.empty" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try std.testing.expect(diagnostics.hasErrors());
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.providers.tool.empty.values: static provider values must not be empty");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.providers.tool.duplicate.values[1]: duplicate static provider value 'auto'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.providers.tool.mixed: provider must define exactly one of function, builtin, or values");
 }
 
 test "completion manifest semantic validation reports clear invalid manifest diagnostics" {

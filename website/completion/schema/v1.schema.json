@@ -231,7 +231,8 @@
     "provider": {
       "oneOf": [
         { "$ref": "#/$defs/functionProvider" },
-        { "$ref": "#/$defs/builtinProvider" }
+        { "$ref": "#/$defs/builtinProvider" },
+        { "$ref": "#/$defs/staticEnumProvider" }
       ]
     },
     "functionProvider": {
@@ -257,6 +258,23 @@
       "properties": {
         "builtin": {
           "enum": ["files", "directories", "executables", "variables"]
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "staticEnumProvider": {
+      "type": "object",
+      "required": ["values"],
+      "additionalProperties": false,
+      "properties": {
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/enumValue"
+          }
         },
         "description": {
           "type": "string"

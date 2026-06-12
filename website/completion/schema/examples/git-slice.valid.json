@@ -8,6 +8,9 @@
       "git.branches": {
         "function": "__rush_complete_git_branches"
       },
+      "git.color-modes": {
+        "values": ["always", "auto", "never"]
+      },
       "builtin.directories": {
         "builtin": "directories"
       }
@@ -33,6 +36,14 @@
               "name": "branch"
             },
             "description": "create and checkout a new branch"
+          },
+          {
+            "long": "color",
+            "value": {
+              "name": "when",
+              "provider": "git.color-modes"
+            },
+            "description": "colorize output"
           }
         ],
         "arguments": {

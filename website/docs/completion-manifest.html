@@ -157,12 +157,15 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   <pre>{
   <span class="str">"providers"</span>: {
     <span class="str">"tool.modes"</span>: { <span class="str">"function"</span>: <span class="str">"__rush_complete_tool_modes"</span> },
+    <span class="str">"tool.colors"</span>: { <span class="str">"values"</span>: [<span class="str">"always"</span>, <span class="str">"auto"</span>, <span class="str">"never"</span>] },
     <span class="str">"builtin.files"</span>: { <span class="str">"builtin"</span>: <span class="str">"files"</span> },
     <span class="str">"builtin.directories"</span>: { <span class="str">"builtin"</span>: <span class="str">"directories"</span> }
   }
 }</pre>
 
-  <p>Function providers run in the companion <code>.rush</code> file and emit candidates with the <code>completion</code> builtin documented in <a href="completion.html">Writing completions</a>. Builtin providers are <code>files</code>, <code>directories</code>, <code>executables</code>, and <code>variables</code>. The current runtime uses fixed builtin behavior: files complete paths, directories complete directories with slash/no-space behavior, executables search <code>PATH</code>, and variables use shell variables. Builtin provider <code>options</code> objects are not part of manifest v1; use a function provider when a completion needs filtering or behavior beyond those fixed builtins.</p>
+  <p>Function providers run in the companion <code>.rush</code> file and emit candidates with the <code>completion</code> builtin documented in <a href="completion.html">Writing completions</a>. Builtin providers are <code>files</code>, <code>directories</code>, <code>executables</code>, and <code>variables</code>. Static enum providers use <code>values</code> for finite option-value or argument choices that do not need a Rush function. Value entries may be strings or objects with <code>value</code>, <code>display</code>, <code>description</code>, and <code>noSpace</code>.</p>
+
+  <p>The current runtime uses fixed builtin behavior: files complete paths, directories complete directories with slash/no-space behavior, executables search <code>PATH</code>, variables use shell variables, and static enum providers emit plain candidates from their <code>values</code>. Builtin provider <code>options</code> objects are not part of manifest v1; use a function provider when a completion needs filtering or behavior beyond those fixed builtins and static enums.</p>
 
   <h2 id="options-and-values"><a href="#options-and-values">Options and values</a></h2>
 
@@ -229,7 +232,7 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   }
 }</pre>
 
-  <p>Separators and key prefixes must be one byte for the current runtime to use them. Enum, path, and string grammar objects are schema-valid, but current behavior comes from the selected provider rather than special enum/path/string grammar execution.</p>
+  <p>Separators and key prefixes must be one byte for the current runtime to use them. Enum, path, and string grammar objects are schema-valid; use static enum providers when enum choices should be emitted directly from the manifest.</p>
 
   <h2 id="trace"><a href="#trace">Trace workflow</a></h2>
 

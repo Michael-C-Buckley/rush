@@ -237,6 +237,14 @@ pub const ProviderKind = enum {
     builtin_directories,
     builtin_executables,
     builtin_variables,
+    static_enum,
+};
+
+pub const StaticProviderValue = struct {
+    value: []const u8,
+    display: ?[]const u8 = null,
+    description: ?[]const u8 = null,
+    append_space: bool = true,
 };
 
 pub const Rule = struct {
@@ -245,6 +253,7 @@ pub const Rule = struct {
     kind: RuleKind,
     value: ?[]const u8 = null,
     provider_kind: ProviderKind = .function,
+    static_values: []const StaticProviderValue = &.{},
     option: Option = .{},
     argument: Argument = .{},
     value_grammar: ValueGrammar = .{},
