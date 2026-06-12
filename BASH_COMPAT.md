@@ -58,6 +58,12 @@ Current examples:
   - `${!prefix*}` / `${!prefix@}`
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.
+- `printf` compatibility for non-portable flag/specifier combinations:
+  - decide whether Bash mode should match dash/bash for sign flags on unsigned
+    conversions such as `%+u` and `% u`;
+  - decide whether to preserve zero padding on `%s` as compatibility behavior.
+    POSIX leaves the `0` flag with string conversions undefined, so this must
+    stay out of POSIX compliance scoring.
 
 ## Implementation rule
 
