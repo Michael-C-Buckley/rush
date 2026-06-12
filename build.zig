@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) void {
         .source_dir = b.path("share/rush/completions"),
         .install_dir = .{ .custom = "share/rush/completions" },
         .install_subdir = "",
-        .include_extensions = &.{".rush"},
+        .include_extensions = &.{ ".rush", ".json" },
         .exclude_extensions = &.{},
         .blank_extensions = &.{},
     });
@@ -109,12 +109,37 @@ pub fn build(b: *std.Build) void {
     });
     invocation_stdin_check.addArtifactArg(exe);
 
+    const install_completion_manifest_check_step = b.step("completion-install-check", "Verify installed completion manifests load from XDG data dirs");
+    const install_completion_manifest_check = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\set -eu
+        \\zig=$1
+        \\tmp=$(mktemp -d)
+        \\trap 'rm -rf "$tmp"' EXIT
+        \\"$zig" build install --prefix "$tmp/prefix" --summary none
+        \\bin=$tmp/prefix/bin/rush
+        \\share=$tmp/prefix/share
+        \\test -f "$share/rush/completions/git.rush"
+        \\test -f "$share/rush/completions/git.json"
+        \\mkdir -p "$tmp/home" "$tmp/config"
+        \\env -i PATH="${PATH:-/usr/bin:/bin}" HOME="$tmp/home" XDG_DATA_HOME= XDG_CONFIG_HOME="$tmp/config" XDG_DATA_DIRS="$share" "$bin" complete --debug 'git sw' >"$tmp/output"
+        \\grep -q 'source: manifest' "$tmp/output"
+        \\grep -q 'manifest-path: .*share/rush/completions/git.json' "$tmp/output"
+        \\grep -q 'insert: switch' "$tmp/output"
+        ,
+        "sh",
+    });
+    install_completion_manifest_check.addArg(b.graph.zig_exe);
+    install_completion_manifest_check_step.dependOn(&install_completion_manifest_check.step);
+
     const fmt_step = b.step("fmt", "Check code formatting");
     const fmt_check = b.addFmt(.{ .paths = &.{ "src", "build.zig", "build.zig.zon" }, .check = true });
     fmt_step.dependOn(&fmt_check.step);
     check_step.dependOn(fmt_step);
     check_step.dependOn(&completion_validate.step);
     check_step.dependOn(&invocation_stdin_check.step);
+    check_step.dependOn(&install_completion_manifest_check.step);
 
     const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
     const cross_check = b.addSystemCommand(&.{ "sh", "scripts/check-cross-targets.sh" });
