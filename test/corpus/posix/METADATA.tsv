@@ -92,6 +92,7 @@ builtin-printf-integer-c-constants	builtin	behavior	printf integer conversions p
 builtin-printf-integer-overflow	builtin	behavior	printf integer conversion overflow saturates to integer limits while diagnosing the operand
 builtin-printf-missing-operands	builtin	behavior	printf supplies empty string and zero defaults for missing conversion operands
 builtin-printf-octal-hex	builtin	builtin	-
+builtin-printf-percent-literal	builtin	behavior	printf %% emits a literal percent while surrounding conversions still consume operands
 builtin-printf-width-precision	builtin	builtin	-
 builtin-read-backslash	builtin	builtin	-
 builtin-read-continuation	builtin	behavior	Backslash-newline continues a cooked read line before field splitting, while -r reads the physical line

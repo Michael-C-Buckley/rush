@@ -291,7 +291,7 @@ Implemented or partially implemented:
 
 - `echo` has minimal behavior and intentionally avoids complex option/escape variations.
 - `read` has broad non-interactive POSIX coverage for IFS splitting, backslash/cooked versus `-r`, EOF status, option/operand diagnostics, and readonly assignment failure. The remaining broad-row gap is interactive terminal input/continuation prompting.
-- `printf` supports common conversions/escapes including representative floating-point conversions, but not POSIX C integer constants or full format grammar details.
+- `printf` supports common conversions/escapes including representative floating-point conversions, POSIX C integer constants, and literal percent formatting, but not full format grammar details.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `vi` command-line editing mode, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (complete job-control terminal semantics).
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
 - Full POSIX alias substitution token timing remains partial only at the broad reserved-word interaction boundary after the parser-owned token-stream substitution, parser-command-word, alias-produced reserved-word, eval/dot dynamic-definition, and same-read-line definition-timing slices; the builtin `alias`/`unalias` utility row is supported separately.

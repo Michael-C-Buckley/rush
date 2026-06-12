@@ -62,6 +62,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `output-write-failure-dev-full-statuses` | `test/corpus/posix-negative` | `errors-output-write-failure` | Linux-gated `/dev/full` actual file target write failures preserve builtin, function, compound, external, and pipeline statuses |
 | `errors-special-builtin-redirection-{output,append}-directory` | `test/corpus/posix-negative` | `errors-special-builtin-redirection` | special builtin directory output redirection failures exit non-interactive execution |
 | `builtin-printf-missing-operands` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-format-reuse`, `builtin-printf-missing-operands`, `builtin-printf-numeric-formats` | printf supplies empty string and zero defaults for missing conversion operands |
+| `builtin-printf-percent-literal` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-percent-literal` | `%%` emits a literal percent without consuming an operand |
 | `errexit-negation-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for negated pipelines |
 | `errexit-and-or-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for commands before `&&` and `||` in AND-OR lists |
 | `errexit-and-or-final-exits` | `test/corpus/posix` | `option-errexit-conditions` | final failing AND-OR list commands still exit non-interactive execution |
