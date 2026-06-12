@@ -4039,8 +4039,8 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(self);
         try child.resetCaughtTrapsForSubshell();
-        const saved_umask = readShellUmask();
-        defer restoreShellUmask(saved_umask);
+        var process_state = try self.savePipelineSubshellProcessState(options);
+        defer process_state.restore();
         var owned_stdin: ?[]u8 = null;
         defer if (owned_stdin) |bytes| self.allocator.free(bytes);
         var stdin_file: ?std.Io.File = null;
@@ -15839,6 +15839,17 @@ test "executor executes POSIX subshells with isolated state" {
     defer nested_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), nested_result.status);
     try std.testing.expectEqualStrings("inner\nouter\n", nested_result.stdout);
+
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+    var cwd_isolation = try parseAndLower(std.testing.allocator, "cd /; ( cd /tmp ); pwd");
+    defer cwd_isolation.parsed.deinit();
+    defer cwd_isolation.program.deinit();
+    var cwd_isolation_result = try executor.executeProgram(cwd_isolation.program, .{ .io = std.testing.io });
+    defer cwd_isolation_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), cwd_isolation_result.status);
+    try std.testing.expectEqualStrings("/\n", cwd_isolation_result.stdout);
 }
 
 test "executor executes POSIX brace groups in current shell" {
