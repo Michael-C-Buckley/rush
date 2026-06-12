@@ -6309,10 +6309,14 @@ pub const Executor = struct {
 
         const statuses = try self.allocator.alloc(ExitStatus, pipeline.command_indexes.len);
         defer self.allocator.free(statuses);
+        const termination_signals = try self.allocator.alloc(?u8, pipeline.command_indexes.len);
+        defer self.allocator.free(termination_signals);
         @memset(statuses, 0);
+        @memset(termination_signals, null);
         for (children[0..spawned], child_stage_indexes[0..spawned]) |*child, stage_index| {
             const term = try child.wait(io);
             statuses[stage_index] = exitStatusFromTerm(term);
+            termination_signals[stage_index] = terminationSignalFromTerm(term);
         }
         for (threads.items) |thread| thread.join();
         for (contexts.items) |context| {
@@ -6334,6 +6338,7 @@ pub const Executor = struct {
             self.allocator.free(stderr_output);
             stderr_output = combined;
         }
+        try appendInteractiveSignalDeathNotice(self.allocator, &stderr_output, options, pipelineSelectedTerminationSignal(self.*, statuses, termination_signals));
 
         return .{
             .allocator = self.allocator,
@@ -6401,7 +6406,10 @@ pub const Executor = struct {
             child.id = null;
             kill_child_on_error = false;
         }
-        return emptyResult(self.allocator, status);
+        var result = try emptyResult(self.allocator, status);
+        errdefer result.deinit();
+        try appendInteractiveSignalDeathNotice(self.allocator, &result.stderr, options, terminationSignalFromWaitStatus(wait_status));
+        return result;
     }
 
     fn redirectionFailureDiagnostic(self: *Executor, command: ir.SimpleCommand, err: anyerror) !?[]u8 {
@@ -7123,10 +7131,14 @@ pub const Executor = struct {
 
         const statuses = try self.allocator.alloc(ExitStatus, spawned);
         defer self.allocator.free(statuses);
+        const termination_signals = try self.allocator.alloc(?u8, spawned);
+        defer self.allocator.free(termination_signals);
         for (children[0..spawned], 0..) |*child, index| {
             const term = try child.wait(io);
             statuses[index] = exitStatusFromTerm(term);
+            termination_signals[index] = terminationSignalFromTerm(term);
         }
+        try appendInteractiveSignalDeathNotice(self.allocator, &stderr_bytes, options, pipelineSelectedTerminationSignal(self.*, statuses, termination_signals));
 
         return .{
             .allocator = self.allocator,
@@ -9377,6 +9389,7 @@ pub const Executor = struct {
         }
 
         const term = try child.wait(io);
+        try appendInteractiveSignalDeathNotice(self.allocator, &stderr, options, terminationSignalFromTerm(term));
         return .{
             .allocator = self.allocator,
             .status = exitStatusFromTerm(term),
@@ -15032,6 +15045,69 @@ fn signalName(signal: u8) ?[]const u8 {
     return null;
 }
 
+fn interactiveSignalDeathNotice(signal: u8) ?[]const u8 {
+    if (signal == signalStatusNumber(std.posix.SIG.INT)) return null;
+    if (signal == signalStatusNumber(std.posix.SIG.PIPE)) return null;
+    if (signal == signalStatusNumber(std.posix.SIG.HUP)) return "Hangup";
+    if (signal == signalStatusNumber(std.posix.SIG.QUIT)) return "Quit";
+    if (signal == signalStatusNumber(std.posix.SIG.ILL)) return "Illegal instruction";
+    if (signal == signalStatusNumber(std.posix.SIG.ABRT)) return "Abort";
+    if (signal == signalStatusNumber(std.posix.SIG.FPE)) return "Floating point exception";
+    if (signal == signalStatusNumber(std.posix.SIG.KILL)) return "Killed";
+    if (signal == signalStatusNumber(std.posix.SIG.SEGV)) return "Segmentation fault";
+    if (signal == signalStatusNumber(std.posix.SIG.ALRM)) return "Alarm clock";
+    if (signal == signalStatusNumber(std.posix.SIG.TERM)) return "Terminated";
+    return signalName(signal);
+}
+
+fn shouldReportInteractiveSignalDeath(options: ExecuteOptions) bool {
+    return options.interactive and options.external_stdio == .inherit;
+}
+
+fn appendSignalDeathNotice(allocator: std.mem.Allocator, output: *std.ArrayList(u8), signal: u8) !void {
+    if (interactiveSignalDeathNotice(signal)) |notice| {
+        try output.print(allocator, "{s}\n", .{notice});
+    } else if (signal != signalStatusNumber(std.posix.SIG.INT) and signal != signalStatusNumber(std.posix.SIG.PIPE)) {
+        try output.print(allocator, "Signal {d}\n", .{signal});
+    }
+}
+
+fn appendInteractiveSignalDeathNotice(allocator: std.mem.Allocator, stderr: *[]u8, options: ExecuteOptions, signal: ?u8) !void {
+    if (!shouldReportInteractiveSignalDeath(options)) return;
+    const active_signal = signal orelse return;
+    var notice: std.ArrayList(u8) = .empty;
+    defer notice.deinit(allocator);
+    try appendSignalDeathNotice(allocator, &notice, active_signal);
+    if (notice.items.len == 0) return;
+    const combined = try std.mem.concat(allocator, u8, &.{ stderr.*, notice.items });
+    allocator.free(stderr.*);
+    stderr.* = combined;
+}
+
+fn terminationSignalFromTerm(term: std.process.Child.Term) ?u8 {
+    return switch (term) {
+        .signal => |signal| signalStatusNumber(signal),
+        else => null,
+    };
+}
+
+fn terminationSignalFromWaitStatus(status: u32) ?u8 {
+    if (!std.posix.W.IFSIGNALED(status)) return null;
+    return signalStatusNumber(std.posix.W.TERMSIG(status));
+}
+
+fn pipelineSelectedTerminationSignal(self: Executor, statuses: []const ExitStatus, signals: []const ?u8) ?u8 {
+    std.debug.assert(statuses.len == signals.len);
+    if (statuses.len == 0) return null;
+    if (!self.shell_options.pipefail) return signals[signals.len - 1];
+    var index = statuses.len;
+    while (index > 0) {
+        index -= 1;
+        if (statuses[index] != 0) return signals[index];
+    }
+    return null;
+}
+
 fn builtinBg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     _ = options;
@@ -15084,8 +15160,11 @@ fn builtinFg(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     try continueStoppedJob(job);
     self.selectCurrentJob(job.id);
     const status = try waitBackgroundJob(io, job, false);
+    var stderr = try self.allocator.alloc(u8, 0);
+    errdefer self.allocator.free(stderr);
+    try appendInteractiveSignalDeathNotice(self.allocator, &stderr, options, job.termination_signal);
     if (job.state == .done) self.removeBackgroundJobById(job_id);
-    return .{ .allocator = self.allocator, .status = status, .stdout = stdout, .stderr = try self.allocator.alloc(u8, 0) };
+    return .{ .allocator = self.allocator, .status = status, .stdout = stdout, .stderr = stderr };
 }
 
 fn builtinWait(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -23043,6 +23122,46 @@ test "executor captures stderr and status from spawned external commands" {
     try std.testing.expectEqual(@as(ExitStatus, 7), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("err\n", result.stderr);
+}
+
+test "interactive foreground external signal reports status and death notice" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'kill -TERM $$'");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const term_status: ExitStatus = 128 + signalStatusNumber(std.posix.SIG.TERM);
+    var interactive_result = try executor.executeSimpleCommand(lowered.program.commands[0], .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .foreground_terminal = false });
+    defer interactive_result.deinit();
+    try std.testing.expectEqual(term_status, interactive_result.status);
+    try std.testing.expectEqualStrings("", interactive_result.stdout);
+    try std.testing.expectEqualStrings("Terminated\n", interactive_result.stderr);
+}
+
+test "non-interactive external signal status stays quiet" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'kill -TERM $$'");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 128) + signalStatusNumber(std.posix.SIG.TERM), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "interactive signal death notices suppress interrupt and pipe" {
+    var stderr = try std.testing.allocator.alloc(u8, 0);
+    defer std.testing.allocator.free(stderr);
+
+    try appendInteractiveSignalDeathNotice(std.testing.allocator, &stderr, .{ .interactive = true, .external_stdio = .inherit }, signalStatusNumber(std.posix.SIG.INT));
+    try appendInteractiveSignalDeathNotice(std.testing.allocator, &stderr, .{ .interactive = true, .external_stdio = .inherit }, signalStatusNumber(std.posix.SIG.PIPE));
+    try std.testing.expectEqualStrings("", stderr);
 }
 
 test "executor captures large single-stream external output" {
