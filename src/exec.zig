@@ -20357,6 +20357,23 @@ test "executor implements shopt extglob for Bash pathname and parameter patterns
     try std.testing.expect(!executor.shell_options.shopt.extglob);
 }
 
+test "executor parse-ahead Bash mode admits extglob syntax before shopt enables matching" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\VALUE=rush-user
+        \\case $VALUE in @(rush|bash)-*) echo before-match ;; *) echo before-literal ;; esac
+        \\shopt -s extglob
+        \\case $VALUE in @(rush|bash)-*) echo after-match ;; *) echo after-literal ;; esac
+    , .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("before-literal\nafter-match\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor applies pipefail option to pipeline status" {
     var internal = try parseAndLower(std.testing.allocator, "false | true");
     defer internal.parsed.deinit();

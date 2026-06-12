@@ -107,13 +107,28 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - these options are reflected by `shopt`, `shopt -p`, named queries, and
     `shopt -q`, and affect subsequent argv and Bash compound indexed-array
     element pathname expansion
-  - Rush's parser admits extglob-looking words throughout Bash-mode scripts so
-    runtime `shopt -s extglob` can affect later commands in Rush's parse-ahead
-    execution model. With `extglob` disabled those words are treated as literal
-    patterns at expansion time; this differs from Bash scripts that require the
-    option to be enabled before parsing extglob syntax. Command-substitution
-    span scanning also treats extglob groups as word content so their `(`, `)`,
-    and `|` bytes are not mistaken for `$()` structure.
+  - Rush currently has no Bash-compatible execution mode that parses later
+    non-interactive script text after observing an earlier runtime
+    `shopt -s extglob`. `executeScriptSlice` parses a whole script slice before
+    executing any command in that slice; CLI `-c`, script files, standard-input
+    scripts, sourced files, command substitutions, traps/hooks, functions, and
+    compound-command bodies all enter execution through that parse-ahead path.
+    The alias-timing chunk path still performs an initial full-script parse
+    before it reparses executable chunks with updated aliases.
+  - Because of that parse-ahead model, Rush's Bash-mode parser deliberately
+    admits extglob-looking words throughout a script slice, regardless of the
+    current runtime `shopt extglob` value. With `extglob` disabled those words
+    are treated as literal patterns at expansion time; after `shopt -s extglob`
+    they affect subsequent expansions. This differs from Bash non-interactive
+    scripts, which require the option to be enabled before parsing extglob
+    syntax.
+  - Interactive use submits one complete line at a time to the same
+    parse-ahead script-slice executor. A previous interactive submission can
+    therefore enable `extglob` for expansion in later submissions, but parsing
+    remains permissive rather than Bash-like parse-time gated.
+  - Command-substitution span scanning also treats extglob groups as word
+    content so their `(`, `)`, and `|` bytes are not mistaken for `$()`
+    structure.
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`

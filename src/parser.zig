@@ -4394,6 +4394,27 @@ test "parser reports incomplete Bash conditional commands" {
     try std.testing.expectEqualStrings("missing ]] to close Bash conditional command", result.diagnostics[0].message);
 }
 
+test "parser admits Bash extglob-looking words for parse-ahead execution" {
+    const source = "printf '%s\\n' @(a|b)\nshopt -s extglob\nprintf '%s\\n' +(c|d)";
+    var result = try parse(std.testing.allocator, source, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try std.testing.expect(!result.incomplete);
+
+    var found_before_shopt = false;
+    var found_after_shopt = false;
+    for (result.tokens) |token| {
+        if (token.kind != .word) continue;
+        const lexeme = token.lexeme(source);
+        if (std.mem.eql(u8, lexeme, "@(a|b)")) found_before_shopt = true;
+        if (std.mem.eql(u8, lexeme, "+(c|d)")) found_after_shopt = true;
+    }
+
+    try std.testing.expect(found_before_shopt);
+    try std.testing.expect(found_after_shopt);
+}
+
 test "parser builds POSIX for command nodes" {
     var result = try parse(std.testing.allocator, "for x in a b; do echo $x; done", .{});
     defer result.deinit();
