@@ -23,6 +23,7 @@ pub const event_loop = @import("event_loop.zig");
 
 const usage =
     \\usage: rush [--login]
+    \\       rush [-i] [--posix-strict] [set-options]
     \\       rush [-i] [--posix-strict] [set-options] -c SCRIPT [NAME [ARGS...]]
     \\       rush [-i] [--posix-strict] [set-options] -s [ARGS...]
     \\       rush [-i] [--posix-strict] [set-options] SCRIPT_FILE [ARGS...]
@@ -118,6 +119,21 @@ pub fn main(init: std.process.Init) !u8 {
         try writeAll(init.io, .stderr, usage);
         return 2;
     };
+
+    if (shouldRunInteractiveStandardInput(invocation, stdinIsTty(init.io), stderrIsTty(init.io))) {
+        var completion_debug_allocator: if (build_options.mode == .Debug) std.heap.DebugAllocator(.{}) else void = if (build_options.mode == .Debug) .init else {};
+        defer if (build_options.mode == .Debug) {
+            _ = completion_debug_allocator.deinit();
+        };
+        const completion_allocator = if (build_options.mode == .Debug) completion_debug_allocator.allocator() else std.heap.smp_allocator;
+        return runInteractive(allocator, completion_allocator, init.io, init.environ_map, .{
+            .arg_zero = invocation.arg_zero,
+            .login = login_shell,
+            .features = invocation.features,
+            .shell_options = invocation.shell_options,
+            .positionals = invocation.positionals,
+        });
+    }
 
     var result = runShellInvocationWithEnvironment(allocator, init.io, invocation, init.environ_map, .inherit, login_shell) catch |err| switch (err) {
         error.FileNotFound => {
@@ -813,6 +829,7 @@ const InteractiveCompletionContext = struct {
     io: std.Io,
     cwd: []const u8 = "",
     arg_zero: []const u8 = "rush",
+    features: compat.Features = .{},
     owned_executor: ?*exec.Executor = null,
     owned_history: ?*History = null,
     owned_cache: ?*CompletionCache = null,
@@ -858,6 +875,7 @@ fn cloneInteractiveCompletionContext(context: *anyopaque, allocator: std.mem.All
         .io = source.io,
         .cwd = cwd,
         .arg_zero = source.arg_zero,
+        .features = source.features,
         .owned_executor = executor,
         .owned_history = history,
         .owned_cache = cache,
@@ -896,6 +914,7 @@ fn renderInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io
     return completion_context.executor.renderPrompt(.{
         .io = io,
         .allow_external = true,
+        .features = completion_context.features,
         .external_stdio = .inherit,
         .arg_zero = completion_context.arg_zero,
     }, fallback_prompt) catch |err| switch (err) {
@@ -999,7 +1018,7 @@ fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator
     errdefer output.deinit(allocator);
     var should_refresh_prompt = refresh_prompt;
 
-    if (try completion_context.executor.executePendingSignalTrap(.{ .io = io, .allow_external = true, .interactive = true, .arg_zero = completion_context.arg_zero })) |trap_result| {
+    if (try completion_context.executor.executePendingSignalTrap(.{ .io = io, .allow_external = true, .features = completion_context.features, .interactive = true, .arg_zero = completion_context.arg_zero })) |trap_result| {
         var result = trap_result;
         defer result.deinit();
         try output.appendSlice(allocator, result.stdout);
@@ -3044,6 +3063,7 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{
         .io = io,
         .allow_external = true,
+        .features = completion_context.features,
         .cancel = completion_context.cancel,
         .completion_loader = loadCompletionDataForExecutor,
         .completion_loader_context = completion_context.loader,
@@ -3148,7 +3168,8 @@ fn interactiveExternalEditorTmpdir(executor: exec.Executor) []const u8 {
 
 fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8) !?line_editor.DiagnosticRender {
     if (source.len == 0) return null;
-    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive });
+    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
+    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .features = completion_context.features });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
         const diagnostic = parsed.diagnostics[0];
@@ -3157,8 +3178,7 @@ fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
         };
     }
 
-    const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    const diagnostics = try completion_context.executor.completionDiagnosticsForInputOptions(source, source.len, .{ .io = io });
+    const diagnostics = try completion_context.executor.completionDiagnosticsForInputOptions(source, source.len, .{ .io = io, .features = completion_context.features });
     defer completion_context.executor.freeCompletionDiagnostics(diagnostics);
     if (diagnostics.len == 0) return null;
     const diagnostic = diagnostics[0];
@@ -5380,6 +5400,9 @@ fn ansiForHighlight(kind: parser.HighlightKind) []const u8 {
 const InteractiveOptions = struct {
     arg_zero: []const u8 = "rush",
     login: bool = false,
+    features: compat.Features = .{},
+    shell_options: exec.ShellOptions = .{},
+    positionals: []const []const u8 = &.{},
 };
 
 pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !u8 {
@@ -5405,6 +5428,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try executor.importEnvironment(environ_map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
+    executor.shell_options = options.shell_options;
+    executor.shell_options.noexec = false;
+    if (options.positionals.len != 0) try executor.global_positionals.set(allocator, options.positionals);
     try loadInteractiveConfig(allocator, io, &executor, options);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
@@ -5428,7 +5454,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         try executor.runPendingVariableHooks(io);
         try executor.runPromptEventHooks(io, "prompt", &.{});
         const fallback_prompt = executor.getEnv("PS1") orelse "$ ";
-        const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .external_stdio = .inherit, .arg_zero = options.arg_zero }, fallback_prompt) catch |err| switch (err) {
+        const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .arg_zero = options.arg_zero }, fallback_prompt) catch |err| switch (err) {
             error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
             else => |e| return e,
         };
@@ -5442,7 +5468,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const title = try terminalTitlePath(allocator, cwd, executor.getEnv("HOME"));
         defer if (title.owned) allocator.free(title.text);
         try terminal.reportWindowTitle(title.text);
-        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero };
+        var completion_context: InteractiveCompletionContext = .{ .executor = &executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
         const ui_theme = interactiveUiTheme(executor);
         const read_result = try terminal.readLine(.{
             .prompt = prompt,
@@ -5485,7 +5511,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const line = switch (read_result) {
             .submitted => |line| line,
             .canceled => {
-                if (try runInteractiveInterruptTrap(io, &executor, options.arg_zero)) |result| {
+                if (try runInteractiveInterruptTrap(io, &executor, options.arg_zero, options.features)) |result| {
                     var trap_result = result;
                     defer trap_result.deinit();
                     try terminal.leaveEditorMode();
@@ -5544,7 +5570,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
             try executor.runPromptEventHooks(io, "preexec", &.{line});
-            var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
+            var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
             defer result.deinit();
             try writeAll(io, .stdout, result.stdout);
@@ -5609,8 +5635,8 @@ fn outputNeedsNewlineMarker(stdout: []const u8, stderr: []const u8) bool {
     return output[output.len - 1] != '\n';
 }
 
-fn runInteractiveInterruptTrap(io: std.Io, executor: *exec.Executor, arg_zero: []const u8) !?exec.CommandResult {
-    return try executor.executeSignalTrap("INT", .{ .io = io, .allow_external = true, .interactive = true, .arg_zero = arg_zero });
+fn runInteractiveInterruptTrap(io: std.Io, executor: *exec.Executor, arg_zero: []const u8, features: compat.Features) !?exec.CommandResult {
+    return try executor.executeSignalTrap("INT", .{ .io = io, .allow_external = true, .features = features, .interactive = true, .arg_zero = arg_zero });
 }
 
 pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8) !exec.CommandResult {
@@ -5764,8 +5790,18 @@ fn readStandardInputScript(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
     return reader.interface.allocRemaining(allocator, .unlimited);
 }
 
+fn shouldRunInteractiveStandardInput(invocation: ShellInvocation, stdin_is_tty: bool, stderr_is_tty: bool) bool {
+    if (invocation.kind != .standard_input) return false;
+    if (!stdin_is_tty) return false;
+    return invocation.interactive or stderr_is_tty;
+}
+
 fn stdinIsTty(io: std.Io) bool {
     return std.Io.File.stdin().isTty(io) catch false;
+}
+
+fn stderrIsTty(io: std.Io) bool {
+    return std.Io.File.stderr().isTty(io) catch false;
 }
 
 fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: exec.ShellOptions) !exec.CommandResult {
@@ -8836,7 +8872,7 @@ test "interactive interrupt runs INT trap" {
     defer setup.deinit();
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
 
-    var result = (try runInteractiveInterruptTrap(std.testing.io, &executor, "rush")) orelse return error.MissingTrapResult;
+    var result = (try runInteractiveInterruptTrap(std.testing.io, &executor, "rush", .{})) orelse return error.MissingTrapResult;
     defer result.deinit();
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("trapped\n", result.stdout);
@@ -8959,6 +8995,19 @@ test "standard input invocation is the default when only invocation options are 
     try std.testing.expectEqual(@as(usize, 0), invocation.positionals.len);
     try std.testing.expect(invocation.features.strict_diagnostics);
     try std.testing.expect(invocation.shell_options.nounset);
+}
+
+test "standard input invocation uses interactive editor when terminal rules require it" {
+    const forced = parseShellInvocation(&.{ "rush", "-i" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(shouldRunInteractiveStandardInput(forced, true, false));
+    try std.testing.expect(!shouldRunInteractiveStandardInput(forced, false, true));
+
+    const implicit = parseShellInvocation(&.{ "rush", "--posix-strict", "-u" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(shouldRunInteractiveStandardInput(implicit, true, true));
+    try std.testing.expect(!shouldRunInteractiveStandardInput(implicit, true, false));
+
+    const command = parseShellInvocation(&.{ "rush", "-i", "-c", "exit" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(!shouldRunInteractiveStandardInput(command, true, true));
 }
 
 test "command string invocation shell options affect execution" {
