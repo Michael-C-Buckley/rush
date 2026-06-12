@@ -310,7 +310,7 @@ const Lexer = struct {
                 '\'' => try self.consumeQuoted('\'', "unterminated single quote"),
                 '"' => try self.consumeDoubleQuoted(),
                 '`' => try self.consumeBackquoted(),
-                '$' => try self.consumeDollarExpansion(),
+                '$' => try self.consumeDollarExpansion(true),
                 else => self.index += 1,
             }
         }
@@ -338,13 +338,15 @@ const Lexer = struct {
         try self.addIncomplete(.init(start, self.source.len), "unterminated backquote command substitution");
     }
 
-    fn consumeDollarExpansion(self: *Lexer) !void {
+    fn consumeDollarExpansion(self: *Lexer, dollar_single_quotes: bool) !void {
         if (self.index + 1 >= self.source.len) {
             self.index += 1;
             return;
         }
 
-        if (self.source[self.index + 1] == '{') {
+        if (dollar_single_quotes and self.source[self.index + 1] == '\'') {
+            try self.consumeDollarSingleQuoted();
+        } else if (self.source[self.index + 1] == '{') {
             try self.consumeParameterExpansion();
         } else if (self.source[self.index + 1] == '(' and self.index + 2 < self.source.len and self.source[self.index + 2] == '(') {
             try self.consumeArithmeticExpansion();
@@ -353,6 +355,22 @@ const Lexer = struct {
         } else {
             self.index += 1;
         }
+    }
+
+    fn consumeDollarSingleQuoted(self: *Lexer) !void {
+        const start = self.index;
+        self.index += 2;
+        while (!self.isAtEnd()) {
+            switch (self.peek()) {
+                '\\' => self.consumeBackslash(),
+                '\'' => {
+                    self.index += 1;
+                    return;
+                },
+                else => self.index += 1,
+            }
+        }
+        try self.addIncomplete(.init(start, self.source.len), "unterminated dollar single quote");
     }
 
     fn consumeParameterExpansion(self: *Lexer) !void {
@@ -420,7 +438,7 @@ const Lexer = struct {
                 // $ and ` keep their special meaning inside double quotes
                 // (POSIX XCU 2.2.3); quotes inside the embedded expansion do
                 // not close the surrounding double-quoted string.
-                '$' => try self.consumeDollarExpansion(),
+                '$' => try self.consumeDollarExpansion(false),
                 '`' => try self.consumeBackquoted(),
                 else => self.index += 1,
             }
@@ -772,7 +790,9 @@ fn commandSubstitutionSpans(allocator: std.mem.Allocator, source: []const u8, sp
         switch (source[index]) {
             '\'' => skipQuoted(source, span.end, &index, '\''),
             '$' => {
-                if (index + 1 < span.end and source[index + 1] == '(' and !(index + 2 < span.end and source[index + 2] == '(')) {
+                if (dollarSingleQuotedEnd(source, span.end, index)) |end| {
+                    index = end;
+                } else if (index + 1 < span.end and source[index + 1] == '(' and !(index + 2 < span.end and source[index + 2] == '(')) {
                     if (try commandSubstitutionEnd(allocator, source, span.end, index)) |end| {
                         try spans.append(allocator, .init(index, end));
                         index = end;
@@ -1027,7 +1047,7 @@ const ParameterExpansionScanner = struct {
                 '\'' => skipQuoted(self.source, self.limit, &self.index, '\''),
                 '"' => try self.skipDoubleQuoted(),
                 '`' => self.skipBackquoted(),
-                '$' => try self.skipDollarExpansion(),
+                '$' => if (self.skipDollarSingleQuoted()) {} else try self.skipDollarExpansion(),
                 '}' => {
                     self.index += 1;
                     return self.index;
@@ -1036,6 +1056,14 @@ const ParameterExpansionScanner = struct {
             }
         }
         return null;
+    }
+
+    fn skipDollarSingleQuoted(self: *ParameterExpansionScanner) bool {
+        if (dollarSingleQuotedEnd(self.source, self.limit, self.index)) |end| {
+            self.index = end;
+            return true;
+        }
+        return false;
     }
 
     fn skipDollarExpansion(self: *ParameterExpansionScanner) std.mem.Allocator.Error!void {
@@ -1199,7 +1227,7 @@ const CommandSubstitutionScanner = struct {
                 },
                 '$' => {
                     keyword_possible = false;
-                    if (!try self.skipDollarExpansion()) self.index += 1;
+                    if (self.skipDollarSingleQuoted()) {} else if (!try self.skipDollarExpansion()) self.index += 1;
                 },
                 else => self.index += 1,
             }
@@ -1267,6 +1295,14 @@ const CommandSubstitutionScanner = struct {
         }
 
         self.command_position = false;
+    }
+
+    fn skipDollarSingleQuoted(self: *CommandSubstitutionScanner) bool {
+        if (dollarSingleQuotedEnd(self.source, self.limit, self.index)) |end| {
+            self.index = end;
+            return true;
+        }
+        return false;
     }
 
     fn skipDollarExpansion(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!bool {
@@ -1362,6 +1398,24 @@ fn skipQuoted(source: []const u8, limit: usize, index: *usize, quote: u8) void {
         }
     }
     if (index.* < limit) index.* += 1;
+}
+
+fn dollarSingleQuotedEnd(source: []const u8, limit: usize, start: usize) ?usize {
+    std.debug.assert(limit <= source.len);
+    if (start + 1 >= limit or source[start] != '$' or source[start + 1] != '\'') return null;
+
+    var index = start + 2;
+    while (index < limit) {
+        switch (source[index]) {
+            '\\' => {
+                index += 1;
+                if (index < limit) index += 1;
+            },
+            '\'' => return index + 1,
+            else => index += 1,
+        }
+    }
+    return null;
 }
 
 fn defaultHighlightKind(kind: TokenKind) HighlightKind {
@@ -4318,6 +4372,20 @@ test "lexer preserves quoted words as one word token" {
     });
 }
 
+test "lexer preserves dollar-single-quoted words and double-quoted literals" {
+    try expectParse("echo pre$'one\\'two'post \"$'literal'\"", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 23) },
+            .{ .kind = .whitespace, .span = .init(23, 24) },
+            .{ .kind = .word, .span = .init(24, 36) },
+            .{ .kind = .eof, .span = .empty(36) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 36) }},
+    });
+}
+
 test "lexer tokenizes comments" {
     try expectParse("echo # hello\nnext", .{
         .tokens = &.{
@@ -4345,6 +4413,22 @@ test "lexer reports incomplete quoted input" {
             .kind = .incomplete_input,
             .span = .init(5, 18),
             .message = "unterminated single quote",
+        }},
+        .incomplete = true,
+    });
+
+    try expectParse("echo $'unterminated", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 19) },
+            .{ .kind = .eof, .span = .empty(19) },
+        },
+        .nodes = &.{.{ .kind = .root, .span = .init(0, 19) }},
+        .diagnostics = &.{.{
+            .kind = .incomplete_input,
+            .span = .init(5, 19),
+            .message = "unterminated dollar single quote",
         }},
         .incomplete = true,
     });

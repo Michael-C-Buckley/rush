@@ -136,6 +136,7 @@ case-subject-esac-word	grammar	behavior	case subject word may be the reserved wo
 case-subject-in-word	grammar	behavior	case subject word may be the reserved word in
 command-substitution	expansion	behavior	-
 comments-ignored	lexing	behavior	-
+dollar-single-quotes	lexing	behavior	Dollar-single-quotes process representative POSIX escapes, preserve adjacent word unity, suppress field splitting, and remain literal inside double quotes
 dash-smoke-case-function-loop	grammar	external-suite-smoke	dash-compatible function case dispatch inside a for loop
 dash-smoke-dot-current-env	builtin	external-suite-smoke	dash-compatible dot utility current-shell environment smoke case
 dash-smoke-function-redirection	grammar	external-suite-smoke	dash-compatible function redirection smoke case

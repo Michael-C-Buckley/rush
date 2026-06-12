@@ -1,0 +1,9 @@
+printf '<%s>\n' $'plain'
+printf '<%s>\n' pre$'mid'post '$x'$'\t'"y"
+set -- $'one two' $'line\nbreak' $'slash\\quote\''
+printf 'argc=%s\n' "$#"
+printf '<%s>\n' "$1" "$2" "$3"
+IFS=:
+set -- $'a:b'
+printf 'split=%s:<%s>\n' "$#" "$1"
+printf '<%s>\n' "$'not-special'"

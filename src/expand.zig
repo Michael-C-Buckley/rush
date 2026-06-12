@@ -111,6 +111,7 @@ pub const Span = struct {
 pub const WordPartKind = enum {
     unquoted,
     single_quoted,
+    dollar_single_quoted,
     double_quoted,
     escaped,
     parameter,
@@ -180,6 +181,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
             continue;
         }
         if (part.kind == .single_quoted) force_current_field = true;
+        if (part.kind == .dollar_single_quoted) force_current_field = true;
         const split = part.kind == .parameter or part.kind == .command_substitution or part.kind == .arithmetic;
         if (part.kind == .parameter) {
             const parameter = part.value(parts.raw);
@@ -204,6 +206,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
             if (split) {
                 try appendSplitText(allocator, &fields, &current, rendered, ifs);
             } else {
+                if (part.kind == .dollar_single_quoted and hasGlobSyntax(rendered)) quoted_expansion_glob = true;
                 try current.appendSlice(allocator, rendered);
             }
         }
@@ -258,6 +261,36 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
     var unquoted_start: ?usize = null;
     while (index < raw.len) {
         switch (raw[index]) {
+            '$' => if (index + 1 < raw.len and raw[index + 1] == '\'') {
+                try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
+                const start = index;
+                index += 2;
+                const value_start = index;
+                while (index < raw.len) {
+                    switch (raw[index]) {
+                        '\\' => {
+                            index += 1;
+                            if (index < raw.len) index += 1;
+                        },
+                        '\'' => break,
+                        else => index += 1,
+                    }
+                }
+                const value_end = index;
+                if (index < raw.len) index += 1;
+                try parts.append(allocator, .{
+                    .kind = .dollar_single_quoted,
+                    .span = .init(start, index),
+                    .value_span = .init(value_start, value_end),
+                });
+            } else if (try substitutionPart(allocator, raw, index)) |part| {
+                try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
+                try parts.append(allocator, part);
+                index = part.span.end;
+            } else {
+                if (unquoted_start == null) unquoted_start = index;
+                index += 1;
+            },
             '\'' => {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 const start = index;
@@ -295,14 +328,6 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                     .span = .init(start, index),
                     .value_span = .init(value_start, index),
                 });
-            },
-            '$' => if (try substitutionPart(allocator, raw, index)) |part| {
-                try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
-                try parts.append(allocator, part);
-                index = part.span.end;
-            } else {
-                if (unquoted_start == null) unquoted_start = index;
-                index += 1;
             },
             '`' => if (try substitutionPart(allocator, raw, index)) |part| {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
@@ -392,6 +417,7 @@ pub fn renderWordParts(allocator: std.mem.Allocator, word: WordParts, options: O
 fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) anyerror![]const u8 {
     return switch (part.kind) {
         .unquoted, .single_quoted => allocator.dupe(u8, part.value(raw)),
+        .dollar_single_quoted => renderDollarSingleQuotedContent(allocator, part.value(raw)),
         .escaped => if (std.mem.eql(u8, part.value(raw), "\n")) allocator.dupe(u8, "") else allocator.dupe(u8, part.value(raw)),
         .double_quoted => renderDoubleQuotedContent(allocator, part.value(raw), options),
         .parameter => renderParameter(allocator, part.value(raw), options, false),
@@ -762,7 +788,7 @@ fn expandParameterWordSegmented(allocator: std.mem.Allocator, word: []const u8, 
                 defer allocator.free(rendered);
                 try builder.append(allocator, rendered, false, false, hasGlobSyntax(rendered));
             },
-            .single_quoted, .double_quoted => {
+            .single_quoted, .dollar_single_quoted, .double_quoted => {
                 const rendered = try renderPart(allocator, parts.raw, part, options);
                 defer allocator.free(rendered);
                 try builder.append(allocator, rendered, false, true, hasGlobSyntax(rendered));
@@ -909,7 +935,7 @@ pub fn expandWordPatterns(allocator: std.mem.Allocator, raw: []const u8, options
         switch (part.kind) {
             .unquoted => try appendPatternBytes(allocator, &current_text, &current_special, rendered, true),
             .escaped => try appendPatternBytes(allocator, &current_text, &current_special, rendered, false),
-            .single_quoted, .double_quoted => {
+            .single_quoted, .dollar_single_quoted, .double_quoted => {
                 force_current_field = true;
                 try appendPatternBytes(allocator, &current_text, &current_special, rendered, false);
             },
@@ -945,7 +971,7 @@ fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Opt
         defer allocator.free(rendered);
         const meta_active = switch (part.kind) {
             .unquoted, .parameter, .arithmetic, .command_substitution => true,
-            .single_quoted, .double_quoted, .escaped => false,
+            .single_quoted, .dollar_single_quoted, .double_quoted, .escaped => false,
         };
         try appendPatternPart(allocator, &text, &special, rendered, meta_active);
     }
@@ -1713,6 +1739,117 @@ fn commandSubstitutionScript(allocator: std.mem.Allocator, raw: []const u8, part
     return output.toOwnedSlice(allocator);
 }
 
+fn renderDollarSingleQuotedContent(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    var index: usize = 0;
+    while (index < text.len) {
+        if (text[index] != '\\' or index + 1 >= text.len) {
+            try output.append(allocator, text[index]);
+            index += 1;
+            continue;
+        }
+
+        const escaped = text[index + 1];
+        switch (escaped) {
+            '"' => try output.append(allocator, '"'),
+            '\'' => try output.append(allocator, '\''),
+            '\\' => try output.append(allocator, '\\'),
+            'a' => try output.append(allocator, 0x07),
+            'b' => try output.append(allocator, 0x08),
+            'e' => try output.append(allocator, 0x1b),
+            'f' => try output.append(allocator, 0x0c),
+            'n' => try output.append(allocator, '\n'),
+            'r' => try output.append(allocator, '\r'),
+            't' => try output.append(allocator, '\t'),
+            'v' => try output.append(allocator, 0x0b),
+            'c' => {
+                if (index + 2 >= text.len) {
+                    try output.appendSlice(allocator, text[index .. index + 2]);
+                    index += 2;
+                    continue;
+                }
+                var control_index = index + 2;
+                var control = text[control_index];
+                if (control == '\\' and control_index + 1 < text.len and text[control_index + 1] == '\\') {
+                    control_index += 1;
+                    control = '\\';
+                }
+                if (controlEscapeValue(control)) |value| {
+                    try output.append(allocator, value);
+                    index = control_index + 1;
+                    continue;
+                }
+                try output.appendSlice(allocator, text[index .. index + 2]);
+                index += 2;
+                continue;
+            },
+            'x' => {
+                var value: u8 = 0;
+                var digits: usize = 0;
+                var cursor = index + 2;
+                while (cursor < text.len and digits < 2) : (cursor += 1) {
+                    const digit = hexValue(text[cursor]) orelse break;
+                    value = value * 16 + digit;
+                    digits += 1;
+                }
+                if (digits == 0) {
+                    try output.appendSlice(allocator, text[index .. index + 2]);
+                    index += 2;
+                    continue;
+                }
+                try output.append(allocator, value);
+                index = cursor;
+                continue;
+            },
+            '0'...'7' => {
+                var value: u16 = 0;
+                var digits: usize = 0;
+                var cursor = index + 1;
+                while (cursor < text.len and digits < 3 and text[cursor] >= '0' and text[cursor] <= '7') : (cursor += 1) {
+                    value = value * 8 + (text[cursor] - '0');
+                    digits += 1;
+                }
+                try output.append(allocator, @intCast(value & 0xff));
+                index = cursor;
+                continue;
+            },
+            else => {
+                try output.append(allocator, '\\');
+                try output.append(allocator, escaped);
+            },
+        }
+        index += 2;
+    }
+
+    return output.toOwnedSlice(allocator);
+}
+
+fn hexValue(byte: u8) ?u8 {
+    return switch (byte) {
+        '0'...'9' => byte - '0',
+        'a'...'f' => byte - 'a' + 10,
+        'A'...'F' => byte - 'A' + 10,
+        else => null,
+    };
+}
+
+fn controlEscapeValue(byte: u8) ?u8 {
+    return switch (byte) {
+        '@' => 0x00,
+        'A'...'Z' => byte - 'A' + 1,
+        'a'...'z' => byte - 'a' + 1,
+        '[' => 0x1b,
+        '\\' => 0x1c,
+        ']' => 0x1d,
+        '^' => 0x1e,
+        '_' => 0x1f,
+        '?' => 0x7f,
+        else => null,
+    };
+}
+
 fn trimTrailingNewlines(output: []const u8) []const u8 {
     var end = output.len;
     while (end > 0 and output[end - 1] == '\n') end -= 1;
@@ -2089,7 +2226,7 @@ pub fn patternHasGlobSyntax(pattern: ExpansionPattern) bool {
 
 fn hasQuotedGlobSyntax(parts: WordParts) bool {
     for (parts.parts) |part| switch (part.kind) {
-        .escaped, .single_quoted, .double_quoted => {
+        .escaped, .single_quoted, .dollar_single_quoted, .double_quoted => {
             if (hasGlobSyntax(part.value(parts.raw))) return true;
         },
         else => {},
@@ -2458,6 +2595,27 @@ pub fn quoteRemove(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
     var index: usize = 0;
     while (index < raw.len) {
         switch (raw[index]) {
+            '$' => if (index + 1 < raw.len and raw[index + 1] == '\'') {
+                const value_start = index + 2;
+                index = value_start;
+                while (index < raw.len) {
+                    switch (raw[index]) {
+                        '\\' => {
+                            index += 1;
+                            if (index < raw.len) index += 1;
+                        },
+                        '\'' => break,
+                        else => index += 1,
+                    }
+                }
+                const rendered = try renderDollarSingleQuotedContent(allocator, raw[value_start..index]);
+                defer allocator.free(rendered);
+                try output.appendSlice(allocator, rendered);
+                if (index < raw.len) index += 1;
+            } else {
+                try output.append(allocator, '$');
+                index += 1;
+            },
             '\'' => {
                 index += 1;
                 while (index < raw.len and raw[index] != '\'') : (index += 1) {
@@ -2626,6 +2784,21 @@ test "word part parser records quoted escaped and parameter regions" {
     try std.testing.expectEqualStrings("EMPTY", parts.parts[5].value(parts.raw));
 }
 
+test "word part parser records dollar single quotes as quoted word segments" {
+    var parts = try parseWordParts(std.testing.allocator, "pre$'a\\n\\'b'post\"$'literal'\"");
+    defer parts.deinit();
+
+    try std.testing.expectEqual(@as(usize, 4), parts.parts.len);
+    try std.testing.expectEqual(WordPartKind.unquoted, parts.parts[0].kind);
+    try std.testing.expectEqualStrings("pre", parts.parts[0].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.dollar_single_quoted, parts.parts[1].kind);
+    try std.testing.expectEqualStrings("a\\n\\'b", parts.parts[1].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.unquoted, parts.parts[2].kind);
+    try std.testing.expectEqualStrings("post", parts.parts[2].value(parts.raw));
+    try std.testing.expectEqual(WordPartKind.double_quoted, parts.parts[3].kind);
+    try std.testing.expectEqualStrings("$'literal'", parts.parts[3].value(parts.raw));
+}
+
 test "word part rendering expands parameters outside single quotes" {
     var parts = try parseWordParts(std.testing.allocator, "'$USER'\"$USER\"-$USER");
     defer parts.deinit();
@@ -2634,6 +2807,22 @@ test "word part rendering expands parameters outside single quotes" {
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("$USERrush-user-rush-user", rendered);
+}
+
+test "dollar single quotes process POSIX escapes before expansion phases" {
+    const scalar = try expandWordScalar(std.testing.allocator, "pre$'a\\n\\t\\\\\\'b'post:$'\\a\\b\\e\\f\\r\\v\\x41\\101'", .{});
+    defer std.testing.allocator.free(scalar);
+    try std.testing.expectEqualStrings("prea\n\t\\'bpost:\x07\x08\x1b\x0c\r\x0bAA", scalar);
+
+    var split = try expandWord(std.testing.allocator, "$'one two'", .{});
+    defer split.deinit();
+    try std.testing.expectEqual(@as(usize, 1), split.fields.len);
+    try std.testing.expectEqualStrings("one two", split.fields[0]);
+
+    var double_quoted = try expandWord(std.testing.allocator, "\"$'literal'\"", .{});
+    defer double_quoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), double_quoted.fields.len);
+    try std.testing.expectEqualStrings("$'literal'", double_quoted.fields[0]);
 }
 
 test "expansion phases include tilde parameter and quote removal" {

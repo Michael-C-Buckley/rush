@@ -5969,7 +5969,7 @@ pub const Executor = struct {
             defer self.allocator.free(rendered);
             const meta_active = switch (part.kind) {
                 .unquoted, .parameter, .arithmetic, .command_substitution => true,
-                .single_quoted, .double_quoted, .escaped => false,
+                .single_quoted, .dollar_single_quoted, .double_quoted, .escaped => false,
             };
             try appendCasePatternPart(self.allocator, &text, &special, rendered, meta_active);
         }
