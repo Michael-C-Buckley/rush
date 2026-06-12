@@ -95,6 +95,7 @@ builtin-printf-integer-format-flags	builtin	behavior	printf integer conversions 
 builtin-printf-integer-overflow	builtin	behavior	printf integer conversion overflow saturates to integer limits while diagnosing the operand
 builtin-printf-integer-zero-precision	builtin	behavior	printf integer zero precision suppresses zero decimal and hexadecimal values while alternate octal keeps one zero
 builtin-printf-missing-operands	builtin	behavior	printf supplies empty string and zero defaults for missing conversion operands
+builtin-printf-omitted-precision-digits	builtin	behavior	printf treats omitted precision digits after period as zero precision for string and integer conversions
 builtin-printf-octal-hex	builtin	builtin	-
 builtin-printf-percent-literal	builtin	behavior	printf %% emits a literal percent while surrounding conversions still consume operands
 builtin-printf-string-width-precision	builtin	behavior	printf string conversions combine width precision left adjustment and zero precision
