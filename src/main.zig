@@ -5335,25 +5335,142 @@ test "supplied completion scripts validate" {
     try std.testing.expectEqual(@as(usize, 0), result.failures);
 }
 
-test "supplied git completion does not offer reverse for show" {
+test "supplied git manifest validates and selects representative contexts" {
+    const manifest_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/git.json", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(manifest_contents);
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator, manifest_contents);
+    defer diagnostics.deinit();
+    try std.testing.expect(!diagnostics.hasErrors());
+
+    const root = "rush-git-first-party-context-test";
+    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(cwd);
+    const root_path = try std.fs.path.join(std.testing.allocator, &.{ cwd, root });
+    defer std.testing.allocator.free(root_path);
+    const bin_path = try std.fs.path.join(std.testing.allocator, &.{ root_path, "bin" });
+    defer std.testing.allocator.free(bin_path);
+    const git_path = try std.fs.path.join(std.testing.allocator, &.{ bin_path, "git" });
+    defer std.testing.allocator.free(git_path);
+
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root_path) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root_path) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, bin_path);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = git_path, .data =
+        \\#!/bin/sh
+        \\case "$1" in
+        \\  branch)
+        \\    case "$2" in
+        \\      --remotes) printf 'origin/main\n' ;;
+        \\      *) printf 'main\nfeature/topic\n' ;;
+        \\    esac
+        \\    ;;
+        \\  tag)
+        \\    printf 'v1.0\n'
+        \\    ;;
+        \\  remote)
+        \\    printf 'origin\n'
+        \\    ;;
+        \\  diff)
+        \\    cached=false
+        \\    for arg do
+        \\      test "$arg" = --cached && cached=true
+        \\    done
+        \\    if test "$cached" = true; then
+        \\      printf 'src/staged.txt\n'
+        \\    else
+        \\      printf 'src/worktree.txt\n'
+        \\    fi
+        \\    ;;
+        \\  ls-files)
+        \\    others=false
+        \\    ignored=false
+        \\    for arg do
+        \\      test "$arg" = --others && others=true
+        \\      test "$arg" = --ignored && ignored=true
+        \\    done
+        \\    if test "$others" = true && test "$ignored" = true; then
+        \\      printf 'ignored.log\n'
+        \\    else
+        \\      if test "$others" = true; then
+        \\        printf 'tmp/untracked.log\n'
+        \\      else
+        \\        printf 'src/tracked.txt\n'
+        \\      fi
+        \\    fi
+        \\    ;;
+        \\  *)
+        \\    exit 0
+        \\    ;;
+        \\esac
+    });
+
+    var setup_executor = exec.Executor.init(std.testing.allocator);
+    defer setup_executor.deinit();
+    const chmod_script = try std.fmt.allocPrint(std.testing.allocator, "/bin/chmod +x {s}", .{git_path});
+    defer std.testing.allocator.free(chmod_script);
+    var chmod = try runScriptWithExecutor(std.testing.allocator, &setup_executor, chmod_script, .{ .io = std.testing.io, .allow_external = true });
+    defer chmod.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), chmod.status);
+
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
     try executor.setEnv("XDG_DATA_HOME", "share");
     try executor.setEnv("XDG_DATA_DIRS", "");
+    const fake_git_path = try std.fmt.allocPrint(std.testing.allocator, "{s}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin", .{bin_path});
+    defer std.testing.allocator.free(fake_git_path);
+    try executor.setEnv("PATH", fake_git_path);
 
-    const show_options = try executor.collectCompletionsForInput("git show --", "git show --".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(show_options);
-    try expectCompletionCandidate(show_options, "--stat");
-    try expectCompletionCandidate(show_options, "--format");
-    try expectNoCompletionCandidate(show_options, "--reverse");
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    try loader.ensureLoaded(std.testing.io, &executor, "git", "rush");
 
-    const show_reverse = try executor.collectCompletionsForInput("git show --rev", "git show --rev".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(show_reverse);
-    try expectNoCompletionCandidate(show_reverse, "--reverse");
+    var saw_manifest_rule = false;
+    for (executor.completionRules()) |rule| {
+        if (rule.source.kind == .manifest) {
+            saw_manifest_rule = true;
+            break;
+        }
+    }
+    try std.testing.expect(saw_manifest_rule);
 
-    const log_reverse = try executor.collectCompletionsForInput("git log --rev", "git log --rev".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(log_reverse);
-    try expectCompletionCandidate(log_reverse, "--reverse");
+    const switch_branches = try executor.collectCompletionsForInput("git switch ma", "git switch ma".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(switch_branches);
+    try expectCompletionCandidate(switch_branches, "main");
+
+    const diff_paths = try executor.collectCompletionsForInput("git diff --staged -- src/st", "git diff --staged -- src/st".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(diff_paths);
+    const staged = findCompletionCandidate(diff_paths, "src/staged.txt") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, staged.kind);
+    try std.testing.expectEqualStrings("staged path", staged.description.?);
+
+    const restore_paths = try executor.collectCompletionsForInput("git restore src/wo", "git restore src/wo".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(restore_paths);
+    const worktree = findCompletionCandidate(restore_paths, "src/worktree.txt") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, worktree.kind);
+    try std.testing.expectEqualStrings("worktree path", worktree.description.?);
+
+    const checkout_paths = try executor.collectCompletionsForInput("git checkout -- src/tra", "git checkout -- src/tra".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(checkout_paths);
+    const tracked = findCompletionCandidate(checkout_paths, "src/tracked.txt") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, tracked.kind);
+    try std.testing.expectEqualStrings("tracked path", tracked.description.?);
+
+    const clean_untracked = try executor.collectCompletionsForInput("git clean tmp/un", "git clean tmp/un".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(clean_untracked);
+    try expectCompletionCandidate(clean_untracked, "tmp/untracked.log");
+
+    const clean_ignored = try executor.collectCompletionsForInput("git clean -X ign", "git clean -X ign".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(clean_ignored);
+    const ignored = findCompletionCandidate(clean_ignored, "ignored.log") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("ignored path", ignored.description.?);
+
+    const push_remotes = try executor.collectCompletionsForInput("git push or", "git push or".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(push_remotes);
+    try expectCompletionCandidate(push_remotes, "origin");
+
+    const branch_sort = try executor.collectCompletionsForInput("git branch --sort comm", "git branch --sort comm".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(branch_sort);
+    try expectCompletionCandidate(branch_sort, "committerdate");
 }
 
 fn expectCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) !void {

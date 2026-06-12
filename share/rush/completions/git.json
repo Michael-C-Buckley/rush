@@ -1,0 +1,288 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "git",
+    "description": "the stupid content tracker",
+    "providers": {
+      "builtin.directories": { "builtin": "directories", "options": { "appendSlash": true } },
+      "builtin.files": { "builtin": "files" },
+      "git.branches": { "function": "__rush_complete_git_branches" },
+      "git.remote-branches": { "function": "__rush_complete_git_remote_branches" },
+      "git.refs": { "function": "__rush_complete_git_refs" },
+      "git.tags": { "function": "__rush_complete_git_tags" },
+      "git.remotes": { "function": "__rush_complete_git_remotes" },
+      "git.stashes": { "function": "__rush_complete_git_stashes" },
+      "git.diff-arguments": { "function": "__rush_complete_git_context_diff_args" },
+      "git.checkout-arguments": { "function": "__rush_complete_git_context_checkout_args" },
+      "git.switch-arguments": { "function": "__rush_complete_git_context_switch_args" },
+      "git.restore-paths": { "function": "__rush_complete_git_context_restore_paths" },
+      "git.reset-arguments": { "function": "__rush_complete_git_context_reset_args" },
+      "git.clean-paths": { "function": "__rush_complete_git_context_clean_paths" },
+      "git.branch-arguments": { "function": "__rush_complete_git_context_branch_args" },
+      "git.push-arguments": { "function": "__rush_complete_git_context_push_args" },
+      "git.sort-keys": { "function": "__rush_complete_git_sort_keys" },
+      "git.color-modes": { "function": "__rush_complete_git_color_modes" },
+      "git.word-diff-modes": { "function": "__rush_complete_git_word_diff_modes" },
+      "git.conflict-styles": { "function": "__rush_complete_git_conflict_styles" },
+      "git.signed-modes": { "function": "__rush_complete_git_signed_modes" }
+    },
+    "options": [
+      { "long": "git-dir", "value": { "name": "path", "provider": "builtin.directories" }, "description": "path to the repository" },
+      { "long": "work-tree", "value": { "name": "path", "provider": "builtin.directories" }, "description": "path to the working tree" },
+      { "long": "help", "description": "show help" },
+      { "long": "version", "description": "show version" },
+      { "long": "paginate", "description": "pipe output into a pager" },
+      { "long": "no-pager", "description": "do not pipe output into a pager" }
+    ],
+    "subcommands": [
+      {
+        "name": "branch",
+        "description": "list, create, or delete branches",
+        "optionGroups": [
+          { "name": "branch-action", "exclusive": true },
+          { "name": "branch-list-scope", "exclusive": true },
+          { "name": "branch-tracking", "exclusive": true }
+        ],
+        "options": [
+          { "long": "all", "short": "a", "exclusiveGroup": "branch-list-scope", "description": "list remote-tracking and local branches" },
+          { "long": "remotes", "short": "r", "exclusiveGroup": "branch-list-scope", "description": "list or delete remote-tracking branches" },
+          { "long": "delete", "short": "d", "exclusiveGroup": "branch-action", "description": "delete a branch" },
+          { "short": "D", "exclusiveGroup": "branch-action", "description": "delete a branch irrespective of merged status" },
+          { "long": "move", "short": "m", "exclusiveGroup": "branch-action", "description": "move or rename a branch" },
+          { "short": "M", "exclusiveGroup": "branch-action", "description": "move or rename a branch even if target exists" },
+          { "long": "copy", "short": "c", "exclusiveGroup": "branch-action", "description": "copy a branch and its reflog" },
+          { "short": "C", "exclusiveGroup": "branch-action", "description": "copy a branch even if target exists" },
+          { "long": "list", "exclusiveGroup": "branch-action", "description": "list branches" },
+          { "long": "show-current", "description": "print the current branch name" },
+          { "long": "verbose", "short": "v", "description": "show sha1 and commit subject" },
+          { "long": "quiet", "short": "q", "description": "be more quiet" },
+          { "long": "track", "exclusiveGroup": "branch-tracking", "description": "set up upstream configuration" },
+          { "long": "no-track", "exclusiveGroup": "branch-tracking", "description": "do not set up upstream configuration" },
+          { "long": "set-upstream-to", "short": "u", "value": { "name": "upstream", "provider": "git.remote-branches" }, "description": "change upstream information" },
+          { "long": "unset-upstream", "description": "remove upstream information" },
+          { "long": "merged", "value": { "name": "commit", "provider": "git.refs" }, "description": "list branches merged into commit" },
+          { "long": "no-merged", "value": { "name": "commit", "provider": "git.refs" }, "description": "list branches not merged into commit" },
+          { "long": "contains", "value": { "name": "commit", "provider": "git.refs" }, "description": "list branches containing commit" },
+          { "long": "no-contains", "value": { "name": "commit", "provider": "git.refs" }, "description": "list branches not containing commit" },
+          { "long": "sort", "value": { "name": "key", "provider": "git.sort-keys" }, "description": "sort branches by key" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "branch", "index": 0, "provider": "git.branch-arguments", "description": "branch name or start point" },
+            { "name": "start-point", "index": 1, "provider": "git.refs", "description": "start point for a new branch" }
+          ]
+        }
+      },
+      {
+        "name": "checkout",
+        "description": "switch branches or restore paths",
+        "optionGroups": [
+          { "name": "checkout-create", "exclusive": true },
+          { "name": "checkout-conflict-side", "exclusive": true },
+          { "name": "checkout-tracking", "exclusive": true }
+        ],
+        "options": [
+          { "long": "branch", "description": "create and checkout a new branch" },
+          { "short": "b", "value": { "name": "branch" }, "exclusiveGroup": "checkout-create", "description": "create and checkout a new branch" },
+          { "short": "B", "value": { "name": "branch" }, "exclusiveGroup": "checkout-create", "description": "create/reset and checkout a branch" },
+          { "long": "force", "short": "f", "description": "force checkout" },
+          { "long": "detach", "description": "detach HEAD" },
+          { "long": "orphan", "value": { "name": "branch" }, "exclusiveGroup": "checkout-create", "description": "create a new orphan branch" },
+          { "long": "ours", "exclusiveGroup": "checkout-conflict-side", "description": "checkout our version for unmerged paths" },
+          { "long": "theirs", "exclusiveGroup": "checkout-conflict-side", "description": "checkout their version for unmerged paths" },
+          { "long": "merge", "short": "m", "description": "perform a three-way merge with the new branch" },
+          { "long": "patch", "short": "p", "description": "select hunks interactively" },
+          { "long": "track", "exclusiveGroup": "checkout-tracking", "description": "set up upstream configuration" },
+          { "long": "no-track", "exclusiveGroup": "checkout-tracking", "description": "do not set up upstream configuration" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "target", "index": 0, "repeatable": true, "provider": "git.checkout-arguments", "description": "branch, tree, or post-terminator path" }
+          ]
+        }
+      },
+      {
+        "name": "switch",
+        "description": "switch branches",
+        "optionGroups": [
+          { "name": "switch-create", "exclusive": true },
+          { "name": "switch-guess", "exclusive": true },
+          { "name": "switch-tracking", "exclusive": true }
+        ],
+        "options": [
+          { "long": "create", "short": "c", "value": { "name": "branch" }, "exclusiveGroup": "switch-create", "description": "create a new branch" },
+          { "short": "C", "value": { "name": "branch" }, "exclusiveGroup": "switch-create", "description": "create/reset and switch to a branch" },
+          { "long": "detach", "description": "detach HEAD" },
+          { "long": "force", "short": "f", "description": "force switch" },
+          { "long": "guess", "exclusiveGroup": "switch-guess", "description": "guess a branch from matching remote-tracking branches" },
+          { "long": "no-guess", "exclusiveGroup": "switch-guess", "description": "do not guess a branch from remote-tracking branches" },
+          { "long": "discard-changes", "description": "discard local changes" },
+          { "long": "merge", "short": "m", "description": "perform a three-way merge with the new branch" },
+          { "long": "track", "exclusiveGroup": "switch-tracking", "description": "set up upstream configuration" },
+          { "long": "no-track", "exclusiveGroup": "switch-tracking", "description": "do not set up upstream configuration" },
+          { "long": "orphan", "value": { "name": "branch" }, "exclusiveGroup": "switch-create", "description": "create a new orphan branch" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "branch", "index": 0, "provider": "git.switch-arguments", "description": "branch to switch to" }
+          ]
+        }
+      },
+      {
+        "name": "diff",
+        "description": "show changes",
+        "optionGroups": [
+          { "name": "diff-source", "exclusive": true }
+        ],
+        "options": [
+          { "long": "staged", "exclusiveGroup": "diff-source", "description": "compare staged changes" },
+          { "long": "cached", "exclusiveGroup": "diff-source", "description": "compare staged changes" },
+          { "long": "no-index", "exclusiveGroup": "diff-source", "description": "compare two paths outside a working tree" },
+          { "long": "name-only", "description": "show only names of changed files" },
+          { "long": "stat", "description": "show diffstat" },
+          { "long": "patch", "short": "p", "description": "generate patch output" },
+          { "long": "no-patch", "short": "s", "description": "suppress diff output" },
+          { "long": "color", "value": { "name": "when", "provider": "git.color-modes" }, "description": "colorize diff output" },
+          { "long": "word-diff", "value": { "name": "mode", "provider": "git.word-diff-modes" }, "description": "show word diff" },
+          { "long": "relative", "value": { "name": "path", "provider": "builtin.directories" }, "description": "exclude changes outside path" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "target", "index": 0, "repeatable": true, "provider": "git.diff-arguments", "description": "revision, --no-index path, or post-terminator path" }
+          ]
+        }
+      },
+      {
+        "name": "restore",
+        "description": "restore working tree files",
+        "optionGroups": [
+          { "name": "restore-target", "exclusive": false },
+          { "name": "restore-conflict-side", "exclusive": true }
+        ],
+        "options": [
+          { "long": "source", "value": { "name": "tree", "provider": "git.refs" }, "description": "restore from tree-ish" },
+          { "long": "staged", "description": "restore the index" },
+          { "long": "worktree", "short": "W", "description": "restore the working tree" },
+          { "long": "patch", "short": "p", "description": "select hunks interactively" },
+          { "long": "ours", "exclusiveGroup": "restore-conflict-side", "description": "restore our version for unmerged paths" },
+          { "long": "theirs", "exclusiveGroup": "restore-conflict-side", "description": "restore their version for unmerged paths" },
+          { "long": "merge", "short": "m", "description": "recreate conflicted merge in unmerged paths" },
+          { "long": "conflict", "value": { "name": "style", "provider": "git.conflict-styles" }, "description": "set conflict marker style" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.restore-paths", "description": "path to restore" }
+          ]
+        }
+      },
+      {
+        "name": "reset",
+        "description": "reset current HEAD",
+        "optionGroups": [
+          { "name": "reset-mode", "exclusive": true }
+        ],
+        "options": [
+          { "long": "soft", "exclusiveGroup": "reset-mode", "description": "reset HEAD only" },
+          { "long": "mixed", "exclusiveGroup": "reset-mode", "description": "reset index but not working tree" },
+          { "long": "hard", "exclusiveGroup": "reset-mode", "description": "reset index and working tree" },
+          { "long": "merge", "exclusiveGroup": "reset-mode", "description": "reset index and update files different between commit and HEAD" },
+          { "long": "keep", "exclusiveGroup": "reset-mode", "description": "reset index and update files while keeping local changes" },
+          { "long": "patch", "short": "p", "description": "select hunks interactively" },
+          { "long": "quiet", "short": "q", "description": "be quiet" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "target", "index": 0, "repeatable": true, "provider": "git.reset-arguments", "description": "commit or staged path" }
+          ]
+        }
+      },
+      {
+        "name": "clean",
+        "description": "remove untracked files from the working tree",
+        "optionGroups": [
+          { "name": "clean-ignored", "exclusive": true }
+        ],
+        "options": [
+          { "long": "force", "short": "f", "repeatable": true, "description": "force cleaning" },
+          { "long": "dry-run", "short": "n", "description": "show what would be done" },
+          { "long": "quiet", "short": "q", "description": "be quiet" },
+          { "long": "directories", "short": "d", "description": "remove untracked directories" },
+          { "short": "x", "exclusiveGroup": "clean-ignored", "description": "do not use standard ignore rules" },
+          { "short": "X", "exclusiveGroup": "clean-ignored", "description": "remove only ignored files" },
+          { "long": "interactive", "short": "i", "description": "show what would be done and clean interactively" },
+          { "long": "exclude", "short": "e", "value": { "name": "pattern" }, "description": "add ignore pattern" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.clean-paths", "description": "untracked or ignored path" }
+          ]
+        }
+      },
+      {
+        "name": "push",
+        "description": "update remote refs",
+        "optionGroups": [
+          { "name": "push-mode", "exclusive": true }
+        ],
+        "options": [
+          { "long": "force-with-lease", "description": "force safely with lease" },
+          { "long": "force", "short": "f", "description": "force update remote refs" },
+          { "long": "tags", "description": "push all refs under refs/tags" },
+          { "long": "set-upstream", "short": "u", "description": "set upstream for the branch" },
+          { "long": "all", "exclusiveGroup": "push-mode", "description": "push all branches" },
+          { "long": "mirror", "exclusiveGroup": "push-mode", "description": "mirror all refs" },
+          { "long": "delete", "short": "d", "exclusiveGroup": "push-mode", "description": "delete refs" },
+          { "long": "dry-run", "short": "n", "description": "show what would be done without making changes" },
+          { "long": "porcelain", "description": "produce machine-readable output" },
+          { "long": "atomic", "description": "request atomic transaction on remote side" },
+          { "long": "follow-tags", "description": "push annotated tags missing from remote" },
+          { "long": "signed", "value": { "name": "mode", "provider": "git.signed-modes" }, "description": "GPG-sign push request" },
+          { "long": "no-signed", "description": "do not GPG-sign push request" },
+          { "long": "repo", "value": { "name": "repository", "provider": "git.remotes" }, "description": "default repository" },
+          { "long": "quiet", "short": "q", "description": "be quiet" },
+          { "long": "verbose", "short": "v", "description": "be verbose" },
+          { "long": "progress", "description": "force progress status" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "remote", "index": 0, "provider": "git.push-arguments", "description": "remote to push to" },
+            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.push-arguments", "description": "refspec to push" }
+          ]
+        }
+      },
+      {
+        "name": "stash",
+        "description": "stash working tree changes",
+        "subcommands": [
+          { "name": "list", "description": "list stash entries" },
+          {
+            "name": "show",
+            "description": "show stash changes",
+            "arguments": { "states": [{ "name": "stash", "index": 0, "provider": "git.stashes" }] }
+          },
+          {
+            "name": "apply",
+            "description": "apply a stash entry",
+            "arguments": { "states": [{ "name": "stash", "index": 0, "provider": "git.stashes" }] }
+          },
+          {
+            "name": "pop",
+            "description": "apply and drop a stash entry",
+            "arguments": { "states": [{ "name": "stash", "index": 0, "provider": "git.stashes" }] }
+          },
+          {
+            "name": "drop",
+            "description": "drop a stash entry",
+            "arguments": { "states": [{ "name": "stash", "index": 0, "provider": "git.stashes" }] }
+          }
+        ]
+      }
+    ]
+  }
+}

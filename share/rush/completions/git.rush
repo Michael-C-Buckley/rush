@@ -1114,3 +1114,159 @@ __rush_complete_git_sort_keys() {
   completion candidate -authordate --kind plain
   completion candidate upstream --kind plain
 }
+
+# Manifest-backed first-party Git providers. These use Rush's parsed completion
+# context instead of re-parsing the command line in shell code.
+
+__rush_complete_git_worktree_changed_paths() {
+  tmp=$(mktemp)
+  git diff --name-only > "$tmp" 2>/dev/null
+  while read path; do test -n "$path" && completion candidate "$path" --kind file --description 'worktree path'; done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_staged_paths() {
+  tmp=$(mktemp)
+  git diff --cached --name-only > "$tmp" 2>/dev/null
+  while read path; do test -n "$path" && completion candidate "$path" --kind file --description 'staged path'; done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_tree_paths() {
+  tree="$1"
+  tmp=$(mktemp)
+  if test -n "$tree"; then
+    git ls-tree -r --name-only "$tree" > "$tmp" 2>/dev/null
+    while read path; do test -n "$path" && completion candidate "$path" --kind file --description 'tree path'; done < "$tmp"
+  else
+    git ls-files > "$tmp" 2>/dev/null
+    while read path; do test -n "$path" && completion candidate "$path" --kind file --description 'tracked path'; done < "$tmp"
+  fi
+  rm -f "$tmp"
+}
+
+__rush_complete_git_untracked_clean_paths() {
+  tmp=$(mktemp)
+  git ls-files --others --exclude-standard > "$tmp" 2>/dev/null
+  while read path; do test -n "$path" && completion candidate "$path" --kind file --description 'untracked path'; done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_ignored_clean_paths() {
+  tmp=$(mktemp)
+  git ls-files --others --ignored --exclude-standard > "$tmp" 2>/dev/null
+  while read path; do test -n "$path" && completion candidate "$path" --kind file --description 'ignored path'; done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_git_context_diff_args() {
+  if test "$(completion option-present --long no-index)" = true; then
+    completion files
+  else
+    if test "$(completion options-terminated)" = true; then
+      __rush_complete_git_staged_paths
+      __rush_complete_git_worktree_changed_paths
+    else
+      __rush_complete_git_refs
+    fi
+  fi
+}
+
+__rush_complete_git_context_checkout_args() {
+  if test "$(completion options-terminated)" = true; then
+    tree="$(completion operand 0)"
+    __rush_complete_git_tree_paths "$tree"
+  else
+    if test "$(completion argument-index)" = 0; then
+      __rush_complete_git_branches
+      __rush_complete_git_remote_branches
+      __rush_complete_git_tags
+    else
+      __rush_complete_git_changed_paths
+    fi
+  fi
+}
+
+__rush_complete_git_context_switch_args() {
+  __rush_complete_git_branches
+  __rush_complete_git_remote_branches
+}
+
+__rush_complete_git_context_restore_paths() {
+  tree=
+  for value in $(completion option-values --long source); do tree="$value"; done
+  if test -n "$tree"; then
+    __rush_complete_git_tree_paths "$tree"
+  else
+    if test "$(completion option-present --long staged)" = true; then
+      __rush_complete_git_staged_paths
+    else
+      __rush_complete_git_worktree_changed_paths
+    fi
+  fi
+}
+
+__rush_complete_git_context_reset_args() {
+  if test "$(completion options-terminated)" = true; then
+    __rush_complete_git_staged_paths
+  else
+    if test "$(completion argument-index)" = 0; then
+      __rush_complete_git_refs
+      __rush_complete_git_staged_paths
+    else
+      __rush_complete_git_staged_paths
+    fi
+  fi
+}
+
+__rush_complete_git_context_clean_paths() {
+  if test "$(completion option-present --short X)" = true; then
+    __rush_complete_git_ignored_clean_paths
+  else
+    __rush_complete_git_untracked_clean_paths
+    if test "$(completion option-present --short x)" = true; then
+      __rush_complete_git_ignored_clean_paths
+    fi
+  fi
+}
+
+__rush_complete_git_context_branch_args() {
+  if test "$(completion option-present --long remotes)" = true; then
+    __rush_complete_git_remote_branches
+  else
+    if test "$(completion option-present --short r)" = true; then
+      __rush_complete_git_remote_branches
+    else
+      __rush_complete_git_branches
+      if test "$(completion option-present --long track)" = true; then
+        __rush_complete_git_remote_branches
+      fi
+    fi
+  fi
+}
+
+__rush_complete_git_context_push_remote_refs() {
+  remote="$(completion operand 0)"
+  if test -n "$remote"; then
+    git for-each-ref --format='%(refname:short)' "refs/remotes/$remote" 2>/dev/null | sed "s#^$remote/##" | while read ref; do test -n "$ref" && completion candidate "$ref" --kind plain --description 'remote ref'; done
+  else
+    __rush_complete_git_remote_branches
+  fi
+}
+
+__rush_complete_git_context_push_args() {
+  if test "$(completion argument-index)" = 0; then
+    __rush_complete_git_remotes
+  else
+    if test "$(completion option-present --long delete)" = true; then
+      __rush_complete_git_context_push_remote_refs
+    else
+      if test "$(completion option-present --short d)" = true; then
+        __rush_complete_git_context_push_remote_refs
+      else
+        __rush_complete_git_branches
+        __rush_complete_git_tags
+      fi
+    fi
+  fi
+}
