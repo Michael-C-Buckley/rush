@@ -46,7 +46,9 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 RUSH="$ROOT/zig-out/bin/rush"
 CORPUS=${1:-$ROOT/test/corpus/system-shell-supported.txt}
 
-zig build --summary none >/dev/null
+if [ -z "${RUSH_SKIP_BUILD:-}" ]; then
+  zig build --summary none >/dev/null
+fi
 
 SHELLS=""
 if command -v dash >/dev/null 2>&1; then SHELLS="$SHELLS dash"; fi

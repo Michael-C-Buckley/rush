@@ -96,7 +96,9 @@ RUSH="$ROOT/zig-out/bin/rush"
 CORPUS_DIR=${1:-$ROOT/test/corpus/posix}
 CORPUS_LABEL=${CORPUS_LABEL:-POSIX corpus}
 
-zig build --summary none >/dev/null
+if [ -z "${RUSH_SKIP_BUILD:-}" ]; then
+  zig build --summary none >/dev/null
+fi
 
 if [ ! -d "$CORPUS_DIR" ]; then
   echo "missing POSIX corpus directory: $CORPUS_DIR" >&2

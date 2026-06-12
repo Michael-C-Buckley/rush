@@ -3,6 +3,8 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const test_filter = b.option([]const u8, "test-filter", "Only run unit tests whose name contains this string");
+    const test_filters: []const []const u8 = if (test_filter) |filter| &.{filter} else &.{};
     const vaxis = b.dependency("vaxis", .{
         .target = target,
         .optimize = optimize,
@@ -67,11 +69,15 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "zeit", .module = zeit },
             },
         }),
+        .filters = test_filters,
     });
     exe_tests.root_module.addOptions("build_config", build_config);
     exe_tests.root_module.addAnonymousImport("default_config", .{ .root_source_file = b.path("share/rush/config.rush") });
     linkSqlite(b, exe_tests.root_module, use_system_sqlite);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
+
+    const check_step = b.step("check", "Run unit tests and repository validation checks");
+    check_step.dependOn(test_step);
 
     const compile_test_step = b.step("compile-test", "Compile unit tests without running them");
     compile_test_step.dependOn(&exe_tests.step);
@@ -106,9 +112,9 @@ pub fn build(b: *std.Build) void {
     const fmt_step = b.step("fmt", "Check code formatting");
     const fmt_check = b.addFmt(.{ .paths = &.{ "src", "build.zig", "build.zig.zon" }, .check = true });
     fmt_step.dependOn(&fmt_check.step);
-    test_step.dependOn(fmt_step);
-    test_step.dependOn(&completion_validate.step);
-    test_step.dependOn(&invocation_stdin_check.step);
+    check_step.dependOn(fmt_step);
+    check_step.dependOn(&completion_validate.step);
+    check_step.dependOn(&invocation_stdin_check.step);
 
     const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
     const cross_check = b.addSystemCommand(&.{ "sh", "scripts/check-cross-targets.sh" });
@@ -119,34 +125,37 @@ pub fn build(b: *std.Build) void {
     const corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-system-shell-corpus.sh" });
     corpus_check.step.dependOn(&exe.step);
     corpus_check.step.dependOn(fmt_step);
+    corpus_check.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
     corpus_step.dependOn(&corpus_check.step);
-    test_step.dependOn(&corpus_check.step);
+    check_step.dependOn(&corpus_check.step);
 
     const posix_corpus_step = b.step("posix-corpus", "Run spec-derived POSIX expected-output corpus");
     const posix_corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-posix-corpus.sh" });
     posix_corpus_check.step.dependOn(&exe.step);
     posix_corpus_check.step.dependOn(fmt_step);
+    posix_corpus_check.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
     posix_corpus_step.dependOn(&posix_corpus_check.step);
-    test_step.dependOn(&posix_corpus_check.step);
+    check_step.dependOn(&posix_corpus_check.step);
 
     const compliance_manifest_step = b.step("compliance-manifest", "Validate POSIX compliance manifest schema and references");
     const compliance_manifest_check = b.addSystemCommand(&.{ "sh", "scripts/check-compliance-manifest.sh" });
     compliance_manifest_check.step.dependOn(fmt_step);
     compliance_manifest_step.dependOn(&compliance_manifest_check.step);
-    test_step.dependOn(&compliance_manifest_check.step);
+    check_step.dependOn(&compliance_manifest_check.step);
 
     const completion_manifest_schema_step = b.step("completion-manifest-schema", "Validate completion manifest schema and examples");
     const completion_manifest_schema_check = b.addSystemCommand(&.{ "sh", "scripts/check-completion-manifest-schema.sh" });
     completion_manifest_schema_check.step.dependOn(fmt_step);
     completion_manifest_schema_step.dependOn(&completion_manifest_schema_check.step);
-    test_step.dependOn(&completion_manifest_schema_check.step);
+    check_step.dependOn(&completion_manifest_schema_check.step);
 
     const posix_negative_corpus_step = b.step("posix-negative-corpus", "Run POSIX negative diagnostics corpus");
     const posix_negative_corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-posix-negative-corpus.sh" });
     posix_negative_corpus_check.step.dependOn(&exe.step);
     posix_negative_corpus_check.step.dependOn(fmt_step);
+    posix_negative_corpus_check.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
     posix_negative_corpus_step.dependOn(&posix_negative_corpus_check.step);
-    test_step.dependOn(&posix_negative_corpus_check.step);
+    check_step.dependOn(&posix_negative_corpus_check.step);
 
     const compliance_step = b.step("compliance", "Report POSIX compliance metrics and validate corpora");
     const compliance_report = b.addSystemCommand(&.{ "sh", "scripts/report-compliance.sh", "--run-corpora" });

@@ -6799,6 +6799,9 @@ pub const Executor = struct {
         var sub_options = substitution_context.options;
         sub_options.external_stdio = .capture_stdout;
         sub_options.force_noninteractive_error_consequences = true;
+        if (std.mem.startsWith(u8, std.mem.trim(u8, script, " \t\r\n"), "completion ")) {
+            return runCompletionCommandSubstitution(substitution_context, allocator, script, sub_options);
+        }
         var child = Executor.init(substitution_context.executor.allocator);
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
@@ -6817,6 +6820,24 @@ pub const Executor = struct {
         if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
         if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
         child.pending_exit = null;
+        var result = try child.executeScriptSlice(script, sub_options);
+        defer result.deinit();
+        substitution_context.executor.command_substitution_status = result.status;
+        if (child.had_expansion_error) {
+            substitution_context.executor.had_expansion_error = true;
+            try substitution_context.executor.command_substitution_stderr.appendSlice(substitution_context.executor.allocator, result.stderr);
+        }
+        return allocator.dupe(u8, result.stdout);
+    }
+
+    fn runCompletionCommandSubstitution(substitution_context: *CommandSubstitutionContext, allocator: std.mem.Allocator, script: []const u8, sub_options: ExecuteOptions) ![]const u8 {
+        var child = Executor.init(substitution_context.executor.allocator);
+        defer child.deinit();
+        child.completion_builder = .{};
+        child.completion_context = substitution_context.executor.completion_context;
+        child.last_completion_context = substitution_context.executor.last_completion_context;
+        for (substitution_context.executor.completion_rules.items) |rule| try child.registerCompletionRule(rule);
+
         var result = try child.executeScriptSlice(script, sub_options);
         defer result.deinit();
         substitution_context.executor.command_substitution_status = result.status;
