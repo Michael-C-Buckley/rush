@@ -1,0 +1,1 @@
+printf '[%*s][%.*s][%*.*d][%-*s]\n' 5 a 3 abcdef 6 4 7 5 left

@@ -85,6 +85,7 @@ builtin-getopts-nonsilent-missing	builtin	behavior	getopts non-silent missing ar
 builtin-getopts-silent-missing	builtin	builtin	-
 builtin-getopts-silent-invalid	builtin	behavior	getopts silent invalid options set OPTARG without diagnostics
 builtin-loop-control	builtin	builtin	-
+builtin-printf-dynamic-width-precision	builtin	behavior	printf accepts dynamic asterisk width and precision arguments for representative string and integer conversions
 builtin-printf-escapes	builtin	builtin	-
 builtin-printf-floating-conversions	builtin	behavior	printf formats representative POSIX floating-point conversions
 builtin-printf-floating-format-flags	builtin	behavior	printf applies representative sign, space, and alternate-form flags to floating conversions with C-locale radix output

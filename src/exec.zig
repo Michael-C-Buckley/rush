@@ -10306,7 +10306,9 @@ const PrintfSpec = struct {
     sign_plus: bool = false,
     sign_space: bool = false,
     alternate: bool = false,
+    width_from_argument: bool = false,
     width: ?usize = null,
+    precision_from_argument: bool = false,
     precision: ?usize = null,
 };
 
@@ -10354,9 +10356,14 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                         continue;
                     };
                     if (spec.spec == '%') {
+                        if (spec.width_from_argument or spec.precision_from_argument) {
+                            try printfDiagnostic(allocator, stderr, status, "invalid format");
+                            continue;
+                        }
                         try stdout.append(allocator, '%');
                         continue;
                     }
+                    const resolved_spec = try resolvePrintfDynamicSpec(allocator, stderr, status, stderr_before_stdout, spec, args, &arg_index);
                     const arg = if (spec.argument) |argument_number| blk: {
                         pass_max_numbered_argument = @max(pass_max_numbered_argument, argument_number);
                         const offset = std.math.add(usize, numbered_base, argument_number - 1) catch {
@@ -10373,7 +10380,7 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                         arg_index += 1;
                         break :blk value;
                     } else "";
-                    if (!try appendPrintfConversion(allocator, stdout, stderr, status, stderr_before_stdout, spec, arg)) return;
+                    if (!try appendPrintfConversion(allocator, stdout, stderr, status, stderr_before_stdout, resolved_spec, arg)) return;
                 },
                 else => {
                     try stdout.append(allocator, format[index]);
@@ -10406,6 +10413,10 @@ fn analyzePrintfFormat(format: []const u8) error{MixedArguments}!PrintfArgumentM
                 if (index >= format.len) return result;
                 const spec = parsePrintfSpec(format, &index) orelse return result;
                 if (spec.spec == '%') continue;
+                if (spec.width_from_argument or spec.precision_from_argument) {
+                    if (result == .numbered) return error.MixedArguments;
+                    result = .unnumbered;
+                }
                 if (spec.argument != null) {
                     if (result == .unnumbered) return error.MixedArguments;
                     result = .numbered;
@@ -10430,6 +10441,40 @@ fn printfDiagnostic(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), st
 fn printfNumericDiagnostic(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool) !void {
     stderr_before_stdout.* = true;
     try printfDiagnostic(allocator, stderr, status, "numeric argument required");
+}
+
+fn resolvePrintfDynamicSpec(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool, spec: PrintfSpec, args: []const ir.WordRef, arg_index: *usize) !PrintfSpec {
+    var result = spec;
+    if (result.width_from_argument) {
+        const value = try parsePrintfSigned(allocator, stderr, status, stderr_before_stdout, nextPrintfArgument(args, arg_index));
+        applyPrintfDynamicWidth(&result, value);
+    }
+    if (result.precision_from_argument) {
+        const value = try parsePrintfSigned(allocator, stderr, status, stderr_before_stdout, nextPrintfArgument(args, arg_index));
+        result.precision = if (value < 0) null else printfDynamicMagnitude(value);
+    }
+    result.width_from_argument = false;
+    result.precision_from_argument = false;
+    return result;
+}
+
+fn nextPrintfArgument(args: []const ir.WordRef, arg_index: *usize) []const u8 {
+    if (arg_index.* >= args.len) return "";
+    const value = args[arg_index.*].text;
+    arg_index.* += 1;
+    return value;
+}
+
+fn applyPrintfDynamicWidth(spec: *PrintfSpec, value: i64) void {
+    if (value < 0) {
+        spec.left_adjust = true;
+    }
+    spec.width = printfDynamicMagnitude(value);
+}
+
+fn printfDynamicMagnitude(value: i64) usize {
+    const magnitude: u64 = if (value < 0) @as(u64, @intCast(-(value + 1))) + 1 else @intCast(value);
+    return std.math.cast(usize, magnitude) orelse std.math.maxInt(usize);
 }
 
 fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
@@ -10457,7 +10502,10 @@ fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
         }
         index.* += 1;
     }
-    if (index.* < format.len and std.ascii.isDigit(format[index.*])) {
+    if (index.* < format.len and format[index.*] == '*') {
+        result.width_from_argument = true;
+        index.* += 1;
+    } else if (index.* < format.len and std.ascii.isDigit(format[index.*])) {
         const start = index.*;
         while (index.* < format.len and std.ascii.isDigit(format[index.*])) : (index.* += 1) {}
         result.width = std.fmt.parseInt(usize, format[start..index.*], 10) catch null;
@@ -10465,8 +10513,13 @@ fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
     if (index.* < format.len and format[index.*] == '.') {
         index.* += 1;
         const start = index.*;
-        while (index.* < format.len and std.ascii.isDigit(format[index.*])) : (index.* += 1) {}
-        result.precision = if (start == index.*) 0 else std.fmt.parseInt(usize, format[start..index.*], 10) catch 0;
+        if (index.* < format.len and format[index.*] == '*') {
+            result.precision_from_argument = true;
+            index.* += 1;
+        } else {
+            while (index.* < format.len and std.ascii.isDigit(format[index.*])) : (index.* += 1) {}
+            result.precision = if (start == index.*) 0 else std.fmt.parseInt(usize, format[start..index.*], 10) catch 0;
+        }
     }
     if (index.* >= format.len) return null;
     result.spec = format[index.*];
@@ -15328,6 +15381,13 @@ test "executor implements read and printf builtins" {
     var width_result = try executor.executeProgram(width_lowered.program, .{});
     defer width_result.deinit();
     try std.testing.expectEqualStrings("[    a][b    ][abc][0007][12][ff][FF]", width_result.stdout);
+
+    var dynamic_width_lowered = try parseAndLower(std.testing.allocator, "printf '[%*s][%.*s][%*.*d][%-*s]\\n' 5 a 3 abcdef 6 4 7 5 left");
+    defer dynamic_width_lowered.parsed.deinit();
+    defer dynamic_width_lowered.program.deinit();
+    var dynamic_width_result = try executor.executeProgram(dynamic_width_lowered.program, .{});
+    defer dynamic_width_result.deinit();
+    try std.testing.expectEqualStrings("[    a][abc][  0007][left ]\n", dynamic_width_result.stdout);
 
     var integer_format_lowered = try parseAndLower(std.testing.allocator, "printf '[%+d][% d][%.4d][%8.4d][%-8.4d][%+05d][%#o][%#x][%#X][%#06x]\\n' 7 7 7 7 7 7 10 255 255 255");
     defer integer_format_lowered.parsed.deinit();
