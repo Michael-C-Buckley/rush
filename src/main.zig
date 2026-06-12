@@ -1490,6 +1490,7 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
         if (manifestString(option.get("exclusiveGroup"))) |group| rule.option.exclusive_group = group;
         rule.option.repeatable = manifestBool(option.get("repeatable"));
         rule.option.terminates_options = manifestBool(option.get("terminatesOptions"));
+        rule.option.inherit = manifestBoolDefault(option.get("inherit"), true);
         if (option.get("value")) |value| {
             if (manifestValueName(value)) |name| rule.option.argument = name;
         }
@@ -1810,6 +1811,9 @@ fn validateManifestCommand(
     var options: std.ArrayList(CompletionManifestOptionSpelling) = .empty;
     defer options.deinit(allocator);
     try options.appendSlice(allocator, inherited_options);
+    var child_options: std.ArrayList(CompletionManifestOptionSpelling) = .empty;
+    defer child_options.deinit(allocator);
+    try child_options.appendSlice(allocator, inherited_options);
     if (command.get("options")) |options_value| {
         const options_path = try manifestFieldPath(allocator, path, "options");
         defer allocator.free(options_path);
@@ -1821,7 +1825,7 @@ fn validateManifestCommand(
             for (array.items, 0..) |option_value, index| {
                 const option_path = try manifestIndexPath(allocator, options_path, index);
                 defer allocator.free(option_path);
-                try validateManifestOption(allocator, diagnostics, option_value, providers.items, &options, groups.items, option_path);
+                try validateManifestOption(allocator, diagnostics, option_value, providers.items, &options, &child_options, groups.items, option_path);
             }
         }
     }
@@ -1853,7 +1857,7 @@ fn validateManifestCommand(
                 const subcommand_path = try manifestIndexPath(allocator, subcommands_path, index);
                 defer allocator.free(subcommand_path);
                 if (subcommand == .object) try validateManifestSubcommandNames(allocator, diagnostics, subcommand.object, &seen_subcommands, subcommand_path);
-                try validateManifestCommand(allocator, diagnostics, subcommand, providers.items, options.items, groups.items, subcommand_path);
+                try validateManifestCommand(allocator, diagnostics, subcommand, providers.items, child_options.items, groups.items, subcommand_path);
             }
         }
     }
@@ -1865,6 +1869,7 @@ fn validateManifestOption(
     option_value: std.json.Value,
     providers: []const []const u8,
     options: *std.ArrayList(CompletionManifestOptionSpelling),
+    child_options: *std.ArrayList(CompletionManifestOptionSpelling),
     groups: []const []const u8,
     path: []const u8,
 ) !void {
@@ -1874,13 +1879,16 @@ fn validateManifestOption(
     };
 
     var has_spelling = false;
+    const inherit = manifestBoolDefault(option.get("inherit"), true);
     if (manifestString(option.get("short"))) |short| {
         has_spelling = true;
-        try appendManifestOptionSpelling(diagnostics, options, .{ .kind = .short, .value = short }, path);
+        const spelling: CompletionManifestOptionSpelling = .{ .kind = .short, .value = short };
+        if (try appendManifestOptionSpelling(diagnostics, options, spelling, path) and inherit) try child_options.append(diagnostics.allocator, spelling);
     }
     if (manifestString(option.get("long"))) |long| {
         has_spelling = true;
-        try appendManifestOptionSpelling(diagnostics, options, .{ .kind = .long, .value = long }, path);
+        const spelling: CompletionManifestOptionSpelling = .{ .kind = .long, .value = long };
+        if (try appendManifestOptionSpelling(diagnostics, options, spelling, path) and inherit) try child_options.append(diagnostics.allocator, spelling);
     }
     if (option.get("aliases")) |aliases_value| {
         const aliases = switch (aliases_value) {
@@ -1895,7 +1903,8 @@ fn validateManifestOption(
                 const alias_path = try manifestIndexPath(allocator, aliases_path, index);
                 defer allocator.free(alias_path);
                 has_spelling = true;
-                try appendManifestOptionSpelling(diagnostics, options, .{ .kind = .long, .value = alias }, alias_path);
+                const spelling: CompletionManifestOptionSpelling = .{ .kind = .long, .value = alias };
+                if (try appendManifestOptionSpelling(diagnostics, options, spelling, alias_path) and inherit) try child_options.append(diagnostics.allocator, spelling);
             }
         }
     }
@@ -2222,14 +2231,15 @@ fn validateManifestNameValue(allocator: std.mem.Allocator, diagnostics: *Complet
     }
 }
 
-fn appendManifestOptionSpelling(diagnostics: *CompletionManifestDiagnostics, options: *std.ArrayList(CompletionManifestOptionSpelling), spelling: CompletionManifestOptionSpelling, path: []const u8) !void {
+fn appendManifestOptionSpelling(diagnostics: *CompletionManifestDiagnostics, options: *std.ArrayList(CompletionManifestOptionSpelling), spelling: CompletionManifestOptionSpelling, path: []const u8) !bool {
     for (options.items) |existing| {
         if (existing.kind == spelling.kind and std.mem.eql(u8, existing.value, spelling.value)) {
             try diagnostics.add(.err, "{s}: duplicate option spelling '{s}{s}'", .{ path, manifestOptionPrefix(spelling.kind), spelling.value });
-            return;
+            return false;
         }
     }
     try options.append(diagnostics.allocator, spelling);
+    return true;
 }
 
 fn manifestOptionPrefix(kind: CompletionManifestOptionSpellingKind) []const u8 {
@@ -2299,6 +2309,13 @@ fn manifestBool(value: ?std.json.Value) bool {
     return switch (value orelse return false) {
         .bool => |boolean| boolean,
         else => false,
+    };
+}
+
+fn manifestBoolDefault(value: ?std.json.Value, default: bool) bool {
+    return switch (value orelse return default) {
+        .bool => |boolean| boolean,
+        else => default,
     };
 }
 
@@ -3218,6 +3235,8 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.write(rule.option.terminates_options);
     try json.objectField("noSpace");
     try json.write(rule.option.no_space);
+    try json.objectField("inherit");
+    try json.write(rule.option.inherit);
     try json.endObject();
     try json.objectField("argument");
     try json.beginObject();
@@ -3324,6 +3343,8 @@ fn writeCompletionCandidateJson(allocator: std.mem.Allocator, json: *std.json.St
         try json.write(option.terminates_options);
         try json.objectField("noSpace");
         try json.write(option.no_space);
+        try json.objectField("inherit");
+        try json.write(option.inherit);
         try json.endObject();
     } else {
         try json.write(@as(?[]const u8, null));
@@ -5329,6 +5350,31 @@ test "completion manifest semantic validation accepts resolved providers groups 
     try std.testing.expectEqual(@as(usize, 0), diagnostics.items.items.len);
 }
 
+test "completion manifest semantic validation allows non-inherited option spelling conflicts" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "options": [
+        \\      { "short": "C", "inherit": false, "value": { "name": "path" } }
+        \\    ],
+        \\    "subcommands": [
+        \\      {
+        \\        "name": "branch",
+        \\        "options": [
+        \\          { "short": "C", "description": "child-local meaning" }
+        \\        ]
+        \\      }
+        \\    ]
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try std.testing.expect(!diagnostics.hasErrors());
+}
+
 test "completion manifest semantic validation rejects builtin provider options" {
     var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
         \\{
@@ -5460,10 +5506,13 @@ test "supplied git manifest validates and selects representative contexts" {
     defer std.testing.allocator.free(bin_path);
     const git_path = try std.fs.path.join(std.testing.allocator, &.{ bin_path, "git" });
     defer std.testing.allocator.free(git_path);
+    const global_cwd_path = try std.fs.path.join(std.testing.allocator, &.{ root_path, "global-cwd" });
+    defer std.testing.allocator.free(global_cwd_path);
 
     std.Io.Dir.cwd().deleteTree(std.testing.io, root_path) catch {};
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root_path) catch {};
     try std.Io.Dir.cwd().createDirPath(std.testing.io, bin_path);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, global_cwd_path);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = git_path, .data =
         \\#!/bin/sh
         \\case "$1" in
@@ -5544,6 +5593,24 @@ test "supplied git manifest validates and selects representative contexts" {
         }
     }
     try std.testing.expect(saw_manifest_rule);
+
+    const global_cwd_source = try std.fmt.allocPrint(std.testing.allocator, "git -C {s}/global", .{root_path});
+    defer std.testing.allocator.free(global_cwd_source);
+    const global_cwd = try executor.collectCompletionsForInput(global_cwd_source, global_cwd_source.len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(global_cwd);
+    const global_cwd_dir = findCompletionCandidate(global_cwd, "global-cwd/") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.directory, global_cwd_dir.kind);
+
+    const global_config_source = "git -c core.editor=true sw";
+    var global_config_analysis = try executor.analyzeCompletionsForInput(global_config_source, global_config_source.len);
+    defer global_config_analysis.deinit();
+    try std.testing.expectEqual(@as(usize, 1), global_config_analysis.parsed_options.len);
+    try std.testing.expectEqualStrings("-c", global_config_analysis.parsed_options[0].spelling);
+    try std.testing.expectEqualStrings("core.editor=true", global_config_analysis.parsed_options[0].value.?);
+    try std.testing.expectEqual(exec.CompletionSemanticPosition.subcommand, global_config_analysis.position);
+    const global_config_subcommands = try executor.collectCompletionsForInput(global_config_source, global_config_source.len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(global_config_subcommands);
+    try expectCompletionCandidate(global_config_subcommands, "switch");
 
     const switch_branches = try executor.collectCompletionsForInput("git switch ma", "git switch ma".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(switch_branches);
@@ -5631,6 +5698,11 @@ test "supplied git manifest validates and selects representative contexts" {
     const branch_sort = try executor.collectCompletionsForInput("git branch --sort comm", "git branch --sort comm".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(branch_sort);
     try expectCompletionCandidate(branch_sort, "committerdate");
+
+    const branch_short_options = try executor.collectCompletionsForInput("git branch -", "git branch -".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(branch_short_options);
+    const branch_copy = findCompletionCandidate(branch_short_options, "-c") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("copy", branch_copy.option.?.long.?);
 }
 
 fn expectCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) !void {

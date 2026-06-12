@@ -393,6 +393,7 @@ pub const CompletionBuilder = struct {
                 .repeatable = option.repeatable,
                 .terminates_options = option.terminates_options,
                 .no_space = option.no_space,
+                .inherit = option.inherit,
             };
         }
         try self.candidates.append(allocator, owned_candidate);
@@ -716,7 +717,7 @@ fn attachedShortCompletionOptionValue(rules: []const completion.Rule, root: []co
 
 fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?MatchedCompletionOption {
     for (rules) |rule| {
-        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextAppliesToPath(rule, root, path)) continue;
+        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
         const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
         const key = completionOptionKey(rule.option) orelse continue;
         if (rule.option.long) |long| {
@@ -738,7 +739,7 @@ fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: 
 
 fn findShortCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, short: u8) ?MatchedCompletionOption {
     for (rules) |rule| {
-        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionRuleContextAppliesToPath(rule, root, path)) continue;
+        if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
         const option_short = rule.option.short orelse continue;
         if (option_short.len != 1 or option_short[0] != short) continue;
         const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
@@ -789,7 +790,7 @@ fn completionContextHasSubcommands(rules: []const completion.Rule, root: []const
 
 fn completionContextHasOptions(rules: []const completion.Rule, root: []const u8, path: []const []const u8) bool {
     for (rules) |rule| {
-        if ((rule.kind == .option or rule.kind == .dynamic_option_value) and completionRuleContextAppliesToPath(rule, root, path)) return true;
+        if ((rule.kind == .option or rule.kind == .dynamic_option_value) and completionOptionRuleContextAppliesToPath(rule, root, path)) return true;
     }
     return false;
 }
@@ -804,7 +805,7 @@ fn completionSubcommandPrefixMatches(rules: []const completion.Rule, root: []con
 
 fn completionOptionPrefixMatches(rules: []const completion.Rule, root: []const u8, path: []const []const u8, prefix: []const u8) bool {
     for (rules) |rule| {
-        if (rule.kind != .option or !completionRuleContextAppliesToPath(rule, root, path)) continue;
+        if (rule.kind != .option or !completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
         if (rule.option.long) |long| {
             var spelling_buffer: [256]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
@@ -856,7 +857,7 @@ const CompletionOptionMetadata = struct {
 
 fn completionRuleOptionMetadataForCandidate(rules: []const completion.Rule, root: []const u8, path: []const []const u8, candidate: completion.Candidate) ?CompletionOptionMetadata {
     for (rules) |rule| {
-        if (rule.kind != .option or !completionRuleContextAppliesToPath(rule, root, path)) continue;
+        if (rule.kind != .option or !completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
         if (completionOptionSpellingMatches(rule.option, candidate.value)) return .{
             .exclusive_group = rule.option.exclusive_group,
             .repeatable = rule.option.repeatable,
@@ -977,12 +978,19 @@ fn completionRuleContextAppliesToPath(rule: completion.Rule, root: []const u8, p
     return true;
 }
 
+fn completionOptionRuleContextAppliesToPath(rule: completion.Rule, root: []const u8, path: []const []const u8) bool {
+    return if (rule.option.inherit)
+        completionRuleContextAppliesToPath(rule, root, path)
+    else
+        completionRuleContextMatches(rule, root, path);
+}
+
 fn completionDynamicRuleMatches(rule: completion.Rule, context: CompletionSemanticContext) bool {
     return switch (rule.kind) {
         .dynamic_subcommands => context.position == .subcommand and completionRuleContextMatches(rule, context.root, context.path),
         .dynamic_options => context.position == .option and completionRuleContextAppliesToPath(rule, context.root, context.path),
         .dynamic_argument => completionArgumentRuleMatches(rule, context),
-        .dynamic_option_value => context.position == .option_value and completionRuleContextMatches(rule, context.root, context.path) and completionOptionValueMatches(rule, context.option_value),
+        .dynamic_option_value => context.position == .option_value and completionOptionRuleContextAppliesToPath(rule, context.root, context.path) and completionOptionValueMatches(rule, context.option_value),
         else => false,
     };
 }
@@ -1061,7 +1069,7 @@ fn completionValueGrammarForOption(rules: []const completion.Rule, root: []const
     for (rules) |rule| {
         if (rule.value_grammar.isEmpty()) continue;
         if (rule.kind != .option and rule.kind != .dynamic_option_value) continue;
-        if (!completionRuleContextMatches(rule, root, path)) continue;
+        if (!completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
         if (!completionOptionValueMatches(rule, option_value)) continue;
         return rule.value_grammar;
     }
@@ -1905,6 +1913,7 @@ pub const Executor = struct {
                 .repeatable = rule.option.repeatable,
                 .terminates_options = rule.option.terminates_options,
                 .no_space = rule.option.no_space,
+                .inherit = rule.option.inherit,
             },
             .argument = .{
                 .state = if (rule.argument.state) |state| try self.allocator.dupe(u8, state) else null,
@@ -2623,7 +2632,7 @@ pub const Executor = struct {
                     if (context.position != .option and !(context.position == .subcommand and context.prefix.len == 0)) continue;
                     if (context.position == .subcommand and context.prefix.len == 0) {
                         if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
-                    } else if (!completionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
+                    } else if (!completionOptionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
                     if (rule.option.long) |long| {
                         if (completionOptionSuppressionForOption(context, rule.option) != null) continue;
                         var spelling_buffer: [256]u8 = undefined;

@@ -175,6 +175,7 @@ type Option = {
   value?: Value
   repeatable?: boolean
   exclusiveGroup?: string
+  inherit?: boolean
   requires?: string[]
   terminatesOptions?: boolean
   hidden?: boolean
@@ -227,6 +228,11 @@ when separating canonical name from aliases is clearer.
 
 Options have `short` and/or `long`. Long names are stored without `--`; short
 names are stored without `-`.
+
+Parent options are inherited into subcommand contexts by default. Set
+`"inherit": false` for options that are only valid before selecting a
+subcommand, such as Git's global `-C` and `-c` options, so subcommands may reuse
+the same short spelling for local meanings.
 
 ### Option groups
 

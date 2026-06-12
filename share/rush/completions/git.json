@@ -28,6 +28,8 @@
       "git.signed-modes": { "function": "__rush_complete_git_signed_modes" }
     },
     "options": [
+      { "short": "C", "inherit": false, "repeatable": true, "value": { "name": "path", "provider": "builtin.directories" }, "description": "run as if git started in path" },
+      { "short": "c", "inherit": false, "repeatable": true, "value": { "name": "name=value" }, "description": "pass a configuration parameter" },
       { "long": "git-dir", "value": { "name": "path", "provider": "builtin.directories" }, "description": "path to the repository" },
       { "long": "work-tree", "value": { "name": "path", "provider": "builtin.directories" }, "description": "path to the working tree" },
       { "long": "help", "description": "show help" },

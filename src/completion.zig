@@ -185,6 +185,7 @@ pub const Option = struct {
     repeatable: bool = false,
     terminates_options: bool = false,
     no_space: bool = false,
+    inherit: bool = true,
 };
 
 pub const Argument = struct {
@@ -742,6 +743,7 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
             .repeatable = option.repeatable,
             .terminates_options = option.terminates_options,
             .no_space = option.no_space,
+            .inherit = option.inherit,
         };
     }
     errdefer if (cloned.option) |option| {
