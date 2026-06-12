@@ -5442,6 +5442,7 @@ test "supplied git manifest validates and selects representative contexts" {
     const staged = findCompletionCandidate(diff_paths, "src/staged.txt") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqual(completion_model.Kind.file, staged.kind);
     try std.testing.expectEqualStrings("staged path", staged.description.?);
+    try expectNoCompletionCandidate(diff_paths, "src/worktree.txt");
 
     const restore_paths = try executor.collectCompletionsForInput("git restore src/wo", "git restore src/wo".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(restore_paths);

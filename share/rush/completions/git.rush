@@ -1163,11 +1163,36 @@ __rush_complete_git_context_diff_args() {
   if test "$(completion option-present --long no-index)" = true; then
     completion files
   else
-    if test "$(completion options-terminated)" = true; then
-      __rush_complete_git_staged_paths
-      __rush_complete_git_worktree_changed_paths
+    if test "$(completion option-present --long staged)" = true; then
+      if test "$(completion options-terminated)" = true; then
+        __rush_complete_git_staged_paths
+      else
+        if test "$(completion argument-index)" = 0; then
+          __rush_complete_git_refs
+          __rush_complete_git_staged_paths
+        else
+          __rush_complete_git_staged_paths
+        fi
+      fi
     else
-      __rush_complete_git_refs
+      if test "$(completion option-present --long cached)" = true; then
+        if test "$(completion options-terminated)" = true; then
+          __rush_complete_git_staged_paths
+        else
+          if test "$(completion argument-index)" = 0; then
+            __rush_complete_git_refs
+            __rush_complete_git_staged_paths
+          else
+            __rush_complete_git_staged_paths
+          fi
+        fi
+      else
+        if test "$(completion options-terminated)" = true; then
+          __rush_complete_git_worktree_changed_paths
+        else
+          __rush_complete_git_refs
+        fi
+      fi
     fi
   fi
 }
@@ -1206,13 +1231,26 @@ __rush_complete_git_context_restore_paths() {
   fi
 }
 
+__rush_complete_git_reset_mode_present() {
+  if test "$(completion option-present --long soft)" = true; then return 0; fi
+  if test "$(completion option-present --long mixed)" = true; then return 0; fi
+  if test "$(completion option-present --long hard)" = true; then return 0; fi
+  if test "$(completion option-present --long merge)" = true; then return 0; fi
+  if test "$(completion option-present --long keep)" = true; then return 0; fi
+  return 1
+}
+
 __rush_complete_git_context_reset_args() {
   if test "$(completion options-terminated)" = true; then
     __rush_complete_git_staged_paths
   else
     if test "$(completion argument-index)" = 0; then
-      __rush_complete_git_refs
-      __rush_complete_git_staged_paths
+      if __rush_complete_git_reset_mode_present; then
+        __rush_complete_git_refs
+      else
+        __rush_complete_git_refs
+        __rush_complete_git_staged_paths
+      fi
     else
       __rush_complete_git_staged_paths
     fi
@@ -1264,8 +1302,16 @@ __rush_complete_git_context_push_args() {
       if test "$(completion option-present --short d)" = true; then
         __rush_complete_git_context_push_remote_refs
       else
-        __rush_complete_git_branches
-        __rush_complete_git_tags
+        if test "$(completion option-present --long set-upstream)" = true; then
+          __rush_complete_git_branches
+        else
+          if test "$(completion option-present --short u)" = true; then
+            __rush_complete_git_branches
+          else
+            __rush_complete_git_branches
+            __rush_complete_git_tags
+          fi
+        fi
       fi
     fi
   fi
