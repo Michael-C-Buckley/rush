@@ -62,6 +62,7 @@ builtin-command	builtin	builtin	-
 builtin-command-default-path	builtin	builtin	-
 builtin-command-lookup	builtin	builtin	-
 builtin-command-v-missing	builtin	builtin	-
+builtin-echo-n	builtin	behavior	echo treats a first operand exactly equal to -n as newline suppression without enabling -e or -E escape semantics
 builtin-fc-no-history	builtin	builtin	fc is a shell builtin and reports a clear diagnostic when no interactive command history is attached
 builtin-hash	builtin	behavior	hash records and reports remembered PATH utilities, clears on -r and PATH changes, reports missing utilities, and omits shell builtins and functions
 builtin-type	builtin	builtin	type classifies aliases reserved words functions builtins special builtins and PATH utilities

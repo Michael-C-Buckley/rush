@@ -12133,11 +12133,18 @@ fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(self.allocator);
 
-    for (command.argv[1..], 0..) |arg, index| {
+    var first_operand: usize = 1;
+    var append_newline = true;
+    if (command.argv.len > 1 and std.mem.eql(u8, command.argv[1].text, "-n")) {
+        first_operand = 2;
+        append_newline = false;
+    }
+
+    for (command.argv[first_operand..], 0..) |arg, index| {
         if (index > 0) try stdout.append(self.allocator, ' ');
         try stdout.appendSlice(self.allocator, arg.text);
     }
-    try stdout.append(self.allocator, '\n');
+    if (append_newline) try stdout.append(self.allocator, '\n');
 
     return .{
         .allocator = self.allocator,
@@ -16316,6 +16323,34 @@ test "executor runs true false and echo builtins" {
     defer echo_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), echo_result.status);
     try std.testing.expectEqualStrings("hello world\n", echo_result.stdout);
+}
+
+test "executor echo treats first -n operand as newline suppression only" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\echo -n hi; printf '<end>\n'
+        \\echo -n -n hi; printf '<end>\n'
+        \\echo -nn hi; printf '<end>\n'
+        \\echo -e hi
+        \\echo -E hi
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        "hi<end>\n" ++
+            "-n hi<end>\n" ++
+            "-nn hi\n<end>\n" ++
+            "-e hi\n" ++
+            "-E hi\n",
+        result.stdout,
+    );
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor executes Bash conditional command baseline" {

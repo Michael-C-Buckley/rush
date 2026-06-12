@@ -194,6 +194,11 @@ not POSIX compliance claims, and remain excluded from POSIX scoring:
   environment values, but deliberately does not execute command substitutions
   while expanding `PS4`. This avoids running code smuggled through an inherited
   environment variable before the script has opted into that behavior.
+- `echo` treats a first operand exactly equal to `-n` as a request to suppress
+  the trailing newline and does not print that operand. This matches common
+  shell practice in the POSIX implementation-defined area while keeping Rush's
+  default `echo` narrow: later `-n` operands are printed normally, and default
+  mode does not add `-e` or `-E` escape semantics.
 
 ## Explicitly not POSIX
 
