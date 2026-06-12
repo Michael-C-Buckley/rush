@@ -7832,7 +7832,7 @@ pub const Executor = struct {
                 const candidate = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ prefix, name });
                 defer self.allocator.free(candidate);
                 return std.Io.Dir.cwd().readFileAlloc(io, candidate, self.allocator, .unlimited) catch |err| switch (err) {
-                    error.FileNotFound => continue,
+                    error.FileNotFound, error.NotDir => continue,
                     else => |e| return e,
                 };
             }
@@ -10479,12 +10479,14 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     const posix_dot = std.mem.eql(u8, command.argv[0].text, ".");
     const contents = self.readSourceFile(io, command.argv[1].text, posix_dot) catch |err| switch (err) {
         error.FileNotFound => return sourceUsageError(self, command.argv[0].text, 1, "file not found"),
-        error.AccessDenied, error.PermissionDenied => {
-            const message = try std.fmt.allocPrint(self.allocator, "{s}: permission denied", .{command.argv[1].text});
-            defer self.allocator.free(message);
-            return sourceUsageError(self, command.argv[0].text, 1, message);
+        else => |e| {
+            if (redirectionFailureMessage(e)) |open_message| {
+                const message = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ command.argv[1].text, open_message });
+                defer self.allocator.free(message);
+                return sourceUsageError(self, command.argv[0].text, 1, message);
+            }
+            return e;
         },
-        else => |e| return e,
     };
     defer self.allocator.free(contents);
     var source_options = options;
@@ -16500,6 +16502,39 @@ test "executor implements source and dot builtins" {
     var source_result = try executor.executeProgram(source_lowered.program, .{ .io = std.testing.io });
     defer source_result.deinit();
     try std.testing.expectEqualStrings("from-source\n", source_result.stdout);
+}
+
+test "dot builtin maps source path open errors to builtin diagnostics" {
+    const dir_path = "rush-source-is-directory-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_path) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, dir_path, .default_dir);
+
+    var dir_lowered = try parseAndLower(std.testing.allocator, ". ./rush-source-is-directory-test; echo after");
+    defer dir_lowered.parsed.deinit();
+    defer dir_lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var dir_result = try executor.executeProgram(dir_lowered.program, .{ .io = std.testing.io });
+    defer dir_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), dir_result.status);
+    try std.testing.expectEqualStrings("", dir_result.stdout);
+    try std.testing.expectEqualStrings(".: ./rush-source-is-directory-test: is a directory\n", dir_result.stderr);
+
+    const file_path = "rush-source-not-directory-test";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = file_path, .data = "" });
+
+    var not_dir_lowered = try parseAndLower(std.testing.allocator, ". ./rush-source-not-directory-test/child; echo after");
+    defer not_dir_lowered.parsed.deinit();
+    defer not_dir_lowered.program.deinit();
+
+    var not_dir_result = try executor.executeProgram(not_dir_lowered.program, .{ .io = std.testing.io });
+    defer not_dir_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), not_dir_result.status);
+    try std.testing.expectEqualStrings("", not_dir_result.stdout);
+    try std.testing.expectEqualStrings(".: ./rush-source-not-directory-test/child: not a directory\n", not_dir_result.stderr);
 }
 
 test "source builtin reports file and line for runtime errors" {
