@@ -60,6 +60,10 @@ pub const ExecuteOptions = struct {
 
 const posix_shell_path = "/bin/sh";
 
+pub const ShoptOptions = struct {
+    patsub_replacement: bool = true,
+};
+
 const ExternalSpawnOptions = struct {
     argv: []const []const u8,
     environ_map: *const std.process.Environ.Map,
@@ -122,6 +126,7 @@ fn cancellableExternalPgid(options: ExecuteOptions, requested_pgid: ?std.posix.p
 }
 
 pub const ShellOptions = struct {
+    shopt: ShoptOptions = .{},
     pipefail: bool = false,
     emacs: bool = true,
     ignoreeof: bool = false,
@@ -598,6 +603,7 @@ const builtin_names = [_][]const u8{
     "exec",
     "exit",
     "set",
+    "shopt",
     "source",
     "test",
     "times",
@@ -612,6 +618,7 @@ const builtin_names = [_][]const u8{
 
 const set_options = [_][]const u8{ "-a", "+a", "-b", "+b", "-e", "+e", "-f", "+f", "-h", "+h", "-m", "+m", "-n", "+n", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
 const set_option_names = [_][]const u8{ "allexport", "emacs", "errexit", "ignoreeof", "monitor", "noglob", "noclobber", "noexec", "nolog", "notify", "nounset", "pipefail", "vi", "verbose", "xtrace" };
+const shopt_option_names = [_][]const u8{"patsub_replacement"};
 const signal_names = [_][]const u8{ "EXIT", "HUP", "INT", "QUIT", "ILL", "TRAP", "ABRT", "BUS", "FPE", "KILL", "USR1", "SEGV", "USR2", "PIPE", "ALRM", "TERM", "CHLD", "CONT", "STOP", "TSTP", "TTIN", "TTOU" };
 const test_operators = [_][]const u8{ "!", "(", ")", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-n", "-p", "-r", "-S", "-s", "-t", "-u", "-w", "-x", "-z", "=", "!=", "-eq", "-ne", "-gt", "-ge", "-lt", "-le" };
 
@@ -6621,7 +6628,7 @@ pub const Executor = struct {
         const positionals: []const []const u8 = self.currentPositionals().params;
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         defer fields.deinit();
         for (fields.fields) |field| {
             const raw = try self.allocator.dupe(u8, word.raw);
@@ -6731,14 +6738,14 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
+        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
     }
 
     pub fn expandParametersScalar(self: *Executor, allocator: std.mem.Allocator, raw: []const u8, options: ExecuteOptions) ![]const u8 {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -6747,7 +6754,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -6763,7 +6770,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
 
         for (parts.parts) |part| {
             const rendered = try expand.expandWordScalar(self.allocator, part.source(parts.raw), expansion_options);
@@ -6784,7 +6791,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
         const text = if (options.features.isBash())
             try self.expandCompoundIndexedArrayAssignmentWord(word.raw, expansion_options) orelse try expand.expandAssignmentWordScalar(self.allocator, word.raw, expansion_options)
         else
@@ -9526,6 +9533,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "exec")) return builtinExec;
     if (std.mem.eql(u8, name, "exit")) return builtinExit;
     if (std.mem.eql(u8, name, "set")) return builtinSet;
+    if (std.mem.eql(u8, name, "shopt")) return builtinShopt;
     if (std.mem.eql(u8, name, "source")) return builtinSource;
     if (std.mem.eql(u8, name, "test")) return builtinTest;
     if (std.mem.eql(u8, name, "times")) return builtinTimes;
@@ -14217,6 +14225,124 @@ fn printShellOptions(self: *Executor, reusable: bool) !CommandResult {
         .stdout = stdout,
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+const ShoptMode = enum {
+    show,
+    set,
+    unset,
+};
+
+fn builtinShopt(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+
+    var mode: ShoptMode = .show;
+    var reusable = false;
+    var quiet = false;
+    var index: usize = 1;
+    while (index < command.argv.len) {
+        const arg = command.argv[index].text;
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        for (arg[1..]) |flag| switch (flag) {
+            'p' => reusable = true,
+            'q' => quiet = true,
+            's' => mode = .set,
+            'u' => mode = .unset,
+            else => return shoptUsageError(self, "invalid option"),
+        };
+        index += 1;
+    }
+
+    const operands = command.argv[index..];
+    if (operands.len == 0) {
+        if (quiet) return emptyResult(self.allocator, 0);
+        return printShoptOptions(self, mode, reusable);
+    }
+
+    switch (mode) {
+        .set, .unset => {
+            for (operands) |operand| {
+                if (!applyShoptOptionName(&self.shell_options.shopt, operand.text, mode == .set)) return shoptInvalidName(self, operand.text);
+            }
+            return emptyResult(self.allocator, 0);
+        },
+        .show => {
+            if (quiet) return shoptQueryOptions(self, operands);
+            return printNamedShoptOptions(self, operands, reusable);
+        },
+    }
+}
+
+fn applyShoptOptionName(options: *ShoptOptions, name: []const u8, enabled: bool) bool {
+    if (std.mem.eql(u8, name, "patsub_replacement")) {
+        options.patsub_replacement = enabled;
+        return true;
+    }
+    return false;
+}
+
+fn shoptOptionEnabled(options: ShoptOptions, name: []const u8) ?bool {
+    if (std.mem.eql(u8, name, "patsub_replacement")) return options.patsub_replacement;
+    return null;
+}
+
+fn shoptUsageError(self: *Executor, message: []const u8) !CommandResult {
+    return errorResult(self.allocator, 2, "shopt", message);
+}
+
+fn shoptInvalidName(self: *Executor, name: []const u8) !CommandResult {
+    const message = try std.fmt.allocPrint(self.allocator, "{s}: invalid shell option name", .{name});
+    defer self.allocator.free(message);
+    return errorResult(self.allocator, 1, "shopt", message);
+}
+
+fn shoptQueryOptions(self: *Executor, operands: []const ir.WordRef) !CommandResult {
+    for (operands) |operand| {
+        const enabled = shoptOptionEnabled(self.shell_options.shopt, operand.text) orelse return shoptInvalidName(self, operand.text);
+        if (!enabled) return emptyResult(self.allocator, 1);
+    }
+    return emptyResult(self.allocator, 0);
+}
+
+fn printShoptOptions(self: *Executor, mode: ShoptMode, reusable: bool) !CommandResult {
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    for (shopt_option_names) |name| {
+        const enabled = shoptOptionEnabled(self.shell_options.shopt, name).?;
+        const include = switch (mode) {
+            .show => true,
+            .set => enabled,
+            .unset => !enabled,
+        };
+        if (include) try appendShoptOptionLine(self.allocator, &stdout, name, enabled, reusable);
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn printNamedShoptOptions(self: *Executor, operands: []const ir.WordRef, reusable: bool) !CommandResult {
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+    var status: ExitStatus = 0;
+    for (operands) |operand| {
+        const enabled = shoptOptionEnabled(self.shell_options.shopt, operand.text) orelse return shoptInvalidName(self, operand.text);
+        if (!enabled) status = 1;
+        try appendShoptOptionLine(self.allocator, &stdout, operand.text, enabled, reusable);
+    }
+    return .{ .allocator = self.allocator, .status = status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+}
+
+fn appendShoptOptionLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), name: []const u8, enabled: bool, reusable: bool) !void {
+    const line = if (reusable)
+        try std.fmt.allocPrint(allocator, "shopt {s} {s}\n", .{ if (enabled) "-s" else "-u", name })
+    else
+        try std.fmt.allocPrint(allocator, "{s}\t{s}\n", .{ name, if (enabled) "on" else "off" });
+    defer allocator.free(line);
+    try stdout.appendSlice(allocator, line);
 }
 
 fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -20213,6 +20339,48 @@ test "executor applies POSIX pipeline negation" {
     var pipeline_result = try executor.executeProgram(pipeline_negated.program, .{});
     defer pipeline_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 1), pipeline_result.status);
+}
+
+test "executor implements shopt patsub_replacement for Bash replacement expansion" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\USER=rush-user
+        \\printf 'default=%s\n' "${USER/rush/[&]}"
+        \\shopt -p patsub_replacement
+        \\shopt -u patsub_replacement
+        \\printf 'off=%s\n' "${USER/rush/[&]}"
+        \\shopt patsub_replacement
+        \\echo show-status=$?
+        \\shopt -q patsub_replacement
+        \\echo query-off=$?
+        \\shopt -s patsub_replacement
+        \\printf 'on=%s\n' "${USER/rush/[&]}"
+        \\shopt -q patsub_replacement
+        \\echo query-on=$?
+        \\shopt
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        "default=[rush]-user\n" ++
+            "shopt -s patsub_replacement\n" ++
+            "off=[&]-user\n" ++
+            "patsub_replacement\toff\n" ++
+            "show-status=1\n" ++
+            "query-off=1\n" ++
+            "on=[rush]-user\n" ++
+            "query-on=0\n" ++
+            "patsub_replacement\ton\n",
+        result.stdout,
+    );
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(executor.shell_options.shopt.patsub_replacement);
 }
 
 test "executor applies pipefail option to pipeline status" {

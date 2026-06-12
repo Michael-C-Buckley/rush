@@ -81,10 +81,18 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - replacement `${parameter/pattern/repl}`, global `${parameter//pattern/repl}`,
     anchored-prefix `${parameter/#pattern/repl}`, and anchored-suffix
     `${parameter/%pattern/repl}` using Rush's existing shell glob pattern matcher;
-    the pattern/replacement separator skips quoted and nested `/` constructs
+    the pattern/replacement separator skips quoted and nested `/` constructs;
+    Bash 5.2's default-on `patsub_replacement` behavior expands unquoted `&`
+    in replacement text to the matched portion, and `shopt -u patsub_replacement`
+    / `shopt -s patsub_replacement` disable and re-enable that behavior
   - ASCII case modification `${parameter^}`, `${parameter^^}`, `${parameter,}`,
     and `${parameter,,}`, including optional pattern operands such as
     `${parameter^^[[:lower:]]}`
+- `shopt` support for the `patsub_replacement` shell option:
+  - `shopt`, `shopt -p`, and named queries list the option state
+  - `shopt -q patsub_replacement` reports the current state through exit status
+  - `shopt -s patsub_replacement` and `shopt -u patsub_replacement` toggle the
+    option for subsequent Bash parameter replacement expansions
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
@@ -151,8 +159,8 @@ Current examples:
   - array slicing and transformation forms
 - Remaining string parameter expansion edge cases:
   - array-wide or element-specific string operations
-  - replacement `&` expansion and any remaining replacement/pattern delimiter
-    edge cases not covered by quoted or nested `/` constructs
+  - any remaining replacement/pattern delimiter edge cases not covered by quoted
+    or nested `/` constructs
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.
 

@@ -139,6 +139,7 @@ pub const Options = struct {
     positionals: []const []const u8 = &.{},
     option_flags: []const u8 = "",
     pathname_expansion: bool = true,
+    patsub_replacement: bool = true,
     nounset: bool = false,
     parameter_error: ?*ParameterError = null,
     arithmetic_error: ?*ArithmeticError = null,
@@ -1753,6 +1754,8 @@ fn expandParameterReplacementWord(allocator: std.mem.Allocator, word: []const u8
     var parts = try parseWordParts(allocator, replacement_word);
     defer parts.deinit();
 
+    const patsub_replacement = options.features.isBash() and options.patsub_replacement;
+
     var text: std.ArrayList(u8) = .empty;
     errdefer text.deinit(allocator);
     var replace_match: std.ArrayList(bool) = .empty;
@@ -1762,13 +1765,17 @@ fn expandParameterReplacementWord(allocator: std.mem.Allocator, word: []const u8
         if (part.kind == .parameter) {
             var rendered = try renderParameterSegmented(allocator, part.value(parts.raw), options);
             defer rendered.deinit(allocator);
-            try appendSegmentedParameterReplacementPart(allocator, &text, &replace_match, rendered);
+            if (patsub_replacement) {
+                try appendSegmentedParameterReplacementPart(allocator, &text, &replace_match, rendered);
+            } else {
+                try appendParameterReplacementPart(allocator, &text, &replace_match, rendered.text, false);
+            }
             continue;
         }
 
         const rendered = try renderPart(allocator, parts.raw, part, options);
         defer allocator.free(rendered);
-        const replace_active = switch (part.kind) {
+        const replace_active = patsub_replacement and switch (part.kind) {
             .unquoted, .parameter, .arithmetic, .command_substitution => true,
             .single_quoted, .dollar_single_quoted, .double_quoted, .escaped => false,
         };
@@ -5366,6 +5373,10 @@ test "parameter expansion supports Bash replacement ampersand expansion" {
     const nested = try expandWordScalar(std.testing.allocator, "${USER/rush/$AMP_REPL}:${USER/rush/\"$AMP_REPL\"}:${USER/rush/$ESC_AMP_REPL}:${USER/rush/$(printf '&X')}:${USER/rush/\"$(printf '&X')\"}", .{ .env = test_env, .features = compat.Features.bash(), .command_substitution = test_command_substitution });
     defer std.testing.allocator.free(nested);
     try std.testing.expectEqualStrings("rushX-user:&X-user:&X-user:rushX-user:&X-user", nested);
+
+    const disabled = try expandWordScalar(std.testing.allocator, "${USER/rush/[&]}:${USER/rush/$AMP_REPL}:${USER/rush/$(printf '&X')}", .{ .env = test_env, .features = compat.Features.bash(), .command_substitution = test_command_substitution, .patsub_replacement = false });
+    defer std.testing.allocator.free(disabled);
+    try std.testing.expectEqualStrings("[&]-user:&X-user:&X-user", disabled);
 }
 
 test "parameter expansion diagnoses malformed Bash indirect array targets" {
