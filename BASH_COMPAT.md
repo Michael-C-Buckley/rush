@@ -60,9 +60,14 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   parameter values:
   - substring `${parameter:offset}` and `${parameter:offset:length}` with
     arithmetic offset/length expressions; negative offsets count back from the
-    end of the string, while negative lengths remain unsupported; the offset
-    delimiter scanner skips nested parameter, command, arithmetic, and quoted
-    constructs, including arithmetic ternary `:` operands
+    end of the string, and negative lengths are interpreted as offsets back
+    from the end of the string. Bash mode reports
+    `length: substring expression < 0` when the computed end precedes the
+    start. Rush targets modern Bash 5.x behavior here; macOS Bash 3.2 was
+    observed to reject negative scalar lengths. The offset delimiter scanner
+    skips nested parameter, command, arithmetic, and quoted constructs,
+    including arithmetic ternary `:` operands. Field-producing Bash slices for
+    `${@:offset:length}` and `${*:offset:length}` are tracked separately
   - replacement `${parameter/pattern/repl}`, global `${parameter//pattern/repl}`,
     anchored-prefix `${parameter/#pattern/repl}`, and anchored-suffix
     `${parameter/%pattern/repl}` using Rush's existing shell glob pattern matcher;
@@ -136,9 +141,10 @@ Current examples:
   - array slicing and transformation forms
 - Remaining string parameter expansion edge cases:
   - array-wide or element-specific string operations
+  - field-producing `${@:offset:length}` and `${*:offset:length}` positional
+    slices
   - replacement `&` expansion and any remaining replacement/pattern delimiter
     edge cases not covered by quoted or nested `/` constructs
-  - Bash-compatible diagnostics and semantics for negative substring lengths
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.
 

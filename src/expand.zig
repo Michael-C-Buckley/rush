@@ -965,22 +965,34 @@ fn renderSubstring(allocator: std.mem.Allocator, value: []const u8, operation: P
     const value_len = std.math.cast(i64, value.len) orelse std.math.maxInt(i64);
     const offset = try evaluateArrayIndexValue(allocator, operation.offset, options);
     const start_value = if (offset < 0) value_len + offset else offset;
-    const start: usize = if (start_value <= 0)
-        0
-    else if (start_value >= value_len)
-        value.len
-    else
-        @intCast(start_value);
+    if (start_value < 0 or start_value > value_len) return allocator.alloc(u8, 0);
+    const start: usize = @intCast(start_value);
 
     const end = if (operation.length) |length_expression| blk: {
         const length = try evaluateArrayIndexValue(allocator, length_expression, options);
-        if (length < 0) return invalidParameterExpansion(allocator, options);
+        if (length < 0) {
+            const end_value = value_len + length;
+            if (end_value < start_value) return badSubstringExpressionExpansion(allocator, options, length_expression);
+            break :blk @as(usize, @intCast(end_value));
+        }
         const available = value.len - start;
         const length_usize = std.math.cast(usize, length) orelse available;
         break :blk start + @min(length_usize, available);
     } else value.len;
 
     return allocator.dupe(u8, value[start..end]);
+}
+
+fn badSubstringExpressionExpansion(allocator: std.mem.Allocator, options: Options, expression: []const u8) anyerror {
+    if (options.parameter_error) |parameter_error| {
+        const name = try allocator.dupe(u8, expression);
+        errdefer allocator.free(name);
+        const message = try allocator.dupe(u8, "substring expression < 0");
+        parameter_error.clear(allocator);
+        parameter_error.name = name;
+        parameter_error.message = message;
+    }
+    return error.ParameterExpansionFailed;
 }
 
 fn renderReplacement(allocator: std.mem.Allocator, value: []const u8, operation: ParameterReplacementOperation, options: Options, in_double_quotes: bool) anyerror![]const u8 {
@@ -4567,6 +4579,7 @@ test "parameter expansion rejects malformed braced forms" {
         "${:}",
         "${USER/}",
         "${USER:1}",
+        "${USER:1:-1}",
         "${USER^}",
         "${1abc}",
         "${!USER_REF}",
@@ -4698,6 +4711,15 @@ test "parameter expansion supports Bash string operations" {
     defer std.testing.allocator.free(nested_substring);
     try std.testing.expectEqualStrings("usr:r/l:sr/", nested_substring);
 
+    const negative_length_substring = try expandWordScalar(std.testing.allocator, "${PATHLIKE:1:-5}:${PATHLIKE: -4:-1}:${PATHLIKE: -99:-1}:${PATHLIKE:99:-1}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(negative_length_substring);
+    try std.testing.expectEqualStrings("usr/local/bin:rus::", negative_length_substring);
+
+    const params = [_][]const u8{ "01234567890abcdefgh", "abcdefg" };
+    const positional_and_special_substring = try expandWordScalar(std.testing.allocator, "${1:7:-2}:${2: -4:-1}:${-:0:-1}", .{ .positionals = &params, .option_flags = "Cf", .features = compat.Features.bash() });
+    defer std.testing.allocator.free(positional_and_special_substring);
+    try std.testing.expectEqualStrings("7890abcdef:def:C", positional_and_special_substring);
+
     const replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/local/LOCAL}:${PATHLIKE//\\//_}:${PATHLIKE/#\\/*/root}:${PATHLIKE/%rush/shell}:${PATHLIKE/bin}", .{ .env = test_env, .features = compat.Features.bash() });
     defer std.testing.allocator.free(replacement);
     try std.testing.expectEqualStrings("/usr/LOCAL/bin/rush:_usr_local_bin_rush:root:/usr/local/bin/shell:/usr/local//rush", replacement);
@@ -4717,6 +4739,27 @@ test "parameter expansion supports Bash string operations" {
     const patterned_case_modification = try expandWordScalar(std.testing.allocator, "${USER^^[rs]}:${USER^^[[:lower:]]}:${USER^[!r]}:${USER,,[RU]}", .{ .env = test_env, .features = compat.Features.bash() });
     defer std.testing.allocator.free(patterned_case_modification);
     try std.testing.expectEqualStrings("RuSh-uSeR:RUSH-USER:rush-user:rush-user", patterned_case_modification);
+}
+
+test "parameter expansion diagnoses Bash negative substring lengths before the start" {
+    const params = [_][]const u8{"abcdefg"};
+    const cases = [_]struct {
+        raw: []const u8,
+        name: []const u8,
+    }{
+        .{ .raw = "${PATHLIKE:15:-5}", .name = "-5" },
+        .{ .raw = "${1:5:-3}", .name = "-3" },
+        .{ .raw = "${-:1:-2}", .name = "-2" },
+    };
+
+    for (cases) |case| {
+        var parameter_error: ParameterError = .{};
+        defer parameter_error.clear(std.testing.allocator);
+
+        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case.raw, .{ .env = test_env, .positionals = &params, .option_flags = "Cf", .features = compat.Features.bash(), .parameter_error = &parameter_error }));
+        try std.testing.expectEqualStrings(case.name, parameter_error.name);
+        try std.testing.expectEqualStrings("substring expression < 0", parameter_error.message);
+    }
 }
 
 test "parameter expansion supports Bash replacement ampersand expansion" {

@@ -16305,8 +16305,11 @@ test "executor supports Bash string parameter operations" {
     var lowered = try parseAndLowerWithOptions(std.testing.allocator,
         \\value=/usr/local/bin/rush
         \\mixed='rush User'
+        \\set -- 01234567890abcdefgh abcdefg
+        \\set -fC
         \\printf 'substring:%s|%s|%s\n' "${value:1}" "${value:5:5}" "${value: -4:2}"
         \\printf 'substring-extra:%s|%s\n' "${value:${missing:-1}:3}" "${value:1 + (0 ? 9 : 2):3}"
+        \\printf 'substring-negative:%s|%s|%s|%s\n' "${1:7:-2}" "${2: -4:-1}" "${value:1:-5}" "${-:0:-1}"
         \\printf 'replace:%s|%s|%s|%s|%s\n' "${value/local/LOCAL}" "${value//\//_}" "${value/#\/*/root}" "${value/%rush/shell}" "${value/bin}"
         \\printf 'replace-extra:%s|%s\n' "${value/$(printf /)/_}" "${value/'/'/_}"
         \\repl='&X'
@@ -16324,8 +16327,34 @@ test "executor supports Bash string parameter operations" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("substring:usr/local/bin/rush|local|ru\nsubstring-extra:usr|r/l\nreplace:/usr/LOCAL/bin/rush|_usr_local_bin_rush|root|/usr/local/bin/shell|/usr/local//rush\nreplace-extra:_usr/local/bin/rush|_usr/local/bin/rush\nreplace-amp:[rush] User|[&] User|[&] User|rushX User|&X User|&X User\ncase:Rush User|RUSH USER|rush User|rush user\ncase-pattern:RuSh USeR|RUSH USER|rush User\n", result.stdout);
+    try std.testing.expectEqualStrings("substring:usr/local/bin/rush|local|ru\nsubstring-extra:usr|r/l\nsubstring-negative:7890abcdef|def|usr/local/bin|C\nreplace:/usr/LOCAL/bin/rush|_usr_local_bin_rush|root|/usr/local/bin/shell|/usr/local//rush\nreplace-extra:_usr/local/bin/rush|_usr/local/bin/rush\nreplace-amp:[rush] User|[&] User|[&] User|rushX User|&X User|&X User\ncase:Rush User|RUSH USER|rush User|rush user\ncase-pattern:RuSh USeR|RUSH USER|rush User\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor diagnoses Bash negative substring lengths before the start" {
+    const cases = [_]struct {
+        script: []const u8,
+        stderr: []const u8,
+    }{
+        .{ .script = "value=abcdefg; printf '<%s>\\n' \"${value:5:-3}\"; echo after", .stderr = "-3: substring expression < 0\n" },
+        .{ .script = "set -- abcdefg; printf '<%s>\\n' \"${1:5:-3}\"; echo after", .stderr = "-3: substring expression < 0\n" },
+        .{ .script = "set -fC; printf '<%s>\\n' \"${-:1:-2}\"; echo after", .stderr = "-2: substring expression < 0\n" },
+    };
+
+    for (cases) |case| {
+        var lowered = try parseAndLowerWithOptions(std.testing.allocator, case.script, .{ .features = compat.Features.bash() });
+        defer lowered.parsed.deinit();
+        defer lowered.program.deinit();
+
+        var executor = Executor.init(std.testing.allocator);
+        defer executor.deinit();
+        var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
+        try std.testing.expectEqualStrings("", result.stdout);
+        try std.testing.expectEqualStrings(case.stderr, result.stderr);
+    }
 }
 
 test "executor diagnoses malformed Bash indirect array targets" {
@@ -16421,6 +16450,7 @@ test "executor keeps Bash array operation forms on POSIX bad-substitution path" 
         "echo ${!name}; echo after",
         "echo ${!prefix*}; echo after",
         "echo ${value:1}; echo after",
+        "echo ${value:1:-1}; echo after",
         "echo ${value/a/b}; echo after",
         "echo ${value^^}; echo after",
         "echo ${value^^[a]}; echo after",
