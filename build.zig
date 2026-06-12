@@ -76,6 +76,24 @@ pub fn build(b: *std.Build) void {
     linkSqlite(b, exe_tests.root_module, use_system_sqlite);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 
+    // Fuzzing entry point: `zig build fuzz --fuzz` (continuous; add --webui)
+    // or `zig build fuzz --fuzz=N` for a bounded run. Uses a dedicated root
+    // module containing only the parser so coverage totals measure parser
+    // code, not the whole shell.
+    const fuzz_step = b.step("fuzz", "Run fuzz tests (combine with --fuzz to actually fuzz)");
+    const fuzz_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/fuzz_root.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{"fuzz parser"},
+        // Patched copy of the default runner; Zig 0.16.0's bundled runner
+        // fails to compile under --fuzz (see the file's doc comment).
+        .test_runner = .{ .path = b.path("test/support/fuzz_test_runner.zig"), .mode = .server },
+    });
+    fuzz_step.dependOn(&b.addRunArtifact(fuzz_tests).step);
+
     const check_step = b.step("check", "Run unit tests and repository validation checks");
     check_step.dependOn(test_step);
 
@@ -242,7 +260,20 @@ fn linkSqlite(b: *std.Build, module: *std.Build.Module, use_system_sqlite: bool)
     }
 
     const sqlite = b.dependency("sqlite", .{});
-    module.addCSourceFile(.{
+    // Built as a separate static library so `zig build fuzz --fuzz` does not
+    // instrument the C code; clang's sancov emits callbacks (e.g.
+    // __sanitizer_cov_trace_switch) that Zig's fuzzer runtime does not provide.
+    const lib = b.addLibrary(.{
+        .name = "sqlite3",
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = module.resolved_target,
+            .optimize = module.optimize,
+            .link_libc = true,
+            .fuzz = false,
+        }),
+    });
+    lib.root_module.addCSourceFile(.{
         .file = sqlite.path("sqlite3.c"),
         .flags = &.{
             "-DSQLITE_ENABLE_FTS5",
@@ -251,6 +282,7 @@ fn linkSqlite(b: *std.Build, module: *std.Build.Module, use_system_sqlite: bool)
             "-DSQLITE_DEFAULT_MEMSTATUS=0",
         },
     });
+    module.linkLibrary(lib);
     module.addIncludePath(sqlite.path("."));
     module.link_libc = true;
 }

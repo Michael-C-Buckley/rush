@@ -7693,6 +7693,7 @@ test "supplied git manifest validates and selects representative contexts" {
         \\    cached=false
         \\    for arg do
         \\      test "$arg" = --cached && cached=true
+        \\      test "$arg" = --staged && cached=true
         \\    done
         \\    if test "$cached" = true; then
         \\      printf 'src/staged.txt\n'

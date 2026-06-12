@@ -5230,3 +5230,384 @@ test "parser harness preserves source-length spans" {
         .nodes = &.{.{ .kind = .root, .span = .init(0, 10) }},
     });
 }
+
+// Fuzzing: run with `zig build fuzz --fuzz` (continuous, add --webui for the
+// interface) or `zig build fuzz --fuzz=10000` for a bounded run. Under plain
+// `zig build test` the corpus entries below run as regression inputs.
+
+/// Encodes a shell source string as Smith input for `fuzzParser`: a u64 zero
+/// selecting raw mode in `fuzzSource`, then the u32 little-endian length
+/// prefix consumed by `Smith.slice`, then the bytes. Smith calls after the
+/// source (features, cursor) fall back to defaults.
+inline fn fuzzCorpusEntry(comptime source: []const u8) []const u8 {
+    return comptime blk: {
+        var prefix: [12]u8 = undefined;
+        std.mem.writeInt(u64, prefix[0..8], 0, .little);
+        std.mem.writeInt(u32, prefix[8..12], source.len, .little);
+        break :blk &(prefix ++ source[0..source.len].*);
+    };
+}
+
+const fuzz_buf_len = 1024;
+
+/// Produces fuzz input either as raw bytes (lexical robustness) or through
+/// the grammar-aware generator below (parser-state exploration).
+fn fuzzSource(smith: *std.testing.Smith, buf: *[fuzz_buf_len]u8) []const u8 {
+    if (smith.boolWeighted(1, 3)) {
+        var out: SourceBuilder = .{ .buf = buf };
+        genList(smith, &out, 0);
+        return out.slice();
+    }
+    const len = smith.slice(buf[0 .. fuzz_buf_len / 2]);
+    return buf[0..len];
+}
+
+/// Fixed-capacity output for the generator; appends past capacity are
+/// silently truncated, which the parser must tolerate like any other input.
+const SourceBuilder = struct {
+    buf: []u8,
+    len: usize = 0,
+
+    fn append(self: *SourceBuilder, bytes: []const u8) void {
+        const n = @min(bytes.len, self.buf.len - self.len);
+        @memcpy(self.buf[self.len..][0..n], bytes[0..n]);
+        self.len += n;
+    }
+
+    fn slice(self: *const SourceBuilder) []const u8 {
+        return self.buf[0..self.len];
+    }
+};
+
+const gen_max_depth = 3;
+
+// Includes keywords and operator-shaped words so generated programs stress
+// boundary confusion (e.g. `done` as an argument, `a=b` as a command word).
+const gen_idents = [_][]const u8{
+    "echo", "x",  "foo", "a1",   "cmd", "--flag", "if", "then",
+    "fi",   "do", "done", "in",  "esac", "EOF",   "2",  "a=b",
+};
+
+const gen_separators = [_][]const u8{
+    "; ", " && ", " || ", " | ", " & ", "\n", ";",
+};
+
+const gen_redirect_ops = [_][]const u8{
+    "<", ">", ">>", "<&", ">&", "<>", ">|",
+};
+
+const gen_heredoc_delims = [_][]const u8{ "EOF", "END", "HD" };
+
+// `inline` so each call site hashes to a distinct Smith decision point.
+inline fn pick(smith: *std.testing.Smith, comptime options: []const []const u8) []const u8 {
+    return options[smith.index(options.len)];
+}
+
+fn genList(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
+    genCommand(smith, out, depth);
+    while (!smith.eosWeightedSimple(1, 2)) {
+        out.append(pick(smith, &gen_separators));
+        genCommand(smith, out, depth);
+    }
+}
+
+fn genCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
+    if (depth >= gen_max_depth) return genSimpleCommand(smith, out, depth);
+    switch (smith.index(12)) {
+        0, 1, 2 => genSimpleCommand(smith, out, depth),
+        3 => { // if
+            out.append("if ");
+            genSimpleCommand(smith, out, depth + 1);
+            out.append("; then ");
+            genList(smith, out, depth + 1);
+            if (smith.boolWeighted(2, 1)) {
+                out.append("; else ");
+                genList(smith, out, depth + 1);
+            }
+            out.append("; fi");
+        },
+        4 => { // while / until
+            out.append(if (smith.boolWeighted(1, 1)) "while " else "until ");
+            genSimpleCommand(smith, out, depth + 1);
+            out.append("; do ");
+            genList(smith, out, depth + 1);
+            out.append("; done");
+        },
+        5 => { // for
+            out.append("for ");
+            out.append(pick(smith, &gen_idents));
+            out.append(" in ");
+            genWord(smith, out, depth + 1);
+            out.append(" ");
+            genWord(smith, out, depth + 1);
+            out.append("; do ");
+            genList(smith, out, depth + 1);
+            out.append("; done");
+        },
+        6 => { // case
+            out.append("case ");
+            genWord(smith, out, depth + 1);
+            out.append(" in ");
+            while (true) {
+                genWord(smith, out, depth + 1);
+                out.append(") ");
+                genList(smith, out, depth + 1);
+                out.append(";; ");
+                if (smith.eosWeightedSimple(1, 2)) break;
+            }
+            out.append("esac");
+        },
+        7 => { // subshell
+            out.append("(");
+            genList(smith, out, depth + 1);
+            out.append(")");
+        },
+        8 => { // brace group
+            out.append("{ ");
+            genList(smith, out, depth + 1);
+            out.append("; }");
+        },
+        9 => { // function definition
+            out.append(pick(smith, &gen_idents));
+            out.append("() { ");
+            genList(smith, out, depth + 1);
+            out.append("; }");
+        },
+        10 => { // bash test command
+            out.append("[[ ");
+            genWord(smith, out, depth + 1);
+            out.append(if (smith.boolWeighted(1, 1)) " == " else " && ");
+            genWord(smith, out, depth + 1);
+            out.append(" ]]");
+        },
+        11 => genHereDocCommand(smith, out, depth),
+        else => unreachable,
+    }
+}
+
+fn genSimpleCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
+    if (smith.boolWeighted(3, 1)) { // leading assignment
+        out.append(pick(smith, &gen_idents));
+        out.append("=");
+        genWord(smith, out, depth);
+        out.append(" ");
+    }
+    genWord(smith, out, depth);
+    while (!smith.eosWeightedSimple(1, 2)) {
+        out.append(" ");
+        genWord(smith, out, depth);
+    }
+    if (smith.boolWeighted(3, 1)) genRedirect(smith, out, depth);
+}
+
+fn genRedirect(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
+    out.append(" ");
+    if (smith.boolWeighted(2, 1)) out.append(pick(smith, &.{ "0", "1", "2", "3" }));
+    out.append(pick(smith, &gen_redirect_ops));
+    genWord(smith, out, depth);
+}
+
+fn genHereDocCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
+    const delim = pick(smith, &gen_heredoc_delims);
+    const dash = smith.boolWeighted(2, 1);
+    out.append("cat <<");
+    if (dash) out.append("-");
+    const quoted = smith.boolWeighted(2, 1);
+    if (quoted) out.append("'");
+    out.append(delim);
+    if (quoted) out.append("'");
+    out.append("\n");
+    while (!smith.eosWeightedSimple(1, 2)) {
+        genWord(smith, out, depth);
+        out.append("\n");
+    }
+    if (dash and smith.boolWeighted(1, 1)) out.append("\t");
+    out.append(delim);
+    if (smith.boolWeighted(1, 2)) out.append("\n"); // sometimes leave unterminated
+}
+
+fn genWord(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
+    switch (smith.index(10)) {
+        0, 1, 2 => out.append(pick(smith, &gen_idents)),
+        3 => {
+            out.append("$");
+            out.append(pick(smith, &gen_idents));
+        },
+        4 => {
+            out.append("${");
+            out.append(pick(smith, &gen_idents));
+            out.append(":-");
+            out.append(pick(smith, &gen_idents));
+            out.append("}");
+        },
+        5 => {
+            out.append("'");
+            out.append(pick(smith, &gen_idents));
+            out.append("'");
+        },
+        6 => {
+            out.append("\"");
+            out.append(pick(smith, &gen_idents));
+            if (depth < gen_max_depth and smith.boolWeighted(1, 1)) {
+                out.append("$(");
+                genSimpleCommand(smith, out, depth + 1);
+                out.append(")");
+            }
+            out.append("\"");
+        },
+        7 => {
+            if (depth < gen_max_depth) {
+                out.append("$(");
+                genList(smith, out, depth + 1);
+                out.append(")");
+            } else {
+                out.append(pick(smith, &gen_idents));
+            }
+        },
+        8 => out.append(pick(smith, &.{ "*.zig", "$((x + 2))", "$'a\\n'", "`pwd`" })),
+        9 => { // raw byte injection keeps lexical mutation reach inside grammar mode
+            var raw: [2]u8 = undefined;
+            smith.bytes(&raw);
+            out.append(&raw);
+        },
+        else => unreachable,
+    }
+}
+
+pub fn fuzzParser(_: void, smith: *std.testing.Smith) anyerror!void {
+    var buf: [fuzz_buf_len]u8 = undefined;
+    const source = fuzzSource(smith, &buf);
+
+    const features: compat.Features = .{
+        .mode = smith.value(compat.Mode),
+        .strict_diagnostics = smith.value(bool),
+    };
+
+    var result = try parse(std.testing.allocator, source, .{ .features = features });
+    defer result.deinit();
+    try checkParseInvariants(result, source.len);
+
+    const highlights = try syntaxHighlights(std.testing.allocator, result);
+    defer std.testing.allocator.free(highlights);
+    for (highlights) |highlight| {
+        try std.testing.expect(highlight.span.start <= highlight.span.end);
+        try std.testing.expect(highlight.span.end <= source.len);
+    }
+
+    const cursor = smith.valueRangeAtMost(u32, 0, @intCast(source.len));
+    const context = completionContext(result, cursor);
+    try std.testing.expect(context.span.start <= context.span.end);
+    try std.testing.expect(context.span.end <= source.len);
+    try std.testing.expect(context.cursor <= source.len);
+}
+
+fn checkParseInvariants(result: ParseResult, source_len: usize) !void {
+    // The token stream tiles the source exactly and terminates with eof.
+    try std.testing.expect(result.tokens.len > 0);
+    try std.testing.expectEqual(TokenKind.eof, result.tokens[result.tokens.len - 1].kind);
+    var offset: usize = 0;
+    for (result.tokens) |token| {
+        try std.testing.expectEqual(offset, token.span.start);
+        try std.testing.expect(token.span.end >= token.span.start);
+        offset = token.span.end;
+    }
+    try std.testing.expectEqual(source_len, offset);
+
+    try std.testing.expect(result.nodes.len > 0);
+    for (result.nodes) |node| {
+        try std.testing.expect(node.span.start <= node.span.end);
+        try std.testing.expect(node.span.end <= source_len);
+        try std.testing.expect(node.token_start <= node.token_end);
+        try std.testing.expect(node.token_end <= result.tokens.len);
+        try std.testing.expect(node.child_start <= node.child_end);
+        try std.testing.expect(node.child_end <= result.children.len);
+    }
+
+    for (result.children) |child| switch (child) {
+        .node => |id| try std.testing.expect(id.index() < result.nodes.len),
+        .token => |id| try std.testing.expect(id.index() < result.tokens.len),
+    };
+
+    for (result.diagnostics) |diagnostic| {
+        try std.testing.expect(diagnostic.span.start <= diagnostic.span.end);
+        try std.testing.expect(diagnostic.span.end <= source_len);
+    }
+}
+
+/// Seed inputs for the parser fuzzer, also run as regression inputs under
+/// plain `zig build test`. Keep this exercising every NodeKind and TokenKind;
+/// the "fuzz corpus exercises every node and token kind" test enforces it.
+const fuzz_corpus_sources = [_][]const u8{
+    "echo hello | grep h && ls; (cd /tmp; pwd) &",
+    "true || echo fallback",
+    "cat <<EOF\nhello $world\nEOF\necho done",
+    "cat <<-'END' >out 2>&1\n\tbody\nEND",
+    "echo \"a $(b inner) 'c'\" 'd' $'e\\n' ${var:-default}",
+    "if true; then echo a; elif false; then :; else echo b; fi",
+    "case $x in a|b) echo ab;; *) echo other;; esac",
+    "for f in *.zig; do echo \"$f\"; done",
+    "while read -r line; do printf '%s\\n' \"$line\"; done <input",
+    "until false; do break; done",
+    "f() { local x=1; echo $((x + 2)); }",
+    "{ FOO=bar; echo $FOO; } >out",
+    "VAR=value OTHER=2 command --flag arg # comment",
+    "[[ -n $x && $y == a* ]] || echo no",
+    "exec 3<>socket 4<&3 5>&2 >|clobbered >>appended",
+    "echo 'unterminated",
+    "echo $(incomplete",
+    "cat <<EOF\nno terminator",
+};
+
+pub const fuzz_corpus_entries = blk: {
+    var out: [fuzz_corpus_sources.len][]const u8 = undefined;
+    for (fuzz_corpus_sources, &out) |source, *entry| entry.* = fuzzCorpusEntry(source);
+    break :blk out;
+};
+
+test "fuzz parser" {
+    for (fuzz_corpus_entries) |entry| {
+        var smith: std.testing.Smith = .{ .in = entry };
+        try fuzzParser({}, &smith);
+    }
+}
+
+test "fuzz corpus entry encoding selects raw mode and round-trips the source" {
+    var smith: std.testing.Smith = .{ .in = fuzzCorpusEntry("cat <<EOF\nhello\nEOF") };
+    var buf: [fuzz_buf_len]u8 = undefined;
+    const source = fuzzSource(&smith, &buf);
+    try std.testing.expectEqualStrings("cat <<EOF\nhello\nEOF", source);
+}
+
+test "fuzz corpus exercises every node and token kind" {
+    var nodes_seen: std.EnumSet(NodeKind) = .initEmpty();
+    var tokens_seen: std.EnumSet(TokenKind) = .initEmpty();
+
+    const feature_sets = [_]compat.Features{ .posix(), .bash() };
+    for (fuzz_corpus_sources) |source| {
+        for (feature_sets) |features| {
+            var result = try parse(std.testing.allocator, source, .{ .features = features });
+            defer result.deinit();
+            for (result.nodes) |node| nodes_seen.insert(node.kind);
+            for (result.tokens) |token| tokens_seen.insert(token.kind);
+        }
+    }
+
+    // The lexer never emits .invalid; it exists for highlight consumers.
+    tokens_seen.insert(.invalid);
+    // No code path constructs a parse_error node; errors surface as
+    // diagnostics. Remove this exemption if the parser grows error nodes.
+    nodes_seen.insert(.parse_error);
+
+    var failed = false;
+    var missing_nodes = nodes_seen.complement().iterator();
+    while (missing_nodes.next()) |kind| {
+        std.debug.print("fuzz corpus never produces NodeKind.{t}\n", .{kind});
+        failed = true;
+    }
+    var missing_tokens = tokens_seen.complement().iterator();
+    while (missing_tokens.next()) |kind| {
+        std.debug.print("fuzz corpus never produces TokenKind.{t}\n", .{kind});
+        failed = true;
+    }
+    try std.testing.expect(!failed);
+}
