@@ -16383,6 +16383,14 @@ test "executor supports Bash field producers in parameter operator words" {
         \\printf 'array-default:'
         \\printf '<%s>' "${missing:-${arr[@]}}"
         \\printf '\n'
+        \\unset assigned
+        \\printf 'assign-quoted-at:'
+        \\printf '<%s>' "${assigned:=$@}"
+        \\printf ' assigned=<%s>\n' "$assigned"
+        \\unset assigned
+        \\printf 'assign-unquoted-quoted-word:'
+        \\printf '<%s>' ${assigned:="one two"}
+        \\printf ' assigned=<%s>\n' "$assigned"
     , .{ .features = compat.Features.bash() });
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
@@ -16393,7 +16401,7 @@ test "executor supports Bash field producers in parameter operator words" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("default-unquoted:<a><b><c>\ndefault-quoted:<a b><><c>\ndefault-embedded:<pre><cpost>\nalternate-quoted:<a b><><c>\nat-word:<a b><><c><d>\narray-default:<zero><two words><three><five>\n", result.stdout);
+    try std.testing.expectEqualStrings("default-unquoted:<a><b><c>\ndefault-quoted:<a b><><c>\ndefault-embedded:<pre><cpost>\nalternate-quoted:<a b><><c>\nat-word:<a b><><c><d>\narray-default:<zero><two words><three><five>\nassign-quoted-at:<a b  c d> assigned=<a b  c d>\nassign-unquoted-quoted-word:<one><two> assigned=<one two>\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
