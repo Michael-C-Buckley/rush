@@ -61,6 +61,8 @@ pub const ExecuteOptions = struct {
 const posix_shell_path = "/bin/sh";
 
 pub const ShoptOptions = struct {
+    dotglob: bool = false,
+    nullglob: bool = false,
     patsub_replacement: bool = true,
 };
 
@@ -618,7 +620,7 @@ const builtin_names = [_][]const u8{
 
 const set_options = [_][]const u8{ "-a", "+a", "-b", "+b", "-e", "+e", "-f", "+f", "-h", "+h", "-m", "+m", "-n", "+n", "-u", "+u", "-x", "+x", "-v", "+v", "-C", "+C", "-o", "+o", "--" };
 const set_option_names = [_][]const u8{ "allexport", "emacs", "errexit", "ignoreeof", "monitor", "noglob", "noclobber", "noexec", "nolog", "notify", "nounset", "pipefail", "vi", "verbose", "xtrace" };
-const shopt_option_names = [_][]const u8{"patsub_replacement"};
+const shopt_option_names = [_][]const u8{ "dotglob", "nullglob", "patsub_replacement" };
 const signal_names = [_][]const u8{ "EXIT", "HUP", "INT", "QUIT", "ILL", "TRAP", "ABRT", "BUS", "FPE", "KILL", "USR1", "SEGV", "USR2", "PIPE", "ALRM", "TERM", "CHLD", "CONT", "STOP", "TSTP", "TTIN", "TTOU" };
 const test_operators = [_][]const u8{ "!", "(", ")", "-b", "-c", "-d", "-e", "-f", "-g", "-h", "-L", "-n", "-p", "-r", "-S", "-s", "-t", "-u", "-w", "-x", "-z", "=", "!=", "-eq", "-ne", "-gt", "-ge", "-lt", "-le" };
 
@@ -6628,7 +6630,7 @@ pub const Executor = struct {
         const positionals: []const []const u8 = self.currentPositionals().params;
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .pathname_nullglob = self.shell_options.shopt.nullglob, .pathname_dotglob = self.shell_options.shopt.dotglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         defer fields.deinit();
         for (fields.fields) |field| {
             const raw = try self.allocator.dupe(u8, word.raw);
@@ -6791,7 +6793,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .pathname_nullglob = self.shell_options.shopt.nullglob, .pathname_dotglob = self.shell_options.shopt.dotglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
         const text = if (options.features.isBash())
             try self.expandCompoundIndexedArrayAssignmentWord(word.raw, expansion_options) orelse try expand.expandAssignmentWordScalar(self.allocator, word.raw, expansion_options)
         else
@@ -14279,6 +14281,14 @@ fn builtinShopt(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
 }
 
 fn applyShoptOptionName(options: *ShoptOptions, name: []const u8, enabled: bool) bool {
+    if (std.mem.eql(u8, name, "dotglob")) {
+        options.dotglob = enabled;
+        return true;
+    }
+    if (std.mem.eql(u8, name, "nullglob")) {
+        options.nullglob = enabled;
+        return true;
+    }
     if (std.mem.eql(u8, name, "patsub_replacement")) {
         options.patsub_replacement = enabled;
         return true;
@@ -14287,6 +14297,8 @@ fn applyShoptOptionName(options: *ShoptOptions, name: []const u8, enabled: bool)
 }
 
 fn shoptOptionEnabled(options: ShoptOptions, name: []const u8) ?bool {
+    if (std.mem.eql(u8, name, "dotglob")) return options.dotglob;
+    if (std.mem.eql(u8, name, "nullglob")) return options.nullglob;
     if (std.mem.eql(u8, name, "patsub_replacement")) return options.patsub_replacement;
     return null;
 }
@@ -20376,11 +20388,59 @@ test "executor implements shopt patsub_replacement for Bash replacement expansio
             "query-off=1\n" ++
             "on=[rush]-user\n" ++
             "query-on=0\n" ++
+            "dotglob\toff\n" ++
+            "nullglob\toff\n" ++
             "patsub_replacement\ton\n",
         result.stdout,
     );
     try std.testing.expectEqualStrings("", result.stderr);
     try std.testing.expect(executor.shell_options.shopt.patsub_replacement);
+}
+
+test "executor implements shopt nullglob and dotglob for pathname expansion" {
+    const dir = "rush-exec-shopt-glob-dir";
+    const visible = "rush-exec-shopt-glob-dir/visible.tmp";
+    const hidden = "rush-exec-shopt-glob-dir/.hidden.tmp";
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = visible, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = hidden, .data = "" });
+
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\printf 'default:%s\n' rush-exec-shopt-glob-dir/*.tmp
+        \\printf 'missing:%s\n' rush-exec-shopt-glob-dir/*.missing after
+        \\shopt -s nullglob
+        \\printf 'null:%s\n' rush-exec-shopt-glob-dir/*.missing after
+        \\shopt -s dotglob
+        \\printf 'dot:%s\n' rush-exec-shopt-glob-dir/*.tmp
+        \\shopt -q nullglob dotglob
+        \\echo query=$?
+        \\shopt -p dotglob nullglob
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash(), .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        "default:rush-exec-shopt-glob-dir/visible.tmp\n" ++
+            "missing:rush-exec-shopt-glob-dir/*.missing\n" ++
+            "missing:after\n" ++
+            "null:after\n" ++
+            "dot:rush-exec-shopt-glob-dir/.hidden.tmp\n" ++
+            "dot:rush-exec-shopt-glob-dir/visible.tmp\n" ++
+            "query=0\n" ++
+            "shopt -s dotglob\n" ++
+            "shopt -s nullglob\n",
+        result.stdout,
+    );
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(executor.shell_options.shopt.nullglob);
+    try std.testing.expect(executor.shell_options.shopt.dotglob);
 }
 
 test "executor applies pipefail option to pipeline status" {

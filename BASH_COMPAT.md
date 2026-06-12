@@ -93,6 +93,14 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - `shopt -q patsub_replacement` reports the current state through exit status
   - `shopt -s patsub_replacement` and `shopt -u patsub_replacement` toggle the
     option for subsequent Bash parameter replacement expansions
+- `shopt` support for pathname expansion options:
+  - `nullglob` is default-off; when enabled, unmatched pathname patterns are
+    removed instead of preserved literally
+  - `dotglob` is default-off; when enabled, pathname patterns can match hidden
+    directory entries even when the pattern component does not begin with `.`
+  - both options are reflected by `shopt`, `shopt -p`, named queries, and
+    `shopt -q`, and affect subsequent argv and Bash compound indexed-array
+    element pathname expansion
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
@@ -161,6 +169,9 @@ Current examples:
   - array-wide or element-specific string operations
   - any remaining replacement/pattern delimiter edge cases not covered by quoted
     or nested `/` constructs
+- Remaining shopt-controlled globbing features such as `extglob`, `globstar`,
+  `failglob`, and case-insensitive matching need parser/pattern-matcher design
+  before they can be recognized as behaviorally supported options.
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.
 

@@ -139,6 +139,8 @@ pub const Options = struct {
     positionals: []const []const u8 = &.{},
     option_flags: []const u8 = "",
     pathname_expansion: bool = true,
+    pathname_nullglob: bool = false,
+    pathname_dotglob: bool = false,
     patsub_replacement: bool = true,
     nounset: bool = false,
     parameter_error: ?*ParameterError = null,
@@ -254,7 +256,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 
     if (options.pathname_expansion and pathname_expansion_safe and !quoted_expansion_glob) {
         if (options.io) |io| {
-            try applyPathnameExpansion(allocator, io, &fields);
+            try applyPathnameExpansion(allocator, io, &fields, .{ .nullglob = options.pathname_nullglob, .dotglob = options.pathname_dotglob });
         }
     }
 
@@ -1744,8 +1746,8 @@ fn renderParameterWordPart(allocator: std.mem.Allocator, raw: []const u8, part: 
     };
 }
 
-// Rush does not have a shopt option model yet, so Bash-mode replacement forms
-// use Bash 5.2's default-on patsub_replacement behavior.
+// Bash 5.2 enables patsub_replacement by default; the shopt option can disable
+// it for subsequent replacement expansions.
 fn expandParameterReplacementWord(allocator: std.mem.Allocator, word: []const u8, options: Options, in_double_quotes: bool) anyerror!ParameterReplacementText {
     const tilde_expanded: ?[]const u8 = if (!in_double_quotes) try expandTilde(allocator, word, options.env) else null;
     defer if (tilde_expanded) |expanded| allocator.free(expanded);
@@ -3859,7 +3861,12 @@ fn isIfsWhitespace(ifs: []const u8, c: u8) bool {
     return (c == ' ' or c == '\t' or c == '\n') and isIfsChar(ifs, c);
 }
 
-fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std.ArrayList([]const u8)) !void {
+const PathnameExpansionOptions = struct {
+    nullglob: bool = false,
+    dotglob: bool = false,
+};
+
+fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std.ArrayList([]const u8), options: PathnameExpansionOptions) !void {
     var expanded: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (expanded.items) |field| allocator.free(field);
@@ -3868,13 +3875,17 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
 
     for (fields.items) |field| {
         if (hasGlobSyntax(field)) {
-            const matches = try expandPathnamePattern(allocator, io, field);
+            const matches = try expandPathnamePatternWithOptions(allocator, io, field, options);
             defer allocator.free(matches);
             if (matches.len != 0) {
                 allocator.free(field);
                 for (matches) |match| {
                     try expanded.append(allocator, match);
                 }
+                continue;
+            }
+            if (options.nullglob) {
+                allocator.free(field);
                 continue;
             }
         }
@@ -3886,13 +3897,21 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
 }
 
 pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
+    return expandPathnamePatternWithOptions(allocator, io, pattern, .{});
+}
+
+fn expandPathnamePatternWithOptions(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8, options: PathnameExpansionOptions) ![][]const u8 {
     const special = try allocator.alloc(bool, pattern.len);
     defer allocator.free(special);
     @memset(special, true);
-    return expandPathnameExpansionPattern(allocator, io, .{ .text = pattern, .special = special });
+    return expandPathnameExpansionPatternWithOptions(allocator, io, .{ .text = pattern, .special = special }, options);
 }
 
 pub fn expandPathnameExpansionPattern(allocator: std.mem.Allocator, io: std.Io, pattern: ExpansionPattern) ![][]const u8 {
+    return expandPathnameExpansionPatternWithOptions(allocator, io, pattern, .{});
+}
+
+fn expandPathnameExpansionPatternWithOptions(allocator: std.mem.Allocator, io: std.Io, pattern: ExpansionPattern, options: PathnameExpansionOptions) ![][]const u8 {
     std.debug.assert(pattern.text.len == pattern.special.len);
 
     var prefixes: std.ArrayList([]const u8) = .empty;
@@ -3922,7 +3941,7 @@ pub fn expandPathnameExpansionPattern(allocator: std.mem.Allocator, io: std.Io, 
 
         for (prefixes.items) |prefix| {
             if (patternHasGlobSyntax(component)) {
-                try appendGlobComponentMatches(allocator, io, &next_prefixes, prefix, component);
+                try appendGlobComponentMatches(allocator, io, &next_prefixes, prefix, component, options);
             } else {
                 const candidate = try joinPathComponent(allocator, prefix, component.text);
                 errdefer allocator.free(candidate);
@@ -3942,7 +3961,7 @@ pub fn expandPathnameExpansionPattern(allocator: std.mem.Allocator, io: std.Io, 
     return prefixes.toOwnedSlice(allocator);
 }
 
-fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches: *std.ArrayList([]const u8), prefix: []const u8, component: ExpansionPattern) !void {
+fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches: *std.ArrayList([]const u8), prefix: []const u8, component: ExpansionPattern, options: PathnameExpansionOptions) !void {
     const dir_path = if (prefix.len == 0) "." else prefix;
     var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound, error.NotDir => return,
@@ -3953,7 +3972,7 @@ fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches:
     var iterator = dir.iterate();
     while (try iterator.next(io)) |entry| {
         if (entry.name.len == 0) continue;
-        if (entry.name[0] == '.' and (component.text.len == 0 or component.text[0] != '.')) continue;
+        if (entry.name[0] == '.' and !options.dotglob and (component.text.len == 0 or component.text[0] != '.')) continue;
         if (globPatternMatches(component, entry.name)) {
             try matches.append(allocator, try joinPathComponent(allocator, prefix, entry.name));
         }
@@ -6005,6 +6024,31 @@ test "pathname expansion handles slash components and dotfiles" {
     defer unmatched.deinit();
     try std.testing.expectEqual(@as(usize, 1), unmatched.fields.len);
     try std.testing.expectEqualStrings(missing_suffix, unmatched.fields[0]);
+}
+
+test "pathname expansion honors nullglob and dotglob options" {
+    const dir = "rush-glob-shopt-dir";
+    const visible = "rush-glob-shopt-dir/visible.tmp";
+    const hidden = "rush-glob-shopt-dir/.hidden.tmp";
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = visible, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = hidden, .data = "" });
+
+    var default_glob = try expandWord(std.testing.allocator, "rush-glob-shopt-dir/*.tmp", .{ .io = std.testing.io });
+    defer default_glob.deinit();
+    try std.testing.expectEqual(@as(usize, 1), default_glob.fields.len);
+    try std.testing.expectEqualStrings(visible, default_glob.fields[0]);
+
+    var dotglob = try expandWord(std.testing.allocator, "rush-glob-shopt-dir/*.tmp", .{ .io = std.testing.io, .pathname_dotglob = true });
+    defer dotglob.deinit();
+    try std.testing.expectEqual(@as(usize, 2), dotglob.fields.len);
+    try std.testing.expectEqualStrings(hidden, dotglob.fields[0]);
+    try std.testing.expectEqualStrings(visible, dotglob.fields[1]);
+
+    var unmatched = try expandWord(std.testing.allocator, "rush-glob-shopt-dir/*.missing", .{ .io = std.testing.io, .pathname_nullglob = true });
+    defer unmatched.deinit();
+    try std.testing.expectEqual(@as(usize, 0), unmatched.fields.len);
 }
 
 test "pathname expansion handles absolute path components" {
