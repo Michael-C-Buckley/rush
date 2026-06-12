@@ -6719,8 +6719,43 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandAssignmentWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const text = if (options.features.isBash())
+            try self.expandCompoundIndexedArrayAssignmentWord(word.raw, expansion_options) orelse try expand.expandAssignmentWordScalar(self.allocator, word.raw, expansion_options)
+        else
+            try expand.expandAssignmentWordScalar(self.allocator, word.raw, expansion_options);
         return .{ .span = word.span, .raw = raw, .text = text };
+    }
+
+    fn expandCompoundIndexedArrayAssignmentWord(self: *Executor, raw: []const u8, expansion_options: expand.Options) !?[]const u8 {
+        const syntax = compoundIndexedArrayAssignmentSyntax(raw) orelse return null;
+
+        var text: std.ArrayList(u8) = .empty;
+        errdefer text.deinit(self.allocator);
+        try text.appendSlice(self.allocator, syntax.name);
+        try text.appendSlice(self.allocator, "=(");
+
+        var body_index: usize = 0;
+        var first = true;
+        while (try nextCompoundIndexedArrayElement(self.allocator, syntax.body, &body_index)) |word_raw| {
+            if (compoundIndexedArrayElementSyntax(word_raw)) |element_syntax| {
+                const index_text = try expand.expandWordScalar(self.allocator, element_syntax.index_text, expansion_options);
+                defer self.allocator.free(index_text);
+                const value = try expand.expandWordScalar(self.allocator, element_syntax.value, expansion_options);
+                defer self.allocator.free(value);
+                try appendExpandedCompoundIndexedArrayElement(self.allocator, &text, &first, index_text, value);
+                continue;
+            }
+
+            var fields = try expand.expandWord(self.allocator, word_raw, expansion_options);
+            defer fields.deinit();
+            for (fields.fields) |field| {
+                try appendExpandedCompoundIndexedArrayElement(self.allocator, &text, &first, null, field);
+            }
+        }
+
+        try text.append(self.allocator, ')');
+        return try text.toOwnedSlice(self.allocator);
     }
 
     fn findExecutableInPath(self: *Executor, io: std.Io, name: []const u8) !?[]const u8 {
@@ -7206,30 +7241,29 @@ pub const Executor = struct {
     fn compoundIndexedArrayAssignment(self: *Executor, text: []const u8) !?CompoundIndexedArrayAssignment {
         const syntax = compoundIndexedArrayAssignmentSyntax(text) orelse return null;
         var elements: std.ArrayList(ArrayAssignmentElement) = .empty;
-        errdefer elements.deinit(self.allocator);
+        errdefer {
+            for (elements.items) |element| self.allocator.free(element.value);
+            elements.deinit(self.allocator);
+        }
 
         var body_index: usize = 0;
         var next_index: usize = 0;
-        while (true) {
-            while (body_index < syntax.body.len and isShellWhitespace(syntax.body[body_index])) : (body_index += 1) {}
-            if (body_index >= syntax.body.len) break;
-
-            const word_start = body_index;
-            while (body_index < syntax.body.len and !isShellWhitespace(syntax.body[body_index])) : (body_index += 1) {}
-            const word = syntax.body[word_start..body_index];
-
+        while (try nextCompoundIndexedArrayElement(self.allocator, syntax.body, &body_index)) |word| {
             var element_index = next_index;
-            var value = word;
+            var value_raw = word;
             if (compoundIndexedArrayElementSyntax(word)) |element_syntax| {
                 const arithmetic_value = if (std.mem.trim(u8, element_syntax.index_text, " \t\r\n").len == 0)
                     0
                 else
                     expand.evalArithmetic(element_syntax.index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(element_syntax.index_text, err);
                 element_index = std.math.cast(usize, arithmetic_value) orelse return self.arraySubscriptExpansionFailed(element_syntax.index_text, error.InvalidArithmetic);
-                value = element_syntax.value;
+                value_raw = element_syntax.value;
             }
 
-            try elements.append(self.allocator, .{ .index = element_index, .value = value });
+            var value: ?[]const u8 = try expand.quoteRemove(self.allocator, value_raw);
+            errdefer if (value) |owned| self.allocator.free(owned);
+            try elements.append(self.allocator, .{ .index = element_index, .value = value.? });
+            value = null;
             next_index = element_index + 1;
         }
 
@@ -14077,6 +14111,7 @@ const CompoundIndexedArrayAssignment = struct {
     elements: []ArrayAssignmentElement,
 
     fn deinit(self: CompoundIndexedArrayAssignment, allocator: std.mem.Allocator) void {
+        for (self.elements) |element| allocator.free(element.value);
         allocator.free(self.elements);
     }
 };
@@ -14096,6 +14131,94 @@ const IndexedArrayAssignmentSyntax = struct {
     index_text: []const u8,
     value: []const u8,
 };
+
+fn appendExpandedCompoundIndexedArrayElement(allocator: std.mem.Allocator, text: *std.ArrayList(u8), first: *bool, index_text: ?[]const u8, value: []const u8) !void {
+    if (!first.*) try text.append(allocator, ' ');
+    first.* = false;
+    if (index_text) |index| {
+        try text.append(allocator, '[');
+        try text.appendSlice(allocator, index);
+        try text.appendSlice(allocator, "]=");
+    }
+    try appendShellQuoted(allocator, text, value);
+}
+
+fn nextCompoundIndexedArrayElement(allocator: std.mem.Allocator, body: []const u8, cursor: *usize) !?[]const u8 {
+    while (cursor.* < body.len and isShellWhitespace(body[cursor.*])) : (cursor.* += 1) {}
+    if (cursor.* >= body.len) return null;
+
+    const start = cursor.*;
+    if (body[cursor.*] == '[') {
+        if (try compoundIndexedArraySubscriptAssignmentValueStart(allocator, body, cursor.*)) |value_start| {
+            cursor.* = value_start;
+        }
+    }
+
+    while (cursor.* < body.len and !isShellWhitespace(body[cursor.*])) {
+        try skipCompoundIndexedArrayElementByte(allocator, body, cursor);
+    }
+    return body[start..cursor.*];
+}
+
+fn compoundIndexedArraySubscriptAssignmentValueStart(allocator: std.mem.Allocator, body: []const u8, start: usize) !?usize {
+    std.debug.assert(start < body.len and body[start] == '[');
+
+    var index = start + 1;
+    var saw_subscript_byte = false;
+    while (index < body.len) {
+        if (body[index] == ']') {
+            if (!saw_subscript_byte) return null;
+            if (index + 1 < body.len and body[index + 1] == '=') return index + 2;
+            return null;
+        }
+        saw_subscript_byte = true;
+        try skipCompoundIndexedArrayElementByte(allocator, body, &index);
+    }
+    return null;
+}
+
+fn skipCompoundIndexedArrayElementByte(allocator: std.mem.Allocator, body: []const u8, index: *usize) !void {
+    switch (body[index.*]) {
+        '\\' => {
+            index.* += 1;
+            if (index.* < body.len) index.* += 1;
+        },
+        '\'' => skipSingleQuotedCompoundIndexedArrayElement(body, index),
+        '"' => try skipDoubleQuotedCompoundIndexedArrayElement(allocator, body, index),
+        '$', '`' => switch (try parser.shellSubstitutionAt(allocator, body, body.len, index.*)) {
+            .complete => |substitution| index.* = substitution.span.end,
+            .none, .incomplete => index.* += 1,
+        },
+        else => index.* += 1,
+    }
+}
+
+fn skipSingleQuotedCompoundIndexedArrayElement(body: []const u8, index: *usize) void {
+    index.* += 1;
+    while (index.* < body.len and body[index.*] != '\'') : (index.* += 1) {}
+    if (index.* < body.len) index.* += 1;
+}
+
+fn skipDoubleQuotedCompoundIndexedArrayElement(allocator: std.mem.Allocator, body: []const u8, index: *usize) !void {
+    index.* += 1;
+    while (index.* < body.len) {
+        switch (body[index.*]) {
+            '\\' => {
+                index.* += 1;
+                if (index.* < body.len) index.* += 1;
+            },
+            '"' => {
+                index.* += 1;
+                return;
+            },
+            '$', '`' => switch (try parser.shellSubstitutionAt(allocator, body, body.len, index.*)) {
+                .complete => |substitution| index.* = substitution.span.end,
+                .none, .incomplete => index.* += 1,
+            },
+            else => index.* += 1,
+        }
+    }
+}
 
 fn compoundIndexedArrayAssignmentSyntax(text: []const u8) ?CompoundIndexedArrayAssignmentSyntax {
     if (text.len == 0 or !isShellNameStart(text[0])) return null;
@@ -15750,6 +15873,44 @@ test "executor supports Bash sparse compound indexed array assignment" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("<>|<two>|<five>|<>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor supports quoted Bash compound indexed array assignment elements" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\value='two words'
+        \\arr=('one word' "$value" '' plain)
+        \\printf '<%s>|<%s>|<%s>|<%s>|<%s>\n' "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[3]}" "${arr[4]}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<one word>|<two words>|<>|<plain>|<>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor applies Bash compound indexed array element expansion per element" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\value='two words'
+        \\arr=($value [4]="$value" [6]='')
+        \\printf '<%s>|<%s>|<%s>|<%s>|<%s>|<%s>\n' "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[4]}" "${arr[6]}" "${arr[7]}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<two>|<words>|<>|<two words>|<>|<>\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

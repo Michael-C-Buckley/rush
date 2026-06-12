@@ -19,6 +19,11 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - `name[index]=word`
   - compound indexed assignment such as `name=(zero one)` and
     `name=([2]=two [5]=five)`
+  - compound indexed assignment elements with quotes and empty quoted words,
+    such as `name=('two words' "${value}" '')`
+  - per-element expansion for compound indexed assignment, including field
+    splitting for sequential unquoted elements and scalar expansion for
+    `[index]=word` elements
   - arithmetic subscript expressions such as `name[i + 1]=word`
   - subscript expressions containing nested parameter, command, or arithmetic substitutions
   - whitespace inside assignment subscripts, such as `name[ i + 1 ]=word`
