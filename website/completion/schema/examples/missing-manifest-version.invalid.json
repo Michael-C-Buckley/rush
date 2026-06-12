@@ -1,0 +1,6 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "command": {
+    "name": "broken"
+  }
+}

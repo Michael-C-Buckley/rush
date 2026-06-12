@@ -1008,9 +1008,17 @@ const CompletionScriptLoader = struct {
         }
 
         try self.loadDataDirs(io, executor, command, arg_zero);
+        if (try xdgDataHomeCompletionManifestPath(self.allocator, executor.*, command)) |path| {
+            defer self.allocator.free(path);
+            loadOptionalCompletionManifest(self.allocator, io, executor, path) catch {};
+        }
         if (try xdgDataHomeCompletionPath(self.allocator, executor.*, command)) |path| {
             defer self.allocator.free(path);
             sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
+        }
+        if (try xdgConfigCompletionManifestPath(self.allocator, executor.*, command)) |path| {
+            defer self.allocator.free(path);
+            loadOptionalCompletionManifest(self.allocator, io, executor, path) catch {};
         }
         if (try xdgConfigCompletionPath(self.allocator, executor.*, command)) |path| {
             defer self.allocator.free(path);
@@ -1023,6 +1031,10 @@ const CompletionScriptLoader = struct {
         var iter = std.mem.splitScalar(u8, data_dirs, ':');
         while (iter.next()) |dir| {
             if (dir.len == 0) continue;
+            const manifest_path = try completionManifestPathInDir(self.allocator, dir, command);
+            defer self.allocator.free(manifest_path);
+            loadOptionalCompletionManifest(self.allocator, io, executor, manifest_path) catch {};
+
             const path = try completionPathInDir(self.allocator, dir, command);
             defer self.allocator.free(path);
             sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
@@ -1180,32 +1192,876 @@ fn completionPathInDir(allocator: std.mem.Allocator, dir: []const u8, command: [
     return std.fs.path.join(allocator, &.{ dir, "rush", "completions", file_name });
 }
 
+fn completionManifestPathInDir(allocator: std.mem.Allocator, dir: []const u8, command: []const u8) ![]const u8 {
+    const file_name = try std.fmt.allocPrint(allocator, "{s}.json", .{command});
+    defer allocator.free(file_name);
+    return std.fs.path.join(allocator, &.{ dir, "rush", "completions", file_name });
+}
+
 fn xdgDataHomeCompletionPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
+    return xdgDataHomeCompletionFilePath(allocator, executor, command, completionPathInDir);
+}
+
+fn xdgDataHomeCompletionManifestPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
+    return xdgDataHomeCompletionFilePath(allocator, executor, command, completionManifestPathInDir);
+}
+
+fn xdgDataHomeCompletionFilePath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8, comptime pathFn: fn (std.mem.Allocator, []const u8, []const u8) anyerror![]const u8) !?[]const u8 {
     if (executor.getEnv("XDG_DATA_HOME")) |xdg_data_home| {
-        if (xdg_data_home.len != 0) return try completionPathInDir(allocator, xdg_data_home, command);
+        if (xdg_data_home.len != 0) return try pathFn(allocator, xdg_data_home, command);
     }
     if (executor.getEnv("HOME")) |home| {
         if (home.len != 0) {
             const data_home = try std.fs.path.join(allocator, &.{ home, ".local", "share" });
             defer allocator.free(data_home);
-            return try completionPathInDir(allocator, data_home, command);
+            return try pathFn(allocator, data_home, command);
         }
     }
     return null;
 }
 
 fn xdgConfigCompletionPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
+    return xdgConfigCompletionFilePath(allocator, executor, command, completionPathInDir);
+}
+
+fn xdgConfigCompletionManifestPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
+    return xdgConfigCompletionFilePath(allocator, executor, command, completionManifestPathInDir);
+}
+
+fn xdgConfigCompletionFilePath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8, comptime pathFn: fn (std.mem.Allocator, []const u8, []const u8) anyerror![]const u8) !?[]const u8 {
     if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
-        if (xdg_config_home.len != 0) return try completionPathInDir(allocator, xdg_config_home, command);
+        if (xdg_config_home.len != 0) return try pathFn(allocator, xdg_config_home, command);
     }
     if (executor.getEnv("HOME")) |home| {
         if (home.len != 0) {
             const config_home = try std.fs.path.join(allocator, &.{ home, ".config" });
             defer allocator.free(config_home);
-            return try completionPathInDir(allocator, config_home, command);
+            return try pathFn(allocator, config_home, command);
         }
     }
     return null;
+}
+
+fn loadOptionalCompletionManifest(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8) !void {
+    const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+        error.FileNotFound => return,
+        else => return err,
+    };
+    defer allocator.free(contents);
+    try loadCompletionManifest(allocator, executor, contents);
+}
+
+fn loadCompletionManifest(allocator: std.mem.Allocator, executor: *exec.Executor, contents: []const u8) !void {
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, contents, .{});
+    defer parsed.deinit();
+
+    var diagnostics = CompletionManifestDiagnostics.init(allocator);
+    defer diagnostics.deinit();
+    try validateCompletionManifestValue(allocator, parsed.value, &diagnostics);
+    if (diagnostics.hasErrors()) return error.CompletionManifestSemanticValidationFailed;
+
+    const root_object = switch (parsed.value) {
+        .object => |object| object,
+        else => return error.CompletionManifestRootMustBeObject,
+    };
+    const manifest_version = root_object.get("manifestVersion") orelse return error.CompletionManifestMissingManifestVersion;
+    switch (manifest_version) {
+        .integer => |version| if (version != 1) return error.UnsupportedCompletionManifestVersion,
+        else => return error.CompletionManifestVersionMustBeInteger,
+    }
+    const command = root_object.get("command") orelse return error.CompletionManifestMissingCommand;
+    try loadCompletionManifestCommand(executor, command, &.{});
+}
+
+fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8) !void {
+    const command = switch (command_value) {
+        .object => |object| object,
+        else => return error.CompletionManifestCommandMustBeObject,
+    };
+    const name = try manifestCommandPrimaryName(command);
+
+    if (path.len == 0) {
+        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, name, &.{}, options);
+        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, name, &.{}, subcommands);
+    } else {
+        try loadCompletionManifestSubcommandNames(executor, path[0], path[1..], command);
+        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, path[0], path[1..], options);
+        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, path[0], path[1..], subcommands);
+    }
+}
+
+fn manifestCommandPrimaryName(command: std.json.ObjectMap) ![]const u8 {
+    const name_value = command.get("name") orelse return error.CompletionManifestCommandMissingName;
+    return switch (name_value) {
+        .string => |name| name,
+        .array => |names| if (names.items.len == 0) error.CompletionManifestCommandNameMustBeString else switch (names.items[0]) {
+            .string => |name| name,
+            else => error.CompletionManifestCommandNameMustBeString,
+        },
+        else => error.CompletionManifestCommandNameMustBeString,
+    };
+}
+
+fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, command: std.json.ObjectMap) !void {
+    const description = manifestString(command.get("description"));
+    const name_value = command.get("name") orelse return error.CompletionManifestCommandMissingName;
+    switch (name_value) {
+        .string => |name| try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description }),
+        .array => |names| for (names.items) |item| {
+            const name = switch (item) {
+                .string => |value| value,
+                else => return error.CompletionManifestCommandNameMustBeString,
+            };
+            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description });
+        },
+        else => return error.CompletionManifestCommandNameMustBeString,
+    }
+    if (command.get("aliases")) |aliases_value| {
+        const aliases = switch (aliases_value) {
+            .array => |array| array,
+            else => return,
+        };
+        for (aliases.items) |alias_value| {
+            const alias = switch (alias_value) {
+                .string => |value| value,
+                else => continue,
+            };
+            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = alias, .description = description });
+        }
+    }
+}
+
+fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, subcommands_value: std.json.Value) !void {
+    const subcommands = switch (subcommands_value) {
+        .array => |array| array,
+        else => return error.CompletionManifestSubcommandsMustBeArray,
+    };
+    for (subcommands.items) |subcommand_value| {
+        const subcommand = switch (subcommand_value) {
+            .object => |object| object,
+            else => return error.CompletionManifestSubcommandMustBeObject,
+        };
+        const name = try manifestCommandPrimaryName(subcommand);
+        try loadCompletionManifestSubcommandNames(executor, root, parent_path, subcommand);
+
+        var child_path: std.ArrayList([]const u8) = .empty;
+        defer child_path.deinit(executor.allocator);
+        try child_path.appendSlice(executor.allocator, parent_path);
+        try child_path.append(executor.allocator, name);
+        if (subcommand.get("options")) |options| try loadCompletionManifestOptions(executor, root, child_path.items, options);
+        if (subcommand.get("subcommands")) |nested| try loadCompletionManifestSubcommands(executor, root, child_path.items, nested);
+    }
+}
+
+fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, path: []const []const u8, options_value: std.json.Value) !void {
+    const options = switch (options_value) {
+        .array => |array| array,
+        else => return error.CompletionManifestOptionsMustBeArray,
+    };
+    for (options.items) |option_value| {
+        const option = switch (option_value) {
+            .object => |object| object,
+            else => return error.CompletionManifestOptionMustBeObject,
+        };
+        var rule: completion_model.Rule = .{ .root = root, .path = path, .kind = .option, .description = manifestString(option.get("description")) };
+        if (manifestString(option.get("long"))) |long| rule.option.long = long;
+        if (manifestString(option.get("short"))) |short| rule.option.short = short;
+        if (option.get("value")) |value| {
+            if (manifestValueName(value)) |name| rule.option.argument = name;
+        }
+        if (rule.option.long == null and rule.option.short == null) return error.CompletionManifestOptionMissingSpelling;
+        try executor.registerCompletionRule(rule);
+        if (option.get("aliases")) |aliases_value| {
+            const aliases = switch (aliases_value) {
+                .array => |array| array,
+                else => continue,
+            };
+            for (aliases.items) |alias_value| {
+                const alias = switch (alias_value) {
+                    .string => |value| value,
+                    else => continue,
+                };
+                var alias_rule = rule;
+                alias_rule.option.long = alias;
+                alias_rule.option.short = null;
+                try executor.registerCompletionRule(alias_rule);
+            }
+        }
+    }
+}
+
+fn manifestString(value: ?std.json.Value) ?[]const u8 {
+    return switch (value orelse return null) {
+        .string => |string| string,
+        else => null,
+    };
+}
+
+fn manifestValueName(value: std.json.Value) ?[]const u8 {
+    const object = switch (value) {
+        .object => |object| object,
+        else => return null,
+    };
+    return manifestString(object.get("name"));
+}
+
+const completion_manifest_supported_version: i64 = 1;
+const completion_manifest_schema_marker = "/completion/schema/v";
+
+const CompletionManifestDiagnosticSeverity = enum { warning, err };
+
+const CompletionManifestDiagnostic = struct {
+    severity: CompletionManifestDiagnosticSeverity,
+    message: []const u8,
+};
+
+const CompletionManifestDiagnostics = struct {
+    allocator: std.mem.Allocator,
+    items: std.ArrayList(CompletionManifestDiagnostic) = .empty,
+
+    fn init(allocator: std.mem.Allocator) CompletionManifestDiagnostics {
+        return .{ .allocator = allocator };
+    }
+
+    fn deinit(self: *CompletionManifestDiagnostics) void {
+        for (self.items.items) |diagnostic| self.allocator.free(diagnostic.message);
+        self.items.deinit(self.allocator);
+    }
+
+    fn add(self: *CompletionManifestDiagnostics, severity: CompletionManifestDiagnosticSeverity, comptime format: []const u8, args: anytype) !void {
+        const message = try std.fmt.allocPrint(self.allocator, format, args);
+        errdefer self.allocator.free(message);
+        try self.items.append(self.allocator, .{ .severity = severity, .message = message });
+    }
+
+    fn hasErrors(self: CompletionManifestDiagnostics) bool {
+        for (self.items.items) |diagnostic| {
+            if (diagnostic.severity == .err) return true;
+        }
+        return false;
+    }
+};
+
+const CompletionManifestOptionSpellingKind = enum { short, long };
+
+const CompletionManifestOptionSpelling = struct {
+    kind: CompletionManifestOptionSpellingKind,
+    value: []const u8,
+};
+
+fn validateCompletionManifestContents(allocator: std.mem.Allocator, contents: []const u8) !CompletionManifestDiagnostics {
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, contents, .{});
+    defer parsed.deinit();
+
+    var diagnostics = CompletionManifestDiagnostics.init(allocator);
+    errdefer diagnostics.deinit();
+    try validateCompletionManifestValue(allocator, parsed.value, &diagnostics);
+    return diagnostics;
+}
+
+fn validateCompletionManifestValue(allocator: std.mem.Allocator, value: std.json.Value, diagnostics: *CompletionManifestDiagnostics) !void {
+    const root = switch (value) {
+        .object => |object| object,
+        else => {
+            try diagnostics.add(.err, "manifest: root value must be an object", .{});
+            return;
+        },
+    };
+
+    var manifest_version: ?i64 = null;
+    if (root.get("manifestVersion")) |version_value| {
+        switch (version_value) {
+            .integer => |version| {
+                manifest_version = version;
+                if (version != completion_manifest_supported_version) {
+                    try diagnostics.add(.err, "manifestVersion: unsupported completion manifest version {d}; supported version is {d}", .{ version, completion_manifest_supported_version });
+                }
+            },
+            else => try diagnostics.add(.err, "manifestVersion: must be an integer", .{}),
+        }
+    } else {
+        try diagnostics.add(.err, "manifestVersion: missing required manifest version", .{});
+    }
+
+    if (root.get("$schema")) |schema_value| {
+        if (schema_value == .string and manifest_version != null) {
+            if (rushCompletionSchemaVersion(schema_value.string)) |schema_version| {
+                if (schema_version != manifest_version.?) {
+                    try diagnostics.add(.warning, "$schema: references Rush completion schema v{d}, but manifestVersion is {d}", .{ schema_version, manifest_version.? });
+                }
+            }
+        }
+    }
+
+    const command = root.get("command") orelse {
+        try diagnostics.add(.err, "command: missing required command object", .{});
+        return;
+    };
+    try validateManifestCommand(allocator, diagnostics, command, &.{}, &.{}, &.{}, "command");
+}
+
+fn rushCompletionSchemaVersion(schema: []const u8) ?i64 {
+    const marker_index = std.mem.indexOf(u8, schema, completion_manifest_schema_marker) orelse return null;
+    var index = marker_index + completion_manifest_schema_marker.len;
+    if (index >= schema.len or !std.ascii.isDigit(schema[index])) return null;
+    const start = index;
+    while (index < schema.len and std.ascii.isDigit(schema[index])) : (index += 1) {}
+    return std.fmt.parseInt(i64, schema[start..index], 10) catch null;
+}
+
+fn validateManifestCommand(
+    allocator: std.mem.Allocator,
+    diagnostics: *CompletionManifestDiagnostics,
+    command_value: std.json.Value,
+    inherited_providers: []const []const u8,
+    inherited_options: []const CompletionManifestOptionSpelling,
+    inherited_groups: []const []const u8,
+    path: []const u8,
+) !void {
+    const command = switch (command_value) {
+        .object => |object| object,
+        else => {
+            try diagnostics.add(.err, "{s}: command must be an object", .{path});
+            return;
+        },
+    };
+
+    if (command.get("name")) |name_value| {
+        try validateManifestNameValue(allocator, diagnostics, name_value, try manifestFieldPath(allocator, path, "name"), true);
+    } else {
+        try diagnostics.add(.err, "{s}.name: command name is required", .{path});
+    }
+
+    var providers: std.ArrayList([]const u8) = .empty;
+    defer providers.deinit(allocator);
+    try providers.appendSlice(allocator, inherited_providers);
+    if (command.get("providers")) |providers_value| {
+        const provider_path = try manifestFieldPath(allocator, path, "providers");
+        defer allocator.free(provider_path);
+        const provider_object = switch (providers_value) {
+            .object => |object| object,
+            else => null,
+        };
+        if (provider_object) |object| {
+            var iter = object.iterator();
+            while (iter.next()) |entry| {
+                const child_path = try manifestFieldPath(allocator, provider_path, entry.key_ptr.*);
+                defer allocator.free(child_path);
+                try validateManifestProvider(diagnostics, entry.value_ptr.*, child_path);
+                try providers.append(allocator, entry.key_ptr.*);
+            }
+        }
+    }
+
+    var groups: std.ArrayList([]const u8) = .empty;
+    defer groups.deinit(allocator);
+    try groups.appendSlice(allocator, inherited_groups);
+    if (command.get("optionGroups")) |groups_value| {
+        const groups_path = try manifestFieldPath(allocator, path, "optionGroups");
+        defer allocator.free(groups_path);
+        const group_array = switch (groups_value) {
+            .array => |array| array,
+            else => null,
+        };
+        if (group_array) |array| {
+            var local_groups: std.StringHashMapUnmanaged(void) = .empty;
+            defer local_groups.deinit(allocator);
+            for (array.items, 0..) |group_value, index| {
+                const group_path = try manifestIndexPath(allocator, groups_path, index);
+                defer allocator.free(group_path);
+                const group = switch (group_value) {
+                    .object => |object| object,
+                    else => continue,
+                };
+                const name = manifestString(group.get("name")) orelse continue;
+                if (local_groups.contains(name)) {
+                    try diagnostics.add(.err, "{s}.name: duplicate option group '{s}'", .{ group_path, name });
+                } else {
+                    try local_groups.put(allocator, name, {});
+                }
+                try groups.append(allocator, name);
+            }
+        }
+    }
+
+    var options: std.ArrayList(CompletionManifestOptionSpelling) = .empty;
+    defer options.deinit(allocator);
+    try options.appendSlice(allocator, inherited_options);
+    if (command.get("options")) |options_value| {
+        const options_path = try manifestFieldPath(allocator, path, "options");
+        defer allocator.free(options_path);
+        const option_array = switch (options_value) {
+            .array => |array| array,
+            else => null,
+        };
+        if (option_array) |array| {
+            for (array.items, 0..) |option_value, index| {
+                const option_path = try manifestIndexPath(allocator, options_path, index);
+                defer allocator.free(option_path);
+                try validateManifestOption(allocator, diagnostics, option_value, providers.items, &options, groups.items, option_path);
+            }
+        }
+    }
+
+    if (command.get("dynamicSubcommands")) |dynamic_subcommands| {
+        try validateManifestProviderRefArray(allocator, diagnostics, dynamic_subcommands, providers.items, try manifestFieldPath(allocator, path, "dynamicSubcommands"));
+    }
+    if (command.get("dynamicOptions")) |dynamic_options| {
+        try validateManifestProviderRefArray(allocator, diagnostics, dynamic_options, providers.items, try manifestFieldPath(allocator, path, "dynamicOptions"));
+    }
+
+    if (command.get("arguments")) |arguments| {
+        const arguments_path = try manifestFieldPath(allocator, path, "arguments");
+        defer allocator.free(arguments_path);
+        try validateManifestArguments(allocator, diagnostics, arguments, providers.items, options.items, arguments_path);
+    }
+
+    if (command.get("subcommands")) |subcommands_value| {
+        const subcommands_path = try manifestFieldPath(allocator, path, "subcommands");
+        defer allocator.free(subcommands_path);
+        const subcommands = switch (subcommands_value) {
+            .array => |array| array,
+            else => null,
+        };
+        if (subcommands) |array| {
+            var seen_subcommands: std.StringHashMapUnmanaged(void) = .empty;
+            defer seen_subcommands.deinit(allocator);
+            for (array.items, 0..) |subcommand, index| {
+                const subcommand_path = try manifestIndexPath(allocator, subcommands_path, index);
+                defer allocator.free(subcommand_path);
+                if (subcommand == .object) try validateManifestSubcommandNames(allocator, diagnostics, subcommand.object, &seen_subcommands, subcommand_path);
+                try validateManifestCommand(allocator, diagnostics, subcommand, providers.items, options.items, groups.items, subcommand_path);
+            }
+        }
+    }
+}
+
+fn validateManifestOption(
+    allocator: std.mem.Allocator,
+    diagnostics: *CompletionManifestDiagnostics,
+    option_value: std.json.Value,
+    providers: []const []const u8,
+    options: *std.ArrayList(CompletionManifestOptionSpelling),
+    groups: []const []const u8,
+    path: []const u8,
+) !void {
+    const option = switch (option_value) {
+        .object => |object| object,
+        else => return,
+    };
+
+    var has_spelling = false;
+    if (manifestString(option.get("short"))) |short| {
+        has_spelling = true;
+        try appendManifestOptionSpelling(diagnostics, options, .{ .kind = .short, .value = short }, path);
+    }
+    if (manifestString(option.get("long"))) |long| {
+        has_spelling = true;
+        try appendManifestOptionSpelling(diagnostics, options, .{ .kind = .long, .value = long }, path);
+    }
+    if (option.get("aliases")) |aliases_value| {
+        const aliases = switch (aliases_value) {
+            .array => |array| array,
+            else => null,
+        };
+        if (aliases) |array| {
+            const aliases_path = try manifestFieldPath(allocator, path, "aliases");
+            defer allocator.free(aliases_path);
+            for (array.items, 0..) |alias_value, index| {
+                const alias = manifestString(alias_value) orelse continue;
+                const alias_path = try manifestIndexPath(allocator, aliases_path, index);
+                defer allocator.free(alias_path);
+                has_spelling = true;
+                try appendManifestOptionSpelling(diagnostics, options, .{ .kind = .long, .value = alias }, alias_path);
+            }
+        }
+    }
+    if (!has_spelling) try diagnostics.add(.err, "{s}: option must define short, long, or alias spelling", .{path});
+
+    if (manifestString(option.get("exclusiveGroup"))) |group| {
+        if (!manifestStringListContains(groups, group)) {
+            try diagnostics.add(.err, "{s}.exclusiveGroup: undefined option group '{s}' (declare it in optionGroups)", .{ path, group });
+        }
+    }
+
+    if (option.get("value")) |value| {
+        const value_path = try manifestFieldPath(allocator, path, "value");
+        defer allocator.free(value_path);
+        try validateManifestValueObject(allocator, diagnostics, value, providers, value_path);
+    }
+}
+
+fn validateManifestArguments(
+    allocator: std.mem.Allocator,
+    diagnostics: *CompletionManifestDiagnostics,
+    arguments_value: std.json.Value,
+    providers: []const []const u8,
+    options: []const CompletionManifestOptionSpelling,
+    path: []const u8,
+) !void {
+    const arguments = switch (arguments_value) {
+        .object => |object| object,
+        else => return,
+    };
+    const states_value = arguments.get("states") orelse return;
+    const states = switch (states_value) {
+        .array => |array| array,
+        else => return,
+    };
+    const states_path = try manifestFieldPath(allocator, path, "states");
+    defer allocator.free(states_path);
+
+    var state_names: std.ArrayList([]const u8) = .empty;
+    defer state_names.deinit(allocator);
+    var seen_names: std.StringHashMapUnmanaged(void) = .empty;
+    defer seen_names.deinit(allocator);
+    for (states.items, 0..) |state_value, index| {
+        const state_path = try manifestIndexPath(allocator, states_path, index);
+        defer allocator.free(state_path);
+        const state = switch (state_value) {
+            .object => |object| object,
+            else => continue,
+        };
+        const name = manifestString(state.get("name")) orelse continue;
+        if (seen_names.contains(name)) {
+            try diagnostics.add(.err, "{s}.name: duplicate argument state '{s}'", .{ state_path, name });
+        } else {
+            try seen_names.put(allocator, name, {});
+        }
+        try state_names.append(allocator, name);
+    }
+
+    var seen_indexes: std.ArrayList(usize) = .empty;
+    defer seen_indexes.deinit(allocator);
+    var next_reachable_index: usize = 0;
+    var trailing_repeatable: ?[]const u8 = null;
+    const terminator_defined = arguments.get("terminator") != null;
+    for (states.items, 0..) |state_value, index| {
+        const state_path = try manifestIndexPath(allocator, states_path, index);
+        defer allocator.free(state_path);
+        const state = switch (state_value) {
+            .object => |object| object,
+            else => continue,
+        };
+        const state_name = manifestString(state.get("name")) orelse "<unnamed>";
+
+        if (trailing_repeatable) |repeatable_name| {
+            if (state.get("after") == null) {
+                try diagnostics.add(.err, "{s}: argument state '{s}' is unreachable after unconditional repeatable state '{s}'", .{ state_path, state_name, repeatable_name });
+            }
+        }
+
+        if (manifestInteger(state.get("index"))) |state_index| {
+            if (state_index < 0) continue;
+            const argument_index: usize = @intCast(state_index);
+            if (manifestIndexListContains(seen_indexes.items, argument_index)) {
+                try diagnostics.add(.err, "{s}.index: duplicate argument index {d}", .{ state_path, argument_index });
+            } else {
+                try seen_indexes.append(allocator, argument_index);
+            }
+            if (argument_index > next_reachable_index) {
+                try diagnostics.add(.err, "{s}.index: argument state '{s}' is unreachable because index {d} leaves a gap before index {d}", .{ state_path, state_name, argument_index, next_reachable_index });
+            }
+            next_reachable_index = @max(next_reachable_index, argument_index + 1);
+        } else if (state.get("after") == null and !manifestBool(state.get("repeatable"))) {
+            next_reachable_index += 1;
+        }
+
+        if (state.get("provider")) |provider| {
+            const provider_path = try manifestFieldPath(allocator, state_path, "provider");
+            defer allocator.free(provider_path);
+            try validateManifestProviderRef(allocator, diagnostics, provider, providers, provider_path);
+        }
+        if (state.get("grammar")) |grammar| {
+            const grammar_path = try manifestFieldPath(allocator, state_path, "grammar");
+            defer allocator.free(grammar_path);
+            try validateManifestValueGrammar(allocator, diagnostics, grammar, providers, grammar_path);
+        }
+        inline for (&.{ "when", "after", "until" }) |field| {
+            if (state.get(field)) |condition| {
+                const condition_path = try manifestFieldPath(allocator, state_path, field);
+                defer allocator.free(condition_path);
+                try validateManifestCondition(allocator, diagnostics, condition, options, state_names.items, terminator_defined, condition_path);
+            }
+        }
+        if (manifestBool(state.get("repeatable")) and state.get("until") == null and state.get("after") == null) trailing_repeatable = state_name;
+    }
+}
+
+fn validateManifestCondition(
+    allocator: std.mem.Allocator,
+    diagnostics: *CompletionManifestDiagnostics,
+    condition_value: std.json.Value,
+    options: []const CompletionManifestOptionSpelling,
+    state_names: []const []const u8,
+    terminator_defined: bool,
+    path: []const u8,
+) !void {
+    const condition = switch (condition_value) {
+        .object => |object| object,
+        else => return,
+    };
+    if (manifestBool(condition.get("terminatorSeen")) and !terminator_defined) {
+        try diagnostics.add(.err, "{s}.terminatorSeen: condition is unreachable because arguments.terminator is not defined", .{path});
+    }
+    if (manifestString(condition.get("previousState"))) |previous_state| {
+        if (!manifestStringListContains(state_names, previous_state)) {
+            try diagnostics.add(.err, "{s}.previousState: unknown argument state '{s}'", .{ path, previous_state });
+        }
+    }
+    inline for (&.{ "optionPresent", "optionAbsent" }) |field| {
+        if (condition.get(field)) |selector_or_selectors| {
+            const selector_path = try manifestFieldPath(allocator, path, field);
+            defer allocator.free(selector_path);
+            try validateManifestOptionSelectorOrSelectors(allocator, diagnostics, selector_or_selectors, options, selector_path);
+        }
+    }
+    inline for (&.{ "all", "any" }) |field| {
+        if (condition.get(field)) |children| {
+            const children_array = switch (children) {
+                .array => |array| array,
+                else => null,
+            };
+            if (children_array) |array| {
+                const children_path = try manifestFieldPath(allocator, path, field);
+                defer allocator.free(children_path);
+                for (array.items, 0..) |child, index| {
+                    const child_path = try manifestIndexPath(allocator, children_path, index);
+                    defer allocator.free(child_path);
+                    try validateManifestCondition(allocator, diagnostics, child, options, state_names, terminator_defined, child_path);
+                }
+            }
+        }
+    }
+    if (condition.get("not")) |child| {
+        const child_path = try manifestFieldPath(allocator, path, "not");
+        defer allocator.free(child_path);
+        try validateManifestCondition(allocator, diagnostics, child, options, state_names, terminator_defined, child_path);
+    }
+}
+
+fn validateManifestValueObject(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const []const u8, path: []const u8) anyerror!void {
+    const object = switch (value) {
+        .object => |object| object,
+        else => return,
+    };
+    if (object.get("provider")) |provider| {
+        const provider_path = try manifestFieldPath(allocator, path, "provider");
+        defer allocator.free(provider_path);
+        try validateManifestProviderRef(allocator, diagnostics, provider, providers, provider_path);
+    }
+    if (object.get("grammar")) |grammar| {
+        const grammar_path = try manifestFieldPath(allocator, path, "grammar");
+        defer allocator.free(grammar_path);
+        try validateManifestValueGrammar(allocator, diagnostics, grammar, providers, grammar_path);
+    }
+}
+
+fn validateManifestValueGrammar(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, grammar: std.json.Value, providers: []const []const u8, path: []const u8) anyerror!void {
+    const object = switch (grammar) {
+        .object => |object| object,
+        else => return,
+    };
+    if (object.get("item")) |item| {
+        const item_path = try manifestFieldPath(allocator, path, "item");
+        defer allocator.free(item_path);
+        try validateManifestValueObject(allocator, diagnostics, item, providers, item_path);
+    }
+    inline for (&.{ "key", "value" }) |field| {
+        if (object.get(field)) |nested| {
+            const nested_path = try manifestFieldPath(allocator, path, field);
+            defer allocator.free(nested_path);
+            try validateManifestValueObject(allocator, diagnostics, nested, providers, nested_path);
+        }
+    }
+}
+
+fn validateManifestProviderRefArray(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const []const u8, path: []const u8) !void {
+    defer allocator.free(path);
+    const array = switch (value) {
+        .array => |array| array,
+        else => return,
+    };
+    for (array.items, 0..) |provider, index| {
+        const provider_path = try manifestIndexPath(allocator, path, index);
+        defer allocator.free(provider_path);
+        try validateManifestProviderRef(allocator, diagnostics, provider, providers, provider_path);
+    }
+}
+
+fn validateManifestProviderRef(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const []const u8, path: []const u8) !void {
+    switch (value) {
+        .string => |provider_id| {
+            if (!manifestStringListContains(providers, provider_id)) {
+                try diagnostics.add(.err, "{s}: unknown provider '{s}'", .{ path, provider_id });
+            }
+        },
+        .object => try validateManifestProvider(diagnostics, value, path),
+        else => {},
+    }
+    _ = allocator;
+}
+
+fn validateManifestProvider(diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, path: []const u8) !void {
+    const provider = switch (value) {
+        .object => |object| object,
+        else => return,
+    };
+    const has_function = provider.get("function") != null;
+    const has_builtin = provider.get("builtin") != null;
+    if (has_function == has_builtin) {
+        try diagnostics.add(.err, "{s}: provider must define exactly one of function or builtin", .{path});
+    }
+}
+
+fn validateManifestSubcommandNames(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, command: std.json.ObjectMap, seen: *std.StringHashMapUnmanaged(void), path: []const u8) !void {
+    const name_path = try manifestFieldPath(allocator, path, "name");
+    defer allocator.free(name_path);
+    if (command.get("name")) |name_value| try appendManifestCommandNames(allocator, diagnostics, seen, name_value, name_path);
+    if (command.get("aliases")) |aliases_value| {
+        const aliases = switch (aliases_value) {
+            .array => |array| array,
+            else => return,
+        };
+        const aliases_path = try manifestFieldPath(allocator, path, "aliases");
+        defer allocator.free(aliases_path);
+        for (aliases.items, 0..) |alias_value, index| {
+            const alias = manifestString(alias_value) orelse continue;
+            const alias_path = try manifestIndexPath(allocator, aliases_path, index);
+            defer allocator.free(alias_path);
+            if (seen.contains(alias)) {
+                try diagnostics.add(.err, "{s}: duplicate subcommand name or alias '{s}'", .{ alias_path, alias });
+            } else {
+                try seen.put(allocator, alias, {});
+            }
+        }
+    }
+}
+
+fn appendManifestCommandNames(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, seen: *std.StringHashMapUnmanaged(void), value: std.json.Value, path: []const u8) !void {
+    switch (value) {
+        .string => |name| {
+            if (seen.contains(name)) {
+                try diagnostics.add(.err, "{s}: duplicate subcommand name or alias '{s}'", .{ path, name });
+            } else {
+                try seen.put(allocator, name, {});
+            }
+        },
+        .array => |names| for (names.items, 0..) |name_value, index| {
+            const name = manifestString(name_value) orelse continue;
+            const name_path = try manifestIndexPath(allocator, path, index);
+            defer allocator.free(name_path);
+            if (seen.contains(name)) {
+                try diagnostics.add(.err, "{s}: duplicate subcommand name or alias '{s}'", .{ name_path, name });
+            } else {
+                try seen.put(allocator, name, {});
+            }
+        },
+        else => {},
+    }
+}
+
+fn validateManifestNameValue(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, path: []const u8, non_empty_array: bool) !void {
+    defer allocator.free(path);
+    switch (value) {
+        .string => {},
+        .array => |array| {
+            if (non_empty_array and array.items.len == 0) try diagnostics.add(.err, "{s}: name array must not be empty", .{path});
+            var seen: std.StringHashMapUnmanaged(void) = .empty;
+            defer seen.deinit(allocator);
+            for (array.items, 0..) |item, index| {
+                const name = manifestString(item) orelse continue;
+                if (seen.contains(name)) {
+                    const item_path = try manifestIndexPath(allocator, path, index);
+                    defer allocator.free(item_path);
+                    try diagnostics.add(.err, "{s}: duplicate name '{s}'", .{ item_path, name });
+                } else {
+                    try seen.put(allocator, name, {});
+                }
+            }
+        },
+        else => {},
+    }
+}
+
+fn appendManifestOptionSpelling(diagnostics: *CompletionManifestDiagnostics, options: *std.ArrayList(CompletionManifestOptionSpelling), spelling: CompletionManifestOptionSpelling, path: []const u8) !void {
+    for (options.items) |existing| {
+        if (existing.kind == spelling.kind and std.mem.eql(u8, existing.value, spelling.value)) {
+            try diagnostics.add(.err, "{s}: duplicate option spelling '{s}{s}'", .{ path, manifestOptionPrefix(spelling.kind), spelling.value });
+            return;
+        }
+    }
+    try options.append(diagnostics.allocator, spelling);
+}
+
+fn manifestOptionPrefix(kind: CompletionManifestOptionSpellingKind) []const u8 {
+    return switch (kind) {
+        .short => "-",
+        .long => "--",
+    };
+}
+
+fn validateManifestOptionSelectorOrSelectors(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, options: []const CompletionManifestOptionSpelling, path: []const u8) !void {
+    switch (value) {
+        .string => |selector| try validateManifestOptionSelector(diagnostics, selector, options, path),
+        .array => |array| for (array.items, 0..) |item, index| {
+            const selector = manifestString(item) orelse continue;
+            const selector_path = try manifestIndexPath(allocator, path, index);
+            defer allocator.free(selector_path);
+            try validateManifestOptionSelector(diagnostics, selector, options, selector_path);
+        },
+        else => {},
+    }
+}
+
+fn validateManifestOptionSelector(diagnostics: *CompletionManifestDiagnostics, selector: []const u8, options: []const CompletionManifestOptionSpelling, path: []const u8) !void {
+    const spelling: CompletionManifestOptionSpelling = if (std.mem.startsWith(u8, selector, "--"))
+        .{ .kind = .long, .value = selector[2..] }
+    else if (std.mem.startsWith(u8, selector, "-") and selector.len == 2)
+        .{ .kind = .short, .value = selector[1..] }
+    else
+        return;
+    for (options) |option| {
+        if (option.kind == spelling.kind and std.mem.eql(u8, option.value, spelling.value)) return;
+    }
+    try diagnostics.add(.err, "{s}: unknown option selector '{s}'", .{ path, selector });
+}
+
+fn manifestFieldPath(allocator: std.mem.Allocator, path: []const u8, field: []const u8) ![]const u8 {
+    if (path.len == 0) return allocator.dupe(u8, field);
+    return std.fmt.allocPrint(allocator, "{s}.{s}", .{ path, field });
+}
+
+fn manifestIndexPath(allocator: std.mem.Allocator, path: []const u8, index: usize) ![]const u8 {
+    return std.fmt.allocPrint(allocator, "{s}[{d}]", .{ path, index });
+}
+
+fn manifestStringListContains(values: []const []const u8, needle: []const u8) bool {
+    for (values) |value| {
+        if (std.mem.eql(u8, value, needle)) return true;
+    }
+    return false;
+}
+
+fn manifestIndexListContains(values: []const usize, needle: usize) bool {
+    for (values) |value| {
+        if (value == needle) return true;
+    }
+    return false;
+}
+
+fn manifestInteger(value: ?std.json.Value) ?i64 {
+    return switch (value orelse return null) {
+        .integer => |integer| integer,
+        else => null,
+    };
+}
+
+fn manifestBool(value: ?std.json.Value) bool {
+    return switch (value orelse return false) {
+        .bool => |boolean| boolean,
+        else => false,
+    };
 }
 
 fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, source: []const u8, cursor: usize) !completion_model.Application {
@@ -2583,6 +3439,174 @@ test "completion scripts lazy-load from XDG data home" {
     try std.testing.expectEqual(completion_model.RuleKind.dynamic_subcommands, rules[0].kind);
     try std.testing.expectEqualStrings("__rush_complete_tool", rules[0].value.?);
     try std.testing.expect(loader.attempted.contains("tool"));
+}
+
+test "completion manifests lazy-load static subcommands and options" {
+    const root = "rush-completion-manifest-loader-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "options": [
+        \\      { "long": "verbose", "short": "v", "description": "show more output" }
+        \\    ],
+        \\    "subcommands": [
+        \\      {
+        \\        "name": "run",
+        \\        "description": "run a task",
+        \\        "options": [
+        \\          { "long": "file", "value": { "name": "path" } }
+        \\        ]
+        \\      }
+        \\    ]
+        \\  }
+        \\}
+    });
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_DIRS", "");
+    try executor.setEnv("XDG_DATA_HOME", root);
+
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+
+    try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
+
+    const rules = executor.completionRules();
+    try std.testing.expectEqual(@as(usize, 3), rules.len);
+    try std.testing.expectEqualStrings("tool", rules[0].root);
+    try std.testing.expectEqual(completion_model.RuleKind.option, rules[0].kind);
+    try std.testing.expectEqualStrings("verbose", rules[0].option.long.?);
+    try std.testing.expectEqualStrings("v", rules[0].option.short.?);
+    try std.testing.expectEqualStrings("show more output", rules[0].description.?);
+    try std.testing.expectEqual(completion_model.RuleKind.subcommand, rules[1].kind);
+    try std.testing.expectEqualStrings("run", rules[1].value.?);
+    try std.testing.expectEqual(completion_model.RuleKind.option, rules[2].kind);
+    try std.testing.expectEqualStrings("run", rules[2].path[0]);
+    try std.testing.expectEqualStrings("file", rules[2].option.long.?);
+    try std.testing.expectEqualStrings("path", rules[2].option.argument.?);
+}
+
+test "completion manifest semantic validation accepts resolved providers groups and reachable arguments" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.targets": { "function": "__rush_complete_tool_targets" }
+        \\    },
+        \\    "optionGroups": [
+        \\      { "name": "mode", "exclusive": true }
+        \\    ],
+        \\    "options": [
+        \\      { "long": "debug", "exclusiveGroup": "mode" },
+        \\      { "long": "release", "exclusiveGroup": "mode" },
+        \\      { "long": "target", "value": { "name": "target", "provider": "tool.targets" } }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "index": 0, "provider": "tool.targets" },
+        \\        { "name": "extra", "index": 1, "grammar": { "kind": "list", "separator": ",", "item": { "provider": "tool.targets" } } }
+        \\      ]
+        \\    },
+        \\    "subcommands": [
+        \\      { "name": ["run", "r"], "aliases": ["execute"] }
+        \\    ]
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try std.testing.expect(!diagnostics.hasErrors());
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.items.items.len);
+}
+
+test "completion manifest semantic validation reports clear invalid manifest diagnostics" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "$schema": "https://rush.horse/completion/schema/v2.schema.json",
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "options": [
+        \\      { "long": "verbose" },
+        \\      { "long": "verbose" },
+        \\      { "long": "mode", "exclusiveGroup": "missing" },
+        \\      { "long": "target", "value": { "name": "target", "provider": "missing.provider" } }
+        \\    ],
+        \\    "subcommands": [
+        \\      { "name": ["run", "r"] },
+        \\      { "name": "test", "aliases": ["r"] }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "index": 1 },
+        \\        { "name": "extra", "provider": "missing.provider" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try std.testing.expect(diagnostics.hasErrors());
+    try expectCompletionManifestDiagnostic(diagnostics, .warning, "$schema: references Rush completion schema v2, but manifestVersion is 1");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[1]: duplicate option spelling '--verbose'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[2].exclusiveGroup: undefined option group 'missing'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[3].value.provider: unknown provider 'missing.provider'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.subcommands[1].aliases[0]: duplicate subcommand name or alias 'r'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.arguments.states[0].index: argument state 'target' is unreachable");
+}
+
+test "completion manifest semantic validation rejects unsupported versions before compiling rules" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try std.testing.expectError(error.CompletionManifestSemanticValidationFailed, loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 2,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "options": [
+        \\      { "long": "verbose" }
+        \\    ]
+        \\  }
+        \\}
+    ));
+    try std.testing.expectEqual(@as(usize, 0), executor.completionRules().len);
+}
+
+test "completion manifest semantic validation rejects duplicates before compiling rules" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try std.testing.expectError(error.CompletionManifestSemanticValidationFailed, loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "options": [
+        \\      { "long": "verbose" },
+        \\      { "long": "verbose" }
+        \\    ]
+        \\  }
+        \\}
+    ));
+    try std.testing.expectEqual(@as(usize, 0), executor.completionRules().len);
+}
+
+fn expectCompletionManifestDiagnostic(diagnostics: CompletionManifestDiagnostics, severity: CompletionManifestDiagnosticSeverity, needle: []const u8) !void {
+    for (diagnostics.items.items) |diagnostic| {
+        if (diagnostic.severity == severity and std.mem.indexOf(u8, diagnostic.message, needle) != null) return;
+    }
+    return error.MissingCompletionManifestDiagnostic;
 }
 
 test "supplied completion scripts validate" {

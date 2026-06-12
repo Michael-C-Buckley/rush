@@ -1,0 +1,439 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rush.horse/completion/schema/v1.schema.json",
+  "title": "Rush Completion Manifest v1",
+  "description": "Structured completion manifest for Rush command completions. See https://rush.horse/docs/completion-manifest.html for human-readable documentation.",
+  "type": "object",
+  "required": ["manifestVersion", "command"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "manifestVersion": {
+      "const": 1
+    },
+    "command": {
+      "$ref": "#/$defs/command"
+    }
+  },
+  "$defs": {
+    "command": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nameOrNames"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "deprecated": {
+          "$ref": "#/$defs/deprecated"
+        },
+        "providers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/provider"
+          }
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/option"
+          }
+        },
+        "optionGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/optionGroup"
+          }
+        },
+        "arguments": {
+          "$ref": "#/$defs/argumentModel"
+        },
+        "subcommands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/command"
+          }
+        },
+        "dynamicSubcommands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/providerRef"
+          }
+        },
+        "dynamicOptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/providerRef"
+          }
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["short"] },
+        { "required": ["long"] }
+      ],
+      "properties": {
+        "short": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1,
+          "pattern": "^[^-\\s]$"
+        },
+        "long": {
+          "$ref": "#/$defs/longOptionName"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/longOptionName"
+          },
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/value"
+        },
+        "repeatable": {
+          "type": "boolean"
+        },
+        "exclusiveGroup": {
+          "$ref": "#/$defs/name"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/optionSelector"
+          },
+          "uniqueItems": true
+        },
+        "terminatesOptions": {
+          "type": "boolean"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "deprecated": {
+          "$ref": "#/$defs/deprecated"
+        }
+      }
+    },
+    "optionGroup": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "exclusive": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "style": {
+          "enum": ["detached", "attached", "attached-or-detached", "equals", "optional"]
+        },
+        "provider": {
+          "$ref": "#/$defs/providerRef"
+        },
+        "grammar": {
+          "$ref": "#/$defs/valueGrammar"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "argumentModel": {
+      "type": "object",
+      "required": ["states"],
+      "additionalProperties": false,
+      "properties": {
+        "terminator": {
+          "type": "string"
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/argumentState"
+          }
+        }
+      }
+    },
+    "argumentState": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "repeatable": {
+          "type": "boolean"
+        },
+        "provider": {
+          "$ref": "#/$defs/providerRef"
+        },
+        "grammar": {
+          "$ref": "#/$defs/valueGrammar"
+        },
+        "description": {
+          "type": "string"
+        },
+        "when": {
+          "$ref": "#/$defs/condition"
+        },
+        "after": {
+          "$ref": "#/$defs/condition"
+        },
+        "until": {
+          "$ref": "#/$defs/condition"
+        }
+      }
+    },
+    "provider": {
+      "oneOf": [
+        { "$ref": "#/$defs/functionProvider" },
+        { "$ref": "#/$defs/builtinProvider" }
+      ]
+    },
+    "functionProvider": {
+      "type": "object",
+      "required": ["function"],
+      "additionalProperties": false,
+      "properties": {
+        "function": {
+          "$ref": "#/$defs/functionName"
+        },
+        "description": {
+          "type": "string"
+        },
+        "lazy": {
+          "type": "boolean"
+        }
+      }
+    },
+    "builtinProvider": {
+      "type": "object",
+      "required": ["builtin"],
+      "additionalProperties": false,
+      "properties": {
+        "builtin": {
+          "enum": ["files", "directories", "executables", "variables"]
+        },
+        "description": {
+          "type": "string"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "providerRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/providerId" },
+        { "$ref": "#/$defs/provider" }
+      ]
+    },
+    "valueGrammar": {
+      "oneOf": [
+        { "$ref": "#/$defs/enumGrammar" },
+        { "$ref": "#/$defs/listGrammar" },
+        { "$ref": "#/$defs/keyValueGrammar" },
+        { "$ref": "#/$defs/pathGrammar" },
+        { "$ref": "#/$defs/stringGrammar" }
+      ]
+    },
+    "enumGrammar": {
+      "type": "object",
+      "required": ["kind", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "enum" },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/enumValue"
+          }
+        }
+      }
+    },
+    "enumValue": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["value"],
+          "additionalProperties": false,
+          "properties": {
+            "value": { "type": "string" },
+            "description": { "type": "string" },
+            "display": { "type": "string" },
+            "noSpace": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "listGrammar": {
+      "type": "object",
+      "required": ["kind", "separator", "item"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "list" },
+        "separator": { "type": "string", "minLength": 1 },
+        "item": { "$ref": "#/$defs/value" },
+        "allowEmpty": { "type": "boolean" }
+      }
+    },
+    "keyValueGrammar": {
+      "type": "object",
+      "required": ["kind", "separator", "key", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "keyValue" },
+        "separator": { "type": "string", "minLength": 1 },
+        "key": { "$ref": "#/$defs/value" },
+        "value": { "$ref": "#/$defs/value" }
+      }
+    },
+    "pathGrammar": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "path" },
+        "directoriesOnly": { "type": "boolean" }
+      }
+    },
+    "stringGrammar": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "string" }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "all": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "any": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "not": {
+          "$ref": "#/$defs/condition"
+        },
+        "optionPresent": {
+          "$ref": "#/$defs/optionSelectorOrSelectors"
+        },
+        "optionAbsent": {
+          "$ref": "#/$defs/optionSelectorOrSelectors"
+        },
+        "terminatorSeen": {
+          "type": "boolean"
+        },
+        "previousState": {
+          "$ref": "#/$defs/name"
+        },
+        "argumentCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "optionSelectorOrSelectors": {
+      "oneOf": [
+        { "$ref": "#/$defs/optionSelector" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/optionSelector" },
+          "uniqueItems": true
+        }
+      ]
+    },
+    "optionSelector": {
+      "type": "string",
+      "pattern": "^(--[A-Za-z0-9][A-Za-z0-9_-]*|-[^-\\s])$"
+    },
+    "nameOrNames": {
+      "oneOf": [
+        { "$ref": "#/$defs/name" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/name" },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    },
+    "longOptionName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    },
+    "providerId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    },
+    "functionName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "deprecated": {
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "git",
+    "description": "the stupid content tracker",
+    "providers": {
+      "git.branches": {
+        "function": "__rush_complete_git_branches"
+      },
+      "builtin.directories": {
+        "builtin": "directories",
+        "options": {
+          "appendSlash": true
+        }
+      }
+    },
+    "options": [
+      {
+        "short": "C",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        },
+        "description": "run as if git started in path"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "checkout",
+        "description": "switch branches or restore paths",
+        "options": [
+          {
+            "short": "b",
+            "value": {
+              "name": "branch"
+            },
+            "description": "create and checkout a new branch"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "branch",
+              "provider": "git.branches"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

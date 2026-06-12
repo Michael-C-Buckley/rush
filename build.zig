@@ -135,6 +135,12 @@ pub fn build(b: *std.Build) void {
     compliance_manifest_step.dependOn(&compliance_manifest_check.step);
     test_step.dependOn(&compliance_manifest_check.step);
 
+    const completion_manifest_schema_step = b.step("completion-manifest-schema", "Validate completion manifest schema and examples");
+    const completion_manifest_schema_check = b.addSystemCommand(&.{ "sh", "scripts/check-completion-manifest-schema.sh" });
+    completion_manifest_schema_check.step.dependOn(fmt_step);
+    completion_manifest_schema_step.dependOn(&completion_manifest_schema_check.step);
+    test_step.dependOn(&completion_manifest_schema_check.step);
+
     const posix_negative_corpus_step = b.step("posix-negative-corpus", "Run POSIX negative diagnostics corpus");
     const posix_negative_corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-posix-negative-corpus.sh" });
     posix_negative_corpus_check.step.dependOn(&exe.step);

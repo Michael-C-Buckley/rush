@@ -1,0 +1,13 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "broken",
+    "options": [
+      {
+        "short": "too-long",
+        "description": "short option must be one character"
+      }
+    ]
+  }
+}
