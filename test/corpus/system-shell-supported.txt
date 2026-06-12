@@ -319,3 +319,4 @@ printf '<%s:%d:%b>\n' only; printf '<%s:%d>\n' a 1 b
 printf '<%s%%>\n' a b; printf 'done:%%\n'
 printf '%i:%i:%i\n' 12 +0x10 -0x10
 printf '[%+d][% d][%.4d][%8.4d][%-8.4d][%+05d][%#o][%#x][%#X][%#06x]\n' 7 7 7 7 7 7 10 255 255 255
+printf '[%.0d][%5.0d][%#.0o][%#.0x][%#.0X]\n' 0 0 0 0 0

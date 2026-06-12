@@ -93,6 +93,7 @@ builtin-printf-i-conversion	builtin	behavior	printf %i formats signed integer op
 builtin-printf-integer-c-constants	builtin	behavior	printf integer conversions parse POSIX C integer constants and leading quote character operands
 builtin-printf-integer-format-flags	builtin	behavior	printf integer conversions honor representative sign space alternate precision width left-adjust and zero-padding flags
 builtin-printf-integer-overflow	builtin	behavior	printf integer conversion overflow saturates to integer limits while diagnosing the operand
+builtin-printf-integer-zero-precision	builtin	behavior	printf integer zero precision suppresses zero decimal and hexadecimal values while alternate octal keeps one zero
 builtin-printf-missing-operands	builtin	behavior	printf supplies empty string and zero defaults for missing conversion operands
 builtin-printf-octal-hex	builtin	builtin	-
 builtin-printf-percent-literal	builtin	behavior	printf %% emits a literal percent while surrounding conversions still consume operands
