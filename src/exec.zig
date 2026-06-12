@@ -9933,6 +9933,22 @@ fn rawWrite(fd: std.posix.fd_t, bytes: []const u8) !usize {
     }
 }
 
+fn setNonBlockingFd(fd: std.posix.fd_t) !void {
+    const flags = std.c.fcntl(fd, @as(c_int, std.c.F.GETFL));
+    switch (std.c.errno(flags)) {
+        .SUCCESS => {},
+        .BADF => return error.BadFileDescriptor,
+        else => return error.Unexpected,
+    }
+    const nonblock: c_int = @bitCast(std.c.O{ .NONBLOCK = true });
+    const rc = std.c.fcntl(fd, @as(c_int, std.c.F.SETFL), flags | nonblock);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => {},
+        .BADF => return error.BadFileDescriptor,
+        else => return error.Unexpected,
+    }
+}
+
 fn isOutputWriteFailure(err: anyerror) bool {
     return writeFailureMessage(err) != null;
 }
@@ -15564,7 +15580,7 @@ fn saveJobTerminalModes(job: *BackgroundJob) void {
 
 fn restoreJobTerminalModes(job: *BackgroundJob) void {
     const termios = job.saved_termios orelse return;
-    std.posix.tcsetattr(std.Io.File.stdin().handle, .FLUSH, termios) catch {};
+    std.posix.tcsetattr(std.Io.File.stdin().handle, .DRAIN, termios) catch {};
 }
 
 fn builtinTimes(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -22124,8 +22140,8 @@ test "executor restores saved pty terminal modes before continuing stopped job" 
     } else {
         changed.lflag = ~changed.lflag;
     }
-    try std.posix.tcsetattr(std.Io.File.stdin().handle, .FLUSH, changed);
-    defer std.posix.tcsetattr(std.Io.File.stdin().handle, .FLUSH, saved) catch {};
+    try std.posix.tcsetattr(std.Io.File.stdin().handle, .DRAIN, changed);
+    defer std.posix.tcsetattr(std.Io.File.stdin().handle, .DRAIN, saved) catch {};
 
     const child_pid = fork();
     if (child_pid < 0) return error.SkipZigTest;
@@ -22140,6 +22156,10 @@ test "executor restores saved pty terminal modes before continuing stopped job" 
     var status: c_int = 0;
     _ = std.c.waitpid(child_pid, &status, @intCast(std.posix.W.UNTRACED));
 
+    const queued = "queued job input\n";
+    try rawWriteAll(master, queued);
+    try setNonBlockingFd(std.Io.File.stdin().handle);
+
     var job: BackgroundJob = .{
         .id = 1,
         .pid = child_pid,
@@ -22152,6 +22172,9 @@ test "executor restores saved pty terminal modes before continuing stopped job" 
 
     const restored = try std.posix.tcgetattr(std.Io.File.stdin().handle);
     try std.testing.expectEqualSlices(u8, std.mem.asBytes(&saved), std.mem.asBytes(&restored));
+    var buffer: [64]u8 = undefined;
+    const read_len = try std.posix.read(std.Io.File.stdin().handle, &buffer);
+    try std.testing.expectEqualStrings(queued, buffer[0..read_len]);
     try std.testing.expectEqual(JobState.running, job.state);
 }
 

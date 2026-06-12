@@ -10,6 +10,9 @@ const event_loop = @import("event_loop.zig");
 const line_editor = @import("line_editor.zig");
 const completion = @import("completion.zig");
 
+extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
+extern "c" fn close(fd: c_int) c_int;
+
 const read_chunk_size = 4096;
 const invalid_fd: std.posix.fd_t = -1;
 const semanticCommandStart = "\x1b]133;A;cl=w\x07";
@@ -505,8 +508,8 @@ pub const TerminalSession = struct {
     pub fn init(allocator: std.mem.Allocator, io: std.Io) !TerminalSession {
         const tty_buffer = try allocator.alloc(u8, 4096);
         errdefer allocator.free(tty_buffer);
-        var tty = try vaxis.tty.PosixTty.init(io, tty_buffer);
-        errdefer tty.deinit();
+        var tty = try initPosixTtyPreserveInput(io, tty_buffer);
+        errdefer deinitPosixTtyPreserveInput(tty);
 
         var wake = try makePipe(io);
         errdefer wake.close(io);
@@ -581,17 +584,17 @@ pub const TerminalSession = struct {
         self.completion_wake.close(self.io);
         self.prompt_redraw.close(self.io);
         self.wake.read.close(self.io);
-        self.tty.deinit();
+        deinitPosixTtyPreserveInput(self.tty);
         self.allocator.free(self.tty_buffer);
         self.* = undefined;
     }
 
     pub fn suspendRawMode(self: *TerminalSession) !void {
-        try std.posix.tcsetattr(self.tty.fd.handle, .FLUSH, self.tty.termios);
+        try std.posix.tcsetattr(self.tty.fd.handle, .DRAIN, self.tty.termios);
     }
 
     pub fn resumeRawMode(self: *TerminalSession) !void {
-        _ = try vaxis.tty.PosixTty.makeRaw(self.tty.fd.handle);
+        _ = try makeRawPreserveInput(self.tty.fd.handle);
     }
 
     pub fn leaveEditorMode(self: *TerminalSession) !void {
@@ -1176,6 +1179,57 @@ fn nextHookIntervalDeadlineMs(options: ReadLineOptions, io: std.Io) !?u64 {
 
 fn nowMs(io: std.Io) u64 {
     return @intCast(std.Io.Clock.Timestamp.now(io, .awake).raw.toMilliseconds());
+}
+
+fn initPosixTtyPreserveInput(io: std.Io, buffer: []u8) !vaxis.tty.PosixTty {
+    var file = try std.Io.Dir.openFileAbsolute(io, "/dev/tty", .{ .mode = .read_write });
+    errdefer if (builtin.os.tag != .macos) file.close(io);
+
+    const termios = try makeRawPreserveInput(file.handle);
+    const tty: vaxis.tty.PosixTty = .{
+        .io = io,
+        .termios = termios,
+        .fd = file,
+        .tty_writer = file.writerStreaming(io, buffer),
+    };
+    if (!builtin.is_test) vaxis.tty.global_tty = tty;
+    return tty;
+}
+
+fn deinitPosixTtyPreserveInput(tty: vaxis.tty.PosixTty) void {
+    std.posix.tcsetattr(tty.fd.handle, .DRAIN, tty.termios) catch |err| {
+        std.log.err("couldn't restore terminal: {}", .{err});
+    };
+    if (builtin.os.tag != .macos) tty.fd.close(tty.io);
+}
+
+fn makeRawPreserveInput(fd: std.posix.fd_t) !std.posix.termios {
+    const state = try std.posix.tcgetattr(fd);
+    var raw = state;
+    raw.iflag.IGNBRK = false;
+    raw.iflag.BRKINT = false;
+    raw.iflag.PARMRK = false;
+    raw.iflag.ISTRIP = false;
+    raw.iflag.INLCR = false;
+    raw.iflag.IGNCR = false;
+    raw.iflag.ICRNL = false;
+    raw.iflag.IXON = false;
+
+    raw.oflag.OPOST = false;
+
+    raw.lflag.ECHO = false;
+    raw.lflag.ECHONL = false;
+    raw.lflag.ICANON = false;
+    raw.lflag.ISIG = false;
+    raw.lflag.IEXTEN = false;
+
+    raw.cflag.CSIZE = .CS8;
+    raw.cflag.PARENB = false;
+
+    raw.cc[@intFromEnum(std.posix.V.MIN)] = 1;
+    raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
+    try std.posix.tcsetattr(fd, .DRAIN, raw);
+    return state;
 }
 
 fn renderSession(allocator: std.mem.Allocator, io: std.Io, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize, options: ReadLineOptions) !void {
@@ -1899,6 +1953,29 @@ test "external editor helper rejects failed editor commands" {
         .external_editor_command = "false",
         .external_editor_tmpdir = tmpdir,
     }, "original"));
+}
+
+test "raw terminal transitions preserve queued pty input" {
+    var master: c_int = -1;
+    var slave: c_int = -1;
+    if (openpty(&master, &slave, null, null, null) != 0) return error.SkipZigTest;
+    defer _ = close(master);
+    defer _ = close(slave);
+
+    const saved = try std.posix.tcgetattr(slave);
+    defer std.posix.tcsetattr(slave, .DRAIN, saved) catch {};
+    var no_echo = saved;
+    no_echo.lflag.ECHO = false;
+    try std.posix.tcsetattr(slave, .DRAIN, no_echo);
+    try setNonBlocking(slave);
+
+    const queued = "echo queued\n";
+    try rawWriteAll(master, queued);
+    _ = try makeRawPreserveInput(slave);
+
+    var buffer: [64]u8 = undefined;
+    const read_len = try rawRead(slave, &buffer);
+    try std.testing.expectEqualStrings(queued, buffer[0..read_len]);
 }
 
 test "terminal parser emits tab key" {
