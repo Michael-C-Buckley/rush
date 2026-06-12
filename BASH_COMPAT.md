@@ -182,6 +182,11 @@ not POSIX compliance claims, and remain excluded from POSIX scoring:
   prefixes for names not declared by that `local` invocation remain temporary
   and do not become visible after the builtin returns. `declare` and `typeset`
   remain out of scope.
+- `set -x` trace prefixes use the expanded value of `PS4`, defaulting to `+ `.
+  Rush expands parameters and arithmetic in `PS4`, including inherited
+  environment values, but deliberately does not execute command substitutions
+  while expanding `PS4`. This avoids running code smuggled through an inherited
+  environment variable before the script has opted into that behavior.
 
 ## Explicitly not POSIX
 

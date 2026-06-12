@@ -6934,7 +6934,7 @@ pub const Executor = struct {
             expanded_commands[index] = try self.expandSimpleCommand(program.commands[command_index], options);
             expanded_count += 1;
             if (self.shell_options.xtrace and (expanded_commands[index].assignments.len != 0 or expanded_commands[index].argv.len != 0)) {
-                const trace = try traceLineForCommand(self.allocator, expanded_commands[index]);
+                const trace = try traceLineForCommand(self, expanded_commands[index], options);
                 defer self.allocator.free(trace);
                 if (options.external_stdio == .inherit) {
                     try rawWriteAll(2, trace);
@@ -7125,7 +7125,7 @@ pub const Executor = struct {
         var trace: ?[]const u8 = null;
         var trace_written = false;
         if (self.shell_options.xtrace and (expanded.assignments.len != 0 or expanded.argv.len != 0)) {
-            trace = try traceLineForCommand(self.allocator, expanded);
+            trace = try traceLineForCommand(self, expanded, options);
             if (options.external_stdio == .inherit and options.io != null) {
                 try rawWriteAll(2, trace.?);
                 trace_written = true;
@@ -10179,17 +10179,41 @@ fn openAppendRedirectionFile(io: std.Io, target: []const u8) !std.Io.File {
     };
 }
 
-fn traceLineForCommand(allocator: std.mem.Allocator, command: ir.SimpleCommand) ![]const u8 {
+fn traceLineForCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) ![]const u8 {
+    const allocator = self.allocator;
+    var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+    const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
+    const ps4_options: expand.Options = .{
+        .env = self.envLookup(),
+        .variable_names = self.variableNames(),
+        .env_set = self.envSet(),
+        .arrays = self.arrayLookup(),
+        .diagnostic_sink = self.expansionDiagnosticSink(),
+        .features = options.features,
+        .positionals = self.currentPositionals().params,
+        .option_flags = option_flags,
+        .extglob = options.features.isBash() and self.shell_options.shopt.extglob,
+        .patsub_replacement = self.shell_options.shopt.patsub_replacement,
+        .nounset = self.shell_options.nounset,
+        .parameter_error = &self.parameter_error,
+        .arithmetic_error = &self.arithmetic_error,
+    };
+    const ps4 = try expand.expandWordScalar(allocator, self.getEnv("PS4") orelse "+ ", ps4_options);
+    defer allocator.free(ps4);
+
     var line: std.ArrayList(u8) = .empty;
     errdefer line.deinit(allocator);
-    try line.appendSlice(allocator, "+");
+    try line.appendSlice(allocator, ps4);
+    var needs_separator = false;
     for (command.assignments) |assignment| {
-        try line.append(allocator, ' ');
+        if (needs_separator) try line.append(allocator, ' ');
         try line.appendSlice(allocator, assignment.text);
+        needs_separator = true;
     }
     for (command.argv) |arg| {
-        try line.append(allocator, ' ');
+        if (needs_separator) try line.append(allocator, ' ');
         try line.appendSlice(allocator, arg.text);
+        needs_separator = true;
     }
     try line.append(allocator, '\n');
     return line.toOwnedSlice(allocator);
@@ -20577,6 +20601,36 @@ test "executor implements set shell option baseline" {
     defer trace.deinit();
     try std.testing.expectEqualStrings("hi\nquiet\n", trace.stdout);
     try std.testing.expectEqualStrings("+ X=hi\n+ echo hi\n+ set +x\n", trace.stderr);
+
+    var assigned_ps4_executor = Executor.init(std.testing.allocator);
+    defer assigned_ps4_executor.deinit();
+    var assigned_ps4 = try assigned_ps4_executor.executeScriptSlice("RUSH_PS4_LABEL=script; PS4='${RUSH_PS4_LABEL}:$((1 + 2))>'; set -x; true", .{});
+    defer assigned_ps4.deinit();
+    try std.testing.expectEqualStrings("", assigned_ps4.stdout);
+    try std.testing.expectEqualStrings("script:3>true\n", assigned_ps4.stderr);
+
+    var env_ps4_map = std.process.Environ.Map.init(std.testing.allocator);
+    defer env_ps4_map.deinit();
+    try env_ps4_map.put("PS4", "env:${RUSH_PS4_LABEL}:$((2 + 3))>");
+    try env_ps4_map.put("RUSH_PS4_LABEL", "inherited");
+    var env_ps4_executor = Executor.init(std.testing.allocator);
+    defer env_ps4_executor.deinit();
+    try env_ps4_executor.importEnvironment(&env_ps4_map);
+    var env_ps4 = try env_ps4_executor.executeScriptSlice("set -x; true", .{});
+    defer env_ps4.deinit();
+    try std.testing.expectEqualStrings("", env_ps4.stdout);
+    try std.testing.expectEqualStrings("env:inherited:5>true\n", env_ps4.stderr);
+
+    var env_ps4_command_substitution_map = std.process.Environ.Map.init(std.testing.allocator);
+    defer env_ps4_command_substitution_map.deinit();
+    try env_ps4_command_substitution_map.put("PS4", "$(printf smuggled)SAFE>");
+    var env_ps4_command_substitution_executor = Executor.init(std.testing.allocator);
+    defer env_ps4_command_substitution_executor.deinit();
+    try env_ps4_command_substitution_executor.importEnvironment(&env_ps4_command_substitution_map);
+    var env_ps4_command_substitution = try env_ps4_command_substitution_executor.executeScriptSlice("set -x; true", .{});
+    defer env_ps4_command_substitution.deinit();
+    try std.testing.expectEqualStrings("", env_ps4_command_substitution.stdout);
+    try std.testing.expectEqualStrings("SAFE>true\n", env_ps4_command_substitution.stderr);
 
     var external_pipeline_trace_lowered = try parseAndLower(std.testing.allocator, "set -x; X=hi; /usr/bin/printf '%s\\n' \"$X\" | /bin/cat | /bin/cat");
     defer external_pipeline_trace_lowered.parsed.deinit();
