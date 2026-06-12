@@ -16309,6 +16309,9 @@ test "executor supports Bash string parameter operations" {
         \\printf 'substring-extra:%s|%s\n' "${value:${missing:-1}:3}" "${value:1 + (0 ? 9 : 2):3}"
         \\printf 'replace:%s|%s|%s|%s|%s\n' "${value/local/LOCAL}" "${value//\//_}" "${value/#\/*/root}" "${value/%rush/shell}" "${value/bin}"
         \\printf 'replace-extra:%s|%s\n' "${value/$(printf /)/_}" "${value/'/'/_}"
+        \\repl='&X'
+        \\esc_repl='\&X'
+        \\printf 'replace-amp:%s|%s|%s|%s|%s|%s\n' "${mixed/rush/[&]}" "${mixed/rush/[\&]}" "${mixed/rush/["&"]}" "${mixed/rush/$repl}" "${mixed/rush/"$repl"}" "${mixed/rush/$esc_repl}"
         \\printf 'case:%s|%s|%s|%s\n' "${mixed^}" "${mixed^^}" "${mixed,}" "${mixed,,}"
         \\printf 'case-pattern:%s|%s|%s\n' "${mixed^^[rs]}" "${mixed^^[[:lower:]]}" "${mixed^[!r]}"
     , .{ .features = compat.Features.bash() });
@@ -16321,7 +16324,7 @@ test "executor supports Bash string parameter operations" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("substring:usr/local/bin/rush|local|ru\nsubstring-extra:usr|r/l\nreplace:/usr/LOCAL/bin/rush|_usr_local_bin_rush|root|/usr/local/bin/shell|/usr/local//rush\nreplace-extra:_usr/local/bin/rush|_usr/local/bin/rush\ncase:Rush User|RUSH USER|rush User|rush user\ncase-pattern:RuSh USeR|RUSH USER|rush User\n", result.stdout);
+    try std.testing.expectEqualStrings("substring:usr/local/bin/rush|local|ru\nsubstring-extra:usr|r/l\nreplace:/usr/LOCAL/bin/rush|_usr_local_bin_rush|root|/usr/local/bin/shell|/usr/local//rush\nreplace-extra:_usr/local/bin/rush|_usr/local/bin/rush\nreplace-amp:[rush] User|[&] User|[&] User|rushX User|&X User|&X User\ncase:Rush User|RUSH USER|rush User|rush user\ncase-pattern:RuSh USeR|RUSH USER|rush User\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

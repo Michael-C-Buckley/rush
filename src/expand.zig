@@ -684,6 +684,17 @@ const ParameterReplacementOperation = struct {
     replacement: []const u8,
 };
 
+const ParameterReplacementText = struct {
+    text: []const u8,
+    replace_match: []const bool,
+
+    fn deinit(self: *ParameterReplacementText, allocator: std.mem.Allocator) void {
+        allocator.free(self.text);
+        allocator.free(self.replace_match);
+        self.* = undefined;
+    }
+};
+
 const ParameterCaseKind = enum {
     uppercase_first,
     uppercase_all,
@@ -976,8 +987,8 @@ fn renderReplacement(allocator: std.mem.Allocator, value: []const u8, operation:
     var pattern = try expandPatternWord(allocator, operation.pattern, options);
     defer pattern.deinit(allocator);
 
-    const replacement = try expandParameterWord(allocator, operation.replacement, options, in_double_quotes);
-    defer allocator.free(replacement);
+    var replacement = try expandParameterReplacementWord(allocator, operation.replacement, options, in_double_quotes);
+    defer replacement.deinit(allocator);
 
     return replacePattern(allocator, value, pattern, replacement, operation.kind);
 }
@@ -1031,7 +1042,7 @@ const PatternMatch = struct {
     end: usize,
 };
 
-fn replacePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8, kind: ParameterReplacementKind) ![]const u8 {
+fn replacePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, kind: ParameterReplacementKind) ![]const u8 {
     return switch (kind) {
         .first => replaceFirstPattern(allocator, value, pattern, replacement),
         .global => replaceGlobalPattern(allocator, value, pattern, replacement),
@@ -1040,17 +1051,17 @@ fn replacePattern(allocator: std.mem.Allocator, value: []const u8, pattern: Expa
     };
 }
 
-fn replaceFirstPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8) ![]const u8 {
+fn replaceFirstPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText) ![]const u8 {
     const match = findPatternMatch(value, pattern, 0) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
     try output.appendSlice(allocator, value[0..match.start]);
-    try output.appendSlice(allocator, replacement);
+    try appendExpandedReplacement(allocator, &output, replacement, value[match.start..match.end]);
     try output.appendSlice(allocator, value[match.end..]);
     return output.toOwnedSlice(allocator);
 }
 
-fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8) ![]const u8 {
+fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText) ![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
@@ -1058,7 +1069,7 @@ fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern
     while (cursor < value.len) {
         const match = findPatternMatch(value, pattern, cursor) orelse break;
         try output.appendSlice(allocator, value[cursor..match.start]);
-        try output.appendSlice(allocator, replacement);
+        try appendExpandedReplacement(allocator, &output, replacement, value[match.start..match.end]);
         if (match.end == match.start) {
             if (match.end < value.len) {
                 try output.append(allocator, value[match.end]);
@@ -1074,22 +1085,47 @@ fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern
     return output.toOwnedSlice(allocator);
 }
 
-fn replacePrefixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8) ![]const u8 {
+fn replacePrefixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText) ![]const u8 {
     const match_end = findPrefixPatternMatch(value, pattern) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
-    try output.appendSlice(allocator, replacement);
+    try appendExpandedReplacement(allocator, &output, replacement, value[0..match_end]);
     try output.appendSlice(allocator, value[match_end..]);
     return output.toOwnedSlice(allocator);
 }
 
-fn replaceSuffixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8) ![]const u8 {
+fn replaceSuffixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText) ![]const u8 {
     const match_start = findSuffixPatternMatch(value, pattern) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
     try output.appendSlice(allocator, value[0..match_start]);
-    try output.appendSlice(allocator, replacement);
+    try appendExpandedReplacement(allocator, &output, replacement, value[match_start..]);
     return output.toOwnedSlice(allocator);
+}
+
+fn appendExpandedReplacement(allocator: std.mem.Allocator, output: *std.ArrayList(u8), replacement: ParameterReplacementText, match: []const u8) !void {
+    std.debug.assert(replacement.text.len == replacement.replace_match.len);
+
+    var index: usize = 0;
+    while (index < replacement.text.len) {
+        const byte = replacement.text[index];
+        if (byte == '&' and replacement.replace_match[index]) {
+            try output.appendSlice(allocator, match);
+            index += 1;
+            continue;
+        }
+        if (byte == '\\' and replacement.replace_match[index] and index + 1 < replacement.text.len and replacement.replace_match[index + 1]) {
+            const escaped = replacement.text[index + 1];
+            if (escaped == '&' or escaped == '\\') {
+                try output.append(allocator, escaped);
+                index += 2;
+                continue;
+            }
+        }
+
+        try output.append(allocator, byte);
+        index += 1;
+    }
 }
 
 fn findPatternMatch(value: []const u8, pattern: ExpansionPattern, start_index: usize) ?PatternMatch {
@@ -1627,6 +1663,57 @@ fn expandParameterWord(allocator: std.mem.Allocator, word: []const u8, options: 
     var parts = try parseWordParts(allocator, word);
     defer parts.deinit();
     return renderWordParts(allocator, parts, options);
+}
+
+// Rush does not have a shopt option model yet, so Bash-mode replacement forms
+// use Bash 5.2's default-on patsub_replacement behavior.
+fn expandParameterReplacementWord(allocator: std.mem.Allocator, word: []const u8, options: Options, in_double_quotes: bool) anyerror!ParameterReplacementText {
+    const tilde_expanded: ?[]const u8 = if (!in_double_quotes) try expandTilde(allocator, word, options.env) else null;
+    defer if (tilde_expanded) |expanded| allocator.free(expanded);
+    const replacement_word = tilde_expanded orelse word;
+
+    var parts = try parseWordParts(allocator, replacement_word);
+    defer parts.deinit();
+
+    var text: std.ArrayList(u8) = .empty;
+    errdefer text.deinit(allocator);
+    var replace_match: std.ArrayList(bool) = .empty;
+    errdefer replace_match.deinit(allocator);
+
+    for (parts.parts) |part| {
+        if (part.kind == .parameter) {
+            var rendered = try renderParameterSegmented(allocator, part.value(parts.raw), options);
+            defer rendered.deinit(allocator);
+            try appendSegmentedParameterReplacementPart(allocator, &text, &replace_match, rendered);
+            continue;
+        }
+
+        const rendered = try renderPart(allocator, parts.raw, part, options);
+        defer allocator.free(rendered);
+        const replace_active = switch (part.kind) {
+            .unquoted, .parameter, .arithmetic, .command_substitution => true,
+            .single_quoted, .dollar_single_quoted, .double_quoted, .escaped => false,
+        };
+        try appendParameterReplacementPart(allocator, &text, &replace_match, rendered, replace_active);
+    }
+
+    const owned_text = try text.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_text);
+    return .{
+        .text = owned_text,
+        .replace_match = try replace_match.toOwnedSlice(allocator),
+    };
+}
+
+fn appendParameterReplacementPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), replace_match: *std.ArrayList(bool), rendered: []const u8, replace_active: bool) !void {
+    try text.appendSlice(allocator, rendered);
+    for (rendered) |_| try replace_match.append(allocator, replace_active);
+}
+
+fn appendSegmentedParameterReplacementPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), replace_match: *std.ArrayList(bool), rendered: SegmentedText) !void {
+    std.debug.assert(rendered.text.len == rendered.split.len);
+    try text.appendSlice(allocator, rendered.text);
+    try replace_match.appendSlice(allocator, rendered.split);
 }
 
 fn parameterHasUsableValue(is_set: bool, is_null: bool, colon: bool) bool {
@@ -3919,6 +4006,7 @@ fn testCommandSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script:
     if (std.mem.eql(u8, script, "echo hi")) return allocator.dupe(u8, "hi\n\n");
     if (std.mem.eql(u8, script, "printf 2")) return allocator.dupe(u8, "2\n");
     if (std.mem.eql(u8, script, "printf /")) return allocator.dupe(u8, "/");
+    if (std.mem.eql(u8, script, "printf '&X'")) return allocator.dupe(u8, "&X");
     if (std.mem.eql(u8, script, "printf 'a}b'")) return allocator.dupe(u8, "a}b");
     if (std.mem.eql(u8, script, "printf '}cd'")) return allocator.dupe(u8, "}cd");
     return allocator.dupe(u8, "");
@@ -3952,6 +4040,8 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
     if (std.mem.eql(u8, name, "PATHLIKE")) return "/usr/local/bin/rush";
+    if (std.mem.eql(u8, name, "AMP_REPL")) return "&X";
+    if (std.mem.eql(u8, name, "ESC_AMP_REPL")) return "\\&X";
     if (std.mem.eql(u8, name, "BRACED")) return "ab}cd";
     if (std.mem.eql(u8, name, "GLOBBY")) return "rush-quoted-glob-?.tmp";
     return null;
@@ -4627,6 +4717,16 @@ test "parameter expansion supports Bash string operations" {
     const patterned_case_modification = try expandWordScalar(std.testing.allocator, "${USER^^[rs]}:${USER^^[[:lower:]]}:${USER^[!r]}:${USER,,[RU]}", .{ .env = test_env, .features = compat.Features.bash() });
     defer std.testing.allocator.free(patterned_case_modification);
     try std.testing.expectEqualStrings("RuSh-uSeR:RUSH-USER:rush-user:rush-user", patterned_case_modification);
+}
+
+test "parameter expansion supports Bash replacement ampersand expansion" {
+    const direct = try expandWordScalar(std.testing.allocator, "${USER/rush/[&]}:${USER/rush/[\\&]}:${USER/rush/['&']}:${USER/rush/[\"&\"]}:${USER/rush/[\\\\&]}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(direct);
+    try std.testing.expectEqualStrings("[rush]-user:[&]-user:[&]-user:[&]-user:[\\rush]-user", direct);
+
+    const nested = try expandWordScalar(std.testing.allocator, "${USER/rush/$AMP_REPL}:${USER/rush/\"$AMP_REPL\"}:${USER/rush/$ESC_AMP_REPL}:${USER/rush/$(printf '&X')}:${USER/rush/\"$(printf '&X')\"}", .{ .env = test_env, .features = compat.Features.bash(), .command_substitution = test_command_substitution });
+    defer std.testing.allocator.free(nested);
+    try std.testing.expectEqualStrings("rushX-user:&X-user:&X-user:rushX-user:&X-user", nested);
 }
 
 test "parameter expansion diagnoses malformed Bash indirect array targets" {
