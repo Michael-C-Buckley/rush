@@ -219,9 +219,14 @@ pub const LexResult = struct {
 };
 
 pub fn lex(allocator: std.mem.Allocator, source: []const u8) !LexResult {
+    return lexWithFeatures(allocator, source, .{});
+}
+
+fn lexWithFeatures(allocator: std.mem.Allocator, source: []const u8, features: compat.Features) !LexResult {
     var lexer: Lexer = .{
         .allocator = allocator,
         .source = source,
+        .features = features,
     };
     return lexer.run();
 }
@@ -229,6 +234,7 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) !LexResult {
 const Lexer = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
+    features: compat.Features = .{},
     index: usize = 0,
     tokens: std.ArrayList(Token) = .empty,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
@@ -306,6 +312,11 @@ const Lexer = struct {
             if (isWordBoundary(c)) break;
 
             switch (c) {
+                '@', '!', '+', '*', '?' => if (self.startsBashExtglob()) {
+                    try self.consumeBashExtglob();
+                } else {
+                    self.index += 1;
+                },
                 '\\' => self.consumeBackslash(),
                 '\'' => try self.consumeQuoted('\'', "unterminated single quote"),
                 '"' => try self.consumeDoubleQuoted(),
@@ -315,6 +326,38 @@ const Lexer = struct {
             }
         }
         try self.add(.word, .init(start, self.index));
+    }
+
+    fn startsBashExtglob(self: Lexer) bool {
+        return self.features.isBash() and self.index + 1 < self.source.len and self.source[self.index + 1] == '(';
+    }
+
+    fn consumeBashExtglob(self: *Lexer) !void {
+        const start = self.index;
+        self.index += 2;
+        var depth: usize = 0;
+        while (!self.isAtEnd()) {
+            switch (self.peek()) {
+                '\\' => self.consumeBackslash(),
+                '\'' => try self.consumeQuoted('\'', "unterminated single quote"),
+                '"' => try self.consumeDoubleQuoted(),
+                '`' => try self.consumeBackquoted(),
+                '$' => try self.consumeDollarExpansion(true),
+                '@', '!', '+', '*', '?' => if (self.startsBashExtglob()) {
+                    depth += 1;
+                    self.index += 2;
+                } else {
+                    self.index += 1;
+                },
+                ')' => {
+                    self.index += 1;
+                    if (depth == 0) return;
+                    depth -= 1;
+                },
+                else => self.index += 1,
+            }
+        }
+        try self.addIncomplete(.init(start, self.source.len), "unterminated extglob pattern");
     }
 
     fn consumeBackslash(self: *Lexer) void {
@@ -1513,7 +1556,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
     defer if (masked_source) |buffer| allocator.free(buffer);
 
     while (true) {
-        var lex_result = try lex(allocator, masked_source orelse source);
+        var lex_result = try lexWithFeatures(allocator, masked_source orelse source, options.features);
         errdefer lex_result.deinit();
 
         var parser: SyntaxParser = .{

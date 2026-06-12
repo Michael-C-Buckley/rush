@@ -141,6 +141,7 @@ pub const Options = struct {
     pathname_expansion: bool = true,
     pathname_nullglob: bool = false,
     pathname_dotglob: bool = false,
+    extglob: bool = false,
     patsub_replacement: bool = true,
     nounset: bool = false,
     parameter_error: ?*ParameterError = null,
@@ -235,7 +236,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 
     var parts = try parseWordParts(allocator, tilde_expanded);
     defer parts.deinit();
-    const pathname_expansion_safe = !hasQuotedGlobSyntax(parts);
+    const pathname_expansion_safe = !hasQuotedGlobSyntax(parts, .{ .extglob = options.extglob });
 
     var fields: std.ArrayList([]const u8) = .empty;
     errdefer {
@@ -256,7 +257,7 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
 
     if (options.pathname_expansion and pathname_expansion_safe and !quoted_expansion_glob) {
         if (options.io) |io| {
-            try applyPathnameExpansion(allocator, io, &fields, .{ .nullglob = options.pathname_nullglob, .dotglob = options.pathname_dotglob });
+            try applyPathnameExpansion(allocator, io, &fields, .{ .nullglob = options.pathname_nullglob, .dotglob = options.pathname_dotglob, .extglob = options.extglob });
         }
     }
 
@@ -931,7 +932,7 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
             const base = value orelse "";
             var pattern = try expandPatternWord(allocator, parsed.word, options);
             defer pattern.deinit(allocator);
-            return removePattern(allocator, base, pattern, parsed.operator);
+            return removePattern(allocator, base, pattern, parsed.operator, options.extglob);
         },
         .invalid => unreachable,
     }
@@ -1021,7 +1022,7 @@ fn renderReplacement(allocator: std.mem.Allocator, value: []const u8, operation:
     var replacement = try expandParameterReplacementWord(allocator, operation.replacement, options, in_double_quotes);
     defer replacement.deinit(allocator);
 
-    return replacePattern(allocator, value, pattern, replacement, operation.kind);
+    return replacePattern(allocator, value, pattern, replacement, operation.kind, options.extglob);
 }
 
 fn renderCaseModification(allocator: std.mem.Allocator, value: []const u8, operation: ParameterCaseOperation, options: Options) ![]const u8 {
@@ -1036,19 +1037,19 @@ fn renderCaseModification(allocator: std.mem.Allocator, value: []const u8, opera
 
     switch (operation.kind) {
         .uppercase_first => {
-            if (output.len > 0 and casePatternMatchesByte(pattern, output[0])) output[0] = std.ascii.toUpper(output[0]);
+            if (output.len > 0 and casePatternMatchesByte(pattern, output[0], options.extglob)) output[0] = std.ascii.toUpper(output[0]);
         },
         .uppercase_all => {
             for (output) |*byte| {
-                if (casePatternMatchesByte(pattern, byte.*)) byte.* = std.ascii.toUpper(byte.*);
+                if (casePatternMatchesByte(pattern, byte.*, options.extglob)) byte.* = std.ascii.toUpper(byte.*);
             }
         },
         .lowercase_first => {
-            if (output.len > 0 and casePatternMatchesByte(pattern, output[0])) output[0] = std.ascii.toLower(output[0]);
+            if (output.len > 0 and casePatternMatchesByte(pattern, output[0], options.extglob)) output[0] = std.ascii.toLower(output[0]);
         },
         .lowercase_all => {
             for (output) |*byte| {
-                if (casePatternMatchesByte(pattern, byte.*)) byte.* = std.ascii.toLower(byte.*);
+                if (casePatternMatchesByte(pattern, byte.*, options.extglob)) byte.* = std.ascii.toLower(byte.*);
             }
         },
     }
@@ -1063,9 +1064,9 @@ fn anySingleCharacterPattern(allocator: std.mem.Allocator) !ExpansionPattern {
     return .{ .text = text, .special = special };
 }
 
-fn casePatternMatchesByte(pattern: ExpansionPattern, byte: u8) bool {
+fn casePatternMatchesByte(pattern: ExpansionPattern, byte: u8, extglob: bool) bool {
     const text = [_]u8{byte};
-    return globPatternMatches(pattern, &text);
+    return globPatternMatchesWithOptions(pattern, &text, .{ .extglob = extglob });
 }
 
 const PatternMatch = struct {
@@ -1073,17 +1074,17 @@ const PatternMatch = struct {
     end: usize,
 };
 
-fn replacePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, kind: ParameterReplacementKind) ![]const u8 {
+fn replacePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, kind: ParameterReplacementKind, extglob: bool) ![]const u8 {
     return switch (kind) {
-        .first => replaceFirstPattern(allocator, value, pattern, replacement),
-        .global => replaceGlobalPattern(allocator, value, pattern, replacement),
-        .prefix => replacePrefixPattern(allocator, value, pattern, replacement),
-        .suffix => replaceSuffixPattern(allocator, value, pattern, replacement),
+        .first => replaceFirstPattern(allocator, value, pattern, replacement, extglob),
+        .global => replaceGlobalPattern(allocator, value, pattern, replacement, extglob),
+        .prefix => replacePrefixPattern(allocator, value, pattern, replacement, extglob),
+        .suffix => replaceSuffixPattern(allocator, value, pattern, replacement, extglob),
     };
 }
 
-fn replaceFirstPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText) ![]const u8 {
-    const match = findPatternMatch(value, pattern, 0) orelse return allocator.dupe(u8, value);
+fn replaceFirstPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, extglob: bool) ![]const u8 {
+    const match = findPatternMatch(value, pattern, 0, extglob) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
     try output.appendSlice(allocator, value[0..match.start]);
@@ -1092,13 +1093,13 @@ fn replaceFirstPattern(allocator: std.mem.Allocator, value: []const u8, pattern:
     return output.toOwnedSlice(allocator);
 }
 
-fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText) ![]const u8 {
+fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, extglob: bool) ![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
     var cursor: usize = 0;
     while (cursor < value.len) {
-        const match = findPatternMatch(value, pattern, cursor) orelse break;
+        const match = findPatternMatch(value, pattern, cursor, extglob) orelse break;
         try output.appendSlice(allocator, value[cursor..match.start]);
         try appendExpandedReplacement(allocator, &output, replacement, value[match.start..match.end]);
         if (match.end == match.start) {
@@ -1116,8 +1117,8 @@ fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern
     return output.toOwnedSlice(allocator);
 }
 
-fn replacePrefixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText) ![]const u8 {
-    const match_end = findPrefixPatternMatch(value, pattern) orelse return allocator.dupe(u8, value);
+fn replacePrefixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, extglob: bool) ![]const u8 {
+    const match_end = findPrefixPatternMatch(value, pattern, extglob) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
     try appendExpandedReplacement(allocator, &output, replacement, value[0..match_end]);
@@ -1125,8 +1126,8 @@ fn replacePrefixPattern(allocator: std.mem.Allocator, value: []const u8, pattern
     return output.toOwnedSlice(allocator);
 }
 
-fn replaceSuffixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText) ![]const u8 {
-    const match_start = findSuffixPatternMatch(value, pattern) orelse return allocator.dupe(u8, value);
+fn replaceSuffixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, extglob: bool) ![]const u8 {
+    const match_start = findSuffixPatternMatch(value, pattern, extglob) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
     try output.appendSlice(allocator, value[0..match_start]);
@@ -1159,12 +1160,12 @@ fn appendExpandedReplacement(allocator: std.mem.Allocator, output: *std.ArrayLis
     }
 }
 
-fn findPatternMatch(value: []const u8, pattern: ExpansionPattern, start_index: usize) ?PatternMatch {
+fn findPatternMatch(value: []const u8, pattern: ExpansionPattern, start_index: usize, extglob: bool) ?PatternMatch {
     var start = start_index;
     while (start <= value.len) : (start += 1) {
         var end = value.len;
         while (end >= start) {
-            if (globPatternMatches(pattern, value[start..end])) return .{ .start = start, .end = end };
+            if (globPatternMatchesWithOptions(pattern, value[start..end], .{ .extglob = extglob })) return .{ .start = start, .end = end };
             if (end == start) break;
             end -= 1;
         }
@@ -1172,20 +1173,20 @@ fn findPatternMatch(value: []const u8, pattern: ExpansionPattern, start_index: u
     return null;
 }
 
-fn findPrefixPatternMatch(value: []const u8, pattern: ExpansionPattern) ?usize {
+fn findPrefixPatternMatch(value: []const u8, pattern: ExpansionPattern, extglob: bool) ?usize {
     var end = value.len;
     while (true) {
-        if (globPatternMatches(pattern, value[0..end])) return end;
+        if (globPatternMatchesWithOptions(pattern, value[0..end], .{ .extglob = extglob })) return end;
         if (end == 0) break;
         end -= 1;
     }
     return null;
 }
 
-fn findSuffixPatternMatch(value: []const u8, pattern: ExpansionPattern) ?usize {
+fn findSuffixPatternMatch(value: []const u8, pattern: ExpansionPattern, extglob: bool) ?usize {
     var start: usize = 0;
     while (start <= value.len) : (start += 1) {
-        if (globPatternMatches(pattern, value[start..])) return start;
+        if (globPatternMatchesWithOptions(pattern, value[start..], .{ .extglob = extglob })) return start;
     }
     return null;
 }
@@ -1674,12 +1675,12 @@ fn appendUnquotedAtPattern(allocator: std.mem.Allocator, fields: *std.ArrayList(
     }
 }
 
-fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, operator: ParameterOperator) ![]const u8 {
+fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, extglob: bool) ![]const u8 {
     return switch (operator) {
         .remove_small_suffix => blk: {
             var start = value.len;
             while (true) {
-                if (globPatternMatches(pattern, value[start..])) break :blk allocator.dupe(u8, value[0..start]);
+                if (globPatternMatchesWithOptions(pattern, value[start..], .{ .extglob = extglob })) break :blk allocator.dupe(u8, value[0..start]);
                 if (start == 0) break;
                 start -= 1;
             }
@@ -1688,21 +1689,21 @@ fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: Expan
         .remove_large_suffix => blk: {
             var start: usize = 0;
             while (start <= value.len) : (start += 1) {
-                if (globPatternMatches(pattern, value[start..])) break :blk allocator.dupe(u8, value[0..start]);
+                if (globPatternMatchesWithOptions(pattern, value[start..], .{ .extglob = extglob })) break :blk allocator.dupe(u8, value[0..start]);
             }
             break :blk allocator.dupe(u8, value);
         },
         .remove_small_prefix => blk: {
             var end: usize = 0;
             while (end <= value.len) : (end += 1) {
-                if (globPatternMatches(pattern, value[0..end])) break :blk allocator.dupe(u8, value[end..]);
+                if (globPatternMatchesWithOptions(pattern, value[0..end], .{ .extglob = extglob })) break :blk allocator.dupe(u8, value[end..]);
             }
             break :blk allocator.dupe(u8, value);
         },
         .remove_large_prefix => blk: {
             var end = value.len;
             while (true) {
-                if (globPatternMatches(pattern, value[0..end])) break :blk allocator.dupe(u8, value[end..]);
+                if (globPatternMatchesWithOptions(pattern, value[0..end], .{ .extglob = extglob })) break :blk allocator.dupe(u8, value[end..]);
                 if (end == 0) break;
                 end -= 1;
             }
@@ -3864,6 +3865,7 @@ fn isIfsWhitespace(ifs: []const u8, c: u8) bool {
 const PathnameExpansionOptions = struct {
     nullglob: bool = false,
     dotglob: bool = false,
+    extglob: bool = false,
 };
 
 fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std.ArrayList([]const u8), options: PathnameExpansionOptions) !void {
@@ -3874,7 +3876,7 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
     }
 
     for (fields.items) |field| {
-        if (hasGlobSyntax(field)) {
+        if (hasGlobSyntaxWithOptions(field, .{ .extglob = options.extglob })) {
             const matches = try expandPathnamePatternWithOptions(allocator, io, field, options);
             defer allocator.free(matches);
             if (matches.len != 0) {
@@ -3940,7 +3942,7 @@ fn expandPathnameExpansionPatternWithOptions(allocator: std.mem.Allocator, io: s
         }
 
         for (prefixes.items) |prefix| {
-            if (patternHasGlobSyntax(component)) {
+            if (patternHasGlobSyntaxWithOptions(component, .{ .extglob = options.extglob })) {
                 try appendGlobComponentMatches(allocator, io, &next_prefixes, prefix, component, options);
             } else {
                 const candidate = try joinPathComponent(allocator, prefix, component.text);
@@ -3973,7 +3975,7 @@ fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches:
     while (try iterator.next(io)) |entry| {
         if (entry.name.len == 0) continue;
         if (entry.name[0] == '.' and !options.dotglob and (component.text.len == 0 or component.text[0] != '.')) continue;
-        if (globPatternMatches(component, entry.name)) {
+        if (globPatternMatchesWithOptions(component, entry.name, .{ .extglob = options.extglob })) {
             try matches.append(allocator, try joinPathComponent(allocator, prefix, entry.name));
         }
     }
@@ -4001,66 +4003,268 @@ fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
 }
 
 pub fn hasGlobSyntax(text: []const u8) bool {
-    for (text) |c| switch (c) {
-        '*', '?', '[' => return true,
-        else => {},
-    };
+    return hasGlobSyntaxWithOptions(text, .{});
+}
+
+const GlobSyntaxOptions = struct {
+    extglob: bool = false,
+};
+
+fn hasGlobSyntaxWithOptions(text: []const u8, options: GlobSyntaxOptions) bool {
+    var index: usize = 0;
+    while (index < text.len) : (index += 1) {
+        if (options.extglob and startsExtglobOperator(text, null, index)) return true;
+        switch (text[index]) {
+            '*', '?', '[' => return true,
+            else => {},
+        }
+    }
     return false;
 }
 
 pub fn patternHasGlobSyntax(pattern: ExpansionPattern) bool {
+    return patternHasGlobSyntaxWithOptions(pattern, .{});
+}
+
+fn patternHasGlobSyntaxWithOptions(pattern: ExpansionPattern, options: GlobSyntaxOptions) bool {
     std.debug.assert(pattern.text.len == pattern.special.len);
-    for (pattern.text, 0..) |c, index| switch (c) {
-        '*', '?', '[' => if (pattern.special[index]) return true,
-        else => {},
-    };
+    for (pattern.text, 0..) |c, index| {
+        if (options.extglob and startsExtglobOperator(pattern.text, pattern.special, index)) return true;
+        switch (c) {
+            '*', '?', '[' => if (pattern.special[index]) return true,
+            else => {},
+        }
+    }
     return false;
 }
 
-fn hasQuotedGlobSyntax(parts: WordParts) bool {
+fn hasQuotedGlobSyntax(parts: WordParts, options: GlobSyntaxOptions) bool {
     for (parts.parts) |part| switch (part.kind) {
         .escaped, .single_quoted, .dollar_single_quoted, .double_quoted => {
-            if (hasGlobSyntax(part.value(parts.raw))) return true;
+            if (hasGlobSyntaxWithOptions(part.value(parts.raw), options)) return true;
         },
         else => {},
     };
     return false;
 }
 
+fn startsExtglobOperator(pattern: []const u8, special: ?[]const bool, index: usize) bool {
+    if (index + 1 >= pattern.len) return false;
+    if (!isGlobSpecial(special, index) or !isGlobSpecial(special, index + 1)) return false;
+    if (pattern[index + 1] != '(') return false;
+    return switch (pattern[index]) {
+        '@', '!', '+', '*', '?' => true,
+        else => false,
+    };
+}
+
+const GlobMatchOptions = struct {
+    extglob: bool = false,
+};
+
 fn globMatches(pattern: []const u8, text: []const u8) bool {
-    return globMatchesAt(pattern, null, 0, text, 0);
+    return globMatchesAt(pattern, null, .{}, 0, text, 0);
 }
 
 fn globPatternMatches(pattern: ExpansionPattern, text: []const u8) bool {
+    return globPatternMatchesWithOptions(pattern, text, .{});
+}
+
+fn globPatternMatchesWithOptions(pattern: ExpansionPattern, text: []const u8, options: GlobMatchOptions) bool {
     std.debug.assert(pattern.text.len == pattern.special.len);
-    return globMatchesAt(pattern.text, pattern.special, 0, text, 0);
+    return globMatchesAt(pattern.text, pattern.special, options, 0, text, 0);
 }
 
 fn isGlobSpecial(special: ?[]const bool, index: usize) bool {
     return if (special) |mask| mask[index] else true;
 }
 
-fn globMatchesAt(pattern: []const u8, special: ?[]const bool, pattern_index: usize, text: []const u8, text_index: usize) bool {
+fn globMatchesAt(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, pattern_index: usize, text: []const u8, text_index: usize) bool {
     if (pattern_index == pattern.len) return text_index == text.len;
+
+    if (options.extglob) {
+        if (parseExtglob(pattern, special, pattern_index)) |extglob| {
+            return extglobMatches(pattern, special, options, extglob, text, text_index);
+        }
+    }
 
     switch (pattern[pattern_index]) {
         '*' => if (isGlobSpecial(special, pattern_index)) {
             var next_text = text_index;
             while (true) : (next_text += 1) {
-                if (globMatchesAt(pattern, special, pattern_index + 1, text, next_text)) return true;
+                if (globMatchesAt(pattern, special, options, pattern_index + 1, text, next_text)) return true;
                 if (next_text == text.len) break;
             }
             return false;
-        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
-        '?' => if (isGlobSpecial(special, pattern_index)) return text_index < text.len and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1) else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
+        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
+        '?' => if (isGlobSpecial(special, pattern_index)) return text_index < text.len and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1) else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
         '[' => if (isGlobSpecial(special, pattern_index)) {
             if (matchBracket(pattern, special, pattern_index, text, text_index)) |matched| {
-                return matched.ok and globMatchesAt(pattern, special, matched.next_pattern, text, text_index + 1);
+                return matched.ok and globMatchesAt(pattern, special, options, matched.next_pattern, text, text_index + 1);
             }
-            return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1);
-        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
-        else => |c| return text_index < text.len and c == text[text_index] and globMatchesAt(pattern, special, pattern_index + 1, text, text_index + 1),
+            return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
+        else => |c| return text_index < text.len and c == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
     }
+}
+
+const ExtglobPattern = struct {
+    operator: u8,
+    body_start: usize,
+    body_end: usize,
+    next_pattern: usize,
+};
+
+fn parseExtglob(pattern: []const u8, special: ?[]const bool, pattern_index: usize) ?ExtglobPattern {
+    if (!startsExtglobOperator(pattern, special, pattern_index)) return null;
+    var index = pattern_index + 2;
+    var depth: usize = 0;
+    while (index < pattern.len) : (index += 1) {
+        if (pattern[index] == '[' and isGlobSpecial(special, index)) {
+            if (bracketExpressionEnd(pattern, special, index)) |end| {
+                index = end;
+                continue;
+            }
+        }
+        if (startsExtglobOperator(pattern, special, index)) {
+            depth += 1;
+            index += 1;
+            continue;
+        }
+        if (pattern[index] == ')' and isGlobSpecial(special, index)) {
+            if (depth == 0) {
+                return .{
+                    .operator = pattern[pattern_index],
+                    .body_start = pattern_index + 2,
+                    .body_end = index,
+                    .next_pattern = index + 1,
+                };
+            }
+            depth -= 1;
+        }
+    }
+    return null;
+}
+
+fn bracketExpressionEnd(pattern: []const u8, special: ?[]const bool, pattern_index: usize) ?usize {
+    var index = pattern_index + 1;
+    if (index < pattern.len and (pattern[index] == '!' or pattern[index] == '^') and isGlobSpecial(special, index)) index += 1;
+    var first_expression = true;
+    while (index < pattern.len) : (index += 1) {
+        if (pattern[index] == ']' and !first_expression and isGlobSpecial(special, index)) return index;
+        first_expression = false;
+    }
+    return null;
+}
+
+fn extglobMatches(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8, text_index: usize) bool {
+    return switch (extglob.operator) {
+        '@' => extglobMatchOne(pattern, special, options, extglob, text, text_index),
+        '?' => globMatchesAt(pattern, special, options, extglob.next_pattern, text, text_index) or extglobMatchOne(pattern, special, options, extglob, text, text_index),
+        '*' => extglobMatchRepeat(pattern, special, options, extglob, text, text_index, false),
+        '+' => extglobMatchRepeat(pattern, special, options, extglob, text, text_index, true),
+        '!' => extglobMatchNegated(pattern, special, options, extglob, text, text_index),
+        else => unreachable,
+    };
+}
+
+fn extglobMatchOne(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8, text_index: usize) bool {
+    var cursor = extglob.body_start;
+    while (cursor <= extglob.body_end) {
+        const alternative = nextExtglobAlternative(pattern, special, extglob.body_end, cursor);
+        var end = text_index;
+        while (end <= text.len) : (end += 1) {
+            if (globMatchesAlternative(pattern, special, options, alternative, text[text_index..end]) and
+                globMatchesAt(pattern, special, options, extglob.next_pattern, text, end)) return true;
+        }
+        if (alternative.next == null) break;
+        cursor = alternative.next.?;
+    }
+    return false;
+}
+
+fn extglobMatchRepeat(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8, text_index: usize, require_one: bool) bool {
+    if (!require_one and globMatchesAt(pattern, special, options, extglob.next_pattern, text, text_index)) return true;
+
+    var cursor = extglob.body_start;
+    while (cursor <= extglob.body_end) {
+        const alternative = nextExtglobAlternative(pattern, special, extglob.body_end, cursor);
+        var end = text_index;
+        while (end <= text.len) : (end += 1) {
+            if (!globMatchesAlternative(pattern, special, options, alternative, text[text_index..end])) continue;
+            if (end == text_index) {
+                if (require_one and globMatchesAt(pattern, special, options, extglob.next_pattern, text, end)) return true;
+                continue;
+            }
+            if (extglobMatchRepeat(pattern, special, options, extglob, text, end, false)) return true;
+        }
+        if (alternative.next == null) break;
+        cursor = alternative.next.?;
+    }
+    return false;
+}
+
+fn extglobMatchNegated(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8, text_index: usize) bool {
+    var end = text_index;
+    while (end <= text.len) : (end += 1) {
+        if (!extglobBodyMatchesWhole(pattern, special, options, extglob, text[text_index..end]) and
+            globMatchesAt(pattern, special, options, extglob.next_pattern, text, end)) return true;
+    }
+    return false;
+}
+
+fn extglobBodyMatchesWhole(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8) bool {
+    var cursor = extglob.body_start;
+    while (cursor <= extglob.body_end) {
+        const alternative = nextExtglobAlternative(pattern, special, extglob.body_end, cursor);
+        if (globMatchesAlternative(pattern, special, options, alternative, text)) return true;
+        if (alternative.next == null) break;
+        cursor = alternative.next.?;
+    }
+    return false;
+}
+
+fn globMatchesAlternative(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, alternative: ExtglobAlternative, text: []const u8) bool {
+    return globMatchesAt(
+        pattern[alternative.start..alternative.end],
+        if (special) |mask| mask[alternative.start..alternative.end] else null,
+        options,
+        0,
+        text,
+        0,
+    );
+}
+
+const ExtglobAlternative = struct {
+    start: usize,
+    end: usize,
+    next: ?usize,
+};
+
+fn nextExtglobAlternative(pattern: []const u8, special: ?[]const bool, body_end: usize, start: usize) ExtglobAlternative {
+    var index = start;
+    var depth: usize = 0;
+    while (index < body_end) : (index += 1) {
+        if (pattern[index] == '[' and isGlobSpecial(special, index)) {
+            if (bracketExpressionEnd(pattern, special, index)) |end| {
+                index = end;
+                continue;
+            }
+        }
+        if (startsExtglobOperator(pattern, special, index)) {
+            depth += 1;
+            index += 1;
+            continue;
+        }
+        if (pattern[index] == ')' and isGlobSpecial(special, index) and depth != 0) {
+            depth -= 1;
+            continue;
+        }
+        if (pattern[index] == '|' and isGlobSpecial(special, index) and depth == 0) {
+            return .{ .start = start, .end = index, .next = index + 1 };
+        }
+    }
+    return .{ .start = start, .end = body_end, .next = null };
 }
 
 const BracketMatch = struct { ok: bool, next_pattern: usize };
@@ -5452,6 +5656,49 @@ test "parameter expansion supports pattern removal operators" {
     const quoted_class = try expandWordScalar(std.testing.allocator, "${USER_NUM#\"[[:digit:]]\"}", .{ .env = test_env });
     defer std.testing.allocator.free(quoted_class);
     try std.testing.expectEqualStrings("3", quoted_class);
+
+    const extglob_off = try expandWordScalar(std.testing.allocator, "${USER#@(rush|bash)-}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(extglob_off);
+    try std.testing.expectEqualStrings("rush-user", extglob_off);
+
+    const extglob_on = try expandWordScalar(std.testing.allocator, "${USER#@(rush|bash)-}", .{ .env = test_env, .features = compat.Features.bash(), .extglob = true });
+    defer std.testing.allocator.free(extglob_on);
+    try std.testing.expectEqualStrings("user", extglob_on);
+}
+
+test "glob matcher supports extglob operators when enabled" {
+    var exactly_one = try expandWordPattern(std.testing.allocator, "@(foo|bar)", .{});
+    defer exactly_one.deinit(std.testing.allocator);
+    try std.testing.expect(!globPatternMatches(exactly_one, "foo"));
+    try std.testing.expect(globPatternMatchesWithOptions(exactly_one, "foo", .{ .extglob = true }));
+    try std.testing.expect(globPatternMatchesWithOptions(exactly_one, "bar", .{ .extglob = true }));
+    try std.testing.expect(!globPatternMatchesWithOptions(exactly_one, "baz", .{ .extglob = true }));
+
+    var zero_or_one = try expandWordPattern(std.testing.allocator, "?(foo|bar)baz", .{});
+    defer zero_or_one.deinit(std.testing.allocator);
+    try std.testing.expect(globPatternMatchesWithOptions(zero_or_one, "baz", .{ .extglob = true }));
+    try std.testing.expect(globPatternMatchesWithOptions(zero_or_one, "foobaz", .{ .extglob = true }));
+    try std.testing.expect(!globPatternMatchesWithOptions(zero_or_one, "foofoobaz", .{ .extglob = true }));
+
+    var zero_or_more = try expandWordPattern(std.testing.allocator, "*(ab|c)", .{});
+    defer zero_or_more.deinit(std.testing.allocator);
+    try std.testing.expect(globPatternMatchesWithOptions(zero_or_more, "", .{ .extglob = true }));
+    try std.testing.expect(globPatternMatchesWithOptions(zero_or_more, "ababc", .{ .extglob = true }));
+
+    var one_or_more = try expandWordPattern(std.testing.allocator, "+(ab|c)", .{});
+    defer one_or_more.deinit(std.testing.allocator);
+    try std.testing.expect(!globPatternMatchesWithOptions(one_or_more, "", .{ .extglob = true }));
+    try std.testing.expect(globPatternMatchesWithOptions(one_or_more, "ababc", .{ .extglob = true }));
+
+    var negated = try expandWordPattern(std.testing.allocator, "!(foo|bar)", .{});
+    defer negated.deinit(std.testing.allocator);
+    try std.testing.expect(globPatternMatchesWithOptions(negated, "baz", .{ .extglob = true }));
+    try std.testing.expect(!globPatternMatchesWithOptions(negated, "foo", .{ .extglob = true }));
+
+    var nested = try expandWordPattern(std.testing.allocator, "@(x|+(ab|c))", .{});
+    defer nested.deinit(std.testing.allocator);
+    try std.testing.expect(globPatternMatchesWithOptions(nested, "x", .{ .extglob = true }));
+    try std.testing.expect(globPatternMatchesWithOptions(nested, "abc", .{ .extglob = true }));
 }
 
 test "parameter operator word spans skip nested substitutions and quoted braces" {
@@ -6049,6 +6296,29 @@ test "pathname expansion honors nullglob and dotglob options" {
     var unmatched = try expandWord(std.testing.allocator, "rush-glob-shopt-dir/*.missing", .{ .io = std.testing.io, .pathname_nullglob = true });
     defer unmatched.deinit();
     try std.testing.expectEqual(@as(usize, 0), unmatched.fields.len);
+}
+
+test "pathname expansion honors extglob option" {
+    const a = "rush-extglob-a.tmp";
+    const b = "rush-extglob-b.tmp";
+    const c = "rush-extglob-c.tmp";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = a, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = b, .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = c, .data = "" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, a) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, b) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, c) catch {};
+
+    var disabled = try expandWord(std.testing.allocator, "rush-extglob-@(a|b).tmp", .{ .io = std.testing.io });
+    defer disabled.deinit();
+    try std.testing.expectEqual(@as(usize, 1), disabled.fields.len);
+    try std.testing.expectEqualStrings("rush-extglob-@(a|b).tmp", disabled.fields[0]);
+
+    var enabled = try expandWord(std.testing.allocator, "rush-extglob-@(a|b).tmp", .{ .io = std.testing.io, .extglob = true });
+    defer enabled.deinit();
+    try std.testing.expectEqual(@as(usize, 2), enabled.fields.len);
+    try std.testing.expectEqualStrings(a, enabled.fields[0]);
+    try std.testing.expectEqualStrings(b, enabled.fields[1]);
 }
 
 test "pathname expansion handles absolute path components" {
