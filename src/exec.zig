@@ -282,6 +282,17 @@ pub const CommandResult = struct {
     }
 };
 
+pub const HistoryEntry = struct {
+    number: i64,
+    command: []const u8,
+};
+
+pub const CommandHistory = struct {
+    context: *anyopaque,
+    list: *const fn (*anyopaque, std.mem.Allocator) anyerror![]HistoryEntry,
+    append: ?*const fn (*anyopaque, std.Io, []const u8, ExitStatus, i64, i64) anyerror!void = null,
+};
+
 pub const PromptBuilder = struct {
     text: std.ArrayList(u8) = .empty,
     used: bool = false,
@@ -490,6 +501,7 @@ const builtin_names = [_][]const u8{
     "export",
     "getopts",
     "hash",
+    "fc",
     "fg",
     "jobs",
     "unset",
@@ -1016,6 +1028,8 @@ pub const Executor = struct {
     completion_builder: ?CompletionBuilder = null,
     completion_context: ?CompletionEvalContext = null,
     last_completion_context: ?CompletionEvalContext = null,
+    command_history: ?CommandHistory = null,
+    suppress_next_interactive_history_append: bool = false,
     getopts_offset: usize = 1,
     getopts_last_optind: usize = 1,
     parameter_error: expand.ParameterError = .{},
@@ -1047,6 +1061,16 @@ pub const Executor = struct {
 
     pub fn promptRefreshIntervalMs(self: Executor) ?u64 {
         return self.prompt_refresh_interval_ms;
+    }
+
+    pub fn setCommandHistory(self: *Executor, history: CommandHistory) void {
+        self.command_history = history;
+    }
+
+    pub fn consumeSuppressNextInteractiveHistoryAppend(self: *Executor) bool {
+        const suppress = self.suppress_next_interactive_history_append;
+        self.suppress_next_interactive_history_append = false;
+        return suppress;
     }
 
     pub fn waitForPromptAsyncRefreshes(self: *Executor) void {
@@ -2772,6 +2796,7 @@ pub const Executor = struct {
         self.prompt_async_owner = other.prompt_async_owner orelse @constCast(other);
         self.completion_context = other.completion_context;
         self.last_completion_context = other.last_completion_context;
+        self.command_history = other.command_history;
         self.script_stdin = other.script_stdin;
         self.script_stdin_offset = other.script_stdin_offset;
         self.script_stdin_file = other.script_stdin_file;
@@ -8382,6 +8407,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "event")) return builtinEvent;
     if (std.mem.eql(u8, name, "getopts")) return builtinGetopts;
     if (std.mem.eql(u8, name, "hash")) return builtinHash;
+    if (std.mem.eql(u8, name, "fc")) return builtinFc;
     if (std.mem.eql(u8, name, "fg")) return builtinFg;
     if (std.mem.eql(u8, name, "jobs")) return builtinJobs;
     if (std.mem.eql(u8, name, "kill")) return builtinKill;
@@ -8557,6 +8583,359 @@ fn printCommandHash(self: *Executor) !CommandResult {
         .stdout = try stdout.toOwnedSlice(self.allocator),
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+const FcOptions = struct {
+    list: bool = false,
+    no_numbers: bool = false,
+    reverse: bool = false,
+    substitute: bool = false,
+    editor: ?[]const u8 = null,
+    first_operand: usize,
+};
+
+const FcReferenceError = error{
+    EmptyHistory,
+    InvalidReference,
+    UnresolvedReference,
+};
+
+const FcOptionError = error{
+    MissingEditor,
+    UnsupportedOption,
+};
+
+fn builtinFc(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    self.suppress_next_interactive_history_append = true;
+
+    const parsed = parseFcOptions(command) catch |err| return fcOptionErrorResult(self, err);
+    if (parsed.list and parsed.substitute) return errorResult(self.allocator, 2, "fc", "conflicting options");
+    if (parsed.list and parsed.editor != null) return errorResult(self.allocator, 2, "fc", "-e is not valid with -l");
+
+    const history = self.command_history orelse return errorResult(self.allocator, 1, "fc", "history is not available");
+    const entries = try history.list(history.context, self.allocator);
+    defer freeHistoryEntries(self.allocator, entries);
+    if (entries.len == 0) return errorResult(self.allocator, 1, "fc", "no history");
+    std.mem.sort(HistoryEntry, entries, {}, lessThanHistoryEntryNumber);
+
+    if (parsed.list) return builtinFcList(self, command, entries, parsed);
+    if (parsed.substitute) return builtinFcSubstitute(self, command, entries, parsed, options);
+    return builtinFcEdit(self, command, entries, parsed, options);
+}
+
+fn parseFcOptions(command: ir.SimpleCommand) FcOptionError!FcOptions {
+    var parsed: FcOptions = .{ .first_operand = 1 };
+    var index: usize = 1;
+    while (index < command.argv.len) {
+        const arg = command.argv[index].text;
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-' or fcLooksLikeRelativeReference(arg)) break;
+        index += 1;
+        var flag_index: usize = 1;
+        while (flag_index < arg.len) : (flag_index += 1) {
+            switch (arg[flag_index]) {
+                'l' => parsed.list = true,
+                'n' => parsed.no_numbers = true,
+                'r' => parsed.reverse = true,
+                's' => parsed.substitute = true,
+                'e' => {
+                    if (flag_index + 1 < arg.len) {
+                        parsed.editor = arg[flag_index + 1 ..];
+                        flag_index = arg.len;
+                    } else {
+                        if (index >= command.argv.len) return error.MissingEditor;
+                        parsed.editor = command.argv[index].text;
+                        index += 1;
+                    }
+                },
+                else => return error.UnsupportedOption,
+            }
+        }
+    }
+    parsed.first_operand = index;
+    return parsed;
+}
+
+fn fcOptionErrorResult(self: *Executor, err: FcOptionError) !CommandResult {
+    return switch (err) {
+        error.MissingEditor => errorResult(self.allocator, 2, "fc", "missing editor"),
+        error.UnsupportedOption => errorResult(self.allocator, 2, "fc", "unsupported option"),
+    };
+}
+
+fn fcLooksLikeRelativeReference(arg: []const u8) bool {
+    return arg.len > 1 and arg[0] == '-' and std.ascii.isDigit(arg[1]);
+}
+
+fn builtinFcList(self: *Executor, command: ir.SimpleCommand, entries: []HistoryEntry, options: FcOptions) !CommandResult {
+    const operands = command.argv[options.first_operand..];
+    if (operands.len > 2) return errorResult(self.allocator, 2, "fc", "too many operands");
+
+    const latest = entries[entries.len - 1].number;
+    const default_first = @max(entries[0].number, latest - 15);
+    const first = resolveFcReference(entries, if (operands.len >= 1) operands[0].text else null, default_first) catch |err| return fcReferenceErrorResult(self, err);
+    const last = resolveFcReference(entries, if (operands.len >= 2) operands[1].text else null, latest) catch |err| return fcReferenceErrorResult(self, err);
+    return formatFcListing(self.allocator, entries, first, last, options.reverse, options.no_numbers);
+}
+
+fn builtinFcSubstitute(self: *Executor, command: ir.SimpleCommand, entries: []HistoryEntry, options: FcOptions, execute_options: ExecuteOptions) !CommandResult {
+    var operand_index = options.first_operand;
+    var replacement: ?FcReplacement = null;
+    if (operand_index < command.argv.len) {
+        const operand = command.argv[operand_index].text;
+        if (std.mem.indexOfScalar(u8, operand, '=')) |equals| {
+            replacement = .{ .old = operand[0..equals], .new = operand[equals + 1 ..] };
+            if (replacement.?.old.len == 0) return errorResult(self.allocator, 2, "fc", "empty replacement pattern");
+            operand_index += 1;
+        }
+    }
+    if (command.argv.len - operand_index > 1) return errorResult(self.allocator, 2, "fc", "too many operands");
+
+    const latest = entries[entries.len - 1].number;
+    const number = resolveFcReference(entries, if (operand_index < command.argv.len) command.argv[operand_index].text else null, latest) catch |err| return fcReferenceErrorResult(self, err);
+    const entry = findHistoryEntry(entries, number) orelse return fcReferenceErrorResult(self, error.UnresolvedReference);
+    const script = if (replacement) |replace|
+        try replaceFirstFcMatch(self.allocator, entry.command, replace.old, replace.new)
+    else
+        try self.allocator.dupe(u8, entry.command);
+    defer self.allocator.free(script);
+
+    return executeFcCommands(self, script, execute_options);
+}
+
+const FcReplacement = struct {
+    old: []const u8,
+    new: []const u8,
+};
+
+fn builtinFcEdit(self: *Executor, command: ir.SimpleCommand, entries: []HistoryEntry, options: FcOptions, execute_options: ExecuteOptions) !CommandResult {
+    const operands = command.argv[options.first_operand..];
+    if (operands.len > 2) return errorResult(self.allocator, 2, "fc", "too many operands");
+
+    const latest = entries[entries.len - 1].number;
+    const first = resolveFcReference(entries, if (operands.len >= 1) operands[0].text else null, latest) catch |err| return fcReferenceErrorResult(self, err);
+    const last_default = if (operands.len >= 1) first else latest;
+    const last = resolveFcReference(entries, if (operands.len >= 2) operands[1].text else null, last_default) catch |err| return fcReferenceErrorResult(self, err);
+
+    var script = try fcRangeScript(self.allocator, entries, first, last, options.reverse);
+    defer self.allocator.free(script);
+
+    const editor = options.editor orelse self.getEnv("FCEDIT") orelse self.getEnv("EDITOR") orelse "ed";
+    if (!std.mem.eql(u8, editor, "-")) {
+        const io = execute_options.io orelse return errorResult(self.allocator, 1, "fc", "editor mode requires io");
+        const path = try writeFcEditorTempFile(self, io, script);
+        defer self.allocator.free(path);
+        defer std.Io.Dir.cwd().deleteFile(io, path) catch {};
+
+        const quoted_path = try singleQuote(self.allocator, path);
+        defer self.allocator.free(quoted_path);
+        const editor_script = try std.fmt.allocPrint(self.allocator, "{s} {s}", .{ editor, quoted_path });
+        defer self.allocator.free(editor_script);
+
+        var editor_options = execute_options;
+        editor_options.allow_external = true;
+        editor_options.external_stdio = .inherit;
+        editor_options.verbose_input_echo = false;
+        var editor_result = try self.executeScriptSlice(editor_script, editor_options);
+        defer editor_result.deinit();
+        if (editor_result.status != 0) {
+            return .{
+                .allocator = self.allocator,
+                .status = editor_result.status,
+                .stdout = try self.allocator.dupe(u8, editor_result.stdout),
+                .stderr = try self.allocator.dupe(u8, editor_result.stderr),
+            };
+        }
+
+        const edited = try std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, .limited(1024 * 1024));
+        self.allocator.free(script);
+        script = edited;
+    }
+
+    return executeFcCommands(self, script, execute_options);
+}
+
+fn executeFcCommands(self: *Executor, script: []const u8, options: ExecuteOptions) !CommandResult {
+    const history = self.command_history orelse return errorResult(self.allocator, 1, "fc", "history is not available");
+    const append = history.append orelse return errorResult(self.allocator, 1, "fc", "history append is not available");
+    const io = options.io orelse return errorResult(self.allocator, 1, "fc", "history append requires io");
+
+    var nested_options = options;
+    nested_options.verbose_input_echo = false;
+    const started_at: i64 = @intCast(nowMs(io) / 1000);
+    const started_ms = nowMs(io);
+    var result = try self.executeScriptSlice(script, nested_options);
+    errdefer result.deinit();
+    const duration_ms: i64 = @intCast(nowMs(io) -| started_ms);
+    try append(history.context, io, script, result.status, started_at, duration_ms);
+    return result;
+}
+
+fn resolveFcReference(entries: []const HistoryEntry, maybe_ref: ?[]const u8, default_number: i64) FcReferenceError!i64 {
+    if (entries.len == 0) return error.EmptyHistory;
+    const ref = maybe_ref orelse return clampHistoryNumber(entries, default_number);
+    if (ref.len == 0) return error.InvalidReference;
+    if (parseFcNumericReference(ref)) |number| {
+        if (number == 0) return error.InvalidReference;
+        const absolute = if (number < 0) entries[entries.len - 1].number + 1 + number else number;
+        return clampHistoryNumber(entries, absolute);
+    } else |_| {
+        var index = entries.len;
+        while (index > 0) {
+            index -= 1;
+            if (std.mem.startsWith(u8, entries[index].command, ref)) return entries[index].number;
+        }
+        return error.UnresolvedReference;
+    }
+}
+
+fn parseFcNumericReference(ref: []const u8) !i64 {
+    var digit_index: usize = 0;
+    if (ref[0] == '-' or ref[0] == '+') digit_index = 1;
+    if (digit_index == ref.len) return error.InvalidCharacter;
+    for (ref[digit_index..]) |byte| if (!std.ascii.isDigit(byte)) return error.InvalidCharacter;
+    return std.fmt.parseInt(i64, ref, 10);
+}
+
+fn clampHistoryNumber(entries: []const HistoryEntry, number: i64) i64 {
+    return @min(@max(number, entries[0].number), entries[entries.len - 1].number);
+}
+
+fn fcReferenceErrorResult(self: *Executor, err: FcReferenceError) !CommandResult {
+    return switch (err) {
+        error.EmptyHistory => errorResult(self.allocator, 1, "fc", "no history"),
+        error.InvalidReference => errorResult(self.allocator, 1, "fc", "invalid history reference"),
+        error.UnresolvedReference => errorResult(self.allocator, 1, "fc", "history reference not found"),
+    };
+}
+
+fn formatFcListing(allocator: std.mem.Allocator, entries: []const HistoryEntry, first: i64, last: i64, reverse: bool, no_numbers: bool) !CommandResult {
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(allocator);
+
+    const low = @min(first, last);
+    const high = @max(first, last);
+    var ascending = first <= last;
+    if (reverse) ascending = !ascending;
+
+    if (ascending) {
+        for (entries) |entry| {
+            if (entry.number < low or entry.number > high) continue;
+            try appendFcListingEntry(allocator, &stdout, entry, no_numbers);
+        }
+    } else {
+        var index = entries.len;
+        while (index > 0) {
+            index -= 1;
+            const entry = entries[index];
+            if (entry.number < low or entry.number > high) continue;
+            try appendFcListingEntry(allocator, &stdout, entry, no_numbers);
+        }
+    }
+
+    return .{
+        .allocator = allocator,
+        .status = 0,
+        .stdout = try stdout.toOwnedSlice(allocator),
+        .stderr = try allocator.alloc(u8, 0),
+    };
+}
+
+fn appendFcListingEntry(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), entry: HistoryEntry, no_numbers: bool) !void {
+    const line = if (no_numbers)
+        try std.fmt.allocPrint(allocator, "{s}\n", .{entry.command})
+    else
+        try std.fmt.allocPrint(allocator, "{d}\t{s}\n", .{ entry.number, entry.command });
+    defer allocator.free(line);
+    try stdout.appendSlice(allocator, line);
+}
+
+fn fcRangeScript(allocator: std.mem.Allocator, entries: []const HistoryEntry, first: i64, last: i64, reverse: bool) ![]u8 {
+    var script: std.ArrayList(u8) = .empty;
+    errdefer script.deinit(allocator);
+
+    const low = @min(first, last);
+    const high = @max(first, last);
+    var ascending = first <= last;
+    if (reverse) ascending = !ascending;
+
+    if (ascending) {
+        for (entries) |entry| {
+            if (entry.number < low or entry.number > high) continue;
+            try appendFcScriptCommand(allocator, &script, entry.command);
+        }
+    } else {
+        var index = entries.len;
+        while (index > 0) {
+            index -= 1;
+            const entry = entries[index];
+            if (entry.number < low or entry.number > high) continue;
+            try appendFcScriptCommand(allocator, &script, entry.command);
+        }
+    }
+
+    return script.toOwnedSlice(allocator);
+}
+
+fn appendFcScriptCommand(allocator: std.mem.Allocator, script: *std.ArrayList(u8), command: []const u8) !void {
+    try script.appendSlice(allocator, command);
+    if (command.len == 0 or command[command.len - 1] != '\n') try script.append(allocator, '\n');
+}
+
+fn replaceFirstFcMatch(allocator: std.mem.Allocator, command: []const u8, old: []const u8, new: []const u8) ![]u8 {
+    const index = std.mem.indexOf(u8, command, old) orelse return allocator.dupe(u8, command);
+    var result: std.ArrayList(u8) = .empty;
+    errdefer result.deinit(allocator);
+    try result.appendSlice(allocator, command[0..index]);
+    try result.appendSlice(allocator, new);
+    try result.appendSlice(allocator, command[index + old.len ..]);
+    return result.toOwnedSlice(allocator);
+}
+
+fn writeFcEditorTempFile(self: *Executor, io: std.Io, contents: []const u8) ![]u8 {
+    const Counter = struct {
+        var value: std.atomic.Value(u64) = .init(0);
+    };
+    const tmpdir = self.getEnv("TMPDIR") orelse "/tmp";
+    var attempts: usize = 0;
+    while (attempts < 32) : (attempts += 1) {
+        const suffix = Counter.value.fetchAdd(1, .monotonic);
+        const path = try std.fmt.allocPrint(self.allocator, "{s}/rush-fc-{d}-{d}.tmp", .{ tmpdir, shellPid(), suffix });
+        var file = std.Io.Dir.cwd().createFile(io, path, .{ .truncate = false, .exclusive = true }) catch |err| switch (err) {
+            error.PathAlreadyExists => {
+                self.allocator.free(path);
+                continue;
+            },
+            else => {
+                self.allocator.free(path);
+                return err;
+            },
+        };
+        errdefer self.allocator.free(path);
+        errdefer std.Io.Dir.cwd().deleteFile(io, path) catch {};
+        defer file.close(io);
+        try writeBytesToFile(io, file, contents);
+        return path;
+    }
+    return error.PathAlreadyExists;
+}
+
+fn findHistoryEntry(entries: []const HistoryEntry, number: i64) ?HistoryEntry {
+    for (entries) |entry| if (entry.number == number) return entry;
+    return null;
+}
+
+fn lessThanHistoryEntryNumber(_: void, lhs: HistoryEntry, rhs: HistoryEntry) bool {
+    return lhs.number < rhs.number;
+}
+
+fn freeHistoryEntries(allocator: std.mem.Allocator, entries: []HistoryEntry) void {
+    for (entries) |entry| allocator.free(entry.command);
+    allocator.free(entries);
 }
 
 const CommandLookupMode = enum { none, terse, verbose };
@@ -14456,6 +14835,106 @@ test "executor implements hash builtin command location cache" {
         \\
     , result.stdout);
     try std.testing.expectEqualStrings("hash: rush-hash-missing: not found\n", result.stderr);
+}
+
+const TestFcHistory = struct {
+    entries: []const []const u8,
+    appended: std.ArrayList([]const u8) = .empty,
+
+    fn deinit(self: *TestFcHistory, allocator: std.mem.Allocator) void {
+        for (self.appended.items) |entry| allocator.free(entry);
+        self.appended.deinit(allocator);
+    }
+
+    fn attach(self: *TestFcHistory, executor: *Executor) void {
+        executor.setCommandHistory(.{
+            .context = self,
+            .list = list,
+            .append = append,
+        });
+    }
+
+    fn list(context: *anyopaque, allocator: std.mem.Allocator) ![]HistoryEntry {
+        const self: *TestFcHistory = @ptrCast(@alignCast(context));
+        var history_entries: std.ArrayList(HistoryEntry) = .empty;
+        errdefer {
+            for (history_entries.items) |entry| allocator.free(entry.command);
+            history_entries.deinit(allocator);
+        }
+        for (self.entries, 0..) |entry, index| {
+            try history_entries.append(allocator, .{
+                .number = @intCast(index + 1),
+                .command = try allocator.dupe(u8, entry),
+            });
+        }
+        return history_entries.toOwnedSlice(allocator);
+    }
+
+    fn append(context: *anyopaque, io: std.Io, line: []const u8, status: ExitStatus, started_at: i64, duration_ms: i64) !void {
+        _ = io;
+        _ = status;
+        _ = started_at;
+        _ = duration_ms;
+        const self: *TestFcHistory = @ptrCast(@alignCast(context));
+        try self.appended.append(std.testing.allocator, try std.testing.allocator.dupe(u8, line));
+    }
+};
+
+test "executor implements fc history listing" {
+    const entries = [_][]const u8{
+        "printf 'one\\n'",
+        "printf 'two\\n'",
+        "printf 'three\\n'",
+    };
+    var history: TestFcHistory = .{ .entries = &entries };
+    defer history.deinit(std.testing.allocator);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    history.attach(&executor);
+
+    var reverse = try executor.executeScriptSlice("fc -l -n -r -3 -1", .{ .io = std.testing.io });
+    defer reverse.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), reverse.status);
+    try std.testing.expectEqualStrings("printf 'three\\n'\nprintf 'two\\n'\nprintf 'one\\n'\n", reverse.stdout);
+    try std.testing.expectEqualStrings("", reverse.stderr);
+    try std.testing.expect(executor.consumeSuppressNextInteractiveHistoryAppend());
+
+    var clamped = try executor.executeScriptSlice("fc -l 2 99", .{ .io = std.testing.io });
+    defer clamped.deinit();
+    try std.testing.expectEqualStrings("2\tprintf 'two\\n'\n3\tprintf 'three\\n'\n", clamped.stdout);
+
+    var string_ref = try executor.executeScriptSlice("fc -l -n \"printf 'two\"", .{ .io = std.testing.io });
+    defer string_ref.deinit();
+    try std.testing.expectEqualStrings("printf 'two\\n'\nprintf 'three\\n'\n", string_ref.stdout);
+}
+
+test "executor implements fc re-execution forms" {
+    const entries = [_][]const u8{
+        "printf 'one\\n'",
+        "printf 'two\\n'",
+    };
+    var history: TestFcHistory = .{ .entries = &entries };
+    defer history.deinit(std.testing.allocator);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    history.attach(&executor);
+
+    var substitute = try executor.executeScriptSlice("fc -s one=again 1", .{ .io = std.testing.io });
+    defer substitute.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), substitute.status);
+    try std.testing.expectEqualStrings("again\n", substitute.stdout);
+    try std.testing.expectEqual(@as(usize, 1), history.appended.items.len);
+    try std.testing.expectEqualStrings("printf 'again\\n'", history.appended.items[0]);
+    try std.testing.expect(executor.consumeSuppressNextInteractiveHistoryAppend());
+
+    var edit = try executor.executeScriptSlice("fc -e - 1 2", .{ .io = std.testing.io });
+    defer edit.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), edit.status);
+    try std.testing.expectEqualStrings("one\ntwo\n", edit.stdout);
+    try std.testing.expectEqual(@as(usize, 2), history.appended.items.len);
+    try std.testing.expectEqualStrings("printf 'one\\n'\nprintf 'two\\n'\n", history.appended.items[1]);
 }
 
 test "executor implements read and printf builtins" {

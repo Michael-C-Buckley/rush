@@ -223,6 +223,14 @@ pub const History = struct {
     }
 
     pub fn addCommand(self: *History, io: std.Io, line: []const u8, status: exec.ExitStatus, started_at: i64, duration_ms: i64) !void {
+        try self.addCommandRecord(io, line, status, started_at, duration_ms, true);
+    }
+
+    pub fn appendCommand(self: *History, io: std.Io, line: []const u8, status: exec.ExitStatus, started_at: i64, duration_ms: i64) !void {
+        try self.addCommandRecord(io, line, status, started_at, duration_ms, false);
+    }
+
+    fn addCommandRecord(self: *History, io: std.Io, line: []const u8, status: exec.ExitStatus, started_at: i64, duration_ms: i64, dedupe: bool) !void {
         if (line.len == 0) return;
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
@@ -240,12 +248,17 @@ pub const History = struct {
             try insertHistoryRecord(db, record);
             return;
         }
-        try self.addRecord(record);
+        if (dedupe) try self.addRecord(record) else try self.appendRecord(record);
     }
 
     fn addRecord(self: *History, record: HistoryRecord) !void {
         if (record.cmd.len == 0) return;
         if (self.entries.items.len != 0 and std.mem.eql(u8, self.entries.items[self.entries.items.len - 1], record.cmd)) return;
+        try self.appendRecord(record);
+    }
+
+    fn appendRecord(self: *History, record: HistoryRecord) !void {
+        if (record.cmd.len == 0) return;
         const cmd = try self.allocator.dupe(u8, record.cmd);
         errdefer self.allocator.free(cmd);
         const cwd = try self.allocator.dupe(u8, record.cwd);
@@ -348,6 +361,22 @@ pub const History = struct {
         return .{ .id = @intCast(index), .text = try allocator.dupe(u8, self.entries.items[index]) };
     }
 
+    pub fn fcEntries(self: *History, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
+        if (self.db) |db| return queryFcHistoryEntries(db, allocator);
+        var entries: std.ArrayList(exec.HistoryEntry) = .empty;
+        errdefer {
+            for (entries.items) |entry| allocator.free(entry.command);
+            entries.deinit(allocator);
+        }
+        for (self.entries.items, 0..) |entry, index| {
+            try entries.append(allocator, .{
+                .number = @intCast(index + 1),
+                .command = try allocator.dupe(u8, entry),
+            });
+        }
+        return entries.toOwnedSlice(allocator);
+    }
+
     pub fn searchEntry(self: *History, allocator: std.mem.Allocator, query: []const u8, cwd: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
         const db = self.db orelse return null;
         return queryHistorySearchEntry(db, allocator, query, cwd, before, .previous);
@@ -377,6 +406,24 @@ fn nextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: [
 fn numberedHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, number: usize) !?line_editor.HistoryView.HistoryEntry {
     const history: *History = @ptrCast(@alignCast(context));
     return history.numberedEntry(allocator, number);
+}
+
+fn fcHistoryEntries(context: *anyopaque, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
+    const history: *History = @ptrCast(@alignCast(context));
+    return history.fcEntries(allocator);
+}
+
+fn appendFcHistoryCommand(context: *anyopaque, io: std.Io, line: []const u8, status: exec.ExitStatus, started_at: i64, duration_ms: i64) !void {
+    const history: *History = @ptrCast(@alignCast(context));
+    try history.appendCommand(io, line, status, started_at, duration_ms);
+}
+
+fn attachFcHistory(executor: *exec.Executor, history: *History) void {
+    executor.setCommandHistory(.{
+        .context = history,
+        .list = fcHistoryEntries,
+        .append = appendFcHistoryCommand,
+    });
 }
 
 fn searchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
@@ -456,6 +503,29 @@ fn queryHistoryEntryByNumber(db: *sqlite.sqlite3, allocator: std.mem.Allocator, 
     if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
     const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse return null;
     return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, std.mem.span(command_text)), .when = sqlite.sqlite3_column_int64(stmt, 2) };
+}
+
+fn queryFcHistoryEntries(db: *sqlite.sqlite3, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(db, "select id, command from history order by id asc", -1, &stmt, null), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+
+    var entries: std.ArrayList(exec.HistoryEntry) = .empty;
+    errdefer {
+        for (entries.items) |entry| allocator.free(entry.command);
+        entries.deinit(allocator);
+    }
+    while (true) {
+        const rc = sqlite.sqlite3_step(stmt);
+        if (rc == sqlite.SQLITE_DONE) break;
+        if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+        const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse continue;
+        try entries.append(allocator, .{
+            .number = sqlite.sqlite3_column_int64(stmt, 0),
+            .command = try allocator.dupe(u8, std.mem.span(command_text)),
+        });
+    }
+    return entries.toOwnedSlice(allocator);
 }
 
 fn appendSqlLikePrefix(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8), prefix: []const u8) !void {
@@ -1650,6 +1720,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var last_status: exec.ExitStatus = 0;
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
+    attachFcHistory(&executor, &history);
     try executor.importEnvironment(environ_map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
@@ -1800,7 +1871,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             if (outputNeedsNewlineMarker(result.stdout, result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
             last_status = result.status;
             executor.setLastCommandDuration(command_duration_ms);
-            try history.addCommand(io, line, result.status, command_started_at, command_duration_ms);
+            if (!executor.consumeSuppressNextInteractiveHistoryAppend()) try history.addCommand(io, line, result.status, command_started_at, command_duration_ms);
             var status_buffer: [3]u8 = undefined;
             const status_text = try std.fmt.bufPrint(&status_buffer, "{d}", .{result.status});
             try executor.runPromptEventHooks(io, "postexec", &.{ line, status_text });
@@ -1871,6 +1942,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     var last_status: exec.ExitStatus = 0;
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
+    attachFcHistory(&executor, &history);
     {
         var result = try runScriptWithExecutor(allocator, &executor, embedded_config, .{ .io = io, .allow_external = true, .arg_zero = "rush", .source_path = embedded_config_path });
         defer result.deinit();
@@ -1895,13 +1967,14 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         allocator.free(prompt);
         if (std.mem.eql(u8, line, "exit")) break;
         if (line.len == 0) continue;
-        try history.add(line);
 
+        const command_started_at = unixTimestamp(io);
         var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .arg_zero = "rush" });
         defer result.deinit();
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
         last_status = result.status;
+        if (!executor.consumeSuppressNextInteractiveHistoryAppend()) try history.addCommand(io, line, result.status, command_started_at, 0);
         if (executor.pending_exit) |status| {
             last_status = status;
             break;
@@ -2248,6 +2321,33 @@ test "history writes commands through to sqlite fts" {
 
     const count = try historyFtsMatchCount(reloaded.db.?, "checkout");
     try std.testing.expectEqual(@as(c_int, 1), count);
+}
+
+test "history exposes POSIX fc command numbers from sqlite" {
+    const path = "rush-history-fc-test.sqlite";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try history.addCommand(std.testing.io, "printf 'one\\n'", 0, 10, 1);
+    try history.addCommand(std.testing.io, "printf 'two\\n'", 0, 20, 1);
+
+    const entries = try history.fcEntries(std.testing.allocator);
+    defer {
+        for (entries) |entry| std.testing.allocator.free(entry.command);
+        std.testing.allocator.free(entries);
+    }
+    try std.testing.expectEqual(@as(usize, 2), entries.len);
+    try std.testing.expectEqual(@as(i64, 1), entries[0].number);
+    try std.testing.expectEqualStrings("printf 'one\\n'", entries[0].command);
+    try std.testing.expectEqual(@as(i64, 2), entries[1].number);
+    try std.testing.expectEqualStrings("printf 'two\\n'", entries[1].command);
 }
 
 test "history search uses fts ranking and hides older duplicates" {
@@ -2920,6 +3020,23 @@ test "runReplInput stops when exit builtin requests shell exit" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 7), result.status);
     try std.testing.expectEqualStrings("$ before\n$ ", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "runReplInput wires fc to interactive history without recording fc itself" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io,
+        \\printf 'one\n'
+        \\printf 'two\n'
+        \\fc -l -n
+        \\fc -s one=again 1
+        \\fc -l -n
+        \\exit
+        \\
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("$ one\n$ two\n$ printf 'one\\n'\nprintf 'two\\n'\n$ again\n$ printf 'one\\n'\nprintf 'two\\n'\nprintf 'again\\n'\n$ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
