@@ -129,6 +129,53 @@ pub const MatchRank = enum(u8) {
     fuzzy = 2,
 };
 
+pub const CaseSensitivity = enum {
+    sensitive,
+    insensitive,
+};
+
+pub const MatchMode = enum {
+    prefix,
+    fuzzy,
+};
+
+pub const SeparatorPolicy = enum {
+    literal,
+    hyphen_underscore_equivalent,
+};
+
+pub const PathSegmentPolicy = enum {
+    full,
+    last,
+};
+
+pub const MatcherPolicy = struct {
+    case_sensitivity: CaseSensitivity = .insensitive,
+    mode: MatchMode = .fuzzy,
+    separators: SeparatorPolicy = .hyphen_underscore_equivalent,
+    path_segments: PathSegmentPolicy = .full,
+
+    pub fn engineDefault() MatcherPolicy {
+        return .{};
+    }
+
+    pub fn prefixOnly() MatcherPolicy {
+        return .{ .mode = .prefix };
+    }
+};
+
+pub const MatchSuppressionReason = enum {
+    invalid_replace_span,
+    no_match,
+    prefix_only,
+};
+
+pub const CandidateMatchTrace = struct {
+    query: []const u8,
+    rank: ?MatchRank,
+    suppression_reason: ?MatchSuppressionReason,
+};
+
 pub const Option = struct {
     long: ?[]const u8 = null,
     short: ?[]const u8 = null,
@@ -259,6 +306,10 @@ fn candidateSortKey(candidate: Candidate) []const u8 {
 }
 
 pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8, candidates: []const Candidate) !Application {
+    return applyCandidatesForInputWithPolicy(allocator, source, candidates, .engineDefault());
+}
+
+pub fn applyCandidatesForInputWithPolicy(allocator: std.mem.Allocator, source: []const u8, candidates: []const Candidate, policy: MatcherPolicy) !Application {
     if (candidates.len == 0) return .none;
 
     var matches: std.ArrayList(Candidate) = .empty;
@@ -273,7 +324,7 @@ pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8,
         std.debug.assert(candidate.replace_start <= candidate.replace_end);
         std.debug.assert(candidate.replace_end <= source.len);
         const prefix = source[candidate.replace_start..candidate.replace_end];
-        if (candidateFuzzyMatchRank(candidate, prefix)) |rank| {
+        if (candidateMatchRank(candidate, prefix, policy)) |rank| {
             switch (rank) {
                 .exact => try exact_matches.append(allocator, candidate),
                 .prefix => try prefix_matches.append(allocator, candidate),
@@ -289,8 +340,12 @@ pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8,
 }
 
 pub fn candidateFuzzyMatchRank(candidate: Candidate, query: []const u8) ?MatchRank {
-    const value_rank = fuzzyMatchRank(candidate.value, query);
-    const display_rank = if (candidate.display) |display| fuzzyMatchRank(display, query) else null;
+    return candidateMatchRank(candidate, query, .engineDefault());
+}
+
+pub fn candidateMatchRank(candidate: Candidate, query: []const u8, policy: MatcherPolicy) ?MatchRank {
+    const value_rank = matchRank(candidate.value, query, policy);
+    const display_rank = if (candidate.display) |display| matchRank(display, query, policy) else null;
     if (value_rank) |value| {
         if (display_rank) |display| return if (@intFromEnum(display) < @intFromEnum(value)) display else value;
         return value;
@@ -298,16 +353,48 @@ pub fn candidateFuzzyMatchRank(candidate: Candidate, query: []const u8) ?MatchRa
     return display_rank;
 }
 
+pub fn candidateMatchTrace(source: []const u8, candidate: Candidate, policy: MatcherPolicy) CandidateMatchTrace {
+    if (candidate.replace_start > candidate.replace_end or candidate.replace_end > source.len) {
+        return .{ .query = "", .rank = null, .suppression_reason = .invalid_replace_span };
+    }
+    const query = source[candidate.replace_start..candidate.replace_end];
+    const rank = candidateMatchRank(candidate, query, policy);
+    return .{
+        .query = query,
+        .rank = rank,
+        .suppression_reason = if (rank == null) candidateSuppressionReason(candidate, query, policy) else null,
+    };
+}
+
+pub fn candidateSuppressionReason(candidate: Candidate, query: []const u8, policy: MatcherPolicy) MatchSuppressionReason {
+    if (policy.mode == .prefix) {
+        var fuzzy_policy = policy;
+        fuzzy_policy.mode = .fuzzy;
+        if (candidateMatchRank(candidate, query, fuzzy_policy)) |rank| {
+            if (rank == .fuzzy) return .prefix_only;
+        }
+    }
+    return .no_match;
+}
+
 pub fn fuzzyMatchRank(text: []const u8, query: []const u8) ?MatchRank {
-    if (query.len == 0) return .prefix;
-    if (std.ascii.eqlIgnoreCase(text, query)) return .exact;
-    if (std.ascii.startsWithIgnoreCase(text, query)) return .prefix;
+    return matchRank(text, query, .engineDefault());
+}
+
+pub fn matchRank(text: []const u8, query: []const u8, policy: MatcherPolicy) ?MatchRank {
+    const input = pathMatchInput(text, query, policy);
+    const match_text = input.text;
+    const match_query = input.query;
+    if (match_query.len == 0) return .prefix;
+    if (eqlWithPolicy(match_text, match_query, policy)) return .exact;
+    if (startsWithPolicy(match_text, match_query, policy)) return .prefix;
+    if (policy.mode == .prefix) return null;
 
     var text_index: usize = 0;
-    for (query) |query_byte| {
+    for (match_query) |query_byte| {
         var matched = false;
-        while (text_index < text.len) : (text_index += 1) {
-            if (std.ascii.toLower(text[text_index]) == std.ascii.toLower(query_byte)) {
+        while (text_index < match_text.len) : (text_index += 1) {
+            if (bytesEqual(match_text[text_index], query_byte, policy)) {
                 text_index += 1;
                 matched = true;
                 break;
@@ -318,17 +405,76 @@ pub fn fuzzyMatchRank(text: []const u8, query: []const u8) ?MatchRank {
     return .fuzzy;
 }
 
+const PathMatchInput = struct {
+    text: []const u8,
+    query: []const u8,
+};
+
+fn pathMatchInput(text: []const u8, query: []const u8, policy: MatcherPolicy) PathMatchInput {
+    if (policy.path_segments == .full) return .{ .text = text, .query = query };
+    const query_slash = std.mem.lastIndexOfScalar(u8, query, '/') orelse return .{ .text = lastPathSegment(text), .query = query };
+    const query_dir = query[0 .. query_slash + 1];
+    if (!startsWithPolicy(text, query_dir, policy)) return .{ .text = "", .query = query };
+    return .{ .text = text[query_dir.len..], .query = query[query_slash + 1 ..] };
+}
+
+fn lastPathSegment(path: []const u8) []const u8 {
+    var end = path.len;
+    while (end > 0 and path[end - 1] == '/') end -= 1;
+    const slash = std.mem.lastIndexOfScalar(u8, path[0..end], '/') orelse return path[0..end];
+    return path[slash + 1 .. end];
+}
+
+fn eqlWithPolicy(a: []const u8, b: []const u8, policy: MatcherPolicy) bool {
+    if (a.len != b.len) return false;
+    for (a, b) |a_byte, b_byte| {
+        if (!bytesEqual(a_byte, b_byte, policy)) return false;
+    }
+    return true;
+}
+
+fn startsWithPolicy(text: []const u8, query: []const u8, policy: MatcherPolicy) bool {
+    if (query.len > text.len) return false;
+    for (text[0..query.len], query) |text_byte, query_byte| {
+        if (!bytesEqual(text_byte, query_byte, policy)) return false;
+    }
+    return true;
+}
+
+fn bytesEqual(a: u8, b: u8, policy: MatcherPolicy) bool {
+    return normalizeMatchByte(a, policy) == normalizeMatchByte(b, policy);
+}
+
+fn normalizeMatchByte(byte: u8, policy: MatcherPolicy) u8 {
+    const c = switch (policy.case_sensitivity) {
+        .sensitive => byte,
+        .insensitive => std.ascii.toLower(byte),
+    };
+    return switch (policy.separators) {
+        .literal => c,
+        .hyphen_underscore_equivalent => if (c == '_') '-' else c,
+    };
+}
+
 pub fn fuzzyMatchPositions(allocator: std.mem.Allocator, text: []const u8, query: []const u8) !?[]usize {
-    if (fuzzyMatchRank(text, query) == null) return null;
+    return matchPositions(allocator, text, query, .engineDefault());
+}
+
+pub fn matchPositions(allocator: std.mem.Allocator, text: []const u8, query: []const u8, policy: MatcherPolicy) !?[]usize {
+    if (matchRank(text, query, policy) == null) return null;
     var positions: std.ArrayList(usize) = .empty;
     errdefer positions.deinit(allocator);
     if (query.len == 0) return try positions.toOwnedSlice(allocator);
 
+    const input = pathMatchInput(text, query, policy);
+    const match_text = input.text;
+    const match_query = input.query;
+    const offset = @intFromPtr(match_text.ptr) - @intFromPtr(text.ptr);
     var text_index: usize = 0;
-    for (query) |query_byte| {
-        while (text_index < text.len) : (text_index += 1) {
-            if (std.ascii.toLower(text[text_index]) == std.ascii.toLower(query_byte)) {
-                try positions.append(allocator, text_index);
+    for (match_query) |query_byte| {
+        while (text_index < match_text.len) : (text_index += 1) {
+            if (bytesEqual(match_text[text_index], query_byte, policy)) {
+                try positions.append(allocator, offset + text_index);
                 text_index += 1;
                 break;
             }
@@ -445,6 +591,32 @@ test "fuzzy matcher ranks exact prefix and ordered non-contiguous matches" {
     try std.testing.expect(fuzzyMatchRank("git checkout", "zq") == null);
 }
 
+test "matcher policy controls case sensitivity" {
+    const insensitive: MatcherPolicy = .{ .case_sensitivity = .insensitive };
+    const sensitive: MatcherPolicy = .{ .case_sensitivity = .sensitive };
+
+    try std.testing.expectEqual(MatchRank.exact, matchRank("Status", "status", insensitive).?);
+    try std.testing.expect(matchRank("Status", "status", sensitive) == null);
+    try std.testing.expectEqual(MatchRank.prefix, matchRank("Status", "Sta", sensitive).?);
+}
+
+test "matcher policy can suppress fuzzy matches for prefix-only mode" {
+    const prefix_only = MatcherPolicy.prefixOnly();
+    const candidate: Candidate = .{ .value = "git checkout", .replace_start = 0, .replace_end = 3 };
+
+    try std.testing.expectEqual(MatchRank.fuzzy, candidateMatchRank(candidate, "gco", .engineDefault()).?);
+    try std.testing.expect(candidateMatchRank(candidate, "gco", prefix_only) == null);
+    try std.testing.expectEqual(MatchSuppressionReason.prefix_only, candidateSuppressionReason(candidate, "gco", prefix_only));
+}
+
+test "matcher policy treats hyphen and underscore as equivalent by default" {
+    try std.testing.expectEqual(MatchRank.prefix, fuzzyMatchRank("feature-branch", "feature_").?);
+    try std.testing.expectEqual(MatchRank.exact, fuzzyMatchRank("feature-branch", "feature_branch").?);
+
+    const literal: MatcherPolicy = .{ .separators = .literal };
+    try std.testing.expect(matchRank("feature-branch", "feature_", literal) == null);
+}
+
 test "application filtering uses fuzzy display and value matches" {
     const source = "git gco";
     const candidates = [_]Candidate{
@@ -457,6 +629,29 @@ test "application filtering uses fuzzy display and value matches" {
 
     const edit = application.edit;
     try std.testing.expectEqualStrings("checkout", edit.replacement);
+}
+
+test "application filtering uses display-label matches" {
+    const source = "git gco";
+    const candidates = [_]Candidate{
+        .{ .value = "checkout", .display = "git checkout", .replace_start = 4, .replace_end = 7 },
+        .{ .value = "status", .replace_start = 4, .replace_end = 7 },
+    };
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("checkout", edit.replacement);
+}
+
+test "matcher policy supports path-segment matches" {
+    const full: MatcherPolicy = .{ .mode = .prefix };
+    const last_segment: MatcherPolicy = .{ .mode = .prefix, .path_segments = .last };
+
+    try std.testing.expect(matchRank("src/completion.zig", "completion", full) == null);
+    try std.testing.expectEqual(MatchRank.prefix, matchRank("src/completion.zig", "completion", last_segment).?);
+    try std.testing.expectEqual(MatchRank.prefix, matchRank("src/completion.zig", "src/com", last_segment).?);
+    try std.testing.expect(matchRank("src/completion.zig", "lib/com", last_segment) == null);
 }
 
 test "application filtering ranks prefix matches before fuzzy matches" {

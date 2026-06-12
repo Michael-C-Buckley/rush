@@ -1167,7 +1167,7 @@ const CompletionRefresh = struct {
         defer self.done.store(true, .release);
         const candidates = self.executor.collectCompletionsForInput(self.source, self.cursor, .{ .io = self.io, .allow_external = true }) catch return;
         defer self.executor.freeCompletions(candidates);
-        rankCompletionCandidates(self.allocator, candidates, self.history, self.cwd, self.source) catch return;
+        rankCompletionCandidates(self.allocator, candidates, self.history, self.cwd, self.source, .engineDefault()) catch return;
         self.cache.put(self.source, self.cursor, self.cwd, self.generation, candidates) catch return;
     }
 
@@ -2086,15 +2086,16 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
         try completion_context.loader.ensureLoaded(completion_context.io, completion_context.executor, eval_context.command, completion_context.arg_zero);
     }
     const generation = completion_context.executor.completionGeneration();
+    const matcher_policy = completion_model.MatcherPolicy.engineDefault();
     if (completion_context.cache.get(source, cursor, completion_context.cwd, generation)) |cached| {
         try completion_context.cache.startRefresh(completion_context.executor, completion_context.history, completion_context.io, source, cursor, completion_context.cwd, generation);
-        return completion_model.applyCandidatesForInput(allocator, source, cached);
+        return completion_model.applyCandidatesForInputWithPolicy(allocator, source, cached, matcher_policy);
     }
     const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true, .cancel = completion_context.cancel });
     defer completion_context.executor.freeCompletions(candidates);
-    try rankCompletionCandidates(allocator, candidates, completion_context.history.*, completion_context.cwd, source);
+    try rankCompletionCandidates(allocator, candidates, completion_context.history.*, completion_context.cwd, source, matcher_policy);
     try completion_context.cache.put(source, cursor, completion_context.cwd, completion_context.executor.completionGeneration(), candidates);
-    return completion_model.applyCandidatesForInput(allocator, source, candidates);
+    return completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
 }
 
 fn expandInteractivePathname(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, word: []const u8) !line_editor.PathExpansionMatches {
@@ -2218,30 +2219,30 @@ fn diagnoseInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
     };
 }
 
-fn rankCompletionCandidates(allocator: std.mem.Allocator, candidates: []completion_model.Candidate, history: History, cwd: []const u8, source: []const u8) !void {
+fn rankCompletionCandidates(allocator: std.mem.Allocator, candidates: []completion_model.Candidate, history: History, cwd: []const u8, source: []const u8, matcher_policy: completion_model.MatcherPolicy) !void {
     if (history.db) |db| {
         var snapshot = History.init(allocator);
         defer snapshot.deinit();
         try snapshot.loadRecentRows(db, 500);
-        std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = snapshot, .cwd = cwd, .source = source }, lessThanRankedCompletion);
+        std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = snapshot, .cwd = cwd, .source = source, .matcher_policy = matcher_policy }, lessThanRankedCompletion);
         return;
     }
-    std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = history, .cwd = cwd, .source = source }, lessThanRankedCompletion);
+    std.mem.sort(completion_model.Candidate, candidates, CompletionRankContext{ .history = history, .cwd = cwd, .source = source, .matcher_policy = matcher_policy }, lessThanRankedCompletion);
 }
 
 const CompletionRankContext = struct {
     history: History,
     cwd: []const u8,
     source: []const u8,
+    matcher_policy: completion_model.MatcherPolicy,
 };
 
 fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.Candidate, b: completion_model.Candidate) bool {
     const a_class = completionRankClass(a);
     const b_class = completionRankClass(b);
     if (a_class != b_class) return a_class < b_class;
-    if (completionPathRankClass(a) != null and completionPathRankClass(b) != null) return lessThanCompletionLabel(a, b);
-    const a_match_rank = completionCandidateRankSortKey(context.source, a);
-    const b_match_rank = completionCandidateRankSortKey(context.source, b);
+    const a_match_rank = completionCandidateRankSortKey(context.source, a, context.matcher_policy);
+    const b_match_rank = completionCandidateRankSortKey(context.source, b, context.matcher_policy);
     if (a_match_rank != b_match_rank) return a_match_rank < b_match_rank;
     const a_score = completionRankScore(context.history, context.cwd, a.value);
     const b_score = completionRankScore(context.history, context.cwd, b.value);
@@ -2249,10 +2250,10 @@ fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.
     return lessThanCompletionLabel(a, b);
 }
 
-fn completionCandidateRankSortKey(source: []const u8, candidate: completion_model.Candidate) u8 {
+fn completionCandidateRankSortKey(source: []const u8, candidate: completion_model.Candidate, matcher_policy: completion_model.MatcherPolicy) u8 {
     if (candidate.replace_start > candidate.replace_end or candidate.replace_end > source.len) return 3;
     const query = source[candidate.replace_start..candidate.replace_end];
-    const rank = completion_model.candidateFuzzyMatchRank(candidate, query) orelse return 3;
+    const rank = completion_model.candidateMatchRank(candidate, query, matcher_policy) orelse return 3;
     return @intFromEnum(rank);
 }
 
@@ -2468,8 +2469,9 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     defer executor.freeCompletions(candidates);
     var effective_context = executor.lastCompletionContext() orelse context;
     effective_context.command_path = semantic_path;
-    try rankCompletionCandidates(allocator, candidates, history, cwd, source);
-    const application = try completion_model.applyCandidatesForInput(allocator, source, candidates);
+    const matcher_policy = completion_model.MatcherPolicy.engineDefault();
+    try rankCompletionCandidates(allocator, candidates, history, cwd, source, matcher_policy);
+    const application = try completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
     defer application.deinit(allocator);
 
     var out: std.Io.Writer.Allocating = .init(allocator);
@@ -2485,6 +2487,12 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  option-name: {s}
         \\  option-spelling: {s}
         \\  replace: {d}..{d}
+        \\matcher-policy:
+        \\  source: engine-default
+        \\  case-sensitivity: {s}
+        \\  mode: {s}
+        \\  separators: {s}
+        \\  path-segments: {s}
         \\semantic:
         \\  root: {s}
         \\  path: {s}
@@ -2506,6 +2514,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         if (effective_context.option_value) |option_value| option_value.spelling else "",
         effective_context.replace_start,
         effective_context.replace_end,
+        @tagName(matcher_policy.case_sensitivity),
+        @tagName(matcher_policy.mode),
+        @tagName(matcher_policy.separators),
+        @tagName(matcher_policy.path_segments),
         semantic.root,
         semantic_path,
         @tagName(semantic.position),
@@ -2532,15 +2544,18 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         }
     }
     for (candidates) |candidate| {
-        const prefix = if (candidate.replace_end <= source.len and candidate.replace_start <= candidate.replace_end) source[candidate.replace_start..candidate.replace_end] else "";
-        const match_rank = completion_model.candidateFuzzyMatchRank(candidate, prefix);
-        try out.writer.print("  - value: {s}\n    kind: {s}\n    description: {s}\n    replace: {d}..{d}\n    matches-prefix: {}\n    rank-score: {d}\n", .{
+        const match_trace = completion_model.candidateMatchTrace(source, candidate, matcher_policy);
+        try out.writer.print("  - value: {s}\n    kind: {s}\n    description: {s}\n    replace: {d}..{d}\n    match-query: {s}\n    match-rank: {s}\n    suppressed: {}\n    suppression-reason: {s}\n    rank-class: {d}\n    rank-score: {d}\n", .{
             candidate.value,
             @tagName(candidate.kind),
             candidate.description orelse "",
             candidate.replace_start,
             candidate.replace_end,
-            match_rank != null,
+            match_trace.query,
+            matchRankName(match_trace.rank),
+            match_trace.suppression_reason != null,
+            matchSuppressionReasonName(match_trace.suppression_reason),
+            completionRankClass(candidate),
             completionRankScore(history, cwd, candidate.value),
         });
         if (candidate.option) |option| {
@@ -2598,8 +2613,9 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     defer executor.freeCompletions(candidates);
     var effective_context = executor.lastCompletionContext() orelse context;
     effective_context.command_path = semantic_path;
-    try rankCompletionCandidates(allocator, candidates, history, cwd, source);
-    const application = try completion_model.applyCandidatesForInput(allocator, source, candidates);
+    const matcher_policy = completion_model.MatcherPolicy.engineDefault();
+    try rankCompletionCandidates(allocator, candidates, history, cwd, source, matcher_policy);
+    const application = try completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
     defer application.deinit(allocator);
 
     var out: std.Io.Writer.Allocating = .init(allocator);
@@ -2614,6 +2630,8 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     try json.write(source);
     try json.objectField("context");
     try writeCompletionEvalContextJson(&json, effective_context);
+    try json.objectField("matcherPolicy");
+    try writeCompletionMatcherPolicyJson(&json, matcher_policy);
     try json.objectField("semantic");
     try writeCompletionSemanticContextJson(&json, semantic, semantic_path);
     try json.objectField("manifest");
@@ -2627,7 +2645,7 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     try json.endArray();
     try json.objectField("candidates");
     try json.beginArray();
-    for (candidates) |candidate| try writeCompletionCandidateJson(&json, history, cwd, source, candidate);
+    for (candidates) |candidate| try writeCompletionCandidateJson(&json, history, cwd, source, candidate, matcher_policy);
     try json.endArray();
     try json.objectField("providerDiagnostics");
     try writeCompletionProviderDiagnosticsJson(&json, executor.completionProviderDiagnostics());
@@ -2679,6 +2697,21 @@ fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.Compl
     try json.write(context.replace_start);
     try json.objectField("replaceEnd");
     try json.write(context.replace_end);
+    try json.endObject();
+}
+
+fn writeCompletionMatcherPolicyJson(json: *std.json.Stringify, policy: completion_model.MatcherPolicy) !void {
+    try json.beginObject();
+    try json.objectField("source");
+    try json.write("engine-default");
+    try json.objectField("caseSensitivity");
+    try json.write(@tagName(policy.case_sensitivity));
+    try json.objectField("mode");
+    try json.write(@tagName(policy.mode));
+    try json.objectField("separators");
+    try json.write(@tagName(policy.separators));
+    try json.objectField("pathSegments");
+    try json.write(@tagName(policy.path_segments));
     try json.endObject();
 }
 
@@ -2751,8 +2784,8 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.endObject();
 }
 
-fn writeCompletionCandidateJson(json: *std.json.Stringify, history: History, cwd: []const u8, source: []const u8, candidate: completion_model.Candidate) !void {
-    const prefix = if (candidate.replace_end <= source.len and candidate.replace_start <= candidate.replace_end) source[candidate.replace_start..candidate.replace_end] else "";
+fn writeCompletionCandidateJson(json: *std.json.Stringify, history: History, cwd: []const u8, source: []const u8, candidate: completion_model.Candidate, matcher_policy: completion_model.MatcherPolicy) !void {
+    const match_trace = completion_model.candidateMatchTrace(source, candidate, matcher_policy);
     try json.beginObject();
     try json.objectField("value");
     try json.write(candidate.value);
@@ -2769,7 +2802,17 @@ fn writeCompletionCandidateJson(json: *std.json.Stringify, history: History, cwd
     try json.objectField("appendSpace");
     try json.write(candidate.append_space);
     try json.objectField("matchesPrefix");
-    try json.write(completion_model.candidateFuzzyMatchRank(candidate, prefix) != null);
+    try json.write(match_trace.rank != null);
+    try json.objectField("matchQuery");
+    try json.write(match_trace.query);
+    try json.objectField("matchRank");
+    try json.write(matchRankName(match_trace.rank));
+    try json.objectField("suppressed");
+    try json.write(match_trace.suppression_reason != null);
+    try json.objectField("suppressionReason");
+    try json.write(matchSuppressionReasonName(match_trace.suppression_reason));
+    try json.objectField("rankClass");
+    try json.write(completionRankClass(candidate));
     try json.objectField("rankScore");
     try json.write(completionRankScore(history, cwd, candidate.value));
     try json.objectField("option");
@@ -2788,6 +2831,14 @@ fn writeCompletionCandidateJson(json: *std.json.Stringify, history: History, cwd
         try json.write(@as(?[]const u8, null));
     }
     try json.endObject();
+}
+
+fn matchRankName(rank: ?completion_model.MatchRank) []const u8 {
+    return if (rank) |value| @tagName(value) else "";
+}
+
+fn matchSuppressionReasonName(reason: ?completion_model.MatchSuppressionReason) []const u8 {
+    return if (reason) |value| @tagName(value) else "";
 }
 
 fn writeCompletionApplicationJson(json: *std.json.Stringify, application: completion_model.Application) !void {
@@ -4805,7 +4856,7 @@ test "completion ranking prefers recent successful same-cwd history" {
         .{ .value = "cherry-pick", .replace_start = 4, .replace_end = 6 },
         .{ .value = "checkout", .replace_start = 4, .replace_end = 6 },
     };
-    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ch");
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ch", .engineDefault());
 
     try std.testing.expectEqualStrings("checkout", candidates[0].value);
     try std.testing.expectEqualStrings("cherry-pick", candidates[1].value);
@@ -4819,7 +4870,7 @@ test "completion ranking falls back to lexical order" {
         .{ .value = "status", .replace_start = 4, .replace_end = 4 },
         .{ .value = "checkout", .replace_start = 4, .replace_end = 4 },
     };
-    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ");
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ", .engineDefault());
 
     try std.testing.expectEqualStrings("checkout", candidates[0].value);
     try std.testing.expectEqualStrings("status", candidates[1].value);
@@ -4834,7 +4885,7 @@ test "completion ranking prefers prefix matches before fuzzy matches" {
         .{ .value = "age-inspect", .kind = .command, .replace_start = 0, .replace_end = 2 },
         .{ .value = "git", .kind = .command, .replace_start = 0, .replace_end = 2 },
     };
-    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "gi");
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "gi", .engineDefault());
 
     try std.testing.expectEqualStrings("git", candidates[0].value);
     try std.testing.expectEqualStrings("age-inspect", candidates[1].value);
@@ -4849,7 +4900,7 @@ test "completion ranking sorts equal scores by display label" {
         .{ .value = "checkout", .display = "branch checkout", .replace_start = 4, .replace_end = 4 },
         .{ .value = "add", .replace_start = 4, .replace_end = 4 },
     };
-    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ");
+    try rankCompletionCandidates(std.testing.allocator, &candidates, history, "/repo", "git ", .engineDefault());
 
     try std.testing.expectEqualStrings("add", candidates[0].value);
     try std.testing.expectEqualStrings("checkout", candidates[1].value);
@@ -4877,7 +4928,11 @@ test "completion debug output shows context provider candidates and application"
 
     try std.testing.expect(std.mem.indexOf(u8, output, "command: git") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "prefix: st") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "matcher-policy:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "mode: fuzzy") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "value: status") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "match-rank: prefix") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "suppression-reason: no_match") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "replacement: status") != null);
 }
 
