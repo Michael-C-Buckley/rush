@@ -12661,7 +12661,10 @@ fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
 
     for (command.argv[first_operand..], 0..) |arg, index| {
         if (index > 0) try stdout.append(self.allocator, ' ');
-        try stdout.appendSlice(self.allocator, arg.text);
+        if (!try appendEchoOperand(self.allocator, &stdout, arg.text)) {
+            append_newline = false;
+            break;
+        }
     }
     if (append_newline) try stdout.append(self.allocator, '\n');
 
@@ -12671,6 +12674,52 @@ fn builtinEcho(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         .stdout = try stdout.toOwnedSlice(self.allocator),
         .stderr = try self.allocator.alloc(u8, 0),
     };
+}
+
+fn appendEchoOperand(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8) !bool {
+    var index: usize = 0;
+    while (index < text.len) {
+        if (text[index] != '\\') {
+            try stdout.append(allocator, text[index]);
+            index += 1;
+            continue;
+        }
+
+        index += 1;
+        if (index >= text.len) {
+            try stdout.append(allocator, '\\');
+            continue;
+        }
+
+        switch (text[index]) {
+            'a' => try stdout.append(allocator, 0x07),
+            'b' => try stdout.append(allocator, 0x08),
+            'c' => return false,
+            'f' => try stdout.append(allocator, 0x0c),
+            'n' => try stdout.append(allocator, '\n'),
+            'r' => try stdout.append(allocator, '\r'),
+            't' => try stdout.append(allocator, '\t'),
+            'v' => try stdout.append(allocator, 0x0b),
+            '\\' => try stdout.append(allocator, '\\'),
+            '0' => {
+                index += 1;
+                var value: u16 = 0;
+                var count: usize = 0;
+                while (index < text.len and count < 3 and text[index] >= '0' and text[index] <= '7') : (count += 1) {
+                    value = value * 8 + (text[index] - '0');
+                    index += 1;
+                }
+                try stdout.append(allocator, @intCast(value & 0xff));
+                continue;
+            },
+            else => {
+                try stdout.append(allocator, '\\');
+                try stdout.append(allocator, text[index]);
+            },
+        }
+        index += 1;
+    }
+    return true;
 }
 
 fn builtinColor(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -16991,6 +17040,47 @@ test "executor echo treats first -n operand as newline suppression only" {
             "-E hi\n",
         result.stdout,
     );
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor echo expands backslash escape operands" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\echo 'a\nb' 'c\t'
+        \\echo 'A\0101Z'
+        \\echo 'q\qz' 'trail\'
+        \\echo 'stop\cignored'; printf '<after-c>\n'
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        "a\nb c\t\n" ++
+            "AAZ\n" ++
+            "q\\qz trail\\\n" ++
+            "stop<after-c>\n",
+        result.stdout,
+    );
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor eval echo handles backslash-newline command substitution result" {
+    var lowered = try parseAndLower(std.testing.allocator, "eval \"echo \\\"$(printf '%s\\\\n' two)\\\"\"");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("two\n\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
