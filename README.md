@@ -1,212 +1,206 @@
 # rush
 
-Rush is an experimental shell.
+Rush is an experimental, POSIX-facing shell with Bash compatibility and
+interactive UX improvements under active development. It is early software: the
+implementation moves quickly, APIs may change, and the POSIX compliance numbers
+are planning evidence rather than certification.
 
-## Structured completion DSL
+## Current focus
 
-Rush completion scripts register semantic command rules with the `complete`
-builtin. Rules are scoped to a command pattern, so Rush can complete the right
-subcommands, options, arguments, and option values for the command position the
-user is editing.
+- POSIX shell execution, expansion, redirection, job-control, and builtin
+  coverage tracked in [`POSIX_AUDIT.md`](POSIX_AUDIT.md) and
+  [`test/compliance/posix-shell.tsv`](test/compliance/posix-shell.tsv).
+- Incremental Bash-compatible features tracked separately in
+  [`BASH_COMPAT.md`](BASH_COMPAT.md); Rush defaults to POSIX-facing behavior.
+- A terminal line editor with parser-aware completions, history search,
+  autosuggestions, emacs/vi editing modes, styled diagnostics, prompt hooks, and
+  adaptive theme variables.
 
-Rush is unreleased; completion authors should use only the structured DSL below.
-The old bare provider form `complete COMMAND --function FUNC` is intentionally
-not supported. Dynamic providers must declare the context they provide with one
-of `--subcommands`, `--options`, `--argument`, or `--option-value`.
+Rush targets POSIX-like systems first: Linux, macOS, and BSDs. Cross-target
+compile coverage is documented in [`CROSS_TARGETS.md`](CROSS_TARGETS.md);
+runtime validation still needs to happen on each claimed host.
 
-Completion scripts can be loaded from Rush configuration. Put completion rules
-in the interactive config file, or source other `.rush` files from there:
+## Build and install
+
+Rush currently requires Zig 0.16. The repository includes `mise.toml` for
+`mise` users, and Zig fetches the declared dependencies from `build.zig.zon`.
+SQLite is built from the bundled amalgamation by default; packagers can opt into
+system SQLite with `-fsys=sqlite3`.
 
 ```sh
+git clone https://github.com/rockorager/rush
+cd rush
+zig build
+zig build install --prefix "$HOME/.local" -Doptimize=ReleaseSafe
+```
+
+Common build options:
+
+- `-Dsysconfdir=/etc` sets the system configuration directory. The default is
+  `<prefix>/etc`.
+- `-fsys=sqlite3` links against system SQLite instead of the bundled
+  amalgamation.
+- `-Dtarget=...` cross-compiles; use `zig build cross-check` for the maintained
+  compile-only target set.
+
+## Run
+
+```sh
+zig build run
+zig build run -- -c 'echo hello'
+./zig-out/bin/rush --help
+```
+
+CLI forms currently supported:
+
+```text
+rush [--login]
+rush [-i] [--posix-strict] [set-options] -c SCRIPT [NAME [ARGS...]]
+rush [-i] [--posix-strict] [set-options] -s [ARGS...]
+rush [-i] [--posix-strict] [set-options] SCRIPT_FILE [ARGS...]
+rush complete --debug INPUT
+rush complete --debug-json INPUT
+rush complete trace INPUT
+rush complete validate [PATH]
+rush --help
+```
+
+`--posix-strict` enables stricter POSIX syntax diagnostics for non-interactive
+execution. There is not currently a user-facing Bash-mode CLI flag; Bash-mode
+compatibility is exercised through the implementation's compatibility feature
+plumbing and tests.
+
+## Test and validation
+
+```sh
+zig build test                         # unit tests
+zig build check                        # unit tests plus repo validation checks
+zig build fmt                          # Zig formatting check
+zig build completion-validate          # shipped .rush completion scripts
+zig build completion-manifest-schema   # JSON schema and examples
+zig build compliance                   # POSIX compliance report and corpora
+zig build cross-check                  # native tests plus compile-only targets
+```
+
+The POSIX differential corpus uses `dash` and/or `bash --posix` when they are
+available; see [`POSIX_COMPARISON_SHELLS.md`](POSIX_COMPARISON_SHELLS.md).
+
+## Configuration
+
+Interactive startup sources Rush scripts in this order:
+
+```text
+embedded default configuration
+$ENV
+$sysconfdir/rush/profile.rush      (login shells only)
+$XDG_CONFIG_HOME/rush/profile.rush (login shells only)
+$sysconfdir/rush/config.rush
 $XDG_CONFIG_HOME/rush/config.rush
 ```
 
-If `XDG_CONFIG_HOME` is unset, Rush uses `$HOME/.config/rush/config.rush`.
-First-party example completions are installed under
-`$prefix/share/rush/completions/`; source the ones you want from `config.rush`.
+If `XDG_CONFIG_HOME` is unset, user files fall back to
+`$HOME/.config/rush/`. The embedded defaults live in
+[`share/rush/config.rush`](share/rush/config.rush) and define prompt defaults,
+colorized `ls`/`grep`/`diff` helpers, and `ll`/`la` abbreviations that later
+config files can override or erase.
 
-### Command patterns
+More configuration and prompt examples are in
+[`website/docs/configuration.html`](website/docs/configuration.html) and
+[`website/docs/features.html`](website/docs/features.html).
 
-The first argument to `complete` is a command pattern. It names the root command
-and, optionally, a subcommand path:
+## Completions
 
-```sh
-complete git --subcommand commit
-complete 'git commit' --option --long amend
-complete 'kubectl get pods' --option --long watch
+Rush completions are structured rules evaluated against the parsed command
+line. Small completions can be written as `.rush` scripts with `complete` and
+`completion`; larger generated completions can put static grammar in a JSON
+manifest and keep dynamic providers in a companion `.rush` file.
+
+Completion files are loaded lazily for the command being completed from:
+
+```text
+$XDG_DATA_HOME/rush/completions/COMMAND.{json,rush}
+$HOME/.local/share/rush/completions/COMMAND.{json,rush}
+$XDG_DATA_DIRS/rush/completions/COMMAND.{json,rush}
+/usr/local/share/rush/completions/COMMAND.{json,rush}
+/usr/share/rush/completions/COMMAND.{json,rush}
+$XDG_CONFIG_HOME/rush/completions/COMMAND.{json,rush}
+$HOME/.config/rush/completions/COMMAND.{json,rush}
 ```
 
-Patterns are parsed as shell words when the rule is registered. Quote patterns
-that contain spaces. Pattern parsing does not depend on the runtime value of
-`IFS`.
+Installed first-party completion files are placed under
+`$prefix/share/rush/completions/`. The repository currently ships a Git
+manifest and companion providers at
+[`share/rush/completions/git.json`](share/rush/completions/git.json) and
+[`share/rush/completions/git.rush`](share/rush/completions/git.rush).
 
-### Static rules
+If `COMMAND.json` and `COMMAND.rush` are colocated, the manifest owns the static
+rules and the `.rush` file is treated as provider-only companion code, sourced
+lazily when a manifest function provider is needed. Manifest version `1` uses
+the schema URL `https://rush.horse/completion/schema/v1.schema.json`; the local
+schema lives at
+[`website/completion/schema/v1.schema.json`](website/completion/schema/v1.schema.json).
 
-Use static rules when the candidates are known without running a provider
-function.
+### `.rush` completion DSL
+
+The old bare provider form `complete COMMAND --function FUNC` is not supported.
+Dynamic providers must declare the semantic context they provide with one of
+`--subcommands`, `--options`, `--argument`, or `--option-value`.
 
 ```sh
-# Subcommands for `git ...`.
-complete git --subcommand status --description 'show the working tree status'
 complete git --subcommand commit --description 'record changes'
-
-# Options available while completing `git commit ...`.
 complete 'git commit' --option --long amend --description 'amend the previous commit'
-complete 'git commit' --option --short m --value-name message --description 'commit message'
+complete 'git commit' --option --short m --long message --value-name text
 
-# Options on the root command can consume values before subcommand analysis.
-complete git --option --short C --value-name path --description 'run as if git started in path'
-complete git --option --long git-dir --value-name path --description 'path to the repository'
-
-# Mutually exclusive option groups suppress conflicting option candidates.
-complete git --option --long json --exclusive-group output --description 'JSON output'
-complete git --option --short p --long porcelain --exclusive-group output --description 'porcelain output'
+__rush_complete_git_branches() {
+  git branch --format='%(refname:short)' 2>/dev/null |
+    completion candidates --kind plain --description branch
+}
+complete 'git checkout' --argument --function __rush_complete_git_branches
 ```
 
-`--option` rules require at least one spelling:
+Useful forms:
 
-- `--long NAME` completes `--NAME`.
-- `--short C` completes `-C`.
-- `--value-name NAME` marks the option as taking a value. This lets semantic
-  analysis treat the next word, or the suffix after `--long=`, as an option
-  value.
-- `--description TEXT` shows help text in completion menus.
-- `--no-space` avoids inserting a trailing space after accepting the option.
-- `--repeatable` keeps the option available after it has already appeared;
-  non-repeatable options are suppressed after use and repeated uses are reported
-  in completion diagnostics.
-- `--exclusive-group NAME` hides other options in the same group after one is
-  already present and reports conflicting combinations in completion diagnostics.
-- `--terminates-options` marks an option that stops later words from being
-  parsed as options. A bare `--` always terminates option parsing.
-
-### Dynamic providers
-
-Use dynamic providers when candidates depend on the filesystem, environment, or
-the current semantic completion context. A provider is a Rush function that emits
-candidates with the `completion` helper builtin.
-
-```sh
-__rush_complete_git_subcommands() {
-  completion candidate status --kind subcommand --description 'show status'
-  completion candidate switch --kind subcommand --description 'switch branches'
-}
-complete git --subcommands --function __rush_complete_git_subcommands
-
-__rush_complete_git_commit_options() {
-  completion option --long amend --description 'amend the previous commit'
-  completion option --short m --argument message --description 'commit message'
-}
-complete 'git commit' --options --function __rush_complete_git_commit_options
+```text
+complete PATTERN --subcommand NAME [--description TEXT]
+complete PATTERN --option [--short C] [--long NAME] [--value-name NAME]
+                 [--exclusive-group GROUP] [--repeatable]
+                 [--terminates-options] [--no-space] [--description TEXT]
+complete PATTERN --subcommands --function FUNC
+complete PATTERN --options --function FUNC
+complete PATTERN --argument --function FUNC [--index N]
+complete PATTERN --argument --state NAME [--after WORD]
+                 [--after-state NAME] [--repeatable] --function FUNC
+complete PATTERN --option-value (--long NAME | --short C) --function FUNC
+                 [--list-separator C] [--key-value-separator C]
 ```
 
-Dynamic provider registrations are context-scoped:
+Provider helpers include:
 
-- `complete PATTERN --subcommands --function FUNC` runs `FUNC` while completing
-  subcommands directly under `PATTERN`.
-- `complete PATTERN --options --function FUNC` runs `FUNC` while completing
-  options for `PATTERN` and its nested subcommand positions.
-- `complete PATTERN --argument --function FUNC` runs `FUNC` while completing
-  positional arguments at `PATTERN`.
-- `complete PATTERN --argument --index N --function FUNC` runs `FUNC` for the
-  zero-based semantic argument index `N`, after known options and option values
-  are skipped.
-- `complete PATTERN --argument --state NAME [--index N] [--after WORD]
-  [--after-state NAME] [--repeatable] --function FUNC` names positional states
-  for multi-argument flows. Unconditional states without `--index` are assigned
-  in registration order; `--repeatable` makes the state cover later arguments.
-- `complete PATTERN --option-value --long NAME --function FUNC` runs `FUNC` for
-  the value of `--NAME` at `PATTERN`.
-- `complete PATTERN --option-value --short C --function FUNC` runs `FUNC` for
-  the value of `-C` at `PATTERN`.
-
-Rush runs interactive dynamic providers asynchronously. A provider sees a
-snapshot of shell state from when the completion request started: variables,
-aliases, functions, and completion rules are available, but mutations made by
-the provider are discarded when completion finishes. Filesystem and external
-command side effects are not sandboxed, so providers should still be written as
-read-only queries. If a newer completion request supersedes an older one, Rush
-discards the stale result and asks in-flight external commands to terminate.
-
-### Provider helper builtins
-
-Provider functions can emit candidates directly:
-
-```sh
+```text
 completion candidate VALUE [--display TEXT] [--description TEXT] [--kind KIND] [--no-space]
-completion option [--long NAME] [--short C] [--argument NAME] [--repeatable] [--exclusive-group NAME] [--terminates-options] [--description TEXT]
+completion candidates [--description TEXT] [--kind KIND] [--no-space]  # stdin lines
+completion option [--long NAME] [--short C] [--argument NAME]
+                  [--repeatable] [--exclusive-group NAME]
+                  [--terminates-options] [--description TEXT]
+completion files [--prefix TEXT] [--extension EXT]
+completion directories [--prefix TEXT] [--append-slash]
+completion executables [--prefix TEXT]
+completion variables [--prefix TEXT]
 ```
 
-Candidate kinds include `command`, `builtin`, `function`, `file`, `directory`,
-`variable`, `option`, `subcommand`, and `plain`.
+Provider functions receive `rush_completion_*` variables for the semantic
+context, including prefix, command path, position, argument state/index, active
+option value, parsed option state, and structured value segment/key data.
+Parameterized queries such as `completion option-present --long NAME`,
+`completion option-values --long NAME`, and `completion operands` remain
+available when a provider needs list data.
 
-Providers can also delegate to built-in sources:
+For the full completion reference, see
+[`website/docs/completion.html`](website/docs/completion.html). The manifest
+design and compatibility notes are in
+[`COMPLETION_MANIFEST.md`](COMPLETION_MANIFEST.md) and
+[`website/docs/completion-manifest.html`](website/docs/completion-manifest.html).
 
-```sh
-completion files        # filesystem entries
-completion directories  # directories only
-completion executables  # executable commands from PATH
-completion variables    # shell variables
-```
+## License
 
-For option-value providers, `completion option` updates the active option-value
-context when its option spelling matches the option being completed. This keeps
-option candidates and option-value candidates consistent when a provider emits
-both.
-
-### Completion context queries
-
-Dynamic providers can inspect the semantic context with:
-
-```sh
-completion prefix          # text being completed
-completion command         # root command, such as `git`
-completion command-path    # root plus resolved subcommand path, such as `git commit`
-completion argument-index  # zero-based semantic argument index
-completion argument-state  # active named argument state, if one matched
-completion operand-index   # alias for the active semantic argument index
-completion operand-state   # alias for the active named argument state
-completion operands        # completed operands, one per line
-completion operand N       # completed operand at zero-based semantic index N
-completion previous        # previous semantic word
-completion position        # command, subcommand, option, argument, or option_value
-completion option-name     # active option's declared name during option-value completion
-completion option-spelling # active spelling, such as `-C` or `--git-dir`
-completion option-present --long NAME   # true if a parsed option is present
-completion option-present --short C     # true if a parsed short option is present
-completion option-values --long NAME    # parsed option values, one per line
-completion option-values --short C      # parsed short-option values, one per line
-completion options-terminated           # true after bare -- or a terminator option
-```
-
-These queries are based on Rush's semantic completion analysis, not simple word
-splitting. Registered structured rules let Rush skip option values, understand
-nested subcommands, expose attached and detached option values, keep operands
-before and after `--` distinct from options, and generate semantic diagnostics
-and underlines for unknown commands, subcommands, options, and missing option
-values.
-
-### Mixed static and dynamic example
-
-This example completes a small `kubectl` slice with static subcommands/options
-and dynamic resource names:
-
-```sh
-complete kubectl --option --long context --value-name name --description 'kube context'
-complete kubectl --subcommand get --description 'display resources'
-complete 'kubectl get' --subcommand pods --description 'pod resources'
-complete 'kubectl get pods' --option --long watch --description 'watch for changes'
-
-__rush_complete_kubectl_pods() {
-  # A real provider could call kubectl here.
-  completion candidate frontend --kind plain --description 'frontend pod'
-  completion candidate worker --kind plain --description 'worker pod'
-}
-complete 'kubectl get pods' --argument --function __rush_complete_kubectl_pods
-
-__rush_complete_kubectl_contexts() {
-  completion candidate dev --kind plain
-  completion candidate prod --kind plain
-}
-complete kubectl --option-value --long context --function __rush_complete_kubectl_contexts
-```
+MIT; see [`LICENSE`](LICENSE).
