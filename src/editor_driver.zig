@@ -44,6 +44,7 @@ pub const TerminalEvent = union(enum) {
     paste: []const u8,
     paste_start,
     paste_end,
+    invalid_utf8,
     focus_in,
     focus_out,
     resize: vaxis.Winsize,
@@ -161,20 +162,21 @@ pub const TerminalParser = struct {
     allocator: std.mem.Allocator,
     parser: vaxis.Parser = undefined,
     pending: std.ArrayList(u8) = .empty,
-    event_text: std.ArrayList(u8) = .empty,
+    event_text_arena: std.heap.ArenaAllocator,
+    saw_invalid_utf8: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) TerminalParser {
-        return .{ .allocator = allocator };
+        return .{ .allocator = allocator, .event_text_arena = std.heap.ArenaAllocator.init(allocator) };
     }
 
     pub fn deinit(self: *TerminalParser) void {
         self.pending.deinit(self.allocator);
-        self.event_text.deinit(self.allocator);
+        self.event_text_arena.deinit();
         self.* = undefined;
     }
 
     pub fn resetEventText(self: *TerminalParser) void {
-        self.event_text.clearRetainingCapacity();
+        _ = self.event_text_arena.reset(.retain_capacity);
     }
 
     pub fn feed(self: *TerminalParser, bytes: []const u8, events: *std.ArrayList(TerminalEvent)) !void {
@@ -185,11 +187,24 @@ pub const TerminalParser = struct {
 
         try self.pending.appendSlice(self.allocator, bytes);
         while (self.pending.items.len != 0) {
-            const result = try self.parser.parse(self.pending.items, null);
+            if (incompleteUtf8Prefix(self.pending.items)) break;
+            const result = self.parser.parse(self.pending.items, null) catch |err| switch (err) {
+                error.InvalidUTF8 => {
+                    if (incompleteUtf8Prefix(self.pending.items)) break;
+                    try events.append(self.allocator, .invalid_utf8);
+                    self.pending.replaceRange(self.allocator, 0, 1, "") catch unreachable;
+                    continue;
+                },
+                else => |e| return e,
+            };
             if (result.n == 0) break;
             if (result.event) |event| {
+                self.saw_invalid_utf8 = false;
                 if (try self.eventFromVaxis(event)) |terminal_event| {
+                    if (self.saw_invalid_utf8) try events.append(self.allocator, .invalid_utf8);
                     try events.append(self.allocator, terminal_event);
+                } else if (self.saw_invalid_utf8) {
+                    try events.append(self.allocator, .invalid_utf8);
                 }
             }
             self.pending.replaceRange(self.allocator, 0, result.n, "") catch unreachable;
@@ -232,11 +247,53 @@ pub const TerminalParser = struct {
     }
 
     fn eventText(self: *TerminalParser, text: []const u8) ![]const u8 {
-        const start = self.event_text.items.len;
-        try self.event_text.appendSlice(self.allocator, text);
-        return self.event_text.items[start..];
+        if (std.unicode.utf8ValidateSlice(text)) return try self.event_text_arena.allocator().dupe(u8, text);
+
+        self.saw_invalid_utf8 = true;
+        var sanitized: std.ArrayList(u8) = .empty;
+        const arena_allocator = self.event_text_arena.allocator();
+        var index: usize = 0;
+        while (index < text.len) {
+            const sequence_len = std.unicode.utf8ByteSequenceLength(text[index]) catch {
+                index += 1;
+                continue;
+            };
+            if (index + sequence_len > text.len) break;
+            const sequence = text[index .. index + sequence_len];
+            if (std.unicode.utf8ValidateSlice(sequence)) {
+                try sanitized.appendSlice(arena_allocator, sequence);
+                index += sequence_len;
+            } else {
+                index += 1;
+            }
+        }
+        return try sanitized.toOwnedSlice(arena_allocator);
     }
 };
+
+fn incompleteUtf8Prefix(bytes: []const u8) bool {
+    if (bytes.len == 0) return false;
+    const sequence_len = std.unicode.utf8ByteSequenceLength(bytes[0]) catch return false;
+    if (sequence_len == 1) return false;
+    if (sequence_len == 2 and bytes[0] < 0xc2) return false;
+    if (bytes[0] > 0xf4) return false;
+    if (bytes.len > 1) {
+        if (!utf8ContinuationByte(bytes[1])) return false;
+        switch (bytes[0]) {
+            0xe0 => if (bytes[1] < 0xa0) return false,
+            0xed => if (bytes[1] >= 0xa0) return false,
+            0xf0 => if (bytes[1] < 0x90) return false,
+            0xf4 => if (bytes[1] >= 0x90) return false,
+            else => {},
+        }
+    }
+    if (bytes.len > 2 and !utf8ContinuationByte(bytes[2])) return false;
+    return bytes.len < sequence_len;
+}
+
+fn utf8ContinuationByte(byte: u8) bool {
+    return byte & 0xc0 == 0x80;
+}
 
 pub const ReadLineOptions = struct {
     prompt: []const u8,
@@ -696,6 +753,7 @@ pub const TerminalSession = struct {
                 }
                 try self.startReadyCompletion(read_options);
                 self.events.clearRetainingCapacity();
+                self.terminal_parser.resetEventText();
                 var hook_ready = false;
                 for (ready) |ready_event| {
                     switch (ready_event.source) {
@@ -723,6 +781,7 @@ pub const TerminalSession = struct {
                     if (try self.runHooks(read_options, &session, &render_needed)) return try self.finishInterruptedReadLine();
                     next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
                 }
+                var reported_invalid_utf8 = false;
                 for (self.events.items) |event| {
                     switch (event) {
                         .key_press => |key| {
@@ -768,6 +827,14 @@ pub const TerminalSession = struct {
                         .paste_end => {
                             render_needed = true;
                             session.endPaste();
+                        },
+                        .invalid_utf8 => {
+                            if (!reported_invalid_utf8) {
+                                reported_invalid_utf8 = true;
+                                render_needed = true;
+                                session.invalidatePrompt();
+                                try self.writeInterruptOutput("rush: ignored invalid UTF-8 input\n");
+                            }
                         },
                         .resize => |winsize| {
                             if (!sameWinsize(self.winsize, winsize)) {
@@ -953,7 +1020,6 @@ pub const TerminalSession = struct {
         var wake_buffer: [32]u8 = undefined;
         _ = try rawRead(self.wake.read.handle, &wake_buffer);
         const bytes = try self.reader.takeReady();
-        self.terminal_parser.resetEventText();
         const old_len = self.events.items.len;
         try self.terminal_parser.feed(bytes, &self.events);
         for (self.events.items[old_len..]) |event| {
@@ -1902,6 +1968,119 @@ test "terminal parser marks bracketed paste around text keys" {
         if (event == .key_press and event.key_press.key == .enter) saw_enter = true;
     }
     try std.testing.expect(saw_enter);
+}
+
+test "terminal parser keeps large bracketed paste text alive until handled" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    var pasted: std.ArrayList(u8) = .empty;
+    defer pasted.deinit(std.testing.allocator);
+    for (0..80) |_| try pasted.appendSlice(std.testing.allocator, "true\n");
+    try pasted.appendSlice(std.testing.allocator, "touch /tmp/rush-paste-marker\n");
+
+    var sequence: std.ArrayList(u8) = .empty;
+    defer sequence.deinit(std.testing.allocator);
+    try sequence.appendSlice(std.testing.allocator, "\x1b[200~");
+    try sequence.appendSlice(std.testing.allocator, pasted.items);
+    try sequence.appendSlice(std.testing.allocator, "\x1b[201~");
+
+    try parser.feed(sequence.items, &events);
+
+    var session = try line_editor.LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try applyTerminalEventsForTest(&session, events.items);
+    try std.testing.expectEqual(line_editor.LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings(pasted.items, session.editor.buffer.text());
+}
+
+test "terminal parser round-trips bracketed paste across small chunks" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+    var session = try line_editor.LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+
+    const pasted = "echo one\necho two\ntouch /tmp/rush-paste-marker\n";
+    const sequence = "\x1b[200~" ++ pasted ++ "\x1b[201~";
+    var offset: usize = 0;
+    while (offset < sequence.len) {
+        const end = @min(offset + 7, sequence.len);
+        try parser.feed(sequence[offset..end], &events);
+        try applyTerminalEventsForTest(&session, events.items);
+        events.clearRetainingCapacity();
+        parser.resetEventText();
+        offset = end;
+    }
+
+    try std.testing.expectEqual(line_editor.LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings(pasted, session.editor.buffer.text());
+}
+
+test "terminal parser reports invalid utf8 input without failing" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[200~ok\xffdone\x1b[201~", &events);
+
+    var saw_invalid_utf8 = false;
+    var saw_paste_end = false;
+    var session = try line_editor.LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    for (events.items) |event| {
+        switch (event) {
+            .invalid_utf8 => saw_invalid_utf8 = true,
+            .paste_end => saw_paste_end = true,
+            else => {},
+        }
+    }
+    try applyTerminalEventsForTest(&session, events.items);
+
+    try std.testing.expect(saw_invalid_utf8);
+    try std.testing.expect(saw_paste_end);
+    try std.testing.expectEqual(line_editor.LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings("okdone", session.editor.buffer.text());
+}
+
+test "terminal parser waits for split utf8 codepoint" {
+    var parser = TerminalParser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(TerminalEvent) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\xc3", &events);
+    try std.testing.expectEqual(@as(usize, 0), events.items.len);
+    try parser.feed("\xa9", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.text, events.items[0].key_press.key);
+    try std.testing.expectEqualStrings("é", events.items[0].key_press.text);
+}
+
+fn applyTerminalEventsForTest(session: *line_editor.LineSession, events: []const TerminalEvent) !void {
+    for (events) |event| {
+        switch (event) {
+            .key_press => |key| try session.handleKey(key),
+            .paste_start => session.beginPaste(),
+            .paste_end => session.endPaste(),
+            .paste => |text| try session.handlePaste(text),
+            .invalid_utf8,
+            .key_release,
+            .focus_in,
+            .focus_out,
+            .resize,
+            .capability,
+            .color_scheme,
+            .color_report,
+            .prompt_redraw,
+            => {},
+        }
+    }
 }
 
 fn testExpandAbbreviation(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8, cursor: usize, append_space: bool) !?completion.Edit {
