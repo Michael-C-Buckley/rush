@@ -58,6 +58,7 @@ pub const ExecuteOptions = struct {
     completion_provider_only: bool = false,
     completion_loader: ?*const fn (*anyopaque, *Executor, []const u8, ExecuteOptions) anyerror!void = null,
     completion_loader_context: ?*anyopaque = null,
+    abort_on_output_write_failure: bool = false,
 };
 
 const posix_shell_path = "/bin/sh";
@@ -4247,6 +4248,7 @@ pub const Executor = struct {
     fn appendOrWriteResultStatus(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), result: CommandResult) !ExitStatus {
         self.appendOrWriteResult(options, stdout, stderr, result) catch |err| {
             if (!isOutputWriteFailure(err)) return err;
+            if (options.abort_on_output_write_failure) return err;
             var failure = try self.writeFailureResult(err, false);
             defer failure.deinit();
             try self.appendOrWriteResult(options, stdout, stderr, failure);
@@ -5841,6 +5843,10 @@ pub const Executor = struct {
             const io = pipeline_options.io orelse return error.MissingIoForExternalCommand;
             return self.executeRealPipeline(program, pipeline, pipeline_options, io);
         }
+        if (self.canExecuteRealSpanPipeline(program, pipeline, pipeline_options)) {
+            const io = pipeline_options.io orelse return error.MissingIoForExternalCommand;
+            return self.executeRealSpanPipeline(program, pipeline, pipeline_options, io);
+        }
         if (pipeline.stage_spans.len != pipeline.command_indexes.len) return self.executeSpanPipeline(program, pipeline, pipeline_options);
 
         var last = try emptyResult(self.allocator, 0);
@@ -5977,6 +5983,165 @@ pub const Executor = struct {
         var stage_options = options;
         stage_options.external_stdio = .capture;
         return self.executeScriptSlice(source, stage_options);
+    }
+
+    fn canExecuteRealSpanPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
+        if (pipeline.stage_spans.len == pipeline.command_indexes.len) return false;
+        if (!options.allow_external or options.io == null or pipeline.stage_spans.len < 2) return false;
+        const last_command_index = stageSimpleCommandIndex(program, pipeline, pipeline.stage_spans.len - 1) orelse return false;
+        const last_command = program.commands[last_command_index];
+        if (last_command.argv.len == 0 or last_command.redirections.len != 0) return false;
+        for (pipeline.command_indexes) |command_index| {
+            if (program.commands[command_index].redirections.len != 0) return false;
+        }
+        return builtinForName(self, last_command.argv[0].text) == null and self.functions.get(last_command.argv[0].text) == null;
+    }
+
+    fn executeRealSpanPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
+        const children = try self.allocator.alloc(std.process.Child, pipeline.stage_spans.len);
+        defer self.allocator.free(children);
+        const cancel_pids = try self.allocator.alloc(?i32, pipeline.stage_spans.len);
+        defer self.allocator.free(cancel_pids);
+        @memset(cancel_pids, null);
+        defer for (cancel_pids) |pid| unregisterCancelableChild(options, pid);
+        var spawned: usize = 0;
+        errdefer for (children[0..spawned]) |*child| child.kill(io);
+
+        var previous_stdout: ?std.Io.File = null;
+        defer if (previous_stdout) |file| file.close(io);
+
+        for (pipeline.stage_spans, 0..) |stage_span, index| {
+            const is_last = index + 1 == pipeline.stage_spans.len;
+            var next_pipe: ?PipelinePipe = if (!is_last) try makePipelinePipe(io) else null;
+            errdefer if (next_pipe) |*pipe| pipe.close(io);
+
+            const stdin_file = previous_stdout;
+            previous_stdout = null;
+            const stdout_file: ?std.Io.File = if (next_pipe) |pipe| pipe.write.? else null;
+            errdefer if (stdin_file) |file| file.close(io);
+            errdefer if (stdout_file) |file| file.close(io);
+
+            if (stageSimpleCommandIndex(program, pipeline, index)) |command_index| {
+                const command = program.commands[command_index];
+                if (builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
+                    children[spawned] = try self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, null, io);
+                } else {
+                    children[spawned] = try self.spawnSpanPipelineExternalStage(command, options, stdin_file, stdout_file, is_last, io);
+                }
+            } else {
+                std.debug.assert(!is_last);
+                children[spawned] = try self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, null, io);
+            }
+            cancel_pids[spawned] = registerCancelableChild(options, children[spawned], false);
+            spawned += 1;
+
+            if (stdin_file) |file| file.close(io);
+            if (stdout_file) |file| file.close(io);
+            if (next_pipe) |*pipe| {
+                pipe.write = null;
+                previous_stdout = pipe.read;
+                pipe.read = null;
+                pipe.close(io);
+            }
+        }
+
+        var stdout_bytes: []u8 = try self.allocator.alloc(u8, 0);
+        errdefer self.allocator.free(stdout_bytes);
+        var stderr_bytes: []u8 = try self.allocator.alloc(u8, 0);
+        errdefer self.allocator.free(stderr_bytes);
+
+        const last_child = &children[pipeline.stage_spans.len - 1];
+        if (options.external_stdio != .inherit) {
+            var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+            var multi_reader: std.Io.File.MultiReader = undefined;
+            multi_reader.init(self.allocator, io, multi_reader_buffer.toStreams(), &.{ last_child.stdout.?, last_child.stderr.? });
+            defer multi_reader.deinit();
+
+            while (multi_reader.fill(64, .none)) |_| {} else |err| switch (err) {
+                error.EndOfStream => {},
+                else => |e| return e,
+            }
+            try multi_reader.checkAnyError();
+            self.allocator.free(stdout_bytes);
+            stdout_bytes = try multi_reader.toOwnedSlice(0);
+            self.allocator.free(stderr_bytes);
+            stderr_bytes = try multi_reader.toOwnedSlice(1);
+        }
+
+        const statuses = try self.allocator.alloc(ExitStatus, spawned);
+        defer self.allocator.free(statuses);
+        for (children[0..spawned], 0..) |*child, index| {
+            const term = try child.wait(io);
+            statuses[index] = exitStatusFromTerm(term);
+        }
+
+        return .{
+            .allocator = self.allocator,
+            .status = self.pipelineStatus(pipeline, statuses),
+            .stdout = stdout_bytes,
+            .stderr = stderr_bytes,
+        };
+    }
+
+    fn spawnSpanPipelineExternalStage(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions, stdin_file: ?std.Io.File, stdout_file: ?std.Io.File, is_last: bool, io: std.Io) !std.process.Child {
+        if (command.redirections.len != 0) return error.Unsupported;
+        const expanded = try self.expandSimpleCommand(command, options);
+        defer self.freeExpandedCommand(expanded);
+        if (expanded.argv.len == 0) return error.Unsupported;
+        const argv = try argvForCommand(self.allocator, expanded);
+        defer self.allocator.free(argv);
+        const resolved_executable = self.resolveExternalArgv0(expanded, io, options) catch |err| switch (err) {
+            error.CommandNotFound => return error.FileNotFound,
+            error.AccessDenied, error.PermissionDenied => return error.PermissionDenied,
+            error.IsDir => return error.IsDir,
+            else => return err,
+        };
+        defer if (resolved_executable) |executable| self.allocator.free(executable);
+        if (resolved_executable) |executable| argv[0] = executable;
+        var child_env = try self.buildProcessEnv(expanded.assignments);
+        defer child_env.deinit();
+        return self.spawnExternalCommand(io, .{
+            .argv = argv,
+            .environ_map = &child_env,
+            .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
+            .stdout = if (stdout_file) |file| .{ .file = file } else if (is_last and options.external_stdio == .inherit) .inherit else .pipe,
+            .stderr = if (is_last and options.external_stdio == .inherit) .inherit else .pipe,
+        });
+    }
+
+    fn forkSpanPipelineShellStage(self: *Executor, source: []const u8, options: ExecuteOptions, stdin_file: ?std.Io.File, stdout_file: ?std.Io.File, stderr_file: ?std.Io.File, io: std.Io) !std.process.Child {
+        const pid = try forkProcess();
+        if (pid == 0) {
+            if (stdin_file) |file| rawDup2(file.handle, 0) catch exitForkedChild(2);
+            if (stdout_file) |file| rawDup2(file.handle, 1) catch exitForkedChild(2);
+            if (stderr_file) |file| rawDup2(file.handle, 2) catch exitForkedChild(2);
+            self.closeForkedChildFds(io);
+            self.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
+            self.loop_control_boundary_outer_depth += self.loop_depth;
+            self.loop_depth = 0;
+            var child_options = options;
+            child_options.external_stdio = .inherit;
+            child_options.foreground_terminal = false;
+            child_options.abort_on_output_write_failure = true;
+            var status: ExitStatus = 2;
+            var child_result = self.executeScriptSlice(source, child_options) catch null;
+            if (child_result) |*result| {
+                status = result.status;
+                writeInheritedResult(io, result.*) catch {};
+                result.deinit();
+            }
+            exitForkedChild(status);
+        }
+        return childFromPid(pid);
+    }
+
+    fn stageSimpleCommandIndex(program: ir.Program, pipeline: ir.Pipeline, stage_index: usize) ?usize {
+        const stage_span = pipeline.stage_spans[stage_index];
+        for (pipeline.command_indexes) |command_index| {
+            const command_span = program.commands[command_index].span;
+            if (command_span.start == stage_span.start and command_span.end == stage_span.end) return command_index;
+        }
+        return null;
     }
 
     fn pipelineHasRedirections(program: ir.Program, pipeline: ir.Pipeline) bool {
@@ -6193,7 +6358,7 @@ pub const Executor = struct {
                     try threads.append(self.allocator, thread);
                     try contexts.append(self.allocator, context);
                 } else {
-                    children[spawned] = try forkBuiltinPipelineStage(context);
+                    children[spawned] = try forkBuiltinPipelineStage(context, pipes, capture_stdout, capture_stderr);
                     cancel_pids[spawned] = registerCancelableChild(options, children[spawned], false);
                     child_stage_indexes[spawned] = index;
                     spawned += 1;
@@ -6884,9 +7049,10 @@ pub const Executor = struct {
         };
     }
 
-    fn forkBuiltinPipelineStage(context: *BuiltinPipelineContext) !std.process.Child {
+    fn forkBuiltinPipelineStage(context: *BuiltinPipelineContext, pipes: []const PipelinePipe, capture_stdout: PipelinePipe, capture_stderr: PipelinePipe) !std.process.Child {
         const pid = try forkProcess();
         if (pid == 0) {
+            context.executor.closeForkedPipelineStageFds(context, pipes, capture_stdout, capture_stderr);
             context.executor.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
             context.executor.loop_control_boundary_outer_depth += context.executor.loop_depth;
             context.executor.loop_depth = 0;
@@ -6894,6 +7060,85 @@ pub const Executor = struct {
             exitForkedChild(context.status);
         }
         return childFromPid(pid);
+    }
+
+    fn closeForkedPipelineStageFds(self: Executor, context: *const BuiltinPipelineContext, pipes: []const PipelinePipe, capture_stdout: PipelinePipe, capture_stderr: PipelinePipe) void {
+        trap_signal_wake_fd.store(-1, .release);
+
+        var max_fd: std.posix.fd_t = 2;
+        max_fd = maxFd(max_fd, context.stdin_file);
+        max_fd = maxFd(max_fd, context.stdout_file);
+        max_fd = maxFd(max_fd, context.stderr_file);
+        for (pipes) |pipe| {
+            max_fd = maxFd(max_fd, pipe.read);
+            max_fd = maxFd(max_fd, pipe.write);
+        }
+        max_fd = maxFd(max_fd, capture_stdout.read);
+        max_fd = maxFd(max_fd, capture_stdout.write);
+        max_fd = maxFd(max_fd, capture_stderr.read);
+        max_fd = maxFd(max_fd, capture_stderr.write);
+        var open_fd_iter = self.open_fds.iterator();
+        while (open_fd_iter.next()) |entry| max_fd = @max(max_fd, entry.key_ptr.*);
+
+        const scan_limit: std.posix.fd_t = if (highestOpenFd()) |highest|
+            highest + 1
+        else
+            @max(max_fd + 33, defaultForkFdScanLimit());
+
+        var fd: std.posix.fd_t = 3;
+        while (fd < scan_limit) : (fd += 1) {
+            if (self.shouldPreserveForkedPipelineStageFd(context, fd)) continue;
+            closeRawFd(context.io, fd);
+        }
+    }
+
+    fn closeForkedChildFds(self: Executor, io: std.Io) void {
+        trap_signal_wake_fd.store(-1, .release);
+
+        var max_fd: std.posix.fd_t = 2;
+        var open_fd_iter = self.open_fds.iterator();
+        while (open_fd_iter.next()) |entry| max_fd = @max(max_fd, entry.key_ptr.*);
+
+        const scan_limit: std.posix.fd_t = if (highestOpenFd()) |highest|
+            highest + 1
+        else
+            @max(max_fd + 33, defaultForkFdScanLimit());
+
+        var fd: std.posix.fd_t = 3;
+        while (fd < scan_limit) : (fd += 1) {
+            if (self.open_fds.contains(fd)) continue;
+            closeRawFd(io, fd);
+        }
+    }
+
+    fn maxFd(current: std.posix.fd_t, file: ?std.Io.File) std.posix.fd_t {
+        const candidate = file orelse return current;
+        return @max(current, candidate.handle);
+    }
+
+    fn shouldPreserveForkedPipelineStageFd(self: Executor, context: *const BuiltinPipelineContext, fd: std.posix.fd_t) bool {
+        if (fd <= 2) return true;
+        if (context.stdin_file != null and context.stdin_file.?.handle == fd) return true;
+        if (context.stdout_file != null and context.stdout_file.?.handle == fd) return true;
+        if (context.stderr_file != null and context.stderr_file.?.handle == fd) return true;
+        return self.open_fds.contains(fd);
+    }
+
+    fn highestOpenFd() ?std.posix.fd_t {
+        if (comptime @hasDecl(std.c.F, "MAXFD")) {
+            const rc = std.c.fcntl(0, @as(c_int, std.c.F.MAXFD));
+            return switch (std.c.errno(rc)) {
+                .SUCCESS => @intCast(rc),
+                else => null,
+            };
+        }
+        return null;
+    }
+
+    fn defaultForkFdScanLimit() std.posix.fd_t {
+        const hard_cap: std.posix.rlim_t = 4096;
+        const rlimit = std.posix.getrlimit(.NOFILE) catch return @intCast(hard_cap);
+        return @intCast(@min(rlimit.cur, hard_cap));
     }
 
     fn runBuiltinPipelineStageFallible(context: *BuiltinPipelineContext) !void {
@@ -6909,6 +7154,7 @@ pub const Executor = struct {
         // commands read it in either mode.
         var stage_options = context.options;
         stage_options.external_stdio = context.stage_stdio;
+        stage_options.abort_on_output_write_failure = true;
         const stdin_guard = pushPipelineStageStdin(context.stdin_file);
         defer stdin_guard.restore();
 
@@ -23043,6 +23289,12 @@ fn expectPtyTestChildSucceeded(child_pid: std.c.pid_t) !void {
 fn sleepPtyTestPollInterval() void {
     var remaining: std.c.timespec = .{ .sec = 0, .nsec = 10 * std.time.ns_per_ms };
     while (std.c.nanosleep(&remaining, &remaining) != 0) {}
+}
+
+test "forked builtin pipeline stages close inherited pipe readers" {
+    try expectForkedScriptCompletes("printf '%0100000d' 7 | true; echo rc=$?", "rc=0\n");
+    try expectForkedScriptCompletes("( while :; do echo y; done ) | /usr/bin/head -2; echo rc=$?", "y\ny\nrc=0\n");
+    try expectForkedScriptCompletes("( i=0; while [ $i -lt 100000 ]; do echo line$i; i=$((i+1)); done ) | /usr/bin/head -1", "line0\n");
 }
 
 test "executor streams large pipeline input into builtin stages" {
