@@ -13139,11 +13139,24 @@ fn parsePrintfMagnitude(text: []const u8, base: u8) !PrintfMagnitude {
     return .{ .value = value };
 }
 
+fn skipPrintfIntegerWhitespace(arg: []const u8, cursor: *usize) void {
+    while (cursor.* < arg.len and std.ascii.isWhitespace(arg[cursor.*])) : (cursor.* += 1) {}
+}
+
+fn printfIntegerParseComplete(arg: []const u8, cursor: usize) bool {
+    var trailing = cursor;
+    skipPrintfIntegerWhitespace(arg, &trailing);
+    return trailing == arg.len;
+}
+
 fn parsePrintfIntegerConstant(arg: []const u8) !PrintfIntegerConstant {
     if (arg.len == 0) return .{ .magnitude = 0 };
     if (arg[0] == '\'' or arg[0] == '"') return .{ .magnitude = if (arg.len > 1) arg[1] else 0 };
 
     var cursor: usize = 0;
+    skipPrintfIntegerWhitespace(arg, &cursor);
+    if (cursor >= arg.len) return error.InvalidCharacter;
+
     var negative = false;
     if (arg[cursor] == '+' or arg[cursor] == '-') {
         negative = arg[cursor] == '-';
@@ -13166,7 +13179,7 @@ fn parsePrintfIntegerConstant(arg: []const u8) !PrintfIntegerConstant {
             return .{
                 .magnitude = magnitude.value,
                 .negative = negative,
-                .complete = cursor == arg.len,
+                .complete = printfIntegerParseComplete(arg, cursor),
                 .overflow = magnitude.overflow,
             };
         }
@@ -13178,7 +13191,7 @@ fn parsePrintfIntegerConstant(arg: []const u8) !PrintfIntegerConstant {
     return .{
         .magnitude = magnitude.value,
         .negative = negative,
-        .complete = cursor == arg.len,
+        .complete = printfIntegerParseComplete(arg, cursor),
         .overflow = magnitude.overflow,
     };
 }
@@ -18562,6 +18575,24 @@ test "executor implements read and printf builtins" {
     defer integer_constant_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), integer_constant_result.status);
     try std.testing.expectEqualStrings("8:16:65:66:18446744073709551608:fffffffffffffff0:0\n", integer_constant_result.stdout);
+
+    var integer_blank_lowered = try parseAndLower(std.testing.allocator, "printf '%d:%i:%o:%u:%x:%X\\n' ' 5 ' '" ++ "\t" ++ "+0x10" ++ "\t" ++ "' ' 010 ' ' -5 ' ' 0x1f ' ' 0X1f '");
+    defer integer_blank_lowered.parsed.deinit();
+    defer integer_blank_lowered.program.deinit();
+    var integer_blank_result = try executor.executeProgram(integer_blank_lowered.program, .{});
+    defer integer_blank_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), integer_blank_result.status);
+    try std.testing.expectEqualStrings("5:16:10:18446744073709551611:1f:1F\n", integer_blank_result.stdout);
+    try std.testing.expectEqualStrings("", integer_blank_result.stderr);
+
+    var integer_junk_lowered = try parseAndLower(std.testing.allocator, "printf '%d:%x\\n' '5x ' ' 0x1fg '");
+    defer integer_junk_lowered.parsed.deinit();
+    defer integer_junk_lowered.program.deinit();
+    var integer_junk_result = try executor.executeProgram(integer_junk_lowered.program, .{});
+    defer integer_junk_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), integer_junk_result.status);
+    try std.testing.expectEqualStrings("5:1f\n", integer_junk_result.stdout);
+    try std.testing.expectEqualStrings("printf: numeric argument required\nprintf: numeric argument required\n", integer_junk_result.stderr);
 
     var partial_integer_lowered = try parseAndLower(std.testing.allocator, "printf '%d:%d\\n' 123abc 0o10");
     defer partial_integer_lowered.parsed.deinit();
