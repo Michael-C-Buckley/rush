@@ -1291,23 +1291,105 @@ fn loadCompletionManifestWithPath(allocator: std.mem.Allocator, executor: *exec.
     }
     const command = root_object.get("command") orelse return error.CompletionManifestMissingCommand;
     const source: completion_model.RuleSource = .{ .kind = .manifest, .manifest_path = source_path, .manifest_version = version };
-    try loadCompletionManifestCommand(executor, command, &.{}, source);
+    try loadCompletionManifestCommand(executor, command, &.{}, &.{}, source);
 }
 
-fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8, source: completion_model.RuleSource) !void {
+const CompletionManifestProviderBinding = struct {
+    id: ?[]const u8 = null,
+    kind: completion_model.ProviderKind,
+    value: []const u8,
+};
+
+fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8, inherited_providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) anyerror!void {
     const command = switch (command_value) {
         .object => |object| object,
         else => return error.CompletionManifestCommandMustBeObject,
     };
     const name = try manifestCommandPrimaryName(command);
 
+    var providers: std.ArrayList(CompletionManifestProviderBinding) = .empty;
+    defer providers.deinit(executor.allocator);
+    try providers.appendSlice(executor.allocator, inherited_providers);
+    if (command.get("providers")) |providers_value| try appendCompletionManifestProviders(executor.allocator, &providers, providers_value);
+
     if (path.len == 0) {
-        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, name, &.{}, options, source);
-        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, name, &.{}, subcommands, source);
+        if (command.get("dynamicSubcommands")) |dynamic_subcommands| try loadCompletionManifestProviderArray(executor, name, &.{}, .dynamic_subcommands, dynamic_subcommands, providers.items, source);
+        if (command.get("dynamicOptions")) |dynamic_options| try loadCompletionManifestProviderArray(executor, name, &.{}, .dynamic_options, dynamic_options, providers.items, source);
+        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, name, &.{}, options, providers.items, source);
+        if (command.get("arguments")) |arguments| try loadCompletionManifestArguments(executor, name, &.{}, arguments, providers.items, source);
+        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, name, &.{}, subcommands, providers.items, source);
     } else {
-        try loadCompletionManifestSubcommandNames(executor, path[0], path[1..], command, source);
-        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, path[0], path[1..], options, source);
-        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, path[0], path[1..], subcommands, source);
+        const root = path[0];
+        const command_path = path[1..];
+        const parent_path = command_path[0 .. command_path.len - 1];
+        try loadCompletionManifestSubcommandNames(executor, root, parent_path, command, source);
+        if (command.get("dynamicSubcommands")) |dynamic_subcommands| try loadCompletionManifestProviderArray(executor, root, command_path, .dynamic_subcommands, dynamic_subcommands, providers.items, source);
+        if (command.get("dynamicOptions")) |dynamic_options| try loadCompletionManifestProviderArray(executor, root, command_path, .dynamic_options, dynamic_options, providers.items, source);
+        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, root, command_path, options, providers.items, source);
+        if (command.get("arguments")) |arguments| try loadCompletionManifestArguments(executor, root, command_path, arguments, providers.items, source);
+        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, root, command_path, subcommands, providers.items, source);
+    }
+}
+
+fn appendCompletionManifestProviders(allocator: std.mem.Allocator, providers: *std.ArrayList(CompletionManifestProviderBinding), providers_value: std.json.Value) !void {
+    const object = switch (providers_value) {
+        .object => |object| object,
+        else => return error.CompletionManifestProvidersMustBeObject,
+    };
+    var iter = object.iterator();
+    while (iter.next()) |entry| {
+        var binding = try completionManifestProviderBinding(entry.value_ptr.*);
+        binding.id = entry.key_ptr.*;
+        try providers.append(allocator, binding);
+    }
+}
+
+fn completionManifestProviderBinding(provider_value: std.json.Value) !CompletionManifestProviderBinding {
+    const provider = switch (provider_value) {
+        .object => |object| object,
+        else => return error.CompletionManifestProviderMustBeObject,
+    };
+    if (manifestString(provider.get("function"))) |function| {
+        return .{ .kind = .function, .value = function };
+    }
+    if (manifestString(provider.get("builtin"))) |builtin| {
+        return .{ .kind = completionManifestBuiltinProviderKind(builtin) orelse return error.UnsupportedCompletionManifestBuiltinProvider, .value = builtin };
+    }
+    return error.CompletionManifestProviderMissingBinding;
+}
+
+fn resolveCompletionManifestProviderRef(provider_ref: std.json.Value, providers: []const CompletionManifestProviderBinding) !CompletionManifestProviderBinding {
+    switch (provider_ref) {
+        .string => |provider_id| {
+            var index = providers.len;
+            while (index > 0) {
+                index -= 1;
+                const provider = providers[index];
+                if (provider.id) |id| if (std.mem.eql(u8, id, provider_id)) return provider;
+            }
+            return error.UnknownCompletionManifestProvider;
+        },
+        .object => return completionManifestProviderBinding(provider_ref),
+        else => return error.CompletionManifestProviderRefMustBeStringOrObject,
+    }
+}
+
+fn completionManifestBuiltinProviderKind(name: []const u8) ?completion_model.ProviderKind {
+    if (std.mem.eql(u8, name, "files")) return .builtin_files;
+    if (std.mem.eql(u8, name, "directories")) return .builtin_directories;
+    if (std.mem.eql(u8, name, "executables")) return .builtin_executables;
+    if (std.mem.eql(u8, name, "variables")) return .builtin_variables;
+    return null;
+}
+
+fn loadCompletionManifestProviderArray(executor: *exec.Executor, root: []const u8, path: []const []const u8, kind: completion_model.RuleKind, providers_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
+    const array = switch (providers_value) {
+        .array => |array| array,
+        else => return error.CompletionManifestProviderArrayMustBeArray,
+    };
+    for (array.items) |provider_ref| {
+        const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
+        try registerCompletionManifestProviderRule(executor, root, path, kind, provider, .{}, .{}, .{}, null, source);
     }
 }
 
@@ -1352,7 +1434,7 @@ fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const
     }
 }
 
-fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, subcommands_value: std.json.Value, source: completion_model.RuleSource) !void {
+fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, subcommands_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) anyerror!void {
     const subcommands = switch (subcommands_value) {
         .array => |array| array,
         else => return error.CompletionManifestSubcommandsMustBeArray,
@@ -1363,18 +1445,17 @@ fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8,
             else => return error.CompletionManifestSubcommandMustBeObject,
         };
         const name = try manifestCommandPrimaryName(subcommand);
-        try loadCompletionManifestSubcommandNames(executor, root, parent_path, subcommand, source);
 
         var child_path: std.ArrayList([]const u8) = .empty;
         defer child_path.deinit(executor.allocator);
+        try child_path.append(executor.allocator, root);
         try child_path.appendSlice(executor.allocator, parent_path);
         try child_path.append(executor.allocator, name);
-        if (subcommand.get("options")) |options| try loadCompletionManifestOptions(executor, root, child_path.items, options, source);
-        if (subcommand.get("subcommands")) |nested| try loadCompletionManifestSubcommands(executor, root, child_path.items, nested, source);
+        try loadCompletionManifestCommand(executor, subcommand_value, child_path.items, providers, source);
     }
 }
 
-fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, path: []const []const u8, options_value: std.json.Value, source: completion_model.RuleSource) !void {
+fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, path: []const []const u8, options_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
     const options = switch (options_value) {
         .array => |array| array,
         else => return error.CompletionManifestOptionsMustBeArray,
@@ -1395,6 +1476,7 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
         }
         if (rule.option.long == null and rule.option.short == null) return error.CompletionManifestOptionMissingSpelling;
         try executor.registerCompletionRule(rule);
+        if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, rule, value, providers, source);
         if (option.get("aliases")) |aliases_value| {
             const aliases = switch (aliases_value) {
                 .array => |array| array,
@@ -1409,9 +1491,104 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
                 alias_rule.option.long = alias;
                 alias_rule.option.short = null;
                 try executor.registerCompletionRule(alias_rule);
+                if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, alias_rule, value, providers, source);
             }
         }
     }
+}
+
+fn loadCompletionManifestOptionValueProvider(executor: *exec.Executor, root: []const u8, path: []const []const u8, option_rule: completion_model.Rule, value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
+    const object = switch (value) {
+        .object => |object| object,
+        else => return,
+    };
+    const provider_ref = object.get("provider") orelse return;
+    const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
+    try registerCompletionManifestProviderRule(executor, root, path, .dynamic_option_value, provider, option_rule.option, .{}, manifestValueGrammar(object.get("grammar")), manifestString(object.get("description")), source);
+}
+
+fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, path: []const []const u8, arguments_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
+    const arguments = switch (arguments_value) {
+        .object => |object| object,
+        else => return error.CompletionManifestArgumentsMustBeObject,
+    };
+    const states_value = arguments.get("states") orelse return;
+    const states = switch (states_value) {
+        .array => |array| array,
+        else => return error.CompletionManifestArgumentStatesMustBeArray,
+    };
+    for (states.items) |state_value| {
+        const state = switch (state_value) {
+            .object => |object| object,
+            else => return error.CompletionManifestArgumentStateMustBeObject,
+        };
+        const provider_ref = state.get("provider") orelse continue;
+        const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
+        var argument: completion_model.Argument = .{
+            .state = manifestString(state.get("name")),
+            .repeatable = manifestBool(state.get("repeatable")),
+        };
+        if (manifestInteger(state.get("index"))) |index| {
+            if (index >= 0) argument.index = @intCast(index);
+        }
+        if (state.get("after")) |after| argument.after_state = manifestConditionPreviousState(after);
+        try registerCompletionManifestProviderRule(executor, root, path, .dynamic_argument, provider, .{}, argument, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source);
+    }
+}
+
+fn registerCompletionManifestProviderRule(
+    executor: *exec.Executor,
+    root: []const u8,
+    path: []const []const u8,
+    kind: completion_model.RuleKind,
+    provider: CompletionManifestProviderBinding,
+    option: completion_model.Option,
+    argument: completion_model.Argument,
+    value_grammar: completion_model.ValueGrammar,
+    description: ?[]const u8,
+    source: completion_model.RuleSource,
+) !void {
+    try executor.registerCompletionRule(.{
+        .root = root,
+        .path = path,
+        .kind = kind,
+        .value = provider.value,
+        .provider_kind = provider.kind,
+        .option = option,
+        .argument = argument,
+        .value_grammar = value_grammar,
+        .description = description,
+        .source = source,
+    });
+}
+
+fn manifestValueGrammar(value: ?std.json.Value) completion_model.ValueGrammar {
+    const grammar = switch (value orelse return .{}) {
+        .object => |object| object,
+        else => return .{},
+    };
+    const kind = manifestString(grammar.get("kind")) orelse return .{};
+    if (std.mem.eql(u8, kind, "list")) {
+        return .{ .list_separator = manifestSingleByteString(grammar.get("separator")) };
+    }
+    if (std.mem.eql(u8, kind, "keyValue")) {
+        return .{ .key_value_separator = manifestSingleByteString(grammar.get("separator")) };
+    }
+    return .{};
+}
+
+fn manifestSingleByteString(value: ?std.json.Value) ?u8 {
+    const string = manifestString(value) orelse return null;
+    if (string.len != 1) return null;
+    return string[0];
+}
+
+fn manifestConditionPreviousState(value: std.json.Value) ?[]const u8 {
+    const condition = switch (value) {
+        .object => |object| object,
+        else => return null,
+    };
+    return manifestString(condition.get("previousState"));
 }
 
 fn manifestString(value: ?std.json.Value) ?[]const u8 {
@@ -1935,6 +2112,18 @@ fn validateManifestProvider(diagnostics: *CompletionManifestDiagnostics, value: 
     const has_builtin = provider.get("builtin") != null;
     if (has_function == has_builtin) {
         try diagnostics.add(.err, "{s}: provider must define exactly one of function or builtin", .{path});
+    }
+    if (provider.get("function")) |function| {
+        if (manifestString(function) == null) try diagnostics.add(.err, "{s}.function: provider function must be a string", .{path});
+    }
+    if (provider.get("builtin")) |builtin_value| {
+        const builtin = manifestString(builtin_value) orelse {
+            try diagnostics.add(.err, "{s}.builtin: provider builtin must be a string", .{path});
+            return;
+        };
+        if (completionManifestBuiltinProviderKind(builtin) == null) {
+            try diagnostics.add(.err, "{s}.builtin: unsupported builtin provider '{s}'", .{ path, builtin });
+        }
     }
 }
 
@@ -2590,6 +2779,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         });
         for (rule.path) |segment| try out.writer.print(" {s}", .{segment});
         try out.writer.print("\n    value: {s}\n", .{rule.value orelse ""});
+        try out.writer.print("    provider-kind: {s}\n", .{@tagName(rule.provider_kind)});
         if (rule.source.kind == .manifest) {
             try out.writer.print("    manifest-path: {s}\n    manifest-version: {d}\n", .{
                 rule.source.manifest_path orelse "",
@@ -2978,6 +3168,8 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.endArray();
     try json.objectField("value");
     try json.write(rule.value);
+    try json.objectField("providerKind");
+    try json.write(@tagName(rule.provider_kind));
     try json.objectField("description");
     try json.write(rule.description);
     try json.objectField("option");
@@ -4753,6 +4945,79 @@ test "completion manifests lazy-load static subcommands and options" {
     try expectNoCompletionCandidate(terminated, "--verbose");
 }
 
+test "completion manifests bind companion function providers and builtin providers" {
+    const root = "rush-completion-manifest-provider-binding-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush-manifest-provider-dir");
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/bin");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush-manifest-provider-file.txt", .data = "fixture" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/bin/runner-tool", .data = "#!/bin/sh\n" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data =
+        \\__rush_complete_tool_targets() {
+        \\  completion candidate target-one --kind plain
+        \\}
+    });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.targets": { "function": "__rush_complete_tool_targets" },
+        \\      "builtin.files": { "builtin": "files" },
+        \\      "builtin.directories": { "builtin": "directories" },
+        \\      "builtin.executables": { "builtin": "executables" },
+        \\      "builtin.variables": { "builtin": "variables" }
+        \\    },
+        \\    "options": [
+        \\      { "long": "config", "value": { "name": "path", "provider": "builtin.files" } },
+        \\      { "long": "cwd", "value": { "name": "dir", "provider": "builtin.directories" } },
+        \\      { "long": "runner", "value": { "name": "cmd", "provider": "builtin.executables" } },
+        \\      { "long": "env", "value": { "name": "var", "provider": "builtin.variables" } }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "index": 0, "provider": "tool.targets" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    });
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_DIRS", "");
+    try executor.setEnv("XDG_DATA_HOME", root);
+    try executor.setEnv("PATH", root ++ "/bin");
+    try executor.setEnv("RUSH_MANIFEST_PROVIDER_VAR", "1");
+
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
+
+    const argument_candidates = try executor.collectCompletionsForInput("tool ta", "tool ta".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(argument_candidates);
+    try expectCompletionCandidate(argument_candidates, "target-one");
+
+    const file_candidates = try executor.collectCompletionsForInput("tool --config " ++ root ++ "/rush-manifest-provider-fi", ("tool --config " ++ root ++ "/rush-manifest-provider-fi").len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(file_candidates);
+    try expectCompletionCandidate(file_candidates, "rush-manifest-provider-file.txt");
+
+    const directory_candidates = try executor.collectCompletionsForInput("tool --cwd " ++ root ++ "/rush-manifest-provider-di", ("tool --cwd " ++ root ++ "/rush-manifest-provider-di").len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(directory_candidates);
+    try expectCompletionCandidate(directory_candidates, "rush-manifest-provider-dir/");
+
+    const executable_candidates = try executor.collectCompletionsForInput("tool --runner runner", "tool --runner runner".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(executable_candidates);
+    try expectCompletionCandidate(executable_candidates, "runner-tool");
+
+    const variable_candidates = try executor.collectCompletionsForInput("tool --env RUSH_MANIFEST_PROVIDER", "tool --env RUSH_MANIFEST_PROVIDER".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(variable_candidates);
+    try expectCompletionCandidate(variable_candidates, "RUSH_MANIFEST_PROVIDER_VAR");
+}
+
 test "completion manifest semantic validation accepts resolved providers groups and reachable arguments" {
     var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
         \\{
@@ -5350,6 +5615,50 @@ test "completion debug output reports dynamic provider failures" {
     try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
     try std.testing.expectEqualStrings("__rush_complete_tool", diagnostics[0].object.get("function").?.string);
     try std.testing.expectEqual(@as(i64, 1), diagnostics[0].object.get("status").?.integer);
+}
+
+test "completion debug output reports missing manifest provider functions" {
+    const root = "rush-debug-missing-manifest-provider-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data = "" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.missing": { "function": "__rush_complete_tool_missing" }
+        \\    },
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "index": 0, "provider": "tool.missing" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_DATA_DIRS", "");
+    try env.put("XDG_DATA_HOME", root);
+
+    const output = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, "tool tar");
+    defer std.testing.allocator.free(output);
+    try std.testing.expect(std.mem.indexOf(u8, output, "source: manifest") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "provider-diagnostics:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "function: __rush_complete_tool_missing") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "CompletionProviderFunctionNotFound") != null);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool tar");
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+    const diagnostics = parsed.value.object.get("providerDiagnostics").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqualStrings("__rush_complete_tool_missing", diagnostics[0].object.get("function").?.string);
+    try std.testing.expectEqualStrings("CompletionProviderFunctionNotFound", diagnostics[0].object.get("error").?.string);
 }
 
 test "completion debug output exposes manifest source and JSON decision state" {

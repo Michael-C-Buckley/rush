@@ -1883,6 +1883,7 @@ pub const Executor = struct {
             .root = try self.allocator.dupe(u8, rule.root),
             .kind = rule.kind,
             .value = if (rule.value) |value| try self.allocator.dupe(u8, value) else null,
+            .provider_kind = rule.provider_kind,
             .option = .{
                 .long = if (rule.option.long) |long| try self.allocator.dupe(u8, long) else null,
                 .short = if (rule.option.short) |short| try self.allocator.dupe(u8, short) else null,
@@ -2446,7 +2447,10 @@ pub const Executor = struct {
 
     fn collectCompletionsFromFunction(self: *Executor, function: []const u8, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
         if (self.completion_builder != null) return error.RecursiveCompletion;
-        if (self.functions.get(function) == null) return self.allocator.alloc(completion.Candidate, 0);
+        if (self.functions.get(function) == null) {
+            try self.appendCompletionProviderDiagnostic(function, command, null, error.CompletionProviderFunctionNotFound, "");
+            return self.allocator.alloc(completion.Candidate, 0);
+        }
 
         var provider = Executor.init(self.allocator);
         defer provider.deinit();
@@ -2767,7 +2771,6 @@ pub const Executor = struct {
     fn appendDynamicStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionEvalContext, semantic: CompletionSemanticContext, options: ExecuteOptions) !void {
         for (self.completion_rules.items) |rule| {
             if (!completionDynamicRuleMatches(rule, semantic)) continue;
-            const function = rule.value orelse continue;
             var provider_context = context;
             provider_context.position = switch (rule.kind) {
                 .dynamic_argument => .argument,
@@ -2779,12 +2782,65 @@ pub const Executor = struct {
             if (rule.kind == .dynamic_argument and !rule.value_grammar.isEmpty()) {
                 provider_context = completionEvalContextWithValueGrammar(provider_context, rule.value_grammar);
             }
-            const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options);
-            defer self.freeCompletions(candidates);
-            for (candidates) |candidate| {
-                if (completionOptionCandidateSuppression(self.completion_rules.items, semantic, candidate) != null) continue;
-                try builder.appendCandidateIfMissing(self.allocator, candidate);
+            switch (rule.provider_kind) {
+                .function => {
+                    const function = rule.value orelse continue;
+                    const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options);
+                    defer self.freeCompletions(candidates);
+                    for (candidates) |candidate| {
+                        if (completionOptionCandidateSuppression(self.completion_rules.items, semantic, candidate) != null) continue;
+                        try builder.appendCandidateIfMissing(self.allocator, candidate);
+                    }
+                },
+                .builtin_files, .builtin_directories, .builtin_executables, .builtin_variables => {
+                    try self.appendBuiltinProviderCompletionCandidates(builder, rule.provider_kind, provider_context, options);
+                },
             }
+        }
+    }
+
+    fn appendBuiltinProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, provider_kind: completion.ProviderKind, context: CompletionEvalContext, options: ExecuteOptions) !void {
+        self.last_completion_context = context;
+        switch (provider_kind) {
+            .function => {},
+            .builtin_files => {
+                const io = options.io orelse return;
+                try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false);
+            },
+            .builtin_directories => {
+                const io = options.io orelse return;
+                try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, true, true);
+            },
+            .builtin_executables => {
+                const io = options.io orelse return;
+                var seen: std.StringHashMapUnmanaged(void) = .empty;
+                defer deinitSeenCompletionNames(self.allocator, &seen);
+                const path = self.getEnv("PATH") orelse return;
+                var path_iter = std.mem.splitScalar(u8, path, ':');
+                while (path_iter.next()) |path_dir| {
+                    if (path_dir.len == 0) continue;
+                    var dir = std.Io.Dir.cwd().openDir(io, path_dir, .{ .iterate = true }) catch continue;
+                    errdefer dir.close(io);
+                    var iterator = dir.iterate();
+                    while (iterator.next(io) catch null) |entry| {
+                        if (completion.fuzzyMatchRank(entry.name, context.prefix) == null) continue;
+                        if (seen.contains(entry.name)) continue;
+                        const seen_name = try self.allocator.dupe(u8, entry.name);
+                        errdefer self.allocator.free(seen_name);
+                        try seen.put(self.allocator, seen_name, {});
+                        try builder.appendCandidateIfMissing(self.allocator, .{ .value = entry.name, .kind = .command, .replace_start = context.replace_start, .replace_end = context.replace_end });
+                    }
+                    dir.close(io);
+                }
+            },
+            .builtin_variables => {
+                var iter = self.env.iterator();
+                while (iter.next()) |entry| {
+                    if (completion.fuzzyMatchRank(entry.key_ptr.*, context.prefix) != null) {
+                        try builder.appendCandidateIfMissing(self.allocator, .{ .value = entry.key_ptr.*, .kind = .variable, .replace_start = context.replace_start, .replace_end = context.replace_end });
+                    }
+                }
+            },
         }
     }
 

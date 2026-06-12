@@ -228,11 +228,20 @@ pub const RuleSource = struct {
     manifest_version: ?i64 = null,
 };
 
+pub const ProviderKind = enum {
+    function,
+    builtin_files,
+    builtin_directories,
+    builtin_executables,
+    builtin_variables,
+};
+
 pub const Rule = struct {
     root: []const u8,
     path: []const []const u8 = &.{},
     kind: RuleKind,
     value: ?[]const u8 = null,
+    provider_kind: ProviderKind = .function,
     option: Option = .{},
     argument: Argument = .{},
     value_grammar: ValueGrammar = .{},
