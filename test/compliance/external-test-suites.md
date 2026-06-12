@@ -77,6 +77,7 @@ Target rows:
 - `builtin-test`
 - `builtin-read`
 - `builtin-printf`
+- `builtin-printf-missing-operands`
 
 Imported starter slice:
 
@@ -85,8 +86,9 @@ Imported starter slice:
 - `busybox-ash-smoke-read-redirection`
 - `busybox-ash-smoke-read-ifs-redirection`
 - `busybox-ash-smoke-append-order`
+- `builtin-printf-missing-operands`
 
-These are hand-translated BusyBox ash-style smoke cases, not vendored BusyBox harness files. They are also present in the differential corpus after comparison across the available shells.
+These are hand-translated BusyBox ash-style smoke cases and small POSIX utility clause checks, not vendored BusyBox harness files. They are also present in the differential corpus after comparison across the available shells.
 
 Further import plan:
 

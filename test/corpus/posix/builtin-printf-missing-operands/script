@@ -1,0 +1,2 @@
+printf '<%s:%d:%b>\n' only
+printf '<%s:%d>\n' a 1 b
