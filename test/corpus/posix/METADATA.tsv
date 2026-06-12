@@ -94,6 +94,7 @@ builtin-printf-floating-format-flags	builtin	behavior	printf applies representat
 builtin-printf-format-reuse	builtin	builtin	printf reuses the format operand until all operands are consumed
 builtin-printf-i-conversion	builtin	behavior	printf %i formats signed integer operands including POSIX C hexadecimal constants
 builtin-printf-integer-c-constants	builtin	behavior	printf integer conversions parse POSIX C integer constants and leading quote character operands
+builtin-printf-integer-alternate-precision	builtin	behavior	printf alternate-form octal and hexadecimal conversions combine prefixes with precision width and zero-flag precedence
 builtin-printf-integer-flag-order	builtin	behavior	printf integer conversion flags are order-independent and follow plus/space and left-adjust/zero-padding precedence
 builtin-printf-integer-format-flags	builtin	behavior	printf integer conversions honor representative sign space alternate precision width left-adjust and zero-padding flags
 builtin-printf-integer-sign-padding	builtin	behavior	printf integer conversions place signs before zero padding and ignore zero padding when precision is present
