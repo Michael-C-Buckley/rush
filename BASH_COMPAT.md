@@ -46,15 +46,22 @@ plans separately from POSIX compliance. POSIX status remains tracked in
 
 ## Bash-version-specific diagnostics
 
-- Negative indexed-array subscripts are version-specific in Bash itself: older
-  Bash releases reject more forms than modern Bash, and exact `bad array
-  subscript` diagnostics vary by release and context.
-- Rush Bash mode follows the modern resolution rule for supported negative
+- Negative indexed-array subscripts are version-specific in Bash itself. Audit
+  evidence from Bash 4.2.46, 4.3.30, and 5.2.26 shows 4.2 resolves negative
+  subscripts for parameter expansion but still rejects assignment and `unset`,
+  while 4.3+ resolves assignment and `unset` when the current maximum index can
+  anchor the negative offset.
+- Rush Bash mode targets the modern 5.x resolution rule for supported negative
   subscripts. When a negative subscript cannot resolve because the array has no
-  current maximum index, Rush deliberately keeps the existing generic expansion
-  diagnostics for now (`parameter: bad substitution` for parameter expansion;
-  `arithmetic: invalid arithmetic expression` for assignment and `unset`
-  subscript resolution) rather than pinning one Bash release's wording.
+  current maximum index, or because the offset is before index 0, Rush emits a
+  Bash-style `bad array subscript` diagnostic. Rush normalizes away Bash's
+  process-name and line-number prefix, but keeps context-specific subjects such
+  as `arr: bad array subscript`, `-1]: bad array subscript`,
+  `arr[-1]: bad array subscript`, `[-1]=value: bad array subscript`, and
+  `unset: [-1]: bad array subscript`.
+- Rush still treats unresolved negative-subscript failures as expansion errors
+  using Rush's existing non-interactive stopping behavior. Bash itself continues
+  after some compound-assignment and `unset` bad-subscript diagnostics.
 
 ## Default common-shell compatibility
 
@@ -87,8 +94,6 @@ Current examples:
 - Broader Bash indexed array semantics:
   - associative arrays and declaration builtins
   - array slicing and transformation forms
-  - exact `bad array subscript` diagnostics across Bash-version-specific
-    indexed-array contexts
 - String parameter expansion extensions:
   - substring `${parameter:offset[:length]}`
   - replacement `${parameter/pattern/repl}`

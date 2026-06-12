@@ -834,14 +834,16 @@ fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8
 }
 
 fn renderArrayElement(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
-    const index = try evaluateArrayIndex(allocator, name, index_text, options);
+    const index = try evaluateArrayIndex(allocator, name, index_text, options, name);
     if (options.arrays.get(name, index)) |value| return allocator.dupe(u8, value);
     if (options.nounset) return error.NounsetParameter;
     return allocator.alloc(u8, 0);
 }
 
 fn renderArrayElementLength(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
-    const index = try evaluateArrayIndex(allocator, name, index_text, options);
+    const diagnostic_name = try std.fmt.allocPrint(allocator, "{s}]", .{index_text});
+    defer allocator.free(diagnostic_name);
+    const index = try evaluateArrayIndex(allocator, name, index_text, options, diagnostic_name);
     if (options.arrays.get(name, index)) |value| return std.fmt.allocPrint(allocator, "{d}", .{value.len});
     if (options.nounset) return error.NounsetParameter;
     return allocator.dupe(u8, "0");
@@ -857,12 +859,12 @@ fn renderArrayKeysJoined(allocator: std.mem.Allocator, name: []const u8, kind: P
     return joinArrayKeys(allocator, name, options, arrayJoinSeparator(options));
 }
 
-fn evaluateArrayIndex(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror!usize {
+fn evaluateArrayIndex(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options, diagnostic_name: []const u8) anyerror!usize {
     const expanded_expression = try expandArithmeticExpression(allocator, index_text, options);
     defer allocator.free(expanded_expression);
     const value = evalArithmetic(expanded_expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, index_text, err, options);
-    if (value < 0) return normalizeNegativeArrayIndex(name, value, options) orelse return invalidParameterExpansion(allocator, options);
-    return std.math.cast(usize, value) orelse return invalidParameterExpansion(allocator, options);
+    if (value < 0) return normalizeNegativeArrayIndex(name, value, options) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
+    return std.math.cast(usize, value) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
 }
 
 fn normalizeNegativeArrayIndex(name: []const u8, value: i64, options: Options) ?usize {
@@ -872,6 +874,20 @@ fn normalizeNegativeArrayIndex(name: []const u8, value: i64, options: Options) ?
     const resolved = base + 1 + value;
     if (resolved < 0) return null;
     return std.math.cast(usize, resolved);
+}
+
+fn badArraySubscriptExpansion(allocator: std.mem.Allocator, options: Options, name: []const u8) anyerror {
+    if (options.parameter_error) |parameter_error| {
+        const owned_name = try allocator.dupe(u8, name);
+        const message = allocator.dupe(u8, "bad array subscript") catch |err| {
+            allocator.free(owned_name);
+            return err;
+        };
+        parameter_error.clear(allocator);
+        parameter_error.name = owned_name;
+        parameter_error.message = message;
+    }
+    return error.ParameterExpansionFailed;
 }
 
 fn segmentedFromText(allocator: std.mem.Allocator, text: []const u8, split_enabled: bool, force_field: bool, quoted_glob: bool) !SegmentedText {
@@ -3505,18 +3521,21 @@ test "parameter expansion supports Bash whole indexed array operations" {
 }
 
 test "parameter expansion rejects Bash negative array subscripts on empty arrays" {
-    const cases = [_][]const u8{
-        "${missing[-1]}",
-        "${#missing[-1]}",
+    const cases = [_]struct {
+        raw: []const u8,
+        name: []const u8,
+    }{
+        .{ .raw = "${missing[-1]}", .name = "missing" },
+        .{ .raw = "${#missing[-1]}", .name = "-1]" },
     };
 
     for (cases) |case| {
         var parameter_error: ParameterError = .{};
         defer parameter_error.clear(std.testing.allocator);
 
-        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case, .{ .features = compat.Features.bash(), .parameter_error = &parameter_error }));
-        try std.testing.expectEqualStrings("parameter", parameter_error.name);
-        try std.testing.expectEqualStrings("bad substitution", parameter_error.message);
+        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case.raw, .{ .features = compat.Features.bash(), .parameter_error = &parameter_error }));
+        try std.testing.expectEqualStrings(case.name, parameter_error.name);
+        try std.testing.expectEqualStrings("bad array subscript", parameter_error.message);
     }
 }
 

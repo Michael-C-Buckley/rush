@@ -7333,7 +7333,9 @@ pub const Executor = struct {
             var element_index = next_index;
             var value_raw = word;
             if (compoundIndexedArrayElementSyntax(word)) |element_syntax| {
-                element_index = try self.evaluateArrayAssignmentIndexWithMax(element_syntax.index_text, max_index);
+                const diagnostic_name = try compoundArraySubscriptDiagnosticName(self.allocator, element_syntax);
+                defer self.allocator.free(diagnostic_name);
+                element_index = try self.evaluateArrayAssignmentIndexWithMax(element_syntax.index_text, max_index, diagnostic_name, "bad array subscript");
                 value_raw = element_syntax.value;
             }
 
@@ -7356,27 +7358,31 @@ pub const Executor = struct {
 
     fn indexedArrayReference(self: *Executor, text: []const u8) !?IndexedArrayReference {
         const syntax = indexedArrayReferenceSyntax(text) orelse return null;
-        const index = try self.evaluateArrayAssignmentIndex(syntax.name, syntax.index_text);
+        const diagnostic_message = try std.fmt.allocPrint(self.allocator, "[{s}]: bad array subscript", .{syntax.index_text});
+        defer self.allocator.free(diagnostic_message);
+        const index = try self.evaluateArrayAssignmentIndexWithMax(syntax.index_text, self.arrayMaxIndex(syntax.name), "unset", diagnostic_message);
         return .{ .name = syntax.name, .index = index };
     }
 
     fn evaluateArrayAssignmentIndex(self: *Executor, name: []const u8, index_text: []const u8) !usize {
-        return self.evaluateArrayAssignmentIndexWithMax(index_text, self.arrayMaxIndex(name));
+        const diagnostic_name = try std.fmt.allocPrint(self.allocator, "{s}[{s}]", .{ name, index_text });
+        defer self.allocator.free(diagnostic_name);
+        return self.evaluateArrayAssignmentIndexWithMax(index_text, self.arrayMaxIndex(name), diagnostic_name, "bad array subscript");
     }
 
-    fn evaluateArrayAssignmentIndexWithMax(self: *Executor, index_text: []const u8, max_index: ?usize) !usize {
+    fn evaluateArrayAssignmentIndexWithMax(self: *Executor, index_text: []const u8, max_index: ?usize, diagnostic_name: []const u8, diagnostic_message: []const u8) !usize {
         const value = if (std.mem.trim(u8, index_text, " \t\r\n").len == 0)
             0
         else
             expand.evalArithmetic(index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(index_text, err);
         if (value < 0) {
-            const current_max = max_index orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
-            const base = std.math.cast(i64, current_max) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+            const current_max = max_index orelse return self.badArraySubscriptExpansionFailed(diagnostic_name, diagnostic_message);
+            const base = std.math.cast(i64, current_max) orelse return self.badArraySubscriptExpansionFailed(diagnostic_name, diagnostic_message);
             const resolved = base + 1 + value;
-            if (resolved < 0) return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
-            return std.math.cast(usize, resolved) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+            if (resolved < 0) return self.badArraySubscriptExpansionFailed(diagnostic_name, diagnostic_message);
+            return std.math.cast(usize, resolved) orelse return self.badArraySubscriptExpansionFailed(diagnostic_name, diagnostic_message);
         }
-        return std.math.cast(usize, value) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+        return std.math.cast(usize, value) orelse return self.badArraySubscriptExpansionFailed(diagnostic_name, diagnostic_message);
     }
 
     fn arraySubscriptExpansionFailed(self: *Executor, index_text: []const u8, err: anyerror) anyerror {
@@ -7396,6 +7402,24 @@ pub const Executor = struct {
             self.arithmetic_error.message = owned_message;
         }
         return error.ArithmeticExpansionFailed;
+    }
+
+    fn badArraySubscriptExpansionFailed(self: *Executor, diagnostic_name: []const u8, diagnostic_message: []const u8) anyerror {
+        const name = try self.allocator.dupe(u8, diagnostic_name);
+        const message = self.allocator.dupe(u8, diagnostic_message) catch |err| {
+            self.allocator.free(name);
+            return err;
+        };
+        self.parameter_error.clear(self.allocator);
+        self.parameter_error.name = name;
+        self.parameter_error.message = message;
+        return error.ParameterExpansionFailed;
+    }
+
+    fn compoundArraySubscriptDiagnosticName(allocator: std.mem.Allocator, element_syntax: CompoundIndexedArrayElementSyntax) ![]const u8 {
+        const value = try expand.quoteRemove(allocator, element_syntax.value);
+        defer allocator.free(value);
+        return std.fmt.allocPrint(allocator, "[{s}]={s}", .{ element_syntax.index_text, value });
     }
 
     fn buildProcessEnv(self: *Executor, assignments: []const ir.WordRef) !std.process.Environ.Map {
@@ -16083,11 +16107,12 @@ test "executor rejects Bash negative array subscripts on empty arrays" {
         script: []const u8,
         stderr: []const u8,
     }{
-        .{ .script = "printf '<%s>\\n' \"${missing[-1]}\"; echo after", .stderr = "parameter: bad substitution\n" },
-        .{ .script = "arr=(); printf '<%s>\\n' \"${arr[-1]}\"; echo after", .stderr = "parameter: bad substitution\n" },
-        .{ .script = "arr=(); arr[-1]=value; echo after", .stderr = "arithmetic: invalid arithmetic expression\n" },
-        .{ .script = "arr=([-1]=value); echo after", .stderr = "arithmetic: invalid arithmetic expression\n" },
-        .{ .script = "arr=(); unset 'arr[-1]'; echo after", .stderr = "arithmetic: invalid arithmetic expression\n" },
+        .{ .script = "printf '<%s>\\n' \"${missing[-1]}\"; echo after", .stderr = "missing: bad array subscript\n" },
+        .{ .script = "arr=(); printf '<%s>\\n' \"${arr[-1]}\"; echo after", .stderr = "arr: bad array subscript\n" },
+        .{ .script = "arr=(); printf '<%s>\\n' \"${#arr[-1]}\"; echo after", .stderr = "-1]: bad array subscript\n" },
+        .{ .script = "arr=(); arr[-1]=value; echo after", .stderr = "arr[-1]: bad array subscript\n" },
+        .{ .script = "arr=([-1]=value); echo after", .stderr = "[-1]=value: bad array subscript\n" },
+        .{ .script = "arr=(); unset 'arr[-1]'; echo after", .stderr = "unset: [-1]: bad array subscript\n" },
     };
 
     for (cases) |case| {
