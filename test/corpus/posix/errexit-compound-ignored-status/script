@@ -1,0 +1,17 @@
+set -e
+{ false && echo bad; }
+echo brace:$?
+if true; then false && echo bad; fi
+echo if:$?
+for x in one; do false && echo bad; done
+echo for:$?
+n=0
+while [ $n -lt 1 ]; do n=$((n + 1)); false && echo bad; done
+echo while:$?
+n=0
+until [ $n -ge 1 ]; do n=$((n + 1)); false && echo bad; done
+echo until:$?
+case x in x) false && echo bad;; esac
+echo case:$?
+{ ! true; }
+echo negated-brace:$?

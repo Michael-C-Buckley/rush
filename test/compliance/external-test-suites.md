@@ -102,6 +102,8 @@ Target rows:
 - `grammar-case-empty-arms`
 - `errors-special-builtin-expansion`
 - `option-errexit-conditions`
+- `option-errexit-compound-ignored-status`
+- `option-errexit-pipeline-substitution`
 
 Import plan:
 

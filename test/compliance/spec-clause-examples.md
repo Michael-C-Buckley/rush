@@ -64,6 +64,9 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `errexit-negation-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for negated pipelines |
 | `errexit-and-or-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for commands before `&&` and `||` in AND-OR lists |
 | `errexit-and-or-final-exits` | `test/corpus/posix` | `option-errexit-conditions` | final failing AND-OR list commands still exit non-interactive execution |
+| `errexit-compound-ignored-status` | `test/corpus/posix` | `option-errexit-compound-ignored-status` | non-subshell compound commands do not trigger `errexit` when their non-zero status comes from an ignored `-e` context |
+| `errexit-{subshell,function}-ignored-status-exits` | `test/corpus/posix` | `option-errexit-compound-ignored-status` | subshell commands and function calls remain `errexit` boundaries for ignored-status failures |
+| `errexit-{pipeline-status,command-substitution-subshell}` | `test/corpus/posix` | `option-errexit-pipeline-substitution` | `errexit` considers pipeline status, and command-substitution failures exit only the substitution subshell when the containing command succeeds |
 
 ## Known follow-up examples
 

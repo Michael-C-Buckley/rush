@@ -273,6 +273,7 @@ pub const CommandResult = struct {
     stdout: []u8,
     stderr: []u8,
     stderr_before_stdout: bool = false,
+    errexit_ignored_status: bool = false,
 
     pub fn deinit(self: *CommandResult) void {
         self.allocator.free(self.stdout);
@@ -2394,6 +2395,7 @@ pub const Executor = struct {
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
         var last_status: ExitStatus = 0;
+        var last_errexit_ignored_status = false;
         var verbose_read_offset: usize = 0;
 
         if (program.statements.len > 0) {
@@ -2413,14 +2415,17 @@ pub const Executor = struct {
                 defer result.deinit();
                 try self.annotateSourcedError(program.source, statement.span.start, options, &result);
                 const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
+                const result_errexit_ignored_status = result.errexit_ignored_status;
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
                 const negated_pipeline = statement.kind == .pipeline and program.pipelines[statement.index].negated;
-                self.applyErrexit(last_status, options, negated_pipeline or isFollowedByAndOrListOp(program.statements, statement_index));
+                const ignored_status = self.applyErrexit(last_status, options, negated_pipeline or isFollowedByAndOrListOp(program.statements, statement_index), result_errexit_ignored_status);
+                result.errexit_ignored_status = ignored_status;
+                last_errexit_ignored_status = ignored_status;
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
             }
-            return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
+            return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator), .errexit_ignored_status = last_errexit_ignored_status });
         }
 
         if (program.pipelines.len > 0) {
@@ -2440,13 +2445,16 @@ pub const Executor = struct {
                 defer result.deinit();
                 try self.annotateSourcedError(program.source, pipeline.span.start, options, &result);
                 const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
+                const result_errexit_ignored_status = result.errexit_ignored_status;
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
-                self.applyErrexit(last_status, options, pipeline.negated or isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index));
+                const ignored_status = self.applyErrexit(last_status, options, pipeline.negated or isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index), result_errexit_ignored_status);
+                result.errexit_ignored_status = ignored_status;
+                last_errexit_ignored_status = ignored_status;
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
             }
-            return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
+            return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator), .errexit_ignored_status = last_errexit_ignored_status });
         }
 
         for (program.commands, 0..) |command, command_index| {
@@ -2461,13 +2469,16 @@ pub const Executor = struct {
             defer result.deinit();
             try self.annotateSourcedError(program.source, command.span.start, options, &result);
             const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
+            const result_errexit_ignored_status = result.errexit_ignored_status;
             try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
             last_status = self.pending_exit orelse result_status;
             self.setLastStatus(last_status);
-            self.applyErrexit(last_status, options, false);
+            const ignored_status = self.applyErrexit(last_status, options, false, result_errexit_ignored_status);
+            result.errexit_ignored_status = ignored_status;
+            last_errexit_ignored_status = ignored_status;
             if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
         }
-        return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) });
+        return self.finishExecuteProgram(root_execution, options, .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator), .errexit_ignored_status = last_errexit_ignored_status });
     }
 
     fn finishExpansionErrorProgram(self: *Executor, root_execution: bool, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), err: anyerror) !CommandResult {
@@ -2541,10 +2552,11 @@ pub const Executor = struct {
         return final;
     }
 
-    fn applyErrexit(self: *Executor, status: ExitStatus, options: ExecuteOptions, suppressed_context: bool) void {
-        if (!self.shell_options.errexit or options.suppress_errexit or options.ignore_errexit or status == 0) return;
-        if (suppressed_context) return;
+    fn applyErrexit(self: *Executor, status: ExitStatus, options: ExecuteOptions, suppressed_context: bool, errexit_ignored_status: bool) bool {
+        if (!self.shell_options.errexit or status == 0) return false;
+        if (options.suppress_errexit or options.ignore_errexit or suppressed_context or errexit_ignored_status) return true;
         self.pending_exit = status;
+        return false;
     }
 
     fn appendOrWriteResultStatus(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), result: CommandResult) !ExitStatus {
@@ -2648,6 +2660,7 @@ pub const Executor = struct {
         }
         var result = try child.executeScriptSlice(subshell.body, options);
         errdefer result.deinit();
+        result.errexit_ignored_status = false;
         return self.applyOutputRedirections(wrapper, result, options, false);
     }
 
@@ -3588,6 +3601,7 @@ pub const Executor = struct {
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
         var status: ExitStatus = 0;
+        var status_errexit_ignored = false;
 
         if (command.use_positionals) {
             for (self.currentPositionals().params) |param| {
@@ -3597,6 +3611,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, body.stdout);
                 try stderr.appendSlice(self.allocator, body.stderr);
                 status = body.status;
+                status_errexit_ignored = body.errexit_ignored_status;
                 if (self.shouldSkipForNoexec(execution_options)) break;
                 if (self.pending_exit != null or self.pending_command_abort) break;
                 if (self.pending_return != null) break;
@@ -3613,6 +3628,7 @@ pub const Executor = struct {
                 try stdout.appendSlice(self.allocator, body.stdout);
                 try stderr.appendSlice(self.allocator, body.stderr);
                 status = body.status;
+                status_errexit_ignored = body.errexit_ignored_status;
                 if (self.shouldSkipForNoexec(execution_options)) break;
                 if (self.pending_exit != null or self.pending_command_abort) break;
                 if (self.pending_return != null) break;
@@ -3628,6 +3644,7 @@ pub const Executor = struct {
             .status = status,
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
+            .errexit_ignored_status = status_errexit_ignored,
         };
         if (real_redirection_guard != null) {
             var owned_result = result;
@@ -3693,6 +3710,7 @@ pub const Executor = struct {
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
         var status: ExitStatus = 0;
+        var status_errexit_ignored = false;
 
         while (true) {
             var condition_options = execution_options;
@@ -3716,6 +3734,7 @@ pub const Executor = struct {
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
+            status_errexit_ignored = body.errexit_ignored_status;
             if (self.shouldSkipForNoexec(execution_options)) break;
             if (self.pending_exit != null or self.pending_command_abort) break;
             if (self.pending_return != null) break;
@@ -3730,6 +3749,7 @@ pub const Executor = struct {
             .status = status,
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
+            .errexit_ignored_status = status_errexit_ignored,
         };
         if (real_redirection_guard != null) {
             var owned_result = result;
@@ -3896,20 +3916,24 @@ pub const Executor = struct {
         try stderr.appendSlice(self.allocator, condition.stderr);
 
         var status: ExitStatus = 0;
+        var status_errexit_ignored = false;
         if (self.pending_exit != null or self.pending_command_abort or self.pending_return != null) {
             status = condition.status;
+            status_errexit_ignored = condition.errexit_ignored_status;
         } else if (condition.status == 0) {
             var body = try self.executeScriptSlice(command.then_body, execution_options);
             defer body.deinit();
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
+            status_errexit_ignored = body.errexit_ignored_status;
         } else if (command.else_body) |else_body| {
             var body = try self.executeElseBody(else_body, execution_options);
             defer body.deinit();
             try stdout.appendSlice(self.allocator, body.stdout);
             try stderr.appendSlice(self.allocator, body.stderr);
             status = body.status;
+            status_errexit_ignored = body.errexit_ignored_status;
         } else {
             status = 0;
         }
@@ -3919,6 +3943,7 @@ pub const Executor = struct {
             .status = status,
             .stdout = try stdout.toOwnedSlice(self.allocator),
             .stderr = try stderr.toOwnedSlice(self.allocator),
+            .errexit_ignored_status = status_errexit_ignored,
         };
         if (real_redirection_guard != null) {
             var owned_result = result;
@@ -4007,6 +4032,7 @@ pub const Executor = struct {
         var stderr: std.ArrayList(u8) = .empty;
         errdefer stderr.deinit(self.allocator);
         var last_status: ExitStatus = 0;
+        var last_errexit_ignored_status = false;
         var verbose_read_offset: usize = 0;
         var statement_index: usize = 0;
         execute_chunks: while (statement_index < program.statements.len) {
@@ -4025,6 +4051,7 @@ pub const Executor = struct {
                     var result = try self.executeScriptSlice(script[start..end], statement_options);
                     defer result.deinit();
                     last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
+                    last_errexit_ignored_status = result.errexit_ignored_status;
                     statement_index = end_statement_index + 1;
                     if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break :execute_chunks;
                     continue :execute_chunks;
@@ -4034,7 +4061,7 @@ pub const Executor = struct {
                 end_statement_index = lastStatementOnReadLine(script, program, end_statement_index);
             }
         }
-        var result: CommandResult = .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator) };
+        var result: CommandResult = .{ .allocator = self.allocator, .status = last_status, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try stderr.toOwnedSlice(self.allocator), .errexit_ignored_status = last_errexit_ignored_status };
         errdefer result.deinit();
         return self.finishExecuteProgram(root_execution, options, result);
     }
@@ -5741,6 +5768,7 @@ pub const Executor = struct {
         defer self.function_depth -= 1;
         var result = try self.executeProgram(function_value.program, execution_options);
         errdefer result.deinit();
+        result.errexit_ignored_status = false;
         if (self.pending_return) |status| {
             self.pending_return = null;
             result.status = status;

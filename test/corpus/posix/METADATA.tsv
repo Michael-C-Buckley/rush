@@ -147,7 +147,12 @@ dash-smoke-subshell-status	grammar	external-suite-smoke	dash-compatible subshell
 errexit-and-or-final-exits	options	option	final AND-OR list command failure triggers errexit
 errexit-and-or-suppression	options	option	errexit is suppressed before AND-OR list operators
 errexit-assignment-command-substitution	options	option	assignment-only command substitution failure triggers errexit
+errexit-command-substitution-subshell	options	option	individual command-substitution and pipeline subshell failures exit their subshell environment without exiting the parent when the containing command or pipeline succeeds
+errexit-compound-ignored-status	options	option	errexit does not apply to non-subshell compound commands whose non-zero status comes from a failure while errexit was ignored
+errexit-function-ignored-status-exits	options	option	function calls still trigger errexit when their non-zero status comes from an ignored failure in the function body
 errexit-negation-suppression	options	option	errexit is suppressed for negated pipelines
+errexit-pipeline-status	options	option	errexit considers the pipeline status rather than individual non-final pipeline command failures
+errexit-subshell-ignored-status-exits	options	option	subshell compound commands still trigger errexit when their non-zero status comes from an ignored failure inside the subshell
 expansion-arithmetic-precedence	expansion	behavior	-
 expansion-command-substitution-case-pattern	expansion	behavior	command substitution spans include POSIX case patterns with unbalanced closing parens
 expansion-command-substitution-recursive-contexts	expansion	behavior	nested dollar and escaped legacy backquote substitutions, legacy backquote line continuation, and compound-command substitution bodies
