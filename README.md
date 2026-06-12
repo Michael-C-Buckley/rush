@@ -178,7 +178,8 @@ complete PATTERN --option-value (--long NAME | --short C) --function FUNC
 Provider helpers include:
 
 ```text
-completion candidate VALUE [--display TEXT] [--description TEXT] [--kind KIND] [--no-space]
+completion candidate VALUE [--display TEXT] [--description TEXT] [--kind KIND]
+                           [--suffix TEXT] [--removable-suffix] [--no-space]
 completion candidates [--description TEXT] [--kind KIND] [--no-space]  # stdin lines
 completion option [--long NAME] [--short C] [--argument NAME]
                   [--repeatable] [--exclusive-group NAME]

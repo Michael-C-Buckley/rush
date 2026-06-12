@@ -657,6 +657,16 @@ pub const CompletionMenu = struct {
     }
 };
 
+const PendingRemovableSuffix = struct {
+    start: usize,
+    end: usize,
+    text: []u8,
+
+    fn deinit(self: PendingRemovableSuffix, allocator: std.mem.Allocator) void {
+        allocator.free(self.text);
+    }
+};
+
 pub const LineSession = struct {
     allocator: std.mem.Allocator,
     prompt: Prompt,
@@ -695,6 +705,7 @@ pub const LineSession = struct {
     paste_depth: usize = 0,
     clear_screen_requested: bool = false,
     completion_flash: ?CompletionFlash = null,
+    pending_removable_suffix: ?PendingRemovableSuffix = null,
 
     pub const State = enum {
         editing,
@@ -730,6 +741,7 @@ pub const LineSession = struct {
         if (self.submitted_line) |line| self.allocator.free(line);
         if (self.external_editor_request) |request| request.deinit(self.allocator);
         self.clearPathExpansionRequest();
+        self.clearPendingRemovableSuffix();
         if (self.history_search_match) |entry| entry.deinit(self.allocator);
         self.clearHistorySearchMatches();
         self.history_search_matches.deinit(self.allocator);
@@ -757,10 +769,12 @@ pub const LineSession = struct {
                 const text = if (event.key == .enter) "\n" else event.text;
                 try self.editor.handleKey(.{ .key = .text, .text = text });
                 self.completion_menu.clear(self.allocator);
+                self.clearPendingRemovableSuffix();
             }
             return;
         }
         if (self.state == .history_search) return self.handleHistorySearchKey(event);
+        if (try self.consumePendingRemovableSuffix(event)) return;
         if (self.editing_mode == .vi) return self.handleViKey(event);
         switch (event.key) {
             .enter => {
@@ -1928,6 +1942,7 @@ pub const LineSession = struct {
         switch (application) {
             .edit => |edit| {
                 try self.editor.buffer.applyCompletionEdit(edit);
+                try self.setPendingRemovableSuffix(edit);
                 self.completion_menu.clear(self.allocator);
                 self.completion_flash = null;
             },
@@ -2342,13 +2357,84 @@ pub const LineSession = struct {
     }
 
     fn applyCompletionCandidate(self: *LineSession, candidate: completion.Candidate) !void {
+        const replacement = try completion.candidateEditReplacement(self.allocator, candidate);
+        defer self.allocator.free(replacement);
+        const suffix = try completion.candidateEditSuffix(self.allocator, candidate);
+        defer if (suffix) |owned_suffix| self.allocator.free(owned_suffix);
+        const edit: completion.Edit = .{
+            .replace_start = candidate.replace_start,
+            .replace_end = candidate.replace_end,
+            .replacement = replacement,
+            .suffix = suffix,
+            .removable_suffix = candidate.removable_suffix,
+            .append_space = candidate.append_space,
+        };
         try self.editor.buffer.applyCompletionEdit(.{
             .replace_start = candidate.replace_start,
             .replace_end = candidate.replace_end,
-            .replacement = completion.candidateInsertText(candidate),
+            .replacement = replacement,
+            .suffix = suffix,
+            .removable_suffix = candidate.removable_suffix,
             .append_space = candidate.append_space,
         });
+        try self.setPendingRemovableSuffix(edit);
         self.completion_menu.clear(self.allocator);
+    }
+
+    fn setPendingRemovableSuffix(self: *LineSession, edit: completion.Edit) !void {
+        self.clearPendingRemovableSuffix();
+        if (!edit.removable_suffix) return;
+        const suffix = edit.suffix orelse return;
+        if (suffix.len == 0 or edit.replacement.len < suffix.len) return;
+        const suffix_end = edit.replace_start + edit.replacement.len;
+        const suffix_start = suffix_end - suffix.len;
+        if (suffix_end > self.editor.buffer.text().len) return;
+        if (!std.mem.eql(u8, self.editor.buffer.text()[suffix_start..suffix_end], suffix)) return;
+        self.pending_removable_suffix = .{
+            .start = suffix_start,
+            .end = suffix_end,
+            .text = try self.allocator.dupe(u8, suffix),
+        };
+    }
+
+    fn clearPendingRemovableSuffix(self: *LineSession) void {
+        if (self.pending_removable_suffix) |pending| pending.deinit(self.allocator);
+        self.pending_removable_suffix = null;
+    }
+
+    fn consumePendingRemovableSuffix(self: *LineSession, event: KeyEvent) !bool {
+        const pending = self.pending_removable_suffix orelse return false;
+        if (pending.end > self.editor.buffer.text().len or self.editor.buffer.cursor_byte != pending.end or !std.mem.eql(u8, self.editor.buffer.text()[pending.start..pending.end], pending.text)) {
+            self.clearPendingRemovableSuffix();
+            return false;
+        }
+        if (event.key == .text and event.text.len != 0) {
+            if (std.mem.eql(u8, event.text, pending.text)) {
+                self.clearPendingRemovableSuffix();
+                self.completion_menu.clear(self.allocator);
+                return true;
+            }
+            if (isRemovableSuffixTerminator(event)) {
+                try self.removePendingRemovableSuffix();
+                return false;
+            }
+            self.clearPendingRemovableSuffix();
+            return false;
+        }
+        if (isRemovableSuffixTerminator(event)) {
+            try self.removePendingRemovableSuffix();
+            return false;
+        }
+        self.clearPendingRemovableSuffix();
+        return false;
+    }
+
+    fn removePendingRemovableSuffix(self: *LineSession) !void {
+        const pending = self.pending_removable_suffix orelse return;
+        const start = pending.start;
+        const end = pending.end;
+        self.clearPendingRemovableSuffix();
+        try self.editor.buffer.replaceRange(start, end, "");
     }
 
     fn killRange(self: *LineSession, start: usize, end: usize, cursor_byte: usize) !void {
@@ -2358,8 +2444,17 @@ pub const LineSession = struct {
         try self.editor.buffer.replaceRange(start, end, "");
         self.editor.buffer.cursor_byte = cursor_byte;
         self.completion_menu.clear(self.allocator);
+        self.clearPendingRemovableSuffix();
     }
 };
+
+fn isRemovableSuffixTerminator(event: KeyEvent) bool {
+    return switch (event.key) {
+        .enter => true,
+        .text => std.mem.eql(u8, event.text, " ") or std.mem.eql(u8, event.text, "\n"),
+        else => false,
+    };
+}
 
 const CompletionFlash = struct {
     start: usize,
@@ -4385,6 +4480,37 @@ test "completion edit clears rendered menu" {
     try session.applyCompletion(.{ .edit = .{ .replace_start = 4, .replace_end = 6, .replacement = "status", .append_space = true } });
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
     try std.testing.expectEqualStrings("git status ", session.editor.buffer.text());
+}
+
+test "removable completion suffix keeps remove and types through" {
+    var keep = try LineSession.init(std.testing.allocator, "$ ");
+    defer keep.deinit();
+    try keep.editor.buffer.replace("tool bl");
+    try keep.applyCompletion(.{ .edit = .{ .replace_start = "tool ".len, .replace_end = "tool bl".len, .replacement = "blue,", .suffix = ",", .removable_suffix = true } });
+    try std.testing.expectEqualStrings("tool blue,", keep.editor.buffer.text());
+    try keep.handleKey(.{ .key = .text, .text = "," });
+    try std.testing.expectEqualStrings("tool blue,", keep.editor.buffer.text());
+
+    var remove = try LineSession.init(std.testing.allocator, "$ ");
+    defer remove.deinit();
+    try remove.editor.buffer.replace("tool bl");
+    try remove.applyCompletion(.{ .edit = .{ .replace_start = "tool ".len, .replace_end = "tool bl".len, .replacement = "blue,", .suffix = ",", .removable_suffix = true } });
+    try remove.handleKey(.{ .key = .text, .text = " " });
+    try std.testing.expectEqualStrings("tool blue ", remove.editor.buffer.text());
+
+    var accept = try LineSession.init(std.testing.allocator, "$ ");
+    defer accept.deinit();
+    try accept.editor.buffer.replace("tool bl");
+    try accept.applyCompletion(.{ .edit = .{ .replace_start = "tool ".len, .replace_end = "tool bl".len, .replacement = "blue,", .suffix = ",", .removable_suffix = true } });
+    try accept.handleKey(.{ .key = .enter });
+    try std.testing.expectEqualStrings("tool blue", accept.submitted_line.?);
+
+    var typed = try LineSession.init(std.testing.allocator, "$ ");
+    defer typed.deinit();
+    try typed.editor.buffer.replace("tool bl");
+    try typed.applyCompletion(.{ .edit = .{ .replace_start = "tool ".len, .replace_end = "tool bl".len, .replacement = "blue,", .suffix = ",", .removable_suffix = true } });
+    try typed.handleKey(.{ .key = .text, .text = "x" });
+    try std.testing.expectEqualStrings("tool blue,x", typed.editor.buffer.text());
 }
 
 test "completion menu respects render height" {

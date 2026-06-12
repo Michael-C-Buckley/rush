@@ -394,6 +394,8 @@
             "value": { "type": "string" },
             "description": { "type": "string" },
             "display": { "type": "string" },
+            "suffix": { "type": "string" },
+            "removableSuffix": { "type": "boolean" },
             "noSpace": { "type": "boolean" }
           }
         }

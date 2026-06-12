@@ -294,7 +294,8 @@ type ProviderRef = string | Provider
 
 type EnumValue =
   | string
-  | { value: string, description?: string, display?: string, noSpace?: boolean }
+  | { value: string, description?: string, display?: string,
+      suffix?: string, removableSuffix?: boolean, noSpace?: boolean }
 ```
 
 The initial implementation may omit `dynamicSubcommands`, `dynamicOptions`,
@@ -485,10 +486,13 @@ in the manifest instead of a companion Rush function:
 ```
 
 Each value emits a plain candidate. Object entries may set a display label,
-description, and `noSpace` for prefix-like values such as `format:`. Static enum
-providers are lexically scoped and may be referenced anywhere a provider ID is
-accepted; they are intended for finite enum-like values, not dynamic repository
-or filesystem data.
+description, `suffix`, `removableSuffix`, and `noSpace` for prefix-like values
+such as `format:`. Static enum providers are lexically scoped and may be
+referenced anywhere a provider ID is accepted; they are intended for finite
+enum-like values, not dynamic repository or filesystem data. When a list value
+grammar completes an item, Rush automatically applies the list separator as a
+removable suffix so the next item can be completed immediately; typing the
+separator keeps it, while typing a space or accepting the line removes it first.
 
 ## Provider context API dependency
 

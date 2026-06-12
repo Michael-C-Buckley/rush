@@ -152,14 +152,14 @@
 
   <h2 id="candidate-fields"><a href="#candidate-fields">Candidate fields</a></h2>
 
-  <pre><span class="cmd">completion</span> candidate VALUE [<span class="opt">--display</span> TEXT] [<span class="opt">--description</span> TEXT] [<span class="opt">--kind</span> KIND] [<span class="opt">--no-space</span>]
+  <pre><span class="cmd">completion</span> candidate VALUE [<span class="opt">--display</span> TEXT] [<span class="opt">--description</span> TEXT] [<span class="opt">--kind</span> KIND] [<span class="opt">--suffix</span> TEXT] [<span class="opt">--removable-suffix</span>] [<span class="opt">--no-space</span>]
 <span class="cmd">completion</span> candidates [<span class="opt">--description</span> TEXT] [<span class="opt">--kind</span> KIND] [<span class="opt">--no-space</span>]  <span class="comment"># reads newline-separated values on stdin</span></pre>
 
   <p>Kinds:</p>
 
   <pre><span class="kw">command</span> <span class="kw">builtin</span> <span class="kw">function</span> <span class="kw">file</span> <span class="kw">directory</span> <span class="kw">variable</span> <span class="kw">option</span> <span class="kw">subcommand</span> <span class="kw">plain</span></pre>
 
-  <p>VALUE is the canonical value to insert. DISPLAY is only shown in the menu and also participates in matching. DESCRIPTION is shown next to the menu label. <code>--no-space</code> prevents the automatic trailing space after insertion.</p>
+  <p>VALUE is the canonical value to insert. DISPLAY is only shown in the menu and also participates in matching. DESCRIPTION is shown next to the menu label. <code>--suffix</code> inserts text immediately after the candidate and suppresses the automatic trailing space. With <code>--removable-suffix</code>, the suffix is kept if the next key typed is the suffix itself, removed before a space or Enter accepts the word or line, and otherwise kept as normal typed-through text. <code>--no-space</code> prevents the automatic trailing space after insertion.</p>
 
   <h2 id="structured-options"><a href="#structured-options">Structured options and option values</a></h2>
 
@@ -290,7 +290,7 @@
   <pre><span class="cmd">completion</span> candidate <span class="str">'feature branch'</span>  <span class="comment"># inserted as feature\ branch when unquoted</span>
 <span class="cmd">completion</span> candidate <span class="str">'cost $5'</span>        <span class="comment"># $ is escaped outside single quotes</span></pre>
 
-  <p>Inside single or double quotes, Rush preserves the quote style and escapes only what that context requires. If a completed quoted value appends a space, Rush closes the quote before adding the space. Directory candidates from path helpers append <code>/</code> and do not add a trailing space; use <code>--no-space</code> for other candidates that should keep the cursor adjacent to the inserted text.</p>
+  <p>Inside single or double quotes, Rush preserves the quote style and escapes only what that context requires. If a completed quoted value appends a space, Rush closes the quote before adding the space. Directory candidates from path helpers append <code>/</code> and do not add a trailing space; use <code>--no-space</code> for other candidates that should keep the cursor adjacent to the inserted text. List value grammars automatically add their separator as a removable suffix to item candidates, so completing <code>a</code> in a comma-separated value can leave <code>a,</code> ready for the next item without polluting the final accepted word.</p>
 
   <h2 id="helper-completions"><a href="#helper-completions">Helper completions</a></h2>
 

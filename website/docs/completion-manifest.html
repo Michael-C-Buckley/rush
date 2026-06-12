@@ -190,7 +190,7 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   }
 }</pre>
 
-  <p>Function providers run in the companion <code>.rush</code> file and emit candidates with the <code>completion</code> builtin documented in <a href="completion.html">Writing completions</a>. Builtin providers are <code>files</code>, <code>directories</code>, <code>executables</code>, and <code>variables</code>. Static enum providers use <code>values</code> for finite option-value or argument choices that do not need a Rush function. Value entries may be strings or objects with <code>value</code>, <code>display</code>, <code>description</code>, and <code>noSpace</code>.</p>
+  <p>Function providers run in the companion <code>.rush</code> file and emit candidates with the <code>completion</code> builtin documented in <a href="completion.html">Writing completions</a>. Builtin providers are <code>files</code>, <code>directories</code>, <code>executables</code>, and <code>variables</code>. Static enum providers use <code>values</code> for finite option-value or argument choices that do not need a Rush function. Value entries may be strings or objects with <code>value</code>, <code>display</code>, <code>description</code>, <code>suffix</code>, <code>removableSuffix</code>, and <code>noSpace</code>.</p>
 
   <p>The current runtime uses fixed builtin behavior: files complete paths, directories complete directories with slash/no-space behavior, executables search <code>PATH</code>, variables use shell variables, and static enum providers emit plain candidates from their <code>values</code>. Builtin provider <code>options</code> objects are not part of manifest v1; use a function provider when a completion needs filtering or behavior beyond those fixed builtins and static enums.</p>
 
@@ -233,7 +233,7 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <h2 id="value-grammars"><a href="#value-grammars">Value grammars</a></h2>
 
-  <p>Runtime value grammar support is segment-based. A grammar changes the active provider prefix and replacement span so the provider completes only the active list item, key, or value.</p>
+  <p>Runtime value grammar support is segment-based. A grammar changes the active provider prefix and replacement span so the provider completes only the active list item, key, or value. List item candidates automatically receive the grammar separator as a removable suffix; typing the separator keeps it, while typing a space or accepting the line removes it before the terminator applies.</p>
 
   <pre>{
   <span class="str">"long"</span>: <span class="str">"mode"</span>,

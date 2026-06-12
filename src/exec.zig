@@ -392,6 +392,7 @@ pub const CompletionBuilder = struct {
         if (candidate.display) |display| owned_candidate.display = try self.dupeField(allocator, display);
         if (candidate.insert) |insert| owned_candidate.insert = try self.dupeField(allocator, insert);
         if (candidate.description) |description| owned_candidate.description = try self.dupeField(allocator, description);
+        if (candidate.suffix) |suffix| owned_candidate.suffix = try self.dupeField(allocator, suffix);
         if (candidate.option) |option| {
             owned_candidate.option = .{
                 .long = if (option.long) |long| try self.dupeField(allocator, long) else null,
@@ -405,6 +406,17 @@ pub const CompletionBuilder = struct {
             };
         }
         try self.candidates.append(allocator, owned_candidate);
+    }
+
+    pub fn applyValueSegmentSuffix(self: *CompletionBuilder, allocator: std.mem.Allocator, start: usize, segment: ?CompletionValueSegment) !void {
+        var suffix_buffer: [1]u8 = undefined;
+        const suffix = completionValueSegmentRemovableSuffix(segment, &suffix_buffer) orelse return;
+        for (self.candidates.items[start..]) |*candidate| {
+            if (candidate.kind == .directory or candidate.suffix != null) continue;
+            candidate.suffix = try self.dupeField(allocator, suffix);
+            candidate.removable_suffix = true;
+            candidate.append_space = false;
+        }
     }
 
     pub fn appendCandidateIfMissing(self: *CompletionBuilder, allocator: std.mem.Allocator, candidate: completion.Candidate) !void {
@@ -535,6 +547,22 @@ pub const CompletionValueSegment = struct {
         };
     }
 };
+
+fn completionValueSegmentRemovableSuffix(segment: ?CompletionValueSegment, buffer: *[1]u8) ?[]const u8 {
+    const active = segment orelse return null;
+    if (active.position != .item) return null;
+    const separator = active.list_separator orelse return null;
+    buffer[0] = separator;
+    return buffer[0..];
+}
+
+fn applyCandidateValueSegmentSuffix(candidate: *completion.Candidate, segment: ?CompletionValueSegment, buffer: *[1]u8) void {
+    if (candidate.kind == .directory or candidate.suffix != null) return;
+    const suffix = completionValueSegmentRemovableSuffix(segment, buffer) orelse return;
+    candidate.suffix = suffix;
+    candidate.removable_suffix = true;
+    candidate.append_space = false;
+}
 
 pub const CompletionSemanticPosition = enum {
     command,
@@ -688,6 +716,7 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
             allocator.free(value.value);
             if (value.display) |display| allocator.free(display);
             if (value.description) |description| allocator.free(description);
+            if (value.suffix) |suffix| allocator.free(suffix);
         }
         allocator.free(rule.static_values);
     }
@@ -731,6 +760,7 @@ fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const comple
             allocator.free(value.value);
             if (value.display) |display| allocator.free(display);
             if (value.description) |description| allocator.free(description);
+            if (value.suffix) |suffix| allocator.free(suffix);
         }
         allocator.free(owned);
     }
@@ -745,7 +775,20 @@ fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const comple
             if (owned_display) |display| allocator.free(display);
             return err;
         } else null;
-        owned[index] = .{ .value = owned_value, .display = owned_display, .description = owned_description, .append_space = value.append_space };
+        const owned_suffix = if (value.suffix) |suffix| allocator.dupe(u8, suffix) catch |err| {
+            allocator.free(owned_value);
+            if (owned_display) |display| allocator.free(display);
+            if (owned_description) |description| allocator.free(description);
+            return err;
+        } else null;
+        owned[index] = .{
+            .value = owned_value,
+            .display = owned_display,
+            .description = owned_description,
+            .suffix = owned_suffix,
+            .removable_suffix = value.removable_suffix,
+            .append_space = value.append_space,
+        };
         initialized += 1;
     }
     return owned;
@@ -3189,7 +3232,10 @@ pub const Executor = struct {
 
     fn appendCompletionValue(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, value: []const u8, kind: completion.Kind, append_space: bool) !void {
         if (completion.fuzzyMatchRank(value, context.prefix) == null) return;
-        try builder.appendCandidateIfMissing(self.allocator, .{ .value = value, .kind = kind, .replace_start = context.replace_start, .replace_end = context.replace_end, .append_space = append_space });
+        var candidate: completion.Candidate = .{ .value = value, .kind = kind, .replace_start = context.replace_start, .replace_end = context.replace_end, .append_space = append_space };
+        var suffix_buffer: [1]u8 = undefined;
+        applyCandidateValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
+        try builder.appendCandidateIfMissing(self.allocator, candidate);
     }
 
     fn appendStructuredCompletionCandidate(
@@ -3203,7 +3249,7 @@ pub const Executor = struct {
         append_space: bool,
     ) !void {
         if (completion.fuzzyMatchRank(value, context.prefix) == null) return;
-        try builder.appendCandidateIfMissing(self.allocator, .{
+        var candidate: completion.Candidate = .{
             .value = value,
             .description = description,
             .kind = kind,
@@ -3211,7 +3257,10 @@ pub const Executor = struct {
             .replace_start = context.replace_start,
             .replace_end = context.replace_end,
             .append_space = append_space,
-        });
+        };
+        var suffix_buffer: [1]u8 = undefined;
+        applyCandidateValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
+        try builder.appendCandidateIfMissing(self.allocator, candidate);
     }
 
     fn appendDynamicStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionEvalContext, semantic: CompletionSemanticContext, options: ExecuteOptions) !void {
@@ -3235,11 +3284,16 @@ pub const Executor = struct {
                     defer self.freeCompletions(candidates);
                     for (candidates) |candidate| {
                         if (completionOptionCandidateSuppression(self.completion_rules.items, semantic, candidate) != null) continue;
-                        try builder.appendCandidateIfMissing(self.allocator, candidate);
+                        var provider_candidate = candidate;
+                        var suffix_buffer: [1]u8 = undefined;
+                        applyCandidateValueSegmentSuffix(&provider_candidate, provider_context.value_segment, &suffix_buffer);
+                        try builder.appendCandidateIfMissing(self.allocator, provider_candidate);
                     }
                 },
                 .builtin_files, .builtin_directories, .builtin_executables, .builtin_variables => {
+                    const start = builder.candidates.items.len;
                     try self.appendBuiltinProviderCompletionCandidates(builder, rule.provider_kind, provider_context, options);
+                    try builder.applyValueSegmentSuffix(self.allocator, start, provider_context.value_segment);
                 },
                 .static_enum => try self.appendStaticProviderCompletionCandidates(builder, rule.static_values, provider_context, rule.kind),
             }
@@ -3253,7 +3307,7 @@ pub const Executor = struct {
             else => .plain,
         };
         for (values) |value| {
-            const candidate: completion.Candidate = .{
+            var candidate: completion.Candidate = .{
                 .value = value.value,
                 .display = value.display,
                 .description = value.description,
@@ -3261,7 +3315,11 @@ pub const Executor = struct {
                 .replace_start = context.replace_start,
                 .replace_end = context.replace_end,
                 .append_space = value.append_space,
+                .suffix = value.suffix,
+                .removable_suffix = value.removable_suffix,
             };
+            var suffix_buffer: [1]u8 = undefined;
+            applyCandidateValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
             if (completion.candidateFuzzyMatchRank(candidate, context.prefix) == null) continue;
             try builder.appendCandidateIfMissing(self.allocator, candidate);
         }
@@ -3324,7 +3382,9 @@ pub const Executor = struct {
             },
             .option_value => {
                 if (self.hasExplicitCompletionRuleForContext(context)) return;
+                const start = builder.candidates.items.len;
                 try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false);
+                try builder.applyValueSegmentSuffix(self.allocator, start, context.value_segment);
             },
             .command, .option => {},
         }
@@ -3349,6 +3409,7 @@ pub const Executor = struct {
             if (candidate.display) |display| self.allocator.free(display);
             if (candidate.insert) |insert| self.allocator.free(insert);
             if (candidate.description) |description| self.allocator.free(description);
+            if (candidate.suffix) |suffix| self.allocator.free(suffix);
             if (candidate.option) |option| {
                 if (option.long) |long| self.allocator.free(long);
                 if (option.short) |short| self.allocator.free(short);
@@ -10702,6 +10763,13 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing kind");
             candidate.kind = parseCompletionKind(command.argv[index].text) orelse return errorResult(self.allocator, 2, "completion", "unsupported kind");
             index += 1;
+        } else if (std.mem.eql(u8, arg, "--suffix")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing suffix text");
+            candidate.suffix = command.argv[index].text;
+            candidate.append_space = false;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--removable-suffix")) {
+            candidate.removable_suffix = true;
         } else if (std.mem.eql(u8, arg, "--no-space")) {
             candidate.append_space = false;
         } else if (std.mem.startsWith(u8, arg, "--")) {
@@ -23502,6 +23570,37 @@ test "completion candidate is scoped to completion evaluation" {
     try std.testing.expect(!candidates[0].append_space);
 }
 
+test "completion candidate supports suffix and removable suffix options" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_tool() {
+        \\  completion candidate alpha --kind plain --suffix , --removable-suffix
+        \\}
+        \\complete tool --argument --function __rush_complete_tool
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var setup_result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer setup_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), setup_result.status);
+
+    const candidates = try executor.collectCompletionsForInput("tool al", "tool al".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    const alpha = findCandidate(candidates, "alpha") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings(",", alpha.suffix.?);
+    try std.testing.expect(alpha.removable_suffix);
+    try std.testing.expect(!alpha.append_space);
+
+    const application = try completion.applyCandidatesForInput(std.testing.allocator, "tool al", &.{alpha});
+    defer application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("alpha,", application.edit.replacement);
+    try std.testing.expectEqualStrings(",", application.edit.suffix.?);
+    try std.testing.expect(application.edit.removable_suffix);
+}
+
 test "completion functions can read semantic context" {
     var setup = try parseAndLower(std.testing.allocator,
         \\__rush_complete_git() {
@@ -23712,9 +23811,14 @@ test "structured option value grammars replace only active list elements" {
     try std.testing.expectEqualStrings("item:sl:,:", attached_long_slow.description.?);
     try std.testing.expectEqual(@as(usize, "tool --mode=fast,".len), attached_long_slow.replace_start);
     try std.testing.expectEqual(@as(usize, attached_long_source.len), attached_long_slow.replace_end);
+    try std.testing.expectEqualStrings(",", attached_long_slow.suffix.?);
+    try std.testing.expect(attached_long_slow.removable_suffix);
+    try std.testing.expect(!attached_long_slow.append_space);
     const attached_long_application = try completion.applyCandidatesForInput(std.testing.allocator, attached_long_source, &.{attached_long_slow});
     defer attached_long_application.deinit(std.testing.allocator);
-    try std.testing.expectEqualStrings("slow", attached_long_application.edit.replacement);
+    try std.testing.expectEqualStrings("slow,", attached_long_application.edit.replacement);
+    try std.testing.expectEqualStrings(",", attached_long_application.edit.suffix.?);
+    try std.testing.expect(attached_long_application.edit.removable_suffix);
     try std.testing.expectEqual(@as(usize, "tool --mode=fast,".len), attached_long_application.edit.replace_start);
 
     const detached_source = "tool --mode fast,sl";
@@ -23810,6 +23914,9 @@ test "structured operand value grammars replace only active list elements" {
     try std.testing.expectEqualStrings("item:bl:,", blue.description.?);
     try std.testing.expectEqual(@as(usize, "tool red,".len), blue.replace_start);
     try std.testing.expectEqual(@as(usize, source.len), blue.replace_end);
+    try std.testing.expectEqualStrings(",", blue.suffix.?);
+    try std.testing.expect(blue.removable_suffix);
+    try std.testing.expect(!blue.append_space);
 }
 
 test "root command completion includes builtins functions aliases and executables" {

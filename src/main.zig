@@ -1746,11 +1746,14 @@ fn manifestStaticProviderValue(value: std.json.Value) !completion_model.StaticPr
         .string => |string| return .{ .value = string },
         .object => |object| {
             const choice = manifestString(object.get("value")) orelse return error.CompletionManifestStaticProviderValueMissingValue;
+            const suffix = manifestString(object.get("suffix"));
             return .{
                 .value = choice,
                 .display = manifestString(object.get("display")),
                 .description = manifestString(object.get("description")),
-                .append_space = !manifestBool(object.get("noSpace")),
+                .suffix = suffix,
+                .removable_suffix = manifestBool(object.get("removableSuffix")),
+                .append_space = suffix == null and !manifestBool(object.get("noSpace")),
             };
         },
         else => return error.CompletionManifestStaticProviderValueMustBeStringOrObject,
@@ -3266,11 +3269,13 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         defer allocator.free(match_query);
         const match_rank = completion_model.candidateMatchRank(candidate, match_query, matcher_policy);
         const suppression_reason = if (match_rank == null) completion_model.candidateSuppressionReason(candidate, match_query, matcher_policy) else null;
-        try out.writer.print("  - value: {s}\n    insert: {s}\n    kind: {s}\n    description: {s}\n    replace: {d}..{d}\n    match-query: {s}\n    match-rank: {s}\n    suppressed: {}\n    suppression-reason: {s}\n    rank-class: {d}\n    rank-score: {d}\n", .{
+        try out.writer.print("  - value: {s}\n    insert: {s}\n    kind: {s}\n    description: {s}\n    suffix: {s}\n    removable-suffix: {}\n    replace: {d}..{d}\n    match-query: {s}\n    match-rank: {s}\n    suppressed: {}\n    suppression-reason: {s}\n    rank-class: {d}\n    rank-score: {d}\n", .{
             candidate.value,
             insert,
             @tagName(candidate.kind),
             candidate.description orelse "",
+            candidate.suffix orelse "",
+            candidate.removable_suffix,
             candidate.replace_start,
             candidate.replace_end,
             match_query,
@@ -3302,7 +3307,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     switch (application) {
         .none => try out.writer.print("  none\n", .{}),
         .ambiguous => try out.writer.print("  ambiguous\n", .{}),
-        .edit => |edit| try out.writer.print("  edit:\n    replace: {d}..{d}\n    replacement: {s}\n    append-space: {}\n", .{ edit.replace_start, edit.replace_end, edit.replacement, edit.append_space }),
+        .edit => |edit| try out.writer.print("  edit:\n    replace: {d}..{d}\n    replacement: {s}\n    suffix: {s}\n    removable-suffix: {}\n    append-space: {}\n", .{ edit.replace_start, edit.replace_end, edit.replacement, edit.suffix orelse "", edit.removable_suffix, edit.append_space }),
     }
     return out.toOwnedSlice();
 }
@@ -3716,6 +3721,10 @@ fn writeCompletionCandidateJson(allocator: std.mem.Allocator, json: *std.json.St
     try json.write(insert);
     try json.objectField("description");
     try json.write(candidate.description);
+    try json.objectField("suffix");
+    try json.write(candidate.suffix);
+    try json.objectField("removableSuffix");
+    try json.write(candidate.removable_suffix);
     try json.objectField("kind");
     try json.write(@tagName(candidate.kind));
     try json.objectField("replaceStart");
@@ -3830,6 +3839,10 @@ fn writeCompletionApplicationJson(json: *std.json.Stringify, application: comple
             try json.write(edit.replace_end);
             try json.objectField("replacement");
             try json.write(edit.replacement);
+            try json.objectField("suffix");
+            try json.write(edit.suffix);
+            try json.objectField("removableSuffix");
+            try json.write(edit.removable_suffix);
             try json.objectField("appendSpace");
             try json.write(edit.append_space);
         },
@@ -5993,6 +6006,7 @@ test "completion manifest static enum providers emit scoped candidates" {
         \\        "values": [
         \\          "auto",
         \\          { "value": "always", "description": "always enable mode" },
+        \\          { "value": "csv", "suffix": ",", "removableSuffix": true },
         \\          { "value": "format:", "display": "custom format", "noSpace": true }
         \\        ]
         \\      }
@@ -6019,6 +6033,13 @@ test "completion manifest static enum providers emit scoped candidates" {
     const format = findCompletionCandidate(display_candidates, "format:") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqualStrings("custom format", format.display.?);
     try std.testing.expect(!format.append_space);
+
+    const suffix_candidates = try executor.collectCompletionsForInput("tool --mode cs", "tool --mode cs".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(suffix_candidates);
+    const csv = findCompletionCandidate(suffix_candidates, "csv") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings(",", csv.suffix.?);
+    try std.testing.expect(csv.removable_suffix);
+    try std.testing.expect(!csv.append_space);
 
     const argument_candidates = try executor.collectCompletionsForInput("tool au", "tool au".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(argument_candidates);
@@ -7349,6 +7370,37 @@ test "completion debug output shows context provider candidates and application"
     try std.testing.expect(std.mem.indexOf(u8, output, "match-rank: prefix") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "suppression-reason: no_match") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "replacement: status") != null);
+}
+
+test "completion debug JSON includes candidate suffix fields" {
+    const root = "rush-debug-suffix-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data =
+        \\__rush_complete_git() {
+        \\  completion candidate status --suffix , --removable-suffix
+        \\}
+        \\complete git --argument --function __rush_complete_git
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git st");
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+    const object = parsed.value.object;
+    const candidate = object.get("candidates").?.array.items[0].object;
+    try std.testing.expectEqualStrings("status", candidate.get("value").?.string);
+    try std.testing.expectEqualStrings(",", candidate.get("suffix").?.string);
+    try std.testing.expect(candidate.get("removableSuffix").?.bool);
+    try std.testing.expectEqualStrings("status,", candidate.get("insert").?.string);
+    const application = object.get("application").?.object;
+    try std.testing.expectEqualStrings("status,", application.get("replacement").?.string);
+    try std.testing.expectEqualStrings(",", application.get("suffix").?.string);
+    try std.testing.expect(application.get("removableSuffix").?.bool);
 }
 
 test "completion debug output shows semantic structured context and rules" {

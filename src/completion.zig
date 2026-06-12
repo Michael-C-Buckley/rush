@@ -117,6 +117,8 @@ pub const Candidate = struct {
     display: ?[]const u8 = null,
     insert: ?[]const u8 = null,
     description: ?[]const u8 = null,
+    suffix: ?[]const u8 = null,
+    removable_suffix: bool = false,
     kind: Kind = .plain,
     option: ?Option = null,
     replace_start: usize,
@@ -244,6 +246,8 @@ pub const StaticProviderValue = struct {
     value: []const u8,
     display: ?[]const u8 = null,
     description: ?[]const u8 = null,
+    suffix: ?[]const u8 = null,
+    removable_suffix: bool = false,
     append_space: bool = true,
 };
 
@@ -267,6 +271,8 @@ pub const Edit = struct {
     replace_start: usize,
     replace_end: usize,
     replacement: []const u8,
+    suffix: ?[]const u8 = null,
+    removable_suffix: bool = false,
     append_space: bool = false,
 };
 
@@ -277,7 +283,10 @@ pub const Application = union(enum) {
 
     pub fn deinit(self: Application, allocator: std.mem.Allocator) void {
         switch (self) {
-            .edit => |edit| allocator.free(edit.replacement),
+            .edit => |edit| {
+                allocator.free(edit.replacement);
+                if (edit.suffix) |suffix| allocator.free(suffix);
+            },
             .ambiguous => |candidates| freeCandidates(allocator, candidates),
             .none => {},
         }
@@ -296,6 +305,7 @@ fn freeCandidateFields(allocator: std.mem.Allocator, candidate: Candidate) void 
     if (candidate.display) |display| allocator.free(display);
     if (candidate.insert) |insert| allocator.free(insert);
     if (candidate.description) |description| allocator.free(description);
+    if (candidate.suffix) |suffix| allocator.free(suffix);
     if (candidate.option) |option| {
         if (option.long) |long| allocator.free(long);
         if (option.short) |short| allocator.free(short);
@@ -312,10 +322,16 @@ pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candida
 
     if (candidates.len == 1) {
         const candidate = candidates[0];
+        const replacement = try candidateEditReplacement(allocator, candidate);
+        errdefer allocator.free(replacement);
+        const suffix = try candidateEditSuffix(allocator, candidate);
+        errdefer if (suffix) |owned_suffix| allocator.free(owned_suffix);
         return .{ .edit = .{
             .replace_start = candidate.replace_start,
             .replace_end = candidate.replace_end,
-            .replacement = try allocator.dupe(u8, candidateInsertText(candidate)),
+            .replacement = replacement,
+            .suffix = suffix,
+            .removable_suffix = candidate.removable_suffix,
             .append_space = candidate.append_space,
         } };
     }
@@ -379,8 +395,11 @@ pub fn applyCandidatesForInputWithPolicy(allocator: std.mem.Allocator, source: [
         defer allocator.free(prefix);
         if (candidateMatchRank(candidate, prefix, policy)) |rank| {
             var insert_candidate = candidate;
-            insert_candidate.insert = try candidateReplacementForInput(allocator, source, candidate);
+            const replacement = try candidateReplacementAndSuffixForInput(allocator, source, candidate);
+            insert_candidate.insert = replacement.text;
+            insert_candidate.suffix = replacement.suffix;
             errdefer allocator.free(insert_candidate.insert.?);
+            errdefer if (insert_candidate.suffix) |suffix| allocator.free(suffix);
             switch (rank) {
                 .exact => try exact_matches.append(allocator, insert_candidate),
                 .prefix => try prefix_matches.append(allocator, insert_candidate),
@@ -398,11 +417,24 @@ pub fn applyCandidatesForInputWithPolicy(allocator: std.mem.Allocator, source: [
 fn freeTemporaryCandidates(allocator: std.mem.Allocator, candidates: []Candidate) void {
     for (candidates) |candidate| {
         if (candidate.insert) |insert| allocator.free(insert);
+        if (candidate.suffix) |suffix| allocator.free(suffix);
     }
 }
 
 pub fn candidateInsertText(candidate: Candidate) []const u8 {
     return candidate.insert orelse candidate.value;
+}
+
+pub fn candidateEditReplacement(allocator: std.mem.Allocator, candidate: Candidate) ![]const u8 {
+    if (candidate.insert) |insert| return allocator.dupe(u8, insert);
+    if (candidate.suffix) |suffix| return std.mem.concat(allocator, u8, &.{ candidate.value, suffix });
+    return allocator.dupe(u8, candidate.value);
+}
+
+pub fn candidateEditSuffix(allocator: std.mem.Allocator, candidate: Candidate) !?[]const u8 {
+    const suffix = candidate.suffix orelse return null;
+    const owned = try allocator.dupe(u8, suffix);
+    return owned;
 }
 
 pub fn candidateQueryForInput(allocator: std.mem.Allocator, source: []const u8, candidate: Candidate) ![]const u8 {
@@ -414,7 +446,18 @@ pub fn candidateQueryForInput(allocator: std.mem.Allocator, source: []const u8, 
 pub fn candidateReplacementForInput(allocator: std.mem.Allocator, source: []const u8, candidate: Candidate) ![]const u8 {
     std.debug.assert(candidate.replace_start <= candidate.replace_end);
     std.debug.assert(candidate.replace_end <= source.len);
-    return encodeShellCompletionReplacement(allocator, source, candidate.replace_start, candidate.replace_end, candidate.value, candidate.append_space);
+    const replacement = try candidateReplacementAndSuffixForInput(allocator, source, candidate);
+    if (replacement.suffix) |suffix| allocator.free(suffix);
+    return replacement.text;
+}
+
+const CandidateReplacement = struct {
+    text: []const u8,
+    suffix: ?[]const u8 = null,
+};
+
+fn candidateReplacementAndSuffixForInput(allocator: std.mem.Allocator, source: []const u8, candidate: Candidate) !CandidateReplacement {
+    return encodeShellCompletionReplacement(allocator, source, candidate.replace_start, candidate.replace_end, candidate.value, candidate.suffix, candidate.append_space);
 }
 
 pub fn decodeShellWordForCompletion(allocator: std.mem.Allocator, word: []const u8) ![]const u8 {
@@ -511,12 +554,15 @@ fn decodeShellCompletionSlice(allocator: std.mem.Allocator, source: []const u8, 
     return decoded.toOwnedSlice(allocator);
 }
 
-fn encodeShellCompletionReplacement(allocator: std.mem.Allocator, source: []const u8, replace_start: usize, replace_end: usize, value: []const u8, append_space: bool) ![]const u8 {
+fn encodeShellCompletionReplacement(allocator: std.mem.Allocator, source: []const u8, replace_start: usize, replace_end: usize, value: []const u8, suffix: ?[]const u8, append_space: bool) !CandidateReplacement {
     const context = shellCompletionContext(source, replace_start);
     var encoded: std.ArrayList(u8) = .empty;
     errdefer encoded.deinit(allocator);
     if (context.opening_quote) |quote| try encoded.append(allocator, quote);
     try appendShellEscapedValue(allocator, &encoded, context.quote, value);
+    const suffix_start = encoded.items.len;
+    if (suffix) |text| try appendShellEscapedValue(allocator, &encoded, context.quote, text);
+    const suffix_end = encoded.items.len;
     if (append_space and shouldCloseQuoteForCompletion(source, replace_end, context.quote, context.opening_quote != null)) {
         try encoded.append(allocator, switch (context.quote) {
             .unquoted => unreachable,
@@ -524,7 +570,10 @@ fn encodeShellCompletionReplacement(allocator: std.mem.Allocator, source: []cons
             .double => '"',
         });
     }
-    return encoded.toOwnedSlice(allocator);
+    const text = try encoded.toOwnedSlice(allocator);
+    errdefer allocator.free(text);
+    const encoded_suffix = if (suffix_start != suffix_end) try allocator.dupe(u8, text[suffix_start..suffix_end]) else null;
+    return .{ .text = text, .suffix = encoded_suffix };
 }
 
 fn appendShellEscapedValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), quote: ShellQuote, value: []const u8) !void {
@@ -742,6 +791,8 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
     errdefer if (cloned.insert) |insert| allocator.free(insert);
     if (candidate.description) |description| cloned.description = try allocator.dupe(u8, description);
     errdefer if (cloned.description) |description| allocator.free(description);
+    if (candidate.suffix) |suffix| cloned.suffix = try allocator.dupe(u8, suffix);
+    errdefer if (cloned.suffix) |suffix| allocator.free(suffix);
     if (candidate.option) |option| {
         cloned.option = .{
             .long = if (option.long) |long| try allocator.dupe(u8, long) else null,
