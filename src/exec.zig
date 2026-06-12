@@ -501,6 +501,7 @@ const builtin_names = [_][]const u8{
     "test",
     "times",
     "trap",
+    "type",
     "umask",
     "unalias",
     "wait",
@@ -8344,6 +8345,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "test")) return builtinTest;
     if (std.mem.eql(u8, name, "times")) return builtinTimes;
     if (std.mem.eql(u8, name, "trap")) return builtinTrap;
+    if (std.mem.eql(u8, name, "type")) return builtinType;
     if (std.mem.eql(u8, name, "umask")) return builtinUmask;
     if (std.mem.eql(u8, name, "unalias")) return builtinUnalias;
     if (std.mem.eql(u8, name, "wait")) return builtinWait;
@@ -8422,6 +8424,19 @@ fn builtinCommand(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
     nested_options.suppress_special_builtin_properties = true;
     if (use_default_path) nested_options.default_path_lookup = true;
     return self.executeSimpleCommandWithInput(pre_expanded.command(command.span), stdin, nested_options);
+}
+
+fn builtinType(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    var index: usize = 1;
+    var option_terminated = false;
+    if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) {
+        option_terminated = true;
+        index += 1;
+    }
+    if (index >= command.argv.len) return errorResult(self.allocator, 2, "type", "missing operand");
+    if (!option_terminated and std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return errorResult(self.allocator, 2, "type", "unsupported option");
+    return commandLookupMany(self, options, command.argv[index..], false, .verbose);
 }
 
 const CommandLookupMode = enum { none, terse, verbose };
@@ -14221,6 +14236,25 @@ test "executor implements command eval exec and exit builtins" {
     var command_result = try command_executor.executeProgram(command_lowered.program, .{});
     defer command_result.deinit();
     try std.testing.expectEqualStrings("builtin\necho\necho is a function\n", command_result.stdout);
+
+    var type_result = try command_executor.executeScriptSlice(
+        \\alias ll='echo long'
+        \\foo() { :; }
+        \\type ll if foo type export definitely-not-rush-command
+        \\printf 'type-status=%s\n' "$?"
+    , .{});
+    defer type_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), type_result.status);
+    try std.testing.expectEqualStrings(
+        \\ll is an alias for echo long
+        \\if is a shell keyword
+        \\foo is a function
+        \\type is a shell builtin
+        \\export is a special shell builtin
+        \\type-status=127
+        \\
+    , type_result.stdout);
+    try std.testing.expectEqualStrings("definitely-not-rush-command: not found\n", type_result.stderr);
 
     var command_path = try parseAndLower(std.testing.allocator, "PATH=/nope; command -p sh -c 'echo path-ok'; printf '%s\n' \"$PATH\"");
     defer command_path.parsed.deinit();

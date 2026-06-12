@@ -1,0 +1,11 @@
+alias ll='echo long'
+foo() { :; }
+printf '#!/bin/sh\necho path-ok\n' > rush-type-cmd
+chmod +x rush-type-cmd
+PATH=.
+type ll if foo type export rush-type-cmd
+printf 'status=%s\n' "$?"
+type -- echo >/dev/null
+printf 'terminator=%s\n' "$?"
+type rush-missing-command-name
+printf 'missing=%s\n' "$?"
