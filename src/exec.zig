@@ -671,6 +671,25 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.description) |description| allocator.free(description);
     if (rule.source.manifest_path) |path| allocator.free(path);
     if (rule.source.companion_path) |path| allocator.free(path);
+    if (rule.variant) |variant| allocator.free(variant);
+}
+
+fn freeCompletionManifestCommandState(allocator: std.mem.Allocator, state: CompletionManifestCommandState) void {
+    allocator.free(state.command);
+    if (state.manifest_path) |path| allocator.free(path);
+    allocator.free(state.platform);
+}
+
+fn freeCompletionVariantProbeState(allocator: std.mem.Allocator, state: CompletionVariantProbeState) void {
+    allocator.free(state.command);
+    for (state.args) |arg| allocator.free(arg);
+    allocator.free(state.args);
+    for (state.patterns) |pattern| {
+        allocator.free(pattern.name);
+        allocator.free(pattern.pattern);
+    }
+    allocator.free(state.patterns);
+    if (state.selected) |selected| allocator.free(selected);
 }
 
 fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const completion.StaticProviderValue) ![]const completion.StaticProviderValue {
@@ -934,6 +953,34 @@ fn completionOptionSpellingMatches(option: completion.Option, value: []const u8)
     return false;
 }
 
+fn completionVariantSelection(patterns: []const CompletionVariantPattern, output: []const u8) ?[]const u8 {
+    for (patterns) |pattern| {
+        if (pattern.pattern.len == 0 or completionVariantPatternMatches(pattern.pattern, output)) return pattern.name;
+    }
+    return null;
+}
+
+fn completionVariantPatternMatches(pattern: []const u8, output: []const u8) bool {
+    if (std.mem.indexOfAny(u8, pattern, "*?") == null) return std.mem.indexOf(u8, output, pattern) != null;
+    return completionVariantGlobMatches(pattern, output, 0, 0);
+}
+
+fn completionVariantGlobMatches(pattern: []const u8, output: []const u8, pattern_index: usize, output_index: usize) bool {
+    if (pattern_index == pattern.len) return output_index == output.len;
+    if (pattern[pattern_index] == '*') {
+        var index = output_index;
+        while (index <= output.len) : (index += 1) {
+            if (completionVariantGlobMatches(pattern, output, pattern_index + 1, index)) return true;
+        }
+        return false;
+    }
+    if (output_index >= output.len) return false;
+    if (pattern[pattern_index] == '?' or pattern[pattern_index] == output[output_index]) {
+        return completionVariantGlobMatches(pattern, output, pattern_index + 1, output_index + 1);
+    }
+    return false;
+}
+
 fn appendParsedCompletionOption(allocator: std.mem.Allocator, parsed_options: *std.ArrayList(CompletionParsedOption), matched: MatchedCompletionOption) !void {
     try parsed_options.append(allocator, .{
         .spelling = matched.spelling,
@@ -1010,6 +1057,7 @@ fn builtinCompletionSawWord(context: CompletionSemanticContext, word: []const u8
 }
 
 fn completionRuleContextMatches(rule: completion.Rule, root: []const u8, path: []const []const u8) bool {
+    if (rule.disabled) return false;
     if (!std.mem.eql(u8, rule.root, root) or rule.path.len != path.len) return false;
     for (rule.path, path) |expected, actual| {
         if (!std.mem.eql(u8, expected, actual)) return false;
@@ -1018,6 +1066,7 @@ fn completionRuleContextMatches(rule: completion.Rule, root: []const u8, path: [
 }
 
 fn completionRuleContextAppliesToPath(rule: completion.Rule, root: []const u8, path: []const []const u8) bool {
+    if (rule.disabled) return false;
     if (!std.mem.eql(u8, rule.root, root) or rule.path.len > path.len) return false;
     for (rule.path, path[0..rule.path.len]) |expected, actual| {
         if (!std.mem.eql(u8, expected, actual)) return false;
@@ -1425,6 +1474,30 @@ pub const ArrayValue = struct {
     }
 };
 
+pub const CompletionVariantPattern = struct {
+    name: []const u8,
+    pattern: []const u8,
+};
+
+pub const CompletionManifestCommandState = struct {
+    command: []const u8,
+    manifest_path: ?[]const u8 = null,
+    manifest_version: ?i64 = null,
+    platform: []const u8,
+    platform_allowed: bool,
+};
+
+pub const CompletionVariantProbeState = struct {
+    command: []const u8,
+    args: []const []const u8,
+    patterns: []const CompletionVariantPattern,
+    selected: ?[]const u8 = null,
+    probed: bool = false,
+    last_probed: bool = false,
+    last_cached: bool = false,
+    skipped_shadow: bool = false,
+};
+
 pub const Executor = struct {
     allocator: std.mem.Allocator,
     env: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -1444,6 +1517,10 @@ pub const Executor = struct {
     completion_rules: std.ArrayList(completion.Rule) = .empty,
     completion_generation: u64 = 0,
     completion_provider_diagnostics: std.ArrayList(CompletionProviderDiagnostic) = .empty,
+    completion_manifest_commands: std.ArrayList(CompletionManifestCommandState) = .empty,
+    completion_variant_probes: std.ArrayList(CompletionVariantProbeState) = .empty,
+    completion_variant_probe_mocks: std.StringHashMapUnmanaged([]const u8) = .empty,
+    completion_variant_probe_counts: std.StringHashMapUnmanaged(usize) = .empty,
     loaded_completion_scripts: std.StringHashMapUnmanaged(void) = .empty,
     loaded_completion_companions: std.StringHashMapUnmanaged(void) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
@@ -1912,6 +1989,19 @@ pub const Executor = struct {
         self.completion_rules.deinit(self.allocator);
         self.clearCompletionProviderDiagnostics();
         self.completion_provider_diagnostics.deinit(self.allocator);
+        for (self.completion_manifest_commands.items) |state| freeCompletionManifestCommandState(self.allocator, state);
+        self.completion_manifest_commands.deinit(self.allocator);
+        for (self.completion_variant_probes.items) |state| freeCompletionVariantProbeState(self.allocator, state);
+        self.completion_variant_probes.deinit(self.allocator);
+        var probe_mock_iter = self.completion_variant_probe_mocks.iterator();
+        while (probe_mock_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.completion_variant_probe_mocks.deinit(self.allocator);
+        var probe_count_iter = self.completion_variant_probe_counts.iterator();
+        while (probe_count_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.completion_variant_probe_counts.deinit(self.allocator);
         var loaded_completion_iter = self.loaded_completion_scripts.iterator();
         while (loaded_completion_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
         self.loaded_completion_scripts.deinit(self.allocator);
@@ -1979,6 +2069,8 @@ pub const Executor = struct {
                 .manifest_version = rule.source.manifest_version,
                 .companion_path = if (rule.source.companion_path) |path| try self.allocator.dupe(u8, path) else null,
             },
+            .variant = if (rule.variant) |variant| try self.allocator.dupe(u8, variant) else null,
+            .disabled = rule.disabled,
         };
         errdefer freeCompletionRule(self.allocator, owned_rule);
         owned_rule.static_values = try dupeStaticProviderValues(self.allocator, rule.static_values);
@@ -2003,6 +2095,179 @@ pub const Executor = struct {
 
     pub fn completionProviderDiagnostics(self: Executor) []const CompletionProviderDiagnostic {
         return self.completion_provider_diagnostics.items;
+    }
+
+    pub fn registerCompletionManifestCommandState(self: *Executor, state: CompletionManifestCommandState) !void {
+        const owned: CompletionManifestCommandState = .{
+            .command = try self.allocator.dupe(u8, state.command),
+            .manifest_path = if (state.manifest_path) |path| try self.allocator.dupe(u8, path) else null,
+            .manifest_version = state.manifest_version,
+            .platform = try self.allocator.dupe(u8, state.platform),
+            .platform_allowed = state.platform_allowed,
+        };
+        errdefer freeCompletionManifestCommandState(self.allocator, owned);
+        for (self.completion_manifest_commands.items) |*existing| {
+            if (!std.mem.eql(u8, existing.command, state.command)) continue;
+            freeCompletionManifestCommandState(self.allocator, existing.*);
+            existing.* = owned;
+            return;
+        }
+        try self.completion_manifest_commands.append(self.allocator, owned);
+    }
+
+    pub fn completionManifestCommandState(self: Executor, command: []const u8) ?CompletionManifestCommandState {
+        for (self.completion_manifest_commands.items) |state| {
+            if (std.mem.eql(u8, state.command, command)) return state;
+        }
+        return null;
+    }
+
+    pub fn registerCompletionVariantProbe(self: *Executor, command: []const u8, args: []const []const u8, patterns: []const CompletionVariantPattern) !void {
+        var owned_args = try self.allocator.alloc([]const u8, args.len);
+        var owned_arg_count: usize = 0;
+        var owned_args_transferred = false;
+        errdefer {
+            if (!owned_args_transferred) {
+                for (owned_args[0..owned_arg_count]) |arg| self.allocator.free(arg);
+                self.allocator.free(owned_args);
+            }
+        }
+        for (args, 0..) |arg, index| {
+            owned_args[index] = try self.allocator.dupe(u8, arg);
+            owned_arg_count += 1;
+        }
+        var owned_patterns = try self.allocator.alloc(CompletionVariantPattern, patterns.len);
+        var owned_pattern_count: usize = 0;
+        var owned_patterns_transferred = false;
+        errdefer {
+            if (!owned_patterns_transferred) {
+                for (owned_patterns[0..owned_pattern_count]) |pattern| {
+                    self.allocator.free(pattern.name);
+                    self.allocator.free(pattern.pattern);
+                }
+                self.allocator.free(owned_patterns);
+            }
+        }
+        for (patterns, 0..) |pattern, index| {
+            owned_patterns[index] = .{
+                .name = try self.allocator.dupe(u8, pattern.name),
+                .pattern = try self.allocator.dupe(u8, pattern.pattern),
+            };
+            owned_pattern_count += 1;
+        }
+        const state: CompletionVariantProbeState = .{
+            .command = try self.allocator.dupe(u8, command),
+            .args = owned_args,
+            .patterns = owned_patterns,
+        };
+        owned_args_transferred = true;
+        owned_patterns_transferred = true;
+        errdefer freeCompletionVariantProbeState(self.allocator, state);
+        for (self.completion_variant_probes.items) |*existing| {
+            if (!std.mem.eql(u8, existing.command, command)) continue;
+            freeCompletionVariantProbeState(self.allocator, existing.*);
+            existing.* = state;
+            return;
+        }
+        try self.completion_variant_probes.append(self.allocator, state);
+    }
+
+    pub fn completionVariantProbeState(self: Executor, command: []const u8) ?CompletionVariantProbeState {
+        for (self.completion_variant_probes.items) |state| {
+            if (std.mem.eql(u8, state.command, command)) return state;
+        }
+        return null;
+    }
+
+    pub fn setCompletionVariantProbeMock(self: *Executor, command: []const u8, output: []const u8) !void {
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const owned_output = try self.allocator.dupe(u8, output);
+        errdefer self.allocator.free(owned_output);
+        const result = try self.completion_variant_probe_mocks.getOrPut(self.allocator, owned_command);
+        if (result.found_existing) {
+            self.allocator.free(owned_command);
+            self.allocator.free(result.value_ptr.*);
+        }
+        result.value_ptr.* = owned_output;
+    }
+
+    pub fn completionVariantProbeCount(self: Executor, command: []const u8) usize {
+        return self.completion_variant_probe_counts.get(command) orelse 0;
+    }
+
+    pub fn hasBuiltin(self: Executor, name: []const u8) bool {
+        return builtinForName(self, name) != null;
+    }
+
+    fn resolveCompletionVariantsForRoot(self: *Executor, root: []const u8, options: ExecuteOptions) !void {
+        const probe_index = for (self.completion_variant_probes.items, 0..) |probe, index| {
+            if (std.mem.eql(u8, probe.command, root)) break index;
+        } else return;
+        var probe = &self.completion_variant_probes.items[probe_index];
+        probe.last_probed = false;
+        probe.last_cached = false;
+        if (probe.probed) {
+            probe.last_cached = true;
+            return;
+        }
+
+        probe.probed = true;
+        if (self.hasFunction(root) or self.hasBuiltin(root)) {
+            probe.skipped_shadow = true;
+            self.applyCompletionVariantSelection(root, null);
+            return;
+        }
+
+        probe.last_probed = true;
+        const output = try self.runCompletionVariantProbe(probe.*, options);
+        defer self.allocator.free(output);
+        const selected = completionVariantSelection(probe.patterns, output);
+        if (selected) |name| probe.selected = try self.allocator.dupe(u8, name);
+        self.applyCompletionVariantSelection(root, selected);
+    }
+
+    fn runCompletionVariantProbe(self: *Executor, probe: CompletionVariantProbeState, options: ExecuteOptions) ![]u8 {
+        try self.incrementCompletionVariantProbeCount(probe.command);
+        if (self.completion_variant_probe_mocks.get(probe.command)) |mock| return try self.allocator.dupe(u8, mock);
+        const io = options.io orelse return self.allocator.alloc(u8, 0);
+        var script: std.ArrayList(u8) = .empty;
+        defer script.deinit(self.allocator);
+        try script.appendSlice(self.allocator, "command ");
+        try appendShellQuoted(self.allocator, &script, probe.command);
+        for (probe.args) |arg| {
+            try script.append(self.allocator, ' ');
+            try appendShellQuoted(self.allocator, &script, arg);
+        }
+        var probe_options = options;
+        probe_options.io = io;
+        probe_options.allow_external = true;
+        probe_options.external_stdio = .capture;
+        probe_options.suppress_errexit = true;
+        var result = self.executeScriptSlice(script.items, probe_options) catch return self.allocator.alloc(u8, 0);
+        defer result.deinit();
+        return try std.mem.concat(self.allocator, u8, &.{ result.stdout, result.stderr });
+    }
+
+    fn incrementCompletionVariantProbeCount(self: *Executor, command: []const u8) !void {
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const result = try self.completion_variant_probe_counts.getOrPut(self.allocator, owned_command);
+        if (result.found_existing) {
+            self.allocator.free(owned_command);
+            result.value_ptr.* += 1;
+        } else {
+            result.value_ptr.* = 1;
+        }
+    }
+
+    fn applyCompletionVariantSelection(self: *Executor, root: []const u8, selected: ?[]const u8) void {
+        for (self.completion_rules.items) |*rule| {
+            if (!std.mem.eql(u8, rule.root, root)) continue;
+            const variant = rule.variant orelse continue;
+            rule.disabled = if (selected) |name| !std.mem.eql(u8, variant, name) else true;
+        }
+        self.completion_generation +%= 1;
     }
 
     fn clearCompletionProviderDiagnostics(self: *Executor) void {
@@ -2145,6 +2410,7 @@ pub const Executor = struct {
         const completing_parameter = context.position == .parameter;
         const parameter_context = context;
         if (context.command.len != 0) try self.loadCompletionScriptForRoot(context.command, options);
+        if (context.command.len != 0) try self.resolveCompletionVariantsForRoot(context.command, options);
         var semantic = try self.analyzeCompletionsForInput(source, cursor);
         defer semantic.deinit();
         const command_path = try completionCommandPath(self.allocator, semantic);
@@ -2413,6 +2679,7 @@ pub const Executor = struct {
         const root_token = words.items[0];
         const root = root_token.lexeme(source);
         try self.loadCompletionScriptForRoot(root, options);
+        try self.resolveCompletionVariantsForRoot(root, options);
         if (root_token.span.end < clamped_cursor and !try self.completionCommandKnown(root, options.io)) {
             try diagnostics.append(self.allocator, .{
                 .kind = .unknown_command,
@@ -3675,6 +3942,18 @@ pub const Executor = struct {
         while (abbr_iter.next()) |entry| try self.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
         if (copy_options.completion_rules) {
             for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
+            for (other.completion_manifest_commands.items) |state| try self.registerCompletionManifestCommandState(state);
+            for (other.completion_variant_probes.items) |probe| {
+                try self.registerCompletionVariantProbe(probe.command, probe.args, probe.patterns);
+                if (self.completion_variant_probes.items.len != 0) {
+                    var copied = &self.completion_variant_probes.items[self.completion_variant_probes.items.len - 1];
+                    copied.probed = probe.probed;
+                    copied.last_probed = probe.last_probed;
+                    copied.last_cached = probe.last_cached;
+                    copied.skipped_shadow = probe.skipped_shadow;
+                    if (probe.selected) |selected| copied.selected = try self.allocator.dupe(u8, selected);
+                }
+            }
         }
         self.ignored_trap_signals_at_entry = other.ignored_trap_signals_at_entry;
         var trap_iter = other.traps.iterator();

@@ -259,6 +259,8 @@ pub const Rule = struct {
     value_grammar: ValueGrammar = .{},
     description: ?[]const u8 = null,
     source: RuleSource = .{},
+    variant: ?[]const u8 = null,
+    disabled: bool = false,
 };
 
 pub const Edit = struct {

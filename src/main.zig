@@ -1327,10 +1327,32 @@ fn loadCompletionManifestWithPath(allocator: std.mem.Allocator, executor: *exec.
         else => return error.CompletionManifestVersionMustBeInteger,
     }
     const command = root_object.get("command") orelse return error.CompletionManifestMissingCommand;
+    const command_object = switch (command) {
+        .object => |object| object,
+        else => return error.CompletionManifestCommandMustBeObject,
+    };
     const companion_path = if (source_path) |path| try completionManifestCompanionPath(allocator, path) else null;
     defer if (companion_path) |path| allocator.free(path);
     const source: completion_model.RuleSource = .{ .kind = .manifest, .manifest_path = source_path, .manifest_version = version, .companion_path = companion_path };
-    try loadCompletionManifestCommand(executor, command, &.{}, &.{}, source);
+    const root_name = try manifestCommandPrimaryName(command_object);
+    const platform = completionManifestCurrentPlatform();
+    const platform_allowed = manifestPlatformsAllowCurrent(command_object.get("platforms"));
+    try executor.registerCompletionManifestCommandState(.{
+        .command = root_name,
+        .manifest_path = source_path,
+        .manifest_version = version,
+        .platform = platform,
+        .platform_allowed = platform_allowed,
+    });
+    if (!platform_allowed) return;
+
+    var root_providers: std.ArrayList(CompletionManifestProviderBinding) = .empty;
+    defer root_providers.deinit(allocator);
+    if (command_object.get("providers")) |providers_value| try appendCompletionManifestProviders(allocator, &root_providers, providers_value);
+
+    try loadCompletionManifestCommand(executor, command, &.{}, &.{}, source, null, false);
+    if (command_object.get("variants")) |variants| try loadCompletionManifestVariants(allocator, executor, root_name, command_object, variants, root_providers.items, source);
+    if (command_object.get("variantProbe")) |probe| try registerCompletionManifestVariantProbe(allocator, executor, root_name, probe);
 }
 
 fn completionManifestCompanionPath(allocator: std.mem.Allocator, path: []const u8) !?[]const u8 {
@@ -1345,7 +1367,7 @@ const CompletionManifestProviderBinding = struct {
     static_values: ?std.json.Array = null,
 };
 
-fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8, inherited_providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) anyerror!void {
+fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8, inherited_providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) anyerror!void {
     const command = switch (command_value) {
         .object => |object| object,
         else => return error.CompletionManifestCommandMustBeObject,
@@ -1358,22 +1380,107 @@ fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.js
     if (command.get("providers")) |providers_value| try appendCompletionManifestProviders(executor.allocator, &providers, providers_value);
 
     if (path.len == 0) {
-        if (command.get("dynamicSubcommands")) |dynamic_subcommands| try loadCompletionManifestProviderArray(executor, name, &.{}, .dynamic_subcommands, dynamic_subcommands, providers.items, source);
-        if (command.get("dynamicOptions")) |dynamic_options| try loadCompletionManifestProviderArray(executor, name, &.{}, .dynamic_options, dynamic_options, providers.items, source);
-        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, name, &.{}, options, providers.items, source);
-        if (command.get("arguments")) |arguments| try loadCompletionManifestArguments(executor, name, &.{}, arguments, providers.items, source);
-        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, name, &.{}, subcommands, providers.items, source);
+        if (command.get("dynamicSubcommands")) |dynamic_subcommands| try loadCompletionManifestProviderArray(executor, name, &.{}, .dynamic_subcommands, dynamic_subcommands, providers.items, source, variant, disabled);
+        if (command.get("dynamicOptions")) |dynamic_options| try loadCompletionManifestProviderArray(executor, name, &.{}, .dynamic_options, dynamic_options, providers.items, source, variant, disabled);
+        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, name, &.{}, options, providers.items, source, variant, disabled);
+        if (command.get("arguments")) |arguments| try loadCompletionManifestArguments(executor, name, &.{}, arguments, providers.items, source, variant, disabled);
+        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, name, &.{}, subcommands, providers.items, source, variant, disabled);
     } else {
         const root = path[0];
         const command_path = path[1..];
         const parent_path = command_path[0 .. command_path.len - 1];
-        try loadCompletionManifestSubcommandNames(executor, root, parent_path, command, source);
-        if (command.get("dynamicSubcommands")) |dynamic_subcommands| try loadCompletionManifestProviderArray(executor, root, command_path, .dynamic_subcommands, dynamic_subcommands, providers.items, source);
-        if (command.get("dynamicOptions")) |dynamic_options| try loadCompletionManifestProviderArray(executor, root, command_path, .dynamic_options, dynamic_options, providers.items, source);
-        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, root, command_path, options, providers.items, source);
-        if (command.get("arguments")) |arguments| try loadCompletionManifestArguments(executor, root, command_path, arguments, providers.items, source);
-        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, root, command_path, subcommands, providers.items, source);
+        try loadCompletionManifestSubcommandNames(executor, root, parent_path, command, source, variant, disabled);
+        if (command.get("dynamicSubcommands")) |dynamic_subcommands| try loadCompletionManifestProviderArray(executor, root, command_path, .dynamic_subcommands, dynamic_subcommands, providers.items, source, variant, disabled);
+        if (command.get("dynamicOptions")) |dynamic_options| try loadCompletionManifestProviderArray(executor, root, command_path, .dynamic_options, dynamic_options, providers.items, source, variant, disabled);
+        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, root, command_path, options, providers.items, source, variant, disabled);
+        if (command.get("arguments")) |arguments| try loadCompletionManifestArguments(executor, root, command_path, arguments, providers.items, source, variant, disabled);
+        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, root, command_path, subcommands, providers.items, source, variant, disabled);
     }
+}
+
+fn loadCompletionManifestVariants(allocator: std.mem.Allocator, executor: *exec.Executor, root: []const u8, command: std.json.ObjectMap, variants_value: std.json.Value, inherited_providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
+    _ = command;
+    const variants = switch (variants_value) {
+        .object => |object| object,
+        else => return error.CompletionManifestVariantsMustBeObject,
+    };
+    var iter = variants.iterator();
+    while (iter.next()) |entry| {
+        const variant_name = entry.key_ptr.*;
+        const overlay = switch (entry.value_ptr.*) {
+            .object => |object| object,
+            else => return error.CompletionManifestVariantMustBeObject,
+        };
+        if (!manifestPlatformsAllowCurrent(overlay.get("platforms"))) continue;
+        try loadCompletionManifestCommandOverlay(allocator, executor, root, &.{}, entry.value_ptr.*, inherited_providers, source, variant_name, true);
+    }
+}
+
+fn loadCompletionManifestCommandOverlay(allocator: std.mem.Allocator, executor: *exec.Executor, root: []const u8, path: []const []const u8, overlay_value: std.json.Value, inherited_providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: []const u8, disabled: bool) anyerror!void {
+    const overlay = switch (overlay_value) {
+        .object => |object| object,
+        else => return error.CompletionManifestVariantMustBeObject,
+    };
+
+    var providers: std.ArrayList(CompletionManifestProviderBinding) = .empty;
+    defer providers.deinit(executor.allocator);
+    try providers.appendSlice(executor.allocator, inherited_providers);
+    if (overlay.get("providers")) |providers_value| try appendCompletionManifestProviders(executor.allocator, &providers, providers_value);
+
+    if (overlay.get("dynamicSubcommands")) |dynamic_subcommands| try loadCompletionManifestProviderArray(executor, root, path, .dynamic_subcommands, dynamic_subcommands, providers.items, source, variant, disabled);
+    if (overlay.get("dynamicOptions")) |dynamic_options| try loadCompletionManifestProviderArray(executor, root, path, .dynamic_options, dynamic_options, providers.items, source, variant, disabled);
+    if (overlay.get("options")) |options| try loadCompletionManifestOptions(executor, root, path, options, providers.items, source, variant, disabled);
+    if (overlay.get("arguments")) |arguments| try loadCompletionManifestArguments(executor, root, path, arguments, providers.items, source, variant, disabled);
+
+    if (overlay.get("subcommands")) |subcommands_value| {
+        const subcommands = switch (subcommands_value) {
+            .array => |array| array,
+            else => return error.CompletionManifestSubcommandsMustBeArray,
+        };
+        for (subcommands.items) |subcommand_value| {
+            const subcommand = switch (subcommand_value) {
+                .object => |object| object,
+                else => return error.CompletionManifestSubcommandMustBeObject,
+            };
+            const name = try manifestCommandPrimaryName(subcommand);
+            var child_path: std.ArrayList([]const u8) = .empty;
+            defer child_path.deinit(allocator);
+            try child_path.appendSlice(allocator, path);
+            try child_path.append(allocator, name);
+            try loadCompletionManifestSubcommandNames(executor, root, path, subcommand, source, variant, disabled);
+            try loadCompletionManifestCommandOverlay(allocator, executor, root, child_path.items, subcommand_value, providers.items, source, variant, disabled);
+        }
+    }
+}
+
+fn registerCompletionManifestVariantProbe(allocator: std.mem.Allocator, executor: *exec.Executor, root: []const u8, probe_value: std.json.Value) !void {
+    const probe = switch (probe_value) {
+        .object => |object| object,
+        else => return error.CompletionManifestVariantProbeMustBeObject,
+    };
+    var args: std.ArrayList([]const u8) = .empty;
+    defer args.deinit(allocator);
+    if (probe.get("args")) |args_value| {
+        const arg_array = switch (args_value) {
+            .array => |array| array,
+            else => return error.CompletionManifestVariantProbeArgsMustBeArray,
+        };
+        for (arg_array.items) |arg_value| if (manifestString(arg_value)) |arg| try args.append(allocator, arg);
+    }
+
+    const matches_value = probe.get("matches") orelse return;
+    const matches = switch (matches_value) {
+        .object => |object| object,
+        else => return error.CompletionManifestVariantProbeMatchesMustBeObject,
+    };
+    var patterns: std.ArrayList(exec.CompletionVariantPattern) = .empty;
+    defer patterns.deinit(allocator);
+    var iter = matches.iterator();
+    while (iter.next()) |entry| {
+        const pattern = manifestString(entry.value_ptr.*) orelse continue;
+        try patterns.append(allocator, .{ .name = entry.key_ptr.*, .pattern = pattern });
+    }
+    try executor.registerCompletionVariantProbe(root, args.items, patterns.items);
 }
 
 fn appendCompletionManifestProviders(allocator: std.mem.Allocator, providers: *std.ArrayList(CompletionManifestProviderBinding), providers_value: std.json.Value) !void {
@@ -1434,14 +1541,14 @@ fn completionManifestBuiltinProviderKind(name: []const u8) ?completion_model.Pro
     return null;
 }
 
-fn loadCompletionManifestProviderArray(executor: *exec.Executor, root: []const u8, path: []const []const u8, kind: completion_model.RuleKind, providers_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
+fn loadCompletionManifestProviderArray(executor: *exec.Executor, root: []const u8, path: []const []const u8, kind: completion_model.RuleKind, providers_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
     const array = switch (providers_value) {
         .array => |array| array,
         else => return error.CompletionManifestProviderArrayMustBeArray,
     };
     for (array.items) |provider_ref| {
         const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
-        try registerCompletionManifestProviderRule(executor, root, path, kind, provider, .{}, .{}, .{}, null, source);
+        try registerCompletionManifestProviderRule(executor, root, path, kind, provider, .{}, .{}, .{}, null, source, variant, disabled);
     }
 }
 
@@ -1457,17 +1564,17 @@ fn manifestCommandPrimaryName(command: std.json.ObjectMap) ![]const u8 {
     };
 }
 
-fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, command: std.json.ObjectMap, source: completion_model.RuleSource) !void {
+fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, command: std.json.ObjectMap, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
     const description = manifestString(command.get("description"));
     const name_value = command.get("name") orelse return error.CompletionManifestCommandMissingName;
     switch (name_value) {
-        .string => |name| try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source }),
+        .string => |name| try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source, .variant = variant, .disabled = disabled }),
         .array => |names| for (names.items) |item| {
             const name = switch (item) {
                 .string => |value| value,
                 else => return error.CompletionManifestCommandNameMustBeString,
             };
-            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source });
+            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source, .variant = variant, .disabled = disabled });
         },
         else => return error.CompletionManifestCommandNameMustBeString,
     }
@@ -1481,12 +1588,12 @@ fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const
                 .string => |value| value,
                 else => continue,
             };
-            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = alias, .description = description, .source = source });
+            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = alias, .description = description, .source = source, .variant = variant, .disabled = disabled });
         }
     }
 }
 
-fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, subcommands_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) anyerror!void {
+fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, subcommands_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) anyerror!void {
     const subcommands = switch (subcommands_value) {
         .array => |array| array,
         else => return error.CompletionManifestSubcommandsMustBeArray,
@@ -1503,11 +1610,11 @@ fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8,
         try child_path.append(executor.allocator, root);
         try child_path.appendSlice(executor.allocator, parent_path);
         try child_path.append(executor.allocator, name);
-        try loadCompletionManifestCommand(executor, subcommand_value, child_path.items, providers, source);
+        try loadCompletionManifestCommand(executor, subcommand_value, child_path.items, providers, source, variant, disabled);
     }
 }
 
-fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, path: []const []const u8, options_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
+fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, path: []const []const u8, options_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
     const options = switch (options_value) {
         .array => |array| array,
         else => return error.CompletionManifestOptionsMustBeArray,
@@ -1517,7 +1624,10 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
             .object => |object| object,
             else => return error.CompletionManifestOptionMustBeObject,
         };
+        if (!manifestPlatformsAllowCurrent(option.get("platforms"))) continue;
         var rule: completion_model.Rule = .{ .root = root, .path = path, .kind = .option, .description = manifestString(option.get("description")), .source = source };
+        rule.variant = variant;
+        rule.disabled = disabled;
         if (manifestString(option.get("long"))) |long| rule.option.long = long;
         if (manifestString(option.get("short"))) |short| rule.option.short = short;
         if (manifestString(option.get("exclusiveGroup"))) |group| rule.option.exclusive_group = group;
@@ -1529,7 +1639,7 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
         }
         if (rule.option.long == null and rule.option.short == null) return error.CompletionManifestOptionMissingSpelling;
         try executor.registerCompletionRule(rule);
-        if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, rule, value, providers, source);
+        if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, rule, value, providers, source, variant, disabled);
         if (option.get("aliases")) |aliases_value| {
             const aliases = switch (aliases_value) {
                 .array => |array| array,
@@ -1544,23 +1654,23 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
                 alias_rule.option.long = alias;
                 alias_rule.option.short = null;
                 try executor.registerCompletionRule(alias_rule);
-                if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, alias_rule, value, providers, source);
+                if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, alias_rule, value, providers, source, variant, disabled);
             }
         }
     }
 }
 
-fn loadCompletionManifestOptionValueProvider(executor: *exec.Executor, root: []const u8, path: []const []const u8, option_rule: completion_model.Rule, value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
+fn loadCompletionManifestOptionValueProvider(executor: *exec.Executor, root: []const u8, path: []const []const u8, option_rule: completion_model.Rule, value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
     const object = switch (value) {
         .object => |object| object,
         else => return,
     };
     const provider_ref = object.get("provider") orelse return;
     const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
-    try registerCompletionManifestProviderRule(executor, root, path, .dynamic_option_value, provider, option_rule.option, .{}, manifestValueGrammar(object.get("grammar")), manifestString(object.get("description")), source);
+    try registerCompletionManifestProviderRule(executor, root, path, .dynamic_option_value, provider, option_rule.option, .{}, manifestValueGrammar(object.get("grammar")), manifestString(object.get("description")), source, variant, disabled);
 }
 
-fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, path: []const []const u8, arguments_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource) !void {
+fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, path: []const []const u8, arguments_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
     const arguments = switch (arguments_value) {
         .object => |object| object,
         else => return error.CompletionManifestArgumentsMustBeObject,
@@ -1585,7 +1695,7 @@ fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, p
             if (index >= 0) argument.index = @intCast(index);
         }
         if (state.get("after")) |after| argument.after_state = manifestConditionPreviousState(after);
-        try registerCompletionManifestProviderRule(executor, root, path, .dynamic_argument, provider, .{}, argument, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source);
+        try registerCompletionManifestProviderRule(executor, root, path, .dynamic_argument, provider, .{}, argument, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source, variant, disabled);
     }
 }
 
@@ -1600,6 +1710,8 @@ fn registerCompletionManifestProviderRule(
     value_grammar: completion_model.ValueGrammar,
     description: ?[]const u8,
     source: completion_model.RuleSource,
+    variant: ?[]const u8,
+    disabled: bool,
 ) !void {
     var static_values: std.ArrayList(completion_model.StaticProviderValue) = .empty;
     defer static_values.deinit(executor.allocator);
@@ -1618,6 +1730,8 @@ fn registerCompletionManifestProviderRule(
         .value_grammar = value_grammar,
         .description = description,
         .source = source,
+        .variant = variant,
+        .disabled = disabled,
     });
 }
 
@@ -1674,6 +1788,42 @@ fn manifestString(value: ?std.json.Value) ?[]const u8 {
         .string => |string| string,
         else => null,
     };
+}
+
+fn completionManifestCurrentPlatform() []const u8 {
+    return switch (@import("builtin").os.tag) {
+        .macos => "darwin",
+        .linux => "linux",
+        .freebsd => "freebsd",
+        .openbsd => "openbsd",
+        .netbsd => "netbsd",
+        .dragonfly => "dragonfly",
+        .windows => "windows",
+        .wasi => "wasi",
+        .haiku => "haiku",
+        else => "unknown",
+    };
+}
+
+fn manifestPlatformsAllowCurrent(value: ?std.json.Value) bool {
+    const platforms_value = value orelse return true;
+    const platforms = switch (platforms_value) {
+        .array => |array| array,
+        else => return true,
+    };
+    const current = completionManifestCurrentPlatform();
+    for (platforms.items) |platform_value| {
+        const platform = manifestString(platform_value) orelse continue;
+        if (std.mem.eql(u8, platform, current)) return true;
+    }
+    return false;
+}
+
+fn completionManifestPlatformKnown(platform: []const u8) bool {
+    inline for (&.{ "darwin", "linux", "freebsd", "openbsd", "netbsd", "dragonfly", "windows", "wasi", "haiku" }) |known| {
+        if (std.mem.eql(u8, platform, known)) return true;
+    }
+    return false;
 }
 
 fn manifestValueName(value: std.json.Value) ?[]const u8 {
@@ -1796,7 +1946,7 @@ fn validateManifestCommand(
     inherited_options: []const CompletionManifestOptionSpelling,
     inherited_groups: []const []const u8,
     path: []const u8,
-) !void {
+) anyerror!void {
     const command = switch (command_value) {
         .object => |object| object,
         else => {
@@ -1810,6 +1960,7 @@ fn validateManifestCommand(
     } else {
         try diagnostics.add(.err, "{s}.name: command name is required", .{path});
     }
+    if (command.get("platforms")) |platforms| try validateManifestPlatforms(allocator, diagnostics, platforms, try manifestFieldPath(allocator, path, "platforms"));
 
     var providers: std.ArrayList([]const u8) = .empty;
     defer providers.deinit(allocator);
@@ -1916,6 +2067,122 @@ fn validateManifestCommand(
             }
         }
     }
+
+    if (command.get("variants")) |variants| try validateManifestVariants(allocator, diagnostics, command, variants, providers.items, options.items, groups.items, try manifestFieldPath(allocator, path, "variants"));
+    if (command.get("variantProbe")) |probe| try validateManifestVariantProbe(allocator, diagnostics, probe, command.get("variants"), try manifestFieldPath(allocator, path, "variantProbe"));
+}
+
+fn validateManifestVariants(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, command: std.json.ObjectMap, variants_value: std.json.Value, providers: []const []const u8, inherited_options: []const CompletionManifestOptionSpelling, groups: []const []const u8, path: []const u8) anyerror!void {
+    defer allocator.free(path);
+    _ = command;
+    const variants = switch (variants_value) {
+        .object => |object| object,
+        else => return,
+    };
+    var iter = variants.iterator();
+    while (iter.next()) |entry| {
+        const name = entry.key_ptr.*;
+        const variant_path = try manifestFieldPath(allocator, path, name);
+        defer allocator.free(variant_path);
+        if (name.len == 0) try diagnostics.add(.err, "{s}: variant name must not be empty", .{variant_path});
+        const overlay = switch (entry.value_ptr.*) {
+            .object => |object| object,
+            else => {
+                try diagnostics.add(.err, "{s}: variant overlay must be an object", .{variant_path});
+                continue;
+            },
+        };
+        try validateManifestCommandOverlay(allocator, diagnostics, overlay, providers, inherited_options, groups, variant_path);
+    }
+}
+
+fn validateManifestCommandOverlay(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, overlay: std.json.ObjectMap, inherited_providers: []const []const u8, inherited_options: []const CompletionManifestOptionSpelling, inherited_groups: []const []const u8, path: []const u8) anyerror!void {
+    if (overlay.get("platforms")) |platforms| try validateManifestPlatforms(allocator, diagnostics, platforms, try manifestFieldPath(allocator, path, "platforms"));
+    var providers: std.ArrayList([]const u8) = .empty;
+    defer providers.deinit(allocator);
+    try providers.appendSlice(allocator, inherited_providers);
+    if (overlay.get("providers")) |providers_value| {
+        const provider_path = try manifestFieldPath(allocator, path, "providers");
+        defer allocator.free(provider_path);
+        if (providers_value == .object) {
+            var iter = providers_value.object.iterator();
+            while (iter.next()) |entry| {
+                const child_path = try manifestFieldPath(allocator, provider_path, entry.key_ptr.*);
+                defer allocator.free(child_path);
+                try validateManifestProvider(allocator, diagnostics, entry.value_ptr.*, child_path);
+                try providers.append(allocator, entry.key_ptr.*);
+            }
+        }
+    }
+
+    var groups: std.ArrayList([]const u8) = .empty;
+    defer groups.deinit(allocator);
+    try groups.appendSlice(allocator, inherited_groups);
+    if (overlay.get("optionGroups")) |groups_value| if (groups_value == .array) {
+        for (groups_value.array.items) |group_value| if (group_value == .object) if (manifestString(group_value.object.get("name"))) |name| try groups.append(allocator, name);
+    };
+
+    var options: std.ArrayList(CompletionManifestOptionSpelling) = .empty;
+    defer options.deinit(allocator);
+    try options.appendSlice(allocator, inherited_options);
+    var child_options: std.ArrayList(CompletionManifestOptionSpelling) = .empty;
+    defer child_options.deinit(allocator);
+    try child_options.appendSlice(allocator, inherited_options);
+    if (overlay.get("options")) |options_value| if (options_value == .array) {
+        const options_path = try manifestFieldPath(allocator, path, "options");
+        defer allocator.free(options_path);
+        for (options_value.array.items, 0..) |option_value, index| {
+            const option_path = try manifestIndexPath(allocator, options_path, index);
+            defer allocator.free(option_path);
+            try validateManifestOption(allocator, diagnostics, option_value, providers.items, &options, &child_options, groups.items, option_path);
+        }
+    };
+    if (overlay.get("arguments")) |arguments| {
+        const arguments_path = try manifestFieldPath(allocator, path, "arguments");
+        defer allocator.free(arguments_path);
+        try validateManifestArguments(allocator, diagnostics, arguments, providers.items, options.items, arguments_path);
+    }
+    if (overlay.get("dynamicSubcommands")) |dynamic_subcommands| try validateManifestProviderRefArray(allocator, diagnostics, dynamic_subcommands, providers.items, try manifestFieldPath(allocator, path, "dynamicSubcommands"));
+    if (overlay.get("dynamicOptions")) |dynamic_options| try validateManifestProviderRefArray(allocator, diagnostics, dynamic_options, providers.items, try manifestFieldPath(allocator, path, "dynamicOptions"));
+    if (overlay.get("subcommands")) |subcommands_value| if (subcommands_value == .array) {
+        const subcommands_path = try manifestFieldPath(allocator, path, "subcommands");
+        defer allocator.free(subcommands_path);
+        for (subcommands_value.array.items, 0..) |subcommand, index| {
+            const subcommand_path = try manifestIndexPath(allocator, subcommands_path, index);
+            defer allocator.free(subcommand_path);
+            try validateManifestCommand(allocator, diagnostics, subcommand, providers.items, child_options.items, groups.items, subcommand_path);
+        }
+    };
+}
+
+fn validateManifestVariantProbe(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, probe_value: std.json.Value, variants_value: ?std.json.Value, path: []const u8) !void {
+    defer allocator.free(path);
+    const probe = switch (probe_value) {
+        .object => |object| object,
+        else => return,
+    };
+    if (probe.get("args")) |args| if (args == .array and args.array.items.len == 0) try diagnostics.add(.err, "{s}.args: variant probe args must not be empty", .{path});
+    const matches_value = probe.get("matches") orelse return;
+    const matches = switch (matches_value) {
+        .object => |object| object,
+        else => return,
+    };
+    var iter = matches.iterator();
+    var index: usize = 0;
+    while (iter.next()) |entry| : (index += 1) {
+        const variant_name = entry.key_ptr.*;
+        if (!manifestVariantExists(variants_value, variant_name)) try diagnostics.add(.err, "{s}.matches.{s}: unknown variant '{s}'", .{ path, variant_name, variant_name });
+        const pattern = manifestString(entry.value_ptr.*) orelse continue;
+        if (pattern.len == 0 and index + 1 != matches.count()) try diagnostics.add(.err, "{s}.matches.{s}: empty pattern is only allowed for the final fallback", .{ path, variant_name });
+    }
+}
+
+fn manifestVariantExists(variants_value: ?std.json.Value, name: []const u8) bool {
+    const variants = switch (variants_value orelse return false) {
+        .object => |object| object,
+        else => return false,
+    };
+    return variants.get(name) != null;
 }
 
 fn validateManifestOption(
@@ -1932,6 +2199,7 @@ fn validateManifestOption(
         .object => |object| object,
         else => return,
     };
+    if (option.get("platforms")) |platforms| try validateManifestPlatforms(allocator, diagnostics, platforms, try manifestFieldPath(allocator, path, "platforms"));
 
     var has_spelling = false;
     const inherit = manifestBoolDefault(option.get("inherit"), true);
@@ -1975,6 +2243,29 @@ fn validateManifestOption(
         const value_path = try manifestFieldPath(allocator, path, "value");
         defer allocator.free(value_path);
         try validateManifestValueObject(allocator, diagnostics, value, providers, value_path);
+    }
+}
+
+fn validateManifestPlatforms(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, path: []const u8) !void {
+    defer allocator.free(path);
+    const platforms = switch (value) {
+        .array => |array| array,
+        else => return,
+    };
+    if (platforms.items.len == 0) try diagnostics.add(.err, "{s}: platforms must not be empty", .{path});
+    var seen: std.StringHashMapUnmanaged(void) = .empty;
+    defer seen.deinit(allocator);
+    for (platforms.items, 0..) |platform_value, index| {
+        const platform = manifestString(platform_value) orelse continue;
+        const platform_path = try manifestIndexPath(allocator, path, index);
+        defer allocator.free(platform_path);
+        if (!completionManifestPlatformKnown(platform)) {
+            try diagnostics.add(.err, "{s}: unknown platform '{s}'", .{ platform_path, platform });
+        } else if (seen.contains(platform)) {
+            try diagnostics.add(.err, "{s}: duplicate platform '{s}'", .{ platform_path, platform });
+        } else {
+            try seen.put(allocator, platform, {});
+        }
     }
 }
 
@@ -2672,6 +2963,7 @@ fn semanticCompletionPath(allocator: std.mem.Allocator, context: exec.Completion
 }
 
 fn debugCompletionRuleMatches(rule: completion_model.Rule, context: exec.CompletionSemanticContext) bool {
+    if (rule.disabled) return false;
     if (!std.mem.eql(u8, rule.root, context.root)) return false;
     if (rule.path.len > context.path.len) return false;
     for (rule.path, context.path[0..rule.path.len]) |expected, actual| {
@@ -3549,14 +3841,34 @@ const ManifestCompletionTrace = struct {
 
 fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext) !void {
     const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
+    const manifest_state = executor.completionManifestCommandState(semantic.root);
+    const variant_state = executor.completionVariantProbeState(semantic.root);
 
     try json.beginObject();
     try json.objectField("path");
-    try json.write(if (manifest_source) |rule_source| rule_source.manifest_path else @as(?[]const u8, null));
+    try json.write(if (manifest_source) |rule_source| rule_source.manifest_path else if (manifest_state) |state| state.manifest_path else @as(?[]const u8, null));
     try json.objectField("manifestVersion");
-    try json.write(if (manifest_source) |rule_source| rule_source.manifest_version else @as(?i64, null));
+    try json.write(if (manifest_source) |rule_source| rule_source.manifest_version else if (manifest_state) |state| state.manifest_version else @as(?i64, null));
     try json.objectField("commandPath");
     try writeSemanticCommandPathArrayJson(json, semantic);
+    try json.objectField("platformGate");
+    try json.beginObject();
+    try json.objectField("platform");
+    try json.write(if (manifest_state) |state| state.platform else completionManifestCurrentPlatform());
+    try json.objectField("allowed");
+    try json.write(if (manifest_state) |state| state.platform_allowed else true);
+    try json.endObject();
+    try json.objectField("variant");
+    try json.beginObject();
+    try json.objectField("selected");
+    try json.write(if (variant_state) |state| state.selected else @as(?[]const u8, null));
+    try json.objectField("probed");
+    try json.write(if (variant_state) |state| state.last_probed else false);
+    try json.objectField("cached");
+    try json.write(if (variant_state) |state| state.last_cached else false);
+    try json.objectField("skippedShadow");
+    try json.write(if (variant_state) |state| state.skipped_shadow else false);
+    try json.endObject();
 
     const source_info = manifest_source orelse {
         try writeEmptyManifestDecisionJson(json);
@@ -3677,9 +3989,11 @@ fn writeEmptyManifestDecisionJson(json: *std.json.Stringify) !void {
 
 fn primaryManifestRuleSource(rules: []const completion_model.Rule, semantic: exec.CompletionSemanticContext) ?completion_model.RuleSource {
     for (rules) |rule| {
+        if (rule.disabled) continue;
         if (rule.source.kind == .manifest and debugCompletionRuleMatches(rule, semantic)) return rule.source;
     }
     for (rules) |rule| {
+        if (rule.disabled) continue;
         if (rule.source.kind == .manifest and std.mem.eql(u8, rule.root, semantic.root)) return rule.source;
     }
     return null;
@@ -5315,6 +5629,135 @@ test "completion manifest static enum providers emit scoped candidates" {
     try expectCompletionCandidate(argument_candidates, "auto");
 }
 
+test "completion manifest variants select lazily and cache probe result" {
+    const platform = completionManifestCurrentPlatform();
+    const manifest = try std.fmt.allocPrint(std.testing.allocator,
+        \\
+        \\{{
+        \\  "manifestVersion": 1,
+        \\  "command": {{
+        \\    "name": "lslike",
+        \\    "options": [{{ "long": "base" }}],
+        \\    "variantProbe": {{
+        \\      "args": ["--version"],
+        \\      "matches": {{ "gnu": "GNU coreutils", "unix": "" }}
+        \\    }},
+        \\    "variants": {{
+        \\      "gnu": {{ "options": [{{ "long": "color" }}] }},
+        \\      "unix": {{ "options": [{{ "long": "classify" }}, {{ "short": "@", "platforms": ["{s}"] }}] }}
+        \\    }}
+        \\  }}
+        \\}}
+    , .{platform});
+    defer std.testing.allocator.free(manifest);
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try loadCompletionManifest(std.testing.allocator, &executor, manifest);
+    try std.testing.expectEqual(@as(usize, 4), executor.completionRules().len);
+    try executor.setCompletionVariantProbeMock("lslike", "ls (GNU coreutils) 9.5\n");
+
+    const first = try executor.collectCompletionsForInput("lslike --", "lslike --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(first);
+    try expectCompletionCandidate(first, "--base");
+    try expectCompletionCandidate(first, "--color");
+    try expectNoCompletionCandidate(first, "--classify");
+    try std.testing.expectEqual(@as(usize, 1), executor.completionVariantProbeCount("lslike"));
+
+    const second = try executor.collectCompletionsForInput("lslike --", "lslike --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(second);
+    try expectCompletionCandidate(second, "--color");
+    try std.testing.expectEqual(@as(usize, 1), executor.completionVariantProbeCount("lslike"));
+}
+
+test "completion manifest variant probe fallback and platform-gated option" {
+    const platform = completionManifestCurrentPlatform();
+    const manifest = try std.fmt.allocPrint(std.testing.allocator,
+        \\
+        \\{{
+        \\  "manifestVersion": 1,
+        \\  "command": {{
+        \\    "name": "lslike",
+        \\    "variantProbe": {{ "args": ["--version"], "matches": {{ "gnu": "GNU coreutils", "unix": "" }} }},
+        \\    "variants": {{
+        \\      "gnu": {{ "options": [{{ "long": "color" }}] }},
+        \\      "unix": {{ "options": [{{ "long": "classify" }}, {{ "short": "@", "platforms": ["{s}"] }}] }}
+        \\    }}
+        \\  }}
+        \\}}
+    , .{platform});
+    defer std.testing.allocator.free(manifest);
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try loadCompletionManifest(std.testing.allocator, &executor, manifest);
+    try executor.setCompletionVariantProbeMock("lslike", "BSD ls\n");
+
+    const long_candidates = try executor.collectCompletionsForInput("lslike --", "lslike --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(long_candidates);
+    try expectCompletionCandidate(long_candidates, "--classify");
+    try expectNoCompletionCandidate(long_candidates, "--color");
+
+    const short_candidates = try executor.collectCompletionsForInput("lslike -", "lslike -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(short_candidates);
+    try expectCompletionCandidate(short_candidates, "-@");
+}
+
+test "completion manifest variant probe skips shell function shadow" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "shadowtool",
+        \\    "options": [ { "long": "base" } ],
+        \\    "variantProbe": { "args": ["--version"], "matches": { "gnu": "GNU", "unix": "" } },
+        \\    "variants": {
+        \\      "gnu": { "options": [ { "long": "color" } ] },
+        \\      "unix": { "options": [ { "long": "classify" } ] }
+        \\    }
+        \\  }
+        \\}
+    );
+    var function_result = try executor.executeScriptSlice("shadowtool() { :; }", .{});
+    defer function_result.deinit();
+    try executor.setCompletionVariantProbeMock("shadowtool", "GNU\n");
+
+    const candidates = try executor.collectCompletionsForInput("shadowtool --", "shadowtool --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCompletionCandidate(candidates, "--base");
+    try expectNoCompletionCandidate(candidates, "--color");
+    try expectNoCompletionCandidate(candidates, "--classify");
+    try std.testing.expectEqual(@as(usize, 0), executor.completionVariantProbeCount("shadowtool"));
+    const probe = executor.completionVariantProbeState("shadowtool") orelse return error.MissingCompletionVariantProbe;
+    try std.testing.expect(probe.skipped_shadow);
+}
+
+test "completion manifest command platform gate skips registration" {
+    const current = completionManifestCurrentPlatform();
+    const other = if (std.mem.eql(u8, current, "linux")) "darwin" else "linux";
+    const manifest = try std.fmt.allocPrint(std.testing.allocator,
+        \\
+        \\{{
+        \\  "manifestVersion": 1,
+        \\  "command": {{
+        \\    "name": "onlyelsewhere",
+        \\    "platforms": ["{s}"],
+        \\    "options": [{{ "long": "never" }}]
+        \\  }}
+        \\}}
+    , .{other});
+    defer std.testing.allocator.free(manifest);
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try loadCompletionManifest(std.testing.allocator, &executor, manifest);
+    try std.testing.expectEqual(@as(usize, 0), executor.completionRules().len);
+    const state = executor.completionManifestCommandState("onlyelsewhere") orelse return error.MissingCompletionManifestState;
+    try std.testing.expect(!state.platform_allowed);
+}
+
 test "Git manifest fixture selects representative zsh-class providers" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
@@ -5676,12 +6119,17 @@ test "completion manifest semantic validation reports clear invalid manifest dia
         \\  "manifestVersion": 1,
         \\  "command": {
         \\    "name": "tool",
+        \\    "platforms": ["bogus"],
+        \\    "variantProbe": { "args": ["--version"], "matches": { "gnu": "", "missing": "x" } },
         \\    "options": [
         \\      { "long": "verbose" },
         \\      { "long": "verbose" },
         \\      { "long": "mode", "exclusiveGroup": "missing" },
         \\      { "long": "target", "value": { "name": "target", "provider": "missing.provider" } }
         \\    ],
+        \\    "variants": {
+        \\      "gnu": { "options": [ { "long": "verbose" } ] }
+        \\    },
         \\    "subcommands": [
         \\      { "name": ["run", "r"] },
         \\      { "name": "test", "aliases": ["r"] }
@@ -5704,6 +6152,10 @@ test "completion manifest semantic validation reports clear invalid manifest dia
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[3].value.provider: unknown provider 'missing.provider'");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.subcommands[1].aliases[0]: duplicate subcommand name or alias 'r'");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.arguments.states[0].index: argument state 'target' is unreachable");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.platforms[0]: unknown platform 'bogus'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.variantProbe.matches.gnu: empty pattern is only allowed for the final fallback");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.variantProbe.matches.missing: unknown variant 'missing'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.variants.gnu.options[0]: duplicate option spelling '--verbose'");
 }
 
 test "completion manifest semantic validation rejects unsupported versions before compiling rules" {
@@ -6694,6 +7146,7 @@ test "completion debug output exposes manifest source and JSON decision state" {
     const manifest = object.get("manifest").?.object;
     try std.testing.expectEqualStrings(root ++ "/rush/completions/tool.json", manifest.get("path").?.string);
     try std.testing.expectEqual(@as(i64, 1), manifest.get("manifestVersion").?.integer);
+    try std.testing.expect(manifest.get("platformGate").?.object.get("allowed").?.bool);
     const semantic_options = object.get("semantic").?.object.get("parsedOptions").?.array.items;
     try std.testing.expectEqualStrings("--debug", semantic_options[0].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("mode", semantic_options[0].object.get("exclusiveGroup").?.string);
@@ -6717,6 +7170,41 @@ test "completion debug output exposes manifest source and JSON decision state" {
     var terminated = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, terminated_output, .{});
     defer terminated.deinit();
     try std.testing.expect(terminated.value.object.get("semantic").?.object.get("optionsTerminated").?.bool);
+}
+
+test "completion debug JSON reports manifest variant selection" {
+    const root = "rush-debug-manifest-variant-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/varianttool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "varianttool",
+        \\    "variantProbe": { "args": ["--version"], "matches": { "gnu": "GNU", "unix": "" } },
+        \\    "variants": {
+        \\      "gnu": { "options": [ { "long": "color" } ] },
+        \\      "unix": { "options": [ { "long": "classify" } ] }
+        \\    }
+        \\  }
+        \\}
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_DATA_DIRS", "");
+    try env.put("XDG_DATA_HOME", root);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "varianttool --");
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+    const manifest = parsed.value.object.get("manifest").?.object;
+    const variant = manifest.get("variant").?.object;
+    try std.testing.expectEqualStrings("unix", variant.get("selected").?.string);
+    try std.testing.expect(variant.get("probed").?.bool);
+    try std.testing.expect(!variant.get("cached").?.bool);
+    try std.testing.expect(manifest.get("platformGate").?.object.get("allowed").?.bool);
 }
 
 test "completion debug output traces Git fixture manifest state" {

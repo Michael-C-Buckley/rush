@@ -42,6 +42,18 @@
         "deprecated": {
           "$ref": "#/$defs/deprecated"
         },
+        "platforms": {
+          "$ref": "#/$defs/platforms"
+        },
+        "variantProbe": {
+          "$ref": "#/$defs/variantProbe"
+        },
+        "variants": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/commandVariant"
+          }
+        },
         "providers": {
           "type": "object",
           "additionalProperties": {
@@ -134,8 +146,69 @@
         },
         "deprecated": {
           "$ref": "#/$defs/deprecated"
+        },
+        "platforms": {
+          "$ref": "#/$defs/platforms"
         }
       }
+    },
+    "commandVariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platforms": { "$ref": "#/$defs/platforms" },
+        "providers": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/provider" }
+        },
+        "options": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/option" }
+        },
+        "optionGroups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/optionGroup" }
+        },
+        "arguments": { "$ref": "#/$defs/argumentModel" },
+        "subcommands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/command" }
+        },
+        "dynamicSubcommands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/providerRef" }
+        },
+        "dynamicOptions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/providerRef" }
+        }
+      }
+    },
+    "variantProbe": {
+      "type": "object",
+      "required": ["args", "matches"],
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "matches": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/platform" },
+      "uniqueItems": true
+    },
+    "platform": {
+      "enum": ["darwin", "linux", "freebsd", "openbsd", "netbsd", "dragonfly", "windows", "wasi", "haiku"]
     },
     "optionGroup": {
       "type": "object",

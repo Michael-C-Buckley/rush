@@ -140,6 +140,9 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   <span class="str">"name"</span>: <span class="comment">string or non-empty string array; first item is canonical</span>
   <span class="str">"aliases"</span>: <span class="comment">additional subcommand aliases</span>
   <span class="str">"description"</span>: <span class="comment">menu description for subcommand candidates</span>
+  <span class="str">"platforms"</span>: <span class="comment">optional OS gate</span>
+  <span class="str">"variantProbe"</span>: <span class="comment">lazy installed-variant probe</span>
+  <span class="str">"variants"</span>: <span class="comment">static overlays selected by the probe</span>
   <span class="str">"providers"</span>: <span class="comment">provider IDs in lexical scope</span>
   <span class="str">"options"</span>: <span class="comment">structured options inherited by subcommands</span>
   <span class="str">"arguments"</span>: <span class="comment">argument states for this command path</span>
@@ -149,6 +152,30 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 }</pre>
 
   <p>The schema also accepts metadata such as <code>hidden</code>, <code>deprecated</code>, <code>requires</code>, and <code>optionGroups</code>. Those fields are validated for shape, but current completion behavior is driven by the concrete option fields on each option, especially <code>exclusiveGroup</code>, <code>repeatable</code>, and <code>terminatesOptions</code>.</p>
+
+  <h2 id="platforms-and-variants"><a href="#platforms-and-variants">Platforms and installed variants</a></h2>
+
+  <p>Use <code>platforms</code> to gate a command or option to a fixed OS enum: <code>darwin</code>, <code>linux</code>, <code>freebsd</code>, <code>openbsd</code>, <code>netbsd</code>, <code>dragonfly</code>, <code>windows</code>, <code>wasi</code>, and <code>haiku</code>. Unknown platform IDs are validation errors. Command-level gates are evaluated when the manifest loads; option-level gates are useful for an OS-only flag inside a broader variant.</p>
+
+  <pre>{
+  <span class="str">"name"</span>: <span class="str">"ls"</span>,
+  <span class="str">"platforms"</span>: [<span class="str">"darwin"</span>, <span class="str">"linux"</span>, <span class="str">"freebsd"</span>],
+  <span class="str">"variantProbe"</span>: {
+    <span class="str">"args"</span>: [<span class="str">"--version"</span>],
+    <span class="str">"matches"</span>: {
+      <span class="str">"gnu"</span>: <span class="str">"GNU coreutils"</span>,
+      <span class="str">"unix"</span>: <span class="str">""</span>
+    }
+  },
+  <span class="str">"variants"</span>: {
+    <span class="str">"gnu"</span>: { <span class="str">"options"</span>: [ { <span class="str">"long"</span>: <span class="str">"color"</span> } ] },
+    <span class="str">"unix"</span>: { <span class="str">"options"</span>: [ { <span class="str">"short"</span>: <span class="str">"G"</span> }, { <span class="str">"short"</span>: <span class="str">"@"</span>, <span class="str">"platforms"</span>: [<span class="str">"darwin"</span>] } ] }
+  }
+}</pre>
+
+  <p><code>variantProbe.args</code> is appended to the command and run lazily the first time that command is completed. The selected variant is cached for the shell session. <code>matches</code> is ordered: plain strings are substring matches against combined stdout/stderr, patterns containing <code>*</code> or <code>?</code> are glob matches, and only the final entry may use an empty string fallback.</p>
+
+  <p>The selected variant is appended over the base command definition. Variant options, groups, arguments, providers, dynamic providers, and subcommands add to the base grammar; they do not replace it. Duplicate option spellings in the effective base+variant scope are rejected. If a Rush function or shell builtin shadows the command name, Rush skips the external probe and uses only the base grammar.</p>
 
   <h2 id="providers"><a href="#providers">Providers</a></h2>
 

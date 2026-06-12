@@ -114,6 +114,67 @@ should be treated as the provider companion, not as a second source of duplicate
 static declarations, unless a later fragment/layering design explicitly allows
 that.
 
+## Platforms and installed variants
+
+Some commands have different option grammars on different operating systems or
+for different installed implementations. The manifest supports the zsh-style
+split between OS gates and one lazy runtime variant probe:
+
+```json
+{
+  "manifestVersion": 1,
+  "command": {
+    "name": "ls",
+    "platforms": ["darwin", "linux", "freebsd", "openbsd", "netbsd", "dragonfly"],
+    "options": [ { "long": "help" } ],
+    "variantProbe": {
+      "args": ["--version"],
+      "matches": {
+        "gnu": "GNU coreutils",
+        "unix": ""
+      }
+    },
+    "variants": {
+      "gnu": {
+        "options": [ { "long": "color" } ]
+      },
+      "unix": {
+        "options": [
+          { "short": "G" },
+          { "short": "@", "platforms": ["darwin"] }
+        ]
+      }
+    }
+  }
+}
+```
+
+- `platforms` is a fixed enum: `darwin`, `linux`, `freebsd`, `openbsd`,
+  `netbsd`, `dragonfly`, `windows`, `wasi`, and `haiku`. Unknown IDs are
+  validation errors. A command-level gate is evaluated when the manifest loads;
+  if the current platform is not listed, no rules from that manifest register.
+- Option-level `platforms` may be used inside a variant for a platform-specific
+  flag within a broader installed variant (for example BSD/Unix `ls -@` on
+  Darwin only).
+- `variantProbe.args` is appended to the command name and run lazily on the
+  first completion for that command. The probe is cached for the shell session
+  and is not run at manifest load.
+- `variantProbe.matches` is ordered. A non-empty pattern matches the combined
+  stdout/stderr probe output. Plain strings are substring matches; patterns that
+  contain `*` or `?` are glob matches against the whole output. Only the final
+  match entry may use an empty string, which is the fallback variant.
+- Rush skips the probe when a Rush function or shell builtin shadows the command
+  name; in that case only the base manifest grammar is active. This matches the
+  zsh `_pick_variant -b` boundary: variants describe external command
+  implementations, not shell functions or builtins.
+
+Merge semantics are append-only: Rush compiles the base command definition plus
+the selected variant overlay. Variant `options`, `optionGroups`, `arguments`,
+`subcommands`, `dynamicSubcommands`, `dynamicOptions`, and `providers` append to
+the base command at the same command path. Duplicate option spellings in the
+effective base+variant scope are semantic validation errors; manifests should
+not rely on variant overlays replacing a base option.
+
 ## Validation layers
 
 JSON Schema validates shape:
@@ -158,6 +219,9 @@ type Command = {
   description?: string
   hidden?: boolean
   deprecated?: boolean | string
+  platforms?: Platform[]
+  variantProbe?: VariantProbe
+  variants?: Record<string, CommandVariant>
   providers?: Record<string, Provider>
   options?: Option[]
   optionGroups?: OptionGroup[]
@@ -172,6 +236,7 @@ type Option = {
   long?: string
   aliases?: string[]
   description?: string
+  platforms?: Platform[]
   value?: Value
   repeatable?: boolean
   exclusiveGroup?: string
@@ -181,6 +246,18 @@ type Option = {
   hidden?: boolean
   deprecated?: boolean | string
 }
+
+type Platform = "darwin" | "linux" | "freebsd" | "openbsd" | "netbsd" | "dragonfly" | "windows" | "wasi" | "haiku"
+
+type VariantProbe = {
+  args: string[]
+  matches: Record<string, string>
+}
+
+type CommandVariant = Partial<Pick<Command,
+  "platforms" | "providers" | "options" | "optionGroups" | "arguments" |
+  "subcommands" | "dynamicSubcommands" | "dynamicOptions"
+>>
 
 type Value = {
   name?: string
