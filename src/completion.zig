@@ -184,6 +184,18 @@ pub const Option = struct {
     no_space: bool = false,
 };
 
+pub const Argument = struct {
+    state: ?[]const u8 = null,
+    index: ?usize = null,
+    after_state: ?[]const u8 = null,
+    after_value: ?[]const u8 = null,
+    repeatable: bool = false,
+
+    pub fn hasSelector(self: Argument) bool {
+        return self.state != null or self.index != null or self.after_state != null or self.after_value != null or self.repeatable;
+    }
+};
+
 pub const ValueGrammar = struct {
     list_separator: ?u8 = null,
     key_value_separator: ?u8 = null,
@@ -219,6 +231,7 @@ pub const Rule = struct {
     kind: RuleKind,
     value: ?[]const u8 = null,
     option: Option = .{},
+    argument: Argument = .{},
     value_grammar: ValueGrammar = .{},
     description: ?[]const u8 = null,
     source: RuleSource = .{},

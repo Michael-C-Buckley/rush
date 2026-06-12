@@ -2475,6 +2475,8 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     defer executor.freeCompletions(candidates);
     var effective_context = executor.lastCompletionContext() orelse context;
     effective_context.command_path = semantic_path;
+    effective_context.argument_index = semantic.argument_index;
+    effective_context.argument_state = semantic.argument_state;
     const matcher_policy = completion_model.MatcherPolicy.engineDefault();
     try rankCompletionCandidates(allocator, candidates, history, cwd, source, matcher_policy);
     const application = try completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
@@ -2493,6 +2495,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  prefix: {s}
         \\  previous: {s}
         \\  argument-index: {d}
+        \\  argument-state: {s}
         \\  position: {s}
         \\  option-name: {s}
         \\  option-spelling: {s}
@@ -2508,25 +2511,13 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  separators: {s}
         \\  path-segments: {s}
         \\semantic:
-        \\  root: {s}
-        \\  path: {s}
-        \\  position: {s}
-        \\  prefix: {s}
-        \\  value-segment: {s}
-        \\  value-separator: {s}
-        \\  value-position: {s}
-        \\  value-key: {s}
-        \\  replace: {d}..{d}
-        \\  parser-position: {s}
-        \\  parser-offset: {d}
-        \\rules:
-        \\candidates:
     , .{
         source,
         effective_context.command,
         effective_context.prefix,
         effective_context.previous,
         effective_context.argument_index,
+        effective_context.argument_state orelse "",
         if (effective_context.option_value != null) "option_value" else @tagName(effective_context.position),
         if (effective_context.option_value) |option_value| option_value.name else "",
         if (effective_context.option_value) |option_value| option_value.spelling else "",
@@ -2540,10 +2531,30 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         @tagName(matcher_policy.mode),
         @tagName(matcher_policy.separators),
         @tagName(matcher_policy.path_segments),
+    });
+    try out.writer.print(
+        \\  root: {s}
+        \\  path: {s}
+        \\  position: {s}
+        \\  prefix: {s}
+        \\  argument-index: {d}
+        \\  argument-state: {s}
+        \\  value-segment: {s}
+        \\  value-separator: {s}
+        \\  value-position: {s}
+        \\  value-key: {s}
+        \\  replace: {d}..{d}
+        \\  parser-position: {s}
+        \\  parser-offset: {d}
+        \\rules:
+        \\candidates:
+    , .{
         semantic.root,
         semantic_path,
         @tagName(semantic.position),
         semantic.prefix,
+        semantic.argument_index,
+        semantic.argument_state orelse "",
         if (semantic.value_segment) |segment| segment.segment else "",
         semantic_value_separator,
         if (semantic.value_segment) |segment| @tagName(segment.position) else "",
@@ -2566,6 +2577,17 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
             try out.writer.print("    manifest-path: {s}\n    manifest-version: {d}\n", .{
                 rule.source.manifest_path orelse "",
                 rule.source.manifest_version orelse 0,
+            });
+        }
+        if (rule.argument.hasSelector()) {
+            var argument_index_buffer: [32]u8 = undefined;
+            const argument_index_text = if (rule.argument.index) |argument_index| std.fmt.bufPrint(&argument_index_buffer, "{d}", .{argument_index}) catch "" else "";
+            try out.writer.print("    argument:\n      state: {s}\n      index: {s}\n      after-state: {s}\n      after-value: {s}\n      repeatable: {}\n", .{
+                rule.argument.state orelse "",
+                argument_index_text,
+                rule.argument.after_state orelse "",
+                rule.argument.after_value orelse "",
+                rule.argument.repeatable,
             });
         }
         if (!rule.value_grammar.isEmpty()) {
@@ -2655,6 +2677,8 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     defer executor.freeCompletions(candidates);
     var effective_context = executor.lastCompletionContext() orelse context;
     effective_context.command_path = semantic_path;
+    effective_context.argument_index = semantic.argument_index;
+    effective_context.argument_state = semantic.argument_state;
     const matcher_policy = completion_model.MatcherPolicy.engineDefault();
     try rankCompletionCandidates(allocator, candidates, history, cwd, source, matcher_policy);
     const application = try completion_model.applyCandidatesForInputWithPolicy(allocator, source, candidates, matcher_policy);
@@ -2729,6 +2753,8 @@ fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.Compl
     try json.write(context.previous);
     try json.objectField("argumentIndex");
     try json.write(context.argument_index);
+    try json.objectField("argumentState");
+    try json.write(context.argument_state);
     try json.objectField("position");
     try json.write(if (context.option_value != null) "option_value" else @tagName(context.position));
     try json.objectField("optionName");
@@ -2781,6 +2807,10 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.write(context.prefix);
     try json.objectField("previous");
     try json.write(context.previous);
+    try json.objectField("argumentIndex");
+    try json.write(context.argument_index);
+    try json.objectField("argumentState");
+    try json.write(context.argument_state);
     try json.objectField("optionName");
     try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
     try json.objectField("optionSpelling");
@@ -2838,6 +2868,19 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.write(rule.option.argument);
     try json.objectField("noSpace");
     try json.write(rule.option.no_space);
+    try json.endObject();
+    try json.objectField("argument");
+    try json.beginObject();
+    try json.objectField("state");
+    try json.write(rule.argument.state);
+    try json.objectField("index");
+    try json.write(rule.argument.index);
+    try json.objectField("afterState");
+    try json.write(rule.argument.after_state);
+    try json.objectField("afterValue");
+    try json.write(rule.argument.after_value);
+    try json.objectField("repeatable");
+    try json.write(rule.argument.repeatable);
     try json.endObject();
     try json.objectField("valueGrammar");
     try json.beginObject();
@@ -5066,6 +5109,35 @@ test "completion debug output shows semantic structured context and rules" {
     try std.testing.expect(std.mem.indexOf(u8, output, "position: option") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "kind: option") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "value: --amend") != null);
+}
+
+test "completion debug output exposes active argument state" {
+    const root = "rush-debug-argument-state-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data =
+        \\__tool_actions() { completion candidate create; }
+        \\__tool_names() { completion candidate new-service; }
+        \\complete tool --argument --state action --function __tool_actions
+        \\complete tool --argument --state name --after create --function __tool_names
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    const text_output = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, "tool create n");
+    defer std.testing.allocator.free(text_output);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "argument-state: name") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "after-value: create") != null);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool create n");
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+    const object = parsed.value.object;
+    try std.testing.expectEqualStrings("name", object.get("context").?.object.get("argumentState").?.string);
+    try std.testing.expectEqualStrings("name", object.get("semantic").?.object.get("argumentState").?.string);
 }
 
 test "completion debug output reports dynamic provider failures" {

@@ -97,6 +97,13 @@ Dynamic provider registrations are context-scoped:
   options for `PATTERN` and its nested subcommand positions.
 - `complete PATTERN --argument --function FUNC` runs `FUNC` while completing
   positional arguments at `PATTERN`.
+- `complete PATTERN --argument --index N --function FUNC` runs `FUNC` for the
+  zero-based semantic argument index `N`, after known options and option values
+  are skipped.
+- `complete PATTERN --argument --state NAME [--index N] [--after WORD]
+  [--after-state NAME] [--repeatable] --function FUNC` names positional states
+  for multi-argument flows. Unconditional states without `--index` are assigned
+  in registration order; `--repeatable` makes the state cover later arguments.
 - `complete PATTERN --option-value --long NAME --function FUNC` runs `FUNC` for
   the value of `--NAME` at `PATTERN`.
 - `complete PATTERN --option-value --short C --function FUNC` runs `FUNC` for
@@ -144,7 +151,8 @@ Dynamic providers can inspect the semantic context with:
 completion prefix          # text being completed
 completion command         # root command, such as `git`
 completion command-path    # root plus resolved subcommand path, such as `git commit`
-completion argument-index  # zero-based positional argument index
+completion argument-index  # zero-based semantic argument index
+completion argument-state  # active named argument state, if one matched
 completion previous        # previous semantic word
 completion position        # command, subcommand, option, argument, or option_value
 completion option-name     # active option's declared name during option-value completion

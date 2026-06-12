@@ -427,6 +427,7 @@ pub const CompletionEvalContext = struct {
     command: []const u8 = "",
     command_path: []const u8 = "",
     argument_index: usize = 0,
+    argument_state: ?[]const u8 = null,
     previous: []const u8 = "",
     position: parser.CompletionKind = .command,
     option_value: ?CompletionOptionValue = null,
@@ -475,6 +476,8 @@ pub const CompletionSemanticContext = struct {
     root: []const u8 = "",
     path: []const []const u8 = &.{},
     prefix: []const u8 = "",
+    argument_index: usize = 0,
+    argument_state: ?[]const u8 = null,
     previous: []const u8 = "",
     position: CompletionSemanticPosition = .command,
     option_value: ?CompletionOptionValue = null,
@@ -600,6 +603,9 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.option.long) |long| allocator.free(long);
     if (rule.option.short) |short| allocator.free(short);
     if (rule.option.argument) |argument| allocator.free(argument);
+    if (rule.argument.state) |state| allocator.free(state);
+    if (rule.argument.after_state) |state| allocator.free(state);
+    if (rule.argument.after_value) |value| allocator.free(value);
     if (rule.description) |description| allocator.free(description);
     if (rule.source.manifest_path) |path| allocator.free(path);
 }
@@ -779,10 +785,73 @@ fn completionDynamicRuleMatches(rule: completion.Rule, context: CompletionSemant
     return switch (rule.kind) {
         .dynamic_subcommands => context.position == .subcommand and completionRuleContextMatches(rule, context.root, context.path),
         .dynamic_options => context.position == .option and completionRuleContextAppliesToPath(rule, context.root, context.path),
-        .dynamic_argument => (context.position == .subcommand or context.position == .argument) and completionRuleContextMatches(rule, context.root, context.path),
+        .dynamic_argument => completionArgumentRuleMatches(rule, context),
         .dynamic_option_value => context.position == .option_value and completionRuleContextMatches(rule, context.root, context.path) and completionOptionValueMatches(rule, context.option_value),
         else => false,
     };
+}
+
+fn completionArgumentRuleMatches(rule: completion.Rule, context: CompletionSemanticContext) bool {
+    if (context.position != .subcommand and context.position != .argument) return false;
+    if (!completionRuleContextMatches(rule, context.root, context.path)) return false;
+    if (rule.argument.state) |state| {
+        const active_state = context.argument_state orelse return false;
+        return std.mem.eql(u8, state, active_state);
+    }
+    if (rule.argument.index) |index| {
+        return context.argument_index == index or (rule.argument.repeatable and context.argument_index >= index);
+    }
+    return true;
+}
+
+fn completionActiveArgumentState(rules: []const completion.Rule, root: []const u8, path: []const []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8) ?[]const u8 {
+    for (rules, 0..) |rule, rule_index| {
+        const state = completionArgumentStateForRule(rules, root, path, rule, rule_index) orelse continue;
+        if (completionExplicitArgumentStateMatches(rule.argument, state, argument_index, previous_state, previous_argument)) return state;
+    }
+
+    var implicit_index: usize = 0;
+    for (rules, 0..) |rule, rule_index| {
+        const state = completionArgumentStateForRule(rules, root, path, rule, rule_index) orelse continue;
+        if (completionArgumentStateHasExplicitTransition(rule.argument)) continue;
+        if (argument_index == implicit_index or (rule.argument.repeatable and argument_index >= implicit_index)) return state;
+        implicit_index += 1;
+    }
+    return null;
+}
+
+fn completionArgumentStateForRule(rules: []const completion.Rule, root: []const u8, path: []const []const u8, rule: completion.Rule, rule_index: usize) ?[]const u8 {
+    if (rule.kind != .dynamic_argument or !completionRuleContextMatches(rule, root, path)) return null;
+    const state = rule.argument.state orelse return null;
+    for (rules[0..rule_index]) |previous| {
+        if (previous.kind != .dynamic_argument or !completionRuleContextMatches(previous, root, path)) continue;
+        if (previous.argument.state) |previous_state| {
+            if (std.mem.eql(u8, previous_state, state)) return null;
+        }
+    }
+    return state;
+}
+
+fn completionArgumentStateHasExplicitTransition(argument: completion.Argument) bool {
+    return argument.index != null or argument.after_state != null or argument.after_value != null;
+}
+
+fn completionExplicitArgumentStateMatches(argument: completion.Argument, state: []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8) bool {
+    if (argument.index) |index| {
+        if (argument_index == index or (argument.repeatable and argument_index >= index)) return true;
+    }
+    if (argument.after_state) |after_state| {
+        if (previous_state) |active| {
+            if (std.mem.eql(u8, active, after_state) or (argument.repeatable and std.mem.eql(u8, active, state))) return true;
+        }
+    }
+    if (argument.after_value) |after_value| {
+        if (std.mem.eql(u8, previous_argument, after_value)) return true;
+        if (argument.repeatable) {
+            if (previous_state) |active| if (std.mem.eql(u8, active, state)) return true;
+        }
+    }
+    return false;
 }
 
 fn completionOptionValueMatches(rule: completion.Rule, option_value: ?CompletionOptionValue) bool {
@@ -1626,6 +1695,13 @@ pub const Executor = struct {
                 .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
                 .no_space = rule.option.no_space,
             },
+            .argument = .{
+                .state = if (rule.argument.state) |state| try self.allocator.dupe(u8, state) else null,
+                .index = rule.argument.index,
+                .after_state = if (rule.argument.after_state) |state| try self.allocator.dupe(u8, state) else null,
+                .after_value = if (rule.argument.after_value) |value| try self.allocator.dupe(u8, value) else null,
+                .repeatable = rule.argument.repeatable,
+            },
             .value_grammar = rule.value_grammar,
             .description = if (rule.description) |description| try self.allocator.dupe(u8, description) else null,
             .source = .{
@@ -1786,6 +1862,8 @@ pub const Executor = struct {
         context.command = semantic.root;
         context.command_path = command_path;
         context.prefix = semantic.prefix;
+        context.argument_index = semantic.argument_index;
+        context.argument_state = semantic.argument_state;
         context.previous = semantic.previous;
         context.option_value = semantic.option_value;
         context.value_segment = semantic.value_segment;
@@ -1865,15 +1943,21 @@ pub const Executor = struct {
         var path: std.ArrayList([]const u8) = .empty;
         errdefer path.deinit(self.allocator);
         var index: usize = 1;
+        var argument_index: usize = 0;
+        var previous_argument: []const u8 = "";
+        var previous_argument_state: ?[]const u8 = null;
         var previous: []const u8 = "";
         var suspicious: ?parser.Span = null;
         var option_value: ?CompletionOptionValue = null;
+        var stop_after_unknown_option = false;
         while (index < words.items.len) {
             const token = words.items[index].token;
             const is_current = token.span.start == parser_context.span.start and clamped_cursor <= token.span.end;
             if (is_current or token.span.end > clamped_cursor) break;
             const word = token.lexeme(view.source);
             previous = word;
+            if (stop_after_unknown_option and !findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) break;
+            stop_after_unknown_option = false;
             if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
                 if (matched.takes_value and !matched.attached_value) {
                     if (index + 1 < words.items.len) {
@@ -1892,6 +1976,7 @@ pub const Executor = struct {
             } else if (analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word)) |cluster| {
                 if (!cluster.valid) {
                     suspicious = token.span;
+                    stop_after_unknown_option = true;
                 } else if (cluster.takes_next_value) {
                     if (index + 1 < words.items.len) {
                         const value_token = words.items[index + 1].token;
@@ -1904,13 +1989,18 @@ pub const Executor = struct {
                 }
             } else if (isOptionLike(word)) {
                 suspicious = token.span;
-            } else if (findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) {
+                stop_after_unknown_option = true;
+            } else if (argument_index == 0 and findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) {
                 try path.append(self.allocator, word);
             } else {
-                break;
+                previous_argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
+                previous_argument = word;
+                argument_index += 1;
             }
             index += 1;
         }
+
+        const argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument);
 
         var semantic_prefix = prefix;
         var semantic_replace_start = replace_start;
@@ -1941,7 +2031,7 @@ pub const Executor = struct {
             .command
         else if (std.mem.startsWith(u8, semantic_prefix, "-"))
             .option
-        else if (semantic_prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completion_rules.items, root, path.items))
+        else if (argument_state == null and (semantic_prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completion_rules.items, root, path.items)))
             .subcommand
         else
             .argument;
@@ -1950,6 +2040,8 @@ pub const Executor = struct {
             .root = root,
             .path = try path.toOwnedSlice(self.allocator),
             .prefix = semantic_prefix,
+            .argument_index = argument_index,
+            .argument_state = argument_state,
             .previous = previous,
             .position = position,
             .option_value = option_value,
@@ -9284,7 +9376,11 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_options, .value = function_name };
             rule_set = true;
         } else if (std.mem.eql(u8, option, "--argument")) {
+            const argument = rule.argument;
+            const value_grammar = rule.value_grammar;
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_argument, .value = function_name };
+            rule.argument = argument;
+            rule.value_grammar = value_grammar;
             rule_set = true;
         } else if (std.mem.eql(u8, option, "--option-value")) {
             rule = .{ .root = pattern.root, .path = pattern.path, .kind = .dynamic_option_value, .value = function_name };
@@ -9309,6 +9405,24 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing value name");
             rule.option.argument = command.argv[index].text;
             index += 1;
+        } else if (std.mem.eql(u8, option, "--index")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing argument index");
+            rule.argument.index = std.fmt.parseInt(usize, command.argv[index].text, 10) catch return errorResult(self.allocator, 2, "complete", "invalid argument index");
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--state")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing argument state");
+            rule.argument.state = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--after-state")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing previous argument state");
+            rule.argument.after_state = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--after")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing previous argument value");
+            rule.argument.after_value = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, option, "--repeatable")) {
+            rule.argument.repeatable = true;
         } else if (std.mem.eql(u8, option, "--list-separator") or std.mem.eql(u8, option, "--value-list-separator")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "complete", "missing list separator");
             rule.value_grammar.list_separator = parseCompletionValueSeparator(command.argv[index].text) orelse return errorResult(self.allocator, 2, "complete", "value separator must be one byte");
@@ -9330,6 +9444,8 @@ fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8
     if (rule_set) {
         if (rule.kind == .option and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
         if (rule.kind == .dynamic_option_value and rule.option.long == null and rule.option.short == null) return errorResult(self.allocator, 2, "complete", "missing option spelling");
+        if (rule.argument.hasSelector() and rule.kind != .dynamic_argument) return errorResult(self.allocator, 2, "complete", "argument state options require --argument");
+        if ((rule.argument.after_state != null or rule.argument.after_value != null) and rule.argument.state == null) return errorResult(self.allocator, 2, "complete", "argument transitions require --state");
         if (rule.kind == .dynamic_subcommands or rule.kind == .dynamic_options or rule.kind == .dynamic_argument or rule.kind == .dynamic_option_value) {
             if (rule.value == null) return errorResult(self.allocator, 2, "complete", "missing function name");
         }
@@ -9390,6 +9506,10 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
         const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         const text = try std.fmt.allocPrint(self.allocator, "{d}\n", .{context.argument_index});
         return .{ .allocator = self.allocator, .status = 0, .stdout = text, .stderr = try self.allocator.alloc(u8, 0) };
+    }
+    if (std.mem.eql(u8, subcommand, "argument-state")) {
+        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        return stdoutLine(self.allocator, context.argument_state orelse "", 0);
     }
     if (std.mem.eql(u8, subcommand, "previous")) return completionContextLine(self, subcommand, completionContextValue(self.*, .previous));
     if (std.mem.eql(u8, subcommand, "position")) {
@@ -20200,6 +20320,134 @@ test "dynamic structured argument provider runs after subcommand path" {
     try expectCandidate(candidates, "qemu", .plain);
 }
 
+test "argument state providers handle fixed sequences and skip option values" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__kubectl_types() {
+        \\  completion candidate pods --description "$(completion argument-state):$(completion argument-index)"
+        \\}
+        \\__kubectl_names() {
+        \\  completion candidate nginx --description "$(completion argument-state):$(completion argument-index)"
+        \\}
+        \\complete kubectl --subcommand get
+        \\complete 'kubectl get' --option --long namespace --value-name name
+        \\complete 'kubectl get' --argument --state type --function __kubectl_types
+        \\complete 'kubectl get' --argument --state name --function __kubectl_names
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const type_candidates = try executor.collectCompletionsForInput("kubectl get po", "kubectl get po".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(type_candidates);
+    const pods = findCandidate(type_candidates, "pods") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("type:0", pods.description.?);
+
+    const name_source = "kubectl get --namespace prod pods ng";
+    const name_candidates = try executor.collectCompletionsForInput(name_source, name_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(name_candidates);
+    const nginx = findCandidate(name_candidates, "nginx") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("name:1", nginx.description.?);
+    const context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    try std.testing.expectEqual(@as(usize, 1), context.argument_index);
+    try std.testing.expectEqualStrings("name", context.argument_state.?);
+}
+
+test "argument state providers support repeatable trailing states" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__kubectl_types() { completion candidate pods; }
+        \\__kubectl_names() { completion candidate api; }
+        \\complete kubectl --subcommand get
+        \\complete 'kubectl get' --argument --state type --function __kubectl_types
+        \\complete 'kubectl get' --argument --state name --repeatable --function __kubectl_names
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const second = try executor.collectCompletionsForInput("kubectl get pods a", "kubectl get pods a".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(second);
+    try expectCandidate(second, "api", .plain);
+
+    const third = try executor.collectCompletionsForInput("kubectl get pods nginx a", "kubectl get pods nginx a".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(third);
+    try expectCandidate(third, "api", .plain);
+}
+
+test "argument state providers transition after specific argument values" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_actions() {
+        \\  completion candidate create
+        \\  completion candidate delete
+        \\}
+        \\__tool_names() { completion candidate new-service --description "$(completion argument-state)"; }
+        \\__tool_ids() { completion candidate old-service --description "$(completion argument-state)"; }
+        \\complete tool --argument --state action --function __tool_actions
+        \\complete tool --argument --state name --after create --function __tool_names
+        \\complete tool --argument --state id --after delete --function __tool_ids
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const create = try executor.collectCompletionsForInput("tool create new", "tool create new".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(create);
+    const new_service = findCandidate(create, "new-service") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("name", new_service.description.?);
+    try expectNoCandidate(create, "old-service");
+
+    const delete = try executor.collectCompletionsForInput("tool delete old", "tool delete old".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(delete);
+    const old_service = findCandidate(delete, "old-service") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("id", old_service.description.?);
+    try expectNoCandidate(delete, "new-service");
+}
+
+test "argument providers keep unindexed and indexed fallback paths" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__tool_any() { completion candidate any --description "$(completion argument-state)"; }
+        \\__tool_second() { completion candidate second --description "$(completion argument-index)"; }
+        \\complete tool --argument --function __tool_any
+        \\complete indexed --argument --index 1 --function __tool_second
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const unindexed = try executor.collectCompletionsForInput("tool a", "tool a".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(unindexed);
+    const any = findCandidate(unindexed, "any") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("", any.description.?);
+
+    const first = try executor.collectCompletionsForInput("indexed one", "indexed one".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(first);
+    try expectNoCandidate(first, "second");
+
+    const second = try executor.collectCompletionsForInput("indexed one tw", "indexed one tw".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(second);
+    const second_candidate = findCandidate(second, "second") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("1", second_candidate.description.?);
+}
+
 test "completion candidates reads newline separated values from stdin" {
     var setup = try parseAndLower(std.testing.allocator,
         \\__brew_formulae() {
@@ -20480,7 +20728,7 @@ test "completion functions can read semantic context" {
     try std.testing.expectEqualStrings("git", prefix.display.?);
     try std.testing.expectEqualStrings("checkout", prefix.description.?);
     try std.testing.expectEqual(completion.Kind.option, prefix.kind);
-    const argument_index = findCandidate(candidates, "2") orelse return error.MissingCompletionCandidate;
+    const argument_index = findCandidate(candidates, "1") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqualStrings("argument", argument_index.display.?);
 }
 
