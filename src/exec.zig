@@ -16266,9 +16266,23 @@ test "executor supports Bash indirect and name-prefix parameter operations" {
         \\RUSH_INDIRECT_ALPHA=1
         \\RUSH_INDIRECT_BETA=2
         \\RUSH_INDIRECT_ARR=([0]=zero)
+        \\arr=([0]=zero [2]='two words' [5]=five)
+        \\array_ref='arr[2]'
+        \\array_expr_ref='arr[1 + 1]'
+        \\array_neg_ref='arr[-1]'
+        \\array_at_ref='arr[@]'
+        \\array_star_ref='arr[*]'
         \\printf 'ind:%s\n' "${!name}"
+        \\printf 'array-ind:<%s>|<%s>|<%s>\n' "${!array_ref}" "${!array_expr_ref}" "${!array_neg_ref}"
+        \\printf 'array-unquoted:'
+        \\for value in ${!array_ref}; do printf '<%s>' "$value"; done
+        \\printf '\n'
+        \\printf 'array-quoted-at:'
+        \\printf '<%s>' "${!array_at_ref}"
+        \\printf '\n'
         \\printf 'default-star:<%s>\n' "${!RUSH_INDIRECT_*}"
         \\IFS=:
+        \\printf 'array-quoted-star:<%s>\n' "${!array_star_ref}"
         \\printf 'colon-star:<%s>\n' "${!RUSH_INDIRECT_*}"
         \\printf 'quoted-at:'
         \\printf '<%s>' "${!RUSH_INDIRECT_@}"
@@ -16283,8 +16297,34 @@ test "executor supports Bash indirect and name-prefix parameter operations" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("ind:value\ndefault-star:<RUSH_INDIRECT_ALPHA RUSH_INDIRECT_ARR RUSH_INDIRECT_BETA RUSH_INDIRECT_TARGET>\ncolon-star:<RUSH_INDIRECT_ALPHA:RUSH_INDIRECT_ARR:RUSH_INDIRECT_BETA:RUSH_INDIRECT_TARGET>\nquoted-at:<RUSH_INDIRECT_ALPHA><RUSH_INDIRECT_ARR><RUSH_INDIRECT_BETA><RUSH_INDIRECT_TARGET>\n", result.stdout);
+    try std.testing.expectEqualStrings("ind:value\narray-ind:<two words>|<two words>|<five>\narray-unquoted:<two><words>\narray-quoted-at:<zero><two words><five>\ndefault-star:<RUSH_INDIRECT_ALPHA RUSH_INDIRECT_ARR RUSH_INDIRECT_BETA RUSH_INDIRECT_TARGET>\narray-quoted-star:<zero:two words:five>\ncolon-star:<RUSH_INDIRECT_ALPHA:RUSH_INDIRECT_ARR:RUSH_INDIRECT_BETA:RUSH_INDIRECT_TARGET>\nquoted-at:<RUSH_INDIRECT_ALPHA><RUSH_INDIRECT_ARR><RUSH_INDIRECT_BETA><RUSH_INDIRECT_TARGET>\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor diagnoses malformed Bash indirect array targets" {
+    const cases = [_]struct {
+        script: []const u8,
+        stderr: []const u8,
+    }{
+        .{ .script = "ref='arr[]'; printf '<%s>\\n' \"${!ref}\"; echo after", .stderr = "arr[]: invalid variable name\n" },
+        .{ .script = "ref='arr[1'; printf '<%s>\\n' \"${!ref}\"; echo after", .stderr = "arr[1: invalid variable name\n" },
+        .{ .script = "ref='bad-name[0]'; printf '<%s>\\n' \"${!ref}\"; echo after", .stderr = "bad-name[0]: invalid variable name\n" },
+    };
+
+    for (cases) |case| {
+        var lowered = try parseAndLowerWithOptions(std.testing.allocator, case.script, .{ .features = compat.Features.bash() });
+        defer lowered.parsed.deinit();
+        defer lowered.program.deinit();
+
+        var executor = Executor.init(std.testing.allocator);
+        defer executor.deinit();
+        var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
+        try std.testing.expectEqualStrings("", result.stdout);
+        try std.testing.expectEqualStrings(case.stderr, result.stderr);
+    }
 }
 
 test "executor unsets Bash indexed array elements" {
@@ -16350,6 +16390,7 @@ test "executor keeps Bash array operation forms on POSIX bad-substitution path" 
         "echo ${arr[@]}; echo after",
         "echo ${#arr[@]}; echo after",
         "echo ${!arr[@]}; echo after",
+        "ref='arr[0]'; echo ${!ref}; echo after",
         "echo ${!name}; echo after",
         "echo ${!prefix*}; echo after",
     };

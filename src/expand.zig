@@ -265,6 +265,13 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
                 }
                 continue;
             }
+            if (try bashIndirectWholeArrayExpansion(allocator, parameter, options)) |array_expansion| {
+                switch (array_expansion.whole) {
+                    .at => try appendUnquotedArrayValues(allocator, &fields, &current, array_expansion.name, options, ifs),
+                    .star => try appendUnquotedArrayValuesStar(allocator, &fields, &current, array_expansion.name, options, ifs),
+                }
+                continue;
+            }
             if (bashNamePrefixExpansion(parameter, options.features)) |prefix_expansion| {
                 switch (prefix_expansion.kind) {
                     .at => try appendUnquotedNamePrefixAt(allocator, &fields, &current, prefix_expansion.prefix, options, ifs),
@@ -922,12 +929,40 @@ fn renderIndirectParameter(allocator: std.mem.Allocator, name: []const u8, optio
         return allocator.alloc(u8, 0);
     };
     if (target_name.len == 0) return allocator.alloc(u8, 0);
+    if (try parseIndirectArrayExpansionTarget(allocator, target_name, options)) |array_target| {
+        return switch (array_target.subscript) {
+            .index => |index| renderArrayElement(allocator, array_target.target.text, index, options),
+            .whole => |kind| renderArrayValuesJoined(allocator, array_target.target.text, kind, options),
+        };
+    }
     if (classifyParameterTarget(target_name).kind == .unknown) return allocator.alloc(u8, 0);
     const value = parameterValue(target_name, options) orelse {
         if (options.nounset and !isNounsetExemptParameter(target_name)) return error.NounsetParameter;
         return allocator.alloc(u8, 0);
     };
     return allocator.dupe(u8, value);
+}
+
+fn parseIndirectArrayExpansionTarget(allocator: std.mem.Allocator, target_name: []const u8, options: Options) !?BashArrayExpansionTarget {
+    if (parseBashArrayExpansionTarget(target_name)) |array_target| return array_target;
+    if (looksLikeArrayTarget(target_name)) return invalidIndirectTargetExpansion(allocator, options, target_name);
+    return null;
+}
+
+fn looksLikeArrayTarget(target_name: []const u8) bool {
+    return std.mem.findScalar(u8, target_name, '[') != null or std.mem.findScalar(u8, target_name, ']') != null;
+}
+
+fn invalidIndirectTargetExpansion(allocator: std.mem.Allocator, options: Options, target_name: []const u8) anyerror {
+    if (options.parameter_error) |parameter_error| {
+        const name = try allocator.dupe(u8, target_name);
+        errdefer allocator.free(name);
+        const message = try allocator.dupe(u8, "invalid variable name");
+        parameter_error.clear(allocator);
+        parameter_error.name = name;
+        parameter_error.message = message;
+    }
+    return error.ParameterExpansionFailed;
 }
 
 fn renderNamePrefixJoined(allocator: std.mem.Allocator, prefix: []const u8, kind: ParameterArrayWholeKind, options: Options) ![]const u8 {
@@ -2281,6 +2316,16 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
             segment_start = index;
             continue;
         }
+        if (try quotedIndirectWholeArrayExpansionAt(allocator, text, index, options)) |special| {
+            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            switch (special.expansion.whole) {
+                .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, special.expansion.name, options),
+                .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, special.expansion.name, options, ifs),
+            }
+            index = special.end;
+            segment_start = index;
+            continue;
+        }
         if (quotedNamePrefixExpansionAt(text, index, options.features)) |special| {
             try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
             switch (special.expansion.kind) {
@@ -2309,6 +2354,11 @@ const BashWholeArrayExpansion = struct {
 const BashNamePrefixExpansion = struct {
     prefix: []const u8,
     kind: ParameterArrayWholeKind,
+};
+
+const BashIndirectWholeArrayExpansion = struct {
+    name: []const u8,
+    whole: ParameterArrayWholeKind,
 };
 
 fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
@@ -2342,6 +2392,14 @@ fn quotedNamePrefixExpansionAt(text: []const u8, index: usize, features: compat.
     return .{ .expansion = expansion, .end = close + 1 };
 }
 
+fn quotedIndirectWholeArrayExpansionAt(allocator: std.mem.Allocator, text: []const u8, index: usize, options: Options) !?struct { expansion: BashIndirectWholeArrayExpansion, end: usize } {
+    if (!options.features.isBash() or index + 3 >= text.len or text[index] != '$' or text[index + 1] != '{') return null;
+    const close = std.mem.indexOfScalarPos(u8, text, index + 2, '}') orelse return null;
+    const expression = text[index + 2 .. close];
+    const expansion = (try bashIndirectWholeArrayExpansion(allocator, expression, options)) orelse return null;
+    return .{ .expansion = expansion, .end = close + 1 };
+}
+
 fn bashWholeArrayExpansion(expression: []const u8, features: compat.Features) ?BashWholeArrayExpansion {
     if (!features.isBash()) return null;
     const syntax = parseParameterExpansionSyntax(expression, features);
@@ -2366,6 +2424,29 @@ fn bashNamePrefixExpansion(expression: []const u8, features: compat.Features) ?B
     return switch (expansion.operation) {
         .name_prefix => |operation| .{ .prefix = expansion.target.text, .kind = operation.kind },
         else => null,
+    };
+}
+
+fn bashIndirectWholeArrayExpansion(allocator: std.mem.Allocator, expression: []const u8, options: Options) !?BashIndirectWholeArrayExpansion {
+    if (!options.features.isBash()) return null;
+    const syntax = parseParameterExpansionSyntax(expression, options.features);
+    const expansion = switch (syntax) {
+        .invalid => return null,
+        .expansion => |parsed| parsed,
+    };
+    switch (expansion.operation) {
+        .indirect => {},
+        else => return null,
+    }
+    const target_name = parameterValue(expansion.target.text, options) orelse {
+        if (options.nounset and !isNounsetExemptParameter(expansion.target.text)) return error.NounsetParameter;
+        return null;
+    };
+    if (target_name.len == 0) return null;
+    const array_target = (try parseIndirectArrayExpansionTarget(allocator, target_name, options)) orelse return null;
+    return switch (array_target.subscript) {
+        .index => null,
+        .whole => |kind| .{ .name = array_target.target.text, .whole = kind },
     };
 }
 
@@ -3322,6 +3403,15 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "USER_REF")) return "USER";
     if (std.mem.eql(u8, name, "STATUS_REF")) return "?";
     if (std.mem.eql(u8, name, "BAD_REF")) return "not-a-name";
+    if (std.mem.eql(u8, name, "ARRAY_REF")) return "arr[2]";
+    if (std.mem.eql(u8, name, "ARRAY_EXPR_REF")) return "arr[USER_NUM - 1]";
+    if (std.mem.eql(u8, name, "ARRAY_NEG_REF")) return "arr[-1]";
+    if (std.mem.eql(u8, name, "ARRAY_MISSING_REF")) return "arr[99]";
+    if (std.mem.eql(u8, name, "ARRAY_VALUES_AT_REF")) return "arr[@]";
+    if (std.mem.eql(u8, name, "ARRAY_VALUES_STAR_REF")) return "arr[*]";
+    if (std.mem.eql(u8, name, "ARRAY_EMPTY_SUBSCRIPT_REF")) return "arr[]";
+    if (std.mem.eql(u8, name, "ARRAY_UNCLOSED_SUBSCRIPT_REF")) return "arr[1";
+    if (std.mem.eql(u8, name, "ARRAY_BAD_NAME_REF")) return "bad-name[0]";
     if (std.mem.eql(u8, name, "USER_NUM")) return "3";
     if (std.mem.eql(u8, name, "MIN_INT")) return "-9223372036854775808";
     if (std.mem.eql(u8, name, "OCTAL_NUM")) return "010";
@@ -3827,6 +3917,43 @@ test "parameter expansion supports Bash indirect and name-prefix operations" {
     defer std.testing.allocator.free(indirect);
     try std.testing.expectEqualStrings("rush-user:0:", indirect);
 
+    const indirect_array = try expandWordScalar(std.testing.allocator, "${!ARRAY_REF}:${!ARRAY_EXPR_REF}:${!ARRAY_NEG_REF}:${!ARRAY_MISSING_REF}", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(indirect_array);
+    try std.testing.expectEqualStrings("two words:two words:five:", indirect_array);
+
+    var unquoted_array = try expandWord(std.testing.allocator, "${!ARRAY_REF}", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer unquoted_array.deinit();
+    try std.testing.expectEqual(@as(usize, 2), unquoted_array.fields.len);
+    try std.testing.expectEqualStrings("two", unquoted_array.fields[0]);
+    try std.testing.expectEqualStrings("words", unquoted_array.fields[1]);
+
+    var quoted_array = try expandWord(std.testing.allocator, "\"${!ARRAY_REF}\"", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_array.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_array.fields.len);
+    try std.testing.expectEqualStrings("two words", quoted_array.fields[0]);
+
+    var unquoted_values = try expandWord(std.testing.allocator, "${!ARRAY_VALUES_AT_REF}", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer unquoted_values.deinit();
+    try std.testing.expectEqual(@as(usize, 5), unquoted_values.fields.len);
+    try std.testing.expectEqualStrings("zero", unquoted_values.fields[0]);
+    try std.testing.expectEqualStrings("two", unquoted_values.fields[1]);
+    try std.testing.expectEqualStrings("words", unquoted_values.fields[2]);
+    try std.testing.expectEqualStrings("three", unquoted_values.fields[3]);
+    try std.testing.expectEqualStrings("five", unquoted_values.fields[4]);
+
+    var quoted_values = try expandWord(std.testing.allocator, "\"${!ARRAY_VALUES_AT_REF}\"", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_values.deinit();
+    try std.testing.expectEqual(@as(usize, 4), quoted_values.fields.len);
+    try std.testing.expectEqualStrings("zero", quoted_values.fields[0]);
+    try std.testing.expectEqualStrings("two words", quoted_values.fields[1]);
+    try std.testing.expectEqualStrings("three", quoted_values.fields[2]);
+    try std.testing.expectEqualStrings("five", quoted_values.fields[3]);
+
+    var quoted_star_values = try expandWord(std.testing.allocator, "\"${!ARRAY_VALUES_STAR_REF}\"", .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_star_values.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_star_values.fields.len);
+    try std.testing.expectEqualStrings("zero,two words,three,five", quoted_star_values.fields[0]);
+
     const scalar = try expandWordScalar(std.testing.allocator, "${!RUSH_PREFIX_*}", .{ .env = test_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA RUSH_PREFIX_BETA", scalar);
@@ -3847,6 +3974,26 @@ test "parameter expansion supports Bash indirect and name-prefix operations" {
     try std.testing.expectEqual(@as(usize, 2), quoted_at.fields.len);
     try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA", quoted_at.fields[0]);
     try std.testing.expectEqualStrings("RUSH_PREFIX_BETA", quoted_at.fields[1]);
+}
+
+test "parameter expansion diagnoses malformed Bash indirect array targets" {
+    const cases = [_]struct {
+        raw: []const u8,
+        name: []const u8,
+    }{
+        .{ .raw = "${!ARRAY_EMPTY_SUBSCRIPT_REF}", .name = "arr[]" },
+        .{ .raw = "${!ARRAY_UNCLOSED_SUBSCRIPT_REF}", .name = "arr[1" },
+        .{ .raw = "${!ARRAY_BAD_NAME_REF}", .name = "bad-name[0]" },
+    };
+
+    for (cases) |case| {
+        var parameter_error: ParameterError = .{};
+        defer parameter_error.clear(std.testing.allocator);
+
+        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case.raw, .{ .env = test_env, .features = compat.Features.bash(), .parameter_error = &parameter_error }));
+        try std.testing.expectEqualStrings(case.name, parameter_error.name);
+        try std.testing.expectEqualStrings("invalid variable name", parameter_error.message);
+    }
 }
 
 test "parameter expansion handles Bash negative array subscripts on missing arrays" {

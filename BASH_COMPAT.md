@@ -43,6 +43,15 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - `${!name}` expands the value of the scalar, positional, or special
     parameter named by `name`'s value; empty, unset, or invalid target names
     expand to an empty value unless `nounset` applies
+  - when `name`'s value is an indexed-array element target such as
+    `arr[index]`, `${!name}` resolves the subscript with the same arithmetic and
+    negative-index rules as `${arr[index]}`
+  - when `name`'s value is `arr[@]` or `arr[*]`, `${!name}` expands array
+    values with the same quoted/unquoted `@` and `*` field behavior as direct
+    whole-array value expansion
+  - malformed indirect target strings containing array brackets, such as
+    `arr[]`, `arr[1`, or `bad-name[0]`, stop with an `invalid variable name`
+    parameter diagnostic
   - `${!prefix*}` and `${!prefix@}` enumerate scalar and indexed-array
     variable names with the requested prefix, sorted for deterministic output
   - `*` joins names with the first byte of `IFS`; quoted `@` emits one field
@@ -113,8 +122,6 @@ Current examples:
   - substring `${parameter:offset[:length]}`
   - replacement `${parameter/pattern/repl}`
   - case modification `${parameter^}` / `${parameter,}`
-- Indirect expansion targets beyond scalar, positional, and special parameter
-  names, such as `${!ref}` where `ref='array[index]'`.
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.
 
