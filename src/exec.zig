@@ -3065,6 +3065,30 @@ pub const Executor = struct {
         array.values.items[index] = try self.allocator.dupe(u8, value);
     }
 
+    fn replaceArrayElements(self: *Executor, name: []const u8, elements: []const ArrayAssignmentElement) !void {
+        if (self.isReadonly(name)) return error.ReadonlyVariable;
+
+        var array: ArrayValue = .{};
+        errdefer array.deinit(self.allocator);
+
+        for (elements) |element| {
+            while (array.values.items.len <= element.index) {
+                try array.values.append(self.allocator, try self.allocator.alloc(u8, 0));
+            }
+            self.allocator.free(array.values.items[element.index]);
+            array.values.items[element.index] = try self.allocator.dupe(u8, element.value);
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const result = try self.arrays.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            result.value_ptr.deinit(self.allocator);
+        }
+        result.value_ptr.* = array;
+    }
+
     pub fn getArrayElement(self: Executor, name: []const u8, index: usize) ?[]const u8 {
         const array = self.arrays.get(name) orelse return null;
         if (index >= array.values.items.len) return null;
@@ -6995,6 +7019,18 @@ pub const Executor = struct {
         }
 
         fn apply(self: *AssignmentExpansionScope, assignment: ir.WordRef) !void {
+            if (try self.executor.compoundIndexedArrayAssignment(assignment.text)) |array_assignment| {
+                defer array_assignment.deinit(self.executor.allocator);
+                var old_value = try self.executor.cloneArray(array_assignment.name);
+                errdefer if (old_value) |*value| value.deinit(self.executor.allocator);
+                const owned_name = try self.executor.allocator.dupe(u8, array_assignment.name);
+                errdefer self.executor.allocator.free(owned_name);
+                try self.saved_arrays.append(self.executor.allocator, .{ .name = owned_name, .old_value = old_value });
+                errdefer _ = self.saved_arrays.pop();
+                try self.executor.replaceArrayElements(array_assignment.name, array_assignment.elements);
+                return;
+            }
+
             if (try self.executor.indexedArrayAssignment(assignment.text)) |array_assignment| {
                 var old_value = try self.executor.cloneArray(array_assignment.name);
                 errdefer if (old_value) |*value| value.deinit(self.executor.allocator);
@@ -7098,6 +7134,19 @@ pub const Executor = struct {
         }
 
         for (assignments) |assignment| {
+            if (try self.compoundIndexedArrayAssignment(assignment.text)) |array_assignment| {
+                defer array_assignment.deinit(self.allocator);
+                var old_value = try self.cloneArray(array_assignment.name);
+                errdefer if (old_value) |*value| value.deinit(self.allocator);
+                var owned_name: ?[]u8 = try self.allocator.dupe(u8, array_assignment.name);
+                errdefer if (owned_name) |name| self.allocator.free(name);
+                try saved_arrays.append(self.allocator, .{ .name = owned_name.?, .old_value = old_value });
+                owned_name = null;
+                old_value = null;
+                try self.replaceArrayElements(array_assignment.name, array_assignment.elements);
+                continue;
+            }
+
             if (try self.indexedArrayAssignment(assignment.text)) |array_assignment| {
                 var old_value = try self.cloneArray(array_assignment.name);
                 errdefer if (old_value) |*value| value.deinit(self.allocator);
@@ -7136,6 +7185,12 @@ pub const Executor = struct {
 
     fn applyAssignments(self: *Executor, assignments: []const ir.WordRef) !void {
         for (assignments) |assignment| {
+            if (try self.compoundIndexedArrayAssignment(assignment.text)) |array_assignment| {
+                defer array_assignment.deinit(self.allocator);
+                try self.replaceArrayElements(array_assignment.name, array_assignment.elements);
+                continue;
+            }
+
             if (try self.indexedArrayAssignment(assignment.text)) |array_assignment| {
                 try self.setArrayElement(array_assignment.name, array_assignment.index, array_assignment.value);
                 continue;
@@ -7146,6 +7201,39 @@ pub const Executor = struct {
             try self.setEnv(name, assignment.text[equals + 1 ..]);
             if (self.shell_options.allexport) try self.setExported(name);
         }
+    }
+
+    fn compoundIndexedArrayAssignment(self: *Executor, text: []const u8) !?CompoundIndexedArrayAssignment {
+        const syntax = compoundIndexedArrayAssignmentSyntax(text) orelse return null;
+        var elements: std.ArrayList(ArrayAssignmentElement) = .empty;
+        errdefer elements.deinit(self.allocator);
+
+        var body_index: usize = 0;
+        var next_index: usize = 0;
+        while (true) {
+            while (body_index < syntax.body.len and isShellWhitespace(syntax.body[body_index])) : (body_index += 1) {}
+            if (body_index >= syntax.body.len) break;
+
+            const word_start = body_index;
+            while (body_index < syntax.body.len and !isShellWhitespace(syntax.body[body_index])) : (body_index += 1) {}
+            const word = syntax.body[word_start..body_index];
+
+            var element_index = next_index;
+            var value = word;
+            if (compoundIndexedArrayElementSyntax(word)) |element_syntax| {
+                const arithmetic_value = if (std.mem.trim(u8, element_syntax.index_text, " \t\r\n").len == 0)
+                    0
+                else
+                    expand.evalArithmetic(element_syntax.index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(element_syntax.index_text, err);
+                element_index = std.math.cast(usize, arithmetic_value) orelse return self.arraySubscriptExpansionFailed(element_syntax.index_text, error.InvalidArithmetic);
+                value = element_syntax.value;
+            }
+
+            try elements.append(self.allocator, .{ .index = element_index, .value = value });
+            next_index = element_index + 1;
+        }
+
+        return .{ .name = syntax.name, .elements = try elements.toOwnedSlice(self.allocator) };
     }
 
     fn indexedArrayAssignment(self: *Executor, text: []const u8) !?IndexedArrayAssignment {
@@ -7183,6 +7271,7 @@ pub const Executor = struct {
             if (self.env.get(entry.key_ptr.*)) |value| try map.put(entry.key_ptr.*, value);
         }
         for (assignments) |assignment| {
+            if (compoundIndexedArrayAssignmentSyntax(assignment.text) != null) continue;
             if (indexedArrayAssignmentSyntax(assignment.text) != null) continue;
             const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
             try map.put(assignment.text[0..equals], assignment.text[equals + 1 ..]);
@@ -13978,11 +14067,55 @@ const IndexedArrayAssignment = struct {
     value: []const u8,
 };
 
+const ArrayAssignmentElement = struct {
+    index: usize,
+    value: []const u8,
+};
+
+const CompoundIndexedArrayAssignment = struct {
+    name: []const u8,
+    elements: []ArrayAssignmentElement,
+
+    fn deinit(self: CompoundIndexedArrayAssignment, allocator: std.mem.Allocator) void {
+        allocator.free(self.elements);
+    }
+};
+
+const CompoundIndexedArrayAssignmentSyntax = struct {
+    name: []const u8,
+    body: []const u8,
+};
+
+const CompoundIndexedArrayElementSyntax = struct {
+    index_text: []const u8,
+    value: []const u8,
+};
+
 const IndexedArrayAssignmentSyntax = struct {
     name: []const u8,
     index_text: []const u8,
     value: []const u8,
 };
+
+fn compoundIndexedArrayAssignmentSyntax(text: []const u8) ?CompoundIndexedArrayAssignmentSyntax {
+    if (text.len == 0 or !isShellNameStart(text[0])) return null;
+
+    var name_end: usize = 1;
+    while (name_end < text.len and isShellNameContinue(text[name_end])) : (name_end += 1) {}
+    if (name_end + 3 > text.len) return null;
+    if (text[name_end] != '=' or text[name_end + 1] != '(' or text[text.len - 1] != ')') return null;
+    return .{ .name = text[0..name_end], .body = text[name_end + 2 .. text.len - 1] };
+}
+
+fn compoundIndexedArrayElementSyntax(text: []const u8) ?CompoundIndexedArrayElementSyntax {
+    if (text.len < 4 or text[0] != '[') return null;
+    const close_offset = std.mem.indexOfScalar(u8, text[1..], ']') orelse return null;
+    const close_index = close_offset + 1;
+    if (close_index + 1 >= text.len or text[close_index + 1] != '=') return null;
+    const index_text = text[1..close_index];
+    if (index_text.len == 0) return null;
+    return .{ .index_text = index_text, .value = text[close_index + 2 ..] };
+}
 
 fn indexedArrayAssignmentSyntax(text: []const u8) ?IndexedArrayAssignmentSyntax {
     if (text.len == 0 or !isShellNameStart(text[0])) return null;
@@ -14006,6 +14139,10 @@ fn isShellNameStart(byte: u8) bool {
 
 fn isShellNameContinue(byte: u8) bool {
     return isShellNameStart(byte) or std.ascii.isDigit(byte);
+}
+
+fn isShellWhitespace(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\r' or byte == '\n';
 }
 
 fn builtinTest(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -15576,6 +15713,62 @@ test "executor treats Bash whitespace-only array assignment subscript as zero" {
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("<zero>\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor supports Bash sequential compound indexed array assignment" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\arr=(zero one)
+        \\copy=${arr[1]}
+        \\printf '<%s>|<%s>|<%s>|<%s>\n' "${arr[0]}" "${arr[1]}" "${arr[2]}" "$copy"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<zero>|<one>|<>|<one>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor supports Bash sparse compound indexed array assignment" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\arr=(old value)
+        \\arr=([2]=two [5]=five)
+        \\printf '<%s>|<%s>|<%s>|<%s>\n' "${arr[0]}" "${arr[2]}" "${arr[5]}" "${arr[6]}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<>|<two>|<five>|<>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor preserves default compound assignment parsing behavior" {
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\arr=(zero one)
+        \\printf 'status:%s\n' "$?"
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status:127\n", result.stdout);
+    try std.testing.expectEqualStrings("zero: command not found\n", result.stderr);
 }
 
 test "executor keeps indexed array expansion on POSIX bad-substitution path" {

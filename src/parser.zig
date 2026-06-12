@@ -2792,6 +2792,13 @@ const SyntaxParser = struct {
 
             if (self.at(.word)) {
                 if (!saw_command_word) {
+                    if (self.bashCompoundArrayAssignmentTokenEnd()) |token_end| {
+                        const word = try self.addWordNodeForTokenRange(.assignment_word, self.index, token_end);
+                        try command_children.append(self.allocator, .{ .node = word });
+                        self.index = token_end;
+                        continue;
+                    }
+
                     if (try self.bashIndexedArrayAssignmentTokenEnd()) |token_end| {
                         const word = try self.addWordNodeForTokenRange(.assignment_word, self.index, token_end);
                         try command_children.append(self.allocator, .{ .node = word });
@@ -2985,6 +2992,36 @@ const SyntaxParser = struct {
 
     fn startsListElement(self: SyntaxParser) bool {
         return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
+    }
+
+    fn bashCompoundArrayAssignmentTokenEnd(self: SyntaxParser) ?usize {
+        if (!self.features.isBash() or !self.at(.word)) return null;
+        const first = self.current();
+        const word = first.lexeme(self.source);
+        if (word.len == 0 or !isNameStart(word[0])) return null;
+
+        var name_end: usize = 1;
+        while (name_end < word.len and isNameContinue(word[name_end])) : (name_end += 1) {}
+        if (name_end + 1 != word.len or word[name_end] != '=') return null;
+
+        var index = self.index + 1;
+        if (index >= self.tokens.len or self.tokens[index].kind != .left_paren) return null;
+        if (first.span.end != self.tokens[index].span.start) return null;
+
+        var depth: usize = 1;
+        index += 1;
+        while (index < self.tokens.len) : (index += 1) {
+            switch (self.tokens[index].kind) {
+                .left_paren => depth += 1,
+                .right_paren => {
+                    depth -= 1;
+                    if (depth == 0) return index + 1;
+                },
+                .eof => return null,
+                else => {},
+            }
+        }
+        return null;
     }
 
     fn startsPosixCompoundCommand(self: SyntaxParser) bool {
@@ -3715,6 +3752,77 @@ test "parser gates indexed array assignment words behind Bash mode" {
             .{ .kind = .word, .span = .init(11, 17), .token_start = 8, .token_end = 9 },
             .{ .kind = .word, .span = .init(18, 22), .token_start = 10, .token_end = 11 },
             .{ .kind = .simple_command, .span = .init(0, 22) },
+        },
+    });
+}
+
+test "parser gates compound indexed array assignment words behind Bash mode" {
+    try expectParse("arr=(zero one) echo", .{
+        .options = .{ .features = compat.Features.bash() },
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .left_paren, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 9) },
+            .{ .kind = .whitespace, .span = .init(9, 10) },
+            .{ .kind = .word, .span = .init(10, 13) },
+            .{ .kind = .right_paren, .span = .init(13, 14) },
+            .{ .kind = .whitespace, .span = .init(14, 15) },
+            .{ .kind = .word, .span = .init(15, 19) },
+            .{ .kind = .eof, .span = .empty(19) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 19) },
+            .{ .kind = .assignment_word, .span = .init(0, 14), .token_start = 0, .token_end = 6 },
+            .{ .kind = .command_word, .span = .init(15, 19), .token_start = 7, .token_end = 8 },
+            .{ .kind = .simple_command, .span = .init(0, 19) },
+        },
+    });
+
+    try expectParse("arr=([2]=two [5]=five) echo", .{
+        .options = .{ .features = compat.Features.bash() },
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .left_paren, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 12) },
+            .{ .kind = .whitespace, .span = .init(12, 13) },
+            .{ .kind = .word, .span = .init(13, 21) },
+            .{ .kind = .right_paren, .span = .init(21, 22) },
+            .{ .kind = .whitespace, .span = .init(22, 23) },
+            .{ .kind = .word, .span = .init(23, 27) },
+            .{ .kind = .eof, .span = .empty(27) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 27) },
+            .{ .kind = .assignment_word, .span = .init(0, 22), .token_start = 0, .token_end = 6 },
+            .{ .kind = .command_word, .span = .init(23, 27), .token_start = 7, .token_end = 8 },
+            .{ .kind = .simple_command, .span = .init(0, 27) },
+        },
+    });
+
+    try expectParse("arr=(zero one) echo", .{
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .left_paren, .span = .init(4, 5) },
+            .{ .kind = .word, .span = .init(5, 9) },
+            .{ .kind = .whitespace, .span = .init(9, 10) },
+            .{ .kind = .word, .span = .init(10, 13) },
+            .{ .kind = .right_paren, .span = .init(13, 14) },
+            .{ .kind = .whitespace, .span = .init(14, 15) },
+            .{ .kind = .word, .span = .init(15, 19) },
+            .{ .kind = .eof, .span = .empty(19) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 19) },
+            .{ .kind = .assignment_word, .span = .init(0, 4), .token_start = 0, .token_end = 1 },
+            .{ .kind = .simple_command, .span = .init(0, 4), .token_start = 0, .token_end = 1 },
+            .{ .kind = .pipeline, .span = .init(0, 4), .token_start = 0, .token_end = 1 },
+            .{ .kind = .command_word, .span = .init(5, 9), .token_start = 2, .token_end = 3 },
+            .{ .kind = .word, .span = .init(10, 13), .token_start = 4, .token_end = 5 },
+            .{ .kind = .simple_command, .span = .init(5, 13), .token_start = 2, .token_end = 5 },
+            .{ .kind = .pipeline, .span = .init(5, 13), .token_start = 2, .token_end = 5 },
+            .{ .kind = .list, .span = .init(5, 13), .token_start = 2, .token_end = 5 },
+            .{ .kind = .subshell, .span = .init(4, 15), .token_start = 1, .token_end = 7 },
+            .{ .kind = .command_word, .span = .init(15, 19), .token_start = 7, .token_end = 8 },
         },
     });
 }

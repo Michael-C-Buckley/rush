@@ -17,6 +17,8 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - unary `!` forms covered by executor tests
 - Indexed array assignment and expansion baseline:
   - `name[index]=word`
+  - compound indexed assignment such as `name=(zero one)` and
+    `name=([2]=two [5]=five)`
   - arithmetic subscript expressions such as `name[i + 1]=word`
   - subscript expressions containing nested parameter, command, or arithmetic substitutions
   - whitespace inside assignment subscripts, such as `name[ i + 1 ]=word`
@@ -56,7 +58,6 @@ Current examples:
 ## Tracked future work
 
 - Broader Bash indexed array semantics:
-  - compound assignment
   - whole-array expansion
   - array-specific parameter operations
   - negative relative indices
