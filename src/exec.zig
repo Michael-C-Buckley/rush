@@ -7328,11 +7328,12 @@ pub const Executor = struct {
 
         var body_index: usize = 0;
         var next_index: usize = 0;
+        var max_index: ?usize = null;
         while (try nextCompoundIndexedArrayElement(self.allocator, syntax.body, &body_index)) |word| {
             var element_index = next_index;
             var value_raw = word;
             if (compoundIndexedArrayElementSyntax(word)) |element_syntax| {
-                element_index = try self.evaluateArrayAssignmentIndex(syntax.name, element_syntax.index_text);
+                element_index = try self.evaluateArrayAssignmentIndexWithMax(element_syntax.index_text, max_index);
                 value_raw = element_syntax.value;
             }
 
@@ -7340,6 +7341,7 @@ pub const Executor = struct {
             errdefer if (value) |owned| self.allocator.free(owned);
             try elements.append(self.allocator, .{ .index = element_index, .value = value.? });
             value = null;
+            max_index = if (max_index) |current| @max(current, element_index) else element_index;
             next_index = element_index + 1;
         }
 
@@ -7359,13 +7361,17 @@ pub const Executor = struct {
     }
 
     fn evaluateArrayAssignmentIndex(self: *Executor, name: []const u8, index_text: []const u8) !usize {
+        return self.evaluateArrayAssignmentIndexWithMax(index_text, self.arrayMaxIndex(name));
+    }
+
+    fn evaluateArrayAssignmentIndexWithMax(self: *Executor, index_text: []const u8, max_index: ?usize) !usize {
         const value = if (std.mem.trim(u8, index_text, " \t\r\n").len == 0)
             0
         else
             expand.evalArithmetic(index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(index_text, err);
         if (value < 0) {
-            const max_index = self.arrayMaxIndex(name) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
-            const base = std.math.cast(i64, max_index) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+            const current_max = max_index orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+            const base = std.math.cast(i64, current_max) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
             const resolved = base + 1 + value;
             if (resolved < 0) return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
             return std.math.cast(usize, resolved) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
@@ -7381,12 +7387,14 @@ pub const Executor = struct {
             else => return err,
         };
 
-        const expression = try self.allocator.dupe(u8, index_text);
-        errdefer self.allocator.free(expression);
-        const owned_message = try self.allocator.dupe(u8, message);
-        self.arithmetic_error.clear(self.allocator);
-        self.arithmetic_error.expression = expression;
-        self.arithmetic_error.message = owned_message;
+        {
+            const expression = try self.allocator.dupe(u8, index_text);
+            errdefer self.allocator.free(expression);
+            const owned_message = try self.allocator.dupe(u8, message);
+            self.arithmetic_error.clear(self.allocator);
+            self.arithmetic_error.expression = expression;
+            self.arithmetic_error.message = owned_message;
+        }
         return error.ArithmeticExpansionFailed;
     }
 
@@ -16048,6 +16056,56 @@ test "executor applies Bash compound indexed array element expansion per element
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "executor resolves Bash negative subscripts within compound indexed array assignment" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\arr=([2]=two [-1]=TWO next [1]=one [-2]=ONE)
+        \\printf 'keys:'
+        \\printf '<%s>' "${!arr[@]}"
+        \\printf ' vals:'
+        \\printf '<%s>' "${arr[@]}"
+        \\printf ' direct:<%s>/<%s>/<%s>\n' "${arr[1]}" "${arr[2]}" "${arr[3]}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("keys:<1><2><3> vals:<one><ONE><next> direct:<one>/<ONE>/<next>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor rejects Bash negative array subscripts on empty arrays" {
+    const cases = [_]struct {
+        script: []const u8,
+        stderr: []const u8,
+    }{
+        .{ .script = "printf '<%s>\\n' \"${missing[-1]}\"; echo after", .stderr = "parameter: bad substitution\n" },
+        .{ .script = "arr=(); printf '<%s>\\n' \"${arr[-1]}\"; echo after", .stderr = "parameter: bad substitution\n" },
+        .{ .script = "arr=(); arr[-1]=value; echo after", .stderr = "arithmetic: invalid arithmetic expression\n" },
+        .{ .script = "arr=([-1]=value); echo after", .stderr = "arithmetic: invalid arithmetic expression\n" },
+        .{ .script = "arr=(); unset 'arr[-1]'; echo after", .stderr = "arithmetic: invalid arithmetic expression\n" },
+    };
+
+    for (cases) |case| {
+        var lowered = try parseAndLowerWithOptions(std.testing.allocator, case.script, .{ .features = compat.Features.bash() });
+        defer lowered.parsed.deinit();
+        defer lowered.program.deinit();
+
+        var executor = Executor.init(std.testing.allocator);
+        defer executor.deinit();
+        var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
+        try std.testing.expectEqualStrings("", result.stdout);
+        try std.testing.expectEqualStrings(case.stderr, result.stderr);
+    }
+}
+
 test "executor supports Bash whole indexed array expansion operations" {
     var lowered = try parseAndLowerWithOptions(std.testing.allocator,
         \\arr=([0]=zero [2]='two words' [5]=five)
@@ -16130,6 +16188,7 @@ test "executor keeps indexed array expansion on POSIX bad-substitution path" {
 
 test "executor keeps Bash array operation forms on POSIX bad-substitution path" {
     const cases = [_][]const u8{
+        "echo ${arr[-1]}; echo after",
         "echo ${arr[@]}; echo after",
         "echo ${#arr[@]}; echo after",
         "echo ${!arr[@]}; echo after",

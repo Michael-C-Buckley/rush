@@ -3504,6 +3504,22 @@ test "parameter expansion supports Bash whole indexed array operations" {
     try std.testing.expectEqualStrings("4:9:five:two words:0 2 3 5", scalar);
 }
 
+test "parameter expansion rejects Bash negative array subscripts on empty arrays" {
+    const cases = [_][]const u8{
+        "${missing[-1]}",
+        "${#missing[-1]}",
+    };
+
+    for (cases) |case| {
+        var parameter_error: ParameterError = .{};
+        defer parameter_error.clear(std.testing.allocator);
+
+        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case, .{ .features = compat.Features.bash(), .parameter_error = &parameter_error }));
+        try std.testing.expectEqualStrings("parameter", parameter_error.name);
+        try std.testing.expectEqualStrings("bad substitution", parameter_error.message);
+    }
+}
+
 test "parameter expansion reports arithmetic errors in Bash array subscripts" {
     var arithmetic_error: ArithmeticError = .{};
     defer arithmetic_error.clear(std.testing.allocator);

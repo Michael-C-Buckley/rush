@@ -36,10 +36,25 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - `unset 'name[index]'` for individual indexed array elements
   - negative relative subscripts against the current maximum set index, such as
     `${name[-1]}`
+  - negative relative subscripts in compound indexed assignment elements after
+    an earlier element establishes a maximum index, such as
+    `name=([2]=two [-1]=TWO)`
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
   - empty delimiter operand as NUL
+
+## Bash-version-specific diagnostics
+
+- Negative indexed-array subscripts are version-specific in Bash itself: older
+  Bash releases reject more forms than modern Bash, and exact `bad array
+  subscript` diagnostics vary by release and context.
+- Rush Bash mode follows the modern resolution rule for supported negative
+  subscripts. When a negative subscript cannot resolve because the array has no
+  current maximum index, Rush deliberately keeps the existing generic expansion
+  diagnostics for now (`parameter: bad substitution` for parameter expansion;
+  `arithmetic: invalid arithmetic expression` for assignment and `unset`
+  subscript resolution) rather than pinning one Bash release's wording.
 
 ## Default common-shell compatibility
 
@@ -72,8 +87,8 @@ Current examples:
 - Broader Bash indexed array semantics:
   - associative arrays and declaration builtins
   - array slicing and transformation forms
-  - long-tail edge cases for negative subscripts on empty arrays and compound
-    assignments
+  - exact `bad array subscript` diagnostics across Bash-version-specific
+    indexed-array contexts
 - String parameter expansion extensions:
   - substring `${parameter:offset[:length]}`
   - replacement `${parameter/pattern/repl}`
