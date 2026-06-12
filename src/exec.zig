@@ -459,6 +459,8 @@ pub const CompletionSemanticContext = struct {
     replace_end: usize = 0,
     suspicious_start: ?usize = null,
     suspicious_end: ?usize = null,
+    parser_position: parser.CompletionKind = .command,
+    parser_source_offset: usize = 0,
 
     pub fn deinit(self: *CompletionSemanticContext) void {
         self.allocator.free(self.path);
@@ -1673,26 +1675,24 @@ pub const Executor = struct {
         const command_path = try completionCommandPath(self.allocator, semantic);
         defer self.allocator.free(command_path);
 
-        if (semantic.root.len != 0) {
-            context.command = semantic.root;
-            context.command_path = command_path;
-            context.prefix = semantic.prefix;
-            context.previous = semantic.previous;
-            context.option_value = semantic.option_value;
-            context.replace_start = semantic.replace_start;
-            context.replace_end = semantic.replace_end;
-            context.position = switch (semantic.position) {
-                .command => .command,
-                .option, .option_value, .subcommand, .redirect_target, .argument => .argument,
-            };
-        }
+        context.command = semantic.root;
+        context.command_path = command_path;
+        context.prefix = semantic.prefix;
+        context.previous = semantic.previous;
+        context.option_value = semantic.option_value;
+        context.replace_start = semantic.replace_start;
+        context.replace_end = semantic.replace_end;
+        context.position = switch (semantic.position) {
+            .command => .command,
+            .option, .option_value, .subcommand, .redirect_target, .argument => .argument,
+        };
 
         if (completing_parameter) {
             return try self.collectParameterCompletions(parameter_context);
         }
 
         const candidates = try self.collectCompletionsWithContext(context.command, context, options);
-        if (semantic.root.len == 0 or semantic.position == .command) return candidates;
+        if (semantic.position == .command) return candidates;
 
         var builder: CompletionBuilder = .{};
         errdefer builder.deinit(self.allocator);
@@ -1725,29 +1725,34 @@ pub const Executor = struct {
     }
 
     pub fn analyzeCompletionsForInput(self: *Executor, source: []const u8, cursor: usize) !CompletionSemanticContext {
-        var parsed = try parser.parse(self.allocator, source, .{ .mode = .interactive, .cursor = cursor });
+        const view = try completionInputView(self.allocator, source, cursor);
+        var parsed = try parser.parse(self.allocator, view.source, .{ .mode = .interactive, .cursor = view.cursor });
         defer parsed.deinit();
-        const parser_context = parser.completionContext(parsed, cursor);
-        const clamped_cursor = @min(cursor, source.len);
+        const parser_context = parser.completionContext(parsed, view.cursor);
+        const clamped_cursor = view.cursor;
 
-        var words: std.ArrayList(parser.Token) = .empty;
+        var words: std.ArrayList(CompletionWord) = .empty;
         defer words.deinit(self.allocator);
-        for (parsed.tokens) |token| {
-            if (token.span.start > clamped_cursor) break;
-            if (token.kind == .word) try words.append(self.allocator, token);
-        }
+        try appendActiveCompletionWords(self.allocator, &words, parsed, parser_context);
+
+        const prefix = completionContextPrefix(view.source, parser_context);
+        const replace_start = view.offset + parser_context.span.start;
+        const replace_end = view.offset + @min(parser_context.cursor, parser_context.span.end);
 
         if (words.items.len == 0) {
             return .{
                 .allocator = self.allocator,
                 .path = try self.allocator.alloc([]const u8, 0),
-                .prefix = completionContextPrefix(source, parser_context),
-                .replace_start = parser_context.span.start,
-                .replace_end = @min(parser_context.cursor, parser_context.span.end),
+                .prefix = prefix,
+                .position = completionPositionForParserContext(parser_context, prefix),
+                .replace_start = replace_start,
+                .replace_end = replace_end,
+                .parser_position = parser_context.kind,
+                .parser_source_offset = view.offset,
             };
         }
 
-        const root = words.items[0].lexeme(source);
+        const root = words.items[0].token.lexeme(view.source);
         var path: std.ArrayList([]const u8) = .empty;
         errdefer path.deinit(self.allocator);
         var index: usize = 1;
@@ -1755,19 +1760,19 @@ pub const Executor = struct {
         var suspicious: ?parser.Span = null;
         var option_value: ?CompletionOptionValue = null;
         while (index < words.items.len) {
-            const token = words.items[index];
+            const token = words.items[index].token;
             const is_current = token.span.start == parser_context.span.start and clamped_cursor <= token.span.end;
             if (is_current or token.span.end > clamped_cursor) break;
-            const word = token.lexeme(source);
+            const word = token.lexeme(view.source);
             previous = word;
             if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
                 if (matched.takes_value and !matched.attached_value) {
                     if (index + 1 < words.items.len) {
-                        const value_token = words.items[index + 1];
+                        const value_token = words.items[index + 1].token;
                         const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
                         if (!value_is_current and value_token.span.end <= clamped_cursor) {
                             index += 1;
-                            previous = value_token.lexeme(source);
+                            previous = value_token.lexeme(view.source);
                         } else {
                             option_value = .{ .name = matched.name, .spelling = matched.spelling };
                         }
@@ -1780,11 +1785,11 @@ pub const Executor = struct {
                     suspicious = token.span;
                 } else if (cluster.takes_next_value) {
                     if (index + 1 < words.items.len) {
-                        const value_token = words.items[index + 1];
+                        const value_token = words.items[index + 1].token;
                         const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
                         if (!value_is_current and value_token.span.end <= clamped_cursor) {
                             index += 1;
-                            previous = value_token.lexeme(source);
+                            previous = value_token.lexeme(view.source);
                         }
                     }
                 }
@@ -1798,24 +1803,26 @@ pub const Executor = struct {
             index += 1;
         }
 
-        var prefix = completionContextPrefix(source, parser_context);
-        var replace_start = parser_context.span.start;
+        var semantic_prefix = prefix;
+        var semantic_replace_start = replace_start;
         if (option_value == null) {
-            if (attachedCompletionOptionValue(self.completion_rules.items, root, path.items, prefix)) |attached| {
+            if (attachedCompletionOptionValue(self.completion_rules.items, root, path.items, semantic_prefix)) |attached| {
                 option_value = .{ .name = attached.name, .spelling = attached.spelling };
-                prefix = prefix[attached.value_offset..];
-                replace_start += attached.value_offset;
+                semantic_prefix = semantic_prefix[attached.value_offset..];
+                semantic_replace_start += attached.value_offset;
             }
         }
         const position: CompletionSemanticPosition = if (option_value != null)
             .option_value
         else if (parser_context.kind == .redirect_target)
             .redirect_target
+        else if (parser_context.kind == .assignment_name)
+            .command
         else if (parser_context.kind == .command)
             .command
-        else if (std.mem.startsWith(u8, prefix, "-"))
+        else if (std.mem.startsWith(u8, semantic_prefix, "-"))
             .option
-        else if (prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completion_rules.items, root, path.items))
+        else if (semantic_prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completion_rules.items, root, path.items))
             .subcommand
         else
             .argument;
@@ -1823,14 +1830,16 @@ pub const Executor = struct {
             .allocator = self.allocator,
             .root = root,
             .path = try path.toOwnedSlice(self.allocator),
-            .prefix = prefix,
+            .prefix = semantic_prefix,
             .previous = previous,
             .position = position,
             .option_value = option_value,
-            .replace_start = replace_start,
-            .replace_end = @min(parser_context.cursor, parser_context.span.end),
-            .suspicious_start = if (suspicious) |span| span.start else null,
-            .suspicious_end = if (suspicious) |span| span.end else null,
+            .replace_start = semantic_replace_start,
+            .replace_end = replace_end,
+            .suspicious_start = if (suspicious) |span| view.offset + span.start else null,
+            .suspicious_end = if (suspicious) |span| view.offset + span.end else null,
+            .parser_position = parser_context.kind,
+            .parser_source_offset = view.offset,
         };
     }
 
@@ -9587,21 +9596,24 @@ fn parseCompletionKind(name: []const u8) ?completion.Kind {
 }
 
 pub fn completionEvalContextForInput(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !CompletionEvalContext {
-    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = cursor });
+    const view = try completionInputView(allocator, source, cursor);
+    var parsed = try parser.parse(allocator, view.source, .{ .mode = .interactive, .cursor = view.cursor });
     defer parsed.deinit();
-    const context = parser.completionContext(parsed, cursor);
-    const prefix = completionContextPrefix(source, context);
+    const context = parser.completionContext(parsed, view.cursor);
+    const prefix = completionContextPrefix(view.source, context);
     const current_token_index = context.token_index;
 
     var command: []const u8 = "";
     var previous: []const u8 = "";
     var argument_index: usize = 0;
     var words_seen: usize = 0;
-    for (parsed.tokens, 0..) |token, index| {
-        if (token.span.start > context.cursor) break;
-        if (token.kind != .word) continue;
-        const is_current_token = index == current_token_index and context.cursor <= token.span.end;
-        const word = token.lexeme(source);
+    var words: std.ArrayList(CompletionWord) = .empty;
+    defer words.deinit(allocator);
+    try appendActiveCompletionWords(allocator, &words, parsed, context);
+    for (words.items) |word_token| {
+        const token = word_token.token;
+        const is_current_token = word_token.index == current_token_index and context.cursor <= token.span.end;
+        const word = token.lexeme(view.source);
         if (words_seen == 0) {
             command = word;
         } else {
@@ -9617,8 +9629,123 @@ pub fn completionEvalContextForInput(allocator: std.mem.Allocator, source: []con
         .argument_index = argument_index,
         .previous = previous,
         .position = context.kind,
-        .replace_start = context.span.start,
-        .replace_end = @min(context.cursor, context.span.end),
+        .replace_start = view.offset + context.span.start,
+        .replace_end = view.offset + @min(context.cursor, context.span.end),
+    };
+}
+
+const CompletionInputView = struct {
+    source: []const u8,
+    cursor: usize,
+    offset: usize,
+};
+
+const CompletionWord = struct {
+    index: usize,
+    token: parser.Token,
+};
+
+const TokenRange = struct {
+    start: usize,
+    end: usize,
+};
+
+fn completionInputView(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !CompletionInputView {
+    const clamped_cursor = @min(cursor, source.len);
+    if (try commandSubstitutionCompletionValueSpan(allocator, source, clamped_cursor)) |span| {
+        return .{
+            .source = source[span.start..span.end],
+            .cursor = clamped_cursor - span.start,
+            .offset = span.start,
+        };
+    }
+    return .{ .source = source, .cursor = clamped_cursor, .offset = 0 };
+}
+
+fn commandSubstitutionCompletionValueSpan(allocator: std.mem.Allocator, source: []const u8, cursor: usize) !?parser.Span {
+    var best: ?parser.Span = null;
+    var index: usize = 0;
+    var single = false;
+    var double = false;
+    while (index < cursor) : (index += 1) {
+        const byte = source[index];
+        if (byte == '\\' and !single) {
+            if (index + 1 < cursor) index += 1;
+            continue;
+        }
+        if (byte == '\'' and !double) {
+            single = !single;
+            continue;
+        }
+        if (byte == '"' and !single) {
+            double = !double;
+            continue;
+        }
+        if (single or byte != '$' or index + 1 >= source.len or source[index + 1] != '(') continue;
+        if (index + 2 < source.len and source[index + 2] == '(') continue;
+
+        const value_start = index + 2;
+        if (cursor < value_start) continue;
+        if (try parser.commandSubstitutionEnd(allocator, source, source.len, index)) |end| {
+            const value_end = end - 1;
+            if (cursor <= value_end) best = .init(value_start, value_end);
+        } else {
+            best = .init(value_start, source.len);
+        }
+    }
+    return best;
+}
+
+fn appendActiveCompletionWords(allocator: std.mem.Allocator, words: *std.ArrayList(CompletionWord), parsed: parser.ParseResult, context: parser.CompletionContext) !void {
+    const range = activeSimpleCommandTokenRange(parsed, context) orelse return;
+    for (range.start..range.end) |index| {
+        const token = parsed.tokens[index];
+        if (token.span.start > context.cursor) break;
+        if (token.kind != .word) continue;
+        const node_kind = parser.nodeKindForToken(parsed, index) orelse continue;
+        switch (node_kind) {
+            .command_word, .word => {},
+            .assignment_word, .io_number => continue,
+            else => continue,
+        }
+        if (parser.tokenHasNodeKind(parsed, index, .redirection)) continue;
+        try words.append(allocator, .{ .index = index, .token = token });
+    }
+}
+
+fn activeSimpleCommandTokenRange(parsed: parser.ParseResult, context: parser.CompletionContext) ?TokenRange {
+    if (context.token_index) |token_index| {
+        if (simpleCommandNodeForToken(parsed, token_index)) |node| {
+            return .{ .start = node.token_start, .end = node.token_end };
+        }
+    }
+
+    var best: ?parser.Node = null;
+    for (parsed.nodes) |node| {
+        if (node.kind != .simple_command) continue;
+        if (!node.span.touches(context.cursor)) continue;
+        if (best == null or node.span.len() < best.?.span.len()) best = node;
+    }
+    if (best) |node| return .{ .start = node.token_start, .end = node.token_end };
+    return null;
+}
+
+fn simpleCommandNodeForToken(parsed: parser.ParseResult, token_index: usize) ?parser.Node {
+    var best: ?parser.Node = null;
+    for (parsed.nodes) |node| {
+        if (node.kind != .simple_command) continue;
+        if (token_index < node.token_start or token_index >= node.token_end) continue;
+        if (best == null or node.span.len() < best.?.span.len()) best = node;
+    }
+    return best;
+}
+
+fn completionPositionForParserContext(context: parser.CompletionContext, prefix: []const u8) CompletionSemanticPosition {
+    return switch (context.kind) {
+        .command, .assignment_name => .command,
+        .redirect_target => .redirect_target,
+        .argument, .assignment_value, .quoted_string => if (std.mem.startsWith(u8, prefix, "-")) .option else .argument,
+        .parameter, .separator => .argument,
     };
 }
 
@@ -19243,6 +19370,90 @@ test "completion analysis handles nested subcommands and unknown options conserv
     try std.testing.expectEqual(@as(usize, 0), unknown_analysis.path.len);
     try std.testing.expect(unknown_analysis.suspicious_start != null);
     try std.testing.expectEqualStrings("prod", unknown_analysis.previous);
+}
+
+test "parser-aware completion recovers command roles across shell edge contexts" {
+    const path = "rush-completion-matrix-file.txt";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
+
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --subcommand run
+        \\complete 'tool run' --option --long flag
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const subcommand_sources = [_][]const u8{
+        "echo ok | tool r",
+        "true; tool r",
+        "false && tool r",
+        "true || tool r",
+        "echo $(tool r",
+        "echo $(tool r)",
+        "echo \"$(tool r",
+        "echo $(echo $(tool r",
+        "{ tool r",
+        "( tool r",
+        "if true; then tool r",
+    };
+    for (subcommand_sources) |source| {
+        const cursor = if (std.mem.endsWith(u8, source, ")")) source.len - 1 else source.len;
+        const candidates = try executor.collectCompletionsForInput(source, cursor, .{ .io = std.testing.io });
+        defer executor.freeCompletions(candidates);
+        try expectCandidate(candidates, "run", .subcommand);
+    }
+
+    const option_source = "echo ok | tool run --f";
+    const option_candidates = try executor.collectCompletionsForInput(option_source, option_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(option_candidates);
+    try expectCandidate(option_candidates, "--flag", .option);
+
+    const assignment_source = "VALUE=rush-completion-matrix";
+    var assignment_analysis = try executor.analyzeCompletionsForInput(assignment_source, assignment_source.len);
+    defer assignment_analysis.deinit();
+    try std.testing.expectEqualStrings("", assignment_analysis.root);
+    try std.testing.expectEqual(CompletionSemanticPosition.argument, assignment_analysis.position);
+    try std.testing.expectEqualStrings("rush-completion-matrix", assignment_analysis.prefix);
+    try std.testing.expectEqual(@as(usize, "VALUE=".len), assignment_analysis.replace_start);
+    const assignment_candidates = try executor.collectCompletionsForInput(assignment_source, assignment_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(assignment_candidates);
+    try expectCandidate(assignment_candidates, path, .file);
+
+    const redirect_source = "tool run > rush-completion-matrix";
+    var redirect_analysis = try executor.analyzeCompletionsForInput(redirect_source, redirect_source.len);
+    defer redirect_analysis.deinit();
+    try std.testing.expectEqualStrings("tool", redirect_analysis.root);
+    try std.testing.expectEqual(@as(usize, 1), redirect_analysis.path.len);
+    try std.testing.expectEqualStrings("run", redirect_analysis.path[0]);
+    try std.testing.expectEqual(CompletionSemanticPosition.redirect_target, redirect_analysis.position);
+    const redirect_candidates = try executor.collectCompletionsForInput(redirect_source, redirect_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(redirect_candidates);
+    try expectCandidate(redirect_candidates, path, .file);
+
+    const incomplete_redirect = "tool run > ";
+    var incomplete_redirect_analysis = try executor.analyzeCompletionsForInput(incomplete_redirect, incomplete_redirect.len);
+    defer incomplete_redirect_analysis.deinit();
+    try std.testing.expectEqualStrings("tool", incomplete_redirect_analysis.root);
+    try std.testing.expectEqual(CompletionSemanticPosition.redirect_target, incomplete_redirect_analysis.position);
+
+    const incomplete_quote = "tool \"r";
+    var quote_analysis = try executor.analyzeCompletionsForInput(incomplete_quote, incomplete_quote.len);
+    defer quote_analysis.deinit();
+    try std.testing.expectEqualStrings("tool", quote_analysis.root);
+    try std.testing.expectEqual(CompletionSemanticPosition.subcommand, quote_analysis.position);
+    try std.testing.expectEqual(parser.CompletionKind.quoted_string, quote_analysis.parser_position);
+
+    const command_after_control = "if true; then ec";
+    const command_candidates = try executor.collectCompletionsForInput(command_after_control, command_after_control.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(command_candidates);
+    try expectCandidate(command_candidates, "echo", .builtin);
 }
 
 test "completion diagnostics report unknown command" {

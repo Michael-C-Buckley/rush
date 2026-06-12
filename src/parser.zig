@@ -641,6 +641,9 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
         const token = result.tokens[token_index];
         if (token.kind == .word) {
             if (nodeKindForToken(result, token_index)) |node_kind| {
+                if (node_kind == .word and tokenHasNodeKind(result, token_index, .redirection)) {
+                    return .{ .kind = .redirect_target, .cursor = clamped_cursor, .token_index = token_index, .span = token.span };
+                }
                 if (node_kind == .assignment_word) {
                     return assignmentCompletionContext(result, token_index, clamped_cursor);
                 }
@@ -661,6 +664,9 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
     if (previous_token.kind == .word) {
         if (nodeKindForToken(result, previous)) |node_kind| {
             if (previous_token.span.end < clamped_cursor) {
+                if (node_kind == .assignment_word and !simpleCommandHasCommandWordForToken(result, previous)) {
+                    return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+                }
                 if (node_kind == .command_word or node_kind == .word or node_kind == .assignment_word) {
                     return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
                 }
@@ -668,9 +674,18 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
             if (node_kind == .command_word) {
                 return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
             }
+            if (node_kind == .assignment_word and previous_token.span.touches(clamped_cursor)) {
+                return assignmentCompletionContext(result, previous, clamped_cursor);
+            }
+            if (node_kind == .word and previous_token.span.touches(clamped_cursor) and tokenHasNodeKind(result, previous, .redirection)) {
+                return .{ .kind = .redirect_target, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
+            }
             if (node_kind == .word or node_kind == .assignment_word) {
                 return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
             }
+        }
+        if (previous_token.span.end < clamped_cursor and commandControlWordStartsList(previous_token.lexeme(result.source))) {
+            return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
         }
     }
 
@@ -752,12 +767,44 @@ fn assignmentCompletionContext(result: ParseResult, token_index: usize, cursor: 
         .span = token.span,
     };
     const equals_offset = token.span.start + equals;
+    if (cursor <= equals_offset) {
+        return .{
+            .kind = .assignment_name,
+            .cursor = cursor,
+            .token_index = token_index,
+            .span = .init(token.span.start, equals_offset),
+        };
+    }
     return .{
-        .kind = if (cursor <= equals_offset) .assignment_name else .assignment_value,
+        .kind = .assignment_value,
         .cursor = cursor,
         .token_index = token_index,
-        .span = token.span,
+        .span = .init(equals_offset + 1, token.span.end),
     };
+}
+
+fn simpleCommandHasCommandWordForToken(result: ParseResult, token_index: usize) bool {
+    const command = simpleCommandNodeForToken(result, token_index) orelse return false;
+    for (command.token_start..command.token_end) |index| {
+        if (tokenHasNodeKind(result, index, .command_word)) return true;
+    }
+    return false;
+}
+
+fn simpleCommandNodeForToken(result: ParseResult, token_index: usize) ?Node {
+    var best: ?Node = null;
+    for (result.nodes) |node| {
+        if (node.kind != .simple_command) continue;
+        if (token_index < node.token_start or token_index >= node.token_end) continue;
+        if (best == null or node.span.len() < best.?.span.len()) best = node;
+    }
+    return best;
+}
+
+fn commandControlWordStartsList(word: []const u8) bool {
+    return std.mem.eql(u8, word, "then") or
+        std.mem.eql(u8, word, "do") or
+        std.mem.eql(u8, word, "else");
 }
 
 fn tokenAtCursor(tokens: []const Token, cursor: usize) ?usize {
@@ -787,6 +834,13 @@ pub fn nodeKindForToken(result: ParseResult, token_index: usize) ?NodeKind {
         }
     }
     return null;
+}
+
+pub fn tokenHasNodeKind(result: ParseResult, token_index: usize, kind: NodeKind) bool {
+    for (result.nodes) |node| {
+        if (node.kind == kind and token_index >= node.token_start and token_index < node.token_end) return true;
+    }
+    return false;
 }
 
 fn commandSubstitutionSpans(allocator: std.mem.Allocator, source: []const u8, span: Span) !std.ArrayList(Span) {
@@ -1698,13 +1752,6 @@ fn appendAliasExpansion(
 
 fn lookupAlias(options: AliasExpansionOptions, word: []const u8) ?[]const u8 {
     return options.lookup.?(options.context.?, word);
-}
-
-fn tokenHasNodeKind(result: ParseResult, token_index: usize, kind: NodeKind) bool {
-    for (result.nodes) |node| {
-        if (node.kind == kind and token_index >= node.token_start and token_index < node.token_end) return true;
-    }
-    return false;
 }
 
 fn aliasTokenLeavesCommandPosition(kind: TokenKind, prior: bool) bool {
@@ -3413,6 +3460,12 @@ test "completion context after trailing whitespace starts an empty argument" {
     const subcommand_context = completionContext(subcommand, 11);
     try std.testing.expectEqual(CompletionKind.argument, subcommand_context.kind);
     try expectSpan(.init(11, 11), subcommand_context.span);
+
+    var assignment_prefix = try parse(std.testing.allocator, "FOO=bar ", .{});
+    defer assignment_prefix.deinit();
+    const assignment_prefix_context = completionContext(assignment_prefix, "FOO=bar ".len);
+    try std.testing.expectEqual(CompletionKind.command, assignment_prefix_context.kind);
+    try expectSpan(.init("FOO=bar ".len, "FOO=bar ".len), assignment_prefix_context.span);
 }
 
 test "completion context finds redirect targets and pipeline commands" {
@@ -3445,12 +3498,39 @@ test "completion context works inside incomplete compound commands" {
 test "completion context finds assignments and quoted strings" {
     var assignment = try parse(std.testing.allocator, "FOO=bar echo", .{});
     defer assignment.deinit();
-    try std.testing.expectEqual(CompletionKind.assignment_name, completionContext(assignment, 2).kind);
-    try std.testing.expectEqual(CompletionKind.assignment_value, completionContext(assignment, 5).kind);
+    const name_context = completionContext(assignment, 2);
+    try std.testing.expectEqual(CompletionKind.assignment_name, name_context.kind);
+    try expectSpan(.init(0, 3), name_context.span);
+    const value_context = completionContext(assignment, 5);
+    try std.testing.expectEqual(CompletionKind.assignment_value, value_context.kind);
+    try expectSpan(.init(4, 7), value_context.span);
+
+    var assignment_end = try parse(std.testing.allocator, "FOO=bar", .{});
+    defer assignment_end.deinit();
+    const value_end_context = completionContext(assignment_end, "FOO=bar".len);
+    try std.testing.expectEqual(CompletionKind.assignment_value, value_end_context.kind);
+    try expectSpan(.init(4, 7), value_end_context.span);
 
     var quoted = try parse(std.testing.allocator, "echo 'unterminated", .{});
     defer quoted.deinit();
     try std.testing.expectEqual(CompletionKind.quoted_string, completionContext(quoted, 10).kind);
+}
+
+test "completion context starts commands after compound control words" {
+    var if_then = try parse(std.testing.allocator, "if true; then ", .{ .mode = .interactive, .cursor = "if true; then ".len });
+    defer if_then.deinit();
+    try std.testing.expect(if_then.incomplete);
+    try std.testing.expectEqual(CompletionKind.command, completionContext(if_then, "if true; then ".len).kind);
+
+    var for_do = try parse(std.testing.allocator, "for x do ", .{ .mode = .interactive, .cursor = "for x do ".len });
+    defer for_do.deinit();
+    try std.testing.expect(for_do.incomplete);
+    try std.testing.expectEqual(CompletionKind.command, completionContext(for_do, "for x do ".len).kind);
+
+    var if_else = try parse(std.testing.allocator, "if false; then :; else ", .{ .mode = .interactive, .cursor = "if false; then :; else ".len });
+    defer if_else.deinit();
+    try std.testing.expect(if_else.incomplete);
+    try std.testing.expectEqual(CompletionKind.command, completionContext(if_else, "if false; then :; else ".len).kind);
 }
 
 test "completion context finds parameter expansion prefixes" {

@@ -2466,7 +2466,8 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     defer allocator.free(semantic_path);
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
     defer executor.freeCompletions(candidates);
-    const effective_context = executor.lastCompletionContext() orelse context;
+    var effective_context = executor.lastCompletionContext() orelse context;
+    effective_context.command_path = semantic_path;
     try rankCompletionCandidates(allocator, candidates, history, cwd, source);
     const application = try completion_model.applyCandidatesForInput(allocator, source, candidates);
     defer application.deinit(allocator);
@@ -2490,6 +2491,8 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  position: {s}
         \\  prefix: {s}
         \\  replace: {d}..{d}
+        \\  parser-position: {s}
+        \\  parser-offset: {d}
         \\rules:
         \\candidates:
     , .{
@@ -2509,6 +2512,8 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         semantic.prefix,
         semantic.replace_start,
         semantic.replace_end,
+        @tagName(semantic.parser_position),
+        semantic.parser_source_offset,
     });
     for (executor.completionRules()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
@@ -2591,7 +2596,8 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     defer allocator.free(semantic_path);
     const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
     defer executor.freeCompletions(candidates);
-    const effective_context = executor.lastCompletionContext() orelse context;
+    var effective_context = executor.lastCompletionContext() orelse context;
+    effective_context.command_path = semantic_path;
     try rankCompletionCandidates(allocator, candidates, history, cwd, source);
     const application = try completion_model.applyCandidatesForInput(allocator, source, candidates);
     defer application.deinit(allocator);
@@ -2704,6 +2710,10 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.write(context.suspicious_start);
     try json.objectField("suspiciousEnd");
     try json.write(context.suspicious_end);
+    try json.objectField("parserPosition");
+    try json.write(@tagName(context.parser_position));
+    try json.objectField("parserSourceOffset");
+    try json.write(context.parser_source_offset);
     try json.endObject();
 }
 
