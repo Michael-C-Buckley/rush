@@ -4805,6 +4805,7 @@ pub const Executor = struct {
     }
 
     pub fn expandAliasesForScriptWithFeatures(self: *Executor, script: []const u8, features: compat.Features) ![]const u8 {
+        if (self.aliases.count() == 0) return self.allocator.dupe(u8, script);
         return parser.expandAliases(self.allocator, script, .{
             .features = features,
             .context = self,
@@ -5640,6 +5641,7 @@ pub const Executor = struct {
         var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features.withStrictDiagnostics() });
         defer parsed.deinit();
         if (parsed.diagnostics.len != 0) return error.ParseError;
+        if (self.shouldSkipForNoexec(options) and !self.shell_options.verbose) return emptyResult(self.allocator, 0);
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         defer program.deinit();
         const cache_start = self.parsed_body_programs.items.len;

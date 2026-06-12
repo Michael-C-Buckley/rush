@@ -1721,6 +1721,9 @@ fn expandAliasesIntoParsedTokens(
     output: *std.ArrayList(u8),
     active_aliases: *std.ArrayList([]const u8),
 ) !bool {
+    const command_word_tokens = try commandWordTokenMap(allocator, parsed);
+    defer allocator.free(command_word_tokens);
+
     var copied_until: usize = 0;
     var skipped_span_index: usize = 0;
     var continued_alias_position = false;
@@ -1737,8 +1740,7 @@ fn expandAliasesIntoParsedTokens(
         if (copied_until < token.span.start) try output.appendSlice(allocator, parsed.source[copied_until..token.span.start]);
 
         if (token.kind == .word) {
-            const parser_command_word = tokenHasNodeKind(parsed, token_index, .command_word);
-            if (parser_command_word or continued_alias_position) {
+            if (command_word_tokens[token_index] or continued_alias_position) {
                 if (try appendAliasExpansion(allocator, token.lexeme(parsed.source), parsed.source, token.span.end, options, output, active_aliases)) |continues| {
                     copied_until = token.span.end;
                     continued_alias_position = continues;
@@ -1754,6 +1756,39 @@ fn expandAliasesIntoParsedTokens(
 
     if (copied_until < parsed.source.len) try output.appendSlice(allocator, parsed.source[copied_until..]);
     return continued_alias_position;
+}
+
+fn commandWordTokenMap(allocator: std.mem.Allocator, parsed: ParseResult) ![]bool {
+    const tokens = try allocator.alloc(bool, parsed.tokens.len);
+    @memset(tokens, false);
+    for (parsed.nodes) |node| {
+        if (node.kind != .command_word) continue;
+        for (node.token_start..node.token_end) |token_index| tokens[token_index] = true;
+    }
+    return tokens;
+}
+
+test "alias expansion indexes command words for large scripts" {
+    const AliasLookup = struct {
+        fn lookup(context: *anyopaque, name: []const u8) ?[]const u8 {
+            _ = context;
+            if (std.mem.eql(u8, name, "hit")) return "echo alias-ok";
+            return null;
+        }
+    };
+
+    var source: std.ArrayList(u8) = .empty;
+    defer source.deinit(std.testing.allocator);
+    for (0..4096) |_| try source.appendSlice(std.testing.allocator, "miss\n");
+    try source.appendSlice(std.testing.allocator, "hit\n");
+
+    var context: u8 = 0;
+    const expanded = try expandAliases(std.testing.allocator, source.items, .{ .context = &context, .lookup = AliasLookup.lookup });
+    defer std.testing.allocator.free(expanded);
+
+    const prefix_len = source.items.len - "hit\n".len;
+    try std.testing.expectEqualStrings(source.items[0..prefix_len], expanded[0..prefix_len]);
+    try std.testing.expectEqualStrings("echo alias-ok\n", expanded[prefix_len..]);
 }
 
 fn expandAliasesIntoLexedSource(
