@@ -19,23 +19,22 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `426` rows
-- `scripts/check-posix-corpus.sh`: `436` expected-output POSIX cases
-- `scripts/check-posix-negative-corpus.sh`: `244` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
-- `scripts/check-system-shell-corpus.sh`: `308` cases, `616` comparisons across dash and bash POSIX mode
+- `zig build compliance --summary all`: passing
+- `scripts/check-compliance-manifest.sh`: `458` rows
+- Compliance corpus validation: `465` expected-output POSIX cases, `248` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS), and `331` system-shell differential cases / `662` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `426`
-- scored POSIX items: `422`
-- supported: `416`
-- baseline: `3`
-- partial: `3`
+- tracked items: `458`
+- scored POSIX items: `454`
+- supported: `452`
+- baseline: `2`
+- partial: `0`
 - missing: `0`
 - out of scope: `4`
-- strict supported only: `98.6%`
-- practical supported+baseline: `99.3%`
-- weighted progress: `99.3%`
+- strict supported only: `99.6%`
+- practical supported+baseline: `100.0%`
+- weighted progress: `99.9%`
 
 Recent notable capabilities:
 
@@ -83,7 +82,7 @@ Recent notable capabilities:
 
 - Reserved words are recognized mostly by parser context/string matching rather than a fully POSIX grammar phase.
 - Newline/list handling works for common constructs, but the parser remains permissive and recovery-oriented rather than a strict POSIX grammar.
-- Misplaced reserved-word syntax diagnostics are incomplete; for example, protected reserved words outside valid grammar contexts may still fall through to command lookup instead of a POSIX syntax error.
+- The default recovery parser remains intentionally permissive for tooling outside `--posix-strict`; strict POSIX mode covers misplaced reserved-word diagnostics for representative protected reserved words, grouping tokens, pipeline separators, and `!` contexts.
 
 ### Missing / gaps
 
@@ -294,7 +293,7 @@ Implemented or partially implemented:
 - `printf` supports common conversions/escapes including `%b` precision after escape expansion, `%c` static and dynamic field widths, signed `%i`, representative signed-integer sign/space flags, integer flag ordering/precedence, octal/hex alternate flags combined with precision/width, unsigned/octal/hex width and precision, precision/zero-padding placement including negative sign padding and zero-flag suppression when precision is present, zero-valued integer precision behavior, omitted precision digits after a period, dynamic asterisk width/precision for representative string and signed-integer conversions including negative dynamic width/precision behavior, C-locale floating dynamic width/precision and left adjustment, representative floating-point conversions and floating flags under the C locale, POSIX C integer constants, literal percent formatting, numbered `%n$` argument conversions with Rush-owned POSIX corpus coverage because dash and bash `--posix` reject representative numbered formats, and a string width/precision combination slice. Non-portable flag/specifier combinations such as sign flags on `%u` and zero padding on `%s` are excluded from the POSIX evidence; non-C locale formatting remains unclaimed because it depends on runner locale availability and libc/shell behavior.
 - `set` has the POSIX non-interactive short option baseline, positional handling, interactive `ignoreeof`, interactive `vi` command-line editing mode, interactive `notify` polling for background job status while the editor is active, interactive `monitor` process groups for tracked async jobs, and explicit no-effect compatibility handling for obsolescent `-h`/`nolog`, but not the full optional interactive/User Portability surface (complete job-control terminal semantics).
 - Exact `times` CPU values are runtime- and host-dependent; coverage asserts POSIX output shape and centisecond formatting rather than fixed accounting totals.
-- Full POSIX alias substitution token timing remains partial only at the broad reserved-word interaction boundary after the parser-owned token-stream substitution, parser-command-word, alias-produced reserved-word, eval/dot dynamic-definition, and same-read-line definition-timing slices; the builtin `alias`/`unalias` utility row is supported separately.
+- Alias substitution token timing is supported at the broad manifest row level after parser-owned token-stream substitution, parser-command-word, alias-produced reserved-word, eval/dot dynamic-definition, same-read-line definition-timing, and strict misplaced-reserved-word diagnostic slices; the builtin `alias`/`unalias` utility row is supported separately.
 
 ## 7. Shell options and modes
 
@@ -329,8 +328,7 @@ Implemented or partially implemented:
 
 ### Partial / gaps
 
-- Errexit is baseline-only and lacks many POSIX corner cases around compound commands, command substitutions, and AND-OR/pipeline contexts.
-- Xtrace exact output ordering is baseline-only.
+- No known POSIX non-interactive `errexit` or `xtrace` gaps are tracked in the current manifest; broader optional interactive/user-portability behavior remains separate from those rows.
 - POSIX vi command-line editing still has edge commands tracked separately, including exact repeat/operator-motion edge behavior and broader terminal-specific command-line editing edge cases beyond the covered terminal-independent slice.
 
 ## 8. Interactive behavior and job control
