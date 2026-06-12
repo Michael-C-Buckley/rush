@@ -10300,6 +10300,7 @@ fn readLineContinues(line: []const u8) bool {
 
 const PrintfSpec = struct {
     spec: u8,
+    argument: ?usize = null,
     left_adjust: bool = false,
     zero_pad: bool = false,
     sign_plus: bool = false,
@@ -10311,12 +10312,26 @@ const PrintfSpec = struct {
 
 const PrintfIntegerBase = enum { decimal, octal, lower_hex, upper_hex };
 
+const PrintfArgumentMode = enum { none, numbered, unnumbered };
+
 fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *ExitStatus, stderr_before_stdout: *bool, format: []const u8, args: []const ir.WordRef) !void {
+    const argument_mode = analyzePrintfFormat(format) catch |err| switch (err) {
+        error.MixedArguments => {
+            try printfDiagnostic(allocator, stderr, status, "invalid format");
+            return;
+        },
+    };
+
     var arg_index: usize = 0;
+    var numbered_base: usize = 0;
     var first_pass = true;
-    while (first_pass or arg_index < args.len) {
+    while (first_pass or switch (argument_mode) {
+        .numbered => numbered_base < args.len,
+        .none, .unnumbered => arg_index < args.len,
+    }) {
         first_pass = false;
-        const before = arg_index;
+        const before = if (argument_mode == .numbered) numbered_base else arg_index;
+        var pass_max_numbered_argument: usize = 0;
         var index: usize = 0;
         while (index < format.len) {
             switch (format[index]) {
@@ -10342,7 +10357,18 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                         try stdout.append(allocator, '%');
                         continue;
                     }
-                    const arg = if (arg_index < args.len) blk: {
+                    const arg = if (spec.argument) |argument_number| blk: {
+                        pass_max_numbered_argument = @max(pass_max_numbered_argument, argument_number);
+                        const offset = std.math.add(usize, numbered_base, argument_number - 1) catch {
+                            try printfDiagnostic(allocator, stderr, status, "missing argument");
+                            return;
+                        };
+                        if (offset >= args.len) {
+                            try printfDiagnostic(allocator, stderr, status, "missing argument");
+                            return;
+                        }
+                        break :blk args[offset].text;
+                    } else if (arg_index < args.len) blk: {
                         const value = args[arg_index].text;
                         arg_index += 1;
                         break :blk value;
@@ -10355,8 +10381,43 @@ fn appendPrintfOutput(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), 
                 },
             }
         }
-        if (arg_index == before) break;
+        if (argument_mode == .numbered) {
+            if (pass_max_numbered_argument == 0) break;
+            numbered_base = std.math.add(usize, numbered_base, pass_max_numbered_argument) catch {
+                try printfDiagnostic(allocator, stderr, status, "missing argument");
+                return;
+            };
+            if (numbered_base == before) break;
+        } else if (arg_index == before) break;
     }
+}
+
+fn analyzePrintfFormat(format: []const u8) error{MixedArguments}!PrintfArgumentMode {
+    var result: PrintfArgumentMode = .none;
+    var index: usize = 0;
+    while (index < format.len) {
+        switch (format[index]) {
+            '\\' => {
+                index += 1;
+                if (index < format.len) index += 1;
+            },
+            '%' => {
+                index += 1;
+                if (index >= format.len) return result;
+                const spec = parsePrintfSpec(format, &index) orelse return result;
+                if (spec.spec == '%') continue;
+                if (spec.argument != null) {
+                    if (result == .unnumbered) return error.MixedArguments;
+                    result = .numbered;
+                } else {
+                    if (result == .numbered) return error.MixedArguments;
+                    result = .unnumbered;
+                }
+            },
+            else => index += 1,
+        }
+    }
+    return result;
 }
 
 fn printfDiagnostic(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, message: []const u8) !void {
@@ -10373,6 +10434,18 @@ fn printfNumericDiagnostic(allocator: std.mem.Allocator, stderr: *std.ArrayList(
 
 fn parsePrintfSpec(format: []const u8, index: *usize) ?PrintfSpec {
     var result: PrintfSpec = .{ .spec = 0 };
+    if (index.* < format.len and std.ascii.isDigit(format[index.*])) {
+        const start = index.*;
+        while (index.* < format.len and std.ascii.isDigit(format[index.*])) : (index.* += 1) {}
+        if (index.* < format.len and format[index.*] == '$') {
+            const argument_number = std.fmt.parseInt(usize, format[start..index.*], 10) catch return null;
+            if (argument_number == 0) return null;
+            result.argument = argument_number;
+            index.* += 1;
+        } else {
+            index.* = start;
+        }
+    }
     while (index.* < format.len) {
         switch (format[index.*]) {
             '-' => result.left_adjust = true,
@@ -15356,6 +15429,40 @@ test "executor implements read and printf builtins" {
     var unknown_escape_result = try executor.executeProgram(unknown_escape.program, .{});
     defer unknown_escape_result.deinit();
     try std.testing.expectEqualStrings("a\\ b", unknown_escape_result.stdout);
+
+    var numbered_lowered = try parseAndLower(std.testing.allocator, "printf '[%2$s:%1$d:%%][%3$.2s]\\n' 7 two three 8 four five");
+    defer numbered_lowered.parsed.deinit();
+    defer numbered_lowered.program.deinit();
+    var numbered_result = try executor.executeProgram(numbered_lowered.program, .{});
+    defer numbered_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), numbered_result.status);
+    try std.testing.expectEqualStrings("[two:7:%][th]\n[four:8:%][fi]\n", numbered_result.stdout);
+
+    var numbered_gap_lowered = try parseAndLower(std.testing.allocator, "printf '<%3$s:%1$s:%3$s>\\n' one ignored three");
+    defer numbered_gap_lowered.parsed.deinit();
+    defer numbered_gap_lowered.program.deinit();
+    var numbered_gap_result = try executor.executeProgram(numbered_gap_lowered.program, .{});
+    defer numbered_gap_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), numbered_gap_result.status);
+    try std.testing.expectEqualStrings("<three:one:three>\n", numbered_gap_result.stdout);
+
+    var missing_numbered_lowered = try parseAndLower(std.testing.allocator, "printf '%2$s\\n' only");
+    defer missing_numbered_lowered.parsed.deinit();
+    defer missing_numbered_lowered.program.deinit();
+    var missing_numbered_result = try executor.executeProgram(missing_numbered_lowered.program, .{});
+    defer missing_numbered_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), missing_numbered_result.status);
+    try std.testing.expectEqualStrings("", missing_numbered_result.stdout);
+    try std.testing.expectEqualStrings("printf: missing argument\n", missing_numbered_result.stderr);
+
+    var mixed_numbered_lowered = try parseAndLower(std.testing.allocator, "printf '%2$s %s\\n' a b");
+    defer mixed_numbered_lowered.parsed.deinit();
+    defer mixed_numbered_lowered.program.deinit();
+    var mixed_numbered_result = try executor.executeProgram(mixed_numbered_lowered.program, .{});
+    defer mixed_numbered_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), mixed_numbered_result.status);
+    try std.testing.expectEqualStrings("", mixed_numbered_result.stdout);
+    try std.testing.expectEqualStrings("printf: invalid format\n", mixed_numbered_result.stderr);
 
     var read_lowered = try parseAndLower(std.testing.allocator,
         \\read first rest <<EOF; printf '%s/%s\n' "$first" "$rest"
