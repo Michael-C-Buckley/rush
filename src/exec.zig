@@ -2593,8 +2593,7 @@ pub const Executor = struct {
     fn completionCommandInPath(self: Executor, command: []const u8, maybe_io: ?std.Io) !bool {
         const io = maybe_io orelse return false;
         if (std.mem.indexOfScalar(u8, command, '/') != null) {
-            std.Io.Dir.cwd().access(io, command, .{ .execute = true }) catch return false;
-            return true;
+            return (try executableFileStatus(io, command)) == .executable;
         }
         const path_value = self.getEnv("PATH") orelse return false;
         var parts = std.mem.splitScalar(u8, path_value, ':');
@@ -2602,8 +2601,7 @@ pub const Executor = struct {
             const dir = if (part.len == 0) "." else part;
             const candidate = try std.mem.concat(self.allocator, u8, &.{ dir, "/", command });
             defer self.allocator.free(candidate);
-            std.Io.Dir.cwd().access(io, candidate, .{ .execute = true }) catch continue;
-            return true;
+            if ((try executableFileStatus(io, candidate)) == .executable) return true;
         }
         return false;
     }
@@ -6226,6 +6224,15 @@ pub const Executor = struct {
                         capture_stderr.close(io);
                         return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 126, "permission denied");
                     },
+                    error.IsDir => {
+                        if (stdin_file) |file| file.close(io);
+                        if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
+                        for (pipes) |*pipe| pipe.close(io);
+                        capture_stdout.close(io);
+                        capture_stderr.close(io);
+                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 126, "is a directory");
+                    },
                     else => return err,
                 };
                 defer if (resolved_executable) |executable| self.allocator.free(executable);
@@ -6250,7 +6257,7 @@ pub const Executor = struct {
                         capture_stderr.close(io);
                         return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 127, "command not found");
                     },
-                    error.AccessDenied, error.PermissionDenied, error.IsDir => {
+                    error.AccessDenied, error.PermissionDenied => {
                         if (stdin_file) |file| file.close(io);
                         if (stdout_file) |file| file.close(io);
                         if (stderr_file) |file| file.close(io);
@@ -6258,6 +6265,15 @@ pub const Executor = struct {
                         capture_stdout.close(io);
                         capture_stderr.close(io);
                         return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 126, "permission denied");
+                    },
+                    error.IsDir => {
+                        if (stdin_file) |file| file.close(io);
+                        if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
+                        for (pipes) |*pipe| pipe.close(io);
+                        capture_stdout.close(io);
+                        capture_stderr.close(io);
+                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 126, "is a directory");
                     },
                     else => return err,
                 };
@@ -6989,6 +7005,18 @@ pub const Executor = struct {
                     }
                     return failure;
                 },
+                error.IsDir => {
+                    const open_stdin = previous_stdout;
+                    previous_stdout = null;
+                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin, 126, "is a directory");
+                    errdefer failure.deinit();
+                    if (trace_stderr.items.len != 0) {
+                        const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
+                        self.allocator.free(failure.stderr);
+                        failure.stderr = stderr;
+                    }
+                    return failure;
+                },
                 else => return err,
             };
             defer if (resolved_executable) |executable| self.allocator.free(executable);
@@ -7024,10 +7052,22 @@ pub const Executor = struct {
                     }
                     return failure;
                 },
-                error.AccessDenied, error.PermissionDenied, error.IsDir => {
+                error.AccessDenied, error.PermissionDenied => {
                     const open_stdin = previous_stdout;
                     previous_stdout = null;
                     var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin, 126, "permission denied");
+                    errdefer failure.deinit();
+                    if (trace_stderr.items.len != 0) {
+                        const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
+                        self.allocator.free(failure.stderr);
+                        failure.stderr = stderr;
+                    }
+                    return failure;
+                },
+                error.IsDir => {
+                    const open_stdin = previous_stdout;
+                    previous_stdout = null;
+                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin, 126, "is a directory");
                     errdefer failure.deinit();
                     if (trace_stderr.items.len != 0) {
                         const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
@@ -7225,6 +7265,10 @@ pub const Executor = struct {
             error.CommandAccessDenied => blk: {
                 synthetic_failure = true;
                 break :blk try errorResult(self.allocator, 126, expanded.argv[0].text, "permission denied");
+            },
+            error.IsDir => blk: {
+                synthetic_failure = true;
+                break :blk try errorResult(self.allocator, 126, expanded.argv[0].text, "is a directory");
             },
             else => {
                 if (isRedirectionFailure(err)) return self.redirectionErrorResult(expanded, err, false);
@@ -7719,9 +7763,31 @@ pub const Executor = struct {
         return self.findExecutableInPathValue(io, name, "/bin:/usr/bin");
     }
 
+    const ExecutableFileStatus = enum {
+        executable,
+        missing,
+        not_regular,
+        inaccessible,
+    };
+
+    fn executableFileStatus(io: std.Io, path: []const u8) !ExecutableFileStatus {
+        const stat = std.Io.Dir.cwd().statFile(io, path, .{}) catch |err| switch (err) {
+            error.FileNotFound, error.NotDir => return .missing,
+            error.AccessDenied, error.PermissionDenied => return .inaccessible,
+            else => return err,
+        };
+        if (stat.kind != .file) return .not_regular;
+        std.Io.Dir.cwd().access(io, path, .{ .execute = true }) catch |err| switch (err) {
+            error.FileNotFound => return .missing,
+            error.AccessDenied, error.PermissionDenied => return .inaccessible,
+            else => return err,
+        };
+        return .executable;
+    }
+
     fn findExecutableInPathValue(self: *Executor, io: std.Io, name: []const u8, path_value: []const u8) !?[]const u8 {
         if (std.mem.indexOfScalar(u8, name, '/') != null) return self.executableReplacementPath(io, name) catch |err| switch (err) {
-            error.CommandNotFound, error.AccessDenied => return null,
+            error.CommandNotFound, error.AccessDenied, error.IsDir => return null,
             else => return err,
         };
         var parts = std.mem.splitScalar(u8, path_value, ':');
@@ -7729,14 +7795,13 @@ pub const Executor = struct {
             const dir = if (part.len == 0) "." else part;
             const candidate = try std.mem.concat(self.allocator, u8, &.{ dir, "/", name });
             errdefer self.allocator.free(candidate);
-            std.Io.Dir.cwd().access(io, candidate, .{ .execute = true }) catch |err| switch (err) {
-                error.FileNotFound, error.AccessDenied, error.PermissionDenied => {
+            switch (try executableFileStatus(io, candidate)) {
+                .executable => return candidate,
+                .missing, .not_regular, .inaccessible => {
                     self.allocator.free(candidate);
                     continue;
                 },
-                else => return err,
-            };
-            return candidate;
+            }
         }
         return null;
     }
@@ -7792,19 +7857,18 @@ pub const Executor = struct {
             const dir = if (part.len == 0) "." else part;
             const candidate = try std.mem.concat(self.allocator, u8, &.{ dir, "/", name });
             errdefer self.allocator.free(candidate);
-            std.Io.Dir.cwd().access(io, candidate, .{ .execute = true }) catch |err| switch (err) {
-                error.FileNotFound => {
+            switch (try executableFileStatus(io, candidate)) {
+                .executable => return candidate,
+                .missing, .not_regular => {
                     self.allocator.free(candidate);
                     continue;
                 },
-                error.AccessDenied, error.PermissionDenied => {
+                .inaccessible => {
                     permission_denied = true;
                     self.allocator.free(candidate);
                     continue;
                 },
-                else => return err,
-            };
-            return candidate;
+            }
         }
 
         if (permission_denied) return error.AccessDenied;
@@ -7812,6 +7876,13 @@ pub const Executor = struct {
     }
 
     fn executableReplacementPath(self: *Executor, io: std.Io, path: []const u8) ![]const u8 {
+        const stat = std.Io.Dir.cwd().statFile(io, path, .{}) catch |err| switch (err) {
+            error.FileNotFound, error.NotDir => return error.CommandNotFound,
+            error.AccessDenied, error.PermissionDenied => return error.AccessDenied,
+            else => return err,
+        };
+        if (stat.kind == .directory) return error.IsDir;
+        if (stat.kind != .file) return error.AccessDenied;
         std.Io.Dir.cwd().access(io, path, .{ .execute = true }) catch |err| switch (err) {
             error.FileNotFound => return error.CommandNotFound,
             error.AccessDenied, error.PermissionDenied => return error.AccessDenied,
@@ -8724,6 +8795,7 @@ pub const Executor = struct {
         const executable = self.findReplacementExecutable(io, command, options.default_path_lookup) catch |err| switch (err) {
             error.CommandNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
+            error.IsDir => return errorResult(self.allocator, 126, command.argv[0].text, "is a directory"),
             else => return err,
         };
         defer self.allocator.free(executable);
@@ -8800,6 +8872,7 @@ pub const Executor = struct {
         const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
             error.CommandNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
+            error.IsDir => return errorResult(self.allocator, 126, command.argv[0].text, "is a directory"),
             else => return err,
         };
         defer if (resolved_executable) |executable| self.allocator.free(executable);
@@ -8921,7 +8994,8 @@ pub const Executor = struct {
             .pgid = if (use_process_pgrp) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
-            error.AccessDenied, error.PermissionDenied, error.IsDir => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
+            error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
+            error.IsDir => return errorResult(self.allocator, 126, command.argv[0].text, "is a directory"),
             else => return err,
         };
         errdefer child.kill(io);
@@ -9059,6 +9133,7 @@ pub const Executor = struct {
         const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
             error.CommandNotFound => return error.CommandNotFound,
             error.AccessDenied, error.PermissionDenied => return error.CommandAccessDenied,
+            error.IsDir => return error.IsDir,
             else => return err,
         };
         defer if (resolved_executable) |executable| self.allocator.free(executable);
@@ -9210,7 +9285,8 @@ pub const Executor = struct {
             .pgid = child_pgid,
         }) catch |err| switch (err) {
             error.FileNotFound => return error.CommandNotFound,
-            error.AccessDenied, error.PermissionDenied, error.IsDir => return error.CommandAccessDenied,
+            error.AccessDenied, error.PermissionDenied => return error.CommandAccessDenied,
+            error.IsDir => return error.IsDir,
             else => return err,
         };
         errdefer child.kill(io);
@@ -19640,6 +19716,60 @@ test "executor resolves external commands from shell PATH" {
     defer result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ok", result.stdout);
+}
+
+test "executor PATH lookup skips directories and reports direct directories" {
+    const root = "rush-external-path-directory-test";
+    const first_dir = root ++ "/first";
+    const second_dir = root ++ "/second";
+    const command_name = "rush-shadow-tool";
+    const first_command = first_dir ++ "/" ++ command_name;
+    const second_command = second_dir ++ "/" ++ command_name;
+
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, first_command);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, second_dir);
+    try std.Io.Dir.cwd().symLink(std.testing.io, "/bin/sh", second_command, .{});
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\PATH=rush-external-path-directory-test/first:rush-external-path-directory-test/second
+        \\rush-shadow-tool -c 'printf real-path'
+        \\printf '\nrun-status:%s\n' "$?"
+        \\command -v rush-shadow-tool
+        \\type rush-shadow-tool
+        \\PATH=rush-external-path-directory-test/first
+        \\rush-shadow-tool
+        \\printf 'only-status:%s\n' "$?"
+        \\command -v rush-shadow-tool
+        \\printf 'command-v-status:%s\n' "$?"
+        \\type rush-shadow-tool
+        \\printf 'type-status:%s\n' "$?"
+        \\./rush-external-path-directory-test/first/rush-shadow-tool
+        \\printf 'direct-status:%s\n' "$?"
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        \\real-path
+        \\run-status:0
+        \\rush-external-path-directory-test/second/rush-shadow-tool
+        \\rush-shadow-tool is rush-external-path-directory-test/second/rush-shadow-tool
+        \\only-status:127
+        \\command-v-status:127
+        \\type-status:127
+        \\direct-status:126
+        \\
+    , result.stdout);
+    try std.testing.expectEqualStrings(
+        \\rush-shadow-tool: command not found
+        \\rush-shadow-tool: not found
+        \\./rush-external-path-directory-test/first/rush-shadow-tool: is a directory
+        \\
+    , result.stderr);
 }
 
 test "executor does not search default PATH when PATH is unset" {

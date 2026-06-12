@@ -464,6 +464,7 @@ builtin-kill-job-spec	job_control	job	kill accepts current previous numeric pref
 expansion-braced-multi-digit-positionals	expansion	behavior	braced all-digit parameter names use the full positional parameter index while unbraced $10 remains $1 plus literal 0
 builtin-export-declaration-assignment	builtin	behavior	export name=value operands use declaration-utility assignment expansion without field splitting and with assignment tilde expansion
 builtin-export-p-marked-name	builtin	behavior	export -p lists names marked for export before they have an assigned value
+external-path-directory-lookup	portability	behavior	PATH search skips directories before executable files, reports directory-only matches as not found, and preserves direct directory invocation status
 external-enoexec-shell-fallback	portability	behavior	executable text files without a recognized format are rerun through sh with resolved PATH or slash operands, original arguments, assignment environment, redirections, and fallback status preserved
 builtin-ulimit-reporting	builtin	behavior	ulimit is a regular builtin that reports default soft file-size, explicit hard/soft resource limits, and all available resources
 builtin-ulimit-set-restore	builtin	behavior	ulimit -S changes a resource limit in the current shell process and can restore the previous soft limit
