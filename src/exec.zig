@@ -664,6 +664,7 @@ const builtin_names = [_][]const u8{
     "fc",
     "fg",
     "jobs",
+    "local",
     "unset",
     "env",
     "eval",
@@ -1552,11 +1553,23 @@ pub const PositionalParams = struct {
     }
 };
 
+const LocalVariable = struct {
+    name: []const u8,
+    old_value: ?[]const u8,
+    old_exported: bool = false,
+};
+
 pub const CallFrame = struct {
     positionals: PositionalParams = .{},
+    local_variables: std.ArrayList(LocalVariable) = .empty,
 
     pub fn deinit(self: *CallFrame, allocator: std.mem.Allocator) void {
         self.positionals.deinit(allocator);
+        for (self.local_variables.items) |entry| {
+            allocator.free(entry.name);
+            if (entry.old_value) |value| allocator.free(value);
+        }
+        self.local_variables.deinit(allocator);
         self.* = undefined;
     }
 };
@@ -3909,6 +3922,28 @@ pub const Executor = struct {
         if (exported) try self.setExported(name) else self.unsetExported(name);
     }
 
+    fn currentFrameHasLocalVariable(frame: *const CallFrame, name: []const u8) bool {
+        for (frame.local_variables.items) |entry| {
+            if (std.mem.eql(u8, entry.name, name)) return true;
+        }
+        return false;
+    }
+
+    fn declareLocalVariable(self: *Executor, frame: *CallFrame, name: []const u8, value: ?[]const u8) !void {
+        if (self.isReadonly(name)) return error.ReadonlyVariable;
+        if (!currentFrameHasLocalVariable(frame, name)) {
+            var old_value = if (self.getEnv(name)) |old| try self.allocator.dupe(u8, old) else null;
+            errdefer if (old_value) |old| self.allocator.free(old);
+            var owned_name: ?[]const u8 = try self.allocator.dupe(u8, name);
+            errdefer if (owned_name) |owned| self.allocator.free(owned);
+            try frame.local_variables.append(self.allocator, .{ .name = owned_name.?, .old_value = old_value, .old_exported = self.isExported(name) });
+            owned_name = null;
+            old_value = null;
+            self.unsetEnv(name);
+        }
+        if (value) |text| try self.setEnv(name, text);
+    }
+
     fn unsetFunction(self: *Executor, name: []const u8) void {
         if (self.functions.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
@@ -4392,6 +4427,15 @@ pub const Executor = struct {
             var copied: CallFrame = .{};
             errdefer copied.deinit(self.allocator);
             try copied.positionals.set(self.allocator, frame.positionals.params);
+            for (frame.local_variables.items) |entry| {
+                var owned_name: ?[]const u8 = try self.allocator.dupe(u8, entry.name);
+                errdefer if (owned_name) |name| self.allocator.free(name);
+                var old_value = if (entry.old_value) |value| try self.allocator.dupe(u8, value) else null;
+                errdefer if (old_value) |value| self.allocator.free(value);
+                try copied.local_variables.append(self.allocator, .{ .name = owned_name.?, .old_value = old_value, .old_exported = entry.old_exported });
+                owned_name = null;
+                old_value = null;
+            }
             try self.call_frames.append(self.allocator, copied);
         }
     }
@@ -7371,7 +7415,7 @@ pub const Executor = struct {
     }
 
     fn isDeclarationUtilityName(name: []const u8) bool {
-        return std.mem.eql(u8, name, "export") or std.mem.eql(u8, name, "readonly");
+        return std.mem.eql(u8, name, "export") or std.mem.eql(u8, name, "readonly") or std.mem.eql(u8, name, "local");
     }
 
     fn isDeclarationAssignmentWord(raw: []const u8) bool {
@@ -7658,7 +7702,26 @@ pub const Executor = struct {
 
     fn popCallFrame(self: *Executor) void {
         var frame = self.call_frames.pop().?;
+        self.restoreFrameLocalVariables(&frame);
         frame.deinit(self.allocator);
+    }
+
+    fn restoreFrameLocalVariables(self: *Executor, frame: *CallFrame) void {
+        var index = frame.local_variables.items.len;
+        while (index > 0) {
+            index -= 1;
+            const entry = frame.local_variables.items[index];
+            if (entry.old_value) |value| {
+                self.setEnv(entry.name, value) catch {};
+                self.allocator.free(value);
+            } else {
+                self.unsetEnv(entry.name);
+            }
+            self.restoreExported(entry.name, entry.old_exported) catch {};
+            self.allocator.free(entry.name);
+        }
+        frame.local_variables.deinit(self.allocator);
+        frame.local_variables = .empty;
     }
 
     fn currentCallFrame(self: Executor) ?CallFrame {
@@ -10232,6 +10295,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "fc")) return builtinFc;
     if (std.mem.eql(u8, name, "fg")) return builtinFg;
     if (std.mem.eql(u8, name, "jobs")) return builtinJobs;
+    if (std.mem.eql(u8, name, "local")) return builtinLocal;
     if (std.mem.eql(u8, name, "kill")) return builtinKill;
     if (std.mem.eql(u8, name, "interval")) return builtinInterval;
     if (std.mem.eql(u8, name, "unset")) return builtinUnset;
@@ -13806,6 +13870,33 @@ fn listExported(self: *Executor) !CommandResult {
     return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
 
+fn builtinLocal(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    const frame = self.currentCallFramePtr() orelse return localUsageError(self, "can only be used in a function");
+
+    var index: usize = 1;
+    if (index < command.argv.len and std.mem.eql(u8, command.argv[index].text, "--")) index += 1;
+    if (index < command.argv.len and std.mem.startsWith(u8, command.argv[index].text, "-") and !std.mem.eql(u8, command.argv[index].text, "-")) return localUsageError(self, "unsupported option");
+
+    for (command.argv[index..]) |arg| {
+        const assignment = std.mem.indexOfScalar(u8, arg.text, '=');
+        const name = if (assignment) |equals| arg.text[0..equals] else arg.text;
+        if (!isShellName(name)) return localUsageError(self, "invalid variable name");
+        const value = if (assignment) |equals| arg.text[equals + 1 ..] else null;
+        self.declareLocalVariable(frame, name, value) catch |err| switch (err) {
+            error.ReadonlyVariable => return localUsageError(self, "readonly variable"),
+            else => return err,
+        };
+    }
+
+    return emptyResult(self.allocator, 0);
+}
+
+fn localUsageError(self: *Executor, message: []const u8) !CommandResult {
+    return errorResult(self.allocator, 1, "local", message);
+}
+
 fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
     var mode: enum { variable, function } = .variable;
@@ -16334,6 +16425,74 @@ test "executor provides positional parameters to shell functions" {
     var nested_result = try executor.executeProgram(nested.program, .{});
     defer nested_result.deinit();
     try std.testing.expectEqualStrings("nested/1\ncaller/2\n", nested_result.stdout);
+}
+
+test "executor implements local function variables" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var shadowing = try executor.executeScriptSlice(
+        \\x=outer
+        \\inner() { echo "inner:$x/$y/${z-unset}"; }
+        \\outer() { local x=local y z=zz; y=yy; inner; }
+        \\outer
+        \\echo "after:$x/${y-unset}/${z-unset}"
+    , .{});
+    defer shadowing.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), shadowing.status);
+    try std.testing.expectEqualStrings("inner:local/yy/zz\nafter:outer/unset/unset\n", shadowing.stdout);
+
+    var unset_shadow = try executor.executeScriptSlice(
+        \\x=outer
+        \\f() { local x=inner; unset x; echo "in:${x-unset}"; }
+        \\f
+        \\echo "out:$x"
+    , .{});
+    defer unset_shadow.deinit();
+    try std.testing.expectEqualStrings("in:unset\nout:outer\n", unset_shadow.stdout);
+
+    var bare_shadow = try executor.executeScriptSlice(
+        \\x=outer
+        \\f() { local x; echo "in:${x-unset}"; }
+        \\f
+        \\echo "out:$x"
+    , .{});
+    defer bare_shadow.deinit();
+    try std.testing.expectEqualStrings("in:unset\nout:outer\n", bare_shadow.stdout);
+
+    var recursive = try executor.executeScriptSlice(
+        \\rec() { local x=$1; echo "pre:$x"; if test "$1" = a; then rec b; fi; echo "post:$x"; }
+        \\rec a
+    , .{});
+    defer recursive.deinit();
+    try std.testing.expectEqualStrings("pre:a\npre:b\npost:b\npost:a\n", recursive.stdout);
+
+    var export_restore = try executor.executeScriptSlice(
+        \\export x=outer
+        \\f() {
+        \\  local x=inner
+        \\  case "$(env)" in *"x=inner"*) echo leak ;; *) echo no-leak ;; esac
+        \\  export x
+        \\  case "$(env)" in *"x=inner"*) echo exported ;; *) echo missing ;; esac
+        \\}
+        \\f
+        \\case "$(env)" in *"x=outer"*) echo restored ;; *) echo not-restored ;; esac
+    , .{});
+    defer export_restore.deinit();
+    try std.testing.expectEqualStrings("no-leak\nexported\nrestored\n", export_restore.stdout);
+
+    var assignments = try executor.executeScriptSlice(
+        \\v='a b'; HOME=/tmp/rush-home
+        \\f() { local x=$v y=~ empty; echo "<$x><$y><${empty-unset}>"; }
+        \\f
+    , .{});
+    defer assignments.deinit();
+    try std.testing.expectEqualStrings("<a b></tmp/rush-home><unset>\n", assignments.stdout);
+
+    var outside = try executor.executeScriptSlice("local x", .{});
+    defer outside.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), outside.status);
+    try std.testing.expect(std.mem.indexOf(u8, outside.stderr, "can only be used in a function") != null);
 }
 
 test "executor parses and executes POSIX shell functions" {

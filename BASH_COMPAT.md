@@ -168,6 +168,14 @@ not POSIX compliance claims, and remain excluded from POSIX scoring:
   `%+u` and `% u`.
 - `printf` preserves zero padding on string conversions such as `%05s`. POSIX
   leaves the `0` flag with string conversions undefined.
+- `local` is available as a function-scoped variable declaration builtin in
+  default mode. Although it is not POSIX, dash, BusyBox ash, zsh sh emulation,
+  and Bash POSIX mode accept it, and Rush has no user-facing Bash-mode switch
+  today. Rush implements only the narrow function-local surface: `local name`
+  creates an unset local shadow, `local name=value` assigns without exporting
+  solely because an outer variable was exported, nested calls observe locals by
+  dynamic scope, and returning from the function restores the prior value and
+  export state. `declare` and `typeset` remain out of scope.
 
 ## Explicitly not POSIX
 
