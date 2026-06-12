@@ -2500,7 +2500,7 @@ pub const Executor = struct {
 
         var provider = Executor.init(self.allocator);
         defer provider.deinit();
-        try provider.copyStateFrom(self);
+        try provider.copyStateFromWithOptions(self, .{ .completion_rules = false });
         defer provider.cleanupCompletionProviderBackgroundJobs(options.io);
 
         const function_value = provider.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
@@ -3478,6 +3478,14 @@ pub const Executor = struct {
     }
 
     pub fn copyStateFrom(self: *Executor, other: *const Executor) !void {
+        try self.copyStateFromWithOptions(other, .{});
+    }
+
+    const CopyStateOptions = struct {
+        completion_rules: bool = true,
+    };
+
+    fn copyStateFromWithOptions(self: *Executor, other: *const Executor, copy_options: CopyStateOptions) !void {
         self.shell_options = other.shell_options;
         self.getopts_offset = other.getopts_offset;
         self.getopts_last_optind = other.getopts_last_optind;
@@ -3517,7 +3525,9 @@ pub const Executor = struct {
         while (command_hash_iter.next()) |entry| try self.rememberCommandHash(entry.key_ptr.*, entry.value_ptr.*);
         var abbr_iter = other.abbreviations.iterator();
         while (abbr_iter.next()) |entry| try self.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
-        for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
+        if (copy_options.completion_rules) {
+            for (other.completion_rules.items) |rule| try self.registerCompletionRule(rule);
+        }
         self.ignored_trap_signals_at_entry = other.ignored_trap_signals_at_entry;
         var trap_iter = other.traps.iterator();
         while (trap_iter.next()) |entry| try self.setTrap(entry.key_ptr.*, entry.value_ptr.*);
@@ -10323,7 +10333,10 @@ fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io
     const split = try splitCompletionPathPrefix(self.allocator, prefix);
     defer split.deinit(self.allocator);
     const candidate_replace_start = replace_start + split.raw_display_prefix_len;
-    var dir = try std.Io.Dir.cwd().openDir(io, split.directory, .{ .iterate = true });
+    var dir = std.Io.Dir.cwd().openDir(io, split.directory, .{ .iterate = true }) catch |err| switch (err) {
+        error.FileNotFound => return,
+        else => return err,
+    };
     defer dir.close(io);
     var iterator = dir.iterate();
     while (try iterator.next(io)) |entry| {

@@ -22,11 +22,16 @@
       "git.branch-arguments": { "function": "__rush_complete_git_context_branch_args" },
       "git.push-arguments": { "function": "__rush_complete_git_context_push_args" },
       "git.changed-paths": { "function": "__rush_complete_git_changed_paths" },
+      "git.tracked-paths": { "function": "__rush_complete_git_tracked_paths" },
+      "git.config-keys": { "function": "__rush_complete_git_config_keys" },
       "git.pretty-formats": { "function": "__rush_complete_git_pretty_formats" },
       "git.cleanup-modes": { "function": "__rush_complete_git_cleanup_modes" },
       "git.recurse-submodules-modes": { "function": "__rush_complete_git_recurse_submodules_modes" },
       "git.pull-rebase-modes": { "function": "__rush_complete_git_pull_rebase_modes" },
       "git.merge-strategies": { "function": "__rush_complete_git_merge_strategies" },
+      "git.config-types": { "function": "__rush_complete_git_config_types" },
+      "git.object-formats": { "function": "__rush_complete_git_object_formats" },
+      "git.ref-formats": { "function": "__rush_complete_git_ref_formats" },
       "git.untracked-modes": { "function": "__rush_complete_git_untracked_modes" },
       "git.ignored-modes": { "function": "__rush_complete_git_ignored_modes" },
       "git.ignore-submodules-modes": { "function": "__rush_complete_git_ignore_submodules_modes" },
@@ -49,6 +54,31 @@
       { "long": "no-pager", "description": "do not pipe output into a pager" }
     ],
     "subcommands": [
+      {
+        "name": "add",
+        "description": "add file contents to the index",
+        "options": [
+          { "long": "patch", "short": "p", "description": "interactively choose hunks" },
+          { "long": "all", "short": "A", "description": "add changes from the whole tree" },
+          { "long": "update", "short": "u", "description": "update tracked files" },
+          { "long": "dry-run", "short": "n", "description": "show if files exist or are ignored without adding" },
+          { "long": "verbose", "short": "v", "description": "be verbose" },
+          { "long": "force", "short": "f", "description": "allow adding ignored files" },
+          { "long": "interactive", "short": "i", "description": "add modified contents interactively" },
+          { "long": "edit", "short": "e", "description": "edit the patch before applying" },
+          { "long": "intent-to-add", "short": "N", "description": "record only that the path will be added later" },
+          { "long": "refresh", "description": "do not add files; refresh stat information only" },
+          { "long": "ignore-errors", "description": "continue adding files after errors" },
+          { "long": "ignore-missing", "description": "check ignored or missing files with dry-run" },
+          { "long": "sparse", "description": "allow updating entries outside the sparse-checkout cone" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.changed-paths", "description": "path to add" }
+          ]
+        }
+      },
       {
         "name": "branch",
         "description": "list, create, or delete branches",
@@ -234,6 +264,102 @@
           "terminator": "--",
           "states": [
             { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.clean-paths", "description": "untracked or ignored path" }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "get and set repository or global options",
+        "options": [
+          { "long": "global", "description": "use global config file" },
+          { "long": "local", "description": "use repository config file" },
+          { "long": "system", "description": "use system config file" },
+          { "long": "worktree", "description": "use per-worktree config file" },
+          { "long": "file", "short": "f", "value": { "name": "file", "provider": "builtin.files" }, "description": "use given config file" },
+          { "long": "blob", "value": { "name": "blob", "provider": "git.refs" }, "description": "read config from blob" },
+          { "long": "get", "description": "get value for key" },
+          { "long": "get-all", "description": "get all values for key" },
+          { "long": "get-regexp", "description": "get values for key regex" },
+          { "long": "add", "description": "add a new variable" },
+          { "long": "replace-all", "description": "replace all matching variables" },
+          { "long": "unset", "description": "remove a variable" },
+          { "long": "unset-all", "description": "remove all matching variables" },
+          { "long": "rename-section", "description": "rename a section" },
+          { "long": "remove-section", "description": "remove a section" },
+          { "long": "list", "short": "l", "description": "list variables" },
+          { "long": "fixed-value", "description": "use fixed string value matching" },
+          { "long": "type", "value": { "name": "type", "provider": "git.config-types" }, "description": "value type" },
+          { "long": "bool", "description": "value is boolean" },
+          { "long": "int", "description": "value is integer" },
+          { "long": "bool-or-int", "description": "value is boolean or integer" },
+          { "long": "path", "description": "value is a path" },
+          { "long": "expiry-date", "description": "value is an expiry date" },
+          { "long": "null", "short": "z", "description": "terminate values with NUL" },
+          { "long": "name-only", "description": "show variable names only" },
+          { "long": "show-origin", "description": "show origin of config values" },
+          { "long": "show-scope", "description": "show scope of config values" },
+          { "long": "get-color", "description": "find color configured for key" },
+          { "long": "get-colorbool", "description": "find color setting for key" },
+          { "long": "edit", "short": "e", "description": "open editor to modify config" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "key", "index": 0, "provider": "git.config-keys", "description": "configuration key" },
+            { "name": "value", "index": 1, "description": "configuration value" }
+          ]
+        }
+      },
+      {
+        "name": "clone",
+        "description": "clone a repository",
+        "options": [
+          { "long": "branch", "short": "b", "value": { "name": "branch" }, "description": "checkout branch instead of remote HEAD" },
+          { "long": "depth", "value": { "name": "depth" }, "description": "create a shallow clone" },
+          { "long": "recurse-submodules", "description": "initialize submodules" },
+          { "long": "no-checkout", "short": "n", "description": "do not checkout HEAD after clone" },
+          { "long": "bare", "description": "make a bare Git repository" },
+          { "long": "mirror", "description": "set up a mirror of the source repository" },
+          { "long": "local", "short": "l", "description": "clone from local repository if possible" },
+          { "long": "no-hardlinks", "description": "copy files instead of using hardlinks" },
+          { "long": "shared", "short": "s", "description": "share objects with source repository" },
+          { "long": "reference", "value": { "name": "repository", "provider": "builtin.directories" }, "description": "borrow objects from reference repository" },
+          { "long": "dissociate", "description": "stop borrowing objects after clone" },
+          { "long": "quiet", "short": "q", "description": "be quiet" },
+          { "long": "verbose", "short": "v", "description": "be verbose" },
+          { "long": "progress", "description": "force progress status" },
+          { "long": "origin", "short": "o", "value": { "name": "name" }, "description": "use name instead of origin for upstream remote" },
+          { "long": "upload-pack", "short": "u", "value": { "name": "path" }, "description": "path to git-upload-pack on remote" },
+          { "long": "template", "value": { "name": "directory", "provider": "builtin.directories" }, "description": "directory of templates to use" },
+          { "long": "config", "short": "c", "value": { "name": "key=value" }, "description": "set a configuration variable in new repository" },
+          { "long": "single-branch", "description": "clone only one branch" },
+          { "long": "no-single-branch", "description": "clone all branches" },
+          { "long": "shallow-submodules", "description": "make cloned submodules shallow" },
+          { "long": "remote-submodules", "description": "clone submodules using remote-tracking branch status" },
+          { "long": "filter", "value": { "name": "filter-spec" }, "description": "request partial clone object filtering" },
+          { "long": "sparse", "description": "initialize sparse-checkout file" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "repository", "index": 0, "provider": "builtin.directories", "description": "repository to clone" },
+            { "name": "directory", "index": 1, "provider": "builtin.directories", "description": "directory to clone into" }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "create an empty repository",
+        "options": [
+          { "long": "bare", "description": "create a bare repository" },
+          { "long": "initial-branch", "short": "b", "value": { "name": "branch" }, "description": "initial branch name" },
+          { "long": "quiet", "short": "q", "description": "only print errors and warnings" },
+          { "long": "separate-git-dir", "value": { "name": "gitdir", "provider": "builtin.directories" }, "description": "separate git directory from working tree" },
+          { "long": "object-format", "value": { "name": "format", "provider": "git.object-formats" }, "description": "object format for repository" },
+          { "long": "ref-format", "value": { "name": "format", "provider": "git.ref-formats" }, "description": "reference storage format for repository" },
+          { "long": "template", "value": { "name": "directory", "provider": "builtin.directories" }, "description": "directory of templates to use" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "directory", "index": 0, "provider": "builtin.directories", "description": "directory to initialize" }
           ]
         }
       },
@@ -518,6 +644,40 @@
         "arguments": {
           "states": [
             { "name": "upstream", "index": 0, "repeatable": true, "provider": "git.refs", "description": "upstream or branch to rebase" }
+          ]
+        }
+      },
+      {
+        "name": "rm",
+        "description": "remove files from the working tree and index",
+        "options": [
+          { "long": "cached", "description": "unstage and remove paths only from the index" },
+          { "long": "force", "short": "f", "description": "override up-to-date checks" },
+          { "long": "dry-run", "short": "n", "description": "show what would be done without removing" },
+          { "long": "recursive", "short": "r", "description": "allow recursive removal when leading directory is given" },
+          { "long": "quiet", "short": "q", "description": "be quiet" },
+          { "long": "ignore-unmatch", "description": "exit with zero status even if no files matched" },
+          { "long": "sparse", "description": "allow updating entries outside sparse-checkout cone" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.tracked-paths", "description": "path to remove" }
+          ]
+        }
+      },
+      {
+        "name": "mv",
+        "description": "move or rename a file",
+        "options": [
+          { "long": "force", "short": "f", "description": "force rename or move" },
+          { "long": "dry-run", "short": "n", "description": "show what would be done without moving" },
+          { "long": "verbose", "short": "v", "description": "report names of moved files" },
+          { "long": "sparse", "description": "allow updating entries outside sparse-checkout cone" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "source", "index": 0, "repeatable": true, "provider": "git.tracked-paths", "description": "path to move" }
           ]
         }
       },

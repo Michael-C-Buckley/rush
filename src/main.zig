@@ -5531,6 +5531,16 @@ test "supplied git manifest validates and selects representative contexts" {
         \\  for-each-ref)
         \\    printf 'origin/main\norigin/release\n'
         \\    ;;
+        \\  config)
+        \\    if test "$2" = --list && test "$3" = --name-only; then
+        \\      printf 'core.editor\nuser.name\n'
+        \\    fi
+        \\    ;;
+        \\  status)
+        \\    if test "$2" = --porcelain=v1; then
+        \\      printf ' M src/worktree.txt\0?? tmp/untracked.log\0'
+        \\    fi
+        \\    ;;
         \\  diff)
         \\    cached=false
         \\    for arg do
@@ -5648,6 +5658,40 @@ test "supplied git manifest validates and selects representative contexts" {
     defer executor.freeCompletions(clean_ignored);
     const ignored = findCompletionCandidate(clean_ignored, "ignored.log") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqualStrings("ignored path", ignored.description.?);
+
+    const add_paths = try executor.collectCompletionsForInput("git add src/wo", "git add src/wo".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(add_paths);
+    const add_worktree = findCompletionCandidate(add_paths, "src/worktree.txt") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, add_worktree.kind);
+
+    const rm_paths = try executor.collectCompletionsForInput("git rm src/tra", "git rm src/tra".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(rm_paths);
+    const rm_tracked = findCompletionCandidate(rm_paths, "src/tracked.txt") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, rm_tracked.kind);
+
+    const mv_paths = try executor.collectCompletionsForInput("git mv src/tra", "git mv src/tra".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(mv_paths);
+    try expectCompletionCandidate(mv_paths, "src/tracked.txt");
+
+    const config_keys = try executor.collectCompletionsForInput("git config core.", "git config core.".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(config_keys);
+    try expectCompletionCandidate(config_keys, "core.editor");
+
+    const config_types = try executor.collectCompletionsForInput("git config --type ", "git config --type ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(config_types);
+    try expectCompletionCandidate(config_types, "bool");
+
+    const clone_options = try executor.collectCompletionsForInput("git clone --ref", "git clone --ref".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(clone_options);
+    try expectCompletionCandidate(clone_options, "--reference");
+
+    const init_object_formats = try executor.collectCompletionsForInput("git init --object-format ", "git init --object-format ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(init_object_formats);
+    try expectCompletionCandidate(init_object_formats, "sha256");
+
+    const init_ref_formats = try executor.collectCompletionsForInput("git init --ref-format ", "git init --ref-format ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(init_ref_formats);
+    try expectCompletionCandidate(init_ref_formats, "reftable");
 
     const push_remotes = try executor.collectCompletionsForInput("git push or", "git push or".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(push_remotes);
