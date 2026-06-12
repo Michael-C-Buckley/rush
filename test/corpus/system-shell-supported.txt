@@ -137,6 +137,7 @@ printf '[%o][%x][%X]' 10 255 255
 printf '%d:%d:%d:%d:%u:%x:%d\n' 010 +0x10 "'A" '"B' -010 -0x10 ''
 printf '%5.2f|%e|%g|%G|%a|%A|\n' 3.14159 2.5 1234567 0.0000123 3.5 3.5
 LC_ALL=C printf '[%+.1f][% .1f][%#.0f][%#g][%#G]\n' 3.5 3.5 3 3 3
+printf '[%*.*s][%-*.*s][%*.*d][%-*.*d]\n' 6 3 abcdef 6 3 abcdef 7 4 7 7 4 7
 printf x > file; test -s file; echo size=$?; test -r file; echo read=$?; test -x file; echo exec=$?
 test a \< b; echo lt=$?; test b \> a; echo gt=$?
 echo() { printf 'function\n'; }; command echo ok; command -v echo

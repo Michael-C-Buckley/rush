@@ -1,0 +1,1 @@
+printf '[%*.*s][%-*.*s][%*.*d][%-*.*d]\n' 6 3 abcdef 6 3 abcdef 7 4 7 7 4 7
