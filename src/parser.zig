@@ -5284,8 +5284,8 @@ const gen_max_depth = 3;
 // Includes keywords and operator-shaped words so generated programs stress
 // boundary confusion (e.g. `done` as an argument, `a=b` as a command word).
 const gen_idents = [_][]const u8{
-    "echo", "x",  "foo", "a1",   "cmd", "--flag", "if", "then",
-    "fi",   "do", "done", "in",  "esac", "EOF",   "2",  "a=b",
+    "echo", "x",  "foo",  "a1", "cmd",  "--flag", "if", "then",
+    "fi",   "do", "done", "in", "esac", "EOF",    "2",  "a=b",
 };
 
 const gen_separators = [_][]const u8{
