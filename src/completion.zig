@@ -226,6 +226,7 @@ pub const RuleSource = struct {
     kind: RuleSourceKind = .rush,
     manifest_path: ?[]const u8 = null,
     manifest_version: ?i64 = null,
+    companion_path: ?[]const u8 = null,
 };
 
 pub const ProviderKind = enum {

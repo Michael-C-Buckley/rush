@@ -55,6 +55,7 @@ pub const ExecuteOptions = struct {
     default_path_lookup: bool = false,
     verbose_input_echo: bool = true,
     alias_timing_chunks: bool = true,
+    completion_provider_only: bool = false,
 };
 
 const posix_shell_path = "/bin/sh";
@@ -650,6 +651,7 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.argument.after_value) |value| allocator.free(value);
     if (rule.description) |description| allocator.free(description);
     if (rule.source.manifest_path) |path| allocator.free(path);
+    if (rule.source.companion_path) |path| allocator.free(path);
 }
 
 const MatchedCompletionOption = struct {
@@ -1379,6 +1381,7 @@ pub const Executor = struct {
     completion_generation: u64 = 0,
     completion_provider_diagnostics: std.ArrayList(CompletionProviderDiagnostic) = .empty,
     loaded_completion_scripts: std.StringHashMapUnmanaged(void) = .empty,
+    loaded_completion_companions: std.StringHashMapUnmanaged(void) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList([]const u8) = .empty,
     next_job_id: usize = 1,
@@ -1848,6 +1851,9 @@ pub const Executor = struct {
         var loaded_completion_iter = self.loaded_completion_scripts.iterator();
         while (loaded_completion_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
         self.loaded_completion_scripts.deinit(self.allocator);
+        var loaded_companion_iter = self.loaded_completion_companions.iterator();
+        while (loaded_companion_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.loaded_completion_companions.deinit(self.allocator);
         for (self.background_jobs.items) |job| self.allocator.free(job.command);
         self.background_jobs.deinit(self.allocator);
         for (self.pending_job_notifications.items) |notification| self.allocator.free(notification);
@@ -1906,6 +1912,7 @@ pub const Executor = struct {
                 .kind = rule.source.kind,
                 .manifest_path = if (rule.source.manifest_path) |path| try self.allocator.dupe(u8, path) else null,
                 .manifest_version = rule.source.manifest_version,
+                .companion_path = if (rule.source.companion_path) |path| try self.allocator.dupe(u8, path) else null,
             },
         };
         errdefer freeCompletionRule(self.allocator, owned_rule);
@@ -2003,13 +2010,13 @@ pub const Executor = struct {
             if (data_home.len != 0) {
                 const path = try std.fs.path.join(self.allocator, &.{ data_home, "rush", "completions", file_name });
                 defer self.allocator.free(path);
-                if (try self.sourceCompletionScript(io, path, options)) return;
+                if (!self.isManifestCompanionCompletionScript(root, path) and try self.sourceCompletionScript(io, path, options, false)) return;
             }
         } else if (self.getEnv("HOME")) |home| {
             if (home.len != 0) {
                 const path = try std.fs.path.join(self.allocator, &.{ home, ".local", "share", "rush", "completions", file_name });
                 defer self.allocator.free(path);
-                if (try self.sourceCompletionScript(io, path, options)) return;
+                if (!self.isManifestCompanionCompletionScript(root, path) and try self.sourceCompletionScript(io, path, options, false)) return;
             }
         }
 
@@ -2019,8 +2026,19 @@ pub const Executor = struct {
             if (dir.len == 0) continue;
             const path = try std.fs.path.join(self.allocator, &.{ dir, "rush", "completions", file_name });
             defer self.allocator.free(path);
-            if (try self.sourceCompletionScript(io, path, options)) return;
+            if (!self.isManifestCompanionCompletionScript(root, path) and try self.sourceCompletionScript(io, path, options, false)) return;
         }
+    }
+
+    fn isManifestCompanionCompletionScript(self: Executor, root: []const u8, path: []const u8) bool {
+        for (self.completion_rules.items) |rule| {
+            if (rule.source.kind != .manifest) continue;
+            if (!std.mem.eql(u8, rule.root, root)) continue;
+            if (rule.source.companion_path) |companion_path| {
+                if (std.mem.eql(u8, companion_path, path)) return true;
+            }
+        }
+        return false;
     }
 
     fn rootCompletionFileName(allocator: std.mem.Allocator, root: []const u8) ![]const u8 {
@@ -2028,7 +2046,7 @@ pub const Executor = struct {
         return std.fmt.allocPrint(allocator, "{s}.rush", .{root});
     }
 
-    fn sourceCompletionScript(self: *Executor, io: std.Io, path: []const u8, options: ExecuteOptions) !bool {
+    fn sourceCompletionScript(self: *Executor, io: std.Io, path: []const u8, options: ExecuteOptions, provider_only: bool) !bool {
         if (path.len == 0) return false;
         const contents = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
             error.FileNotFound => return false,
@@ -2037,9 +2055,18 @@ pub const Executor = struct {
         defer self.allocator.free(contents);
         var source_options = options;
         source_options.allow_external = true;
+        source_options.completion_provider_only = provider_only;
         var result = self.executeScriptSlice(contents, source_options) catch return true;
         defer result.deinit();
         return true;
+    }
+
+    fn ensureCompletionCompanionLoaded(self: *Executor, io: std.Io, path: []const u8, options: ExecuteOptions) !void {
+        if (path.len == 0 or self.loaded_completion_companions.contains(path)) return;
+        const owned_path = try self.allocator.dupe(u8, path);
+        errdefer self.allocator.free(owned_path);
+        try self.loaded_completion_companions.put(self.allocator, owned_path, {});
+        _ = try self.sourceCompletionScript(io, path, options, true);
     }
 
     pub fn lastCompletionContext(self: Executor) ?CompletionEvalContext {
@@ -2445,8 +2472,11 @@ pub const Executor = struct {
         return self.allocator.alloc(completion.Candidate, 0);
     }
 
-    fn collectCompletionsFromFunction(self: *Executor, function: []const u8, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
+    fn collectCompletionsFromFunction(self: *Executor, function: []const u8, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions, companion_path: ?[]const u8) ![]completion.Candidate {
         if (self.completion_builder != null) return error.RecursiveCompletion;
+        if (companion_path) |path| {
+            if (options.io) |io| try self.ensureCompletionCompanionLoaded(io, path, options);
+        }
         if (self.functions.get(function) == null) {
             try self.appendCompletionProviderDiagnostic(function, command, null, error.CompletionProviderFunctionNotFound, "");
             return self.allocator.alloc(completion.Candidate, 0);
@@ -2785,7 +2815,7 @@ pub const Executor = struct {
             switch (rule.provider_kind) {
                 .function => {
                     const function = rule.value orelse continue;
-                    const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options);
+                    const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options, rule.source.companion_path);
                     defer self.freeCompletions(candidates);
                     for (candidates) |candidate| {
                         if (completionOptionCandidateSuppression(self.completion_rules.items, semantic, candidate) != null) continue;
@@ -9682,7 +9712,7 @@ fn commandLookup(self: *Executor, options: ExecuteOptions, name: []const u8, use
 
 fn builtinComplete(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
-    _ = options;
+    if (options.completion_provider_only) return emptyResult(self.allocator, 0);
     if (command.argv.len < 2) return errorResult(self.allocator, 2, "complete", "missing command name");
     var pattern = try parseCompletionPattern(self.allocator, command.argv[1].text);
     defer pattern.deinit(self.allocator);

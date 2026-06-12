@@ -1022,17 +1022,27 @@ const CompletionScriptLoader = struct {
         try self.loadDataDirs(io, executor, command, arg_zero);
         if (try xdgDataHomeCompletionManifestPath(self.allocator, executor.*, command)) |path| {
             defer self.allocator.free(path);
-            loadOptionalCompletionManifest(self.allocator, io, executor, path) catch {};
-        }
-        if (try xdgDataHomeCompletionPath(self.allocator, executor.*, command)) |path| {
+            const loaded_manifest = loadOptionalCompletionManifest(self.allocator, io, executor, path) catch false;
+            if (!loaded_manifest) {
+                if (try xdgDataHomeCompletionPath(self.allocator, executor.*, command)) |script_path| {
+                    defer self.allocator.free(script_path);
+                    sourceOptionalConfig(self.allocator, io, executor, script_path, arg_zero) catch {};
+                }
+            }
+        } else if (try xdgDataHomeCompletionPath(self.allocator, executor.*, command)) |path| {
             defer self.allocator.free(path);
             sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
         }
         if (try xdgConfigCompletionManifestPath(self.allocator, executor.*, command)) |path| {
             defer self.allocator.free(path);
-            loadOptionalCompletionManifest(self.allocator, io, executor, path) catch {};
-        }
-        if (try xdgConfigCompletionPath(self.allocator, executor.*, command)) |path| {
+            const loaded_manifest = loadOptionalCompletionManifest(self.allocator, io, executor, path) catch false;
+            if (!loaded_manifest) {
+                if (try xdgConfigCompletionPath(self.allocator, executor.*, command)) |script_path| {
+                    defer self.allocator.free(script_path);
+                    sourceOptionalConfig(self.allocator, io, executor, script_path, arg_zero) catch {};
+                }
+            }
+        } else if (try xdgConfigCompletionPath(self.allocator, executor.*, command)) |path| {
             defer self.allocator.free(path);
             sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
         }
@@ -1045,7 +1055,8 @@ const CompletionScriptLoader = struct {
             if (dir.len == 0) continue;
             const manifest_path = try completionManifestPathInDir(self.allocator, dir, command);
             defer self.allocator.free(manifest_path);
-            loadOptionalCompletionManifest(self.allocator, io, executor, manifest_path) catch {};
+            const loaded_manifest = loadOptionalCompletionManifest(self.allocator, io, executor, manifest_path) catch false;
+            if (loaded_manifest) continue;
 
             const path = try completionPathInDir(self.allocator, dir, command);
             defer self.allocator.free(path);
@@ -1254,13 +1265,14 @@ fn xdgConfigCompletionFilePath(allocator: std.mem.Allocator, executor: exec.Exec
     return null;
 }
 
-fn loadOptionalCompletionManifest(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8) !void {
+fn loadOptionalCompletionManifest(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8) !bool {
     const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
-        error.FileNotFound => return,
+        error.FileNotFound => return false,
         else => return err,
     };
     defer allocator.free(contents);
     try loadCompletionManifestWithPath(allocator, executor, contents, path);
+    return true;
 }
 
 fn loadCompletionManifest(allocator: std.mem.Allocator, executor: *exec.Executor, contents: []const u8) !void {
@@ -1290,8 +1302,15 @@ fn loadCompletionManifestWithPath(allocator: std.mem.Allocator, executor: *exec.
         else => return error.CompletionManifestVersionMustBeInteger,
     }
     const command = root_object.get("command") orelse return error.CompletionManifestMissingCommand;
-    const source: completion_model.RuleSource = .{ .kind = .manifest, .manifest_path = source_path, .manifest_version = version };
+    const companion_path = if (source_path) |path| try completionManifestCompanionPath(allocator, path) else null;
+    defer if (companion_path) |path| allocator.free(path);
+    const source: completion_model.RuleSource = .{ .kind = .manifest, .manifest_path = source_path, .manifest_version = version, .companion_path = companion_path };
     try loadCompletionManifestCommand(executor, command, &.{}, &.{}, source);
+}
+
+fn completionManifestCompanionPath(allocator: std.mem.Allocator, path: []const u8) !?[]const u8 {
+    if (!std.mem.endsWith(u8, path, ".json")) return null;
+    return @as(?[]const u8, try std.fmt.allocPrint(allocator, "{s}.rush", .{path[0 .. path.len - ".json".len]}));
 }
 
 const CompletionManifestProviderBinding = struct {
@@ -5018,6 +5037,113 @@ test "completion manifests bind companion function providers and builtin provide
     try expectCompletionCandidate(variable_candidates, "RUSH_MANIFEST_PROVIDER_VAR");
 }
 
+test "completion manifest function providers lazy-load provider-only companions" {
+    const root = "rush-completion-manifest-lazy-companion-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data =
+        \\RUSH_MANIFEST_COMPANION_LOADED=yes
+        \\complete tool --subcommand companion-static
+        \\__rush_complete_tool_targets() {
+        \\  completion candidate target-one --kind plain
+        \\}
+    });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.targets": { "function": "__rush_complete_tool_targets" }
+        \\    },
+        \\    "options": [
+        \\      { "long": "verbose" }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "index": 0, "provider": "tool.targets" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    });
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_DIRS", "");
+    try executor.setEnv("XDG_DATA_HOME", root);
+
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
+
+    const loaded_rules = executor.completionRules().len;
+    try std.testing.expect(!executor.hasFunction("__rush_complete_tool_targets"));
+    try std.testing.expect(executor.getEnv("RUSH_MANIFEST_COMPANION_LOADED") == null);
+
+    const option_candidates = try executor.collectCompletionsForInput("tool --v", "tool --v".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(option_candidates);
+    try expectCompletionCandidate(option_candidates, "--verbose");
+    try std.testing.expect(!executor.hasFunction("__rush_complete_tool_targets"));
+    try std.testing.expect(executor.getEnv("RUSH_MANIFEST_COMPANION_LOADED") == null);
+
+    const argument_candidates = try executor.collectCompletionsForInput("tool ta", "tool ta".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(argument_candidates);
+    try expectCompletionCandidate(argument_candidates, "target-one");
+    try std.testing.expect(executor.hasFunction("__rush_complete_tool_targets"));
+    try std.testing.expectEqualStrings("yes", executor.getEnv("RUSH_MANIFEST_COMPANION_LOADED").?);
+    try std.testing.expectEqual(loaded_rules, executor.completionRules().len);
+
+    const companion_static_candidates = try executor.collectCompletionsForInput("tool companion", "tool companion".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(companion_static_candidates);
+    try expectNoCompletionCandidate(companion_static_candidates, "companion-static");
+}
+
+test "completion manifest builtin providers do not load companions" {
+    const root = "rush-completion-manifest-builtin-no-companion-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data =
+        \\RUSH_BUILTIN_COMPANION_LOADED=yes
+        \\complete tool --subcommand builtin-companion-static
+    });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "builtin.variables": { "builtin": "variables" }
+        \\    },
+        \\    "options": [
+        \\      { "long": "env", "value": { "name": "var", "provider": "builtin.variables" } }
+        \\    ]
+        \\  }
+        \\}
+    });
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_DIRS", "");
+    try executor.setEnv("XDG_DATA_HOME", root);
+    try executor.setEnv("RUSH_BUILTIN_PROVIDER_VAR", "1");
+
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
+
+    const variable_candidates = try executor.collectCompletionsForInput("tool --env RUSH_BUILTIN_PROVIDER", "tool --env RUSH_BUILTIN_PROVIDER".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(variable_candidates);
+    try expectCompletionCandidate(variable_candidates, "RUSH_BUILTIN_PROVIDER_VAR");
+    try std.testing.expect(executor.getEnv("RUSH_BUILTIN_COMPANION_LOADED") == null);
+
+    const companion_static_candidates = try executor.collectCompletionsForInput("tool builtin", "tool builtin".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(companion_static_candidates);
+    try expectNoCompletionCandidate(companion_static_candidates, "builtin-companion-static");
+}
+
 test "completion manifest semantic validation accepts resolved providers groups and reachable arguments" {
     var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
         \\{
@@ -5621,7 +5747,6 @@ test "completion debug output reports missing manifest provider functions" {
     const root = "rush-debug-missing-manifest-provider-test";
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data = "" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
         \\{
         \\  "manifestVersion": 1,

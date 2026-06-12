@@ -95,16 +95,18 @@ Loading should happen in phases:
 4. Compile the manifest into completion rules / IR.
 5. Register provider references.
 6. Source `git.rush` lazily when a referenced Rush function provider is first
-   needed, if implementation constraints allow it.
+   needed.
 
 Built-in providers do not require a companion `.rush` file.
 
-The v1 implementation currently sources the companion `.rush` file eagerly when
-the matching manifest is loaded. Treat the companion as provider code: keep
-static declarations in the JSON manifest, and define only the Rush functions
-referenced by manifest providers in the `.rush` file. Missing provider IDs are
-reported by manifest semantic validation; missing Rush functions are reported as
-provider diagnostics when completion tries to run the provider.
+The v1 implementation sources the companion `.rush` file lazily when a manifest
+function provider first needs a referenced Rush function. Treat the companion as
+provider-only code: keep static declarations in the JSON manifest, and define
+only the Rush functions referenced by manifest providers in the `.rush` file.
+Static `complete` declarations in a manifest companion are ignored while the
+companion is loaded as provider code. Missing provider IDs are reported by
+manifest semantic validation; missing Rush functions are reported as provider
+diagnostics when completion tries to run the provider.
 
 The loader should support `.rush`-only completions and manifest-backed
 completions side by side. If both `git.json` and `git.rush` exist, `git.rush`
