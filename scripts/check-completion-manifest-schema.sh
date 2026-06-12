@@ -182,6 +182,14 @@ def check_arguments(arguments, providers, path):
             if name in seen:
                 errors.append(f"{path}.states: duplicate state {name!r}")
             seen.add(name)
+        if "rest" in state:
+            if state.get("rest") != "command-line":
+                errors.append(f"{state_path}.rest: rest must be 'command-line'")
+            if i + 1 != len(states):
+                errors.append(f"{state_path}.rest: command-line rest state must be final")
+            for field in ("repeatable", "provider", "grammar"):
+                if field in state:
+                    errors.append(f"{state_path}.{field}: command-line rest state must not define {field}")
         if "provider" in state:
             check_provider_ref(state["provider"], providers, path_join(state_path, "provider"))
 

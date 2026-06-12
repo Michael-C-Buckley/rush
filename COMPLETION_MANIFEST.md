@@ -277,6 +277,7 @@ type ArgumentState = {
   name: string
   index?: number
   repeatable?: boolean
+  rest?: "command-line"
   provider?: ProviderRef
   grammar?: ValueGrammar
   description?: string
@@ -396,6 +397,29 @@ Repeatable trailing operands use `repeatable`:
   }
 }
 ```
+
+Precommand wrappers whose trailing operands are a fresh shell command line use a
+terminal rest state:
+
+```json
+{
+  "arguments": {
+    "states": [
+      { "name": "command", "rest": "command-line" }
+    ]
+  }
+}
+```
+
+`rest: "command-line"` is terminal and implicitly repeatable: it must be the
+final state and must not also set `repeatable`, `provider`, or `grammar`. When
+completion reaches the state, Rush shifts the remaining operands so the first
+rest operand is word 0 and re-enters normal command completion. That means word
+0 completes aliases/functions/builtins/executables, later words use the nested
+command's manifest or `.rush` rules, and nested wrappers such as `sudo env git
+...` work recursively up to the engine depth limit. Leading `VAR=value` words
+inside the shifted command line are skipped by the normal shell command parser;
+there is no separate manifest flag for env-style assignments.
 
 Git-style ambiguous ref/path cases may use simple conditions. Keep conditions
 structured rather than expression strings:
@@ -720,6 +744,7 @@ model in the top-level `manifest` object:
   "path": "share/rush/completions/git.json",
   "manifestVersion": 1,
   "commandPath": ["git", "diff"],
+  "precommandDepthLimited": false,
   "optionName": null,
   "optionValueIndex": null,
   "parsedOptions": [

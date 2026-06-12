@@ -197,11 +197,12 @@ pub const Argument = struct {
     after_state: ?[]const u8 = null,
     after_value: ?[]const u8 = null,
     repeatable: bool = false,
+    rest_command_line: bool = false,
     require_option_values: []const OptionValueCondition = &.{},
     reject_option_values: []const OptionValueCondition = &.{},
 
     pub fn hasSelector(self: Argument) bool {
-        return self.state != null or self.index != null or self.after_state != null or self.after_value != null or self.repeatable or self.require_option_values.len != 0 or self.reject_option_values.len != 0;
+        return self.state != null or self.index != null or self.after_state != null or self.after_value != null or self.repeatable or self.rest_command_line or self.require_option_values.len != 0 or self.reject_option_values.len != 0;
     }
 };
 

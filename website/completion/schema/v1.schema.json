@@ -298,9 +298,29 @@
       "type": "object",
       "required": ["name"],
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "required": ["rest"] },
+          "then": {
+            "properties": {
+              "rest": { "const": "command-line" }
+            },
+            "not": {
+              "anyOf": [
+                { "required": ["repeatable"] },
+                { "required": ["provider"] },
+                { "required": ["grammar"] }
+              ]
+            }
+          }
+        }
+      ],
       "properties": {
         "name": {
           "$ref": "#/$defs/name"
+        },
+        "rest": {
+          "const": "command-line"
         },
         "index": {
           "type": "integer",

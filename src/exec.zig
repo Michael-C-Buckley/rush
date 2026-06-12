@@ -56,9 +56,12 @@ pub const ExecuteOptions = struct {
     verbose_input_echo: bool = true,
     alias_timing_chunks: bool = true,
     completion_provider_only: bool = false,
+    completion_loader: ?*const fn (*anyopaque, *Executor, []const u8, ExecuteOptions) anyerror!void = null,
+    completion_loader_context: ?*anyopaque = null,
 };
 
 const posix_shell_path = "/bin/sh";
+const precommand_completion_depth_limit = 8;
 
 pub const ShoptOptions = struct {
     dotglob: bool = false,
@@ -515,6 +518,7 @@ pub const CompletionParsedOperand = struct {
     index: usize,
     state: ?[]const u8 = null,
     after_terminator: bool = false,
+    rest_command_line: bool = false,
 };
 
 pub const CompletionOptionSuppressionReason = enum {
@@ -594,6 +598,7 @@ pub const CompletionSemanticContext = struct {
     suspicious_end: ?usize = null,
     parser_position: parser.CompletionKind = .command,
     parser_source_offset: usize = 0,
+    precommand_start: ?usize = null,
 
     pub fn deinit(self: *CompletionSemanticContext) void {
         self.allocator.free(self.path);
@@ -1286,7 +1291,7 @@ fn completionActiveArgumentState(rules: []const completion.Rule, root: []const u
         const state = completionArgumentStateForRule(rules, root, path, rule, rule_index) orelse continue;
         if (!completionArgumentOptionValueConditionsAllow(rule.argument, parsed_options)) continue;
         if (completionArgumentStateHasExplicitTransition(rule.argument)) continue;
-        if (argument_index == implicit_index or (rule.argument.repeatable and argument_index >= implicit_index)) return state;
+        if (argument_index == implicit_index or ((rule.argument.repeatable or rule.argument.rest_command_line) and argument_index >= implicit_index)) return state;
         implicit_index += 1;
     }
     return null;
@@ -1331,17 +1336,29 @@ fn completionArgumentStateHasExplicitTransition(argument: completion.Argument) b
 
 fn completionExplicitArgumentStateMatches(argument: completion.Argument, state: []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8) bool {
     if (argument.index) |index| {
-        if (argument_index == index or (argument.repeatable and argument_index >= index)) return true;
+        if (argument_index == index or ((argument.repeatable or argument.rest_command_line) and argument_index >= index)) return true;
     }
     if (argument.after_state) |after_state| {
         if (previous_state) |active| {
-            if (std.mem.eql(u8, active, after_state) or (argument.repeatable and std.mem.eql(u8, active, state))) return true;
+            if (std.mem.eql(u8, active, after_state) or ((argument.repeatable or argument.rest_command_line) and std.mem.eql(u8, active, state))) return true;
         }
     }
     if (argument.after_value) |after_value| {
         if (std.mem.eql(u8, previous_argument, after_value)) return true;
-        if (argument.repeatable) {
+        if (argument.repeatable or argument.rest_command_line) {
             if (previous_state) |active| if (std.mem.eql(u8, active, state)) return true;
+        }
+    }
+    return false;
+}
+
+fn completionArgumentStateIsRestCommandLine(rules: []const completion.Rule, root: []const u8, path: []const []const u8, state: ?[]const u8) bool {
+    const active_state = state orelse return false;
+    for (rules) |rule| {
+        if (rule.kind != .dynamic_argument or !rule.argument.rest_command_line) continue;
+        if (!completionRuleContextMatches(rule, root, path)) continue;
+        if (rule.argument.state) |rule_state| {
+            if (std.mem.eql(u8, rule_state, active_state)) return true;
         }
     }
     return false;
@@ -1717,6 +1734,9 @@ pub const Executor = struct {
     completion_variant_probe_counts: std.StringHashMapUnmanaged(usize) = .empty,
     loaded_completion_scripts: std.StringHashMapUnmanaged(void) = .empty,
     loaded_completion_companions: std.StringHashMapUnmanaged(void) = .empty,
+    last_completion_trace_path: ?[]const []const u8 = null,
+    last_completion_semantic: ?CompletionSemanticContext = null,
+    last_completion_precommand_depth_limited: bool = false,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList([]const u8) = .empty,
     next_job_id: usize = 1,
@@ -2202,6 +2222,7 @@ pub const Executor = struct {
         var loaded_companion_iter = self.loaded_completion_companions.iterator();
         while (loaded_companion_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
         self.loaded_completion_companions.deinit(self.allocator);
+        self.clearLastCompletionTrace();
         for (self.background_jobs.items) |job| self.allocator.free(job.command);
         self.background_jobs.deinit(self.allocator);
         for (self.pending_job_notifications.items) |notification| self.allocator.free(notification);
@@ -2255,6 +2276,7 @@ pub const Executor = struct {
                 .after_state = if (rule.argument.after_state) |state| try self.allocator.dupe(u8, state) else null,
                 .after_value = if (rule.argument.after_value) |value| try self.allocator.dupe(u8, value) else null,
                 .repeatable = rule.argument.repeatable,
+                .rest_command_line = rule.argument.rest_command_line,
                 .require_option_values = try dupeOptionValueConditions(self.allocator, rule.argument.require_option_values),
                 .reject_option_values = try dupeOptionValueConditions(self.allocator, rule.argument.reject_option_values),
             },
@@ -2602,15 +2624,122 @@ pub const Executor = struct {
         return self.last_completion_context;
     }
 
+    pub fn lastCompletionTracePath(self: Executor) ?[]const []const u8 {
+        return self.last_completion_trace_path;
+    }
+
+    pub fn lastCompletionSemantic(self: Executor) ?CompletionSemanticContext {
+        return self.last_completion_semantic;
+    }
+
+    pub fn lastCompletionPrecommandDepthLimited(self: Executor) bool {
+        return self.last_completion_precommand_depth_limited;
+    }
+
+    fn clearLastCompletionTrace(self: *Executor) void {
+        if (self.last_completion_trace_path) |path| self.allocator.free(path);
+        self.last_completion_trace_path = null;
+        if (self.last_completion_semantic) |*semantic| semantic.deinit();
+        self.last_completion_semantic = null;
+        self.last_completion_precommand_depth_limited = false;
+    }
+
+    fn storeLastCompletionSemantic(self: *Executor, semantic: CompletionSemanticContext) !void {
+        if (self.last_completion_semantic) |*stored| stored.deinit();
+        self.last_completion_semantic = null;
+        const owned_path = try self.allocator.dupe([]const u8, semantic.path);
+        errdefer self.allocator.free(owned_path);
+        const owned_parsed_options = try self.allocator.dupe(CompletionParsedOption, semantic.parsed_options);
+        errdefer self.allocator.free(owned_parsed_options);
+        const owned_operands = try self.allocator.dupe(CompletionParsedOperand, semantic.operands);
+        errdefer self.allocator.free(owned_operands);
+        self.last_completion_semantic = .{
+            .allocator = self.allocator,
+            .root = semantic.root,
+            .path = owned_path,
+            .parsed_options = owned_parsed_options,
+            .operands = owned_operands,
+            .options_terminated = semantic.options_terminated,
+            .prefix = semantic.prefix,
+            .argument_index = semantic.argument_index,
+            .argument_state = semantic.argument_state,
+            .previous = semantic.previous,
+            .position = semantic.position,
+            .option_value = semantic.option_value,
+            .value_segment = semantic.value_segment,
+            .replace_start = semantic.replace_start,
+            .replace_end = semantic.replace_end,
+            .suspicious_start = semantic.suspicious_start,
+            .suspicious_end = semantic.suspicious_end,
+            .parser_position = semantic.parser_position,
+            .parser_source_offset = semantic.parser_source_offset,
+            .precommand_start = semantic.precommand_start,
+        };
+    }
+
+    fn offsetLastCompletionSemantic(self: *Executor, offset: usize) void {
+        const semantic = if (self.last_completion_semantic) |*stored| stored else return;
+        semantic.replace_start += offset;
+        semantic.replace_end += offset;
+        if (semantic.suspicious_start) |start| semantic.suspicious_start = start + offset;
+        if (semantic.suspicious_end) |end| semantic.suspicious_end = end + offset;
+        semantic.parser_source_offset += offset;
+        if (semantic.precommand_start) |start| semantic.precommand_start = start + offset;
+    }
+
+    fn storeLastCompletionTracePath(self: *Executor, root: []const u8, path: []const []const u8) !void {
+        if (self.last_completion_trace_path) |existing| self.allocator.free(existing);
+        self.last_completion_trace_path = null;
+        const owned = try self.allocator.alloc([]const u8, 1 + path.len);
+        owned[0] = root;
+        @memcpy(owned[1..], path);
+        self.last_completion_trace_path = owned;
+    }
+
+    fn storeCombinedLastCompletionTracePath(self: *Executor, outer: CompletionSemanticContext, inner: []const []const u8) !void {
+        const owned = try self.allocator.alloc([]const u8, 1 + outer.path.len + inner.len);
+        errdefer self.allocator.free(owned);
+        owned[0] = outer.root;
+        @memcpy(owned[1 .. 1 + outer.path.len], outer.path);
+        @memcpy(owned[1 + outer.path.len ..], inner);
+        if (self.last_completion_trace_path) |existing| self.allocator.free(existing);
+        self.last_completion_trace_path = owned;
+    }
+
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
         self.clearCompletionProviderDiagnostics();
+        self.clearLastCompletionTrace();
+        return self.collectCompletionsForInputDepth(source, cursor, options, 0);
+    }
+
+    fn collectCompletionsForInputDepth(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions, precommand_depth: usize) ![]completion.Candidate {
         var context = try completionEvalContextForInput(self.allocator, source, cursor);
         const completing_parameter = context.position == .parameter;
         const parameter_context = context;
-        if (context.command.len != 0) try self.loadCompletionScriptForRoot(context.command, options);
+        if (context.command.len != 0) try self.loadCompletionDataForRoot(context.command, options);
         if (context.command.len != 0) try self.resolveCompletionVariantsForRoot(context.command, options);
         var semantic = try self.analyzeCompletionsForInput(source, cursor);
         defer semantic.deinit();
+
+        if (semantic.precommand_start) |start| {
+            if (precommand_depth >= precommand_completion_depth_limit) {
+                self.last_completion_precommand_depth_limited = true;
+                try self.storeLastCompletionSemantic(semantic);
+                try self.storeLastCompletionTracePath(semantic.root, semantic.path);
+                return self.allocator.alloc(completion.Candidate, 0);
+            }
+            const nested_source = source[start..];
+            const nested_cursor = if (cursor >= start) cursor - start else 0;
+            const candidates = try self.collectCompletionsForInputDepth(nested_source, nested_cursor, options, precommand_depth + 1);
+            for (candidates) |*candidate| {
+                candidate.replace_start += start;
+                candidate.replace_end += start;
+            }
+            self.offsetLastCompletionSemantic(start);
+            if (self.last_completion_trace_path) |inner_path| try self.storeCombinedLastCompletionTracePath(semantic, inner_path);
+            return candidates;
+        }
+
         const command_path = try completionCommandPath(self.allocator, semantic);
         defer self.allocator.free(command_path);
 
@@ -2633,11 +2762,17 @@ pub const Executor = struct {
         };
 
         if (completing_parameter) {
+            try self.storeLastCompletionSemantic(semantic);
+            try self.storeLastCompletionTracePath(semantic.root, semantic.path);
             return try self.collectParameterCompletions(parameter_context);
         }
 
         const candidates = try self.collectCompletionsWithContext(context.command, context, options);
-        if (semantic.position == .command) return candidates;
+        if (semantic.position == .command) {
+            try self.storeLastCompletionSemantic(semantic);
+            try self.storeLastCompletionTracePath(semantic.root, semantic.path);
+            return candidates;
+        }
 
         var builder: CompletionBuilder = .{};
         errdefer builder.deinit(self.allocator);
@@ -2648,7 +2783,18 @@ pub const Executor = struct {
         try self.appendDefaultCompletionCandidates(&builder, semantic, options);
         self.freeCompletions(candidates);
         const merged = try builder.finish(self.allocator);
+        try self.storeLastCompletionSemantic(semantic);
+        try self.storeLastCompletionTracePath(semantic.root, semantic.path);
         return merged;
+    }
+
+    fn loadCompletionDataForRoot(self: *Executor, command: []const u8, options: ExecuteOptions) !void {
+        if (options.completion_loader) |loader| {
+            const context = options.completion_loader_context orelse return;
+            try loader(context, self, command, options);
+            return;
+        }
+        try self.loadCompletionScriptForRoot(command, options);
     }
 
     fn collectParameterCompletions(self: *Executor, context: CompletionEvalContext) ![]completion.Candidate {
@@ -2715,6 +2861,7 @@ pub const Executor = struct {
         var option_value: ?CompletionOptionValue = null;
         var stop_after_unknown_option = false;
         var options_terminated = false;
+        var precommand_start: ?usize = null;
         while (index < words.items.len) {
             const token = words.items[index].token;
             const is_current = token.span.start == parser_context.span.start and clamped_cursor <= token.span.end;
@@ -2725,7 +2872,9 @@ pub const Executor = struct {
             stop_after_unknown_option = false;
             if (options_terminated) {
                 const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
-                try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = true });
+                const rest_command_line = completionArgumentStateIsRestCommandLine(self.completion_rules.items, root, path.items, operand_state);
+                if (rest_command_line and precommand_start == null) precommand_start = view.offset + token.span.start;
+                try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = true, .rest_command_line = rest_command_line });
                 previous_argument_state = operand_state;
                 previous_argument = word;
                 argument_index += 1;
@@ -2771,7 +2920,9 @@ pub const Executor = struct {
                 try path.append(self.allocator, word);
             } else {
                 const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
-                try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = false });
+                const rest_command_line = completionArgumentStateIsRestCommandLine(self.completion_rules.items, root, path.items, operand_state);
+                if (rest_command_line and precommand_start == null) precommand_start = view.offset + token.span.start;
+                try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = false, .rest_command_line = rest_command_line });
                 previous_argument_state = operand_state;
                 previous_argument = word;
                 argument_index += 1;
@@ -2780,6 +2931,9 @@ pub const Executor = struct {
         }
 
         const argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
+        if (precommand_start == null and completionArgumentStateIsRestCommandLine(self.completion_rules.items, root, path.items, argument_state)) {
+            precommand_start = replace_start;
+        }
 
         var semantic_prefix = prefix;
         var semantic_replace_start = replace_start;
@@ -2841,6 +2995,7 @@ pub const Executor = struct {
             .suspicious_end = if (suspicious) |span| view.offset + span.end else null,
             .parser_position = parser_context.kind,
             .parser_source_offset = view.offset,
+            .precommand_start = precommand_start,
         };
     }
 
@@ -3384,6 +3539,7 @@ pub const Executor = struct {
 
     fn appendDynamicStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionEvalContext, semantic: CompletionSemanticContext, options: ExecuteOptions) !void {
         for (self.completion_rules.items) |rule| {
+            if (rule.argument.rest_command_line) continue;
             if (!completionDynamicRuleMatches(rule, semantic)) continue;
             var provider_context = context;
             provider_context.position = switch (rule.kind) {

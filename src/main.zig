@@ -1100,6 +1100,12 @@ const CompletionScriptLoader = struct {
     }
 };
 
+fn loadCompletionDataForExecutor(context: *anyopaque, executor: *exec.Executor, command: []const u8, options: exec.ExecuteOptions) !void {
+    const loader: *CompletionScriptLoader = @ptrCast(@alignCast(context));
+    const io = options.io orelse return;
+    try loader.ensureLoaded(io, executor, command, options.arg_zero);
+}
+
 const CompletionCache = struct {
     allocator: std.mem.Allocator,
     mutex: std.atomic.Mutex = .unlocked,
@@ -1701,11 +1707,10 @@ fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, p
             .object => |object| object,
             else => return error.CompletionManifestArgumentStateMustBeObject,
         };
-        const provider_ref = state.get("provider") orelse continue;
-        const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
         var argument: completion_model.Argument = .{
             .state = manifestString(state.get("name")),
             .repeatable = manifestBool(state.get("repeatable")),
+            .rest_command_line = manifestRestCommandLine(state.get("rest")),
         };
         if (manifestInteger(state.get("index"))) |index| {
             if (index >= 0) argument.index = @intCast(index);
@@ -1722,6 +1727,12 @@ fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, p
         if (state.get("until")) |condition| try appendCompletionManifestOptionValueConditions(executor.allocator, &reject_option_values, condition, root, path, executor.completionRules());
         argument.require_option_values = require_option_values.items;
         argument.reject_option_values = reject_option_values.items;
+        if (argument.rest_command_line) {
+            try executor.registerCompletionRule(.{ .root = root, .path = path, .kind = .dynamic_argument, .argument = argument, .description = manifestString(state.get("description")), .source = source, .variant = variant, .disabled = disabled });
+            continue;
+        }
+        const provider_ref = state.get("provider") orelse continue;
+        const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
         try registerCompletionManifestProviderRule(executor, root, path, .dynamic_argument, provider, .{}, argument, 0, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source, variant, disabled);
     }
 }
@@ -1797,6 +1808,11 @@ fn manifestOptionSelectorName(selector: []const u8) ?[]const u8 {
     if (std.mem.startsWith(u8, selector, "--") and selector.len > 2) return selector[2..];
     if (std.mem.startsWith(u8, selector, "-") and selector.len == 2) return selector[1..];
     return null;
+}
+
+fn manifestRestCommandLine(value: ?std.json.Value) bool {
+    const rest = manifestString(value) orelse return false;
+    return std.mem.eql(u8, rest, "command-line");
 }
 
 fn registerCompletionManifestProviderRule(
@@ -2529,6 +2545,25 @@ fn validateManifestArguments(
             else => continue,
         };
         const state_name = manifestString(state.get("name")) orelse "<unnamed>";
+        const rest_command_line = manifestRestCommandLine(state.get("rest"));
+
+        if (state.get("rest")) |_| {
+            const rest_path = try manifestFieldPath(allocator, state_path, "rest");
+            defer allocator.free(rest_path);
+            if (!rest_command_line) try diagnostics.add(.err, "{s}: argument state rest must be 'command-line'", .{rest_path});
+        }
+        if (rest_command_line and index + 1 != states.items.len) {
+            try diagnostics.add(.err, "{s}.rest: command-line rest state must be the final argument state", .{state_path});
+        }
+        if (rest_command_line and manifestBool(state.get("repeatable"))) {
+            try diagnostics.add(.err, "{s}.repeatable: command-line rest state is implicitly repeatable and must not set repeatable", .{state_path});
+        }
+        if (rest_command_line and state.get("provider") != null) {
+            try diagnostics.add(.err, "{s}.provider: command-line rest state must not define a provider", .{state_path});
+        }
+        if (rest_command_line and state.get("grammar") != null) {
+            try diagnostics.add(.err, "{s}.grammar: command-line rest state must not define grammar", .{state_path});
+        }
 
         if (trailing_repeatable) |repeatable_name| {
             if (state.get("after") == null) {
@@ -2569,7 +2604,7 @@ fn validateManifestArguments(
                 try validateManifestCondition(allocator, diagnostics, condition, options, state_names.items, terminator_defined, condition_path);
             }
         }
-        if (manifestBool(state.get("repeatable")) and state.get("until") == null and state.get("after") == null) trailing_repeatable = state_name;
+        if ((manifestBool(state.get("repeatable")) or rest_command_line) and state.get("until") == null and state.get("after") == null) trailing_repeatable = state_name;
     }
 }
 
@@ -3006,7 +3041,14 @@ fn completeInteractiveLine(context: *anyopaque, allocator: std.mem.Allocator, io
         try completion_context.cache.startRefresh(completion_context.executor, completion_context.history, completion_context.io, source, cursor, completion_context.cwd, generation);
         return completion_model.applyCandidatesForInputWithPolicy(allocator, source, cached, matcher_policy);
     }
-    const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{ .io = io, .allow_external = true, .cancel = completion_context.cancel });
+    const candidates = try completion_context.executor.collectCompletionsForInput(source, cursor, .{
+        .io = io,
+        .allow_external = true,
+        .cancel = completion_context.cancel,
+        .completion_loader = loadCompletionDataForExecutor,
+        .completion_loader_context = completion_context.loader,
+        .arg_zero = completion_context.arg_zero,
+    });
     defer completion_context.executor.freeCompletions(candidates);
     try rankCompletionCandidates(allocator, candidates, completion_context.history.*, completion_context.cwd, source, matcher_policy);
     try completion_context.cache.put(source, cursor, completion_context.cwd, completion_context.executor.completionGeneration(), candidates);
@@ -3381,8 +3423,15 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     defer semantic.deinit();
     const semantic_path = try semanticCompletionPath(allocator, semantic);
     defer allocator.free(semantic_path);
-    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{
+        .io = io,
+        .allow_external = true,
+        .completion_loader = loadCompletionDataForExecutor,
+        .completion_loader_context = &loader,
+        .arg_zero = "rush",
+    });
     defer executor.freeCompletions(candidates);
+    const trace_semantic = executor.lastCompletionSemantic() orelse semantic;
     var effective_context = executor.lastCompletionContext() orelse context;
     effective_context.command_path = semantic_path;
     effective_context.argument_index = semantic.argument_index;
@@ -3493,7 +3542,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     try writeCompletionParsedOptionsText(&out.writer, semantic.parsed_options, "    ");
     try out.writer.print("  operands:\n", .{});
     try writeCompletionOperandsText(&out.writer, semantic.operands, "    ");
-    try writeCompletionManifestTraceText(allocator, io, &out.writer, executor, source, semantic, candidates);
+    try writeCompletionManifestTraceText(allocator, io, &out.writer, executor, source, trace_semantic, candidates);
     try out.writer.print("rules:\n", .{});
     for (executor.completionRules()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
@@ -3514,12 +3563,13 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         if (rule.argument.hasSelector()) {
             var argument_index_buffer: [32]u8 = undefined;
             const argument_index_text = if (rule.argument.index) |argument_index| std.fmt.bufPrint(&argument_index_buffer, "{d}", .{argument_index}) catch "" else "";
-            try out.writer.print("    argument:\n      state: {s}\n      index: {s}\n      after-state: {s}\n      after-value: {s}\n      repeatable: {}\n", .{
+            try out.writer.print("    argument:\n      state: {s}\n      index: {s}\n      after-state: {s}\n      after-value: {s}\n      repeatable: {}\n      rest-command-line: {}\n", .{
                 rule.argument.state orelse "",
                 argument_index_text,
                 rule.argument.after_state orelse "",
                 rule.argument.after_value orelse "",
                 rule.argument.repeatable,
+                rule.argument.rest_command_line,
             });
         }
         if (!rule.value_grammar.isEmpty()) {
@@ -3623,7 +3673,7 @@ fn writeCompletionParsedOptionsText(writer: *std.Io.Writer, options: []const exe
 
 fn writeCompletionOperandsText(writer: *std.Io.Writer, operands: []const exec.CompletionParsedOperand, indent: []const u8) !void {
     for (operands) |operand| {
-        try writer.print("{s}- value: {s}\n{s}  index: {d}\n{s}  state: {s}\n{s}  after-terminator: {}\n", .{
+        try writer.print("{s}- value: {s}\n{s}  index: {d}\n{s}  state: {s}\n{s}  after-terminator: {}\n{s}  rest-command-line: {}\n", .{
             indent,
             operand.value,
             indent,
@@ -3632,6 +3682,8 @@ fn writeCompletionOperandsText(writer: *std.Io.Writer, operands: []const exec.Co
             operand.state orelse "",
             indent,
             operand.after_terminator,
+            indent,
+            operand.rest_command_line,
         });
     }
 }
@@ -3663,8 +3715,16 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     defer semantic.deinit();
     const semantic_path = try semanticCompletionPath(allocator, semantic);
     defer allocator.free(semantic_path);
-    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{
+        .io = io,
+        .allow_external = true,
+        .completion_loader = loadCompletionDataForExecutor,
+        .completion_loader_context = &loader,
+        .arg_zero = "rush",
+    });
     defer executor.freeCompletions(candidates);
+    const trace_semantic = executor.lastCompletionSemantic() orelse semantic;
+    const trace_path = executor.lastCompletionTracePath();
     var effective_context = executor.lastCompletionContext() orelse context;
     effective_context.command_path = semantic_path;
     effective_context.argument_index = semantic.argument_index;
@@ -3694,7 +3754,7 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     try json.objectField("semantic");
     try writeCompletionSemanticContextJson(&json, semantic, semantic_path);
     try json.objectField("manifest");
-    try writeCompletionManifestTraceJson(allocator, io, &json, executor, source, semantic, candidates);
+    try writeCompletionManifestTraceJson(allocator, io, &json, executor, source, trace_semantic, trace_path, executor.lastCompletionPrecommandDepthLimited(), candidates);
     try json.objectField("matchedRules");
     try json.beginArray();
     for (executor.completionRules()) |rule| {
@@ -3897,6 +3957,8 @@ fn writeCompletionOperandsJson(json: *std.json.Stringify, operands: []const exec
         try json.write(operand.state);
         try json.objectField("afterTerminator");
         try json.write(operand.after_terminator);
+        try json.objectField("restCommandLine");
+        try json.write(operand.rest_command_line);
         try json.endObject();
     }
     try json.endArray();
@@ -3957,6 +4019,8 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.write(rule.argument.after_value);
     try json.objectField("repeatable");
     try json.write(rule.argument.repeatable);
+    try json.objectField("restCommandLine");
+    try json.write(rule.argument.rest_command_line);
     try json.endObject();
     try json.objectField("valueIndex");
     try json.write(rule.value_index);
@@ -4460,7 +4524,7 @@ fn manifestFallbackReason(loaded: bool, provider_count: usize, candidates: []con
     return "manifest provider or static manifest candidates matched";
 }
 
-fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext, candidates: []const completion_model.Candidate) !void {
+fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext, trace_path: ?[]const []const u8, precommand_depth_limited: bool, candidates: []const completion_model.Candidate) !void {
     const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
     const manifest_state = executor.completionManifestCommandState(semantic.root);
     const variant_state = executor.completionVariantProbeState(semantic.root);
@@ -4474,7 +4538,9 @@ fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, js
     try json.objectField("manifestVersion");
     try json.write(if (manifest_source) |rule_source| rule_source.manifest_version else if (manifest_state) |state| state.manifest_version else @as(?i64, null));
     try json.objectField("commandPath");
-    try writeSemanticCommandPathArrayJson(json, semantic);
+    if (trace_path) |path| try writeCommandPathArrayJson(json, path) else try writeSemanticCommandPathArrayJson(json, semantic);
+    try json.objectField("precommandDepthLimited");
+    try json.write(precommand_depth_limited);
     try json.objectField("optionName");
     try json.write(if (semantic.option_value) |option_value| option_value.name else @as(?[]const u8, null));
     try json.objectField("optionValueIndex");
@@ -4647,6 +4713,12 @@ fn writeSemanticCommandPathArrayJson(json: *std.json.Stringify, semantic: exec.C
     try json.beginArray();
     if (semantic.root.len != 0) try json.write(semantic.root);
     for (semantic.path) |segment| try json.write(segment);
+    try json.endArray();
+}
+
+fn writeCommandPathArrayJson(json: *std.json.Stringify, path: []const []const u8) !void {
+    try json.beginArray();
+    for (path) |segment| try json.write(segment);
     try json.endArray();
 }
 
@@ -6812,6 +6884,81 @@ test "completion manifest command platform gate skips registration" {
     try std.testing.expect(!state.platform_allowed);
 }
 
+test "completion manifest precommand rest re-enters command completion" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_HOME", "test/fixtures/completion-data");
+    try executor.setEnv("XDG_DATA_DIRS", "");
+
+    const bin_dir = "rush-precommand-bin";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, bin_dir) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, bin_dir, .default_dir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = bin_dir ++ "/git", .data = "" });
+    try executor.setEnv("PATH", bin_dir);
+
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    try loader.ensureLoaded(std.testing.io, &executor, "sudo", "rush");
+
+    const command_candidates = try executor.collectCompletionsForInput("sudo gi", "sudo gi".len, .{
+        .io = std.testing.io,
+        .completion_loader = loadCompletionDataForExecutor,
+        .completion_loader_context = &loader,
+    });
+    defer executor.freeCompletions(command_candidates);
+    const git_command = findCompletionCandidate(command_candidates, "git") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.command, git_command.kind);
+    try std.testing.expectEqual(@as(usize, "sudo ".len), git_command.replace_start);
+
+    const option_source = "sudo -u root git diff --ca";
+    const option_candidates = try executor.collectCompletionsForInput(option_source, option_source.len, .{
+        .io = std.testing.io,
+        .completion_loader = loadCompletionDataForExecutor,
+        .completion_loader_context = &loader,
+    });
+    defer executor.freeCompletions(option_candidates);
+    const cached_option = findCompletionCandidate(option_candidates, "--cached") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.option, cached_option.kind);
+    try std.testing.expectEqual(@as(usize, "sudo -u root git diff ".len), cached_option.replace_start);
+
+    const nested_source = "sudo sudo git diff --sta";
+    const nested_candidates = try executor.collectCompletionsForInput(nested_source, nested_source.len, .{
+        .io = std.testing.io,
+        .completion_loader = loadCompletionDataForExecutor,
+        .completion_loader_context = &loader,
+    });
+    defer executor.freeCompletions(nested_candidates);
+    _ = findCompletionCandidate(nested_candidates, "--staged") orelse return error.MissingCompletionCandidate;
+    const trace_path = executor.lastCompletionTracePath() orelse return error.MissingCompletionTracePath;
+    try std.testing.expectEqual(@as(usize, 4), trace_path.len);
+    try std.testing.expectEqualStrings("sudo", trace_path[0]);
+    try std.testing.expectEqualStrings("sudo", trace_path[1]);
+    try std.testing.expectEqualStrings("git", trace_path[2]);
+    try std.testing.expectEqualStrings("diff", trace_path[3]);
+}
+
+test "completion manifest precommand recursion is bounded" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "wrap",
+        \\    "arguments": {
+        \\      "states": [ { "name": "command", "rest": "command-line" } ]
+        \\    }
+        \\  }
+        \\}
+    );
+
+    const source = "wrap wrap wrap wrap wrap wrap wrap wrap wrap echo";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try std.testing.expectEqual(@as(usize, 0), candidates.len);
+    try std.testing.expect(executor.lastCompletionPrecommandDepthLimited());
+}
+
 test "Git manifest fixture selects representative zsh-class providers" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
@@ -8474,6 +8621,21 @@ test "completion debug output traces Git fixture manifest state" {
     const suppressed = diff_manifest.get("suppressedOptions").?.array.items;
     try std.testing.expectEqualStrings("--staged", suppressed[1].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("exclusiveGroup", suppressed[1].object.get("reason").?.string);
+
+    const precommand_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "sudo git diff --sta");
+    defer std.testing.allocator.free(precommand_json);
+    var precommand = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, precommand_json, .{});
+    defer precommand.deinit();
+    const precommand_object = precommand.value.object;
+    const precommand_manifest = precommand_object.get("manifest").?.object;
+    const precommand_path = precommand_manifest.get("commandPath").?.array.items;
+    try std.testing.expectEqual(@as(usize, 3), precommand_path.len);
+    try std.testing.expectEqualStrings("sudo", precommand_path[0].string);
+    try std.testing.expectEqualStrings("git", precommand_path[1].string);
+    try std.testing.expectEqualStrings("diff", precommand_path[2].string);
+    try std.testing.expect(!precommand_manifest.get("precommandDepthLimited").?.bool);
+    try std.testing.expectEqualStrings("test/fixtures/completion-data/rush/completions/git.json", precommand_manifest.get("path").?.string);
+    try std.testing.expectEqualStrings("--staged", precommand_object.get("candidates").?.array.items[0].object.get("value").?.string);
 
     const no_index_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git diff --no-index left rush-git-fixture");
     defer std.testing.allocator.free(no_index_json);

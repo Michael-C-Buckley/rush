@@ -261,6 +261,18 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   }
 }</pre>
 
+  <p>Precommand wrappers such as <code>sudo</code>, <code>env</code>, <code>xargs</code>, <code>watch</code>, <code>nice</code>, and <code>time</code> can mark trailing operands as a fresh command line with a terminal rest state:</p>
+
+  <pre>{
+  <span class="str">"arguments"</span>: {
+    <span class="str">"states"</span>: [
+      { <span class="str">"name"</span>: <span class="str">"command"</span>, <span class="str">"rest"</span>: <span class="str">"command-line"</span> }
+    ]
+  }
+}</pre>
+
+  <p><code>rest: "command-line"</code> must be the final state and must not also set <code>repeatable</code>, <code>provider</code>, or <code>grammar</code>; it is terminal and implicitly repeatable. When completion reaches it, Rush shifts the remaining operands so the first rest operand is word 0 and re-enters normal command completion, including nested manifests and <code>.rush</code> providers. Leading <code>VAR=value</code> words are handled by the normal command parser, so env-style assignments do not need a separate manifest flag.</p>
+
   <h2 id="value-grammars"><a href="#value-grammars">Value grammars</a></h2>
 
   <p>Runtime value grammar support is segment-based. A grammar changes the active provider prefix and replacement span so the provider completes only the active list item, key, or value. List item candidates automatically receive the grammar separator as a removable suffix; typing the separator keeps it, while typing a space or accepting the line removes it before the terminator applies.</p>

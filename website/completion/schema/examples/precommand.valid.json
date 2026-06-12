@@ -1,0 +1,23 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sudo",
+    "description": "run a command as another user",
+    "options": [
+      {
+        "short": "u",
+        "value": { "name": "user" }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "rest": "command-line",
+          "description": "command line to run"
+        }
+      ]
+    }
+  }
+}
