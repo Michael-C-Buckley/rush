@@ -5472,6 +5472,21 @@ test "supplied git manifest validates and selects representative contexts" {
     defer executor.freeCompletions(push_remotes);
     try expectCompletionCandidate(push_remotes, "origin");
 
+    const push_remote_less_source = "git push ma";
+    const push_remote_less = try executor.collectCompletionsForInput(push_remote_less_source, push_remote_less_source.len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(push_remote_less);
+    const remote_less_main = findCompletionCandidate(push_remote_less, "main") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, remote_less_main.kind);
+    try std.testing.expectEqualStrings("branch", remote_less_main.description.?);
+
+    const push_repo_source = "git push --repo=origin ma";
+    const push_repo = try executor.collectCompletionsForInput(push_repo_source, push_repo_source.len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(push_repo);
+    const repo_main = findCompletionCandidate(push_repo, "main") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, repo_main.kind);
+    try std.testing.expectEqualStrings("branch", repo_main.description.?);
+    try expectNoCompletionCandidate(push_repo, "origin");
+
     const push_destination_source = "git push origin feature/topic:ma";
     const push_destinations = try executor.collectCompletionsForInput(push_destination_source, push_destination_source.len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(push_destinations);
@@ -5479,6 +5494,14 @@ test "supplied git manifest validates and selects representative contexts" {
     try std.testing.expectEqual(completion_model.Kind.plain, remote_main.kind);
     try std.testing.expectEqualStrings("remote ref", remote_main.description.?);
     try std.testing.expectEqual(@as(usize, "git push origin feature/topic:".len), remote_main.replace_start);
+
+    const push_repo_destination_source = "git push --repo origin feature/topic:ma";
+    const push_repo_destinations = try executor.collectCompletionsForInput(push_repo_destination_source, push_repo_destination_source.len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(push_repo_destinations);
+    const repo_remote_main = findCompletionCandidate(push_repo_destinations, "main") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, repo_remote_main.kind);
+    try std.testing.expectEqualStrings("remote ref", repo_remote_main.description.?);
+    try std.testing.expectEqual(@as(usize, "git push --repo origin feature/topic:".len), repo_remote_main.replace_start);
 
     const branch_sort = try executor.collectCompletionsForInput("git branch --sort comm", "git branch --sort comm".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(branch_sort);

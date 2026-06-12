@@ -347,7 +347,7 @@ complete 'git push' --option-value --long repo --function __rush_complete_git_re
 complete 'git push' --option --long quiet --short q --description 'be quiet'
 complete 'git push' --option --long verbose --short v --description 'be verbose'
 complete 'git push' --option --long progress --description 'force progress status'
-complete 'git push' --argument --function __rush_complete_git_remotes
+complete 'git push' --argument --function __rush_complete_git_push_args --key-value-separator :
 
 # merge / rebase / reset / restore / revert / cherry-pick
 complete 'git merge' --option --long abort --description 'abort the current merge'
@@ -1040,7 +1040,7 @@ complete 'git rm' --argument --function __rush_complete_git_tracked_paths
 complete 'git reset' --argument --function __rush_complete_git_reset_args
 complete 'git checkout' --argument --function __rush_complete_git_checkout_args
 complete 'git switch' --argument --function __rush_complete_git_branches
-complete 'git push' --argument --function __rush_complete_git_push_args
+complete 'git push' --argument --function __rush_complete_git_push_args --key-value-separator :
 complete 'git remote set-url' --argument --function __rush_complete_git_remote_url_args
 complete 'git remote get-url' --argument --function __rush_complete_git_remotes
 complete 'git remote remove' --argument --function __rush_complete_git_remotes
@@ -1084,12 +1084,7 @@ __rush_complete_git_checkout_args() {
 }
 
 __rush_complete_git_push_args() {
-  if test "$(completion argument-index)" = 1; then
-    __rush_complete_git_remotes
-  else
-    __rush_complete_git_branches
-    __rush_complete_git_tags
-  fi
+  __rush_complete_git_context_push_args
 }
 
 __rush_complete_git_remote_url_args() {
@@ -1284,7 +1279,7 @@ __rush_complete_git_context_branch_args() {
 }
 
 __rush_complete_git_context_push_remote_refs() {
-  remote="$(completion operand 0)"
+  remote="$(__rush_complete_git_context_push_remote_for_refs)"
   if test -n "$remote"; then
     git for-each-ref --format='%(refname:short)' "refs/remotes/$remote" 2>/dev/null | sed "s#^$remote/##" | while read ref; do test -n "$ref" && completion candidate "$ref" --kind plain --description 'remote ref'; done
   else
@@ -1292,31 +1287,86 @@ __rush_complete_git_context_push_remote_refs() {
   fi
 }
 
-__rush_complete_git_context_push_args() {
-  if test "$(completion argument-index)" = 0; then
-    __rush_complete_git_remotes
+__rush_complete_git_context_push_repo_present() {
+  test "$(completion option-present --long repo)" = true
+}
+
+__rush_complete_git_context_push_repo_value() {
+  repo=
+  for value in $(completion option-values --long repo); do repo="$value"; done
+  test -n "$repo" && printf '%s\n' "$repo"
+}
+
+__rush_complete_git_context_push_configured_remote() {
+  candidate="$1"
+  test -n "$candidate" || return
+  git remote 2>/dev/null | while read remote; do
+    if test "$remote" = "$candidate"; then
+      printf '%s\n' "$remote"
+      exit 0
+    fi
+  done
+}
+
+__rush_complete_git_context_push_positional_remote() {
+  if __rush_complete_git_context_push_repo_present; then return; fi
+  first="$(completion operand 0)"
+  __rush_complete_git_context_push_configured_remote "$first"
+}
+
+__rush_complete_git_context_push_remote_for_refs() {
+  repo="$(__rush_complete_git_context_push_repo_value)"
+  if test -n "$repo"; then
+    __rush_complete_git_context_push_configured_remote "$repo"
   else
-    if test "$(completion value-position)" = value; then
-      __rush_complete_git_context_push_remote_refs
+    __rush_complete_git_context_push_positional_remote
+  fi
+}
+
+__rush_complete_git_context_push_delete_present() {
+  if test "$(completion option-present --long delete)" = true; then return 0; fi
+  if test "$(completion option-present --short d)" = true; then return 0; fi
+  return 1
+}
+
+__rush_complete_git_context_push_set_upstream_present() {
+  if test "$(completion option-present --long set-upstream)" = true; then return 0; fi
+  if test "$(completion option-present --short u)" = true; then return 0; fi
+  return 1
+}
+
+__rush_complete_git_context_push_refspec_sources() {
+  if __rush_complete_git_context_push_set_upstream_present; then
+    __rush_complete_git_branches
+  else
+    __rush_complete_git_branches
+    __rush_complete_git_tags
+  fi
+}
+
+__rush_complete_git_context_push_refspecs() {
+  if __rush_complete_git_context_push_delete_present; then
+    __rush_complete_git_context_push_remote_refs
+  else
+    __rush_complete_git_context_push_refspec_sources
+  fi
+}
+
+__rush_complete_git_context_push_remote_or_refspecs() {
+  if ! __rush_complete_git_context_push_repo_present; then
+    __rush_complete_git_remotes
+  fi
+  __rush_complete_git_context_push_refspecs
+}
+
+__rush_complete_git_context_push_args() {
+  if test "$(completion value-position)" = value; then
+    __rush_complete_git_context_push_remote_refs
+  else
+    if test "$(completion argument-index)" = 0; then
+      __rush_complete_git_context_push_remote_or_refspecs
     else
-      if test "$(completion option-present --long delete)" = true; then
-        __rush_complete_git_context_push_remote_refs
-      else
-        if test "$(completion option-present --short d)" = true; then
-          __rush_complete_git_context_push_remote_refs
-        else
-          if test "$(completion option-present --long set-upstream)" = true; then
-            __rush_complete_git_branches
-          else
-            if test "$(completion option-present --short u)" = true; then
-              __rush_complete_git_branches
-            else
-              __rush_complete_git_branches
-              __rush_complete_git_tags
-            fi
-          fi
-        fi
-      fi
+      __rush_complete_git_context_push_refspecs
     fi
   fi
 }
