@@ -65,6 +65,7 @@ This note records hand-curated examples added from current high-risk POSIX shell
 | `builtin-printf-percent-literal` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-percent-literal` | `%%` emits a literal percent without consuming an operand |
 | `builtin-printf-i-conversion` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-i-conversion`, `builtin-printf-numeric-formats` | `%i` formats signed integer operands including POSIX C hexadecimal constants |
 | `builtin-printf-floating-format-flags` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-floating-conversions`, `builtin-printf-floating-format-flags` | floating conversions honor representative sign/space/alternate flags with C-locale radix output |
+| `builtin-printf-string-width-precision` | `test/corpus/posix` | `builtin-printf`, `builtin-printf-width-precision` | string conversions combine width, precision, left adjustment, and zero precision |
 | `errexit-negation-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for negated pipelines |
 | `errexit-and-or-suppression` | `test/corpus/posix` | `option-errexit-conditions` | `set -e` is suppressed for commands before `&&` and `||` in AND-OR lists |
 | `errexit-and-or-final-exits` | `test/corpus/posix` | `option-errexit-conditions` | final failing AND-OR list commands still exit non-interactive execution |
