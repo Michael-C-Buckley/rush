@@ -41,7 +41,10 @@
       "git.color-modes": { "function": "__rush_complete_git_color_modes" },
       "git.word-diff-modes": { "function": "__rush_complete_git_word_diff_modes" },
       "git.conflict-styles": { "function": "__rush_complete_git_conflict_styles" },
-      "git.signed-modes": { "function": "__rush_complete_git_signed_modes" }
+      "git.signed-modes": { "function": "__rush_complete_git_signed_modes" },
+      "git.maintenance-schedules": { "function": "__rush_complete_git_maintenance_schedules" },
+      "git.maintenance-tasks": { "function": "__rush_complete_git_maintenance_tasks" },
+      "git.notes-refs": { "function": "__rush_complete_git_notes_refs" }
     },
     "options": [
       { "short": "C", "inherit": false, "repeatable": true, "value": { "name": "path", "provider": "builtin.directories" }, "description": "run as if git started in path" },
@@ -521,6 +524,147 @@
         }
       },
       {
+        "name": "grep",
+        "description": "print lines matching a pattern",
+        "optionGroups": [
+          { "name": "grep-pattern-type", "exclusive": true }
+        ],
+        "options": [
+          { "long": "cached", "description": "search blobs registered in the index file" },
+          { "long": "no-index", "description": "search files outside a Git working tree" },
+          { "long": "untracked", "description": "search untracked files in the working tree" },
+          { "long": "no-exclude-standard", "description": "also search ignored files" },
+          { "long": "recurse-submodules", "description": "recursively search submodules" },
+          { "long": "text", "short": "a", "description": "process binary files as text" },
+          { "long": "textconv", "description": "honor textconv filters" },
+          { "long": "ignore-case", "short": "i", "description": "match patterns ignoring case" },
+          { "long": "word-regexp", "short": "w", "description": "match only whole words" },
+          { "long": "invert-match", "short": "v", "description": "select non-matching lines" },
+          { "long": "extended-regexp", "short": "E", "exclusiveGroup": "grep-pattern-type", "description": "use extended POSIX regular expressions" },
+          { "long": "fixed-strings", "short": "F", "exclusiveGroup": "grep-pattern-type", "description": "interpret patterns as fixed strings" },
+          { "long": "basic-regexp", "short": "G", "exclusiveGroup": "grep-pattern-type", "description": "use basic POSIX regular expressions" },
+          { "long": "perl-regexp", "short": "P", "exclusiveGroup": "grep-pattern-type", "description": "use Perl-compatible regular expressions" },
+          { "long": "line-number", "short": "n", "description": "prefix matches with line numbers" },
+          { "long": "column", "description": "prefix matches with column numbers" },
+          { "long": "name-only", "short": "l", "description": "show only filenames with matches" },
+          { "long": "files-with-matches", "description": "show only filenames with matches" },
+          { "long": "files-without-match", "short": "L", "description": "show only filenames without matches" },
+          { "long": "count", "short": "c", "description": "show number of matching lines per file" },
+          { "long": "break", "description": "print an empty line between matches from different files" },
+          { "long": "heading", "description": "show filename once above matches" },
+          { "long": "context", "short": "C", "value": { "name": "lines" }, "description": "show surrounding context" },
+          { "long": "before-context", "short": "B", "value": { "name": "lines" }, "description": "show leading context" },
+          { "long": "after-context", "short": "A", "value": { "name": "lines" }, "description": "show trailing context" },
+          { "long": "max-depth", "value": { "name": "depth" }, "description": "descend at most depth levels" },
+          { "long": "threads", "value": { "name": "threads" }, "description": "use the specified number of grep worker threads" },
+          { "long": "color", "value": { "name": "mode", "provider": "git.color-modes" }, "description": "color matching text" },
+          { "long": "pattern", "short": "e", "value": { "name": "pattern" }, "description": "use the given pattern" },
+          { "long": "and", "description": "combine patterns with and" },
+          { "long": "or", "description": "combine patterns with or" },
+          { "long": "not", "description": "negate the next pattern" },
+          { "long": "all-match", "description": "limit matches to files matching all patterns" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "pattern", "index": 0, "description": "pattern to search for" },
+            { "name": "tree-or-path", "index": 1, "repeatable": true, "provider": "git.refs", "description": "tree, path, or pathspec to search" }
+          ]
+        }
+      },
+      {
+        "name": "ls-files",
+        "description": "show information about files in the index and working tree",
+        "options": [
+          { "long": "cached", "short": "c", "description": "show cached files in the output" },
+          { "long": "deleted", "short": "d", "description": "show deleted files in the output" },
+          { "long": "modified", "short": "m", "description": "show modified files in the output" },
+          { "long": "others", "short": "o", "description": "show other untracked files in the output" },
+          { "long": "ignored", "short": "i", "description": "show only ignored files in the output" },
+          { "long": "stage", "short": "s", "description": "show staged contents' object name and mode" },
+          { "long": "unmerged", "short": "u", "description": "show unmerged files in the output" },
+          { "long": "killed", "short": "k", "description": "show files that need to be removed" },
+          { "long": "directory", "description": "show whole directories for other files" },
+          { "long": "no-empty-directory", "description": "do not list empty directories" },
+          { "long": "exclude-standard", "description": "add the standard Git exclusions" },
+          { "long": "recurse-submodules", "description": "recursively list files in submodules" },
+          { "long": "sparse", "description": "show sparse directories without expanding" },
+          { "long": "eol", "description": "show line-ending metadata" },
+          { "long": "debug", "description": "show debugging data" },
+          { "long": "error-unmatch", "description": "error if any pathspec does not match" },
+          { "long": "with-tree", "value": { "name": "tree", "provider": "git.refs" }, "description": "pretend paths removed since tree are still present" },
+          { "long": "exclude", "short": "x", "value": { "name": "pattern" }, "description": "skip untracked files matching pattern" },
+          { "long": "exclude-from", "short": "X", "value": { "name": "file", "provider": "builtin.files" }, "description": "read exclude patterns from file" },
+          { "long": "exclude-per-directory", "value": { "name": "file" }, "description": "read additional per-directory exclude files" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "pathspec to limit output" }
+          ]
+        }
+      },
+      {
+        "name": "describe",
+        "description": "name an object using an available ref",
+        "options": [
+          { "long": "all", "description": "use any ref found in refs" },
+          { "long": "tags", "description": "use any tag in refs/tags" },
+          { "long": "contains", "description": "find the tag that comes after the commit" },
+          { "long": "abbrev", "value": { "name": "n" }, "description": "use n digits of object name" },
+          { "long": "candidates", "value": { "name": "n" }, "description": "consider up to n most recent tags" },
+          { "long": "exact-match", "description": "only output exact matches" },
+          { "long": "debug", "description": "show search strategy on stderr" },
+          { "long": "long", "description": "always output long format" },
+          { "long": "always", "description": "show abbreviated commit object as fallback" },
+          { "long": "first-parent", "description": "follow only first-parent ancestry" },
+          { "long": "dirty", "value": { "name": "mark" }, "description": "describe working tree with dirty mark if modified" },
+          { "long": "broken", "value": { "name": "mark" }, "description": "describe working tree with broken mark if corruption is detected" },
+          { "long": "match", "value": { "name": "pattern" }, "description": "only consider tags matching pattern" },
+          { "long": "exclude", "value": { "name": "pattern" }, "description": "do not consider tags matching pattern" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "commitish", "index": 0, "repeatable": true, "provider": "git.refs", "description": "commit-ish to describe" }
+          ]
+        }
+      },
+      {
+        "name": "format-patch",
+        "description": "prepare patches for email submission",
+        "options": [
+          { "long": "output-directory", "short": "o", "value": { "name": "dir", "provider": "builtin.directories" }, "description": "store resulting files in directory" },
+          { "long": "numbered", "short": "n", "description": "name output in numbered format" },
+          { "long": "no-numbered", "short": "N", "description": "name output without sequence numbers" },
+          { "long": "start-number", "value": { "name": "n" }, "description": "start numbering patches at n" },
+          { "long": "numbered-files", "description": "use only numbers for output filenames" },
+          { "long": "suffix", "value": { "name": "suffix" }, "description": "use suffix for generated filenames" },
+          { "long": "stdout", "description": "print patches to standard output" },
+          { "long": "attach", "value": { "name": "boundary" }, "description": "create multipart attachment" },
+          { "long": "inline", "value": { "name": "boundary" }, "description": "create inline multipart attachment" },
+          { "long": "thread", "description": "thread generated messages" },
+          { "long": "no-thread", "description": "do not thread generated messages" },
+          { "long": "cover-letter", "description": "generate a cover letter" },
+          { "long": "no-cover-letter", "description": "do not generate a cover letter" },
+          { "long": "subject-prefix", "value": { "name": "prefix" }, "description": "use alternate subject prefix" },
+          { "long": "reroll-count", "short": "v", "value": { "name": "n" }, "description": "mark series as reroll n" },
+          { "long": "range-diff", "value": { "name": "previous", "provider": "git.refs" }, "description": "include a range-diff against previous version" },
+          { "long": "signature", "value": { "name": "signature" }, "description": "add a signature to each message" },
+          { "long": "signature-file", "value": { "name": "file", "provider": "builtin.files" }, "description": "read signature from file" },
+          { "long": "signoff", "short": "s", "description": "add a Signed-off-by trailer" },
+          { "long": "base", "value": { "name": "base", "provider": "git.refs" }, "description": "record base tree information" },
+          { "long": "notes", "value": { "name": "notes", "provider": "git.notes-refs" }, "description": "include notes in patch notes" },
+          { "long": "zero-commit", "description": "output a zero object name in From header" },
+          { "long": "no-binary", "description": "do not output binary diffs" },
+          { "long": "quiet", "short": "q", "description": "do not print generated filenames" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "revision", "index": 0, "repeatable": true, "provider": "git.refs", "description": "revision range to format" }
+          ]
+        }
+      },
+      {
         "name": "fetch",
         "description": "download objects and refs from another repository",
         "options": [
@@ -644,6 +788,64 @@
         "arguments": {
           "states": [
             { "name": "upstream", "index": 0, "repeatable": true, "provider": "git.refs", "description": "upstream or branch to rebase" }
+          ]
+        }
+      },
+      {
+        "name": "cherry-pick",
+        "description": "apply changes introduced by existing commits",
+        "options": [
+          { "long": "continue", "description": "continue the current cherry-pick sequence" },
+          { "long": "skip", "description": "skip the current commit and continue" },
+          { "long": "abort", "description": "cancel the current cherry-pick sequence" },
+          { "long": "quit", "description": "end the current cherry-pick sequence" },
+          { "long": "edit", "short": "e", "description": "edit the commit message before committing" },
+          { "long": "no-commit", "short": "n", "description": "apply changes without committing" },
+          { "long": "signoff", "short": "s", "description": "add a Signed-off-by trailer" },
+          { "long": "mainline", "short": "m", "value": { "name": "parent" }, "description": "select parent number for a merge commit" },
+          { "long": "strategy", "value": { "name": "strategy", "provider": "git.merge-strategies" }, "description": "use given merge strategy" },
+          { "long": "strategy-option", "short": "X", "value": { "name": "option" }, "description": "pass option through to the merge strategy" },
+          { "long": "gpg-sign", "short": "S", "value": { "name": "keyid" }, "description": "GPG-sign commits" },
+          { "long": "no-gpg-sign", "description": "do not GPG-sign commits" },
+          { "long": "ff", "description": "fast-forward when possible" },
+          { "long": "allow-empty", "description": "preserve initially empty commits" },
+          { "long": "allow-empty-message", "description": "allow commits with empty messages" },
+          { "long": "keep-redundant-commits", "description": "keep commits that become empty" },
+          { "long": "cleanup", "value": { "name": "mode", "provider": "git.cleanup-modes" }, "description": "set message cleanup mode" },
+          { "long": "rerere-autoupdate", "description": "allow rerere to update the index" },
+          { "long": "no-rerere-autoupdate", "description": "do not allow rerere to update the index" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "commit", "index": 0, "repeatable": true, "provider": "git.refs", "description": "commit to cherry-pick" }
+          ]
+        }
+      },
+      {
+        "name": "revert",
+        "description": "revert existing commits",
+        "options": [
+          { "long": "continue", "description": "continue the current revert sequence" },
+          { "long": "skip", "description": "skip the current commit and continue" },
+          { "long": "abort", "description": "cancel the current revert sequence" },
+          { "long": "quit", "description": "end the current revert sequence" },
+          { "long": "edit", "short": "e", "description": "edit the commit message before committing" },
+          { "long": "no-edit", "description": "do not edit the commit message" },
+          { "long": "no-commit", "short": "n", "description": "apply changes without committing" },
+          { "long": "signoff", "short": "s", "description": "add a Signed-off-by trailer" },
+          { "long": "mainline", "short": "m", "value": { "name": "parent" }, "description": "select parent number for a merge commit" },
+          { "long": "strategy", "value": { "name": "strategy", "provider": "git.merge-strategies" }, "description": "use given merge strategy" },
+          { "long": "strategy-option", "short": "X", "value": { "name": "option" }, "description": "pass option through to the merge strategy" },
+          { "long": "gpg-sign", "short": "S", "value": { "name": "keyid" }, "description": "GPG-sign commits" },
+          { "long": "no-gpg-sign", "description": "do not GPG-sign commits" },
+          { "long": "cleanup", "value": { "name": "mode", "provider": "git.cleanup-modes" }, "description": "set message cleanup mode" },
+          { "long": "reference", "description": "use referent format in revert message" },
+          { "long": "rerere-autoupdate", "description": "allow rerere to update the index" },
+          { "long": "no-rerere-autoupdate", "description": "do not allow rerere to update the index" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "commit", "index": 0, "repeatable": true, "provider": "git.refs", "description": "commit to revert" }
           ]
         }
       },
@@ -803,6 +1005,62 @@
         }
       },
       {
+        "name": "sparse-checkout",
+        "description": "reduce the working tree to a subset of tracked files",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "initialize sparse-checkout",
+            "options": [
+              { "long": "cone", "description": "initialize in cone mode" },
+              { "long": "no-cone", "description": "initialize in non-cone mode" },
+              { "long": "sparse-index", "description": "use a sparse index" },
+              { "long": "no-sparse-index", "description": "do not use a sparse index" }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list sparse-checkout patterns"
+          },
+          {
+            "name": "set",
+            "description": "set sparse-checkout patterns",
+            "options": [
+              { "long": "stdin", "description": "read patterns from standard input" },
+              { "long": "cone", "description": "use cone-mode patterns" },
+              { "long": "no-cone", "description": "use non-cone patterns" },
+              { "long": "sparse-index", "description": "use a sparse index" },
+              { "long": "no-sparse-index", "description": "do not use a sparse index" },
+              { "long": "skip-checks", "description": "skip checks for invalid paths" }
+            ],
+            "arguments": { "states": [{ "name": "pathspec", "index": 0, "repeatable": true, "provider": "builtin.directories", "description": "directory pattern to include" }] }
+          },
+          {
+            "name": "add",
+            "description": "add sparse-checkout patterns",
+            "options": [
+              { "long": "stdin", "description": "read patterns from standard input" },
+              { "long": "skip-checks", "description": "skip checks for invalid paths" }
+            ],
+            "arguments": { "states": [{ "name": "pathspec", "index": 0, "repeatable": true, "provider": "builtin.directories", "description": "directory pattern to include" }] }
+          },
+          {
+            "name": "reapply",
+            "description": "reapply sparse-checkout patterns",
+            "options": [
+              { "long": "cone", "description": "use cone-mode patterns" },
+              { "long": "no-cone", "description": "use non-cone patterns" },
+              { "long": "sparse-index", "description": "use a sparse index" },
+              { "long": "no-sparse-index", "description": "do not use a sparse index" }
+            ]
+          },
+          {
+            "name": "disable",
+            "description": "disable sparse-checkout"
+          }
+        ]
+      },
+      {
         "name": "worktree",
         "description": "manage multiple working trees",
         "subcommands": [
@@ -864,6 +1122,195 @@
             "name": "unlock",
             "description": "unlock a worktree",
             "arguments": { "states": [{ "name": "worktree", "index": 0, "provider": "git.worktrees", "description": "worktree to unlock" }] }
+          }
+        ]
+      },
+      {
+        "name": "maintenance",
+        "description": "run tasks to optimize repository data",
+        "subcommands": [
+          {
+            "name": "run",
+            "description": "run one or more maintenance tasks",
+            "options": [
+              { "long": "auto", "description": "run only tasks needed by configuration thresholds" },
+              { "long": "schedule", "value": { "name": "schedule", "provider": "git.maintenance-schedules" }, "description": "run tasks for the named schedule" },
+              { "long": "task", "repeatable": true, "value": { "name": "task", "provider": "git.maintenance-tasks" }, "description": "run the named maintenance task" },
+              { "long": "quiet", "description": "do not report progress" }
+            ]
+          },
+          {
+            "name": "start",
+            "description": "start background maintenance",
+            "options": [
+              { "long": "scheduler", "value": { "name": "scheduler" }, "description": "use the named scheduler" }
+            ]
+          },
+          {
+            "name": "stop",
+            "description": "stop background maintenance"
+          },
+          {
+            "name": "register",
+            "description": "register this repository for maintenance"
+          },
+          {
+            "name": "unregister",
+            "description": "unregister this repository from maintenance",
+            "options": [
+              { "long": "force", "description": "unregister even if repository is missing" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "notes",
+        "description": "add or inspect object notes",
+        "options": [
+          { "long": "ref", "value": { "name": "notesref", "provider": "git.notes-refs" }, "description": "use notes from the given ref" }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list notes objects",
+            "arguments": { "states": [{ "name": "object", "index": 0, "provider": "git.refs", "description": "object whose notes should be listed" }] }
+          },
+          {
+            "name": "add",
+            "description": "add notes for an object",
+            "options": [
+              { "long": "message", "short": "m", "value": { "name": "message" }, "description": "use the given note message" },
+              { "long": "file", "short": "F", "value": { "name": "file", "provider": "builtin.files" }, "description": "read note message from file" },
+              { "long": "reuse-message", "short": "C", "value": { "name": "object", "provider": "git.refs" }, "description": "reuse note message from object" },
+              { "long": "reedit-message", "short": "c", "value": { "name": "object", "provider": "git.refs" }, "description": "reuse and edit note message from object" },
+              { "long": "force", "short": "f", "description": "replace existing notes" },
+              { "long": "allow-empty", "description": "allow an empty note" }
+            ],
+            "arguments": { "states": [{ "name": "object", "index": 0, "provider": "git.refs", "description": "object to annotate" }] }
+          },
+          {
+            "name": "copy",
+            "description": "copy notes between objects",
+            "options": [
+              { "long": "force", "short": "f", "description": "replace existing notes" },
+              { "long": "stdin", "description": "read object pairs from standard input" },
+              { "long": "for-rewrite", "value": { "name": "command" }, "description": "load rewrite configuration for command" }
+            ],
+            "arguments": {
+              "states": [
+                { "name": "from-object", "index": 0, "provider": "git.refs", "description": "object to copy notes from" },
+                { "name": "to-object", "index": 1, "provider": "git.refs", "description": "object to copy notes to" }
+              ]
+            }
+          },
+          {
+            "name": "append",
+            "description": "append to notes for an object",
+            "options": [
+              { "long": "message", "short": "m", "value": { "name": "message" }, "description": "use the given note message" },
+              { "long": "file", "short": "F", "value": { "name": "file", "provider": "builtin.files" }, "description": "read note message from file" },
+              { "long": "reuse-message", "short": "C", "value": { "name": "object", "provider": "git.refs" }, "description": "reuse note message from object" },
+              { "long": "reedit-message", "short": "c", "value": { "name": "object", "provider": "git.refs" }, "description": "reuse and edit note message from object" },
+              { "long": "allow-empty", "description": "allow an empty note" }
+            ],
+            "arguments": { "states": [{ "name": "object", "index": 0, "provider": "git.refs", "description": "object to annotate" }] }
+          },
+          {
+            "name": "edit",
+            "description": "edit notes for an object",
+            "options": [
+              { "long": "allow-empty", "description": "allow an empty note" }
+            ],
+            "arguments": { "states": [{ "name": "object", "index": 0, "provider": "git.refs", "description": "object to edit notes for" }] }
+          },
+          {
+            "name": "show",
+            "description": "show notes for an object",
+            "arguments": { "states": [{ "name": "object", "index": 0, "provider": "git.refs", "description": "object whose notes should be shown" }] }
+          },
+          {
+            "name": "merge",
+            "description": "merge notes from another notes ref",
+            "options": [
+              { "long": "commit", "description": "finalize an in-progress notes merge" },
+              { "long": "abort", "description": "abort an in-progress notes merge" },
+              { "long": "strategy", "short": "s", "value": { "name": "strategy" }, "description": "use the named notes merge strategy" },
+              { "long": "quiet", "short": "q", "description": "be quiet" },
+              { "long": "verbose", "short": "v", "description": "be verbose" }
+            ],
+            "arguments": { "states": [{ "name": "notesref", "index": 0, "provider": "git.notes-refs", "description": "notes ref to merge" }] }
+          },
+          {
+            "name": "remove",
+            "aliases": ["rm"],
+            "description": "remove notes for objects",
+            "options": [
+              { "long": "ignore-missing", "description": "ignore objects without notes" },
+              { "long": "stdin", "description": "read object names from standard input" }
+            ],
+            "arguments": { "states": [{ "name": "object", "index": 0, "repeatable": true, "provider": "git.refs", "description": "object whose notes should be removed" }] }
+          },
+          {
+            "name": "prune",
+            "description": "remove notes for missing or unreachable objects",
+            "options": [
+              { "long": "dry-run", "short": "n", "description": "show notes that would be removed" },
+              { "long": "verbose", "short": "v", "description": "report pruned notes" }
+            ]
+          },
+          {
+            "name": "get-ref",
+            "description": "print the current notes ref"
+          }
+        ]
+      },
+      {
+        "name": "reflog",
+        "description": "manage reflog information",
+        "subcommands": [
+          {
+            "name": "show",
+            "description": "show reflog entries",
+            "options": [
+              { "long": "all", "description": "show reflogs of all refs" },
+              { "long": "date", "value": { "name": "format" }, "description": "format reflog dates" },
+              { "long": "format", "value": { "name": "format", "provider": "git.pretty-formats" }, "description": "pretty-print entries" },
+              { "long": "pretty", "value": { "name": "format", "provider": "git.pretty-formats" }, "description": "pretty-print entries" },
+              { "long": "oneline", "description": "show one entry per line" }
+            ],
+            "arguments": { "states": [{ "name": "ref", "index": 0, "repeatable": true, "provider": "git.refs", "description": "ref whose reflog should be shown" }] }
+          },
+          {
+            "name": "expire",
+            "description": "prune old reflog entries",
+            "options": [
+              { "long": "expire", "value": { "name": "time" }, "description": "prune entries older than time" },
+              { "long": "expire-unreachable", "value": { "name": "time" }, "description": "prune unreachable entries older than time" },
+              { "long": "rewrite", "description": "adjust old SHA-1 values while expiring" },
+              { "long": "updateref", "description": "update ref to the top reflog entry" },
+              { "long": "stale-fix", "description": "prune entries pointing to broken commits" },
+              { "long": "dry-run", "short": "n", "description": "show entries that would be pruned" },
+              { "long": "verbose", "description": "show additional information" },
+              { "long": "all", "description": "process reflogs of all refs" },
+              { "long": "single-worktree", "description": "limit all processing to the current worktree" }
+            ],
+            "arguments": { "states": [{ "name": "ref", "index": 0, "repeatable": true, "provider": "git.refs", "description": "ref whose reflog should expire" }] }
+          },
+          {
+            "name": "delete",
+            "description": "delete reflog entries",
+            "options": [
+              { "long": "rewrite", "description": "adjust old SHA-1 values after deleting" },
+              { "long": "updateref", "description": "update ref to the top reflog entry" },
+              { "long": "dry-run", "short": "n", "description": "show entries that would be deleted" },
+              { "long": "verbose", "description": "show additional information" }
+            ],
+            "arguments": { "states": [{ "name": "ref", "index": 0, "repeatable": true, "provider": "git.refs", "description": "reflog entry to delete" }] }
+          },
+          {
+            "name": "exists",
+            "description": "check whether a ref has a reflog",
+            "arguments": { "states": [{ "name": "ref", "index": 0, "provider": "git.refs", "description": "ref to check" }] }
           }
         ]
       },

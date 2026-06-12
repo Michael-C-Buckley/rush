@@ -5529,7 +5529,11 @@ test "supplied git manifest validates and selects representative contexts" {
         \\    printf 'origin\n'
         \\    ;;
         \\  for-each-ref)
-        \\    printf 'origin/main\norigin/release\n'
+        \\    if test "$3" = refs/notes; then
+        \\      printf 'notes/commits\n'
+        \\    else
+        \\      printf 'origin/main\norigin/release\n'
+        \\    fi
         \\    ;;
         \\  config)
         \\    if test "$2" = --list && test "$3" = --name-only; then
@@ -5759,6 +5763,66 @@ test "supplied git manifest validates and selects representative contexts" {
     const show_format = try executor.collectCompletionsForInput("git show --format ", "git show --format ".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(show_format);
     try expectCompletionCandidate(show_format, "oneline");
+
+    const grep_color = try executor.collectCompletionsForInput("git grep --color ", "git grep --color ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(grep_color);
+    try expectCompletionCandidate(grep_color, "always");
+
+    const grep_refs = try executor.collectCompletionsForInput("git grep needle ma", "git grep needle ma".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(grep_refs);
+    try expectCompletionCandidate(grep_refs, "main");
+
+    const ls_files_with_tree = try executor.collectCompletionsForInput("git ls-files --with-tree ma", "git ls-files --with-tree ma".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(ls_files_with_tree);
+    try expectCompletionCandidate(ls_files_with_tree, "main");
+
+    const describe_refs = try executor.collectCompletionsForInput("git describe ma", "git describe ma".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(describe_refs);
+    try expectCompletionCandidate(describe_refs, "main");
+
+    const format_patch_notes = try executor.collectCompletionsForInput("git format-patch --notes notes/", "git format-patch --notes notes/".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(format_patch_notes);
+    try expectCompletionCandidate(format_patch_notes, "notes/commits");
+
+    const cherry_pick_strategy = try executor.collectCompletionsForInput("git cherry-pick --strategy ", "git cherry-pick --strategy ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(cherry_pick_strategy);
+    try expectCompletionCandidate(cherry_pick_strategy, "ort");
+
+    const cherry_pick_refs = try executor.collectCompletionsForInput("git cherry-pick ma", "git cherry-pick ma".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(cherry_pick_refs);
+    try expectCompletionCandidate(cherry_pick_refs, "main");
+
+    const revert_refs = try executor.collectCompletionsForInput("git revert ma", "git revert ma".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(revert_refs);
+    try expectCompletionCandidate(revert_refs, "main");
+
+    const sparse_options = try executor.collectCompletionsForInput("git sparse-checkout set --ski", "git sparse-checkout set --ski".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(sparse_options);
+    try expectCompletionCandidate(sparse_options, "--skip-checks");
+
+    const maintenance_tasks = try executor.collectCompletionsForInput("git maintenance run --task ", "git maintenance run --task ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(maintenance_tasks);
+    try expectCompletionCandidate(maintenance_tasks, "gc");
+
+    const maintenance_schedules = try executor.collectCompletionsForInput("git maintenance run --schedule ", "git maintenance run --schedule ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(maintenance_schedules);
+    try expectCompletionCandidate(maintenance_schedules, "daily");
+
+    const notes_ref = try executor.collectCompletionsForInput("git notes --ref notes/", "git notes --ref notes/".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(notes_ref);
+    try expectCompletionCandidate(notes_ref, "notes/commits");
+
+    const notes_merge = try executor.collectCompletionsForInput("git notes merge notes/", "git notes merge notes/".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(notes_merge);
+    try expectCompletionCandidate(notes_merge, "notes/commits");
+
+    const reflog_refs = try executor.collectCompletionsForInput("git reflog show ma", "git reflog show ma".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(reflog_refs);
+    try expectCompletionCandidate(reflog_refs, "main");
+
+    const reflog_pretty = try executor.collectCompletionsForInput("git reflog show --pretty ", "git reflog show --pretty ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(reflog_pretty);
+    try expectCompletionCandidate(reflog_pretty, "oneline");
 
     const fetch_recurse = try executor.collectCompletionsForInput("git fetch --recurse-submodules ", "git fetch --recurse-submodules ".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(fetch_recurse);

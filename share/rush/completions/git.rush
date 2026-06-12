@@ -237,6 +237,15 @@ __rush_complete_git_maintenance_tasks() {
   completion candidate prefetch --kind plain
 }
 
+__rush_complete_git_notes_refs() {
+  tmp=$(mktemp)
+  git for-each-ref --format='%(refname:short)' refs/notes > "$tmp" 2>/dev/null
+  while read ref; do
+    completion candidate "$ref" --kind plain --description 'notes ref'
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
 # Async-friendly dynamic overlays for repository-aware path and ref completion.
 
 __rush_complete_git_changed_paths() {
