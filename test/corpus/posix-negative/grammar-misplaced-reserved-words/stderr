@@ -1,0 +1,33 @@
+rush: parse_error: misplaced reserved word
+  then
+  ^^^^
+rush: parse_error: misplaced reserved word
+  else
+  ^^^^
+rush: parse_error: misplaced reserved word
+  elif
+  ^^^^
+rush: parse_error: misplaced reserved word
+  fi
+  ^^
+rush: parse_error: misplaced reserved word
+  do
+  ^^
+rush: parse_error: misplaced reserved word
+  done
+  ^^^^
+rush: parse_error: misplaced reserved word
+  esac
+  ^^^^
+rush: parse_error: misplaced reserved word
+  in
+  ^^
+rush: parse_error: misplaced reserved word
+  }
+  ^
+rush: parse_error: misplaced reserved word
+  ! then
+    ^^^^
+rush: parse_error: misplaced reserved word
+  echo ok | then
+            ^^^^

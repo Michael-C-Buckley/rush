@@ -3350,11 +3350,16 @@ test "strict POSIX mode reports misplaced reserved words" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 127), loose.status);
     try std.testing.expect(std.mem.indexOf(u8, loose.stderr, "then: command not found") != null);
 
-    var strict = try runScriptWithOptions(std.testing.allocator, std.testing.io, "then echo bad", .{ .io = std.testing.io, .allow_external = true, .features = .strictPosix() });
+    const strict_script =
+        \\alias then='echo bad'
+        \\then
+    ;
+    var strict = try runScriptWithOptions(std.testing.allocator, std.testing.io, strict_script, .{ .io = std.testing.io, .allow_external = true, .features = .strictPosix() });
     defer strict.deinit();
     try std.testing.expectEqual(@as(exec.ExitStatus, 2), strict.status);
     try std.testing.expectEqualStrings("", strict.stdout);
     try std.testing.expect(std.mem.indexOf(u8, strict.stderr, "misplaced reserved word") != null);
+    try std.testing.expect(std.mem.indexOf(u8, strict.stderr, "bad\n") == null);
 }
 
 test "runScript returns parse diagnostics" {

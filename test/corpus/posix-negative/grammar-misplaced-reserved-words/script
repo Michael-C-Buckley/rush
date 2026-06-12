@@ -1,0 +1,12 @@
+alias then='echo alias-bad'
+then
+else
+elif
+fi
+do
+done
+esac
+in
+}
+! then
+echo ok | then

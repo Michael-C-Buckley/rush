@@ -1923,11 +1923,7 @@ const SyntaxParser = struct {
             }
 
             if (self.features.strict_diagnostics and self.atMisplacedReservedWord()) {
-                try self.diagnostics.append(self.allocator, .{
-                    .kind = .parse_error,
-                    .span = self.current().span,
-                    .message = "misplaced reserved word",
-                });
+                try self.appendMisplacedReservedWordDiagnostic();
                 try self.appendCurrentTokenChildTo(&list_children);
                 continue;
             }
@@ -2588,9 +2584,32 @@ const SyntaxParser = struct {
         defer pipeline_children.deinit(self.allocator);
 
         if (self.atWord("!")) {
+            const bang_span = self.current().span;
             try self.appendCurrentTokenChildTo(&pipeline_children);
             while (self.current().kind == .whitespace) {
                 try self.appendCurrentTokenChildTo(&pipeline_children);
+            }
+            if (self.features.strict_diagnostics and self.atMisplacedReservedWord()) {
+                try self.appendMisplacedReservedWordDiagnostic();
+                try self.appendCurrentTokenChildTo(&pipeline_children);
+                const token_end = self.index;
+                const child_start = self.children.items.len;
+                try self.children.appendSlice(self.allocator, pipeline_children.items);
+                const span = spanForTokenRange(self.tokens, token_start, token_end);
+                return self.addNode(.pipeline, span, token_start, token_end, child_start, self.children.items.len);
+            }
+            if (!self.startsCommand()) {
+                self.incomplete = true;
+                try self.diagnostics.append(self.allocator, .{
+                    .kind = .parse_error,
+                    .span = bang_span,
+                    .message = "missing command after !",
+                });
+                const token_end = self.index;
+                const child_start = self.children.items.len;
+                try self.children.appendSlice(self.allocator, pipeline_children.items);
+                const span = spanForTokenRange(self.tokens, token_start, token_end);
+                return self.addNode(.pipeline, span, token_start, token_end, child_start, self.children.items.len);
             }
         }
 
@@ -2608,6 +2627,12 @@ const SyntaxParser = struct {
 
             while (self.current().kind == .whitespace) {
                 try self.appendCurrentTokenChildTo(&pipeline_children);
+            }
+
+            if (self.features.strict_diagnostics and self.atMisplacedReservedWord()) {
+                try self.appendMisplacedReservedWordDiagnostic();
+                try self.appendCurrentTokenChildTo(&pipeline_children);
+                break;
             }
 
             if (!self.startsCommand()) {
@@ -2648,6 +2673,12 @@ const SyntaxParser = struct {
 
             while (self.current().kind == .whitespace) {
                 try self.appendCurrentTokenChildTo(&pipeline_children);
+            }
+
+            if (self.features.strict_diagnostics and self.atMisplacedReservedWord()) {
+                try self.appendMisplacedReservedWordDiagnostic();
+                try self.appendCurrentTokenChildTo(&pipeline_children);
+                break;
             }
 
             if (!self.startsCommand()) {
@@ -2970,7 +3001,15 @@ const SyntaxParser = struct {
     }
 
     fn startsPipeline(self: SyntaxParser) bool {
-        return self.startsSimpleCommand();
+        return self.atWord("!") or self.startsSimpleCommand();
+    }
+
+    fn appendMisplacedReservedWordDiagnostic(self: *SyntaxParser) !void {
+        try self.diagnostics.append(self.allocator, .{
+            .kind = .parse_error,
+            .span = self.current().span,
+            .message = "misplaced reserved word",
+        });
     }
 
     fn atMisplacedReservedWord(self: SyntaxParser) bool {
@@ -2983,11 +3022,13 @@ const SyntaxParser = struct {
             std.mem.eql(u8, lexeme, "do") or
             std.mem.eql(u8, lexeme, "done") or
             std.mem.eql(u8, lexeme, "esac") or
-            std.mem.eql(u8, lexeme, "in");
+            std.mem.eql(u8, lexeme, "in") or
+            std.mem.eql(u8, lexeme, "}");
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
         if (self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand()) return false;
+        if (self.atWord("!")) return false;
         return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
     }
 
@@ -3818,6 +3859,32 @@ test "parser wraps POSIX compound first pipeline stages" {
             };
         }
         try std.testing.expect(found);
+    }
+}
+
+test "strict parser diagnoses misplaced POSIX reserved words in command positions" {
+    const cases = [_]struct {
+        source: []const u8,
+        span: Span,
+        message: []const u8,
+        incomplete: bool = false,
+    }{
+        .{ .source = "then", .span = .init(0, 4), .message = "misplaced reserved word" },
+        .{ .source = "}", .span = .init(0, 1), .message = "misplaced reserved word" },
+        .{ .source = "echo ok | then", .span = .init(10, 14), .message = "misplaced reserved word" },
+        .{ .source = "! then", .span = .init(2, 6), .message = "misplaced reserved word" },
+        .{ .source = "!", .span = .init(0, 1), .message = "missing command after !", .incomplete = true },
+    };
+
+    for (cases) |example| {
+        var result = try parse(std.testing.allocator, example.source, .{ .features = .strictPosix() });
+        defer result.deinit();
+
+        try std.testing.expectEqual(example.incomplete, result.incomplete);
+        try std.testing.expect(result.diagnostics.len >= 1);
+        try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+        try expectSpan(example.span, result.diagnostics[0].span);
+        try std.testing.expectEqualStrings(example.message, result.diagnostics[0].message);
     }
 }
 
