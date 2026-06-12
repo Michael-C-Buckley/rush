@@ -5064,6 +5064,13 @@ test "Git manifest fixture selects representative zsh-class providers" {
     try std.testing.expectEqual(completion_model.Kind.file, ordinary_file.kind);
     try std.testing.expectEqual(@as(usize, "git diff --no-index ".len), ordinary_file.replace_start);
 
+    const staged_path_source = "git diff --staged HEAD -- src/ch";
+    const staged_paths = try executor.collectCompletionsForInput(staged_path_source, staged_path_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(staged_paths);
+    const staged_file = findCompletionCandidate(staged_paths, "src/changed.zig") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, staged_file.kind);
+    try std.testing.expectEqualStrings("changed-file:pathspec:1:true", staged_file.description.?);
+
     const restore_source_value = "git restore --source ma";
     const restore_refs = try executor.collectCompletionsForInput(restore_source_value, restore_source_value.len, .{ .io = std.testing.io });
     defer executor.freeCompletions(restore_refs);
