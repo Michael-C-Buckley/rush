@@ -1,0 +1,23 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "broken",
+    "providers": {
+      "builtin.files": {
+        "builtin": "files",
+        "options": {
+          "extension": ".zig"
+        }
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      ]
+    }
+  }
+}

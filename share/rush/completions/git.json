@@ -5,7 +5,7 @@
     "name": "git",
     "description": "the stupid content tracker",
     "providers": {
-      "builtin.directories": { "builtin": "directories", "options": { "appendSlash": true } },
+      "builtin.directories": { "builtin": "directories" },
       "builtin.files": { "builtin": "files" },
       "git.branches": { "function": "__rush_complete_git_branches" },
       "git.remote-branches": { "function": "__rush_complete_git_remote_branches" },

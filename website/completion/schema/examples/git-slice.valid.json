@@ -9,10 +9,7 @@
         "function": "__rush_complete_git_branches"
       },
       "builtin.directories": {
-        "builtin": "directories",
-        "options": {
-          "appendSlash": true
-        }
+        "builtin": "directories"
       }
     },
     "options": [

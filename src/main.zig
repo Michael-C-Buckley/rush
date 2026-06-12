@@ -2146,6 +2146,9 @@ fn validateManifestProvider(diagnostics: *CompletionManifestDiagnostics, value: 
         if (completionManifestBuiltinProviderKind(builtin) == null) {
             try diagnostics.add(.err, "{s}.builtin: unsupported builtin provider '{s}'", .{ path, builtin });
         }
+        if (provider.get("options") != null) {
+            try diagnostics.add(.err, "{s}.options: builtin provider options are not supported in completion manifest v1", .{path});
+        }
     }
 }
 
@@ -5324,6 +5327,29 @@ test "completion manifest semantic validation accepts resolved providers groups 
 
     try std.testing.expect(!diagnostics.hasErrors());
     try std.testing.expectEqual(@as(usize, 0), diagnostics.items.items.len);
+}
+
+test "completion manifest semantic validation rejects builtin provider options" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "builtin.files": { "builtin": "files", "options": { "extension": ".zig" } }
+        \\    },
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "path", "provider": "builtin.files" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try std.testing.expect(diagnostics.hasErrors());
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.providers.builtin.files.options: builtin provider options are not supported in completion manifest v1");
 }
 
 test "completion manifest semantic validation reports clear invalid manifest diagnostics" {

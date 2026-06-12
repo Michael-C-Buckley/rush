@@ -80,6 +80,8 @@ def check_provider(value, path):
         errors.append(f"{path}.function: invalid function name")
     if has_builtin and value["builtin"] not in allowed_builtin:
         errors.append(f"{path}.builtin: invalid builtin provider {value['builtin']!r}")
+    if has_builtin and "options" in value:
+        errors.append(f"{path}.options: builtin provider options are not supported in v1")
 
 
 def check_value(value, providers, path):

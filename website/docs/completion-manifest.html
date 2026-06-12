@@ -162,7 +162,7 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   }
 }</pre>
 
-  <p>Function providers run in the companion <code>.rush</code> file and emit candidates with the <code>completion</code> builtin documented in <a href="completion.html">Writing completions</a>. Builtin providers are <code>files</code>, <code>directories</code>, <code>executables</code>, and <code>variables</code>. The current runtime uses fixed builtin behavior: files complete paths, directories complete directories with slash/no-space behavior, executables search <code>PATH</code>, and variables use shell variables. Provider <code>options</code> objects are accepted by the schema but are not currently interpreted by the runtime.</p>
+  <p>Function providers run in the companion <code>.rush</code> file and emit candidates with the <code>completion</code> builtin documented in <a href="completion.html">Writing completions</a>. Builtin providers are <code>files</code>, <code>directories</code>, <code>executables</code>, and <code>variables</code>. The current runtime uses fixed builtin behavior: files complete paths, directories complete directories with slash/no-space behavior, executables search <code>PATH</code>, and variables use shell variables. Builtin provider <code>options</code> objects are not part of manifest v1; use a function provider when a completion needs filtering or behavior beyond those fixed builtins.</p>
 
   <h2 id="options-and-values"><a href="#options-and-values">Options and values</a></h2>
 

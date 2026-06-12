@@ -209,7 +209,7 @@ type ArgumentState = {
 
 type Provider =
   | { function: string, description?: string, lazy?: boolean }
-  | { builtin: "files" | "directories" | "executables" | "variables", options?: object }
+  | { builtin: "files" | "directories" | "executables" | "variables", description?: string }
 
 type ProviderRef = string | Provider
 ```
@@ -342,10 +342,7 @@ Providers should be named when reused:
       "function": "__rush_complete_git_branches",
       "description": "local branches"
     },
-    "builtin.directories": {
-      "builtin": "directories",
-      "options": { "appendSlash": true }
-    }
+    "builtin.directories": { "builtin": "directories" }
   }
 }
 ```
@@ -364,6 +361,12 @@ snippets:
 ```
 
 Do not embed shell in JSON. Dynamic behavior belongs in `.rush` functions.
+
+Builtin providers have fixed v1 behavior and do not accept provider `options`:
+`files` completes paths, `directories` completes directory paths with trailing
+slashes and no inserted space, `executables` searches `PATH`, and `variables`
+uses shell variables. Add a Rush function provider when a completion needs
+filtering or behavior beyond those fixed builtins.
 
 ## Provider context API dependency
 
@@ -399,10 +402,7 @@ segments, but structured queries should be preferred.
       "git.refs": { "function": "__rush_complete_git_refs" },
       "git.diffPaths": { "function": "__rush_complete_git_diff_paths" },
       "git.changedPaths": { "function": "__rush_complete_git_changed_paths" },
-      "builtin.directories": {
-        "builtin": "directories",
-        "options": { "appendSlash": true }
-      }
+      "builtin.directories": { "builtin": "directories" }
     },
     "options": [
       {
