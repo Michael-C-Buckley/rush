@@ -448,6 +448,12 @@ const CompletionController = struct {
         return if (deadline <= now) 0 else deadline - now;
     }
 
+    fn hasSupersedingRequest(self: CompletionController, generation: u64) bool {
+        if (self.queued) |queued_request| if (queued_request.generation > generation) return true;
+        if (self.debounce) |debounce_request| if (debounce_request.generation > generation) return true;
+        return false;
+    }
+
     fn makeRequest(self: *CompletionController, source: []const u8, cursor: usize, reason: CompletionRequestReason) !CompletionRequest {
         const generation = self.next_generation;
         self.next_generation += 1;
@@ -1037,6 +1043,7 @@ pub const TerminalSession = struct {
         defer completion_result.deinit(self.allocator);
         switch (completion_result) {
             .success => |payload| {
+                if (self.completion.hasSupersedingRequest(payload.generation)) return false;
                 if (!std.mem.eql(u8, session.editor.buffer.text(), payload.source)) return false;
                 if (session.editor.buffer.cursor_byte != payload.cursor) return false;
                 try session.applyCompletion(payload.application);
@@ -1961,6 +1968,18 @@ test "completion controller cancels active worker when superseded" {
     worker.deinit();
     std.testing.allocator.destroy(worker);
     controller.deinit();
+}
+
+test "completion controller marks same-input active results stale when superseded" {
+    var controller = CompletionController.init(std.testing.allocator);
+    defer controller.deinit();
+
+    var first = try controller.makeRequest("git s", 5, .explicit);
+    defer first.deinit(std.testing.allocator);
+    try controller.request(std.testing.io, "git s", 5, .explicit);
+
+    try std.testing.expect(controller.hasSupersedingRequest(first.generation));
+    try std.testing.expect(!controller.hasSupersedingRequest(controller.queued.?.generation));
 }
 
 test "terminal parser emits in-band resize events" {

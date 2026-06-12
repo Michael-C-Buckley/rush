@@ -99,17 +99,25 @@ fn checkCanceled(options: ExecuteOptions) !void {
     if (options.cancel) |cancel| if (cancel.isCanceled()) return error.Canceled;
 }
 
-fn registerCancelableChild(options: ExecuteOptions, child: std.process.Child) ?i32 {
+fn registerCancelableChild(options: ExecuteOptions, child: std.process.Child, process_group: bool) ?i32 {
     const cancel = options.cancel orelse return null;
     const pid = child.id orelse return null;
     const numeric_pid: i32 = @intCast(pid);
-    cancel.registerChild(numeric_pid);
+    if (process_group) cancel.registerProcessGroup(numeric_pid) else cancel.registerChild(numeric_pid);
     return numeric_pid;
 }
 
 fn unregisterCancelableChild(options: ExecuteOptions, pid: ?i32) void {
     const cancel = options.cancel orelse return;
     cancel.unregisterChild(pid orelse return);
+}
+
+fn completionCancelProcessGroup(options: ExecuteOptions) bool {
+    return options.cancel != null and !options.interactive and options.external_stdio != .inherit;
+}
+
+fn cancellableExternalPgid(options: ExecuteOptions, requested_pgid: ?std.posix.pid_t) ?std.posix.pid_t {
+    return requested_pgid orelse if (completionCancelProcessGroup(options)) 0 else null;
 }
 
 pub const ShellOptions = struct {
@@ -476,6 +484,14 @@ pub const CompletionDiagnostic = struct {
     start: usize,
     end: usize,
     message: []const u8,
+};
+
+pub const CompletionProviderDiagnostic = struct {
+    function: []const u8,
+    command: []const u8,
+    status: ?ExitStatus = null,
+    err: ?[]const u8 = null,
+    stderr: []const u8 = "",
 };
 
 const builtin_names = [_][]const u8{
@@ -989,6 +1005,7 @@ pub const Executor = struct {
     pending_variable_hooks: std.ArrayList([]const u8) = .empty,
     completion_rules: std.ArrayList(completion.Rule) = .empty,
     completion_generation: u64 = 0,
+    completion_provider_diagnostics: std.ArrayList(CompletionProviderDiagnostic) = .empty,
     loaded_completion_scripts: std.StringHashMapUnmanaged(void) = .empty,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList([]const u8) = .empty,
@@ -1454,6 +1471,8 @@ pub const Executor = struct {
         self.pending_variable_hooks.deinit(self.allocator);
         for (self.completion_rules.items) |rule| freeCompletionRule(self.allocator, rule);
         self.completion_rules.deinit(self.allocator);
+        self.clearCompletionProviderDiagnostics();
+        self.completion_provider_diagnostics.deinit(self.allocator);
         var loaded_completion_iter = self.loaded_completion_scripts.iterator();
         while (loaded_completion_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
         self.loaded_completion_scripts.deinit(self.allocator);
@@ -1523,6 +1542,38 @@ pub const Executor = struct {
 
     pub fn completionRules(self: Executor) []const completion.Rule {
         return self.completion_rules.items;
+    }
+
+    pub fn completionProviderDiagnostics(self: Executor) []const CompletionProviderDiagnostic {
+        return self.completion_provider_diagnostics.items;
+    }
+
+    fn clearCompletionProviderDiagnostics(self: *Executor) void {
+        for (self.completion_provider_diagnostics.items) |diagnostic| {
+            self.allocator.free(diagnostic.function);
+            self.allocator.free(diagnostic.command);
+            if (diagnostic.err) |err| self.allocator.free(err);
+            self.allocator.free(diagnostic.stderr);
+        }
+        self.completion_provider_diagnostics.clearRetainingCapacity();
+    }
+
+    fn appendCompletionProviderDiagnostic(self: *Executor, function: []const u8, command: []const u8, status: ?ExitStatus, err: ?anyerror, stderr: []const u8) !void {
+        const owned_function = try self.allocator.dupe(u8, function);
+        errdefer self.allocator.free(owned_function);
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const owned_err = if (err) |provider_err| try self.allocator.dupe(u8, @errorName(provider_err)) else null;
+        errdefer if (owned_err) |err_name| self.allocator.free(err_name);
+        const owned_stderr = try self.allocator.dupe(u8, stderr);
+        errdefer self.allocator.free(owned_stderr);
+        try self.completion_provider_diagnostics.append(self.allocator, .{
+            .function = owned_function,
+            .command = owned_command,
+            .status = status,
+            .err = owned_err,
+            .stderr = owned_stderr,
+        });
     }
 
     fn completionCommandKnown(self: Executor, command: []const u8, io: ?std.Io) !bool {
@@ -1612,6 +1663,7 @@ pub const Executor = struct {
     }
 
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
+        self.clearCompletionProviderDiagnostics();
         var context = try completionEvalContextForInput(self.allocator, source, cursor);
         const completing_parameter = context.position == .parameter;
         const parameter_context = context;
@@ -1906,14 +1958,23 @@ pub const Executor = struct {
     }
 
     fn collectCompletionsFromFunction(self: *Executor, function: []const u8, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
-        const function_value = self.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
         if (self.completion_builder != null) return error.RecursiveCompletion;
-        self.completion_builder = .{};
-        self.completion_context = context;
+        if (self.functions.get(function) == null) return self.allocator.alloc(completion.Candidate, 0);
+
+        var provider = Executor.init(self.allocator);
+        defer provider.deinit();
+        try provider.copyStateFrom(self);
+        defer provider.cleanupCompletionProviderBackgroundJobs(options.io);
+
+        const function_value = provider.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
+        provider.completion_builder = .{};
+        provider.completion_context = context;
         errdefer {
-            self.completion_builder.?.deinit(self.allocator);
-            self.completion_builder = null;
-            self.completion_context = null;
+            if (provider.completion_builder) |*completion_builder| {
+                completion_builder.deinit(self.allocator);
+                provider.completion_builder = null;
+            }
+            provider.completion_context = null;
         }
 
         var argv = [_]ir.WordRef{
@@ -1923,27 +1984,58 @@ pub const Executor = struct {
         const call: ir.SimpleCommand = .{ .span = .{ .start = 0, .end = 0 }, .assignments = &.{}, .argv = &argv, .redirections = &.{} };
         var completion_options = options;
         completion_options.external_stdio = .capture;
-        var result = try self.executeFunctionBody(call, function_value, completion_options);
+        var result = provider.executeFunctionBody(call, function_value, completion_options) catch |err| {
+            provider.completion_builder.?.deinit(self.allocator);
+            provider.completion_builder = null;
+            provider.completion_context = null;
+            switch (err) {
+                error.OutOfMemory => return err,
+                else => {
+                    try self.appendCompletionProviderDiagnostic(function, command, null, err, "");
+                    return self.allocator.alloc(completion.Candidate, 0);
+                },
+            }
+        };
         defer result.deinit();
 
-        var builder = self.completion_builder.?;
-        self.completion_builder = null;
+        var builder = provider.completion_builder.?;
+        provider.completion_builder = null;
         errdefer builder.deinit(self.allocator);
-        const final_context = self.completion_context orelse context;
+        const final_context = provider.completion_context orelse context;
         self.last_completion_context = final_context;
+        provider.completion_context = null;
+
+        if (result.status != 0) {
+            builder.deinit(self.allocator);
+            try self.appendCompletionProviderDiagnostic(function, command, result.status, null, result.stderr);
+            return self.allocator.alloc(completion.Candidate, 0);
+        }
+
         for (builder.candidates.items) |*candidate| {
             if (candidate.replace_start == 0 and candidate.replace_end == 0) {
                 candidate.replace_start = final_context.replace_start;
                 candidate.replace_end = final_context.replace_end;
             }
         }
-        self.completion_context = null;
 
         var deduplicated: CompletionBuilder = .{};
         errdefer deduplicated.deinit(self.allocator);
         for (builder.candidates.items) |candidate| try deduplicated.appendCandidateIfMissing(self.allocator, candidate);
         builder.deinit(self.allocator);
         return deduplicated.finish(self.allocator);
+    }
+
+    fn cleanupCompletionProviderBackgroundJobs(self: *Executor, io: ?std.Io) void {
+        const real_io = io orelse return;
+        for (self.background_jobs.items) |*job| {
+            if (job.state == .done) continue;
+            if (job.pgrp) |pgrp| switch (zig_builtin.os.tag) {
+                .windows, .wasi => {},
+                else => std.posix.kill(@intCast(-pgrp), .TERM) catch {},
+            };
+            job.child.kill(real_io);
+            job.state = .done;
+        }
     }
 
     fn collectRootCommandCompletions(self: *Executor, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
@@ -4051,9 +4143,11 @@ pub const Executor = struct {
     fn forkAsyncJob(self: *Executor, command_text: []const u8, options: ExecuteOptions, kind: AsyncJobKind, program: ir.Program) !CommandResult {
         const io = options.io orelse return error.Unsupported;
         const use_monitor_pgrp = self.monitorProcessGroupsEnabled();
+        const use_cancel_pgrp = completionCancelProcessGroup(options);
+        const use_process_pgrp = use_monitor_pgrp or use_cancel_pgrp;
         const pid = try forkProcess();
         if (pid == 0) {
-            if (use_monitor_pgrp) processSetPgrp(0, 0) catch exitForkedChild(2);
+            if (use_process_pgrp) processSetPgrp(0, 0) catch exitForkedChild(2);
             self.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
             resetInteractiveJobSignalHandlers();
             var child_options = options;
@@ -4072,14 +4166,14 @@ pub const Executor = struct {
             exitForkedChild(status);
         }
 
-        if (use_monitor_pgrp) {
+        if (use_process_pgrp) {
             processSetPgrp(pid, pid) catch |err| switch (err) {
                 error.ProcessAlreadyExec, error.ProcessNotFound => {},
                 else => return err,
             };
         }
 
-        _ = registerCancelableChild(options, childFromPid(pid));
+        _ = registerCancelableChild(options, childFromPid(pid), use_process_pgrp);
         const numeric_pid: i64 = @intCast(pid);
         self.setLastBackgroundPid(numeric_pid);
         const owned_command = try self.allocator.dupe(u8, std.mem.trim(u8, command_text, " \t\r\n;&"));
@@ -4087,7 +4181,7 @@ pub const Executor = struct {
         try self.background_jobs.append(self.allocator, .{
             .id = self.next_job_id,
             .pid = numeric_pid,
-            .pgrp = if (use_monitor_pgrp) numeric_pid else null,
+            .pgrp = if (use_process_pgrp) numeric_pid else null,
             .command = owned_command,
             .child = childFromPid(pid),
         });
@@ -4455,7 +4549,7 @@ pub const Executor = struct {
                     try contexts.append(self.allocator, context);
                 } else {
                     children[spawned] = try forkBuiltinPipelineStage(context);
-                    cancel_pids[spawned] = registerCancelableChild(options, children[spawned]);
+                    cancel_pids[spawned] = registerCancelableChild(options, children[spawned], false);
                     child_stage_indexes[spawned] = index;
                     spawned += 1;
                     if (stdin_file) |file| file.close(io);
@@ -4491,12 +4585,14 @@ pub const Executor = struct {
                 if (resolved_executable) |executable| argv[0] = executable;
                 var child_env = try self.buildProcessEnv(command.assignments);
                 defer child_env.deinit();
+                const child_pgid = cancellableExternalPgid(options, null);
                 children[spawned] = self.spawnExternalCommand(io, .{
                     .argv = argv,
                     .environ_map = &child_env,
                     .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
                     .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else .ignore,
                     .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else .inherit,
+                    .pgid = child_pgid,
                 }) catch |err| switch (err) {
                     error.FileNotFound => {
                         if (stdin_file) |file| file.close(io);
@@ -4522,7 +4618,7 @@ pub const Executor = struct {
                 errdefer children[spawned_index].kill(io);
                 try movePipelineStageHandlesFromGuard(inherited_redirections.?, &stdin_file, &stdout_file, &stderr_file, io);
                 inherited_redirections.?.restore(self, io);
-                cancel_pids[spawned] = registerCancelableChild(options, children[spawned]);
+                cancel_pids[spawned] = registerCancelableChild(options, children[spawned], child_pgid != null);
                 child_stage_indexes[spawned] = index;
                 spawned += 1;
                 if (stdin_file) |file| file.close(io);
@@ -4610,7 +4706,7 @@ pub const Executor = struct {
             else => return err,
         };
 
-        const cancel_pid = registerCancelableChild(options, child);
+        const cancel_pid = registerCancelableChild(options, child, true);
         defer unregisterCancelableChild(options, cancel_pid);
         defer restoreForegroundTerminal(terminal);
         try giveTerminalToForegroundPgrp(pid, terminal);
@@ -5256,13 +5352,15 @@ pub const Executor = struct {
             // the output (command substitution, hidden refreshes, tests).
             const inherit_output = options.external_stdio == .inherit;
             const is_last = index + 1 == pipeline.command_indexes.len;
+            const requested_pgid: ?std.posix.pid_t = if (foreground_terminal != null) (pipeline_pgrp orelse 0) else null;
+            const child_pgid = cancellableExternalPgid(options, requested_pgid);
             children[index] = self.spawnExternalCommand(io, .{
                 .argv = argv,
                 .environ_map = &child_env,
                 .stdin = if (previous_stdout) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
                 .stdout = if (is_last and inherit_output) .inherit else .pipe,
                 .stderr = if (is_last and !inherit_output) .pipe else .inherit,
-                .pgid = if (foreground_terminal != null) (pipeline_pgrp orelse 0) else null,
+                .pgid = child_pgid,
             }) catch |err| switch (err) {
                 error.FileNotFound => {
                     const open_stdin = previous_stdout;
@@ -5290,7 +5388,7 @@ pub const Executor = struct {
                 },
                 else => return err,
             };
-            cancel_pids[index] = registerCancelableChild(options, children[index]);
+            cancel_pids[index] = registerCancelableChild(options, children[index], child_pgid != null);
             if (pipeline_pgrp == null and foreground_terminal != null) pipeline_pgrp = children[index].id;
             spawned += 1;
 
@@ -6868,13 +6966,16 @@ pub const Executor = struct {
 
         var child_env = try self.buildProcessEnv(command.assignments);
         defer child_env.deinit();
+        const use_monitor_pgrp = self.monitorProcessGroupsEnabled();
+        const use_cancel_pgrp = completionCancelProcessGroup(options);
+        const use_process_pgrp = use_monitor_pgrp or use_cancel_pgrp;
         var child = self.spawnExternalCommand(io, .{
             .argv = argv,
             .environ_map = &child_env,
             .stdin = if (stdin_closed) .close else if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
             .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
-            .pgid = if (self.monitorProcessGroupsEnabled()) 0 else null,
+            .pgid = if (use_process_pgrp) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             error.AccessDenied, error.PermissionDenied, error.IsDir => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
@@ -6895,7 +6996,7 @@ pub const Executor = struct {
             file.close(io);
             stderr_file = null;
         }
-        _ = registerCancelableChild(options, child);
+        _ = registerCancelableChild(options, child, use_process_pgrp);
         if (child.id) |pid| {
             const numeric_pid: i64 = @intCast(pid);
             self.setLastBackgroundPid(numeric_pid);
@@ -6903,8 +7004,7 @@ pub const Executor = struct {
             defer self.allocator.free(argv_text);
             const command_text = try joinParams(self.allocator, argv_text);
             errdefer self.allocator.free(command_text);
-            const use_monitor_pgrp = self.monitorProcessGroupsEnabled();
-            try self.background_jobs.append(self.allocator, .{ .id = self.next_job_id, .pid = numeric_pid, .pgrp = if (use_monitor_pgrp) numeric_pid else null, .command = command_text, .child = child });
+            try self.background_jobs.append(self.allocator, .{ .id = self.next_job_id, .pid = numeric_pid, .pgrp = if (use_process_pgrp) numeric_pid else null, .command = command_text, .child = child });
             self.selectCurrentJob(self.next_job_id);
             self.next_job_id += 1;
         }
@@ -7156,13 +7256,14 @@ pub const Executor = struct {
         // stdin; only stdout is captured.
         const inherit_stdin = externalStdioInheritsStdin(options.external_stdio) or
             (options.interactive and options.external_stdio == .capture_stdout);
+        const child_pgid = cancellableExternalPgid(options, if (foreground_terminal != null) 0 else null);
         var child = self.spawnExternalCommand(io, .{
             .argv = argv,
             .environ_map = &child_env,
             .stdin = if (stdin_redirected) .inherit else if (stdin_file) |file| .{ .file = file } else if (inherit_stdin) .inherit else .close,
             .stdout = if (stdout_closed) .close else if (stdout_file) |file| .{ .file = file } else if (merged_capture) |pipe| .{ .file = pipe.write.? } else if (manual_stdout_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stdout_pipe) .pipe else .inherit,
             .stderr = if (stderr_closed) .close else if (stderr_file) |file| .{ .file = file } else if (merged_stderr_write) |file| .{ .file = file } else if (duplicate_stderr_to_stdout) .{ .file = manual_stdout_capture.?.write.? } else if (manual_stderr_capture) |pipe| .{ .file = pipe.write.? } else if (capture_stderr_pipe) .pipe else .inherit,
-            .pgid = if (foreground_terminal != null) 0 else null,
+            .pgid = child_pgid,
         }) catch |err| switch (err) {
             error.FileNotFound => return error.CommandNotFound,
             error.AccessDenied, error.PermissionDenied, error.IsDir => return error.AccessDenied,
@@ -7183,7 +7284,7 @@ pub const Executor = struct {
             file.close(io);
             stderr_file = null;
         }
-        const cancel_pid = registerCancelableChild(options, child);
+        const cancel_pid = registerCancelableChild(options, child, child_pgid != null);
         defer unregisterCancelableChild(options, cancel_pid);
         defer child.kill(io);
         if (merged_capture) |*pipe| {
@@ -19492,6 +19593,141 @@ test "dynamic completion providers close external command fds" {
     }
     const after = try openFdCount();
     try std.testing.expectEqual(before, after);
+}
+
+test "dynamic completion providers discard shell-state mutations" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_mutating() {
+        \\  set -f
+        \\  export RUSH_PROVIDER_LEAK=1
+        \\  alias rush_provider_leak='echo leaked'
+        \\  completion candidate stable
+        \\}
+        \\complete tool --argument --function __rush_complete_mutating
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("tool s", "tool s".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "stable", .plain);
+    try std.testing.expect(!executor.shell_options.noglob);
+    try std.testing.expect(executor.getEnv("RUSH_PROVIDER_LEAK") == null);
+    try std.testing.expect(!executor.aliases.contains("rush_provider_leak"));
+}
+
+test "dynamic completion provider failures are diagnostic and discard candidates" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_failing() {
+        \\  completion candidate stale
+        \\  echo provider exploded >&2
+        \\  false
+        \\}
+        \\complete tool --argument --function __rush_complete_failing
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("tool s", "tool s".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "stale");
+
+    const diagnostics = executor.completionProviderDiagnostics();
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqualStrings("__rush_complete_failing", diagnostics[0].function);
+    try std.testing.expectEqual(@as(?ExitStatus, 1), diagnostics[0].status);
+    try std.testing.expect(std.mem.indexOf(u8, diagnostics[0].stderr, "provider exploded") != null);
+}
+
+test "dynamic completion provider background jobs are cleaned up" {
+    if (zig_builtin.os.tag == .windows or zig_builtin.os.tag == .wasi) return error.SkipZigTest;
+    const pid_path = "rush-provider-background.pid";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, pid_path) catch {};
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_background() {
+        \\  /bin/sleep 5 &
+        \\  echo $! > rush-provider-background.pid
+        \\  completion candidate ready
+        \\}
+        \\complete tool --argument --function __rush_complete_background
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("tool r", "tool r".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "ready", .plain);
+
+    const pid_text = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, pid_path, std.testing.allocator, .limited(128));
+    defer std.testing.allocator.free(pid_text);
+    const pid = try std.fmt.parseInt(std.posix.pid_t, std.mem.trim(u8, pid_text, " \t\r\n"), 10);
+    std.posix.kill(pid, .TERM) catch |err| switch (err) {
+        error.ProcessNotFound => return,
+        else => return err,
+    };
+    return error.ProviderBackgroundJobLeaked;
+}
+
+test "dynamic completion cancellation terminates provider external command" {
+    if (zig_builtin.os.tag == .windows or zig_builtin.os.tag == .wasi) return error.SkipZigTest;
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__rush_complete_slow() {
+        \\  /bin/sleep 5
+        \\  completion candidate late
+        \\}
+        \\complete tool --argument --function __rush_complete_slow
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    var token: completion.CancellationToken = .{};
+    const Worker = struct {
+        executor: *Executor,
+        token: *completion.CancellationToken,
+        err: ?anyerror = null,
+
+        fn run(self: *@This()) void {
+            const candidates = self.executor.collectCompletionsForInput("tool l", "tool l".len, .{ .io = std.testing.io, .allow_external = true, .cancel = self.token }) catch |err| {
+                self.err = err;
+                return;
+            };
+            self.executor.freeCompletions(candidates);
+        }
+    };
+    var worker: Worker = .{ .executor = &executor, .token = &token };
+    const thread = try std.Thread.spawn(.{}, Worker.run, .{&worker});
+    var polls: usize = 0;
+    while (token.activeChildCount() == 0 and polls < 200) : (polls += 1) sleepPtyTestPollInterval();
+    try std.testing.expect(token.activeChildCount() != 0);
+    token.cancel();
+    thread.join();
+    if (worker.err) |err| return err;
+    try std.testing.expectEqual(@as(usize, 0), token.activeChildCount());
+    try std.testing.expectEqual(@as(usize, 1), executor.completionProviderDiagnostics().len);
 }
 
 test "structured completion keeps parent options available in subcommand contexts" {

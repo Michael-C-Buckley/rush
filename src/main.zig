@@ -2546,6 +2546,13 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
             });
         }
     }
+    try out.writer.print("provider-diagnostics:\n", .{});
+    for (executor.completionProviderDiagnostics()) |diagnostic| {
+        try out.writer.print("  - function: {s}\n    command: {s}\n", .{ diagnostic.function, diagnostic.command });
+        if (diagnostic.status) |status| try out.writer.print("    status: {d}\n", .{status});
+        if (diagnostic.err) |err| try out.writer.print("    error: {s}\n", .{err});
+        if (diagnostic.stderr.len != 0) try out.writer.print("    stderr: {s}\n", .{diagnostic.stderr});
+    }
     try out.writer.print("application:\n", .{});
     switch (application) {
         .none => try out.writer.print("  none\n", .{}),
@@ -2616,11 +2623,32 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     try json.beginArray();
     for (candidates) |candidate| try writeCompletionCandidateJson(&json, history, cwd, source, candidate);
     try json.endArray();
+    try json.objectField("providerDiagnostics");
+    try writeCompletionProviderDiagnosticsJson(&json, executor.completionProviderDiagnostics());
     try json.objectField("application");
     try writeCompletionApplicationJson(&json, application);
     try json.endObject();
     try out.writer.writeByte('\n');
     return out.toOwnedSlice();
+}
+
+fn writeCompletionProviderDiagnosticsJson(json: *std.json.Stringify, diagnostics: []const exec.CompletionProviderDiagnostic) !void {
+    try json.beginArray();
+    for (diagnostics) |diagnostic| {
+        try json.beginObject();
+        try json.objectField("function");
+        try json.write(diagnostic.function);
+        try json.objectField("command");
+        try json.write(diagnostic.command);
+        try json.objectField("status");
+        try json.write(diagnostic.status);
+        try json.objectField("error");
+        try json.write(diagnostic.err);
+        try json.objectField("stderr");
+        try json.write(diagnostic.stderr);
+        try json.endObject();
+    }
+    try json.endArray();
 }
 
 fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.CompletionEvalContext) !void {
@@ -4865,6 +4893,41 @@ test "completion debug output shows semantic structured context and rules" {
     try std.testing.expect(std.mem.indexOf(u8, output, "position: option") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "kind: option") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "value: --amend") != null);
+}
+
+test "completion debug output reports dynamic provider failures" {
+    const root = "rush-debug-provider-failure-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data =
+        \\__rush_complete_tool() {
+        \\  completion candidate stale
+        \\  echo provider failed >&2
+        \\  false
+        \\}
+        \\complete tool --argument --function __rush_complete_tool
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    const output = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, "tool st");
+    defer std.testing.allocator.free(output);
+    try std.testing.expect(std.mem.indexOf(u8, output, "provider-diagnostics:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "function: __rush_complete_tool") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "status: 1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "provider failed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "value: stale") == null);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool st");
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+    const diagnostics = parsed.value.object.get("providerDiagnostics").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.len);
+    try std.testing.expectEqualStrings("__rush_complete_tool", diagnostics[0].object.get("function").?.string);
+    try std.testing.expectEqual(@as(i64, 1), diagnostics[0].object.get("status").?.integer);
 }
 
 test "completion debug output exposes manifest source and JSON decision state" {

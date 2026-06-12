@@ -5,39 +5,65 @@ const std = @import("std");
 pub const CancellationToken = struct {
     canceled: std.atomic.Value(bool) = .init(false),
     mutex: std.atomic.Mutex = .unlocked,
-    child_pids: [32]i32 = .{0} ** 32,
+    children: [32]CancelableChild = .{CancelableChild{}} ** 32,
+
+    const CancelableChild = struct {
+        pid: i32 = 0,
+        process_group: bool = false,
+    };
 
     pub fn cancel(self: *CancellationToken) void {
         self.canceled.store(true, .release);
         lockMutex(&self.mutex);
         defer self.mutex.unlock();
-        for (self.child_pids) |pid| terminateProcess(pid);
+        for (self.children) |child| terminateProcess(child);
     }
 
     pub fn isCanceled(self: *CancellationToken) bool {
         return self.canceled.load(.acquire);
     }
 
-    pub fn registerChild(self: *CancellationToken, pid: i32) void {
+    pub fn activeChildCount(self: *CancellationToken) usize {
         lockMutex(&self.mutex);
         defer self.mutex.unlock();
-        for (&self.child_pids) |*slot| {
-            if (slot.* == 0) {
-                slot.* = pid;
+        var count: usize = 0;
+        for (self.children) |child| {
+            if (child.pid != 0) count += 1;
+        }
+        return count;
+    }
+
+    pub fn registerChild(self: *CancellationToken, pid: i32) void {
+        self.register(pid, false);
+    }
+
+    pub fn registerProcessGroup(self: *CancellationToken, pid: i32) void {
+        self.register(pid, true);
+    }
+
+    fn register(self: *CancellationToken, pid: i32, process_group: bool) void {
+        if (pid <= 0) return;
+        const child: CancelableChild = .{ .pid = pid, .process_group = process_group };
+        lockMutex(&self.mutex);
+        defer self.mutex.unlock();
+        for (&self.children) |*slot| {
+            if (slot.pid == 0) {
+                slot.* = child;
                 break;
             }
         } else {
-            terminateProcess(pid);
+            terminateProcess(child);
             return;
         }
-        if (self.isCanceled()) terminateProcess(pid);
+        if (self.isCanceled()) terminateProcess(child);
     }
 
     pub fn unregisterChild(self: *CancellationToken, pid: i32) void {
+        if (pid <= 0) return;
         lockMutex(&self.mutex);
         defer self.mutex.unlock();
-        for (&self.child_pids) |*slot| {
-            if (slot.* == pid) slot.* = 0;
+        for (&self.children) |*slot| {
+            if (slot.pid == pid) slot.* = .{};
         }
     }
 };
@@ -46,24 +72,29 @@ fn lockMutex(mutex: *std.atomic.Mutex) void {
     while (!mutex.tryLock()) std.Thread.yield() catch {};
 }
 
-fn terminateProcess(pid: i32) void {
-    if (pid <= 0) return;
+fn terminateProcess(child: CancellationToken.CancelableChild) void {
+    if (child.pid <= 0) return;
     switch (@import("builtin").os.tag) {
         .windows => {},
-        else => std.posix.kill(@intCast(pid), .TERM) catch {},
+        else => {
+            const pid: std.posix.pid_t = @intCast(child.pid);
+            std.posix.kill(if (child.process_group) -pid else pid, .TERM) catch {};
+        },
     }
 }
 
 test "cancellation token tracks multiple children" {
     var token: CancellationToken = .{};
-    token.registerChild(-1);
-    token.registerChild(-2);
-    try std.testing.expectEqual(@as(i32, -1), token.child_pids[0]);
-    try std.testing.expectEqual(@as(i32, -2), token.child_pids[1]);
+    token.registerChild(1);
+    token.registerProcessGroup(2);
+    try std.testing.expectEqual(@as(i32, 1), token.children[0].pid);
+    try std.testing.expect(!token.children[0].process_group);
+    try std.testing.expectEqual(@as(i32, 2), token.children[1].pid);
+    try std.testing.expect(token.children[1].process_group);
 
-    token.unregisterChild(-1);
-    try std.testing.expectEqual(@as(i32, 0), token.child_pids[0]);
-    try std.testing.expectEqual(@as(i32, -2), token.child_pids[1]);
+    token.unregisterChild(1);
+    try std.testing.expectEqual(@as(i32, 0), token.children[0].pid);
+    try std.testing.expectEqual(@as(i32, 2), token.children[1].pid);
 
     token.cancel();
     try std.testing.expect(token.isCanceled());
