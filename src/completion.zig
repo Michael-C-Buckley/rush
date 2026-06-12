@@ -201,10 +201,11 @@ pub const Argument = struct {
 
 pub const ValueGrammar = struct {
     list_separator: ?u8 = null,
+    key_prefix: ?u8 = null,
     key_value_separator: ?u8 = null,
 
     pub fn isEmpty(self: ValueGrammar) bool {
-        return self.list_separator == null and self.key_value_separator == null;
+        return self.list_separator == null and self.key_prefix == null and self.key_value_separator == null;
     }
 };
 

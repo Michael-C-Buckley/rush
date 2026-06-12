@@ -1591,7 +1591,10 @@ fn manifestValueGrammar(value: ?std.json.Value) completion_model.ValueGrammar {
         return .{ .list_separator = manifestSingleByteString(grammar.get("separator")) };
     }
     if (std.mem.eql(u8, kind, "keyValue")) {
-        return .{ .key_value_separator = manifestSingleByteString(grammar.get("separator")) };
+        return .{
+            .key_prefix = manifestSingleByteString(grammar.get("keyPrefix")),
+            .key_value_separator = manifestSingleByteString(grammar.get("separator")),
+        };
     }
     return .{};
 }
@@ -2819,10 +2822,13 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         if (!rule.value_grammar.isEmpty()) {
             var list_separator_buffer: [1]u8 = undefined;
             const list_separator = completionSeparatorSlice(rule.value_grammar.list_separator, &list_separator_buffer);
+            var key_prefix_buffer: [1]u8 = undefined;
+            const key_prefix = completionSeparatorSlice(rule.value_grammar.key_prefix, &key_prefix_buffer);
             var key_value_separator_buffer: [1]u8 = undefined;
             const key_value_separator = completionSeparatorSlice(rule.value_grammar.key_value_separator, &key_value_separator_buffer);
-            try out.writer.print("    value-grammar:\n      list-separator: {s}\n      key-value-separator: {s}\n", .{
+            try out.writer.print("    value-grammar:\n      list-separator: {s}\n      key-prefix: {s}\n      key-value-separator: {s}\n", .{
                 list_separator,
+                key_prefix,
                 key_value_separator,
             });
         }
@@ -3225,6 +3231,8 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.beginObject();
     try json.objectField("listSeparator");
     try writeCompletionSeparatorJson(json, rule.value_grammar.list_separator);
+    try json.objectField("keyPrefix");
+    try writeCompletionSeparatorJson(json, rule.value_grammar.key_prefix);
     try json.objectField("keyValueSeparator");
     try writeCompletionSeparatorJson(json, rule.value_grammar.key_value_separator);
     try json.endObject();
@@ -5478,6 +5486,22 @@ test "supplied git manifest validates and selects representative contexts" {
     const remote_less_main = findCompletionCandidate(push_remote_less, "main") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqual(completion_model.Kind.plain, remote_less_main.kind);
     try std.testing.expectEqualStrings("branch", remote_less_main.description.?);
+
+    const push_force_source = "git push origin +ma";
+    const push_force = try executor.collectCompletionsForInput(push_force_source, push_force_source.len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(push_force);
+    const force_main = findCompletionCandidate(push_force, "main") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, force_main.kind);
+    try std.testing.expectEqualStrings("branch", force_main.description.?);
+    try std.testing.expectEqual(@as(usize, "git push origin +".len), force_main.replace_start);
+
+    const push_force_tag_source = "git push origin +v";
+    const push_force_tag = try executor.collectCompletionsForInput(push_force_tag_source, push_force_tag_source.len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(push_force_tag);
+    const force_tag = findCompletionCandidate(push_force_tag, "v1.0") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, force_tag.kind);
+    try std.testing.expectEqualStrings("tag", force_tag.description.?);
+    try std.testing.expectEqual(@as(usize, "git push origin +".len), force_tag.replace_start);
 
     const push_repo_source = "git push --repo=origin ma";
     const push_repo = try executor.collectCompletionsForInput(push_repo_source, push_repo_source.len, .{ .io = std.testing.io, .allow_external = true });

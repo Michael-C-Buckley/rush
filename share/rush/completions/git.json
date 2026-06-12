@@ -251,8 +251,8 @@
         ],
         "arguments": {
           "states": [
-            { "name": "remote-or-refspec", "index": 0, "provider": "git.push-arguments", "grammar": { "kind": "keyValue", "separator": ":" }, "description": "remote to push to or refspec when no remote is present" },
-            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.push-arguments", "grammar": { "kind": "keyValue", "separator": ":" }, "description": "refspec to push" }
+            { "name": "remote-or-refspec", "index": 0, "provider": "git.push-arguments", "grammar": { "kind": "keyValue", "separator": ":", "keyPrefix": "+" }, "description": "remote to push to or refspec when no remote is present" },
+            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.push-arguments", "grammar": { "kind": "keyValue", "separator": ":", "keyPrefix": "+" }, "description": "refspec to push" }
           ]
         }
       },

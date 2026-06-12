@@ -330,6 +330,7 @@
       "properties": {
         "kind": { "const": "keyValue" },
         "separator": { "type": "string", "minLength": 1 },
+        "keyPrefix": { "type": "string", "minLength": 1 },
         "key": { "$ref": "#/$defs/value" },
         "value": { "$ref": "#/$defs/value" }
       }

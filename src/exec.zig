@@ -1080,9 +1080,16 @@ fn activeCompletionValueSegment(prefix: []const u8, replace_start: usize, gramma
         if (std.mem.findScalarLast(u8, prefix, separator)) |index| segment_start = index + 1;
     }
 
-    const item = prefix[segment_start..];
+    var item = prefix[segment_start..];
     var segment = item;
     var segment_replace_start = replace_start + segment_start;
+    if (grammar.key_prefix) |key_prefix| {
+        if (item.len != 0 and item[0] == key_prefix) {
+            item = item[1..];
+            segment = item;
+            segment_replace_start += 1;
+        }
+    }
     var position: CompletionValuePosition = if (grammar.key_value_separator == null) .item else .key;
     var key: []const u8 = "";
     if (grammar.key_value_separator) |separator| {
