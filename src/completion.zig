@@ -304,20 +304,17 @@ fn freeCandidateFields(allocator: std.mem.Allocator, candidate: Candidate) void 
 
 pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) !Application {
     if (candidates.len == 0) return .none;
-    const replace_start = candidates[0].replace_start;
-    const replace_end = candidates[0].replace_end;
-
-    for (candidates[1..]) |candidate| {
-        std.debug.assert(candidate.replace_start == replace_start);
-        std.debug.assert(candidate.replace_end == replace_end);
+    for (candidates) |candidate| {
+        std.debug.assert(candidate.replace_start <= candidate.replace_end);
     }
 
     if (candidates.len == 1) {
+        const candidate = candidates[0];
         return .{ .edit = .{
-            .replace_start = replace_start,
-            .replace_end = replace_end,
-            .replacement = try allocator.dupe(u8, candidateInsertText(candidates[0])),
-            .append_space = candidates[0].append_space,
+            .replace_start = candidate.replace_start,
+            .replace_end = candidate.replace_end,
+            .replacement = try allocator.dupe(u8, candidateInsertText(candidate)),
+            .append_space = candidate.append_space,
         } };
     }
 
@@ -812,6 +809,22 @@ test "application reports ambiguous candidates" {
     defer application.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+}
+
+test "application reports mixed replacement spans as ambiguous" {
+    const source = "git add src/mai";
+    const candidates = [_]Candidate{
+        .{ .value = "src/main.zig", .kind = .file, .replace_start = "git add ".len, .replace_end = source.len },
+        .{ .value = "main.zig", .kind = .file, .replace_start = "git add src/".len, .replace_end = source.len },
+    };
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+    try std.testing.expectEqual(@as(usize, "git add ".len), application.ambiguous[0].replace_start);
+    try std.testing.expectEqualStrings("src/main.zig", application.ambiguous[0].insert.?);
+    try std.testing.expectEqual(@as(usize, "git add src/".len), application.ambiguous[1].replace_start);
+    try std.testing.expectEqualStrings("main.zig", application.ambiguous[1].insert.?);
 }
 
 test "application filters candidates by replacement prefix" {

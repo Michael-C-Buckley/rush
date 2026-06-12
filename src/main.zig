@@ -5140,6 +5140,58 @@ test "completion manifests bind companion function providers and builtin provide
     try expectCompletionCandidate(variable_candidates, "RUSH_MANIFEST_PROVIDER_VAR");
 }
 
+test "completion application tolerates manifest path providers with mixed replacement spans" {
+    const root = "rush-completion-manifest-mixed-path-span-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/src");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/src/main.zig", .data = "fixture" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.rush", .data = "__rush_complete_tool_paths() {\n" ++
+        "  completion candidate " ++ root ++ "/src/main.zig --kind file\n" ++
+        "}\n" ++
+        "complete tool --argument --function __rush_complete_tool_paths\n" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "builtin.files": { "builtin": "files" }
+        \\    },
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "pathspec", "index": 0, "repeatable": true, "provider": "builtin.files" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    });
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_DIRS", "");
+    try executor.setEnv("XDG_DATA_HOME", root);
+
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    try loader.ensureLoaded(std.testing.io, &executor, "tool", "rush");
+    try sourceOptionalConfig(std.testing.allocator, std.testing.io, &executor, root ++ "/rush/completions/tool.rush", "rush");
+
+    const source = "tool " ++ root ++ "/src/mai";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+
+    const full_path = findCompletionCandidate(candidates, root ++ "/src/main.zig") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "tool ".len), full_path.replace_start);
+    const basename = findCompletionCandidate(candidates, "main.zig") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, ("tool " ++ root ++ "/src/").len), basename.replace_start);
+
+    const application = try completion_model.applyCandidatesForInput(std.testing.allocator, source, candidates);
+    defer application.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+}
+
 test "completion manifest static enum providers emit scoped candidates" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
