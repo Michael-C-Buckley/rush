@@ -515,6 +515,7 @@ const builtin_names = [_][]const u8{
     "times",
     "trap",
     "type",
+    "ulimit",
     "umask",
     "unalias",
     "wait",
@@ -2057,6 +2058,7 @@ pub const Executor = struct {
         if (std.mem.eql(u8, context.root, "env")) return appendStaticValueCandidates(self, builder, context, &.{ "-i", "--" }, .option, true);
         if (std.mem.eql(u8, context.root, "set")) return appendStaticValueCandidates(self, builder, context, &set_options, .option, true);
         if (std.mem.eql(u8, context.root, "trap")) return appendStaticValueCandidates(self, builder, context, &.{"--"}, .option, true);
+        if (std.mem.eql(u8, context.root, "ulimit")) return appendStaticValueCandidates(self, builder, context, &.{ "-H", "-S", "-a", "-c", "-d", "-f", "-n", "-s", "-v", "-t", "--" }, .option, true);
         if (std.mem.eql(u8, context.root, "umask")) return appendStaticValueCandidates(self, builder, context, &.{ "-S", "--" }, .option, true);
         if (std.mem.eql(u8, context.root, "unalias")) return appendStaticValueCandidates(self, builder, context, &.{ "-a", "--" }, .option, true);
         if (std.mem.eql(u8, context.root, "jobs")) return appendStaticValueCandidates(self, builder, context, &.{ "-l", "-p", "--" }, .option, true);
@@ -8423,6 +8425,7 @@ fn builtinFor(name: []const u8) ?BuiltinFn {
     if (std.mem.eql(u8, name, "times")) return builtinTimes;
     if (std.mem.eql(u8, name, "trap")) return builtinTrap;
     if (std.mem.eql(u8, name, "type")) return builtinType;
+    if (std.mem.eql(u8, name, "ulimit")) return builtinUlimit;
     if (std.mem.eql(u8, name, "umask")) return builtinUmask;
     if (std.mem.eql(u8, name, "unalias")) return builtinUnalias;
     if (std.mem.eql(u8, name, "wait")) return builtinWait;
@@ -11486,6 +11489,186 @@ fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
 fn shiftUsageError(self: *Executor, message: []const u8) !CommandResult {
     setSpecialBuiltinErrorConsequence(self, 2);
     return errorResult(self.allocator, 2, "shift", message);
+}
+
+const RlimitValue = @TypeOf(@as(std.posix.rlimit, undefined).cur);
+
+const UlimitResource = struct {
+    option: u8,
+    name: []const u8,
+    unit: []const u8,
+    scale: RlimitValue,
+    resource: ?std.posix.rlimit_resource,
+};
+
+fn rlimitResource(comptime name: []const u8) ?std.posix.rlimit_resource {
+    return switch (@typeInfo(std.posix.rlimit_resource)) {
+        .@"enum" => blk: {
+            if (@hasField(std.posix.rlimit_resource, name)) break :blk @field(std.posix.rlimit_resource, name);
+            if (@hasDecl(std.posix.rlimit_resource, name)) break :blk @field(std.posix.rlimit_resource, name);
+            break :blk null;
+        },
+        else => null,
+    };
+}
+
+const ulimit_resources = [_]UlimitResource{
+    .{ .option = 'c', .name = "core file size", .unit = "blocks", .scale = 512, .resource = rlimitResource("CORE") },
+    .{ .option = 'd', .name = "data seg size", .unit = "kbytes", .scale = 1024, .resource = rlimitResource("DATA") },
+    .{ .option = 'f', .name = "file size", .unit = "blocks", .scale = 512, .resource = rlimitResource("FSIZE") },
+    .{ .option = 'n', .name = "open files", .unit = "descriptors", .scale = 1, .resource = rlimitResource("NOFILE") },
+    .{ .option = 's', .name = "stack size", .unit = "kbytes", .scale = 1024, .resource = rlimitResource("STACK") },
+    .{ .option = 'v', .name = "virtual memory", .unit = "kbytes", .scale = 1024, .resource = rlimitResource("AS") },
+    .{ .option = 't', .name = "cpu time", .unit = "seconds", .scale = 1, .resource = rlimitResource("CPU") },
+};
+
+const UlimitOptions = struct {
+    hard: bool = false,
+    soft: bool = false,
+    all: bool = false,
+    selected: [ulimit_resources.len]bool = [_]bool{false} ** ulimit_resources.len,
+    selected_count: usize = 0,
+    arg_index: usize = 1,
+};
+
+fn builtinUlimit(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
+    _ = stdin;
+    _ = options;
+    var parsed = parseUlimitOptions(command) catch |err| return ulimitOptionError(self, err);
+    if (command.argv.len > parsed.arg_index + 1) return errorResult(self.allocator, 2, "ulimit", "too many arguments");
+    const has_operand = parsed.arg_index < command.argv.len;
+    if (parsed.all and has_operand) return errorResult(self.allocator, 2, "ulimit", "cannot set all resources");
+    if (parsed.selected_count == 0 and !parsed.all) {
+        selectUlimitResource(&parsed, 'f');
+    }
+    if (has_operand) return setUlimit(self, command.argv[parsed.arg_index].text, parsed);
+    return reportUlimit(self, parsed);
+}
+
+const UlimitOptionError = error{UnsupportedOption};
+
+fn parseUlimitOptions(command: ir.SimpleCommand) UlimitOptionError!UlimitOptions {
+    var parsed: UlimitOptions = .{};
+    while (parsed.arg_index < command.argv.len) {
+        const arg = command.argv[parsed.arg_index].text;
+        if (std.mem.eql(u8, arg, "--")) {
+            parsed.arg_index += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        parsed.arg_index += 1;
+        for (arg[1..]) |option| switch (option) {
+            'H' => parsed.hard = true,
+            'S' => parsed.soft = true,
+            'a' => parsed.all = true,
+            'c', 'd', 'f', 'n', 's', 'v', 't' => selectUlimitResource(&parsed, option),
+            else => return error.UnsupportedOption,
+        };
+    }
+    return parsed;
+}
+
+fn selectUlimitResource(parsed: *UlimitOptions, option: u8) void {
+    for (ulimit_resources, 0..) |spec, index| {
+        if (spec.option != option) continue;
+        if (!parsed.selected[index]) {
+            parsed.selected[index] = true;
+            parsed.selected_count += 1;
+        }
+        return;
+    }
+    unreachable;
+}
+
+fn ulimitOptionError(self: *Executor, err: UlimitOptionError) !CommandResult {
+    return switch (err) {
+        error.UnsupportedOption => errorResult(self.allocator, 2, "ulimit", "unsupported option"),
+    };
+}
+
+fn reportUlimit(self: *Executor, options: UlimitOptions) !CommandResult {
+    if (options.all or options.selected_count > 1) {
+        var stdout: std.ArrayList(u8) = .empty;
+        errdefer stdout.deinit(self.allocator);
+        for (ulimit_resources, 0..) |spec, index| {
+            if (!options.all and !options.selected[index]) continue;
+            if (spec.resource == null) continue;
+            try appendUlimitReportLine(self.allocator, &stdout, spec, options);
+        }
+        return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
+    }
+    const spec = selectedUlimitSpec(options) orelse unreachable;
+    if (spec.resource == null) return unavailableUlimitResource(self, spec.option);
+    const limits = readUlimitLimits(self, spec) orelse return errorResult(self.allocator, 1, "ulimit", "getrlimit failed");
+    const text = try formatUlimitValue(self.allocator, selectedRlimitValue(limits, options), spec.scale);
+    defer self.allocator.free(text);
+    return stdoutLine(self.allocator, text, 0);
+}
+
+fn setUlimit(self: *Executor, operand: []const u8, options: UlimitOptions) !CommandResult {
+    if (options.selected_count != 1) return errorResult(self.allocator, 2, "ulimit", "requires exactly one resource");
+    const spec = selectedUlimitSpec(options) orelse unreachable;
+    const resource = spec.resource orelse return unavailableUlimitResource(self, spec.option);
+    var limits = readUlimitLimits(self, spec) orelse return errorResult(self.allocator, 1, "ulimit", "getrlimit failed");
+    const value = parseUlimitLimit(operand, spec.scale) orelse return errorResult(self.allocator, 2, "ulimit", "invalid limit");
+    const set_soft = options.soft or !options.hard;
+    const set_hard = options.hard or !options.soft;
+    if (set_soft) limits.cur = value;
+    if (set_hard) limits.max = value;
+    std.posix.setrlimit(resource, limits) catch |err| switch (err) {
+        error.PermissionDenied => return errorResult(self.allocator, 1, "ulimit", "permission denied"),
+        error.LimitTooBig => return errorResult(self.allocator, 1, "ulimit", "limit too large"),
+        error.Unexpected => return errorResult(self.allocator, 1, "ulimit", "setrlimit failed"),
+    };
+    return emptyResult(self.allocator, 0);
+}
+
+fn selectedUlimitSpec(options: UlimitOptions) ?UlimitResource {
+    for (ulimit_resources, 0..) |spec, index| {
+        if (options.selected[index]) return spec;
+    }
+    return null;
+}
+
+fn readUlimitLimits(self: *Executor, spec: UlimitResource) ?std.posix.rlimit {
+    _ = self;
+    return std.posix.getrlimit(spec.resource.?) catch null;
+}
+
+fn selectedRlimitValue(limits: std.posix.rlimit, options: UlimitOptions) RlimitValue {
+    return if (options.hard and !options.soft) limits.max else limits.cur;
+}
+
+fn parseUlimitLimit(operand: []const u8, scale: RlimitValue) ?RlimitValue {
+    if (std.mem.eql(u8, operand, "unlimited")) return std.c.RLIM.INFINITY;
+    if (operand.len == 0) return null;
+    for (operand) |char| {
+        if (!std.ascii.isDigit(char)) return null;
+    }
+    const units = std.fmt.parseInt(u128, operand, 10) catch return null;
+    const raw = std.math.mul(u128, units, @intCast(scale)) catch return null;
+    if (raw > std.math.maxInt(RlimitValue)) return null;
+    return @intCast(raw);
+}
+
+fn formatUlimitValue(allocator: std.mem.Allocator, value: RlimitValue, scale: RlimitValue) ![]u8 {
+    if (value == std.c.RLIM.INFINITY) return allocator.dupe(u8, "unlimited");
+    return std.fmt.allocPrint(allocator, "{d}", .{@divTrunc(value, scale)});
+}
+
+fn appendUlimitReportLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), spec: UlimitResource, options: UlimitOptions) !void {
+    const limits = std.posix.getrlimit(spec.resource.?) catch return;
+    const value = try formatUlimitValue(allocator, selectedRlimitValue(limits, options), spec.scale);
+    defer allocator.free(value);
+    const line = try std.fmt.allocPrint(allocator, "{s} ({s}) {s}\n", .{ spec.name, spec.unit, value });
+    defer allocator.free(line);
+    try stdout.appendSlice(allocator, line);
+}
+
+fn unavailableUlimitResource(self: *Executor, option: u8) !CommandResult {
+    const message = try std.fmt.allocPrint(self.allocator, "-{c}: resource unavailable", .{option});
+    defer self.allocator.free(message);
+    return errorResult(self.allocator, 2, "ulimit", message);
 }
 
 fn builtinUmask(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {

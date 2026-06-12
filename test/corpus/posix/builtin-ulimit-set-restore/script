@@ -1,0 +1,19 @@
+old=$(ulimit -Sn)
+case $old in
+  unlimited) new=16 ;;
+  ''|*[!0123456789]*) new= ;;
+  *)
+    new=$old
+    if [ "$old" -gt 16 ]; then new=16; fi
+    ;;
+esac
+if [ -z "$new" ]; then
+  echo unsupported-old
+else
+  ulimit -Sn "$new"
+  echo set:$?
+  if [ "$(ulimit -Sn)" = "$new" ]; then echo changed; else echo changed-mismatch; fi
+  ulimit -Sn "$old"
+  echo restore:$?
+  if [ "$(ulimit -Sn)" = "$old" ]; then echo restored; else echo restore-mismatch; fi
+fi

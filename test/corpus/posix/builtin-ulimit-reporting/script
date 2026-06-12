@@ -1,0 +1,12 @@
+type ulimit
+command -V ulimit
+default=$(ulimit)
+soft_file=$(ulimit -Sf)
+hard_file=$(ulimit -Hf)
+if [ "$default" = "$soft_file" ]; then echo default-soft-file; else echo default-mismatch; fi
+case $hard_file in '') echo hard-missing ;; *) echo hard-file-reported ;; esac
+all=$(ulimit -a)
+case "$all" in *'file size (blocks)'*) echo all-file ;; *) echo all-file-missing ;; esac
+case "$all" in *'open files (descriptors)'*) echo all-nofile ;; *) echo all-nofile-missing ;; esac
+case $(ulimit -n) in ''|*[!0123456789]*) echo nofile-bad ;; *) echo nofile-number ;; esac
+case $(ulimit -c) in unlimited|*[0123456789]*) echo core-reported ;; *) echo core-bad ;; esac

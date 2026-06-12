@@ -1,0 +1,8 @@
+ulimit is a shell builtin
+ulimit is a shell builtin
+default-soft-file
+hard-file-reported
+all-file
+all-nofile
+nofile-number
+core-reported
