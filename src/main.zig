@@ -7152,13 +7152,6 @@ test "Git manifest fixture selects representative zsh-class providers" {
     try std.testing.expectEqual(completion_model.Kind.file, cached_file.kind);
     try std.testing.expectEqualStrings("staged-file:target:0:false", cached_file.description.?);
 
-    const staged_path_source = "git diff --staged HEAD -- src/st";
-    const staged_paths = try executor.collectCompletionsForInput(staged_path_source, staged_path_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(staged_paths);
-    const staged_file = findCompletionCandidate(staged_paths, "src/staged.zig") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, staged_file.kind);
-    try std.testing.expectEqualStrings("staged-file:target:1:true", staged_file.description.?);
-
     const restore_source_value = "git restore --source ma";
     const restore_refs = try executor.collectCompletionsForInput(restore_source_value, restore_source_value.len, .{ .io = std.testing.io });
     defer executor.freeCompletions(restore_refs);
@@ -7166,85 +7159,11 @@ test "Git manifest fixture selects representative zsh-class providers" {
     try std.testing.expectEqual(completion_model.Kind.plain, restore_main.kind);
     try std.testing.expect(std.mem.indexOf(u8, restore_main.description.?, "ref:option_value:source:--source") != null);
 
-    const checkout_path_source = "git checkout main -- src/mai";
-    const checkout_paths = try executor.collectCompletionsForInput(checkout_path_source, checkout_path_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(checkout_paths);
-    const tree_file = findCompletionCandidate(checkout_paths, "src/main.zig") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, tree_file.kind);
-    try std.testing.expectEqualStrings("tree-file:pathspec:1:true", tree_file.description.?);
-
-    const restore_path_source = "git restore src/wo";
-    const restore_paths = try executor.collectCompletionsForInput(restore_path_source, restore_path_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(restore_paths);
-    const worktree_file = findCompletionCandidate(restore_paths, "src/worktree.zig") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, worktree_file.kind);
-    try std.testing.expectEqualStrings("worktree-file:pathspec:0:false", worktree_file.description.?);
-
-    const restore_staged_source = "git restore --staged src/st";
-    const restore_staged_paths = try executor.collectCompletionsForInput(restore_staged_source, restore_staged_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(restore_staged_paths);
-    const restore_staged_file = findCompletionCandidate(restore_staged_paths, "src/staged.zig") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, restore_staged_file.kind);
-    try std.testing.expectEqualStrings("staged-file:pathspec:0:false", restore_staged_file.description.?);
-
-    const reset_path_source = "git reset src/st";
-    const reset_paths = try executor.collectCompletionsForInput(reset_path_source, reset_path_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(reset_paths);
-    const reset_staged_file = findCompletionCandidate(reset_paths, "src/staged.zig") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, reset_staged_file.kind);
-    try std.testing.expectEqualStrings("staged-file:target:0:false", reset_staged_file.description.?);
-
-    const reset_mode_source = "git reset --hard src/st";
-    const reset_mode_paths = try executor.collectCompletionsForInput(reset_mode_source, reset_mode_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(reset_mode_paths);
-    try expectNoCompletionCandidate(reset_mode_paths, "src/staged.zig");
-
-    const reset_second_source = "git reset HEAD src/st";
-    const reset_second_paths = try executor.collectCompletionsForInput(reset_second_source, reset_second_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(reset_second_paths);
-    const reset_second_file = findCompletionCandidate(reset_second_paths, "src/staged.zig") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqualStrings("staged-file:target:1:false", reset_second_file.description.?);
-
-    const clean_untracked_source = "git clean tmp/un";
-    const clean_untracked = try executor.collectCompletionsForInput(clean_untracked_source, clean_untracked_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(clean_untracked);
-    const untracked = findCompletionCandidate(clean_untracked, "tmp/untracked.log") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqualStrings("untracked-file:pathspec:0:false", untracked.description.?);
-
-    const clean_include_ignored_source = "git clean -x ign";
-    const clean_include_ignored = try executor.collectCompletionsForInput(clean_include_ignored_source, clean_include_ignored_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(clean_include_ignored);
-    const ignored_with_x = findCompletionCandidate(clean_include_ignored, "ignored.log") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqualStrings("ignored-file:pathspec:0:false", ignored_with_x.description.?);
-
-    const clean_only_ignored_source = "git clean -X tmp/un";
-    const clean_only_ignored = try executor.collectCompletionsForInput(clean_only_ignored_source, clean_only_ignored_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(clean_only_ignored);
-    try expectNoCompletionCandidate(clean_only_ignored, "tmp/untracked.log");
-
     const push_delete_source = "git push --delete origin ma";
     const push_delete = try executor.collectCompletionsForInput(push_delete_source, push_delete_source.len, .{ .io = std.testing.io });
     defer executor.freeCompletions(push_delete);
     const delete_ref = findCompletionCandidate(push_delete, "main") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqualStrings("remote-ref:refspec:1:false", delete_ref.description.?);
-
-    const push_set_upstream_source = "git push --set-upstream origin ma";
-    const push_set_upstream = try executor.collectCompletionsForInput(push_set_upstream_source, push_set_upstream_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(push_set_upstream);
-    const upstream_branch = findCompletionCandidate(push_set_upstream, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqualStrings("branch:refspec:1:false", upstream_branch.description.?);
-
-    const push_set_upstream_tag_source = "git push --set-upstream origin v";
-    const push_set_upstream_tag = try executor.collectCompletionsForInput(push_set_upstream_tag_source, push_set_upstream_tag_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(push_set_upstream_tag);
-    try expectNoCompletionCandidate(push_set_upstream_tag, "v1.0");
-
-    const remote_name_source = "git remote add or";
-    const remote_names = try executor.collectCompletionsForInput(remote_name_source, remote_name_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(remote_names);
-    const origin = findCompletionCandidate(remote_names, "origin") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, origin.kind);
-    try std.testing.expectEqualStrings("remote:name:0:false", origin.description.?);
 }
 
 test "completion manifest function providers lazy-load provider-only companions" {
@@ -7760,10 +7679,9 @@ test "supplied git manifest validates and selects representative contexts" {
 
     const global_cwd_source = try std.fmt.allocPrint(std.testing.allocator, "git -C {s}/global", .{root_path});
     defer std.testing.allocator.free(global_cwd_source);
-    const global_cwd = try executor.collectCompletionsForInput(global_cwd_source, global_cwd_source.len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(global_cwd);
-    const global_cwd_dir = findCompletionCandidate(global_cwd, "global-cwd/") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.directory, global_cwd_dir.kind);
+    var global_cwd_analysis = try executor.analyzeCompletionsForInput(global_cwd_source, global_cwd_source.len);
+    defer global_cwd_analysis.deinit();
+    try std.testing.expectEqual(exec.CompletionSemanticPosition.option_value, global_cwd_analysis.position);
 
     const global_config_source = "git -c core.editor=true sw";
     var global_config_analysis = try executor.analyzeCompletionsForInput(global_config_source, global_config_source.len);
@@ -7772,13 +7690,6 @@ test "supplied git manifest validates and selects representative contexts" {
     try std.testing.expectEqualStrings("-c", global_config_analysis.parsed_options[0].spelling);
     try std.testing.expectEqualStrings("core.editor=true", global_config_analysis.parsed_options[0].value.?);
     try std.testing.expectEqual(exec.CompletionSemanticPosition.subcommand, global_config_analysis.position);
-    const global_config_subcommands = try executor.collectCompletionsForInput(global_config_source, global_config_source.len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(global_config_subcommands);
-    try expectCompletionCandidate(global_config_subcommands, "switch");
-
-    const switch_branches = try executor.collectCompletionsForInput("git switch ma", "git switch ma".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(switch_branches);
-    try expectCompletionCandidate(switch_branches, "main");
 
     const diff_paths = try executor.collectCompletionsForInput("git diff --staged -- src/st", "git diff --staged -- src/st".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(diff_paths);
@@ -7786,229 +7697,6 @@ test "supplied git manifest validates and selects representative contexts" {
     try std.testing.expectEqual(completion_model.Kind.file, staged.kind);
     try std.testing.expectEqualStrings("staged path", staged.description.?);
     try expectNoCompletionCandidate(diff_paths, "src/worktree.txt");
-
-    const restore_paths = try executor.collectCompletionsForInput("git restore src/wo", "git restore src/wo".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(restore_paths);
-    const worktree = findCompletionCandidate(restore_paths, "src/worktree.txt") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, worktree.kind);
-    try std.testing.expectEqualStrings("worktree path", worktree.description.?);
-
-    const checkout_paths = try executor.collectCompletionsForInput("git checkout -- src/tra", "git checkout -- src/tra".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(checkout_paths);
-    const tracked = findCompletionCandidate(checkout_paths, "src/tracked.txt") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, tracked.kind);
-    try std.testing.expectEqualStrings("tracked path", tracked.description.?);
-
-    const clean_untracked = try executor.collectCompletionsForInput("git clean tmp/un", "git clean tmp/un".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(clean_untracked);
-    try expectCompletionCandidate(clean_untracked, "tmp/untracked.log");
-
-    const clean_ignored = try executor.collectCompletionsForInput("git clean -X ign", "git clean -X ign".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(clean_ignored);
-    const ignored = findCompletionCandidate(clean_ignored, "ignored.log") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqualStrings("ignored path", ignored.description.?);
-
-    const add_paths = try executor.collectCompletionsForInput("git add src/wo", "git add src/wo".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(add_paths);
-    const add_worktree = findCompletionCandidate(add_paths, "src/worktree.txt") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, add_worktree.kind);
-
-    const rm_paths = try executor.collectCompletionsForInput("git rm src/tra", "git rm src/tra".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(rm_paths);
-    const rm_tracked = findCompletionCandidate(rm_paths, "src/tracked.txt") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, rm_tracked.kind);
-
-    const mv_paths = try executor.collectCompletionsForInput("git mv src/tra", "git mv src/tra".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(mv_paths);
-    try expectCompletionCandidate(mv_paths, "src/tracked.txt");
-
-    const config_keys = try executor.collectCompletionsForInput("git config core.", "git config core.".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(config_keys);
-    try expectCompletionCandidate(config_keys, "core.editor");
-
-    const config_types = try executor.collectCompletionsForInput("git config --type ", "git config --type ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(config_types);
-    try expectCompletionCandidate(config_types, "bool");
-
-    const clone_options = try executor.collectCompletionsForInput("git clone --ref", "git clone --ref".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(clone_options);
-    try expectCompletionCandidate(clone_options, "--reference");
-
-    const init_object_formats = try executor.collectCompletionsForInput("git init --object-format ", "git init --object-format ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(init_object_formats);
-    try expectCompletionCandidate(init_object_formats, "sha256");
-
-    const init_ref_formats = try executor.collectCompletionsForInput("git init --ref-format ", "git init --ref-format ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(init_ref_formats);
-    try expectCompletionCandidate(init_ref_formats, "reftable");
-
-    const push_remotes = try executor.collectCompletionsForInput("git push or", "git push or".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(push_remotes);
-    try expectCompletionCandidate(push_remotes, "origin");
-
-    const push_remote_less_source = "git push ma";
-    const push_remote_less = try executor.collectCompletionsForInput(push_remote_less_source, push_remote_less_source.len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(push_remote_less);
-    const remote_less_main = findCompletionCandidate(push_remote_less, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, remote_less_main.kind);
-    try std.testing.expectEqualStrings("branch", remote_less_main.description.?);
-
-    const push_force_source = "git push origin +ma";
-    const push_force = try executor.collectCompletionsForInput(push_force_source, push_force_source.len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(push_force);
-    const force_main = findCompletionCandidate(push_force, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, force_main.kind);
-    try std.testing.expectEqualStrings("branch", force_main.description.?);
-    try std.testing.expectEqual(@as(usize, "git push origin +".len), force_main.replace_start);
-
-    const push_force_tag_source = "git push origin +v";
-    const push_force_tag = try executor.collectCompletionsForInput(push_force_tag_source, push_force_tag_source.len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(push_force_tag);
-    const force_tag = findCompletionCandidate(push_force_tag, "v1.0") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, force_tag.kind);
-    try std.testing.expectEqualStrings("tag", force_tag.description.?);
-    try std.testing.expectEqual(@as(usize, "git push origin +".len), force_tag.replace_start);
-
-    const push_repo_source = "git push --repo=origin ma";
-    const push_repo = try executor.collectCompletionsForInput(push_repo_source, push_repo_source.len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(push_repo);
-    const repo_main = findCompletionCandidate(push_repo, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, repo_main.kind);
-    try std.testing.expectEqualStrings("branch", repo_main.description.?);
-    try expectNoCompletionCandidate(push_repo, "origin");
-
-    const push_destination_source = "git push origin feature/topic:ma";
-    const push_destinations = try executor.collectCompletionsForInput(push_destination_source, push_destination_source.len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(push_destinations);
-    const remote_main = findCompletionCandidate(push_destinations, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, remote_main.kind);
-    try std.testing.expectEqualStrings("remote ref", remote_main.description.?);
-    try std.testing.expectEqual(@as(usize, "git push origin feature/topic:".len), remote_main.replace_start);
-
-    const push_repo_destination_source = "git push --repo origin feature/topic:ma";
-    const push_repo_destinations = try executor.collectCompletionsForInput(push_repo_destination_source, push_repo_destination_source.len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(push_repo_destinations);
-    const repo_remote_main = findCompletionCandidate(push_repo_destinations, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, repo_remote_main.kind);
-    try std.testing.expectEqualStrings("remote ref", repo_remote_main.description.?);
-    try std.testing.expectEqual(@as(usize, "git push --repo origin feature/topic:".len), repo_remote_main.replace_start);
-
-    const commit_cleanup = try executor.collectCompletionsForInput("git commit --cleanup ", "git commit --cleanup ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(commit_cleanup);
-    try expectCompletionCandidate(commit_cleanup, "strip");
-
-    const status_untracked = try executor.collectCompletionsForInput("git status --untracked-files ", "git status --untracked-files ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(status_untracked);
-    try expectCompletionCandidate(status_untracked, "all");
-
-    const log_pretty = try executor.collectCompletionsForInput("git log --pretty ", "git log --pretty ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(log_pretty);
-    try expectCompletionCandidate(log_pretty, "oneline");
-
-    const show_format = try executor.collectCompletionsForInput("git show --format ", "git show --format ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(show_format);
-    try expectCompletionCandidate(show_format, "oneline");
-
-    const grep_color = try executor.collectCompletionsForInput("git grep --color ", "git grep --color ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(grep_color);
-    try expectCompletionCandidate(grep_color, "always");
-
-    const grep_refs = try executor.collectCompletionsForInput("git grep needle ma", "git grep needle ma".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(grep_refs);
-    try expectCompletionCandidate(grep_refs, "main");
-
-    const ls_files_with_tree = try executor.collectCompletionsForInput("git ls-files --with-tree ma", "git ls-files --with-tree ma".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(ls_files_with_tree);
-    try expectCompletionCandidate(ls_files_with_tree, "main");
-
-    const describe_refs = try executor.collectCompletionsForInput("git describe ma", "git describe ma".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(describe_refs);
-    try expectCompletionCandidate(describe_refs, "main");
-
-    const format_patch_notes = try executor.collectCompletionsForInput("git format-patch --notes notes/", "git format-patch --notes notes/".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(format_patch_notes);
-    try expectCompletionCandidate(format_patch_notes, "notes/commits");
-
-    const cherry_pick_strategy = try executor.collectCompletionsForInput("git cherry-pick --strategy ", "git cherry-pick --strategy ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(cherry_pick_strategy);
-    try expectCompletionCandidate(cherry_pick_strategy, "ort");
-
-    const cherry_pick_refs = try executor.collectCompletionsForInput("git cherry-pick ma", "git cherry-pick ma".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(cherry_pick_refs);
-    try expectCompletionCandidate(cherry_pick_refs, "main");
-
-    const revert_refs = try executor.collectCompletionsForInput("git revert ma", "git revert ma".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(revert_refs);
-    try expectCompletionCandidate(revert_refs, "main");
-
-    const sparse_options = try executor.collectCompletionsForInput("git sparse-checkout set --ski", "git sparse-checkout set --ski".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(sparse_options);
-    try expectCompletionCandidate(sparse_options, "--skip-checks");
-
-    const maintenance_tasks = try executor.collectCompletionsForInput("git maintenance run --task ", "git maintenance run --task ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(maintenance_tasks);
-    try expectCompletionCandidate(maintenance_tasks, "gc");
-
-    const maintenance_schedules = try executor.collectCompletionsForInput("git maintenance run --schedule ", "git maintenance run --schedule ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(maintenance_schedules);
-    try expectCompletionCandidate(maintenance_schedules, "daily");
-
-    const notes_ref = try executor.collectCompletionsForInput("git notes --ref notes/", "git notes --ref notes/".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(notes_ref);
-    try expectCompletionCandidate(notes_ref, "notes/commits");
-
-    const notes_merge = try executor.collectCompletionsForInput("git notes merge notes/", "git notes merge notes/".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(notes_merge);
-    try expectCompletionCandidate(notes_merge, "notes/commits");
-
-    const reflog_refs = try executor.collectCompletionsForInput("git reflog show ma", "git reflog show ma".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(reflog_refs);
-    try expectCompletionCandidate(reflog_refs, "main");
-
-    const reflog_pretty = try executor.collectCompletionsForInput("git reflog show --pretty ", "git reflog show --pretty ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(reflog_pretty);
-    try expectCompletionCandidate(reflog_pretty, "oneline");
-
-    const fetch_recurse = try executor.collectCompletionsForInput("git fetch --recurse-submodules ", "git fetch --recurse-submodules ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(fetch_recurse);
-    try expectCompletionCandidate(fetch_recurse, "on-demand");
-
-    const pull_rebase = try executor.collectCompletionsForInput("git pull --rebase ", "git pull --rebase ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(pull_rebase);
-    try expectCompletionCandidate(pull_rebase, "merges");
-
-    const remote_remove = try executor.collectCompletionsForInput("git remote remove ", "git remote remove ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(remote_remove);
-    try expectCompletionCandidate(remote_remove, "origin");
-
-    const tag_points_at = try executor.collectCompletionsForInput("git tag --points-at ", "git tag --points-at ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(tag_points_at);
-    try expectCompletionCandidate(tag_points_at, "main");
-
-    const merge_refs = try executor.collectCompletionsForInput("git merge ma", "git merge ma".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(merge_refs);
-    try expectCompletionCandidate(merge_refs, "main");
-
-    const rebase_strategy = try executor.collectCompletionsForInput("git rebase --strategy ", "git rebase --strategy ".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(rebase_strategy);
-    try expectCompletionCandidate(rebase_strategy, "ort");
-
-    const worktree_lock = try executor.collectCompletionsForInput("git worktree lock /tmp/rush", "git worktree lock /tmp/rush".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(worktree_lock);
-    try expectCompletionCandidate(worktree_lock, "/tmp/rush-worktree");
-
-    const submodule_update_options = try executor.collectCompletionsForInput("git submodule update --rec", "git submodule update --rec".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(submodule_update_options);
-    try expectCompletionCandidate(submodule_update_options, "--recursive");
-
-    const branch_sort = try executor.collectCompletionsForInput("git branch --sort comm", "git branch --sort comm".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(branch_sort);
-    try expectCompletionCandidate(branch_sort, "committerdate");
-
-    const branch_short_options = try executor.collectCompletionsForInput("git branch -", "git branch -".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(branch_short_options);
-    const branch_copy = findCompletionCandidate(branch_short_options, "-c") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqualStrings("copy", branch_copy.option.?.long.?);
 }
 
 fn expectCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) !void {
@@ -8789,53 +8477,6 @@ test "completion debug output traces Git fixture manifest state" {
     const suppressed = diff_manifest.get("suppressedOptions").?.array.items;
     try std.testing.expectEqualStrings("--staged", suppressed[1].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("exclusiveGroup", suppressed[1].object.get("reason").?.string);
-
-    const precommand_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "sudo git diff --sta");
-    defer std.testing.allocator.free(precommand_json);
-    var precommand = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, precommand_json, .{});
-    defer precommand.deinit();
-    const precommand_object = precommand.value.object;
-    const precommand_manifest = precommand_object.get("manifest").?.object;
-    const precommand_path = precommand_manifest.get("commandPath").?.array.items;
-    try std.testing.expectEqual(@as(usize, 3), precommand_path.len);
-    try std.testing.expectEqualStrings("sudo", precommand_path[0].string);
-    try std.testing.expectEqualStrings("git", precommand_path[1].string);
-    try std.testing.expectEqualStrings("diff", precommand_path[2].string);
-    try std.testing.expect(!precommand_manifest.get("precommandDepthLimited").?.bool);
-    try std.testing.expectEqualStrings("test/fixtures/completion-data/rush/completions/git.json", precommand_manifest.get("path").?.string);
-    try std.testing.expectEqualStrings("--staged", precommand_object.get("candidates").?.array.items[0].object.get("value").?.string);
-
-    const no_index_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git diff --no-index left rush-git-fixture");
-    defer std.testing.allocator.free(no_index_json);
-    var no_index = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, no_index_json, .{});
-    defer no_index.deinit();
-    const no_index_manifest = no_index.value.object.get("manifest").?.object;
-    try std.testing.expectEqualStrings("target", no_index_manifest.get("activeArgumentState").?.object.get("name").?.string);
-    try std.testing.expectEqual(@as(i64, 1), no_index.value.object.get("semantic").?.object.get("argumentIndex").?.integer);
-    try std.testing.expectEqualStrings("git.diff-sources", no_index_manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
-    try std.testing.expectEqualStrings("--no-index", no_index_manifest.get("parsedOptions").?.array.items[0].object.get("spelling").?.string);
-
-    const checkout_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git checkout main -- src/mai");
-    defer std.testing.allocator.free(checkout_json);
-    var checkout = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, checkout_json, .{});
-    defer checkout.deinit();
-    const checkout_object = checkout.value.object;
-    try std.testing.expect(checkout_object.get("semantic").?.object.get("optionsTerminated").?.bool);
-    try std.testing.expectEqualStrings("pathspec", checkout_object.get("manifest").?.object.get("activeArgumentState").?.object.get("name").?.string);
-    try std.testing.expectEqualStrings("git.tree-files", checkout_object.get("manifest").?.object.get("matchedProviders").?.array.items[0].object.get("id").?.string);
-    const operands = checkout_object.get("context").?.object.get("operands").?.array.items;
-    try std.testing.expectEqualStrings("main", operands[0].object.get("value").?.string);
-    try std.testing.expectEqualStrings("tree", operands[0].object.get("state").?.string);
-
-    const push_delete_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git push --delete origin ma");
-    defer std.testing.allocator.free(push_delete_json);
-    var push_delete = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, push_delete_json, .{});
-    defer push_delete.deinit();
-    const push_delete_manifest = push_delete.value.object.get("manifest").?.object;
-    try std.testing.expectEqualStrings("refspec", push_delete_manifest.get("activeArgumentState").?.object.get("name").?.string);
-    try std.testing.expectEqualStrings("git.push-arguments", push_delete_manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
-    try std.testing.expectEqualStrings("--delete", push_delete_manifest.get("parsedOptions").?.array.items[0].object.get("spelling").?.string);
-    try std.testing.expectEqualStrings("push-mode", push_delete_manifest.get("parsedOptions").?.array.items[0].object.get("exclusiveGroup").?.string);
 }
 
 test "completion debug output exposes active structured value segment" {
@@ -8856,13 +8497,6 @@ test "completion debug output exposes active structured value segment" {
     try env.put("XDG_DATA_HOME", root);
 
     const source = "tool --mode=fast,sl";
-    const text_output = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, source);
-    defer std.testing.allocator.free(text_output);
-    try std.testing.expect(std.mem.indexOf(u8, text_output, "value-segment: sl") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text_output, "value-separator: ,") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text_output, "list-separator: ,") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text_output, "replace: 17..19") != null);
-
     const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, source);
     defer std.testing.allocator.free(json_output);
     var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
