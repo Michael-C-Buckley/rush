@@ -5370,6 +5370,9 @@ test "supplied git manifest validates and selects representative contexts" {
         \\  remote)
         \\    printf 'origin\n'
         \\    ;;
+        \\  for-each-ref)
+        \\    printf 'origin/main\norigin/release\n'
+        \\    ;;
         \\  diff)
         \\    cached=false
         \\    for arg do
@@ -5468,6 +5471,14 @@ test "supplied git manifest validates and selects representative contexts" {
     const push_remotes = try executor.collectCompletionsForInput("git push or", "git push or".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(push_remotes);
     try expectCompletionCandidate(push_remotes, "origin");
+
+    const push_destination_source = "git push origin feature/topic:ma";
+    const push_destinations = try executor.collectCompletionsForInput(push_destination_source, push_destination_source.len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(push_destinations);
+    const remote_main = findCompletionCandidate(push_destinations, "main") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, remote_main.kind);
+    try std.testing.expectEqualStrings("remote ref", remote_main.description.?);
+    try std.testing.expectEqual(@as(usize, "git push origin feature/topic:".len), remote_main.replace_start);
 
     const branch_sort = try executor.collectCompletionsForInput("git branch --sort comm", "git branch --sort comm".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(branch_sort);

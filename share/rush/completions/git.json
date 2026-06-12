@@ -252,7 +252,7 @@
         "arguments": {
           "states": [
             { "name": "remote", "index": 0, "provider": "git.push-arguments", "description": "remote to push to" },
-            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.push-arguments", "description": "refspec to push" }
+            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.push-arguments", "grammar": { "kind": "keyValue", "separator": ":" }, "description": "refspec to push" }
           ]
         }
       },

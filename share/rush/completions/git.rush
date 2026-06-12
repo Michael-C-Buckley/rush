@@ -1296,20 +1296,24 @@ __rush_complete_git_context_push_args() {
   if test "$(completion argument-index)" = 0; then
     __rush_complete_git_remotes
   else
-    if test "$(completion option-present --long delete)" = true; then
+    if test "$(completion value-position)" = value; then
       __rush_complete_git_context_push_remote_refs
     else
-      if test "$(completion option-present --short d)" = true; then
+      if test "$(completion option-present --long delete)" = true; then
         __rush_complete_git_context_push_remote_refs
       else
-        if test "$(completion option-present --long set-upstream)" = true; then
-          __rush_complete_git_branches
+        if test "$(completion option-present --short d)" = true; then
+          __rush_complete_git_context_push_remote_refs
         else
-          if test "$(completion option-present --short u)" = true; then
+          if test "$(completion option-present --long set-upstream)" = true; then
             __rush_complete_git_branches
           else
-            __rush_complete_git_branches
-            __rush_complete_git_tags
+            if test "$(completion option-present --short u)" = true; then
+              __rush_complete_git_branches
+            else
+              __rush_complete_git_branches
+              __rush_complete_git_tags
+            fi
           fi
         fi
       fi
