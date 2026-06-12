@@ -18,6 +18,22 @@ pub const EnvLookup = struct {
     }
 };
 
+pub const VariableNames = struct {
+    context: ?*const anyopaque = null,
+    countFn: ?*const fn (?*const anyopaque) usize = null,
+    nameFn: ?*const fn (?*const anyopaque, usize) ?[]const u8 = null,
+
+    pub fn count(self: VariableNames) usize {
+        const count_fn = self.countFn orelse return 0;
+        return count_fn(self.context);
+    }
+
+    pub fn name(self: VariableNames, ordinal: usize) ?[]const u8 {
+        const name_fn = self.nameFn orelse return null;
+        return name_fn(self.context, ordinal);
+    }
+};
+
 pub const EnvSet = struct {
     context: ?*anyopaque = null,
     setFn: ?*const fn (?*anyopaque, []const u8, []const u8) anyerror!void = null,
@@ -113,6 +129,7 @@ pub const ArithmeticError = struct {
 
 pub const Options = struct {
     env: EnvLookup = .{},
+    variable_names: VariableNames = .{},
     env_set: EnvSet = .{},
     arrays: ArrayLookup = .{},
     diagnostic_sink: DiagnosticSink = .{},
@@ -245,6 +262,13 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
                         .at => try appendUnquotedArrayKeys(allocator, &fields, &current, array_expansion.name, options, ifs),
                         .star => try appendUnquotedArrayKeysStar(allocator, &fields, &current, array_expansion.name, options, ifs),
                     },
+                }
+                continue;
+            }
+            if (bashNamePrefixExpansion(parameter, options.features)) |prefix_expansion| {
+                switch (prefix_expansion.kind) {
+                    .at => try appendUnquotedNamePrefixAt(allocator, &fields, &current, prefix_expansion.prefix, options, ifs),
+                    .star => try appendUnquotedNamePrefixStar(allocator, &fields, &current, prefix_expansion.prefix, options, ifs),
                 }
                 continue;
             }
@@ -648,9 +672,15 @@ const ParameterArrayWholeOperation = struct {
     kind: ParameterArrayWholeKind,
 };
 
+const ParameterNamePrefixOperation = struct {
+    kind: ParameterArrayWholeKind,
+};
+
 const ParameterOperation = union(enum) {
     value,
     length,
+    indirect,
+    name_prefix: ParameterNamePrefixOperation,
     word: ParameterWordOperation,
     pattern: ParameterPatternOperation,
     array_index: ParameterArrayIndexOperation,
@@ -675,6 +705,8 @@ const ParameterExpression = struct {
     operator: ParameterOperator = .none,
     word: []const u8 = "",
     colon: bool = false,
+    indirect: bool = false,
+    name_prefix: ?ParameterArrayWholeKind = null,
     array_index: ?[]const u8 = null,
     array_whole: ?ParameterArrayWholeKind = null,
     array_keys: ?ParameterArrayWholeKind = null,
@@ -734,6 +766,8 @@ const SegmentedTextBuilder = struct {
 fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
     const parsed = parseParameterExpression(expression, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
+    if (parsed.name_prefix) |kind| return renderNamePrefixJoined(allocator, parsed.name, kind, options);
+    if (parsed.indirect) return renderIndirectParameter(allocator, parsed.name, options);
     if (parsed.array_keys) |kind| return renderArrayKeysJoined(allocator, parsed.name, kind, options);
     if (parsed.array_whole) |kind| {
         if (parsed.operator == .length) return std.fmt.allocPrint(allocator, "{d}", .{options.arrays.len(parsed.name)});
@@ -811,7 +845,7 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
 fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror!SegmentedText {
     const parsed = parseParameterExpression(expression, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
-    if (parsed.array_keys != null or parsed.array_whole != null or parsed.array_index != null) {
+    if (parsed.name_prefix != null or parsed.indirect or parsed.array_keys != null or parsed.array_whole != null or parsed.array_index != null) {
         const rendered = try renderParameter(allocator, expression, options, false);
         defer allocator.free(rendered);
         return segmentedFromText(allocator, rendered, true, false, false);
@@ -880,6 +914,32 @@ fn renderArrayValuesJoined(allocator: std.mem.Allocator, name: []const u8, kind:
 fn renderArrayKeysJoined(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, options: Options) ![]const u8 {
     _ = kind;
     return joinArrayKeys(allocator, name, options, arrayJoinSeparator(options));
+}
+
+fn renderIndirectParameter(allocator: std.mem.Allocator, name: []const u8, options: Options) ![]const u8 {
+    const target_name = parameterValue(name, options) orelse {
+        if (options.nounset and !isNounsetExemptParameter(name)) return error.NounsetParameter;
+        return allocator.alloc(u8, 0);
+    };
+    if (target_name.len == 0) return allocator.alloc(u8, 0);
+    if (classifyParameterTarget(target_name).kind == .unknown) return allocator.alloc(u8, 0);
+    const value = parameterValue(target_name, options) orelse {
+        if (options.nounset and !isNounsetExemptParameter(target_name)) return error.NounsetParameter;
+        return allocator.alloc(u8, 0);
+    };
+    return allocator.dupe(u8, value);
+}
+
+fn renderNamePrefixJoined(allocator: std.mem.Allocator, prefix: []const u8, kind: ParameterArrayWholeKind, options: Options) ![]const u8 {
+    _ = kind;
+    const names = try matchingVariableNames(allocator, prefix, options);
+    defer freeVariableNameList(allocator, names);
+    return joinNames(allocator, names, arrayJoinSeparator(options));
+}
+
+fn parameterValue(name: []const u8, options: Options) ?[]const u8 {
+    if (isDigitParameterName(name)) return digitParameterValue(name, options);
+    return specialParameterValue(name, options) orelse options.env.get(name);
 }
 
 fn evaluateArrayIndex(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options, diagnostic_name: []const u8) anyerror!usize {
@@ -1317,6 +1377,8 @@ fn parseParameterExpression(expression: []const u8, features: compat.Features) P
     return switch (expansion.operation) {
         .value => .{ .name = expansion.target.text },
         .length => .{ .name = expansion.target.text, .operator = .length },
+        .indirect => .{ .name = expansion.target.text, .indirect = true },
+        .name_prefix => |operation| .{ .name = expansion.target.text, .name_prefix = operation.kind },
         .word => |operation| .{
             .name = expansion.target.text,
             .operator = operation.kind,
@@ -1386,6 +1448,17 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
                 .index => .invalid,
             };
         }
+        if (parseBashNamePrefixExpansionTarget(expression[1..])) |target| {
+            return .{ .expansion = .{
+                .target = .{ .kind = .name, .text = target.prefix },
+                .operation = .{ .name_prefix = .{ .kind = target.kind } },
+            } };
+        }
+        const target = classifyIndirectParameterTarget(expression[1..]) orelse return .invalid;
+        return .{ .expansion = .{
+            .target = target,
+            .operation = .indirect,
+        } };
     }
 
     const name_end = parseParameterNameEnd(expression) orelse return .invalid;
@@ -1444,6 +1517,11 @@ const BashArrayExpansionTarget = struct {
     subscript: BashArraySubscript,
 };
 
+const BashNamePrefixExpansionTarget = struct {
+    prefix: []const u8,
+    kind: ParameterArrayWholeKind,
+};
+
 fn parseBashArrayExpansion(expression: []const u8, target: ParameterTarget, name_end: usize) ParameterExpansionSyntax {
     std.debug.assert(name_end < expression.len);
     std.debug.assert(expression[name_end] == '[');
@@ -1465,6 +1543,23 @@ fn parseBashArrayExpansionTarget(expression: []const u8) ?BashArrayExpansionTarg
     if (name_end >= expression.len or expression[name_end] != '[') return null;
     const subscript = parseBashArraySubscript(expression, name_end) orelse return null;
     return .{ .target = target, .subscript = subscript };
+}
+
+fn parseBashNamePrefixExpansionTarget(expression: []const u8) ?BashNamePrefixExpansionTarget {
+    if (expression.len < 2) return null;
+    const marker = expression[expression.len - 1];
+    if (marker != '*' and marker != '@') return null;
+    const prefix = expression[0 .. expression.len - 1];
+    if (!isAssignableParameterName(prefix)) return null;
+    return .{ .prefix = prefix, .kind = if (marker == '@') .at else .star };
+}
+
+fn classifyIndirectParameterTarget(expression: []const u8) ?ParameterTarget {
+    const name_end = parseParameterNameEnd(expression) orelse return null;
+    if (name_end != expression.len) return null;
+    const target = classifyParameterTarget(expression);
+    if (target.kind == .unknown) return null;
+    return target;
 }
 
 fn parseBashArraySubscript(expression: []const u8, name_end: usize) ?BashArraySubscript {
@@ -2186,6 +2281,16 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
             segment_start = index;
             continue;
         }
+        if (quotedNamePrefixExpansionAt(text, index, options.features)) |special| {
+            try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
+            switch (special.expansion.kind) {
+                .at => try appendQuotedNamePrefixAt(allocator, fields, current, force_current_field, special.expansion.prefix, options),
+                .star => try appendQuotedNamePrefixStar(allocator, current, special.expansion.prefix, options, ifs),
+            }
+            index = special.end;
+            segment_start = index;
+            continue;
+        }
         index += 1;
     }
     try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..], options);
@@ -2199,6 +2304,11 @@ const BashWholeArrayExpansion = struct {
     kind: BashWholeArrayExpansionKind,
     name: []const u8,
     whole: ParameterArrayWholeKind,
+};
+
+const BashNamePrefixExpansion = struct {
+    prefix: []const u8,
+    kind: ParameterArrayWholeKind,
 };
 
 fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
@@ -2224,6 +2334,14 @@ fn quotedWholeArrayExpansionAt(text: []const u8, index: usize, features: compat.
     return .{ .expansion = expansion, .end = close + 1 };
 }
 
+fn quotedNamePrefixExpansionAt(text: []const u8, index: usize, features: compat.Features) ?struct { expansion: BashNamePrefixExpansion, end: usize } {
+    if (!features.isBash() or index + 3 >= text.len or text[index] != '$' or text[index + 1] != '{') return null;
+    const close = std.mem.indexOfScalarPos(u8, text, index + 2, '}') orelse return null;
+    const expression = text[index + 2 .. close];
+    const expansion = bashNamePrefixExpansion(expression, features) orelse return null;
+    return .{ .expansion = expansion, .end = close + 1 };
+}
+
 fn bashWholeArrayExpansion(expression: []const u8, features: compat.Features) ?BashWholeArrayExpansion {
     if (!features.isBash()) return null;
     const syntax = parseParameterExpansionSyntax(expression, features);
@@ -2234,6 +2352,19 @@ fn bashWholeArrayExpansion(expression: []const u8, features: compat.Features) ?B
     return switch (expansion.operation) {
         .array_values => |operation| .{ .kind = .values, .name = expansion.target.text, .whole = operation.kind },
         .array_keys => |operation| .{ .kind = .keys, .name = expansion.target.text, .whole = operation.kind },
+        else => null,
+    };
+}
+
+fn bashNamePrefixExpansion(expression: []const u8, features: compat.Features) ?BashNamePrefixExpansion {
+    if (!features.isBash()) return null;
+    const syntax = parseParameterExpansionSyntax(expression, features);
+    const expansion = switch (syntax) {
+        .invalid => return null,
+        .expansion => |parsed| parsed,
+    };
+    return switch (expansion.operation) {
+        .name_prefix => |operation| .{ .prefix = expansion.target.text, .kind = operation.kind },
         else => null,
     };
 }
@@ -2293,6 +2424,25 @@ fn appendUnquotedArrayKeys(allocator: std.mem.Allocator, fields: *std.ArrayList(
 
 fn appendUnquotedArrayKeysStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, options: Options, ifs: []const u8) !void {
     const joined = try joinArrayKeys(allocator, name, options, arrayJoinSeparatorFromIfs(ifs));
+    defer allocator.free(joined);
+    try appendSplitText(allocator, fields, current, joined, ifs);
+}
+
+fn appendUnquotedNamePrefixAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), prefix: []const u8, options: Options, ifs: []const u8) !void {
+    const names = try matchingVariableNames(allocator, prefix, options);
+    defer freeVariableNameList(allocator, names);
+    for (names, 0..) |name, index| {
+        try appendSplitText(allocator, fields, current, name, ifs);
+        if (index + 1 < names.len and current.items.len != 0) {
+            try fields.append(allocator, try current.toOwnedSlice(allocator));
+        }
+    }
+}
+
+fn appendUnquotedNamePrefixStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), prefix: []const u8, options: Options, ifs: []const u8) !void {
+    const names = try matchingVariableNames(allocator, prefix, options);
+    defer freeVariableNameList(allocator, names);
+    const joined = try joinNames(allocator, names, arrayJoinSeparatorFromIfs(ifs));
     defer allocator.free(joined);
     try appendSplitText(allocator, fields, current, joined, ifs);
 }
@@ -2391,6 +2541,31 @@ fn appendQuotedArrayKeysStar(allocator: std.mem.Allocator, current: *std.ArrayLi
     }
 }
 
+fn appendQuotedNamePrefixAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, prefix: []const u8, options: Options) !void {
+    const names = try matchingVariableNames(allocator, prefix, options);
+    defer freeVariableNameList(allocator, names);
+    if (names.len == 0) {
+        force_current_field.* = false;
+        return;
+    }
+    for (names, 0..) |name, index| {
+        try current.appendSlice(allocator, name);
+        force_current_field.* = true;
+        if (index + 1 < names.len) {
+            try fields.append(allocator, try current.toOwnedSlice(allocator));
+            force_current_field.* = false;
+        }
+    }
+}
+
+fn appendQuotedNamePrefixStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), prefix: []const u8, options: Options, ifs: []const u8) !void {
+    const names = try matchingVariableNames(allocator, prefix, options);
+    defer freeVariableNameList(allocator, names);
+    const joined = try joinNames(allocator, names, arrayJoinSeparatorFromIfs(ifs));
+    defer allocator.free(joined);
+    try current.appendSlice(allocator, joined);
+}
+
 fn joinArrayValues(allocator: std.mem.Allocator, name: []const u8, options: Options, separator: []const u8) ![]const u8 {
     var joined: std.ArrayList(u8) = .empty;
     errdefer joined.deinit(allocator);
@@ -2412,6 +2587,44 @@ fn joinArrayKeys(allocator: std.mem.Allocator, name: []const u8, options: Option
         const key_text = try std.fmt.bufPrint(&buffer, "{d}", .{options.arrays.key(name, ordinal) orelse continue});
         if (ordinal > 0) try joined.appendSlice(allocator, separator);
         try joined.appendSlice(allocator, key_text);
+    }
+    return joined.toOwnedSlice(allocator);
+}
+
+fn matchingVariableNames(allocator: std.mem.Allocator, prefix: []const u8, options: Options) ![][]const u8 {
+    var names: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (names.items) |name| allocator.free(name);
+        names.deinit(allocator);
+    }
+    for (0..options.variable_names.count()) |ordinal| {
+        const name = options.variable_names.name(ordinal) orelse continue;
+        if (!std.mem.startsWith(u8, name, prefix)) continue;
+        if (containsName(names.items, name)) continue;
+        try names.append(allocator, try allocator.dupe(u8, name));
+    }
+    std.mem.sort([]const u8, names.items, {}, lessThanString);
+    return names.toOwnedSlice(allocator);
+}
+
+fn containsName(names: []const []const u8, needle: []const u8) bool {
+    for (names) |name| {
+        if (std.mem.eql(u8, name, needle)) return true;
+    }
+    return false;
+}
+
+fn freeVariableNameList(allocator: std.mem.Allocator, names: []const []const u8) void {
+    for (names) |name| allocator.free(name);
+    allocator.free(names);
+}
+
+fn joinNames(allocator: std.mem.Allocator, names: []const []const u8, separator: []const u8) ![]const u8 {
+    var joined: std.ArrayList(u8) = .empty;
+    errdefer joined.deinit(allocator);
+    for (names, 0..) |name, index| {
+        if (index > 0) try joined.appendSlice(allocator, separator);
+        try joined.appendSlice(allocator, name);
     }
     return joined.toOwnedSlice(allocator);
 }
@@ -3103,8 +3316,12 @@ fn testCommandSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script:
 const test_command_substitution: CommandSubstitution = .{ .runFn = testCommandSubstitution };
 
 fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, name, "?")) return "0";
     if (std.mem.eql(u8, name, "HOME")) return "/home/rush";
     if (std.mem.eql(u8, name, "USER")) return "rush-user";
+    if (std.mem.eql(u8, name, "USER_REF")) return "USER";
+    if (std.mem.eql(u8, name, "STATUS_REF")) return "?";
+    if (std.mem.eql(u8, name, "BAD_REF")) return "not-a-name";
     if (std.mem.eql(u8, name, "USER_NUM")) return "3";
     if (std.mem.eql(u8, name, "MIN_INT")) return "-9223372036854775808";
     if (std.mem.eql(u8, name, "OCTAL_NUM")) return "010";
@@ -3121,6 +3338,26 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
 }
 
 const test_env: EnvLookup = .{ .lookupFn = testLookup };
+
+const test_variable_names_items = [_][]const u8{
+    "HOME",
+    "USER",
+    "USER_REF",
+    "RUSH_PREFIX_ALPHA",
+    "RUSH_PREFIX_BETA",
+    "OTHER",
+};
+
+fn testVariableNameCount(_: ?*const anyopaque) usize {
+    return test_variable_names_items.len;
+}
+
+fn testVariableNameAt(_: ?*const anyopaque, ordinal: usize) ?[]const u8 {
+    if (ordinal >= test_variable_names_items.len) return null;
+    return test_variable_names_items[ordinal];
+}
+
+const test_variable_names: VariableNames = .{ .countFn = testVariableNameCount, .nameFn = testVariableNameAt };
 
 fn testArrayLookup(_: ?*const anyopaque, name: []const u8, index: usize) ?[]const u8 {
     if (!std.mem.eql(u8, name, "arr")) return null;
@@ -3463,6 +3700,32 @@ test "structured parameter parser accepts Bash whole array operations" {
     try expectInvalidParameterSyntax("!arr[@]");
 }
 
+test "structured parameter parser accepts Bash indirect and name-prefix operations" {
+    const indirect = try expectParameterSyntaxWithFeatures("!USER_REF", compat.Features.bash());
+    try expectParameterTarget(indirect.target, .name, "USER_REF");
+    switch (indirect.operation) {
+        .indirect => {},
+        else => try std.testing.expect(false),
+    }
+
+    const prefix_star = try expectParameterSyntaxWithFeatures("!RUSH_PREFIX_*", compat.Features.bash());
+    try expectParameterTarget(prefix_star.target, .name, "RUSH_PREFIX_");
+    switch (prefix_star.operation) {
+        .name_prefix => |operation| try std.testing.expectEqual(ParameterArrayWholeKind.star, operation.kind),
+        else => try std.testing.expect(false),
+    }
+
+    const prefix_at = try expectParameterSyntaxWithFeatures("!RUSH_PREFIX_@", compat.Features.bash());
+    try expectParameterTarget(prefix_at.target, .name, "RUSH_PREFIX_");
+    switch (prefix_at.operation) {
+        .name_prefix => |operation| try std.testing.expectEqual(ParameterArrayWholeKind.at, operation.kind),
+        else => try std.testing.expect(false),
+    }
+
+    try expectInvalidParameterSyntax("!USER_REF");
+    try expectInvalidParameterSyntax("!RUSH_PREFIX_*");
+}
+
 test "parameter assignment expansion rejects non-variable targets when assignment is needed" {
     const params = [_][]const u8{ "one", "" };
 
@@ -3503,6 +3766,8 @@ test "parameter expansion rejects malformed braced forms" {
         "${USER:1}",
         "${USER^}",
         "${1abc}",
+        "${!USER_REF}",
+        "${!RUSH_PREFIX_*}",
     };
 
     for (cases) |case| {
@@ -3555,6 +3820,33 @@ test "parameter expansion supports Bash whole indexed array operations" {
     const scalar = try expandWordScalar(std.testing.allocator, "${#arr[@]}:${#arr[2]}:${arr[-1]}:${arr[-4]}:${!arr[*]}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("4:9:five:two words:0 2 3 5", scalar);
+}
+
+test "parameter expansion supports Bash indirect and name-prefix operations" {
+    const indirect = try expandWordScalar(std.testing.allocator, "${!USER_REF}:${!STATUS_REF}:${!BAD_REF}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(indirect);
+    try std.testing.expectEqualStrings("rush-user:0:", indirect);
+
+    const scalar = try expandWordScalar(std.testing.allocator, "${!RUSH_PREFIX_*}", .{ .env = test_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(scalar);
+    try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA RUSH_PREFIX_BETA", scalar);
+
+    var unquoted = try expandWord(std.testing.allocator, "${!RUSH_PREFIX_@}", .{ .env = test_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
+    defer unquoted.deinit();
+    try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
+    try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA", unquoted.fields[0]);
+    try std.testing.expectEqualStrings("RUSH_PREFIX_BETA", unquoted.fields[1]);
+
+    var quoted_star = try expandWord(std.testing.allocator, "\"${!RUSH_PREFIX_*}\"", .{ .env = test_comma_ifs_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
+    defer quoted_star.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_star.fields.len);
+    try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA,RUSH_PREFIX_BETA", quoted_star.fields[0]);
+
+    var quoted_at = try expandWord(std.testing.allocator, "\"${!RUSH_PREFIX_@}\"", .{ .env = test_comma_ifs_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
+    defer quoted_at.deinit();
+    try std.testing.expectEqual(@as(usize, 2), quoted_at.fields.len);
+    try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA", quoted_at.fields[0]);
+    try std.testing.expectEqualStrings("RUSH_PREFIX_BETA", quoted_at.fields[1]);
 }
 
 test "parameter expansion handles Bash negative array subscripts on missing arrays" {

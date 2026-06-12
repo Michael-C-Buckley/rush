@@ -4056,6 +4056,7 @@ pub const Executor = struct {
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
         return expand.expandWordPattern(allocator, word, .{
             .env = self.envLookup(),
+            .variable_names = self.variableNames(),
             .env_set = self.envSet(),
             .arrays = self.arrayLookup(),
             .diagnostic_sink = self.expansionDiagnosticSink(),
@@ -4075,6 +4076,7 @@ pub const Executor = struct {
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
         return expand.expandWordPatterns(allocator, word, .{
             .env = self.envLookup(),
+            .variable_names = self.variableNames(),
             .env_set = self.envSet(),
             .arrays = self.arrayLookup(),
             .diagnostic_sink = self.expansionDiagnosticSink(),
@@ -6619,7 +6621,7 @@ pub const Executor = struct {
         const positionals: []const []const u8 = self.currentPositionals().params;
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         defer fields.deinit();
         for (fields.fields) |field| {
             const raw = try self.allocator.dupe(u8, word.raw);
@@ -6729,14 +6731,14 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
+        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
     }
 
     pub fn expandParametersScalar(self: *Executor, allocator: std.mem.Allocator, raw: []const u8, options: ExecuteOptions) ![]const u8 {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -6745,7 +6747,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -6761,7 +6763,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
 
         for (parts.parts) |part| {
             const rendered = try expand.expandWordScalar(self.allocator, part.source(parts.raw), expansion_options);
@@ -6782,7 +6784,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
         const text = if (options.features.isBash())
             try self.expandCompoundIndexedArrayAssignmentWord(word.raw, expansion_options) orelse try expand.expandAssignmentWordScalar(self.allocator, word.raw, expansion_options)
         else
@@ -7037,6 +7039,10 @@ pub const Executor = struct {
         return .{ .context = self, .lookupFn = lookupEnv };
     }
 
+    fn variableNames(self: *Executor) expand.VariableNames {
+        return .{ .context = self, .countFn = variableNameCount, .nameFn = variableNameAt };
+    }
+
     fn arrayLookup(self: *Executor) expand.ArrayLookup {
         return .{
             .context = self,
@@ -7074,6 +7080,30 @@ pub const Executor = struct {
             return null;
         }
         return self.getEnv(name);
+    }
+
+    fn variableNameCount(context: ?*const anyopaque) usize {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        return self.env.count() + self.arrays.count();
+    }
+
+    fn variableNameAt(context: ?*const anyopaque, ordinal: usize) ?[]const u8 {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        var remaining = ordinal;
+
+        var env_iter = self.env.iterator();
+        while (env_iter.next()) |entry| {
+            if (remaining == 0) return entry.key_ptr.*;
+            remaining -= 1;
+        }
+
+        var array_iter = self.arrays.iterator();
+        while (array_iter.next()) |entry| {
+            if (remaining == 0) return entry.key_ptr.*;
+            remaining -= 1;
+        }
+
+        return null;
     }
 
     fn lookupArray(context: ?*const anyopaque, name: []const u8, index: usize) ?[]const u8 {
@@ -16229,6 +16259,34 @@ test "executor supports Bash whole indexed array expansion operations" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "executor supports Bash indirect and name-prefix parameter operations" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\name=RUSH_INDIRECT_TARGET
+        \\RUSH_INDIRECT_TARGET=value
+        \\RUSH_INDIRECT_ALPHA=1
+        \\RUSH_INDIRECT_BETA=2
+        \\RUSH_INDIRECT_ARR=([0]=zero)
+        \\printf 'ind:%s\n' "${!name}"
+        \\printf 'default-star:<%s>\n' "${!RUSH_INDIRECT_*}"
+        \\IFS=:
+        \\printf 'colon-star:<%s>\n' "${!RUSH_INDIRECT_*}"
+        \\printf 'quoted-at:'
+        \\printf '<%s>' "${!RUSH_INDIRECT_@}"
+        \\printf '\n'
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("ind:value\ndefault-star:<RUSH_INDIRECT_ALPHA RUSH_INDIRECT_ARR RUSH_INDIRECT_BETA RUSH_INDIRECT_TARGET>\ncolon-star:<RUSH_INDIRECT_ALPHA:RUSH_INDIRECT_ARR:RUSH_INDIRECT_BETA:RUSH_INDIRECT_TARGET>\nquoted-at:<RUSH_INDIRECT_ALPHA><RUSH_INDIRECT_ARR><RUSH_INDIRECT_BETA><RUSH_INDIRECT_TARGET>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor unsets Bash indexed array elements" {
     var lowered = try parseAndLowerWithOptions(std.testing.allocator,
         \\arr=([0]=zero [2]=two [5]=five)
@@ -16292,6 +16350,8 @@ test "executor keeps Bash array operation forms on POSIX bad-substitution path" 
         "echo ${arr[@]}; echo after",
         "echo ${#arr[@]}; echo after",
         "echo ${!arr[@]}; echo after",
+        "echo ${!name}; echo after",
+        "echo ${!prefix*}; echo after",
     };
 
     for (cases) |case| {

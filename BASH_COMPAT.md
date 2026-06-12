@@ -39,6 +39,14 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - negative relative subscripts in compound indexed assignment elements after
     an earlier element establishes a maximum index, such as
     `name=([2]=two [-1]=TWO)`
+- Indirect and name-prefix parameter expansion baseline:
+  - `${!name}` expands the value of the scalar, positional, or special
+    parameter named by `name`'s value; empty, unset, or invalid target names
+    expand to an empty value unless `nounset` applies
+  - `${!prefix*}` and `${!prefix@}` enumerate scalar and indexed-array
+    variable names with the requested prefix, sorted for deterministic output
+  - `*` joins names with the first byte of `IFS`; quoted `@` emits one field
+    per matching name, while unquoted forms are still subject to field splitting
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
@@ -93,6 +101,8 @@ Current examples:
 - `read -d` is valid only in Bash mode; default/POSIX mode reports an
   unsupported `read` option.
 - `[[ ... ]]` is parsed only in Bash mode.
+- `${!name}` and `${!prefix*}` / `${!prefix@}` are valid only in Bash mode;
+  default/POSIX mode reports `parameter: bad substitution`.
 
 ## Tracked future work
 
@@ -103,9 +113,8 @@ Current examples:
   - substring `${parameter:offset[:length]}`
   - replacement `${parameter/pattern/repl}`
   - case modification `${parameter^}` / `${parameter,}`
-- Indirect and name-prefix parameter expansion:
-  - `${!name}`
-  - `${!prefix*}` / `${!prefix@}`
+- Indirect expansion targets beyond scalar, positional, and special parameter
+  names, such as `${!ref}` where `ref='array[index]'`.
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.
 
