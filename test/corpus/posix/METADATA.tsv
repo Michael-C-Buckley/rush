@@ -90,6 +90,7 @@ builtin-printf-negative-dynamic-width-precision	builtin	behavior	printf treats n
 builtin-printf-dynamic-width-precision	builtin	behavior	printf accepts dynamic asterisk width and precision arguments for representative string and integer conversions
 builtin-printf-escapes	builtin	builtin	-
 builtin-printf-floating-conversions	builtin	behavior	printf formats representative POSIX floating-point conversions
+builtin-printf-floating-dynamic-width-precision	builtin	behavior	printf applies dynamic asterisk width and precision to representative floating conversions under the C locale
 builtin-printf-floating-format-flags	builtin	behavior	printf applies representative sign, space, and alternate-form flags to floating conversions with C-locale radix output
 builtin-printf-format-reuse	builtin	builtin	printf reuses the format operand until all operands are consumed
 builtin-printf-i-conversion	builtin	behavior	printf %i formats signed integer operands including POSIX C hexadecimal constants
