@@ -253,6 +253,40 @@ pub fn expandAssignmentWordScalar(allocator: std.mem.Allocator, raw: []const u8,
     return renderWordParts(allocator, parts, options);
 }
 
+pub fn expandParametersScalar(allocator: std.mem.Allocator, raw: []const u8, options: Options) anyerror![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    var index: usize = 0;
+    var literal_start: usize = 0;
+    while (index < raw.len) {
+        if (raw[index] != '$' and raw[index] != '`') {
+            index += 1;
+            continue;
+        }
+
+        const part = (try substitutionPart(allocator, raw, index)) orelse {
+            index += 1;
+            continue;
+        };
+        if (part.kind != .parameter) {
+            index = part.span.end;
+            continue;
+        }
+
+        try output.appendSlice(allocator, raw[literal_start..index]);
+        const rendered = try renderParameter(allocator, part.value(raw), options, false);
+        defer allocator.free(rendered);
+        try output.appendSlice(allocator, rendered);
+
+        index = part.span.end;
+        literal_start = index;
+    }
+    try output.appendSlice(allocator, raw[literal_start..]);
+
+    return output.toOwnedSlice(allocator);
+}
+
 pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts {
     var parts: std.ArrayList(WordPart) = .empty;
     errdefer parts.deinit(allocator);
@@ -2837,6 +2871,13 @@ test "parameter expansion supports braced names and missing values" {
     defer std.testing.allocator.free(expanded);
 
     try std.testing.expectEqualStrings("rush-user--", expanded);
+}
+
+test "parameter-only expansion preserves non-parameter syntax" {
+    const expanded = try expandParametersScalar(std.testing.allocator, "'$USER':${MISSING:-$USER}:$(printf '$USER'):`printf '$USER'`", .{ .env = test_env });
+    defer std.testing.allocator.free(expanded);
+
+    try std.testing.expectEqualStrings("'rush-user':rush-user:$(printf '$USER'):`printf '$USER'`", expanded);
 }
 
 test "parameter expansion supports POSIX operators" {

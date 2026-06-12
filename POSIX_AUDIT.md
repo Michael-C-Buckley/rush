@@ -1,6 +1,6 @@
 # POSIX Shell Audit
 
-Date: 2026-06-11
+Date: 2026-06-12
 
 This audit compares Rush's current implementation against the POSIX Shell Command Language at a practical feature level. It is a gap analysis for implementation planning, not a normative copy of the specification.
 
@@ -19,16 +19,16 @@ The machine-readable checklist in `test/compliance/posix-shell.tsv` and the gene
 Validated for this audit refresh:
 
 - `zig build test --summary none`: passing
-- `scripts/check-compliance-manifest.sh`: `425` rows
+- `scripts/check-compliance-manifest.sh`: `426` rows
 - `scripts/check-posix-corpus.sh`: `436` expected-output POSIX cases
 - `scripts/check-posix-negative-corpus.sh`: `244` expected-error POSIX cases (`1` Linux-only `/dev/full` case skipped on macOS)
 - `scripts/check-system-shell-corpus.sh`: `308` cases, `616` comparisons across dash and bash POSIX mode
 
 Current compliance report snapshot:
 
-- tracked items: `425`
-- scored POSIX items: `421`
-- supported: `415`
+- tracked items: `426`
+- scored POSIX items: `422`
+- supported: `416`
 - baseline: `3`
 - partial: `3`
 - missing: `0`
@@ -50,7 +50,7 @@ Recent notable capabilities:
 - Baseline asynchronous external, builtin, and compound command execution with `&`, `$!`, visible background job records, `jobs`, `fg`, `bg`, and `wait` for pid operands.
 - POSIX parameter expansion operators, nested operator-word span recognition, pattern removal with nested/quoted operands and ASCII POSIX character classes, `${parameter:?word}` diagnostics, focused malformed braced-substitution diagnostics, invalid assignment diagnostics for positional/special parameter assignment attempts, braced multi-digit positional parameters such as `${10}`, command substitution via `$()` and legacy backquotes including representative nested and compound-command contexts, dollar-single-quotes with representative POSIX escape processing, arithmetic baseline with nested parameter/command preprocessing, logical/conditional short-circuit evaluation, division/remainder-by-zero diagnostics, and representative quote/backslash handling, IFS-aware field splitting, pathname expansion baseline including ASCII POSIX character classes, quoted command substitution in double quotes, and quoted/unquoted `$@`/`$*` positional field behavior including POSIX-permitted unquoted `$*` empty-field retention.
 - Non-POSIX extension forms are excluded from POSIX scoring and tracked separately in `BASH_COMPAT.md`; representative unsupported substring, replacement, case modification, indirect expansion, name-prefix, and transform-flag forms currently diagnose `parameter: bad substitution` in the negative corpus. Indexed array assignment and expansion are supported only in Bash mode for arithmetic subscript expressions, including unquoted whitespace inside assignment subscripts; POSIX/default mode keeps the existing bad-substitution negative coverage for `${name[index]}`.
-- Initial process environment import, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
+- Initial process environment import, interactive `$ENV` startup loading with parameter-expanded pathnames, command-prefix assignment semantics, POSIX special builtin assignment persistence, global positional parameters via `set --`, logical `PWD`/`OLDPWD`, and core special parameters `$?`, `$$`, `$!`, and `$0`.
 - POSIX builtins now include supported `.`, `export`, `readonly`, `unset`, `umask`, `times`, `trap`, `getopts`, `eval`, and `exec` plus baseline `command`, `exit`, `shift`, `wait`, `alias`, `unalias`, `jobs`, `fg`, `bg`, and `kill` coverage.
 - POSIX shell options baseline for `allexport`, `errexit`, `noglob`, `noclobber`, `noexec`, `nounset`, and `xtrace`, plus supported `verbose` input echo, reusable supported-option listing, and terminal-independent vi command-line repeat coverage for insert editing controls and replace-mode sessions.
 - Prompt prototype support scoped so prompt DSL commands are only available during prompt rendering.

@@ -2004,7 +2004,11 @@ fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *ex
     try sourceConfigScript(allocator, io, executor, embedded_config, embedded_config_path, options.arg_zero);
 
     if (executor.getEnv("ENV")) |env_path| {
-        if (env_path.len != 0) try sourceOptionalConfig(allocator, io, executor, env_path, options.arg_zero);
+        if (env_path.len != 0) {
+            const expanded_env_path = try executor.expandParametersScalar(allocator, env_path, .{ .io = io, .allow_external = true, .arg_zero = options.arg_zero });
+            defer allocator.free(expanded_env_path);
+            if (expanded_env_path.len != 0) try sourceOptionalConfig(allocator, io, executor, expanded_env_path, options.arg_zero);
+        }
     }
 
     if (options.login) {
@@ -3703,6 +3707,25 @@ test "interactive startup initializes prompt variables and sources ENV" {
     try std.testing.expectEqualStrings("env> ", executor.getEnv("PS1").?);
 }
 
+test "interactive startup parameter-expands ENV pathname from HOME" {
+    const env_path = "rush-test-home-env-startup.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "HOME_ENV_LOADED=ok\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
+
+    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(cwd);
+    const env_value = try std.fmt.allocPrint(std.testing.allocator, "$HOME/{s}", .{env_path});
+    defer std.testing.allocator.free(env_value);
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("HOME", cwd);
+    try executor.setEnv("ENV", env_value);
+
+    try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
+    try std.testing.expectEqualStrings("ok", executor.getEnv("HOME_ENV_LOADED").?);
+}
+
 test "interactive command string invocation sources ENV before script" {
     const env_path = "rush-test-command-string-env.rush";
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "COMMAND_STRING_ENV=loaded\n" });
@@ -3716,6 +3739,64 @@ test "interactive command string invocation sources ENV before script" {
         std.testing.allocator,
         std.testing.io,
         "printf '%s\n' \"$COMMAND_STRING_ENV\"",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("loaded\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "non-interactive command string invocation does not source ENV" {
+    const env_path = "rush-test-noninteractive-env.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "NONINTERACTIVE_ENV=loaded\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("ENV", env_path);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "printf '%s\n' \"${NONINTERACTIVE_ENV-unset}\"",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        null,
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("unset\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "interactive command string invocation parameter-expands ENV_DIR before script" {
+    const env_path = "rush-test-env-dir-command-string.rush";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = env_path, .data = "ENV_DIR_COMMAND_STRING=loaded\n" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, env_path) catch {};
+
+    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(cwd);
+    const env_value = try std.fmt.allocPrint(std.testing.allocator, "${{ENV_DIR}}/{s}", .{env_path});
+    defer std.testing.allocator.free(env_value);
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("ENV_DIR", cwd);
+    try env.put("ENV", env_value);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "printf '%s\n' \"$ENV_DIR_COMMAND_STRING\"",
         .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
         &env,
         &.{},

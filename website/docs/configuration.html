@@ -73,7 +73,11 @@
 <span class="var">$sysconfdir</span>/rush/config.rush
 <span class="var">$XDG_CONFIG_HOME</span>/rush/config.rush</pre>
 
+  <p>Before reading <span class="var">$ENV</span>, Rush applies shell parameter expansion to its value, so paths such as <code>$HOME/.rushrc</code> and <code>${ENV_DIR}/startup.rush</code> are resolved before the file is sourced. Rush does not apply field splitting or pathname expansion to the resulting startup pathname.</p>
+
   <p>User paths fall back to <span class="var">$HOME</span><code>/.config/rush/</code> when <span class="var">$XDG_CONFIG_HOME</span> is unset. <span class="var">$sysconfdir</span> is fixed at build time: it defaults to <code>etc</code> inside the install prefix, and packagers set it to <code>/etc</code> with <code>zig build -Dsysconfdir=/etc</code>.</p>
+
+  <p>POSIX leaves a non-absolute expanded <span class="var">$ENV</span> pathname unspecified; Rush currently accepts it relative to the current working directory. Rush is not intended to be installed setuid/setgid and does not add a differing-real/effective-ID suppression layer around <span class="var">$ENV</span>. Point <span class="var">$ENV</span> at a trusted file and avoid group- or world-writable startup files or containing directories.</p>
 
   <p>The embedded defaults define the <a href="#prompt">default prompt</a>, colorized <code>ls</code>, <code>grep</code>, and <code>diff</code> functions (color flags are probed once per session and only colorize terminals), and <code>ll</code> and <code>la</code> <a href="#abbreviations">abbreviations</a> for <code>ls -lh</code> and <code>ls -lAh</code>. Redefine, <code>unset -f</code>, or <code>abbr --erase</code> any of them in a later file to opt out.</p>
 

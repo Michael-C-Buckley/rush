@@ -5940,6 +5940,13 @@ pub const Executor = struct {
         return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
     }
 
+    pub fn expandParametersScalar(self: *Executor, allocator: std.mem.Allocator, raw: []const u8, options: ExecuteOptions) ![]const u8 {
+        var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
+        var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
+        const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
+        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+    }
+
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
         const raw = try self.allocator.dupe(u8, word.raw);
         errdefer self.allocator.free(raw);
