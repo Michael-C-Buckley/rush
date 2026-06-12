@@ -1,0 +1,6 @@
+rush: parse_error: misplaced reserved word
+  x=for; $x i in 1; do echo $i; done
+                    ^^
+rush: parse_error: misplaced reserved word
+  x=for; $x i in 1; do echo $i; done
+                                ^^^^

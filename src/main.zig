@@ -5829,7 +5829,7 @@ fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor,
 fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
     const aliased = try executor.expandAliasesForScriptWithFeatures(script, options.features);
     defer allocator.free(aliased);
-    var parsed = try parser.parse(allocator, aliased, .{ .features = options.features });
+    var parsed = try parser.parse(allocator, aliased, .{ .features = options.features.withStrictDiagnostics() });
     defer parsed.deinit();
 
     if (parsed.diagnostics.len != 0) {
@@ -9078,6 +9078,23 @@ test "command string invocation shell options affect execution" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), noexec.status);
     try std.testing.expectEqualStrings("", noexec.stdout);
     try std.testing.expectEqualStrings("", noexec.stderr);
+
+    const invalid_noexec_invocation = parseCommandStringInvocation(&.{ "rush", "-n", "-c", "x=for; $x i in 1; do echo $i; done" }) orelse return error.ExpectedInvocation;
+    var invalid_noexec = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        invalid_noexec_invocation.source,
+        .{ .io = std.testing.io, .arg_zero = invalid_noexec_invocation.arg_zero },
+        null,
+        invalid_noexec_invocation.positionals,
+        null,
+        invalid_noexec_invocation.shell_options,
+    );
+    defer invalid_noexec.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 2), invalid_noexec.status);
+    try std.testing.expectEqualStrings("", invalid_noexec.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, invalid_noexec.stderr, "misplaced reserved word") != null);
 }
 
 test "command string set -v does not echo already-read input" {
@@ -9299,22 +9316,28 @@ test "compatibility feature plumbing accepts Bash mode without changing baseline
     try std.testing.expectEqualStrings("ok\n", result.stdout);
 }
 
-test "strict POSIX mode reports misplaced reserved words" {
-    var loose = try runScript(std.testing.allocator, std.testing.io, "then echo bad");
-    defer loose.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 127), loose.status);
-    try std.testing.expect(std.mem.indexOf(u8, loose.stderr, "then: command not found") != null);
+test "POSIX mode reports misplaced reserved words" {
+    var bare = try runScript(std.testing.allocator, std.testing.io, "then echo bad");
+    defer bare.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 2), bare.status);
+    try std.testing.expectEqualStrings("", bare.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, bare.stderr, "misplaced reserved word") != null);
 
-    const strict_script =
+    var expanded = try runScript(std.testing.allocator, std.testing.io, "x=for; $x i in 1");
+    defer expanded.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 127), expanded.status);
+    try std.testing.expect(std.mem.indexOf(u8, expanded.stderr, "for: command not found") != null);
+
+    const alias_script =
         \\alias then='echo bad'
         \\then
     ;
-    var strict = try runScriptWithOptions(std.testing.allocator, std.testing.io, strict_script, .{ .io = std.testing.io, .allow_external = true, .features = .strictPosix() });
-    defer strict.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), strict.status);
-    try std.testing.expectEqualStrings("", strict.stdout);
-    try std.testing.expect(std.mem.indexOf(u8, strict.stderr, "misplaced reserved word") != null);
-    try std.testing.expect(std.mem.indexOf(u8, strict.stderr, "bad\n") == null);
+    var alias_result = try runScript(std.testing.allocator, std.testing.io, alias_script);
+    defer alias_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 2), alias_result.status);
+    try std.testing.expectEqualStrings("", alias_result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, alias_result.stderr, "misplaced reserved word") != null);
+    try std.testing.expect(std.mem.indexOf(u8, alias_result.stderr, "bad\n") == null);
 }
 
 test "runScript returns parse diagnostics" {

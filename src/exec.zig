@@ -5630,7 +5630,7 @@ pub const Executor = struct {
         }
         const aliased = try self.expandAliasesForScriptWithFeatures(source, options.features);
         defer self.allocator.free(aliased);
-        var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features });
+        var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features.withStrictDiagnostics() });
         defer parsed.deinit();
         if (parsed.diagnostics.len != 0) return error.ParseError;
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
@@ -5711,7 +5711,7 @@ pub const Executor = struct {
     fn scriptSliceParsesWithCurrentAliases(self: *Executor, script: []const u8, features: compat.Features) !bool {
         const aliased = try self.expandAliasesForScriptWithFeatures(script, features);
         defer self.allocator.free(aliased);
-        var parsed = try parser.parse(self.allocator, aliased, .{ .features = features });
+        var parsed = try parser.parse(self.allocator, aliased, .{ .features = features.withStrictDiagnostics() });
         defer parsed.deinit();
         return parsed.diagnostics.len == 0;
     }

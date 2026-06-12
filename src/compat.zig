@@ -20,6 +20,12 @@ pub const Features = struct {
         return .{ .mode = .posix, .strict_diagnostics = true };
     }
 
+    pub fn withStrictDiagnostics(self: Features) Features {
+        var features = self;
+        features.strict_diagnostics = true;
+        return features;
+    }
+
     pub fn bash() Features {
         return .{ .mode = .bash };
     }
@@ -41,6 +47,10 @@ test "strict POSIX diagnostics can be requested explicitly" {
     const features = Features.strictPosix();
     try std.testing.expectEqual(Mode.posix, features.mode);
     try std.testing.expect(features.strict_diagnostics);
+
+    const strict_bash = Features.bash().withStrictDiagnostics();
+    try std.testing.expectEqual(Mode.bash, strict_bash.mode);
+    try std.testing.expect(strict_bash.strict_diagnostics);
 }
 
 test "Bash compatibility can be requested explicitly" {

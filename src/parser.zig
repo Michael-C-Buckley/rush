@@ -2066,6 +2066,12 @@ const SyntaxParser = struct {
                 continue;
             }
 
+            if (self.features.strict_diagnostics and self.atMisplacedRightParen()) {
+                try self.appendMisplacedRightParenDiagnostic();
+                try self.appendCurrentTokenChildTo(&list_children);
+                continue;
+            }
+
             if (self.startsPipeline()) {
                 const pipeline = try self.parsePipeline();
                 try list_children.append(self.allocator, .{ .node = pipeline });
@@ -2143,27 +2149,49 @@ const SyntaxParser = struct {
 
         try self.appendCurrentTokenChildTo(&if_children);
         const condition = try self.parseListUntil(&.{ "then", "fi" }, &.{});
+        if (self.features.strict_diagnostics and !self.listContainsCommand(condition)) {
+            const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
+            try self.appendParseError(span, "missing condition in if command");
+        }
         try if_children.append(self.allocator, .{ .node = condition });
         if (self.atWord("then")) {
             saw_then = true;
             try self.appendCurrentTokenChildTo(&if_children);
             const then_body = try self.parseListUntil(&.{ "elif", "else", "fi" }, &.{});
+            if (self.features.strict_diagnostics and !self.listContainsCommand(then_body)) {
+                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
+                try self.appendParseError(span, "missing body in if command");
+            }
             try if_children.append(self.allocator, .{ .node = then_body });
         }
         while (self.atWord("elif")) {
+            const elif_token_start = self.index;
             try self.appendCurrentTokenChildTo(&if_children);
             const elif_condition = try self.parseListUntil(&.{ "then", "fi" }, &.{});
+            if (self.features.strict_diagnostics and !self.listContainsCommand(elif_condition)) {
+                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, elif_token_start, self.index);
+                try self.appendParseError(span, "missing condition in elif clause");
+            }
             try if_children.append(self.allocator, .{ .node = elif_condition });
             if (self.atWord("then")) {
                 saw_then = true;
                 try self.appendCurrentTokenChildTo(&if_children);
                 const elif_body = try self.parseListUntil(&.{ "elif", "else", "fi" }, &.{});
+                if (self.features.strict_diagnostics and !self.listContainsCommand(elif_body)) {
+                    const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, elif_token_start, self.index);
+                    try self.appendParseError(span, "missing body in elif clause");
+                }
                 try if_children.append(self.allocator, .{ .node = elif_body });
             }
         }
         if (self.atWord("else")) {
+            const else_token_start = self.index;
             try self.appendCurrentTokenChildTo(&if_children);
             const else_body = try self.parseListUntil(&.{"fi"}, &.{});
+            if (self.features.strict_diagnostics and !self.listContainsCommand(else_body)) {
+                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, else_token_start, self.index);
+                try self.appendParseError(span, "missing body in else clause");
+            }
             try if_children.append(self.allocator, .{ .node = else_body });
         }
         if (self.atWord("fi")) {
@@ -2618,6 +2646,10 @@ const SyntaxParser = struct {
             saw_do = true;
             try self.appendCurrentTokenChildTo(&for_children);
             const body = try self.parseListUntil(&.{"done"}, &.{});
+            if (self.features.strict_diagnostics and !self.listContainsCommand(body)) {
+                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
+                try self.appendParseError(span, "missing body in for command");
+            }
             try for_children.append(self.allocator, .{ .node = body });
         }
         if (self.atWord("done")) {
@@ -2679,11 +2711,19 @@ const SyntaxParser = struct {
 
         try self.appendCurrentTokenChildTo(&loop_children);
         const condition = try self.parseListUntil(&.{ "do", "done" }, &.{});
+        if (self.features.strict_diagnostics and !self.listContainsCommand(condition)) {
+            const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
+            try self.appendParseError(span, if (std.mem.eql(u8, opener, "while")) "missing condition in while command" else "missing condition in until command");
+        }
         try loop_children.append(self.allocator, .{ .node = condition });
         if (self.atWord("do")) {
             saw_do = true;
             try self.appendCurrentTokenChildTo(&loop_children);
             const body = try self.parseListUntil(&.{"done"}, &.{});
+            if (self.features.strict_diagnostics and !self.listContainsCommand(body)) {
+                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
+                try self.appendParseError(span, if (std.mem.eql(u8, opener, "while")) "missing body in while command" else "missing body in until command");
+            }
             try loop_children.append(self.allocator, .{ .node = body });
         }
         if (self.atWord("done")) {
@@ -3082,7 +3122,7 @@ const SyntaxParser = struct {
     }
 
     fn startsListElement(self: SyntaxParser) bool {
-        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline();
+        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline() or (self.features.strict_diagnostics and self.atMisplacedRightParen());
     }
 
     fn bashCompoundArrayAssignmentTokenEnd(self: SyntaxParser) ?usize {
@@ -3179,12 +3219,20 @@ const SyntaxParser = struct {
         return self.atWord("!") or self.startsSimpleCommand();
     }
 
-    fn appendMisplacedReservedWordDiagnostic(self: *SyntaxParser) !void {
+    fn appendParseError(self: *SyntaxParser, span: Span, message: []const u8) !void {
         try self.diagnostics.append(self.allocator, .{
             .kind = .parse_error,
-            .span = self.current().span,
-            .message = "misplaced reserved word",
+            .span = span,
+            .message = message,
         });
+    }
+
+    fn appendMisplacedReservedWordDiagnostic(self: *SyntaxParser) !void {
+        try self.appendParseError(self.current().span, "misplaced reserved word");
+    }
+
+    fn appendMisplacedRightParenDiagnostic(self: *SyntaxParser) !void {
+        try self.appendParseError(self.current().span, "misplaced )");
     }
 
     fn atMisplacedReservedWord(self: SyntaxParser) bool {
@@ -3199,6 +3247,10 @@ const SyntaxParser = struct {
             std.mem.eql(u8, lexeme, "esac") or
             std.mem.eql(u8, lexeme, "in") or
             std.mem.eql(u8, lexeme, "}");
+    }
+
+    fn atMisplacedRightParen(self: SyntaxParser) bool {
+        return self.at(.right_paren);
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
@@ -4170,9 +4222,14 @@ test "strict parser diagnoses misplaced POSIX reserved words in command position
         incomplete: bool = false,
     }{
         .{ .source = "then", .span = .init(0, 4), .message = "misplaced reserved word" },
+        .{ .source = "fi", .span = .init(0, 2), .message = "misplaced reserved word" },
+        .{ .source = "do", .span = .init(0, 2), .message = "misplaced reserved word" },
+        .{ .source = "done", .span = .init(0, 4), .message = "misplaced reserved word" },
         .{ .source = "}", .span = .init(0, 1), .message = "misplaced reserved word" },
+        .{ .source = ")", .span = .init(0, 1), .message = "misplaced )" },
         .{ .source = "echo ok | then", .span = .init(10, 14), .message = "misplaced reserved word" },
         .{ .source = "! then", .span = .init(2, 6), .message = "misplaced reserved word" },
+        .{ .source = "x=for; $x i in 1; do echo $i; done", .span = .init(18, 20), .message = "misplaced reserved word" },
         .{ .source = "!", .span = .init(0, 1), .message = "missing command after !", .incomplete = true },
     };
 
@@ -4181,6 +4238,31 @@ test "strict parser diagnoses misplaced POSIX reserved words in command position
         defer result.deinit();
 
         try std.testing.expectEqual(example.incomplete, result.incomplete);
+        try std.testing.expect(result.diagnostics.len >= 1);
+        try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+        try expectSpan(example.span, result.diagnostics[0].span);
+        try std.testing.expectEqualStrings(example.message, result.diagnostics[0].message);
+    }
+}
+
+test "strict parser diagnoses empty POSIX compound command lists" {
+    const cases = [_]struct {
+        source: []const u8,
+        span: Span,
+        message: []const u8,
+    }{
+        .{ .source = "if then fi", .span = .init(3, 7), .message = "missing condition in if command" },
+        .{ .source = "if true; then fi", .span = .init(14, 16), .message = "missing body in if command" },
+        .{ .source = "while do done", .span = .init(6, 8), .message = "missing condition in while command" },
+        .{ .source = "while true; do done", .span = .init(15, 19), .message = "missing body in while command" },
+        .{ .source = "for x; do done", .span = .init(10, 14), .message = "missing body in for command" },
+    };
+
+    for (cases) |example| {
+        var result = try parse(std.testing.allocator, example.source, .{ .features = .strictPosix() });
+        defer result.deinit();
+
+        try std.testing.expect(!result.incomplete);
         try std.testing.expect(result.diagnostics.len >= 1);
         try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
         try expectSpan(example.span, result.diagnostics[0].span);
