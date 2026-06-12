@@ -15722,8 +15722,8 @@ fn evalBinaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, left: [
         return evalFileComparisonTest(allocator, options, left, op, right);
     }
 
-    const lhs = std.fmt.parseInt(i64, left, 10) catch return error.InvalidTestExpression;
-    const rhs = std.fmt.parseInt(i64, right, 10) catch return error.InvalidTestExpression;
+    const lhs = parseTestInteger(left) orelse return error.InvalidTestExpression;
+    const rhs = parseTestInteger(right) orelse return error.InvalidTestExpression;
     if (std.mem.eql(u8, op, "-eq")) return lhs == rhs;
     if (std.mem.eql(u8, op, "-ne")) return lhs != rhs;
     if (std.mem.eql(u8, op, "-gt")) return lhs > rhs;
@@ -15731,6 +15731,12 @@ fn evalBinaryTest(allocator: std.mem.Allocator, options: ExecuteOptions, left: [
     if (std.mem.eql(u8, op, "-lt")) return lhs < rhs;
     if (std.mem.eql(u8, op, "-le")) return lhs <= rhs;
     return error.InvalidTestExpression;
+}
+
+fn parseTestInteger(text: []const u8) ?i64 {
+    const trimmed = std.mem.trim(u8, text, " \t");
+    if (trimmed.len == 0) return null;
+    return std.fmt.parseInt(i64, trimmed, 10) catch null;
 }
 
 fn evalFileComparisonTest(allocator: std.mem.Allocator, options: ExecuteOptions, left: []const u8, op: []const u8, right: []const u8) bool {
@@ -17593,6 +17599,11 @@ test "executor implements test and bracket builtins" {
         .{ .script = "test ! a = a", .status = 1 },
         .{ .script = "test 3 -gt 2", .status = 0 },
         .{ .script = "test 3 -le 2", .status = 1 },
+        .{ .script = "test ' 5' -eq 5", .status = 0 },
+        .{ .script = "test '5 ' -eq 5", .status = 0 },
+        .{ .script = "[ '\t5\t' -eq 5 ]", .status = 0 },
+        .{ .script = "test ' -5 ' -lt 0", .status = 0 },
+        .{ .script = "test '010 ' -eq 10", .status = 0 },
         .{ .script = "test a '<' b", .status = 0 },
         .{ .script = "test b '>' a", .status = 0 },
         .{ .script = "test ! = !", .status = 0 },
@@ -17641,6 +17652,16 @@ test "executor implements test and bracket builtins" {
     defer invalid_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 2), invalid_result.status);
     try std.testing.expectEqualStrings("test: invalid expression\n", invalid_result.stderr);
+
+    var invalid_integer = try parseAndLower(std.testing.allocator, "test '5x ' -eq 5");
+    defer invalid_integer.parsed.deinit();
+    defer invalid_integer.program.deinit();
+    var invalid_integer_executor = Executor.init(std.testing.allocator);
+    defer invalid_integer_executor.deinit();
+    var invalid_integer_result = try invalid_integer_executor.executeProgram(invalid_integer.program, .{});
+    defer invalid_integer_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), invalid_integer_result.status);
+    try std.testing.expectEqualStrings("test: invalid expression\n", invalid_integer_result.stderr);
 
     var missing_bracket = try parseAndLower(std.testing.allocator, "[ foo");
     defer missing_bracket.parsed.deinit();
