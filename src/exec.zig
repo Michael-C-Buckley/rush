@@ -1763,6 +1763,7 @@ pub const Executor = struct {
     source_depth: usize = 0,
     pending_return: ?ExitStatus = null,
     loop_depth: usize = 0,
+    loop_control_boundary_outer_depth: usize = 0,
     pending_loop_control: ?LoopControl = null,
     pending_exit: ?ExitStatus = null,
     execution_depth: usize = 0,
@@ -4257,6 +4258,7 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(self);
         try child.resetCaughtTrapsForSubshell();
+        child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
         var process_state = try self.savePipelineSubshellProcessState(options);
         defer process_state.restore();
         var owned_stdin: ?[]u8 = null;
@@ -4382,6 +4384,7 @@ pub const Executor = struct {
 
     fn copyStateFromWithOptions(self: *Executor, other: *const Executor, copy_options: CopyStateOptions) !void {
         self.shell_options = other.shell_options;
+        self.loop_control_boundary_outer_depth = other.loop_control_boundary_outer_depth;
         self.getopts_offset = other.getopts_offset;
         self.getopts_last_optind = other.getopts_last_optind;
         self.arg_zero = other.arg_zero;
@@ -5681,6 +5684,8 @@ pub const Executor = struct {
         if (pid == 0) {
             if (use_process_pgrp) processSetPgrp(0, 0) catch exitForkedChild(2);
             self.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
+            self.loop_control_boundary_outer_depth += self.loop_depth;
+            self.loop_depth = 0;
             resetInteractiveJobSignalHandlers();
             var child_options = options;
             child_options.foreground_terminal = false;
@@ -5797,6 +5802,7 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(self);
         try child.resetCaughtTrapsForSubshell();
+        child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
 
         var guard = try self.savePipelineSubshellProcessState(options);
         defer guard.restore();
@@ -5814,6 +5820,7 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(self);
         try child.resetCaughtTrapsForSubshell();
+        child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
 
         var guard = try self.savePipelineSubshellProcessState(options);
         defer guard.restore();
@@ -6216,6 +6223,8 @@ pub const Executor = struct {
         const pid = try forkProcess();
         if (pid == 0) {
             processSetPgrp(0, 0) catch exitForkedChild(2);
+            self.loop_control_boundary_outer_depth += self.loop_depth;
+            self.loop_depth = 0;
             resetInteractiveJobSignalHandlers();
             var child_options = options;
             child_options.foreground_terminal = false;
@@ -6747,6 +6756,8 @@ pub const Executor = struct {
         const pid = try forkProcess();
         if (pid == 0) {
             context.executor.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
+            context.executor.loop_control_boundary_outer_depth += context.executor.loop_depth;
+            context.executor.loop_depth = 0;
             runBuiltinPipelineStage(context);
             exitForkedChild(context.status);
         }
@@ -7795,6 +7806,7 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
         try child.resetCaughtTrapsForSubshell();
+        child.loop_control_boundary_outer_depth = substitution_context.executor.loop_depth + substitution_context.executor.loop_control_boundary_outer_depth;
         const saved_umask = readShellUmask();
         defer restoreShellUmask(saved_umask);
         if (substitution_context.executor.remainingScriptStdin()) |stdin| {
@@ -11905,7 +11917,10 @@ fn setLoopControlBuiltin(self: *Executor, command: ir.SimpleCommand, kind: LoopC
     // status 0 and the shell keeps running; dash and bash agree. Operand
     // errors above still stop the shell like other special builtins.
     if (self.loop_depth == 0) return emptyResult(self.allocator, 0);
-    self.pending_loop_control = .{ .kind = kind, .levels = @min(levels, self.loop_depth) };
+    // Subshell-like contexts keep an unsatisfied count pending so the rest of
+    // that context's body is skipped at the execution-environment boundary.
+    const effective_levels = if (self.loop_control_boundary_outer_depth != 0 and levels > self.loop_depth) levels else @min(levels, self.loop_depth);
+    self.pending_loop_control = .{ .kind = kind, .levels = effective_levels };
     return emptyResult(self.allocator, 0);
 }
 
@@ -16425,6 +16440,36 @@ test "executor clamps over-depth break and continue loop counts" {
     defer continue_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), continue_result.status);
     try std.testing.expectEqualStrings("a1\nb1\ndone\n", continue_result.stdout);
+}
+
+test "executor unwinds over-depth loop control to subshell boundaries" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var break_result = try executor.executeScriptSlice("for i in 1 2; do (for j in a b; do break 2; done; echo sub_after); echo i=$i; done; echo done", .{});
+    defer break_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), break_result.status);
+    try std.testing.expectEqualStrings("i=1\ni=2\ndone\n", break_result.stdout);
+
+    var continue_result = try executor.executeScriptSlice("for i in 1 2; do (for j in a b; do continue 2; done; echo sub_after); echo i=$i; done; echo done", .{});
+    defer continue_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), continue_result.status);
+    try std.testing.expectEqualStrings("i=1\ni=2\ndone\n", continue_result.stdout);
+
+    var substitution_result = try executor.executeScriptSlice("for i in 1 2; do value=$(for j in a b; do break 2; done; echo sub_after); echo \"value=<$value> i=$i\"; done; echo done", .{});
+    defer substitution_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), substitution_result.status);
+    try std.testing.expectEqualStrings("value=<> i=1\nvalue=<> i=2\ndone\n", substitution_result.stdout);
+
+    var no_outer_subshell = try executor.executeScriptSlice("(for j in a b; do break 2; done; echo sub_after); echo parent", .{});
+    defer no_outer_subshell.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), no_outer_subshell.status);
+    try std.testing.expectEqualStrings("sub_after\nparent\n", no_outer_subshell.stdout);
+
+    var no_outer_substitution = try executor.executeScriptSlice("value=$(for j in a b; do break 2; done; echo sub_after); echo \"value=<$value>\"", .{});
+    defer no_outer_substitution.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), no_outer_substitution.status);
+    try std.testing.expectEqualStrings("value=<sub_after>\n", no_outer_substitution.stdout);
 }
 
 test "executor supports return builtin in shell functions" {
