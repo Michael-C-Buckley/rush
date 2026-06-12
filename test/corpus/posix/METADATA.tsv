@@ -87,6 +87,7 @@ builtin-getopts-silent-invalid	builtin	behavior	getopts silent invalid options s
 builtin-loop-control	builtin	builtin	-
 builtin-printf-escapes	builtin	builtin	-
 builtin-printf-floating-conversions	builtin	behavior	printf formats representative POSIX floating-point conversions
+builtin-printf-floating-format-flags	builtin	behavior	printf applies representative sign, space, and alternate-form flags to floating conversions with C-locale radix output
 builtin-printf-format-reuse	builtin	builtin	printf reuses the format operand until all operands are consumed
 builtin-printf-i-conversion	builtin	behavior	printf %i formats signed integer operands including POSIX C hexadecimal constants
 builtin-printf-integer-c-constants	builtin	behavior	printf integer conversions parse POSIX C integer constants and leading quote character operands
