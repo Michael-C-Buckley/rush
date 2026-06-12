@@ -169,35 +169,59 @@ fn parseShellInvocation(args: []const []const u8) ?ShellInvocation {
     var features: compat.Features = .{};
     var shell_options: exec.ShellOptions = .{};
     var interactive = false;
+    var command_string = false;
+    var standard_input = false;
     var index: usize = 1;
-    while (index < args.len) : (index += 1) {
+    while (index < args.len) {
         const arg = args[index];
-        if (std.mem.eql(u8, arg, "-c")) {
-            if (index + 1 >= args.len) return null;
-            const arg_zero = if (index + 2 < args.len) args[index + 2] else args[0];
-            const positionals = if (index + 3 < args.len) args[index + 3 ..] else &.{};
-            return .{ .kind = .command_string, .source = args[index + 1], .features = features, .shell_options = shell_options, .arg_zero = arg_zero, .positionals = positionals, .interactive = interactive };
-        }
-        if (std.mem.eql(u8, arg, "-s")) {
-            return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .arg_zero = args[0], .positionals = args[index + 1 ..], .interactive = interactive };
-        }
         if (std.mem.eql(u8, arg, "--")) {
-            if (index + 1 >= args.len) return null;
-            const path = args[index + 1];
-            return .{ .kind = .script_file, .source = path, .features = features, .shell_options = shell_options, .arg_zero = path, .positionals = args[index + 2 ..], .interactive = interactive };
+            index += 1;
+            break;
         }
         if (std.mem.eql(u8, arg, "--posix-strict")) {
             features = .strictPosix();
-        } else if (std.mem.eql(u8, arg, "-i")) {
-            interactive = true;
-        } else if (std.mem.eql(u8, arg, "-o") or std.mem.eql(u8, arg, "+o")) {
-            if (index + 1 >= args.len) return null;
             index += 1;
-            if (!exec.applyShellOptionName(&shell_options, args[index], arg[0] == '-')) return null;
-        } else if (!exec.applyShellOptionShort(&shell_options, arg)) {
-            if (std.mem.startsWith(u8, arg, "-") or std.mem.startsWith(u8, arg, "+")) return null;
-            return .{ .kind = .script_file, .source = arg, .features = features, .shell_options = shell_options, .arg_zero = arg, .positionals = args[index + 1 ..], .interactive = interactive };
+            continue;
         }
+        if (arg.len == 0 or (arg[0] != '-' and arg[0] != '+')) break;
+        if (arg.len == 1 or (arg[0] == '-' and arg[1] == '-')) return null;
+
+        const enabled = arg[0] == '-';
+        var option_index: usize = 1;
+        while (option_index < arg.len) : (option_index += 1) {
+            const option = arg[option_index];
+            if (enabled and option == 'c') {
+                command_string = true;
+            } else if (enabled and option == 's') {
+                standard_input = true;
+            } else if (enabled and option == 'i') {
+                interactive = true;
+            } else if (option == 'o') {
+                if (index + 1 >= args.len) return null;
+                index += 1;
+                if (!exec.applyShellOptionName(&shell_options, args[index], enabled)) return null;
+            } else {
+                var option_spelling = [_]u8{ arg[0], option };
+                if (!exec.applyShellOptionShort(&shell_options, option_spelling[0..])) return null;
+            }
+        }
+
+        index += 1;
+    }
+
+    const operands = args[index..];
+    if (command_string) {
+        if (operands.len == 0) return null;
+        const arg_zero = if (operands.len >= 2) operands[1] else args[0];
+        const positionals = if (operands.len >= 3) operands[2..] else &.{};
+        return .{ .kind = .command_string, .source = operands[0], .features = features, .shell_options = shell_options, .arg_zero = arg_zero, .positionals = positionals, .interactive = interactive };
+    }
+    if (standard_input) {
+        return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .arg_zero = args[0], .positionals = operands, .interactive = interactive };
+    }
+    if (operands.len != 0) {
+        const path = operands[0];
+        return .{ .kind = .script_file, .source = path, .features = features, .shell_options = shell_options, .arg_zero = path, .positionals = operands[1..], .interactive = interactive };
     }
     return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .arg_zero = args[0], .interactive = interactive };
 }
@@ -9028,6 +9052,40 @@ test "command string invocation shell options affect execution" {
     try std.testing.expectEqualStrings("", errexit.stdout);
     try std.testing.expectEqualStrings("", errexit.stderr);
 
+    const clustered_errexit_invocation = parseCommandStringInvocation(&.{ "rush", "-ec", "false; echo unreached" }) orelse return error.ExpectedInvocation;
+    var clustered_errexit = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        clustered_errexit_invocation.source,
+        .{ .io = std.testing.io, .arg_zero = clustered_errexit_invocation.arg_zero },
+        null,
+        clustered_errexit_invocation.positionals,
+        null,
+        clustered_errexit_invocation.shell_options,
+    );
+    defer clustered_errexit.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 1), clustered_errexit.status);
+    try std.testing.expectEqualStrings("", clustered_errexit.stdout);
+    try std.testing.expectEqualStrings("", clustered_errexit.stderr);
+
+    const option_after_c_invocation = parseCommandStringInvocation(&.{ "rush", "-c", "-e", "false; echo unreached" }) orelse return error.ExpectedInvocation;
+    var option_after_c = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        option_after_c_invocation.source,
+        .{ .io = std.testing.io, .arg_zero = option_after_c_invocation.arg_zero },
+        null,
+        option_after_c_invocation.positionals,
+        null,
+        option_after_c_invocation.shell_options,
+    );
+    defer option_after_c.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 1), option_after_c.status);
+    try std.testing.expectEqualStrings("", option_after_c.stdout);
+    try std.testing.expectEqualStrings("", option_after_c.stderr);
+
     const nounset_invocation = parseCommandStringInvocation(&.{ "rush", "-o", "nounset", "-c", "echo $RUSH_INVOCATION_UNSET_FOR_TEST_416; echo unreached" }) orelse return error.ExpectedInvocation;
     var nounset = try runCommandStringWithEnvironment(
         std.testing.allocator,
@@ -10132,6 +10190,56 @@ test "command string invocation accepts set option flags before -c" {
     try std.testing.expect(invocation.shell_options.errexit);
     try std.testing.expect(invocation.shell_options.nounset);
     try std.testing.expect(invocation.shell_options.pipefail);
+}
+
+test "command string invocation continues option parsing after -c" {
+    const invocation = parseCommandStringInvocation(
+        &.{ "rush", "-c", "-e", "printf '%s:%s:%s\n' \"$0\" \"$1\" \"$2\"", "name", "one", "two" },
+    ) orelse return error.ExpectedInvocation;
+
+    try std.testing.expectEqualStrings("printf '%s:%s:%s\n' \"$0\" \"$1\" \"$2\"", invocation.source);
+    try std.testing.expectEqualStrings("name", invocation.arg_zero);
+    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
+    try std.testing.expectEqualStrings("one", invocation.positionals[0]);
+    try std.testing.expectEqualStrings("two", invocation.positionals[1]);
+    try std.testing.expect(invocation.shell_options.errexit);
+}
+
+test "command string invocation accepts -c in clustered short options" {
+    const invocation = parseCommandStringInvocation(
+        &.{ "rush", "-ec", "printf '%s:%s:%s\n' \"$0\" \"$1\" \"$2\"", "name", "one", "two" },
+    ) orelse return error.ExpectedInvocation;
+
+    try std.testing.expectEqualStrings("printf '%s:%s:%s\n' \"$0\" \"$1\" \"$2\"", invocation.source);
+    try std.testing.expectEqualStrings("name", invocation.arg_zero);
+    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
+    try std.testing.expectEqualStrings("one", invocation.positionals[0]);
+    try std.testing.expectEqualStrings("two", invocation.positionals[1]);
+    try std.testing.expect(invocation.shell_options.errexit);
+}
+
+test "command string invocation lets -c win when clustered with -s" {
+    const sc_invocation = parseCommandStringInvocation(&.{ "rush", "-sc", "echo ok" }) orelse return error.ExpectedInvocation;
+    try std.testing.expectEqualStrings("echo ok", sc_invocation.source);
+    try std.testing.expectEqualStrings("rush", sc_invocation.arg_zero);
+    try std.testing.expectEqual(@as(usize, 0), sc_invocation.positionals.len);
+
+    const cs_invocation = parseCommandStringInvocation(&.{ "rush", "-cs", "echo ok" }) orelse return error.ExpectedInvocation;
+    try std.testing.expectEqualStrings("echo ok", cs_invocation.source);
+    try std.testing.expectEqualStrings("rush", cs_invocation.arg_zero);
+    try std.testing.expectEqual(@as(usize, 0), cs_invocation.positionals.len);
+}
+
+test "standard input invocation continues option parsing after -s" {
+    const invocation = parseShellInvocation(&.{ "rush", "-s", "-e", "posarg", "two words" }) orelse return error.ExpectedInvocation;
+
+    try std.testing.expectEqual(InvocationKind.standard_input, invocation.kind);
+    try std.testing.expectEqualStrings("-", invocation.source);
+    try std.testing.expectEqualStrings("rush", invocation.arg_zero);
+    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
+    try std.testing.expectEqualStrings("posarg", invocation.positionals[0]);
+    try std.testing.expectEqualStrings("two words", invocation.positionals[1]);
+    try std.testing.expect(invocation.shell_options.errexit);
 }
 
 test "script file invocation accepts options before script operand" {

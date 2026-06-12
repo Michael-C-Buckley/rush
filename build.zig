@@ -115,6 +115,24 @@ pub fn build(b: *std.Build) void {
         \\printf 'real stdin value\n' | "$1" -c 'read x < "$1"; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' rush "$tmp/redirect" >"$tmp/stdout" 2>"$tmp/stderr"
         \\test "$(cat "$tmp/stdout")" = 'x=[redirected value] status=0'
         \\test ! -s "$tmp/stderr"
+        \\if "$1" -e -c 'false; echo no' >"$tmp/stdout" 2>"$tmp/stderr"; then exit 1; else status=$?; fi
+        \\test "$status" = 1
+        \\test ! -s "$tmp/stdout"
+        \\test ! -s "$tmp/stderr"
+        \\if "$1" -ec 'false; echo no' >"$tmp/stdout" 2>"$tmp/stderr"; then exit 1; else status=$?; fi
+        \\test "$status" = 1
+        \\test ! -s "$tmp/stdout"
+        \\test ! -s "$tmp/stderr"
+        \\if "$1" -c -e 'false; echo no' >"$tmp/stdout" 2>"$tmp/stderr"; then exit 1; else status=$?; fi
+        \\test "$status" = 1
+        \\test ! -s "$tmp/stdout"
+        \\test ! -s "$tmp/stderr"
+        \\"$1" -ec 'printf "%s:%s:%s\n" "$0" "$1" "$2"' name one two >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = 'name:one:two'
+        \\test ! -s "$tmp/stderr"
+        \\"$1" -sc 'printf "%s:%s\n" "$0" "$1"' name one >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = 'name:one'
+        \\test ! -s "$tmp/stderr"
         \\cat >"$tmp/read-script.rush" <<'EOF'
         \\read x; status=$?; printf 'x=[%s] status=%s\n' "$x" "$status"
         \\EOF
