@@ -4058,6 +4058,7 @@ pub const Executor = struct {
             .env = self.envLookup(),
             .env_set = self.envSet(),
             .arrays = self.arrayLookup(),
+            .diagnostic_sink = self.expansionDiagnosticSink(),
             .io = io,
             .command_substitution = commandSubstitution(&substitution_context),
             .positionals = self.currentPositionals().params,
@@ -4076,6 +4077,7 @@ pub const Executor = struct {
             .env = self.envLookup(),
             .env_set = self.envSet(),
             .arrays = self.arrayLookup(),
+            .diagnostic_sink = self.expansionDiagnosticSink(),
             .io = io,
             .command_substitution = commandSubstitution(&substitution_context),
             .positionals = self.currentPositionals().params,
@@ -6243,7 +6245,7 @@ pub const Executor = struct {
 
     fn executeExpandedSimpleCommandWithInput(self: *Executor, expanded: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, force_stdin: bool) anyerror!CommandResult {
         if (isRedirectionOnlyExec(expanded)) {
-            self.applyAssignments(expanded.assignments) catch |err| switch (err) {
+            self.applyAssignments(expanded.assignments, options.features) catch |err| switch (err) {
                 error.ReadonlyVariable => return self.assignmentErrorResult(),
                 else => return err,
             };
@@ -6260,7 +6262,7 @@ pub const Executor = struct {
         const effective_stdin = self.applyInputRedirections(expanded, stdin, options, &owned_stdin, &stdin_file) catch |err| return self.redirectionErrorResult(expanded, err, input_special_builtin);
 
         if (expanded.argv.len == 0) {
-            self.applyAssignments(expanded.assignments) catch |err| switch (err) {
+            self.applyAssignments(expanded.assignments, options.features) catch |err| switch (err) {
                 error.ReadonlyVariable => return self.assignmentErrorResult(),
                 else => return err,
             };
@@ -6397,6 +6399,14 @@ pub const Executor = struct {
         return result;
     }
 
+    fn appendParameterExpansionDiagnostic(self: *Executor, stderr: *std.ArrayList(u8)) !void {
+        if (self.parameter_error.name.len == 0) return appendDiagnosticLine(self.allocator, stderr, "parameter", "expansion failed");
+        const name = self.parameter_error.name;
+        const message = if (self.parameter_error.message.len != 0) self.parameter_error.message else "parameter null or not set";
+        defer self.parameter_error.clear(self.allocator);
+        try appendDiagnosticLine(self.allocator, stderr, name, message);
+    }
+
     fn arithmeticExpansionErrorResult(self: *Executor, options: ExecuteOptions) !CommandResult {
         const message = if (self.arithmetic_error.message.len != 0) self.arithmetic_error.message else "invalid arithmetic expression";
         self.markExpansionErrorConsequence(options, 1);
@@ -6408,13 +6418,13 @@ pub const Executor = struct {
 
     fn executeBuiltinWithAssignments(self: *Executor, builtin: BuiltinFn, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
         if (specialBuiltinPropertiesApply(options, command.argv[0].text)) {
-            self.applyAssignments(command.assignments) catch |err| switch (err) {
+            self.applyAssignments(command.assignments, options.features) catch |err| switch (err) {
                 error.ReadonlyVariable => return self.assignmentErrorResult(),
                 else => return err,
             };
             return self.runBuiltin(builtin, command, stdin, options);
         }
-        var assignment_scope = self.pushTemporaryAssignments(command.assignments) catch |err| switch (err) {
+        var assignment_scope = self.pushTemporaryAssignments(command.assignments, options.features) catch |err| switch (err) {
             error.ReadonlyVariable => return self.assignmentErrorResult(),
             else => return err,
         };
@@ -6440,7 +6450,7 @@ pub const Executor = struct {
     }
 
     fn executeFunctionBody(self: *Executor, command: ir.SimpleCommand, function_value: *const FunctionValue, options: ExecuteOptions) anyerror!CommandResult {
-        var assignment_scope = self.pushTemporaryAssignments(command.assignments) catch |err| switch (err) {
+        var assignment_scope = self.pushTemporaryAssignments(command.assignments, options.features) catch |err| switch (err) {
             error.ReadonlyVariable => return self.assignmentErrorResult(),
             else => return err,
         };
@@ -6609,7 +6619,7 @@ pub const Executor = struct {
         const positionals: []const []const u8 = self.currentPositionals().params;
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         defer fields.deinit();
         for (fields.fields) |field| {
             const raw = try self.allocator.dupe(u8, word.raw);
@@ -6681,7 +6691,7 @@ pub const Executor = struct {
         for (words, 0..) |word, index| {
             expanded[index] = try self.expandAssignmentWord(word, options);
             initialized += 1;
-            try scope.apply(expanded[index]);
+            try scope.apply(expanded[index], options.features);
         }
         return expanded;
     }
@@ -6719,14 +6729,14 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
+        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
     }
 
     pub fn expandParametersScalar(self: *Executor, allocator: std.mem.Allocator, raw: []const u8, options: ExecuteOptions) ![]const u8 {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -6735,7 +6745,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -6751,7 +6761,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
 
         for (parts.parts) |part| {
             const rendered = try expand.expandWordScalar(self.allocator, part.source(parts.raw), expansion_options);
@@ -6772,7 +6782,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
         const text = if (options.features.isBash())
             try self.expandCompoundIndexedArrayAssignmentWord(word.raw, expansion_options) orelse try expand.expandAssignmentWordScalar(self.allocator, word.raw, expansion_options)
         else
@@ -7035,7 +7045,12 @@ pub const Executor = struct {
             .keyFn = lookupArrayKey,
             .valueFn = lookupArrayValue,
             .maxIndexFn = lookupArrayMaxIndex,
+            .existsFn = lookupArrayExists,
         };
+    }
+
+    fn expansionDiagnosticSink(self: *Executor) expand.DiagnosticSink {
+        return .{ .context = self, .appendFn = appendExpansionDiagnostic };
     }
 
     fn setEnvCallback(context: ?*anyopaque, name: []const u8, value: []const u8) !void {
@@ -7086,6 +7101,16 @@ pub const Executor = struct {
         return self.arrayMaxIndex(name);
     }
 
+    fn lookupArrayExists(context: ?*const anyopaque, name: []const u8) bool {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        return self.arrays.contains(name);
+    }
+
+    fn appendExpansionDiagnostic(context: ?*anyopaque, name: []const u8, message: []const u8) !void {
+        const self: *Executor = @ptrCast(@alignCast(context.?));
+        try appendDiagnosticLine(self.allocator, &self.command_substitution_stderr, name, message);
+    }
+
     fn freeExpandedCommand(self: *Executor, command: ir.SimpleCommand) void {
         self.freeWords(command.assignments);
         self.freeWords(command.argv);
@@ -7124,6 +7149,12 @@ pub const Executor = struct {
         old_value: ?ArrayValue,
     };
 
+    const CompoundBadSubscriptPolicy = enum {
+        hard_error,
+        skip_element,
+        skip_element_quiet,
+    };
+
     const AssignmentExpansionScope = struct {
         executor: *Executor,
         saved: std.ArrayList(SavedAssignment) = .empty,
@@ -7133,8 +7164,9 @@ pub const Executor = struct {
             return .{ .executor = executor };
         }
 
-        fn apply(self: *AssignmentExpansionScope, assignment: ir.WordRef) !void {
-            if (try self.executor.compoundIndexedArrayAssignment(assignment.text)) |array_assignment| {
+        fn apply(self: *AssignmentExpansionScope, assignment: ir.WordRef, features: compat.Features) !void {
+            const bad_subscript_policy: CompoundBadSubscriptPolicy = if (features.isBash()) .skip_element_quiet else .hard_error;
+            if (try self.executor.compoundIndexedArrayAssignment(assignment.text, bad_subscript_policy)) |array_assignment| {
                 defer array_assignment.deinit(self.executor.allocator);
                 var old_value = try self.executor.cloneArray(array_assignment.name);
                 errdefer if (old_value) |*value| value.deinit(self.executor.allocator);
@@ -7229,7 +7261,7 @@ pub const Executor = struct {
         }
     };
 
-    fn pushTemporaryAssignments(self: *Executor, assignments: []const ir.WordRef) !AssignmentScope {
+    fn pushTemporaryAssignments(self: *Executor, assignments: []const ir.WordRef, features: compat.Features) !AssignmentScope {
         var saved: std.ArrayList(SavedAssignment) = .empty;
         var saved_arrays: std.ArrayList(SavedArrayAssignment) = .empty;
         errdefer {
@@ -7249,7 +7281,7 @@ pub const Executor = struct {
         }
 
         for (assignments) |assignment| {
-            if (try self.compoundIndexedArrayAssignment(assignment.text)) |array_assignment| {
+            if (try self.compoundIndexedArrayAssignment(assignment.text, compoundBadSubscriptPolicy(features))) |array_assignment| {
                 defer array_assignment.deinit(self.allocator);
                 var old_value = try self.cloneArray(array_assignment.name);
                 errdefer if (old_value) |*value| value.deinit(self.allocator);
@@ -7298,9 +7330,9 @@ pub const Executor = struct {
         return .{ .executor = self, .saved = owned_saved, .saved_arrays = try saved_arrays.toOwnedSlice(self.allocator) };
     }
 
-    fn applyAssignments(self: *Executor, assignments: []const ir.WordRef) !void {
+    fn applyAssignments(self: *Executor, assignments: []const ir.WordRef, features: compat.Features) !void {
         for (assignments) |assignment| {
-            if (try self.compoundIndexedArrayAssignment(assignment.text)) |array_assignment| {
+            if (try self.compoundIndexedArrayAssignment(assignment.text, compoundBadSubscriptPolicy(features))) |array_assignment| {
                 defer array_assignment.deinit(self.allocator);
                 try self.replaceArrayElements(array_assignment.name, array_assignment.elements);
                 continue;
@@ -7318,7 +7350,11 @@ pub const Executor = struct {
         }
     }
 
-    fn compoundIndexedArrayAssignment(self: *Executor, text: []const u8) !?CompoundIndexedArrayAssignment {
+    fn compoundBadSubscriptPolicy(features: compat.Features) CompoundBadSubscriptPolicy {
+        return if (features.isBash()) .skip_element else .hard_error;
+    }
+
+    fn compoundIndexedArrayAssignment(self: *Executor, text: []const u8, bad_subscript_policy: CompoundBadSubscriptPolicy) !?CompoundIndexedArrayAssignment {
         const syntax = compoundIndexedArrayAssignmentSyntax(text) orelse return null;
         var elements: std.ArrayList(ArrayAssignmentElement) = .empty;
         errdefer {
@@ -7335,7 +7371,18 @@ pub const Executor = struct {
             if (compoundIndexedArrayElementSyntax(word)) |element_syntax| {
                 const diagnostic_name = try compoundArraySubscriptDiagnosticName(self.allocator, element_syntax);
                 defer self.allocator.free(diagnostic_name);
-                element_index = try self.evaluateArrayAssignmentIndexWithMax(element_syntax.index_text, max_index, diagnostic_name, "bad array subscript");
+                element_index = self.evaluateArrayAssignmentIndexWithMax(element_syntax.index_text, max_index, diagnostic_name, "bad array subscript") catch |err| switch (err) {
+                    error.ParameterExpansionFailed => {
+                        if (bad_subscript_policy == .hard_error) return err;
+                        if (bad_subscript_policy == .skip_element) {
+                            try self.appendParameterExpansionDiagnostic(&self.command_substitution_stderr);
+                        } else {
+                            self.parameter_error.clear(self.allocator);
+                        }
+                        continue;
+                    },
+                    else => return err,
+                };
                 value_raw = element_syntax.value;
             }
 
@@ -13018,13 +13065,29 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
             break;
         }
     }
+    var status: ExitStatus = 0;
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(self.allocator);
     for (command.argv[index..]) |arg| {
         switch (mode) {
             .variable => {
                 if (options.features.isBash()) {
-                    if (try self.indexedArrayReference(arg.text)) |array_reference| {
-                        if (self.isReadonly(array_reference.name)) return variableBuiltinUsageError(self, "unset", "readonly variable");
-                        try self.unsetArrayElement(array_reference.name, array_reference.index);
+                    const array_reference = self.indexedArrayReference(arg.text) catch |err| switch (err) {
+                        error.ParameterExpansionFailed => {
+                            const syntax = indexedArrayReferenceSyntax(arg.text) orelse return err;
+                            if (!self.arrays.contains(syntax.name)) {
+                                self.parameter_error.clear(self.allocator);
+                                continue;
+                            }
+                            try self.appendParameterExpansionDiagnostic(&stderr);
+                            status = 1;
+                            continue;
+                        },
+                        else => return err,
+                    };
+                    if (array_reference) |array_reference_value| {
+                        if (self.isReadonly(array_reference_value.name)) return variableBuiltinUsageError(self, "unset", "readonly variable");
+                        try self.unsetArrayElement(array_reference_value.name, array_reference_value.index);
                         continue;
                     }
                 }
@@ -13038,7 +13101,7 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
             },
         }
     }
-    return emptyResult(self.allocator, 0);
+    return .{ .allocator = self.allocator, .status = status, .stdout = try self.allocator.alloc(u8, 0), .stderr = try stderr.toOwnedSlice(self.allocator) };
 }
 
 fn builtinReadonly(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -14845,6 +14908,13 @@ fn emptyResult(allocator: std.mem.Allocator, status: ExitStatus) !CommandResult 
     };
 }
 
+fn appendDiagnosticLine(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), command: []const u8, message: []const u8) !void {
+    try stderr.appendSlice(allocator, command);
+    try stderr.appendSlice(allocator, ": ");
+    try stderr.appendSlice(allocator, message);
+    try stderr.append(allocator, '\n');
+}
+
 fn errorResult(allocator: std.mem.Allocator, status: ExitStatus, command: []const u8, message: []const u8) !CommandResult {
     const stderr = try std.fmt.allocPrint(allocator, "{s}: {s}\n", .{ command, message });
     errdefer allocator.free(stderr);
@@ -16102,17 +16172,22 @@ test "executor resolves Bash negative subscripts within compound indexed array a
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
-test "executor rejects Bash negative array subscripts on empty arrays" {
+test "executor follows Bash negative array subscript edge consequences" {
     const cases = [_]struct {
         script: []const u8,
+        status: ExitStatus,
+        stdout: []const u8,
         stderr: []const u8,
     }{
-        .{ .script = "printf '<%s>\\n' \"${missing[-1]}\"; echo after", .stderr = "missing: bad array subscript\n" },
-        .{ .script = "arr=(); printf '<%s>\\n' \"${arr[-1]}\"; echo after", .stderr = "arr: bad array subscript\n" },
-        .{ .script = "arr=(); printf '<%s>\\n' \"${#arr[-1]}\"; echo after", .stderr = "-1]: bad array subscript\n" },
-        .{ .script = "arr=(); arr[-1]=value; echo after", .stderr = "arr[-1]: bad array subscript\n" },
-        .{ .script = "arr=([-1]=value); echo after", .stderr = "[-1]=value: bad array subscript\n" },
-        .{ .script = "arr=(); unset 'arr[-1]'; echo after", .stderr = "unset: [-1]: bad array subscript\n" },
+        .{ .script = "printf '<%s>\\n' \"${missing[-1]}\"; echo after", .status = 0, .stdout = "<>\nafter\n", .stderr = "missing: bad array subscript\n" },
+        .{ .script = "arr=(); printf '<%s>\\n' \"${arr[-1]}\"; echo after", .status = 0, .stdout = "<>\nafter\n", .stderr = "arr: bad array subscript\n" },
+        .{ .script = "printf '<%s>\\n' \"${#missing[-1]}\"; echo after", .status = 0, .stdout = "<0>\nafter\n", .stderr = "" },
+        .{ .script = "arr=(); printf '<%s>\\n' \"${#arr[-1]}\"; echo after", .status = 1, .stdout = "", .stderr = "-1]: bad array subscript\n" },
+        .{ .script = "arr=(); arr[-1]=value; echo after", .status = 1, .stdout = "", .stderr = "arr[-1]: bad array subscript\n" },
+        .{ .script = "arr=([-1]=value); echo after:$?; printf '<%s>\\n' \"${#arr[@]}\"", .status = 0, .stdout = "after:0\n<0>\n", .stderr = "[-1]=value: bad array subscript\n" },
+        .{ .script = "arr=([0]=zero [-2]=bad [1]=one); echo after:$?; printf '<%s>' \"${arr[@]}\"; echo", .status = 0, .stdout = "after:0\n<zero><one>\n", .stderr = "[-2]=bad: bad array subscript\n" },
+        .{ .script = "arr=(); unset 'arr[-1]'; echo after:$?", .status = 0, .stdout = "after:1\n", .stderr = "unset: [-1]: bad array subscript\n" },
+        .{ .script = "unset 'missing[-1]'; echo after:$?", .status = 0, .stdout = "after:0\n", .stderr = "" },
     };
 
     for (cases) |case| {
@@ -16125,8 +16200,8 @@ test "executor rejects Bash negative array subscripts on empty arrays" {
         var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
         defer result.deinit();
 
-        try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
-        try std.testing.expectEqualStrings("", result.stdout);
+        try std.testing.expectEqual(case.status, result.status);
+        try std.testing.expectEqualStrings(case.stdout, result.stdout);
         try std.testing.expectEqualStrings(case.stderr, result.stderr);
     }
 }

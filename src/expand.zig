@@ -35,6 +35,7 @@ pub const ArrayLookup = struct {
     keyFn: ?*const fn (?*const anyopaque, []const u8, usize) ?usize = null,
     valueFn: ?*const fn (?*const anyopaque, []const u8, usize) ?[]const u8 = null,
     maxIndexFn: ?*const fn (?*const anyopaque, []const u8) ?usize = null,
+    existsFn: ?*const fn (?*const anyopaque, []const u8) bool = null,
 
     pub fn get(self: ArrayLookup, name: []const u8, index: usize) ?[]const u8 {
         const lookup = self.lookupFn orelse return null;
@@ -59,6 +60,22 @@ pub const ArrayLookup = struct {
     pub fn maxIndex(self: ArrayLookup, name: []const u8) ?usize {
         const max_index_fn = self.maxIndexFn orelse return null;
         return max_index_fn(self.context, name);
+    }
+
+    pub fn exists(self: ArrayLookup, name: []const u8) bool {
+        const exists_fn = self.existsFn orelse return false;
+        return exists_fn(self.context, name);
+    }
+};
+
+pub const DiagnosticSink = struct {
+    context: ?*anyopaque = null,
+    appendFn: ?*const fn (?*anyopaque, []const u8, []const u8) anyerror!void = null,
+
+    pub fn append(self: DiagnosticSink, name: []const u8, message: []const u8) !bool {
+        const append_fn = self.appendFn orelse return false;
+        try append_fn(self.context, name, message);
+        return true;
     }
 };
 
@@ -98,6 +115,7 @@ pub const Options = struct {
     env: EnvLookup = .{},
     env_set: EnvSet = .{},
     arrays: ArrayLookup = .{},
+    diagnostic_sink: DiagnosticSink = .{},
     io: ?std.Io = null,
     features: compat.Features = .{},
     command_substitution: CommandSubstitution = .{},
@@ -834,7 +852,7 @@ fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8
 }
 
 fn renderArrayElement(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
-    const index = try evaluateArrayIndex(allocator, name, index_text, options, name);
+    const index = (try evaluateRecoverableArrayElementIndex(allocator, name, index_text, options, name)) orelse return allocator.alloc(u8, 0);
     if (options.arrays.get(name, index)) |value| return allocator.dupe(u8, value);
     if (options.nounset) return error.NounsetParameter;
     return allocator.alloc(u8, 0);
@@ -843,8 +861,13 @@ fn renderArrayElement(allocator: std.mem.Allocator, name: []const u8, index_text
 fn renderArrayElementLength(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
     const diagnostic_name = try std.fmt.allocPrint(allocator, "{s}]", .{index_text});
     defer allocator.free(diagnostic_name);
-    const index = try evaluateArrayIndex(allocator, name, index_text, options, diagnostic_name);
-    if (options.arrays.get(name, index)) |value| return std.fmt.allocPrint(allocator, "{d}", .{value.len});
+    const value = try evaluateArrayIndexValue(allocator, index_text, options);
+    const index = if (value < 0) blk: {
+        if (normalizeNegativeArrayIndex(name, value, options)) |index| break :blk index;
+        if (!options.arrays.exists(name)) return allocator.dupe(u8, "0");
+        return badArraySubscriptExpansion(allocator, options, diagnostic_name);
+    } else std.math.cast(usize, value) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
+    if (options.arrays.get(name, index)) |array_value| return std.fmt.allocPrint(allocator, "{d}", .{array_value.len});
     if (options.nounset) return error.NounsetParameter;
     return allocator.dupe(u8, "0");
 }
@@ -860,10 +883,24 @@ fn renderArrayKeysJoined(allocator: std.mem.Allocator, name: []const u8, kind: P
 }
 
 fn evaluateArrayIndex(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options, diagnostic_name: []const u8) anyerror!usize {
+    const value = try evaluateArrayIndexValue(allocator, index_text, options);
+    if (value < 0) return normalizeNegativeArrayIndex(name, value, options) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
+    return std.math.cast(usize, value) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
+}
+
+fn evaluateArrayIndexValue(allocator: std.mem.Allocator, index_text: []const u8, options: Options) anyerror!i64 {
     const expanded_expression = try expandArithmeticExpression(allocator, index_text, options);
     defer allocator.free(expanded_expression);
-    const value = evalArithmetic(expanded_expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, index_text, err, options);
-    if (value < 0) return normalizeNegativeArrayIndex(name, value, options) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
+    return evalArithmetic(expanded_expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, index_text, err, options);
+}
+
+fn evaluateRecoverableArrayElementIndex(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options, diagnostic_name: []const u8) anyerror!?usize {
+    const value = try evaluateArrayIndexValue(allocator, index_text, options);
+    if (value < 0) {
+        if (normalizeNegativeArrayIndex(name, value, options)) |index| return index;
+        if (try options.diagnostic_sink.append(diagnostic_name, "bad array subscript")) return null;
+        return badArraySubscriptExpansion(allocator, options, diagnostic_name);
+    }
     return std.math.cast(usize, value) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
 }
 
@@ -3520,23 +3557,17 @@ test "parameter expansion supports Bash whole indexed array operations" {
     try std.testing.expectEqualStrings("4:9:five:two words:0 2 3 5", scalar);
 }
 
-test "parameter expansion rejects Bash negative array subscripts on empty arrays" {
-    const cases = [_]struct {
-        raw: []const u8,
-        name: []const u8,
-    }{
-        .{ .raw = "${missing[-1]}", .name = "missing" },
-        .{ .raw = "${#missing[-1]}", .name = "-1]" },
-    };
+test "parameter expansion handles Bash negative array subscripts on missing arrays" {
+    var parameter_error: ParameterError = .{};
+    defer parameter_error.clear(std.testing.allocator);
 
-    for (cases) |case| {
-        var parameter_error: ParameterError = .{};
-        defer parameter_error.clear(std.testing.allocator);
+    try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${missing[-1]}", .{ .features = compat.Features.bash(), .parameter_error = &parameter_error }));
+    try std.testing.expectEqualStrings("missing", parameter_error.name);
+    try std.testing.expectEqualStrings("bad array subscript", parameter_error.message);
 
-        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case.raw, .{ .features = compat.Features.bash(), .parameter_error = &parameter_error }));
-        try std.testing.expectEqualStrings(case.name, parameter_error.name);
-        try std.testing.expectEqualStrings("bad array subscript", parameter_error.message);
-    }
+    const missing_length = try expandWordScalar(std.testing.allocator, "${#missing[-1]}", .{ .features = compat.Features.bash() });
+    defer std.testing.allocator.free(missing_length);
+    try std.testing.expectEqualStrings("0", missing_length);
 }
 
 test "parameter expansion reports arithmetic errors in Bash array subscripts" {

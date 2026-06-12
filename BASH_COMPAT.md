@@ -59,9 +59,14 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   as `arr: bad array subscript`, `-1]: bad array subscript`,
   `arr[-1]: bad array subscript`, `[-1]=value: bad array subscript`, and
   `unset: [-1]: bad array subscript`.
-- Rush still treats unresolved negative-subscript failures as expansion errors
-  using Rush's existing non-interactive stopping behavior. Bash itself continues
-  after some compound-assignment and `unset` bad-subscript diagnostics.
+- Rush follows Bash 5.x consequences for the audited unresolved negative
+  subscript cases: element expansion diagnoses and expands as an empty value;
+  `${#missing[-1]}` expands to `0`; `${#arr[-1]}` for an existing empty array
+  remains a stopping expansion error; simple assignment such as `arr[-1]=value`
+  remains a stopping expansion error; compound assignment diagnoses and skips
+  invalid elements while keeping valid elements; and `unset 'arr[-1]'` diagnoses
+  with status 1 without stopping the following command, while `unset
+  'missing[-1]'` is a quiet no-op.
 
 ## Default common-shell compatibility
 
