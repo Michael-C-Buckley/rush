@@ -804,7 +804,6 @@ fn attachedShortCompletionOptionValue(rules: []const completion.Rule, root: []co
     while (index < word.len) : (index += 1) {
         const matched = findShortCompletionOption(rules, root, path, word[index]) orelse return null;
         if (matched.takes_value) {
-            if (index + 1 >= word.len) return null;
             return .{
                 .name = matched.name,
                 .spelling = word,
@@ -2983,6 +2982,8 @@ pub const Executor = struct {
     }
 
     fn appendStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
+        if (try self.appendActiveShortOptionClusterCandidates(builder, context)) return;
+
         for (self.completion_rules.items) |rule| {
             switch (rule.kind) {
                 .dynamic_subcommands, .dynamic_options, .dynamic_argument, .dynamic_option_value => {},
@@ -3013,6 +3014,40 @@ pub const Executor = struct {
                 },
             }
         }
+    }
+
+    fn appendActiveShortOptionClusterCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !bool {
+        if (context.position != .option) return false;
+        if (!isShortOptionCluster(context.prefix)) return false;
+        if (findCompletionOption(self.completion_rules.items, context.root, context.path, context.prefix) != null) return false;
+        const cluster = analyzeShortOptionCluster(self.completion_rules.items, context.root, context.path, context.prefix) orelse return false;
+        if (!cluster.valid) return false;
+        if (cluster.value_offset != null) return true;
+
+        var parsed_options: std.ArrayList(CompletionParsedOption) = .empty;
+        defer parsed_options.deinit(self.allocator);
+        try parsed_options.appendSlice(self.allocator, context.parsed_options);
+        _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, context.root, context.path, context.prefix);
+
+        var cluster_context = context;
+        cluster_context.parsed_options = parsed_options.items;
+        for (self.completion_rules.items) |rule| {
+            if (rule.kind != .option) continue;
+            if (!completionOptionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
+            const short = rule.option.short orelse continue;
+            if (short.len != 1) continue;
+            if (completionOptionSuppressionForOption(cluster_context, rule.option) != null) continue;
+            try builder.appendCandidateIfMissing(self.allocator, .{
+                .value = short,
+                .description = rule.description,
+                .kind = .option,
+                .option = rule.option,
+                .replace_start = context.replace_end,
+                .replace_end = context.replace_end,
+                .append_space = false,
+            });
+        }
+        return true;
     }
 
     fn appendBuiltinCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
@@ -22067,6 +22102,68 @@ test "completion analysis decomposes clustered short option occurrences" {
     try expectCandidate(candidates, "-i", .option);
 }
 
+test "completion inserts short option suffixes inside active clusters" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --short x --long execute
+        \\complete tool --option --short z --long zero
+        \\complete tool --option --short f --long force
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const source = "tool -xz";
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectCandidate(candidates, "f", .option);
+    try expectNoCandidate(candidates, "-f");
+    try expectNoCandidate(candidates, "--force");
+
+    const force = findCandidate(candidates, "f") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, source.len), force.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), force.replace_end);
+    try std.testing.expect(!force.append_space);
+    try std.testing.expectEqualStrings("f", force.option.?.short.?);
+    try std.testing.expectEqualStrings("force", force.option.?.long.?);
+
+    const application = try completion.applyCandidatesForInput(std.testing.allocator, source, &.{force});
+    defer application.deinit(std.testing.allocator);
+    const edit = application.edit;
+    try std.testing.expectEqual(@as(usize, source.len), edit.replace_start);
+    try std.testing.expectEqual(@as(usize, source.len), edit.replace_end);
+    try std.testing.expectEqualStrings("f", edit.replacement);
+    try std.testing.expect(!edit.append_space);
+}
+
+test "completion short option cluster suffixes respect exclusions and repeatables" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --short x --exclusive-group output
+        \\complete tool --option --short p --exclusive-group output
+        \\complete tool --option --short v --repeatable
+        \\complete tool --option --short r
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const candidates = try executor.collectCompletionsForInput("tool -xv", "tool -xv".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "x");
+    try expectNoCandidate(candidates, "p");
+    try expectCandidate(candidates, "v", .option);
+    try expectCandidate(candidates, "r", .option);
+}
+
 test "completion analysis handles attached and detached cluster values" {
     var setup = try parseAndLower(std.testing.allocator,
         \\complete grep --option --short n
@@ -22111,6 +22208,41 @@ test "completion analysis handles attached and detached cluster values" {
     defer missing.deinit();
     try std.testing.expectEqual(CompletionSemanticPosition.option_value, missing.position);
     try std.testing.expectEqualStrings("e", missing.option_value.?.name);
+}
+
+test "completion short option clusters switch to attached value completion" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\__grep_patterns() { completion candidate needle --description "$(completion option-spelling):$(completion prefix)"; }
+        \\complete grep --option --short n
+        \\complete grep --option --short e --value-name pattern
+        \\complete grep --option-value --short e --function __grep_patterns
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const source = "grep -ne";
+    var analysis = try executor.analyzeCompletionsForInput(source, source.len);
+    defer analysis.deinit();
+    try std.testing.expectEqual(CompletionSemanticPosition.option_value, analysis.position);
+    try std.testing.expectEqualStrings("e", analysis.option_value.?.name);
+    var spelling_buffer: [2]u8 = undefined;
+    try std.testing.expectEqualStrings("-e", analysis.option_value.?.displaySpelling(&spelling_buffer));
+    try std.testing.expectEqualStrings("", analysis.prefix);
+    try std.testing.expectEqual(@as(usize, source.len), analysis.replace_start);
+
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try expectNoCandidate(candidates, "n");
+    try expectCandidate(candidates, "needle", .plain);
+    const needle = findCandidate(candidates, "needle") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, source.len), needle.replace_start);
+    try std.testing.expectEqualStrings("-e:", needle.description.?);
 }
 
 test "completion analysis applies exclusions from clustered short options" {
@@ -22188,6 +22320,34 @@ test "completion analysis gives literal short spellings precedence over clusters
     try std.testing.expectEqualStrings("needle", analysis.parsed_options[0].value.?);
     try std.testing.expectEqual(@as(usize, 1), analysis.argument_index);
     try std.testing.expectEqualStrings("path", analysis.operands[0].value);
+}
+
+test "completion short option cluster suffixes require valid non-literal clusters" {
+    var setup = try parseAndLower(std.testing.allocator,
+        \\complete tool --option --short xz
+        \\complete tool --option --short x
+        \\complete tool --option --short z
+        \\complete tool --option --short f
+        \\complete ls --option --short x
+        \\complete ls --option --short f
+    );
+    defer setup.parsed.deinit();
+    defer setup.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(setup.program, .{ .io = std.testing.io });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+
+    const literal = try executor.collectCompletionsForInput("tool -xz", "tool -xz".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(literal);
+    try expectCandidate(literal, "-xz", .option);
+    try expectNoCandidate(literal, "f");
+
+    const invalid = try executor.collectCompletionsForInput("ls -xq", "ls -xq".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(invalid);
+    try expectNoCandidate(invalid, "f");
 }
 
 test "structured completion rules emit subcommand and option candidates" {
