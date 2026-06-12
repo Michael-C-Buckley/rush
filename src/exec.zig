@@ -5574,9 +5574,9 @@ pub const Executor = struct {
         const expanded = try self.expandSimpleCommand(command, options);
         defer self.freeExpandedCommand(expanded);
         if (expanded.argv.len == 0) return emptyResult(self.allocator, 0);
-        return self.executeExternalAsync(expanded, options.io.?, options) catch |err| switch (err) {
-            error.BadFileDescriptor, error.FileNotFound, error.IsDir, error.PathAlreadyExists => return self.asyncRedirectionErrorResult(expanded, err),
-            else => return err,
+        return self.executeExternalAsync(expanded, options.io.?, options) catch |err| {
+            if (isRedirectionFailure(err)) return self.asyncRedirectionErrorResult(expanded, err);
+            return err;
         };
     }
 
@@ -6127,7 +6127,7 @@ pub const Executor = struct {
         var stderr_output = try multi_reader.toOwnedSlice(1);
         errdefer self.allocator.free(stderr_output);
         for (stage_failures.items) |failure| {
-            statuses[failure.index] = 2;
+            statuses[failure.index] = 1;
             const combined = try std.mem.concat(self.allocator, u8, &.{ failure.diagnostic, stderr_output });
             self.allocator.free(stderr_output);
             stderr_output = combined;
@@ -6201,12 +6201,11 @@ pub const Executor = struct {
     }
 
     fn redirectionFailureDiagnostic(self: *Executor, command: ir.SimpleCommand, err: anyerror) !?[]u8 {
-        const name, const message = switch (err) {
-            error.BadFileDescriptor => .{ badFdTargetName(command), "bad file descriptor" },
-            error.FileNotFound => .{ redirectionTargetName(command), "no such file or directory" },
-            error.IsDir => .{ redirectionTargetName(command), "is a directory" },
-            error.PathAlreadyExists => .{ noclobberTargetName(command), "cannot overwrite existing file" },
-            else => return null,
+        const message = redirectionFailureMessage(err) orelse return null;
+        const name = switch (err) {
+            error.BadFileDescriptor => badFdTargetName(command),
+            error.PathAlreadyExists => noclobberTargetName(command),
+            else => redirectionTargetName(command),
         };
         return try std.fmt.allocPrint(self.allocator, "{s}: {s}\n", .{ name, message });
     }
@@ -7033,12 +7032,14 @@ pub const Executor = struct {
                 synthetic_failure = true;
                 break :blk try errorResult(self.allocator, 127, expanded.argv[0].text, "command not found");
             },
-            error.AccessDenied, error.PermissionDenied => blk: {
+            error.CommandAccessDenied => blk: {
                 synthetic_failure = true;
                 break :blk try errorResult(self.allocator, 126, expanded.argv[0].text, "permission denied");
             },
-            error.BadFileDescriptor, error.FileNotFound, error.IsDir, error.PathAlreadyExists => return self.redirectionErrorResult(expanded, err, false),
-            else => return err,
+            else => {
+                if (isRedirectionFailure(err)) return self.redirectionErrorResult(expanded, err, false);
+                return err;
+            },
         };
         errdefer external_result.deinit();
         if (synthetic_failure) return try self.applyOutputRedirections(expanded, external_result, options, false);
@@ -7056,13 +7057,13 @@ pub const Executor = struct {
     }
 
     fn redirectionErrorResult(self: *Executor, command: ir.SimpleCommand, err: anyerror, special_builtin: bool) !CommandResult {
-        const result = switch (err) {
-            error.PathAlreadyExists => try errorResult(self.allocator, 1, noclobberTargetName(command), "cannot overwrite existing file"),
-            error.BadFileDescriptor => try errorResult(self.allocator, 1, badFdTargetName(command), "bad file descriptor"),
-            error.FileNotFound => try errorResult(self.allocator, 1, redirectionTargetName(command), "no such file or directory"),
-            error.IsDir => try errorResult(self.allocator, 1, redirectionTargetName(command), "is a directory"),
-            else => return err,
+        const message = redirectionFailureMessage(err) orelse return err;
+        const name = switch (err) {
+            error.BadFileDescriptor => badFdTargetName(command),
+            error.PathAlreadyExists => noclobberTargetName(command),
+            else => redirectionTargetName(command),
         };
+        const result = try errorResult(self.allocator, 1, name, message);
         if (special_builtin) self.pending_exit = result.status;
         return result;
     }
@@ -8294,25 +8295,13 @@ pub const Executor = struct {
                 const fd = redirectionFd(redirection) orelse 1;
                 if (fd != 1 and fd != 2) continue;
                 self.validateOutputRedirection(redirection, options) catch |err| switch (err) {
-                    error.PathAlreadyExists => {
+                    else => {
+                        const message = redirectionFailureMessage(err) orelse return err;
                         redirected.deinit();
-                        const failure = try errorResult(self.allocator, 1, targetName(redirection), "cannot overwrite existing file");
+                        const failure = try errorResult(self.allocator, 1, targetName(redirection), message);
                         if (special_exit) self.pending_exit = failure.status;
                         return failure;
                     },
-                    error.FileNotFound => {
-                        redirected.deinit();
-                        const failure = try errorResult(self.allocator, 1, targetName(redirection), "no such file or directory");
-                        if (special_exit) self.pending_exit = failure.status;
-                        return failure;
-                    },
-                    error.IsDir => {
-                        redirected.deinit();
-                        const failure = try errorResult(self.allocator, 1, targetName(redirection), "is a directory");
-                        if (special_exit) self.pending_exit = failure.status;
-                        return failure;
-                    },
-                    else => return err,
                 };
                 const sink: OutputSink = .{ .file = .{ .redirection = redirection, .id = next_file_id } };
                 next_file_id += 1;
@@ -8805,6 +8794,7 @@ pub const Executor = struct {
         defer self.allocator.free(argv);
         const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
             error.CommandNotFound => return error.CommandNotFound,
+            error.AccessDenied, error.PermissionDenied => return error.CommandAccessDenied,
             else => return err,
         };
         defer if (resolved_executable) |executable| self.allocator.free(executable);
@@ -8956,7 +8946,7 @@ pub const Executor = struct {
             .pgid = child_pgid,
         }) catch |err| switch (err) {
             error.FileNotFound => return error.CommandNotFound,
-            error.AccessDenied, error.PermissionDenied, error.IsDir => return error.AccessDenied,
+            error.AccessDenied, error.PermissionDenied, error.IsDir => return error.CommandAccessDenied,
             else => return err,
         };
         errdefer child.kill(io);
@@ -9354,6 +9344,39 @@ fn writeFailureMessage(err: anyerror) ?[]const u8 {
         error.NoSpaceLeft => "no space left on device",
         error.InputOutput => "input/output error",
         error.WriteFailed => "write failed",
+        else => null,
+    };
+}
+
+fn isRedirectionFailure(err: anyerror) bool {
+    return redirectionFailureMessage(err) != null;
+}
+
+fn redirectionFailureMessage(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.BadFileDescriptor => "bad file descriptor",
+        error.PathAlreadyExists => "cannot overwrite existing file",
+        error.FileNotFound => "no such file or directory",
+        error.NotDir => "not a directory",
+        error.AccessDenied, error.PermissionDenied => "permission denied",
+        error.IsDir => "is a directory",
+        error.SymLinkLoop => "too many levels of symbolic links",
+        error.NameTooLong => "file name too long",
+        error.NoSpaceLeft => "no space left on device",
+        error.ReadOnlyFileSystem => "read-only file system",
+        error.FileTooBig => "file too large",
+        error.FileBusy => "file busy",
+        error.DeviceBusy => "device busy",
+        error.NoDevice => "no such device",
+        error.ProcessFdQuotaExceeded => "too many open files",
+        error.SystemFdQuotaExceeded => "too many open files in system",
+        error.SystemResources => "system resources unavailable",
+        error.BadPathName => "bad path name",
+        error.PipeBusy => "pipe busy",
+        error.NetworkNotFound => "network not found",
+        error.AntivirusInterference => "antivirus interference",
+        error.FileLocksUnsupported => "file locks unsupported",
+        error.WouldBlock => "resource temporarily unavailable",
         else => null,
     };
 }
@@ -19545,6 +19568,63 @@ test "executor streams large stdin redirections for builtins and compound comman
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("builtin:first line\nfunction:first line\ngroup:first line\n", result.stdout);
+}
+
+fn chmodTestPath(path: []const u8, mode: []const u8) !void {
+    const result = try std.process.run(std.testing.allocator, std.testing.io, .{ .argv = &.{ "/bin/chmod", mode, path } });
+    defer std.testing.allocator.free(result.stdout);
+    defer std.testing.allocator.free(result.stderr);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, result.term);
+}
+
+test "executor treats redirection permission denial as command failure" {
+    const output_path = "rush-test-redirection-permission-output.tmp";
+    const input_path = "rush-test-redirection-permission-input.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, input_path) catch {};
+
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = output_path, .data = "old" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = input_path, .data = "hidden" });
+    try chmodTestPath(output_path, "444");
+    defer chmodTestPath(output_path, "644") catch {};
+    try chmodTestPath(input_path, "000");
+    defer chmodTestPath(input_path, "644") catch {};
+
+    if (std.Io.Dir.cwd().createFile(std.testing.io, output_path, .{ .truncate = true })) |file| {
+        file.close(std.testing.io);
+        return error.SkipZigTest;
+    } else |err| switch (err) {
+        error.AccessDenied, error.PermissionDenied => {},
+        else => return err,
+    }
+    if (std.Io.Dir.cwd().openFile(std.testing.io, input_path, .{})) |file| {
+        file.close(std.testing.io);
+        return error.SkipZigTest;
+    } else |err| switch (err) {
+        error.AccessDenied, error.PermissionDenied => {},
+        else => return err,
+    }
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeScriptSlice(
+        \\echo x > rush-test-redirection-permission-output.tmp
+        \\printf 'out=%s\n' "$?"
+        \\/bin/cat < rush-test-redirection-permission-input.tmp
+        \\printf 'in=%s\n' "$?"
+        \\: | /bin/cat < rush-test-redirection-permission-input.tmp
+        \\printf 'pipe=%s\n' "$?"
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("out=1\nin=1\npipe=1\n", result.stdout);
+    try std.testing.expectEqualStrings(
+        "rush-test-redirection-permission-output.tmp: permission denied\n" ++
+            "rush-test-redirection-permission-input.tmp: permission denied\n" ++
+            "rush-test-redirection-permission-input.tmp: permission denied\n",
+        result.stderr,
+    );
 }
 
 test "executor redirects stdout to files" {
