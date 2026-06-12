@@ -10441,20 +10441,18 @@ fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u
         else => {},
     }
 
+    if (spec.spec == 'b') {
+        var escaped: std.ArrayList(u8) = .empty;
+        errdefer escaped.deinit(allocator);
+        const keep_going = try appendEscapedString(allocator, &escaped, arg);
+        const bytes = try escaped.toOwnedSlice(allocator);
+        defer allocator.free(bytes);
+        try appendPadded(allocator, stdout, truncatePrintfBytes(bytes, spec.precision), spec);
+        return keep_going;
+    }
+
     const rendered: []u8 = switch (spec.spec) {
         's' => try formatPrintfString(allocator, arg, spec.precision),
-        'b' => blk: {
-            var escaped: std.ArrayList(u8) = .empty;
-            errdefer escaped.deinit(allocator);
-            const keep_going = try appendEscapedString(allocator, &escaped, arg);
-            const bytes = try escaped.toOwnedSlice(allocator);
-            if (!keep_going) {
-                try appendPadded(allocator, stdout, bytes, spec);
-                allocator.free(bytes);
-                return false;
-            }
-            break :blk bytes;
-        },
         'c' => try allocator.dupe(u8, if (arg.len == 0) &[_]u8{0} else arg[0..1]),
         else => blk: {
             try printfDiagnostic(allocator, stderr, status, "invalid conversion");
@@ -10467,8 +10465,12 @@ fn appendPrintfConversion(allocator: std.mem.Allocator, stdout: *std.ArrayList(u
 }
 
 fn formatPrintfString(allocator: std.mem.Allocator, arg: []const u8, precision: ?usize) ![]u8 {
-    const limit = if (precision) |value| @min(value, arg.len) else arg.len;
-    return allocator.dupe(u8, arg[0..limit]);
+    return allocator.dupe(u8, truncatePrintfBytes(arg, precision));
+}
+
+fn truncatePrintfBytes(text: []const u8, precision: ?usize) []const u8 {
+    const limit = if (precision) |value| @min(value, text.len) else text.len;
+    return text[0..limit];
 }
 
 fn formatPrintfSignedInteger(allocator: std.mem.Allocator, spec: PrintfSpec, value: i64) ![]u8 {
@@ -15326,6 +15328,13 @@ test "executor implements read and printf builtins" {
     var escaped_result = try executor.executeProgram(escaped_lowered.program, .{});
     defer escaped_result.deinit();
     try std.testing.expectEqualStrings("x\ny", escaped_result.stdout);
+
+    var escaped_precision_lowered = try parseAndLower(std.testing.allocator, "printf '[%.3b][%6.3b][%-6.3b][%.4b]\\n' abcdef 'a\\nbcd' abcdef 'x\\141yz'");
+    defer escaped_precision_lowered.parsed.deinit();
+    defer escaped_precision_lowered.program.deinit();
+    var escaped_precision_result = try executor.executeProgram(escaped_precision_lowered.program, .{});
+    defer escaped_precision_result.deinit();
+    try std.testing.expectEqualStrings("[abc][   a\nb][abc   ][xayz]\n", escaped_precision_result.stdout);
 
     var octal_escape = try parseAndLower(std.testing.allocator, "printf 'A\\101'; printf '%b' 'B\\0101'; printf '%b' 'C\\cD'");
     defer octal_escape.parsed.deinit();

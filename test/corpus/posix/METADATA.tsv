@@ -325,6 +325,7 @@ builtin-set-positionals	builtin	behavior	set -- sets and clears positional param
 builtin-read-eof-status	builtin	behavior	read returns non-zero at EOF while assigning an empty value
 builtin-dot-path-search	builtin	behavior	dot searches PATH for scripts without slash operands
 builtin-printf-b-c-conversions	builtin	behavior	printf %b expands escapes and %c uses the first character
+builtin-printf-b-precision	builtin	behavior	printf %b applies precision after escape expansion before width padding
 builtin-unalias-all	builtin	behavior	unalias -a removes all aliases
 builtin-return-status-default	builtin	behavior	return uses explicit status or previous command status when omitted
 builtin-exit-status-default	builtin	behavior	exit without operands exits with previous command status
