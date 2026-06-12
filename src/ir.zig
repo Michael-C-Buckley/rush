@@ -332,6 +332,264 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     };
 }
 
+pub fn lowerParsedList(allocator: std.mem.Allocator, parsed: parser.ParseResult, list_node: parser.Node) !Program {
+    return lowerListNode(allocator, parsed, list_node, list_node.span);
+}
+
+fn lowerListNode(allocator: std.mem.Allocator, parsed: parser.ParseResult, list_node: parser.Node, source_span: parser.Span) !Program {
+    std.debug.assert(list_node.kind == .list);
+    var commands: std.ArrayList(SimpleCommand) = .empty;
+    var pipelines: std.ArrayList(Pipeline) = .empty;
+    var if_commands: std.ArrayList(IfCommand) = .empty;
+    var loop_commands: std.ArrayList(LoopCommand) = .empty;
+    var for_commands: std.ArrayList(ForCommand) = .empty;
+    var case_commands: std.ArrayList(CaseCommand) = .empty;
+    var function_definitions: std.ArrayList(FunctionDefinition) = .empty;
+    var bash_test_commands: std.ArrayList(BashTestCommand) = .empty;
+    var brace_groups: std.ArrayList(BraceGroup) = .empty;
+    var subshells: std.ArrayList(Subshell) = .empty;
+    var statements: std.ArrayList(Statement) = .empty;
+
+    errdefer {
+        for (commands.items) |command| freeCommand(allocator, command);
+        commands.deinit(allocator);
+        for (pipelines.items) |pipeline| {
+            allocator.free(pipeline.command_indexes);
+            allocator.free(pipeline.stage_spans);
+        }
+        pipelines.deinit(allocator);
+        for (if_commands.items) |command| freeIfCommand(allocator, command);
+        if_commands.deinit(allocator);
+        for (loop_commands.items) |command| freeLoopCommand(allocator, command);
+        loop_commands.deinit(allocator);
+        for (for_commands.items) |command| freeForCommand(allocator, command);
+        for_commands.deinit(allocator);
+        for (case_commands.items) |command| freeCaseCommand(allocator, command);
+        case_commands.deinit(allocator);
+        for (function_definitions.items) |definition| freeFunctionDefinition(allocator, definition);
+        function_definitions.deinit(allocator);
+        for (bash_test_commands.items) |command| freeBashTestCommand(allocator, command);
+        bash_test_commands.deinit(allocator);
+        for (brace_groups.items) |group| freeBraceGroup(allocator, group);
+        brace_groups.deinit(allocator);
+        for (subshells.items) |subshell| freeSubshell(allocator, subshell);
+        subshells.deinit(allocator);
+        statements.deinit(allocator);
+    }
+
+    var previous_statement_end: ?usize = null;
+    for (parsed.nodeChildren(list_node)) |child| {
+        const child_node_id = switch (child) {
+            .node => |node_id| node_id,
+            .token => continue,
+        };
+        const child_node = parsed.nodes[child_node_id.index()];
+        var statement: Statement = switch (child_node.kind) {
+            .pipeline => blk: {
+                var lowered = try lowerPipelineDirect(allocator, parsed, child_node, &commands);
+                lowered.async_after = statementHasAsyncTerminator(parsed.tokens, child_node.token_end, nextListStatementStart(parsed, list_node, child_node.token_end));
+                const pipeline_index = pipelines.items.len;
+                try pipelines.append(allocator, lowered);
+                break :blk .{ .kind = .pipeline, .index = pipeline_index, .span = child_node.span, .async_after = lowered.async_after };
+            },
+            .if_command => blk: {
+                const index = if_commands.items.len;
+                try if_commands.append(allocator, try lowerIfCommand(allocator, parsed, child_node));
+                break :blk .{ .kind = .if_command, .index = index, .span = child_node.span };
+            },
+            .loop_command => blk: {
+                const index = loop_commands.items.len;
+                try loop_commands.append(allocator, try lowerLoopCommand(allocator, parsed, child_node));
+                break :blk .{ .kind = .loop_command, .index = index, .span = child_node.span };
+            },
+            .for_command => blk: {
+                const index = for_commands.items.len;
+                try for_commands.append(allocator, try lowerForCommand(allocator, parsed, child_node));
+                break :blk .{ .kind = .for_command, .index = index, .span = child_node.span };
+            },
+            .case_command => blk: {
+                const index = case_commands.items.len;
+                try case_commands.append(allocator, try lowerCaseCommand(allocator, parsed, child_node));
+                break :blk .{ .kind = .case_command, .index = index, .span = child_node.span };
+            },
+            .function_definition => blk: {
+                const index = function_definitions.items.len;
+                try function_definitions.append(allocator, try lowerFunctionDefinition(allocator, parsed, child_node));
+                break :blk .{ .kind = .function_definition, .index = index, .span = child_node.span };
+            },
+            .bash_test_command => blk: {
+                const index = bash_test_commands.items.len;
+                try bash_test_commands.append(allocator, try lowerBashTestCommand(allocator, parsed, child_node));
+                break :blk .{ .kind = .bash_test_command, .index = index, .span = child_node.span };
+            },
+            .brace_group => blk: {
+                const index = brace_groups.items.len;
+                try brace_groups.append(allocator, try lowerBraceGroup(allocator, parsed, child_node));
+                break :blk .{ .kind = .brace_group, .index = index, .span = child_node.span };
+            },
+            .subshell => blk: {
+                const index = subshells.items.len;
+                try subshells.append(allocator, try lowerSubshell(allocator, parsed, child_node));
+                break :blk .{ .kind = .subshell, .index = index, .span = child_node.span };
+            },
+            else => continue,
+        };
+        if (previous_statement_end) |previous_end| statement.op_before = listOpBetween(parsed.tokens, previous_end, child_node.token_start);
+        statement.async_after = statementHasAsyncTerminator(parsed.tokens, child_node.token_end, nextListStatementStart(parsed, list_node, child_node.token_end));
+        if (statement.kind == .pipeline) pipelines.items[statement.index].async_after = statement.async_after;
+        previous_statement_end = if (previous_statement_end) |previous_end| @max(previous_end, child_node.token_end) else child_node.token_end;
+        try statements.append(allocator, statement);
+    }
+
+    var program: Program = .{
+        .allocator = allocator,
+        .source = parsed.source[source_span.start..source_span.end],
+        .commands = try commands.toOwnedSlice(allocator),
+        .pipelines = try pipelines.toOwnedSlice(allocator),
+        .if_commands = try if_commands.toOwnedSlice(allocator),
+        .loop_commands = try loop_commands.toOwnedSlice(allocator),
+        .for_commands = try for_commands.toOwnedSlice(allocator),
+        .case_commands = try case_commands.toOwnedSlice(allocator),
+        .function_definitions = try function_definitions.toOwnedSlice(allocator),
+        .bash_test_commands = try bash_test_commands.toOwnedSlice(allocator),
+        .brace_groups = try brace_groups.toOwnedSlice(allocator),
+        .subshells = try subshells.toOwnedSlice(allocator),
+        .statements = try statements.toOwnedSlice(allocator),
+    };
+    relocateProgramSpans(&program, source_span.start);
+    return program;
+}
+
+fn nextListStatementStart(parsed: parser.ParseResult, list_node: parser.Node, after_token: usize) usize {
+    for (parsed.nodeChildren(list_node)) |child| {
+        const child_node_id = switch (child) {
+            .node => |node_id| node_id,
+            .token => continue,
+        };
+        const child_node = parsed.nodes[child_node_id.index()];
+        if (!isStatementNode(child_node.kind) or child_node.token_start <= after_token) continue;
+        return child_node.token_start;
+    }
+    return list_node.token_end;
+}
+
+fn isStatementNode(kind: parser.NodeKind) bool {
+    return switch (kind) {
+        .pipeline,
+        .if_command,
+        .loop_command,
+        .for_command,
+        .case_command,
+        .function_definition,
+        .bash_test_command,
+        .brace_group,
+        .subshell,
+        => true,
+        else => false,
+    };
+}
+
+fn lowerPipelineDirect(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node, commands: *std.ArrayList(SimpleCommand)) !Pipeline {
+    std.debug.assert(node.kind == .pipeline);
+    var command_indexes: std.ArrayList(usize) = .empty;
+    errdefer command_indexes.deinit(allocator);
+    var stage_spans: std.ArrayList(parser.Span) = .empty;
+    errdefer stage_spans.deinit(allocator);
+    var negated = false;
+
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .token => |token_index| {
+            const token = parsed.tokens[token_index.index()];
+            if (token.kind == .word and std.mem.eql(u8, token.lexeme(parsed.source), "!")) negated = true;
+        },
+        .node => |child_node_id| {
+            const child_node = parsed.nodes[child_node_id.index()];
+            try stage_spans.append(allocator, child_node.span);
+            if (child_node.kind == .simple_command) {
+                const command_index = commands.items.len;
+                try commands.append(allocator, try lowerSimpleCommand(allocator, parsed, child_node_id));
+                try command_indexes.append(allocator, command_index);
+            }
+        },
+    };
+
+    return .{
+        .span = node.span,
+        .command_indexes = try command_indexes.toOwnedSlice(allocator),
+        .stage_spans = try stage_spans.toOwnedSlice(allocator),
+        .negated = negated,
+    };
+}
+
+fn relocateProgramSpans(program: *Program, source_offset: usize) void {
+    for (program.commands) |*command| relocateSimpleCommandSpans(command, source_offset);
+    for (program.pipelines) |*pipeline| {
+        pipeline.span = relocateSpan(pipeline.span, source_offset);
+        for (pipeline.stage_spans) |*span| span.* = relocateSpan(span.*, source_offset);
+    }
+    for (program.if_commands) |*command| {
+        command.span = relocateSpan(command.span, source_offset);
+        for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
+    }
+    for (program.loop_commands) |*command| {
+        command.span = relocateSpan(command.span, source_offset);
+        for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
+    }
+    for (program.for_commands) |*command| {
+        command.span = relocateSpan(command.span, source_offset);
+        for (command.words) |*word| relocateWordSpans(word, source_offset);
+        for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
+    }
+    for (program.case_commands) |*command| {
+        command.span = relocateSpan(command.span, source_offset);
+        relocateWordSpans(&command.word, source_offset);
+        for (command.arms) |*arm| {
+            for (arm.patterns) |*pattern| relocateWordSpans(pattern, source_offset);
+        }
+        for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
+    }
+    for (program.function_definitions) |*definition| {
+        definition.span = relocateSpan(definition.span, source_offset);
+        for (definition.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
+    }
+    for (program.bash_test_commands) |*command| {
+        command.span = relocateSpan(command.span, source_offset);
+        for (command.args) |*arg| relocateWordSpans(arg, source_offset);
+    }
+    for (program.brace_groups) |*group| {
+        group.span = relocateSpan(group.span, source_offset);
+        for (group.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
+    }
+    for (program.subshells) |*subshell| {
+        subshell.span = relocateSpan(subshell.span, source_offset);
+        for (subshell.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
+    }
+    for (program.statements) |*statement| statement.span = relocateSpan(statement.span, source_offset);
+}
+
+fn relocateSimpleCommandSpans(command: *SimpleCommand, source_offset: usize) void {
+    command.span = relocateSpan(command.span, source_offset);
+    for (command.assignments) |*word| relocateWordSpans(word, source_offset);
+    for (command.argv) |*word| relocateWordSpans(word, source_offset);
+    for (command.redirections) |*redirection| relocateRedirectionSpans(redirection, source_offset);
+}
+
+fn relocateRedirectionSpans(redirection: *Redirection, source_offset: usize) void {
+    redirection.span = relocateSpan(redirection.span, source_offset);
+    if (redirection.io_number) |*word| relocateWordSpans(word, source_offset);
+    if (redirection.target) |*word| relocateWordSpans(word, source_offset);
+}
+
+fn relocateWordSpans(word: *WordRef, source_offset: usize) void {
+    word.span = relocateSpan(word.span, source_offset);
+}
+
+fn relocateSpan(span: parser.Span, source_offset: usize) parser.Span {
+    std.debug.assert(span.start >= source_offset);
+    std.debug.assert(span.end >= source_offset);
+    return .init(span.start - source_offset, span.end - source_offset);
+}
+
 fn collectNestedBodyRanges(allocator: std.mem.Allocator, parsed: parser.ParseResult) !std.ArrayList(parser.Span) {
     var ranges: std.ArrayList(parser.Span) = .empty;
     errdefer ranges.deinit(allocator);

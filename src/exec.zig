@@ -1606,6 +1606,18 @@ fn freeFunctionValueWord(allocator: std.mem.Allocator, word: ir.WordRef) void {
     allocator.free(word.text);
 }
 
+const ParsedBodyProgram = struct {
+    ptr: usize,
+    len: usize,
+    alias_generation: u64,
+    program: ir.Program,
+
+    fn deinit(self: *ParsedBodyProgram) void {
+        self.program.deinit();
+        self.* = undefined;
+    }
+};
+
 pub const BackgroundJob = struct {
     id: usize,
     pid: i64,
@@ -1730,6 +1742,7 @@ pub const Executor = struct {
     arrays: std.StringHashMapUnmanaged(ArrayValue) = .empty,
     functions: std.StringHashMapUnmanaged(FunctionValue) = .empty,
     aliases: std.StringHashMapUnmanaged([]const u8) = .empty,
+    alias_generation: u64 = 0,
     command_hash: std.StringHashMapUnmanaged([]const u8) = .empty,
     abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
     traps: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -1805,6 +1818,9 @@ pub const Executor = struct {
     script_stdin: ?[]const u8 = null,
     script_stdin_offset: usize = 0,
     script_stdin_file: ?std.Io.File = null,
+    parsed_body_programs: std.ArrayList(ParsedBodyProgram) = .empty,
+    parsed_body_cache_hits: usize = 0,
+    parsed_body_cache_inserts: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
         var executor: Executor = .{ .allocator = allocator, .ignored_trap_signals_at_entry = ignoredTrapSignalsAtEntry() };
@@ -2287,6 +2303,8 @@ pub const Executor = struct {
         self.global_positionals.deinit(self.allocator);
         for (self.call_frames.items) |*frame| frame.deinit(self.allocator);
         self.call_frames.deinit(self.allocator);
+        self.clearParsedBodyProgramsFrom(0);
+        self.parsed_body_programs.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -4419,6 +4437,7 @@ pub const Executor = struct {
         while (function_iter.next()) |entry| try self.setFunction(entry.key_ptr.*, entry.value_ptr.body, entry.value_ptr.redirections);
         var alias_iter = other.aliases.iterator();
         while (alias_iter.next()) |entry| try self.setAlias(entry.key_ptr.*, entry.value_ptr.*);
+        self.alias_generation = other.alias_generation;
         var command_hash_iter = other.command_hash.iterator();
         while (command_hash_iter.next()) |entry| try self.rememberCommandHash(entry.key_ptr.*, entry.value_ptr.*);
         var abbr_iter = other.abbreviations.iterator();
@@ -4777,12 +4796,14 @@ pub const Executor = struct {
         } else {
             result.value_ptr.* = owned_value;
         }
+        self.alias_generation +%= 1;
     }
 
     fn unsetAlias(self: *Executor, name: []const u8) bool {
         if (self.aliases.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
+            self.alias_generation +%= 1;
             return true;
         }
         return false;
@@ -5515,9 +5536,61 @@ pub const Executor = struct {
         return text[index..];
     }
 
+    fn scriptSlicePtr(script: []const u8) usize {
+        return if (script.len == 0) 0 else @intFromPtr(script.ptr);
+    }
+
+    fn cachedParsedBodyProgram(self: *Executor, script: []const u8) ?ir.Program {
+        const ptr = scriptSlicePtr(script);
+        for (self.parsed_body_programs.items) |entry| {
+            if (entry.ptr == ptr and entry.len == script.len and entry.alias_generation == self.alias_generation) {
+                self.parsed_body_cache_hits += 1;
+                return entry.program;
+            }
+        }
+        return null;
+    }
+
+    fn parsedBodyProgramCached(self: Executor, script: []const u8) bool {
+        const ptr = scriptSlicePtr(script);
+        for (self.parsed_body_programs.items) |entry| {
+            if (entry.ptr == ptr and entry.len == script.len and entry.alias_generation == self.alias_generation) return true;
+        }
+        return false;
+    }
+
+    fn populateParsedBodyProgramCache(self: *Executor, parsed: parser.ParseResult) !void {
+        for (parsed.nodes) |node| {
+            if (node.kind != .list or node.span.start >= node.span.end) continue;
+            const source = parsed.source[node.span.start..node.span.end];
+            if (containsAliasTimingCommandToken(source)) continue;
+            if (self.parsedBodyProgramCached(source)) continue;
+            var program = try ir.lowerParsedList(self.allocator, parsed, node);
+            errdefer program.deinit();
+            try self.parsed_body_programs.append(self.allocator, .{
+                .ptr = scriptSlicePtr(source),
+                .len = source.len,
+                .alias_generation = self.alias_generation,
+                .program = program,
+            });
+            self.parsed_body_cache_inserts += 1;
+        }
+    }
+
+    fn clearParsedBodyProgramsFrom(self: *Executor, start: usize) void {
+        std.debug.assert(start <= self.parsed_body_programs.items.len);
+        var index = self.parsed_body_programs.items.len;
+        while (index > start) {
+            index -= 1;
+            self.parsed_body_programs.items[index].deinit();
+        }
+        self.parsed_body_programs.shrinkRetainingCapacity(start);
+    }
+
     pub fn executeScriptSlice(self: *Executor, script: []const u8, options: ExecuteOptions) anyerror!CommandResult {
         const trimmed = std.mem.trim(u8, script, " \t\r\n;");
         if (trimmed.len == 0) return emptyResult(self.allocator, 0);
+        if (self.cachedParsedBodyProgram(script)) |program| return self.executeProgram(program, options);
         const source = std.mem.trimStart(u8, script, " \t\r\n;");
         if (options.alias_timing_chunks and containsAliasTimingCommandToken(source)) {
             if (try self.aliasTimingChunkProgram(source, options)) |chunk_program| {
@@ -5533,6 +5606,9 @@ pub const Executor = struct {
         if (parsed.diagnostics.len != 0) return error.ParseError;
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         defer program.deinit();
+        const cache_start = self.parsed_body_programs.items.len;
+        defer self.clearParsedBodyProgramsFrom(cache_start);
+        try self.populateParsedBodyProgramCache(parsed);
         if (self.shouldSkipForNoexec(options)) return emptyResult(self.allocator, 0);
         var result = try self.executeProgram(program, options);
         errdefer result.deinit();
@@ -13721,6 +13797,7 @@ fn builtinUnalias(self: *Executor, command: ir.SimpleCommand, stdin: []const u8,
             self.allocator.free(entry.value_ptr.*);
         }
         self.aliases.clearRetainingCapacity();
+        self.alias_generation +%= 1;
         index += 1;
         if (index == command.argv.len) return emptyResult(self.allocator, 0);
     }
@@ -16470,6 +16547,45 @@ test "executor unwinds over-depth loop control to subshell boundaries" {
     defer no_outer_substitution.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), no_outer_substitution.status);
     try std.testing.expectEqualStrings("value=<sub_after>\n", no_outer_substitution.stdout);
+}
+
+test "executor reuses parsed programs for nested compound bodies" {
+    const depth = 64;
+    var script: std.ArrayList(u8) = .empty;
+    defer script.deinit(std.testing.allocator);
+    for (0..depth) |index| {
+        const opener = try std.fmt.allocPrint(std.testing.allocator, "for v{d} in 1; do ", .{index});
+        defer std.testing.allocator.free(opener);
+        try script.appendSlice(std.testing.allocator, opener);
+    }
+    try script.appendSlice(std.testing.allocator, "echo deep");
+    for (0..depth) |_| try script.appendSlice(std.testing.allocator, "; done");
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(script.items, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("deep\n", result.stdout);
+    try std.testing.expect(executor.parsed_body_cache_inserts >= depth);
+    try std.testing.expect(executor.parsed_body_cache_hits >= depth);
+}
+
+test "executor keeps alias timing semantics for uncached compound bodies" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\for x in 1; do
+        \\  alias zzloop='echo loop-ok'
+        \\  zzloop
+        \\done
+    , .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("loop-ok\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor supports return builtin in shell functions" {
