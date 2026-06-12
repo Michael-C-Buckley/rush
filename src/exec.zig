@@ -13688,28 +13688,36 @@ fn builtinCd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opti
     const cd_target = try resolveCdTarget(self, io, target);
     defer cd_target.deinit(self.allocator);
 
-    std.process.setCurrentPath(io, cd_target.path) catch |err| {
+    var new_pwd = if (physical) null else normalizeLogicalCdPath(self.allocator, io, old_pwd, cd_target.path) catch |err| {
         const message = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ cd_target.path, cdErrorMessage(err) });
         defer self.allocator.free(message);
         return errorResult(self.allocator, 1, "cd", message);
     };
-    const new_pwd = if (physical)
-        try self.physicalCwd(io)
-    else
-        try normalizeLogicalPath(self.allocator, old_pwd, cd_target.path);
-    errdefer self.allocator.free(new_pwd);
+    errdefer if (new_pwd) |pwd| self.allocator.free(pwd);
+
+    const chdir_path = new_pwd orelse cd_target.path;
+    std.process.setCurrentPath(io, chdir_path) catch |err| {
+        const message = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ cd_target.path, cdErrorMessage(err) });
+        defer self.allocator.free(message);
+        return errorResult(self.allocator, 1, "cd", message);
+    };
+    if (physical) new_pwd = try self.physicalCwd(io);
+    const final_pwd = new_pwd.?;
     try self.setEnv("OLDPWD", old_pwd);
-    try self.setEnv("PWD", new_pwd);
+    try self.setEnv("PWD", final_pwd);
     try self.setExported("OLDPWD");
     try self.setExported("PWD");
-    const stdout = if (oldpwd_target or cd_target.print_path) try std.fmt.allocPrint(self.allocator, "{s}\n", .{new_pwd}) else try self.allocator.alloc(u8, 0);
+    const stdout = if (oldpwd_target or cd_target.print_path) try std.fmt.allocPrint(self.allocator, "{s}\n", .{final_pwd}) else try self.allocator.alloc(u8, 0);
     errdefer self.allocator.free(stdout);
-    self.allocator.free(new_pwd);
+    const stderr = try self.allocator.alloc(u8, 0);
+    errdefer self.allocator.free(stderr);
+    self.allocator.free(final_pwd);
+    new_pwd = null;
     return .{
         .allocator = self.allocator,
         .status = 0,
         .stdout = stdout,
-        .stderr = try self.allocator.alloc(u8, 0),
+        .stderr = stderr,
     };
 }
 
@@ -13767,6 +13775,50 @@ fn pathHasDotOrDotDotComponent(path: []const u8) bool {
         if (std.mem.eql(u8, component, ".") or std.mem.eql(u8, component, "..")) return true;
     }
     return false;
+}
+
+fn normalizeLogicalCdPath(allocator: std.mem.Allocator, io: std.Io, base: []const u8, target: []const u8) ![]const u8 {
+    try validateLogicalCdDotDotPrefixes(allocator, io, base, target);
+    return normalizeLogicalPath(allocator, base, target);
+}
+
+fn validateLogicalCdDotDotPrefixes(allocator: std.mem.Allocator, io: std.Io, base: []const u8, target: []const u8) !void {
+    const combined = if (target.len > 0 and target[0] == '/')
+        try allocator.dupe(u8, target)
+    else
+        try std.mem.concat(allocator, u8, &.{ base, "/", target });
+    defer allocator.free(combined);
+
+    const source_root = if (target.len > 0 and target[0] == '/') target else base;
+    const double_slash_root = source_root.len >= 2 and source_root[0] == '/' and source_root[1] == '/' and
+        (source_root.len == 2 or source_root[2] != '/');
+
+    var parts: std.ArrayList([]const u8) = .empty;
+    defer parts.deinit(allocator);
+    var iter = std.mem.splitScalar(u8, combined, '/');
+    while (iter.next()) |part| {
+        if (part.len == 0 or std.mem.eql(u8, part, ".")) continue;
+        if (std.mem.eql(u8, part, "..")) {
+            if (parts.items.len > 0) {
+                try validateLogicalCdPrefix(allocator, io, parts.items, double_slash_root);
+                _ = parts.pop();
+            }
+            continue;
+        }
+        try parts.append(allocator, part);
+    }
+}
+
+fn validateLogicalCdPrefix(allocator: std.mem.Allocator, io: std.Io, parts: []const []const u8, double_slash_root: bool) !void {
+    var prefix: std.ArrayList(u8) = .empty;
+    defer prefix.deinit(allocator);
+    if (double_slash_root) try prefix.append(allocator, '/');
+    for (parts) |part| {
+        try prefix.append(allocator, '/');
+        try prefix.appendSlice(allocator, part);
+    }
+    const stat = try std.Io.Dir.cwd().statFile(io, prefix.items, .{});
+    if (stat.kind != .directory) return error.NotDir;
 }
 
 fn builtinPwd(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -19442,6 +19494,68 @@ test "executor implements pwd cd and export builtins" {
     defer export_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), export_result.status);
     try std.testing.expectEqualStrings("ok\n", export_result.stdout);
+}
+
+test "cd -L resolves dot-dot against logical symlink paths before chdir" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+
+    const root = "rush-cd-logical-dotdot.tmp";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/sub/deep");
+    try std.Io.Dir.cwd().symLink(std.testing.io, "sub/deep", root ++ "/link", .{ .is_directory = true });
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    const root_path = if (std.mem.eql(u8, original_cwd, "/"))
+        try std.mem.concat(std.testing.allocator, u8, &.{ "/", root })
+    else
+        try std.mem.concat(std.testing.allocator, u8, &.{ original_cwd, "/", root });
+    defer std.testing.allocator.free(root_path);
+
+    var script: std.ArrayList(u8) = .empty;
+    defer script.deinit(std.testing.allocator);
+    try script.appendSlice(std.testing.allocator, "cd ");
+    try appendShellQuoted(std.testing.allocator, &script, root_path);
+    try script.append(std.testing.allocator, '\n');
+    try script.appendSlice(std.testing.allocator,
+        \\cd link
+        \\cd ..
+        \\printf 'after-cd-dotdot:PWD=%s\n' "$PWD"
+        \\pwd -P
+        \\cd link/..
+        \\printf 'after-operand-dotdot:PWD=%s\n' "$PWD"
+        \\pwd -P
+        \\cd missing/..
+        \\missing=$?
+        \\printf 'missing-dotdot=%s\n' "$missing"
+        \\pwd -P
+        \\
+    );
+
+    var lowered = try parseAndLower(std.testing.allocator, script.items);
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io });
+    defer result.deinit();
+
+    const expected_stdout = try std.fmt.allocPrint(std.testing.allocator,
+        \\after-cd-dotdot:PWD={s}
+        \\{s}
+        \\after-operand-dotdot:PWD={s}
+        \\{s}
+        \\missing-dotdot=1
+        \\{s}
+        \\
+    , .{ root_path, root_path, root_path, root_path, root_path });
+    defer std.testing.allocator.free(expected_stdout);
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(expected_stdout, result.stdout);
+    try std.testing.expectEqualStrings("cd: missing/..: no such file or directory\n", result.stderr);
 }
 
 test "executor expands arithmetic expressions in argv" {
