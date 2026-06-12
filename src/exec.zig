@@ -5797,7 +5797,10 @@ pub const Executor = struct {
         const use_monitor_pgrp = self.monitorProcessGroupsEnabled();
         const use_cancel_pgrp = completionCancelProcessGroup(options);
         const use_process_pgrp = use_monitor_pgrp or use_cancel_pgrp;
-        const pid = try forkProcess();
+        const pid = forkProcess() catch |err| {
+            const message = spawnResourceMessage(err) orelse return err;
+            return errorResult(self.allocator, 126, "cannot fork", message);
+        };
         if (pid == 0) {
             if (use_process_pgrp) processSetPgrp(0, 0) catch exitForkedChild(2);
             self.resetCaughtTrapsForSubshell() catch exitForkedChild(2);
@@ -6021,7 +6024,17 @@ pub const Executor = struct {
 
         for (pipeline.stage_spans, 0..) |stage_span, index| {
             const is_last = index + 1 == pipeline.stage_spans.len;
-            var next_pipe: ?PipelinePipe = if (!is_last) try makePipelinePipe(io) else null;
+            const stage_failure_name = if (stageSimpleCommandIndex(program, pipeline, index)) |command_index| blk: {
+                const command = program.commands[command_index];
+                break :blk if (command.argv.len == 0) "cannot fork" else command.argv[0].text;
+            } else "cannot fork";
+            var next_pipe: ?PipelinePipe = if (!is_last) makePipelinePipe(io) catch |err| {
+                const message = if (std.mem.eql(u8, stage_failure_name, "cannot fork"))
+                    spawnResourceMessage(err) orelse return err
+                else
+                    spawnResourceDiagnostic(err) orelse return err;
+                return errorResult(self.allocator, 126, stage_failure_name, message);
+            } else null;
             errdefer if (next_pipe) |*pipe| pipe.close(io);
 
             const stdin_file = previous_stdout;
@@ -6033,13 +6046,31 @@ pub const Executor = struct {
             if (stageSimpleCommandIndex(program, pipeline, index)) |command_index| {
                 const command = program.commands[command_index];
                 if (builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
-                    children[spawned] = try self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, null, io);
+                    children[spawned] = self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, null, io) catch |err| {
+                        const message = spawnResourceMessage(err) orelse return err;
+                        if (stdin_file) |file| file.close(io);
+                        if (next_pipe) |*pipe| pipe.close(io);
+                        for (children[0..spawned]) |*child| child.kill(io);
+                        return errorResult(self.allocator, 126, "cannot fork", message);
+                    };
                 } else {
-                    children[spawned] = try self.spawnSpanPipelineExternalStage(command, options, stdin_file, stdout_file, is_last, io);
+                    children[spawned] = self.spawnSpanPipelineExternalStage(command, options, stdin_file, stdout_file, is_last, io) catch |err| {
+                        const failure = spawnErrorCommandFailure(err) orelse return err;
+                        if (stdin_file) |file| file.close(io);
+                        if (next_pipe) |*pipe| pipe.close(io);
+                        for (children[0..spawned]) |*child| child.kill(io);
+                        return errorResult(self.allocator, failure.status, command.argv[0].text, failure.message);
+                    };
                 }
             } else {
                 std.debug.assert(!is_last);
-                children[spawned] = try self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, null, io);
+                children[spawned] = self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, null, io) catch |err| {
+                    const message = spawnResourceMessage(err) orelse return err;
+                    if (stdin_file) |file| file.close(io);
+                    if (next_pipe) |*pipe| pipe.close(io);
+                    for (children[0..spawned]) |*child| child.kill(io);
+                    return errorResult(self.allocator, 126, "cannot fork", message);
+                };
             }
             cancel_pids[spawned] = registerCancelableChild(options, children[spawned], false);
             spawned += 1;
@@ -6271,12 +6302,27 @@ pub const Executor = struct {
         const pipe_count = pipeline.command_indexes.len - 1;
         const pipes = try self.allocator.alloc(PipelinePipe, pipe_count);
         defer self.allocator.free(pipes);
-        for (pipes) |*pipe| pipe.* = try makePipelinePipe(io);
-        defer for (pipes) |*pipe| pipe.close(io);
+        const first_command_name = program.commands[pipeline.command_indexes[0]].argv[0].text;
+        var pipes_initialized: usize = 0;
+        for (pipes) |*pipe| {
+            pipe.* = makePipelinePipe(io) catch |err| {
+                const message = spawnResourceDiagnostic(err) orelse return err;
+                for (pipes[0..pipes_initialized]) |*initialized_pipe| initialized_pipe.close(io);
+                return errorResult(self.allocator, 126, first_command_name, message);
+            };
+            pipes_initialized += 1;
+        }
+        defer for (pipes[0..pipes_initialized]) |*pipe| pipe.close(io);
 
-        var capture_stdout = try makePipelinePipe(io);
+        var capture_stdout = makePipelinePipe(io) catch |err| {
+            const message = spawnResourceDiagnostic(err) orelse return err;
+            return errorResult(self.allocator, 126, first_command_name, message);
+        };
         defer capture_stdout.close(io);
-        var capture_stderr = try makePipelinePipe(io);
+        var capture_stderr = makePipelinePipe(io) catch |err| {
+            const message = spawnResourceDiagnostic(err) orelse return err;
+            return errorResult(self.allocator, 126, first_command_name, message);
+        };
         defer capture_stderr.close(io);
 
         const children = try self.allocator.alloc(std.process.Child, pipeline.command_indexes.len);
@@ -6367,7 +6413,17 @@ pub const Executor = struct {
                     try threads.append(self.allocator, thread);
                     try contexts.append(self.allocator, context);
                 } else {
-                    children[spawned] = try forkBuiltinPipelineStage(context, pipes, capture_stdout, capture_stderr);
+                    children[spawned] = forkBuiltinPipelineStage(context, pipes, capture_stdout, capture_stderr) catch |err| {
+                        const message = spawnResourceMessage(err) orelse return err;
+                        if (stdin_file) |file| file.close(io);
+                        if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
+                        for (pipes) |*pipe| pipe.close(io);
+                        capture_stdout.close(io);
+                        capture_stderr.close(io);
+                        self.allocator.destroy(context);
+                        return self.pipelineSpawnFailureResult(io, "cannot fork", children[0..spawned], &threads, contexts.items, 126, message);
+                    };
                     cancel_pids[spawned] = registerCancelableChild(options, children[spawned], false);
                     child_stage_indexes[spawned] = index;
                     spawned += 1;
@@ -6449,7 +6505,16 @@ pub const Executor = struct {
                         capture_stderr.close(io);
                         return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 126, "is a directory");
                     },
-                    else => return err,
+                    else => {
+                        const failure = spawnErrorCommandFailure(err) orelse return err;
+                        if (stdin_file) |file| file.close(io);
+                        if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
+                        for (pipes) |*pipe| pipe.close(io);
+                        capture_stdout.close(io);
+                        capture_stderr.close(io);
+                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, failure.status, failure.message);
+                    },
                 };
                 const spawned_index = spawned;
                 errdefer children[spawned_index].kill(io);
@@ -6523,7 +6588,10 @@ pub const Executor = struct {
     }
 
     fn executeForegroundMixedPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io, terminal: ForegroundTerminal) !CommandResult {
-        const pid = try forkProcess();
+        const pid = forkProcess() catch |err| {
+            const message = spawnResourceMessage(err) orelse return err;
+            return errorResult(self.allocator, 126, "cannot fork", message);
+        };
         if (pid == 0) {
             processSetPgrp(0, 0) catch exitForkedChild(2);
             self.loop_control_boundary_outer_depth += self.loop_depth;
@@ -7339,7 +7407,19 @@ pub const Executor = struct {
                     }
                     return failure;
                 },
-                else => return err,
+                else => {
+                    const spawn_failure = spawnErrorCommandFailure(err) orelse return err;
+                    const open_stdin = previous_stdout;
+                    previous_stdout = null;
+                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin, spawn_failure.status, spawn_failure.message);
+                    errdefer failure.deinit();
+                    if (trace_stderr.items.len != 0) {
+                        const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
+                        self.allocator.free(failure.stderr);
+                        failure.stderr = stderr;
+                    }
+                    return failure;
+                },
             };
             cancel_pids[index] = registerCancelableChild(options, children[index], child_pgid != null);
             if (pipeline_pgrp == null and foreground_terminal != null) pipeline_pgrp = children[index].id;
@@ -7537,7 +7617,11 @@ pub const Executor = struct {
                 synthetic_failure = true;
                 break :blk try errorResult(self.allocator, 126, expanded.argv[0].text, "is a directory");
             },
-            else => {
+            else => blk: {
+                if (commandSpawnFailure(err)) |failure| {
+                    synthetic_failure = true;
+                    break :blk try errorResult(self.allocator, failure.status, expanded.argv[0].text, failure.message);
+                }
                 if (isRedirectionFailure(err)) return self.redirectionErrorResult(expanded, err, false);
                 return err;
             },
@@ -9118,12 +9202,18 @@ pub const Executor = struct {
                 execve(shell_path.ptr, @ptrCast(fallback_argv_ptrs.ptr), @ptrCast(env_ptrs.ptr)) catch |fallback_err| switch (fallback_err) {
                     error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
                     error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
-                    else => return fallback_err,
+                    else => {
+                        const failure = spawnErrorCommandFailure(fallback_err) orelse return fallback_err;
+                        return errorResult(self.allocator, failure.status, command.argv[0].text, failure.message);
+                    },
                 };
             },
             error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
-            else => return err,
+            else => {
+                const failure = spawnErrorCommandFailure(err) orelse return err;
+                return errorResult(self.allocator, failure.status, command.argv[0].text, failure.message);
+            },
         };
         unreachable;
     }
@@ -9157,7 +9247,10 @@ pub const Executor = struct {
         var inherited_redirections = try FdRedirectionGuard.init(self.allocator, io);
         defer inherited_redirections.restore(self, io);
         if (!self.monitorProcessGroupsEnabled()) {
-            stdin_file = try openDevNullRead(io);
+            stdin_file = openDevNullRead(io) catch |err| {
+                const message = spawnResourceDiagnostic(err) orelse return err;
+                return errorResult(self.allocator, 126, command.argv[0].text, message);
+            };
         }
 
         // The diagnostic is reported but the async command itself still
@@ -9263,7 +9356,10 @@ pub const Executor = struct {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
             error.IsDir => return errorResult(self.allocator, 126, command.argv[0].text, "is a directory"),
-            else => return err,
+            else => {
+                const failure = spawnErrorCommandFailure(err) orelse return err;
+                return errorResult(self.allocator, failure.status, command.argv[0].text, failure.message);
+            },
         };
         errdefer child.kill(io);
         try moveAsyncExternalRedirectionHandlesFromGuard(inherited_redirections, &stdin_file, &stdout_file, &stderr_file, io);
@@ -9554,7 +9650,7 @@ pub const Executor = struct {
             error.FileNotFound => return error.CommandNotFound,
             error.AccessDenied, error.PermissionDenied => return error.CommandAccessDenied,
             error.IsDir => return error.IsDir,
-            else => return err,
+            else => return commandSpawnFailureError(err) orelse err,
         };
         errdefer child.kill(io);
         try moveExternalRedirectionHandlesFromGuard(inherited_redirections, &stdin_file, &stdout_file, &stderr_file, &manual_stdout_capture, &manual_stderr_capture, io);
@@ -9743,7 +9839,7 @@ pub const Executor = struct {
     }
 };
 
-const ExecveError = error{ FileNotFound, AccessDenied, PermissionDenied, InvalidExe, ExecFailed, Unsupported };
+const ExecveError = error{ FileNotFound, AccessDenied, PermissionDenied, InvalidExe, SystemResources, ProcessFdQuotaExceeded, SystemFdQuotaExceeded, OutOfMemory, ExecFailed, Unsupported };
 
 fn execve(path: [*:0]const u8, argv: [*:null]const ?[*:0]const u8, envp: [*:null]const ?[*:0]const u8) ExecveError!void {
     if (zig_builtin.os.tag == .windows or zig_builtin.os.tag == .wasi) return error.Unsupported;
@@ -9754,6 +9850,10 @@ fn execve(path: [*:0]const u8, argv: [*:null]const ?[*:0]const u8, envp: [*:null
             .NOENT, .NOTDIR => error.FileNotFound,
             .ACCES, .PERM => error.AccessDenied,
             .NOEXEC => error.InvalidExe,
+            .AGAIN => error.SystemResources,
+            .MFILE => error.ProcessFdQuotaExceeded,
+            .NFILE => error.SystemFdQuotaExceeded,
+            .NOMEM => error.OutOfMemory,
             else => error.ExecFailed,
         };
     }
@@ -9764,6 +9864,10 @@ fn execve(path: [*:0]const u8, argv: [*:null]const ?[*:0]const u8, envp: [*:null
             .NOENT, .NOTDIR => error.FileNotFound,
             .ACCES, .PERM => error.AccessDenied,
             .NOEXEC => error.InvalidExe,
+            .AGAIN => error.SystemResources,
+            .MFILE => error.ProcessFdQuotaExceeded,
+            .NFILE => error.SystemFdQuotaExceeded,
+            .NOMEM => error.OutOfMemory,
             else => error.ExecFailed,
         };
     }
@@ -9968,6 +10072,61 @@ fn writeFailureMessage(err: anyerror) ?[]const u8 {
         error.NoSpaceLeft => "no space left on device",
         error.InputOutput => "input/output error",
         error.WriteFailed => "write failed",
+        else => null,
+    };
+}
+
+const ExternalCommandFailure = struct {
+    status: ExitStatus,
+    message: []const u8,
+};
+
+fn spawnErrorCommandFailure(err: anyerror) ?ExternalCommandFailure {
+    return switch (err) {
+        error.FileNotFound => .{ .status = 127, .message = "command not found" },
+        error.AccessDenied, error.PermissionDenied => .{ .status = 126, .message = "permission denied" },
+        error.IsDir => .{ .status = 126, .message = "is a directory" },
+        else => if (spawnResourceDiagnostic(err)) |message| .{ .status = 126, .message = message } else null,
+    };
+}
+
+fn commandSpawnFailureError(err: anyerror) ?anyerror {
+    return switch (err) {
+        error.SystemResources => error.CommandSpawnSystemResources,
+        error.ProcessFdQuotaExceeded => error.CommandSpawnProcessFdQuotaExceeded,
+        error.SystemFdQuotaExceeded => error.CommandSpawnSystemFdQuotaExceeded,
+        error.OutOfMemory => error.CommandSpawnOutOfMemory,
+        else => null,
+    };
+}
+
+fn commandSpawnFailure(err: anyerror) ?ExternalCommandFailure {
+    return switch (err) {
+        error.CommandSpawnSystemResources,
+        error.CommandSpawnProcessFdQuotaExceeded,
+        error.CommandSpawnSystemFdQuotaExceeded,
+        error.CommandSpawnOutOfMemory,
+        => if (spawnResourceDiagnostic(err)) |message| .{ .status = 126, .message = message } else null,
+        else => null,
+    };
+}
+
+fn spawnResourceDiagnostic(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.SystemResources, error.CommandSpawnSystemResources => "cannot fork: resource temporarily unavailable",
+        error.ProcessFdQuotaExceeded, error.CommandSpawnProcessFdQuotaExceeded => "cannot fork: too many open files",
+        error.SystemFdQuotaExceeded, error.CommandSpawnSystemFdQuotaExceeded => "cannot fork: too many open files in system",
+        error.OutOfMemory, error.CommandSpawnOutOfMemory => "cannot fork: out of memory",
+        else => null,
+    };
+}
+
+fn spawnResourceMessage(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.SystemResources, error.CommandSpawnSystemResources => "resource temporarily unavailable",
+        error.ProcessFdQuotaExceeded, error.CommandSpawnProcessFdQuotaExceeded => "too many open files",
+        error.SystemFdQuotaExceeded, error.CommandSpawnSystemFdQuotaExceeded => "too many open files in system",
+        error.OutOfMemory, error.CommandSpawnOutOfMemory => "out of memory",
         else => null,
     };
 }
@@ -20397,6 +20556,44 @@ test "executor reports command not found without external execution" {
 
     try std.testing.expectEqual(@as(ExitStatus, 127), result.status);
     try std.testing.expectEqualStrings("definitely-not-a-rush-builtin: command not found\n", result.stderr);
+}
+
+test "external spawn error mapping reports resource failures as command failures" {
+    // Deterministically inducing fork(2) EAGAIN or process-wide fd exhaustion is
+    // host-limit dependent, so cover the std.process.spawn/fork error mapping
+    // directly. Integration paths route these mapped failures through normal
+    // command diagnostics.
+    try expectExternalFailure(error.SystemResources, 126, "cannot fork: resource temporarily unavailable");
+    try expectExternalFailure(error.ProcessFdQuotaExceeded, 126, "cannot fork: too many open files");
+    try expectExternalFailure(error.SystemFdQuotaExceeded, 126, "cannot fork: too many open files in system");
+    try expectExternalFailure(error.OutOfMemory, 126, "cannot fork: out of memory");
+    try expectExternalFailure(error.FileNotFound, 127, "command not found");
+    try expectExternalFailure(error.PermissionDenied, 126, "permission denied");
+    try expectExternalFailure(error.IsDir, 126, "is a directory");
+
+    try std.testing.expectEqual(error.CommandSpawnSystemResources, commandSpawnFailureError(error.SystemResources).?);
+    try std.testing.expectEqual(error.CommandSpawnProcessFdQuotaExceeded, commandSpawnFailureError(error.ProcessFdQuotaExceeded).?);
+    try std.testing.expectEqual(error.CommandSpawnSystemFdQuotaExceeded, commandSpawnFailureError(error.SystemFdQuotaExceeded).?);
+    try std.testing.expectEqual(error.CommandSpawnOutOfMemory, commandSpawnFailureError(error.OutOfMemory).?);
+    try std.testing.expect(commandSpawnFailureError(error.FileNotFound) == null);
+
+    try expectDeferredSpawnFailure(error.CommandSpawnSystemResources, 126, "cannot fork: resource temporarily unavailable");
+    try expectDeferredSpawnFailure(error.CommandSpawnProcessFdQuotaExceeded, 126, "cannot fork: too many open files");
+    try expectDeferredSpawnFailure(error.CommandSpawnSystemFdQuotaExceeded, 126, "cannot fork: too many open files in system");
+    try expectDeferredSpawnFailure(error.CommandSpawnOutOfMemory, 126, "cannot fork: out of memory");
+    try std.testing.expect(commandSpawnFailure(error.ProcessFdQuotaExceeded) == null);
+}
+
+fn expectExternalFailure(err: anyerror, status: ExitStatus, message: []const u8) !void {
+    const failure = spawnErrorCommandFailure(err) orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(status, failure.status);
+    try std.testing.expectEqualStrings(message, failure.message);
+}
+
+fn expectDeferredSpawnFailure(err: anyerror, status: ExitStatus, message: []const u8) !void {
+    const failure = commandSpawnFailure(err) orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(status, failure.status);
+    try std.testing.expectEqualStrings(message, failure.message);
 }
 
 test "exec exits non-interactive shell when replacement command is not found" {
