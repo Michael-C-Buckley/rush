@@ -62,6 +62,7 @@ pub const ExecuteOptions = struct {
 
 const posix_shell_path = "/bin/sh";
 const precommand_completion_depth_limit = 8;
+const executor_nesting_depth_limit = 128;
 
 pub const ShoptOptions = struct {
     dotglob: bool = false,
@@ -1780,6 +1781,7 @@ pub const Executor = struct {
     pending_loop_control: ?LoopControl = null,
     pending_exit: ?ExitStatus = null,
     execution_depth: usize = 0,
+    executor_nesting_depth: usize = 0,
     hook_depth: usize = 0,
     running_exit_trap: bool = false,
     warned_stopped_jobs_on_exit: bool = false,
@@ -4040,7 +4042,33 @@ pub const Executor = struct {
         return self.shell_options.noexec and !options.interactive;
     }
 
+    const ExecutorNestingGuard = struct {
+        executor: *Executor,
+
+        fn restore(self: ExecutorNestingGuard) void {
+            self.executor.executor_nesting_depth -= 1;
+        }
+    };
+
+    fn enterExecutorNesting(self: *Executor) ?ExecutorNestingGuard {
+        if (self.executor_nesting_depth >= executor_nesting_depth_limit) return null;
+        self.executor_nesting_depth += 1;
+        return .{ .executor = self };
+    }
+
+    fn executorNestingErrorResult(self: *Executor, options: ExecuteOptions) !CommandResult {
+        if (options.interactive and !options.force_noninteractive_error_consequences) {
+            self.pending_command_abort = true;
+        } else {
+            self.pending_exit = 2;
+        }
+        return errorResult(self.allocator, 2, "rush", "nesting level too deep");
+    }
+
     pub fn executeProgram(self: *Executor, program: ir.Program, options: ExecuteOptions) anyerror!CommandResult {
+        const nesting_guard = self.enterExecutorNesting() orelse return self.executorNestingErrorResult(options);
+        defer nesting_guard.restore();
+
         const root_execution = self.execution_depth == 0;
         if (root_execution) self.pending_command_abort = false;
         defer {
@@ -4406,6 +4434,7 @@ pub const Executor = struct {
         self.getopts_offset = other.getopts_offset;
         self.getopts_last_optind = other.getopts_last_optind;
         self.arg_zero = other.arg_zero;
+        self.executor_nesting_depth = other.executor_nesting_depth;
         self.last_status_text = other.last_status_text;
         self.last_status_text_len = other.last_status_text_len;
         self.lineno_text = other.lineno_text;
@@ -5629,6 +5658,9 @@ pub const Executor = struct {
     }
 
     fn executeScriptChunks(self: *Executor, script: []const u8, program: ir.Program, options: ExecuteOptions) anyerror!CommandResult {
+        const nesting_guard = self.enterExecutorNesting() orelse return self.executorNestingErrorResult(options);
+        defer nesting_guard.restore();
+
         const root_execution = self.execution_depth == 0;
         if (root_execution) self.pending_command_abort = false;
         defer {
@@ -16322,6 +16354,35 @@ test "executor executes POSIX brace groups in current shell" {
     defer nested_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), nested_result.status);
     try std.testing.expectEqualStrings("inner\nouter\n", nested_result.stdout);
+}
+
+test "executor rejects over-depth compound command nesting" {
+    var script: std.ArrayList(u8) = .empty;
+    defer script.deinit(std.testing.allocator);
+
+    for (0..executor_nesting_depth_limit + 1) |_| try script.appendSlice(std.testing.allocator, "{ ");
+    try script.appendSlice(std.testing.allocator, "echo too-deep; ");
+    for (0..executor_nesting_depth_limit + 1) |_| try script.appendSlice(std.testing.allocator, "} ");
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(script.items, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "nesting level too deep") != null);
+}
+
+test "executor rejects over-depth shell function recursion" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice("f() { f; }; f", .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "nesting level too deep") != null);
 }
 
 test "executor executes POSIX compound commands as pipeline stages once" {
