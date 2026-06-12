@@ -21,6 +21,17 @@
       "git.clean-paths": { "function": "__rush_complete_git_context_clean_paths" },
       "git.branch-arguments": { "function": "__rush_complete_git_context_branch_args" },
       "git.push-arguments": { "function": "__rush_complete_git_context_push_args" },
+      "git.changed-paths": { "function": "__rush_complete_git_changed_paths" },
+      "git.pretty-formats": { "function": "__rush_complete_git_pretty_formats" },
+      "git.cleanup-modes": { "function": "__rush_complete_git_cleanup_modes" },
+      "git.recurse-submodules-modes": { "function": "__rush_complete_git_recurse_submodules_modes" },
+      "git.pull-rebase-modes": { "function": "__rush_complete_git_pull_rebase_modes" },
+      "git.merge-strategies": { "function": "__rush_complete_git_merge_strategies" },
+      "git.untracked-modes": { "function": "__rush_complete_git_untracked_modes" },
+      "git.ignored-modes": { "function": "__rush_complete_git_ignored_modes" },
+      "git.ignore-submodules-modes": { "function": "__rush_complete_git_ignore_submodules_modes" },
+      "git.worktrees": { "function": "__rush_complete_git_worktrees" },
+      "git.authors": { "function": "__rush_complete_git_authors" },
       "git.sort-keys": { "function": "__rush_complete_git_sort_keys" },
       "git.color-modes": { "function": "__rush_complete_git_color_modes" },
       "git.word-diff-modes": { "function": "__rush_complete_git_word_diff_modes" },
@@ -257,6 +268,538 @@
             { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.push-arguments", "grammar": { "kind": "keyValue", "separator": ":", "keyPrefix": "+" }, "description": "refspec to push" }
           ]
         }
+      },
+      {
+        "name": "commit",
+        "description": "record changes to the repository",
+        "options": [
+          { "long": "amend", "description": "amend the previous commit" },
+          { "long": "all", "short": "a", "description": "stage tracked files before committing" },
+          { "long": "message", "short": "m", "value": { "name": "message" }, "description": "use the given commit message" },
+          { "long": "signoff", "short": "s", "description": "add a Signed-off-by trailer" },
+          { "long": "no-verify", "description": "bypass pre-commit and commit-msg hooks" },
+          { "long": "verbose", "short": "v", "description": "show unified diff in commit message template" },
+          { "long": "quiet", "short": "q", "description": "suppress commit summary message" },
+          { "long": "dry-run", "description": "show paths to be committed without committing" },
+          { "long": "short", "description": "show dry-run output in short format" },
+          { "long": "branch", "description": "show branch and tracking info in dry-run output" },
+          { "long": "porcelain", "description": "show dry-run output in porcelain format" },
+          { "long": "long", "description": "show dry-run output in long format" },
+          { "long": "null", "short": "z", "description": "terminate dry-run entries with NUL" },
+          { "long": "file", "short": "F", "value": { "name": "file", "provider": "builtin.files" }, "description": "take commit message from file" },
+          { "long": "template", "short": "t", "value": { "name": "file", "provider": "builtin.files" }, "description": "use specified template file" },
+          { "long": "author", "value": { "name": "author", "provider": "git.authors" }, "description": "override commit author" },
+          { "long": "date", "value": { "name": "date" }, "description": "override author date" },
+          { "long": "cleanup", "value": { "name": "mode", "provider": "git.cleanup-modes" }, "description": "set message cleanup mode" },
+          { "long": "status", "description": "include status in commit message template" },
+          { "long": "no-status", "description": "do not include status in commit message template" },
+          { "long": "include", "short": "i", "description": "stage specified paths before committing" },
+          { "long": "only", "short": "o", "description": "commit only specified paths" },
+          { "long": "pathspec-from-file", "value": { "name": "file", "provider": "builtin.files" }, "description": "read pathspec from file" },
+          { "long": "allow-empty", "description": "allow an empty commit" },
+          { "long": "allow-empty-message", "description": "allow an empty commit message" },
+          { "long": "fixup", "value": { "name": "commit", "provider": "git.refs" }, "description": "construct a fixup commit message" },
+          { "long": "squash", "value": { "name": "commit", "provider": "git.refs" }, "description": "construct a squash commit message" },
+          { "long": "reset-author", "description": "reuse current author information" },
+          { "long": "reuse-message", "short": "C", "value": { "name": "commit", "provider": "git.refs" }, "description": "reuse commit message and authorship" },
+          { "long": "reedit-message", "short": "c", "value": { "name": "commit", "provider": "git.refs" }, "description": "reuse and edit commit message" },
+          { "long": "gpg-sign", "short": "S", "value": { "name": "keyid" }, "description": "GPG-sign the commit" },
+          { "long": "no-gpg-sign", "description": "do not GPG-sign the commit" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.changed-paths", "description": "paths to commit" }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "description": "show the working tree status",
+        "options": [
+          { "long": "short", "short": "s", "description": "show status concisely" },
+          { "long": "branch", "short": "b", "description": "show branch and tracking info" },
+          { "long": "show-stash", "description": "show number of stash entries" },
+          { "long": "porcelain", "value": { "name": "version" }, "description": "show machine-readable output" },
+          { "long": "long", "description": "show long status format" },
+          { "long": "verbose", "short": "v", "description": "show textual changes" },
+          { "long": "untracked-files", "short": "u", "value": { "name": "mode", "provider": "git.untracked-modes" }, "description": "control untracked file display" },
+          { "long": "ignored", "value": { "name": "mode", "provider": "git.ignored-modes" }, "description": "show ignored files" },
+          { "long": "ignore-submodules", "value": { "name": "mode", "provider": "git.ignore-submodules-modes" }, "description": "ignore submodule changes" },
+          { "long": "column", "value": { "name": "options" }, "description": "display untracked files in columns" },
+          { "long": "no-column", "description": "do not display untracked files in columns" }
+        ]
+      },
+      {
+        "name": "log",
+        "description": "show commit logs",
+        "options": [
+          { "long": "oneline", "description": "show one commit per line" },
+          { "long": "graph", "description": "draw commit graph" },
+          { "long": "decorate", "description": "print ref names" },
+          { "long": "all", "description": "show all refs" },
+          { "long": "patch", "short": "p", "description": "show patch output" },
+          { "long": "stat", "description": "show diffstat" },
+          { "long": "shortstat", "description": "show only the last line of stat output" },
+          { "long": "name-only", "description": "show changed file names" },
+          { "long": "name-status", "description": "show names and status of changed files" },
+          { "long": "follow", "description": "continue listing history beyond renames" },
+          { "long": "reverse", "description": "show commits in reverse order" },
+          { "long": "left-right", "description": "mark which side of a symmetric difference commits are on" },
+          { "long": "boundary", "description": "output excluded boundary commits" },
+          { "long": "max-count", "short": "n", "value": { "name": "number" }, "description": "limit number of commits" },
+          { "long": "skip", "value": { "name": "number" }, "description": "skip number of commits" },
+          { "long": "since", "value": { "name": "date" }, "description": "show commits more recent than date" },
+          { "long": "after", "value": { "name": "date" }, "description": "show commits more recent than date" },
+          { "long": "until", "value": { "name": "date" }, "description": "show commits older than date" },
+          { "long": "before", "value": { "name": "date" }, "description": "show commits older than date" },
+          { "long": "author", "value": { "name": "pattern", "provider": "git.authors" }, "description": "limit commits by author" },
+          { "long": "committer", "value": { "name": "pattern", "provider": "git.authors" }, "description": "limit commits by committer" },
+          { "long": "grep", "value": { "name": "pattern" }, "description": "limit commits by message pattern" },
+          { "long": "regexp-ignore-case", "short": "i", "description": "match regexps ignoring case" },
+          { "long": "extended-regexp", "short": "E", "description": "use extended POSIX regular expressions" },
+          { "long": "fixed-strings", "short": "F", "description": "interpret patterns as fixed strings" },
+          { "long": "perl-regexp", "short": "P", "description": "use Perl-compatible regular expressions" },
+          { "long": "branches", "value": { "name": "pattern" }, "description": "show commits from branches" },
+          { "long": "tags", "value": { "name": "pattern" }, "description": "show commits from tags" },
+          { "long": "remotes", "value": { "name": "pattern" }, "description": "show commits from remote-tracking branches" },
+          { "long": "no-merges", "description": "do not print commits with more than one parent" },
+          { "long": "merges", "description": "print only merge commits" },
+          { "long": "first-parent", "description": "follow only first parent commits" },
+          { "long": "format", "value": { "name": "format", "provider": "git.pretty-formats" }, "description": "pretty-print commits in format" },
+          { "long": "pretty", "value": { "name": "format", "provider": "git.pretty-formats" }, "description": "pretty-print commits in format" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "revision-or-path", "index": 0, "repeatable": true, "provider": "git.refs", "description": "revision or path limiter" }
+          ]
+        }
+      },
+      {
+        "name": "show",
+        "description": "show objects",
+        "options": [
+          { "long": "stat", "description": "show diffstat" },
+          { "long": "patch", "short": "p", "description": "show patch output" },
+          { "long": "name-only", "description": "show changed file names" },
+          { "long": "name-status", "description": "show names and status of changed files" },
+          { "long": "format", "value": { "name": "format", "provider": "git.pretty-formats" }, "description": "pretty-print objects in format" },
+          { "long": "pretty", "value": { "name": "format", "provider": "git.pretty-formats" }, "description": "pretty-print objects in format" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "object", "index": 0, "repeatable": true, "provider": "git.refs", "description": "object or path to show" }
+          ]
+        }
+      },
+      {
+        "name": "fetch",
+        "description": "download objects and refs from another repository",
+        "options": [
+          { "long": "all", "description": "fetch all remotes" },
+          { "long": "prune", "description": "prune deleted remote refs" },
+          { "long": "tags", "description": "fetch all tags" },
+          { "long": "no-tags", "description": "do not fetch tags" },
+          { "long": "force", "short": "f", "description": "force update local refs" },
+          { "long": "multiple", "description": "allow several repository and group arguments" },
+          { "long": "append", "short": "a", "description": "append ref names to FETCH_HEAD" },
+          { "long": "depth", "value": { "name": "depth" }, "description": "deepen or shorten history to depth" },
+          { "long": "deepen", "value": { "name": "depth" }, "description": "deepen history by depth" },
+          { "long": "shallow-since", "value": { "name": "date" }, "description": "deepen or shorten history after date" },
+          { "long": "shallow-exclude", "value": { "name": "revision", "provider": "git.refs" }, "description": "deepen or shorten history excluding revision" },
+          { "long": "unshallow", "description": "convert shallow repository to complete repository" },
+          { "long": "update-shallow", "description": "accept refs that update .git/shallow" },
+          { "long": "dry-run", "description": "show what would be done without making changes" },
+          { "long": "quiet", "short": "q", "description": "be quiet" },
+          { "long": "verbose", "short": "v", "description": "be verbose" },
+          { "long": "progress", "description": "force progress status" },
+          { "long": "recurse-submodules", "value": { "name": "mode", "provider": "git.recurse-submodules-modes" }, "description": "control recursive fetching of submodules" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "repository", "index": 0, "provider": "git.remotes", "description": "remote repository" },
+            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.refs", "description": "refspec to fetch" }
+          ]
+        }
+      },
+      {
+        "name": "pull",
+        "description": "fetch from and integrate with another repository",
+        "options": [
+          { "long": "rebase", "value": { "name": "mode", "provider": "git.pull-rebase-modes" }, "description": "rebase after fetching" },
+          { "long": "ff-only", "description": "refuse non-fast-forward merges" },
+          { "long": "ff", "description": "fast-forward when possible" },
+          { "long": "no-ff", "description": "create a merge commit even when fast-forwarding is possible" },
+          { "long": "squash", "description": "produce working tree and index state as if merged" },
+          { "long": "no-squash", "description": "perform merge and commit normally" },
+          { "long": "commit", "description": "perform merge and commit result" },
+          { "long": "no-commit", "description": "perform merge but do not commit" },
+          { "long": "edit", "short": "e", "description": "edit auto-generated merge message" },
+          { "long": "no-edit", "description": "accept auto-generated merge message" },
+          { "long": "autostash", "description": "automatically stash before operation" },
+          { "long": "no-autostash", "description": "do not automatically stash before operation" },
+          { "long": "all", "description": "fetch all remotes" },
+          { "long": "prune", "description": "prune deleted remote refs" },
+          { "long": "tags", "description": "fetch all tags" },
+          { "long": "no-tags", "description": "do not fetch tags" },
+          { "long": "force", "short": "f", "description": "force update local refs" },
+          { "long": "quiet", "short": "q", "description": "be quiet" },
+          { "long": "verbose", "short": "v", "description": "be verbose" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "repository", "index": 0, "provider": "git.remotes", "description": "remote repository" },
+            { "name": "refspec", "index": 1, "repeatable": true, "provider": "git.refs", "description": "branch or refspec to pull" }
+          ]
+        }
+      },
+      {
+        "name": "merge",
+        "description": "join development histories",
+        "options": [
+          { "long": "abort", "description": "abort the current merge" },
+          { "long": "continue", "description": "continue the current merge" },
+          { "long": "no-ff", "description": "create a merge commit" },
+          { "long": "ff", "description": "fast-forward when possible" },
+          { "long": "ff-only", "description": "refuse non-fast-forward merges" },
+          { "long": "squash", "description": "produce working tree and index state as if merged" },
+          { "long": "no-squash", "description": "perform merge and commit normally" },
+          { "long": "commit", "description": "perform merge and commit result" },
+          { "long": "no-commit", "description": "perform merge but do not commit" },
+          { "long": "edit", "short": "e", "description": "edit auto-generated merge message" },
+          { "long": "no-edit", "description": "accept auto-generated merge message" },
+          { "long": "message", "short": "m", "value": { "name": "message" }, "description": "set merge commit message" },
+          { "long": "log", "value": { "name": "n" }, "description": "populate log message with shortlog" },
+          { "long": "no-log", "description": "do not list one-line descriptions from merged commits" },
+          { "long": "stat", "description": "show diffstat at end of merge" },
+          { "long": "no-stat", "description": "do not show diffstat at end of merge" },
+          { "long": "verify-signatures", "description": "verify commits have valid signatures" },
+          { "long": "no-verify-signatures", "description": "do not verify commit signatures" },
+          { "long": "autostash", "description": "automatically stash before operation" },
+          { "long": "no-autostash", "description": "do not automatically stash before operation" },
+          { "long": "quiet", "short": "q", "description": "be quiet" },
+          { "long": "verbose", "short": "v", "description": "be verbose" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "commit", "index": 0, "repeatable": true, "provider": "git.refs", "description": "commit to merge" }
+          ]
+        }
+      },
+      {
+        "name": "rebase",
+        "description": "reapply commits on top of another base",
+        "options": [
+          { "long": "abort", "description": "abort the current rebase" },
+          { "long": "continue", "description": "continue the current rebase" },
+          { "long": "skip", "description": "skip current patch and continue" },
+          { "long": "quit", "description": "abort rebase but keep HEAD where it is" },
+          { "long": "interactive", "short": "i", "description": "make a list of commits to rebase" },
+          { "long": "onto", "value": { "name": "newbase", "provider": "git.refs" }, "description": "rebase onto new base" },
+          { "long": "keep-base", "description": "use merge-base of upstream and branch as upstream" },
+          { "long": "root", "description": "rebase all commits reachable from branch" },
+          { "long": "autosquash", "description": "move fixup and squash commits automatically" },
+          { "long": "no-autosquash", "description": "do not move fixup and squash commits automatically" },
+          { "long": "autostash", "description": "automatically stash before operation" },
+          { "long": "no-autostash", "description": "do not automatically stash before operation" },
+          { "long": "stat", "description": "show diffstat of upstream changes" },
+          { "long": "no-stat", "description": "do not show diffstat of upstream changes" },
+          { "long": "merge", "short": "m", "description": "use merging strategies to rebase" },
+          { "long": "apply", "description": "use applying strategies to rebase" },
+          { "long": "strategy", "short": "s", "value": { "name": "strategy", "provider": "git.merge-strategies" }, "description": "use given merge strategy" },
+          { "long": "exec", "short": "x", "value": { "name": "command" }, "description": "run command after each picked commit" },
+          { "long": "reschedule-failed-exec", "description": "reschedule failed exec commands" },
+          { "long": "no-reschedule-failed-exec", "description": "do not reschedule failed exec commands" },
+          { "long": "update-refs", "description": "update refs that point to rebased commits" },
+          { "long": "no-update-refs", "description": "do not update refs that point to rebased commits" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "upstream", "index": 0, "repeatable": true, "provider": "git.refs", "description": "upstream or branch to rebase" }
+          ]
+        }
+      },
+      {
+        "name": "remote",
+        "description": "manage tracked repositories",
+        "options": [
+          { "long": "verbose", "short": "v", "description": "show remote URLs" }
+        ],
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a remote",
+            "options": [
+              { "long": "fetch", "short": "f", "description": "run git fetch after adding remote" },
+              { "long": "tags", "description": "import every tag from remote" },
+              { "long": "no-tags", "description": "do not import tags from remote" },
+              { "long": "mirror", "value": { "name": "mode" }, "description": "set up remote as mirror" },
+              { "short": "m", "value": { "name": "branch" }, "description": "set remote HEAD branch" }
+            ],
+            "arguments": {
+              "states": [
+                { "name": "name", "index": 0, "description": "remote name" },
+                { "name": "url", "index": 1, "description": "remote URL" }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "aliases": ["rm"],
+            "description": "remove a remote",
+            "arguments": { "states": [{ "name": "remote", "index": 0, "provider": "git.remotes", "description": "remote to remove" }] }
+          },
+          {
+            "name": "rename",
+            "description": "rename a remote",
+            "arguments": {
+              "states": [
+                { "name": "old-name", "index": 0, "provider": "git.remotes", "description": "remote to rename" },
+                { "name": "new-name", "index": 1, "description": "new remote name" }
+              ]
+            }
+          },
+          {
+            "name": "get-url",
+            "description": "print remote URL",
+            "options": [
+              { "long": "push", "description": "query push URLs" },
+              { "long": "all", "description": "list all URLs" }
+            ],
+            "arguments": { "states": [{ "name": "remote", "index": 0, "provider": "git.remotes", "description": "remote to query" }] }
+          },
+          {
+            "name": "set-url",
+            "description": "change remote URL",
+            "options": [
+              { "long": "push", "description": "manipulate push URLs" },
+              { "long": "add", "description": "add a new URL" },
+              { "long": "delete", "description": "delete matching URLs" }
+            ],
+            "arguments": {
+              "states": [
+                { "name": "remote", "index": 0, "provider": "git.remotes", "description": "remote to change" },
+                { "name": "new-url", "index": 1, "description": "new URL" },
+                { "name": "old-url", "index": 2, "description": "old URL to replace" }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "show remote information",
+            "options": [
+              { "long": "no-query", "description": "do not query remote heads" }
+            ],
+            "arguments": { "states": [{ "name": "remote", "index": 0, "provider": "git.remotes", "description": "remote to show" }] }
+          },
+          {
+            "name": "prune",
+            "description": "delete stale remote-tracking branches",
+            "options": [
+              { "long": "dry-run", "short": "n", "description": "show what would be pruned" }
+            ],
+            "arguments": { "states": [{ "name": "remote", "index": 0, "provider": "git.remotes", "description": "remote to prune" }] }
+          },
+          {
+            "name": "update",
+            "description": "fetch updates for remotes or groups",
+            "options": [
+              { "long": "prune", "description": "prune stale remote-tracking branches" }
+            ],
+            "arguments": { "states": [{ "name": "remote-or-group", "index": 0, "provider": "git.remotes", "description": "remote or group to update" }] }
+          }
+        ]
+      },
+      {
+        "name": "tag",
+        "description": "create, list, delete, or verify tags",
+        "options": [
+          { "long": "annotated", "short": "a", "description": "make an unsigned annotated tag" },
+          { "long": "sign", "short": "s", "description": "make a GPG-signed tag" },
+          { "long": "local-user", "short": "u", "value": { "name": "keyid" }, "description": "use given key to sign tag" },
+          { "long": "delete", "short": "d", "description": "delete tags" },
+          { "long": "force", "short": "f", "description": "replace an existing tag" },
+          { "long": "list", "short": "l", "description": "list tags" },
+          { "long": "sort", "value": { "name": "key", "provider": "git.sort-keys" }, "description": "sort tags by key" },
+          { "long": "column", "value": { "name": "options" }, "description": "list tags in columns" },
+          { "long": "no-column", "description": "do not list tags in columns" },
+          { "long": "contains", "value": { "name": "commit", "provider": "git.refs" }, "description": "list tags containing commit" },
+          { "long": "no-contains", "value": { "name": "commit", "provider": "git.refs" }, "description": "list tags not containing commit" },
+          { "long": "merged", "value": { "name": "commit", "provider": "git.refs" }, "description": "list tags merged into commit" },
+          { "long": "no-merged", "value": { "name": "commit", "provider": "git.refs" }, "description": "list tags not merged into commit" },
+          { "long": "message", "short": "m", "value": { "name": "message" }, "description": "tag message" },
+          { "long": "file", "short": "F", "value": { "name": "file", "provider": "builtin.files" }, "description": "read tag message from file" },
+          { "long": "edit", "short": "e", "description": "edit tag message" },
+          { "long": "cleanup", "value": { "name": "mode", "provider": "git.cleanup-modes" }, "description": "set message cleanup mode" },
+          { "long": "create-reflog", "description": "create a reflog for the tag" },
+          { "long": "points-at", "value": { "name": "object", "provider": "git.refs" }, "description": "list tags of the given object" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "tag", "index": 0, "repeatable": true, "provider": "git.tags", "description": "tag name" }
+          ]
+        }
+      },
+      {
+        "name": "worktree",
+        "description": "manage multiple working trees",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "create a worktree",
+            "options": [
+              { "long": "force", "short": "f", "description": "checkout even if branch is already checked out" },
+              { "long": "detach", "description": "detach HEAD in new worktree" },
+              { "long": "checkout", "description": "checkout branch in new worktree" },
+              { "long": "no-checkout", "description": "suppress checkout in new worktree" },
+              { "long": "branch", "short": "b", "value": { "name": "branch" }, "description": "create a new branch" },
+              { "short": "B", "value": { "name": "branch" }, "description": "create or reset a branch" }
+            ],
+            "arguments": {
+              "states": [
+                { "name": "path", "index": 0, "provider": "builtin.directories", "description": "worktree path" },
+                { "name": "commitish", "index": 1, "provider": "git.refs", "description": "commit-ish to checkout" }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list worktrees",
+            "options": [
+              { "long": "porcelain", "description": "produce machine-readable output" },
+              { "long": "verbose", "description": "show additional annotations" }
+            ]
+          },
+          {
+            "name": "lock",
+            "description": "lock a worktree",
+            "options": [
+              { "long": "reason", "value": { "name": "reason" }, "description": "explain why worktree is locked" }
+            ],
+            "arguments": { "states": [{ "name": "worktree", "index": 0, "provider": "git.worktrees", "description": "worktree to lock" }] }
+          },
+          {
+            "name": "move",
+            "description": "move a worktree",
+            "arguments": {
+              "states": [
+                { "name": "worktree", "index": 0, "provider": "git.worktrees", "description": "worktree to move" },
+                { "name": "new-path", "index": 1, "provider": "builtin.directories", "description": "new worktree path" }
+              ]
+            }
+          },
+          { "name": "prune", "description": "prune worktree information" },
+          { "name": "repair", "description": "repair worktree administrative files" },
+          {
+            "name": "remove",
+            "description": "remove a worktree",
+            "options": [
+              { "long": "force", "short": "f", "description": "remove even if worktree is dirty" }
+            ],
+            "arguments": { "states": [{ "name": "worktree", "index": 0, "provider": "git.worktrees", "description": "worktree to remove" }] }
+          },
+          {
+            "name": "unlock",
+            "description": "unlock a worktree",
+            "arguments": { "states": [{ "name": "worktree", "index": 0, "provider": "git.worktrees", "description": "worktree to unlock" }] }
+          }
+        ]
+      },
+      {
+        "name": "submodule",
+        "description": "initialize, update, or inspect submodules",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a submodule",
+            "options": [
+              { "long": "branch", "short": "b", "value": { "name": "branch" }, "description": "branch to track in submodule" },
+              { "long": "force", "short": "f", "description": "allow adding otherwise ignored path" },
+              { "long": "name", "value": { "name": "name" }, "description": "custom submodule name" },
+              { "long": "depth", "value": { "name": "depth" }, "description": "create shallow clone" }
+            ],
+            "arguments": {
+              "states": [
+                { "name": "repository", "index": 0, "description": "repository to add" },
+                { "name": "path", "index": 1, "provider": "builtin.directories", "description": "submodule path" }
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "description": "show submodule status",
+            "options": [
+              { "long": "cached", "description": "use commit stored in index" },
+              { "long": "recursive", "description": "traverse submodules recursively" }
+            ],
+            "arguments": { "states": [{ "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "submodule path" }] }
+          },
+          { "name": "init", "description": "initialize submodules" },
+          {
+            "name": "deinit",
+            "description": "unregister submodules",
+            "options": [
+              { "long": "force", "short": "f", "description": "remove submodule working trees even with local changes" },
+              { "long": "all", "description": "unregister all submodules" }
+            ],
+            "arguments": { "states": [{ "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "submodule path" }] }
+          },
+          {
+            "name": "update",
+            "description": "update registered submodules",
+            "options": [
+              { "long": "init", "description": "initialize uninitialized submodules before update" },
+              { "long": "remote", "description": "use remote tracking branch instead of recorded SHA-1" },
+              { "long": "recursive", "description": "traverse submodules recursively" },
+              { "long": "force", "short": "f", "description": "force checkout even if local changes exist" },
+              { "long": "checkout", "description": "checkout recorded commit" },
+              { "long": "rebase", "description": "rebase current branch onto recorded commit" },
+              { "long": "merge", "description": "merge recorded commit into current branch" },
+              { "long": "depth", "value": { "name": "depth" }, "description": "create shallow clones" }
+            ],
+            "arguments": { "states": [{ "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "submodule path" }] }
+          },
+          {
+            "name": "set-branch",
+            "description": "set default remote tracking branch",
+            "options": [
+              { "long": "branch", "short": "b", "value": { "name": "branch" }, "description": "set remote tracking branch" },
+              { "long": "default", "description": "remove configured tracking branch" }
+            ],
+            "arguments": { "states": [{ "name": "path", "index": 0, "provider": "builtin.files", "description": "submodule path" }] }
+          },
+          {
+            "name": "set-url",
+            "description": "set URL of a submodule",
+            "arguments": {
+              "states": [
+                { "name": "path", "index": 0, "provider": "builtin.files", "description": "submodule path" },
+                { "name": "url", "index": 1, "description": "new URL" }
+              ]
+            }
+          },
+          {
+            "name": "summary",
+            "description": "show commit summary between given commit and working tree",
+            "options": [
+              { "long": "cached", "description": "use commit stored in index" },
+              { "long": "files", "description": "compare commit in index to submodule HEAD" },
+              { "long": "summary-limit", "value": { "name": "n" }, "description": "limit summary size" }
+            ],
+            "arguments": { "states": [{ "name": "commit", "index": 0, "provider": "git.refs", "description": "commit to summarize from" }] }
+          },
+          { "name": "foreach", "description": "evaluate shell command in submodules" },
+          {
+            "name": "sync",
+            "description": "synchronize remote URL configuration",
+            "options": [
+              { "long": "recursive", "description": "traverse submodules recursively" }
+            ],
+            "arguments": { "states": [{ "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "submodule path" }] }
+          }
+        ]
       },
       {
         "name": "stash",

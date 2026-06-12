@@ -5559,6 +5559,11 @@ test "supplied git manifest validates and selects representative contexts" {
         \\      fi
         \\    fi
         \\    ;;
+        \\  worktree)
+        \\    if test "$2" = list && test "$3" = --porcelain; then
+        \\      printf 'worktree /tmp/rush-worktree\n\n'
+        \\    fi
+        \\    ;;
         \\  *)
         \\    exit 0
         \\    ;;
@@ -5694,6 +5699,54 @@ test "supplied git manifest validates and selects representative contexts" {
     try std.testing.expectEqual(completion_model.Kind.plain, repo_remote_main.kind);
     try std.testing.expectEqualStrings("remote ref", repo_remote_main.description.?);
     try std.testing.expectEqual(@as(usize, "git push --repo origin feature/topic:".len), repo_remote_main.replace_start);
+
+    const commit_cleanup = try executor.collectCompletionsForInput("git commit --cleanup ", "git commit --cleanup ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(commit_cleanup);
+    try expectCompletionCandidate(commit_cleanup, "strip");
+
+    const status_untracked = try executor.collectCompletionsForInput("git status --untracked-files ", "git status --untracked-files ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(status_untracked);
+    try expectCompletionCandidate(status_untracked, "all");
+
+    const log_pretty = try executor.collectCompletionsForInput("git log --pretty ", "git log --pretty ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(log_pretty);
+    try expectCompletionCandidate(log_pretty, "oneline");
+
+    const show_format = try executor.collectCompletionsForInput("git show --format ", "git show --format ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(show_format);
+    try expectCompletionCandidate(show_format, "oneline");
+
+    const fetch_recurse = try executor.collectCompletionsForInput("git fetch --recurse-submodules ", "git fetch --recurse-submodules ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(fetch_recurse);
+    try expectCompletionCandidate(fetch_recurse, "on-demand");
+
+    const pull_rebase = try executor.collectCompletionsForInput("git pull --rebase ", "git pull --rebase ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(pull_rebase);
+    try expectCompletionCandidate(pull_rebase, "merges");
+
+    const remote_remove = try executor.collectCompletionsForInput("git remote remove ", "git remote remove ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(remote_remove);
+    try expectCompletionCandidate(remote_remove, "origin");
+
+    const tag_points_at = try executor.collectCompletionsForInput("git tag --points-at ", "git tag --points-at ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(tag_points_at);
+    try expectCompletionCandidate(tag_points_at, "main");
+
+    const merge_refs = try executor.collectCompletionsForInput("git merge ma", "git merge ma".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(merge_refs);
+    try expectCompletionCandidate(merge_refs, "main");
+
+    const rebase_strategy = try executor.collectCompletionsForInput("git rebase --strategy ", "git rebase --strategy ".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(rebase_strategy);
+    try expectCompletionCandidate(rebase_strategy, "ort");
+
+    const worktree_lock = try executor.collectCompletionsForInput("git worktree lock /tmp/rush", "git worktree lock /tmp/rush".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(worktree_lock);
+    try expectCompletionCandidate(worktree_lock, "/tmp/rush-worktree");
+
+    const submodule_update_options = try executor.collectCompletionsForInput("git submodule update --rec", "git submodule update --rec".len, .{ .io = std.testing.io, .allow_external = true });
+    defer executor.freeCompletions(submodule_update_options);
+    try expectCompletionCandidate(submodule_update_options, "--recursive");
 
     const branch_sort = try executor.collectCompletionsForInput("git branch --sort comm", "git branch --sort comm".len, .{ .io = std.testing.io, .allow_external = true });
     defer executor.freeCompletions(branch_sort);
