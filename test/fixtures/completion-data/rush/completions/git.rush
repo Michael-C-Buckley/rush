@@ -1,0 +1,35 @@
+# Provider companion for the focused Git manifest fixture. These providers are
+# deterministic and intentionally do not inspect the ambient repository.
+
+__rush_complete_git_fixture_refs() {
+  completion candidate main --kind plain --description "ref:$(completion position):$(completion option-name):$(completion option-spelling):$(completion argument-state):$(completion argument-index):$(completion options-terminated)"
+  completion candidate feature/demo --kind plain --description "ref:$(completion position):$(completion option-name):$(completion option-spelling):$(completion argument-state):$(completion argument-index):$(completion options-terminated)"
+}
+
+__rush_complete_git_fixture_diff_sources() {
+  if test "$(completion option-present --long no-index)" = true; then
+    completion files
+  else
+    __rush_complete_git_fixture_refs
+  fi
+}
+
+__rush_complete_git_fixture_tree_files() {
+  completion candidate src/main.zig --kind file --description "tree-file:$(completion argument-state):$(completion argument-index):$(completion options-terminated)"
+  completion candidate README.md --kind file --description "tree-file:$(completion argument-state):$(completion argument-index):$(completion options-terminated)"
+}
+
+__rush_complete_git_fixture_changed_files() {
+  completion candidate src/changed.zig --kind file --description "changed-file:$(completion argument-state):$(completion argument-index):$(completion options-terminated)"
+  completion candidate docs/changed.md --kind file --description "changed-file:$(completion argument-state):$(completion argument-index):$(completion options-terminated)"
+}
+
+__rush_complete_git_fixture_remotes() {
+  completion candidate origin --kind plain --description "remote:$(completion argument-state):$(completion argument-index):$(completion options-terminated)"
+  completion candidate upstream --kind plain --description "remote:$(completion argument-state):$(completion argument-index):$(completion options-terminated)"
+}
+
+__rush_complete_git_fixture_remote_urls() {
+  completion candidate git@github.com:rockorager/rush.git --kind plain --description "url:$(completion argument-state):$(completion argument-index)"
+  completion candidate https://github.com/rockorager/rush.git --kind plain --description "url:$(completion argument-state):$(completion argument-index)"
+}

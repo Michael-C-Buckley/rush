@@ -5037,6 +5037,62 @@ test "completion manifests bind companion function providers and builtin provide
     try expectCompletionCandidate(variable_candidates, "RUSH_MANIFEST_PROVIDER_VAR");
 }
 
+test "Git manifest fixture selects representative zsh-class providers" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_DATA_HOME", "test/fixtures/completion-data");
+    try executor.setEnv("XDG_DATA_DIRS", "");
+
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    try loader.ensureLoaded(std.testing.io, &executor, "git", "rush");
+
+    const ordinary_path = "rush-git-fixture-left.txt";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = ordinary_path, .data = "fixture" });
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, ordinary_path) catch {};
+
+    const diff_refs = try executor.collectCompletionsForInput("git diff ma", "git diff ma".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(diff_refs);
+    const main_ref = findCompletionCandidate(diff_refs, "main") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, main_ref.kind);
+    try std.testing.expectEqualStrings("ref:argument:::source:0:false", main_ref.description.?);
+
+    const no_index_source = "git diff --no-index rush-git-fixture";
+    const no_index_paths = try executor.collectCompletionsForInput(no_index_source, no_index_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(no_index_paths);
+    const ordinary_file = findCompletionCandidate(no_index_paths, ordinary_path) orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, ordinary_file.kind);
+    try std.testing.expectEqual(@as(usize, "git diff --no-index ".len), ordinary_file.replace_start);
+
+    const restore_source_value = "git restore --source ma";
+    const restore_refs = try executor.collectCompletionsForInput(restore_source_value, restore_source_value.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(restore_refs);
+    const restore_main = findCompletionCandidate(restore_refs, "main") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, restore_main.kind);
+    try std.testing.expect(std.mem.indexOf(u8, restore_main.description.?, "ref:option_value:source:--source") != null);
+
+    const checkout_path_source = "git checkout main -- src/mai";
+    const checkout_paths = try executor.collectCompletionsForInput(checkout_path_source, checkout_path_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(checkout_paths);
+    const tree_file = findCompletionCandidate(checkout_paths, "src/main.zig") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, tree_file.kind);
+    try std.testing.expectEqualStrings("tree-file:pathspec:1:true", tree_file.description.?);
+
+    const restore_path_source = "git restore src/ch";
+    const restore_paths = try executor.collectCompletionsForInput(restore_path_source, restore_path_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(restore_paths);
+    const changed_file = findCompletionCandidate(restore_paths, "src/changed.zig") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, changed_file.kind);
+    try std.testing.expectEqualStrings("changed-file:pathspec:0:false", changed_file.description.?);
+
+    const remote_name_source = "git remote add or";
+    const remote_names = try executor.collectCompletionsForInput(remote_name_source, remote_name_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(remote_names);
+    const origin = findCompletionCandidate(remote_names, "origin") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, origin.kind);
+    try std.testing.expectEqualStrings("remote:name:0:false", origin.description.?);
+}
+
 test "completion manifest function providers lazy-load provider-only companions" {
     const root = "rush-completion-manifest-lazy-companion-test";
     std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
@@ -5298,6 +5354,13 @@ fn expectCompletionCandidate(candidates: []const completion_model.Candidate, val
         if (std.mem.eql(u8, candidate.value, value)) return;
     }
     return error.MissingCompletionCandidate;
+}
+
+fn findCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) ?completion_model.Candidate {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, value)) return candidate;
+    }
+    return null;
 }
 
 fn expectNoCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) !void {
@@ -5862,6 +5925,53 @@ test "completion debug output exposes manifest source and JSON decision state" {
     var terminated = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, terminated_output, .{});
     defer terminated.deinit();
     try std.testing.expect(terminated.value.object.get("semantic").?.object.get("optionsTerminated").?.bool);
+}
+
+test "completion debug output traces Git fixture manifest state" {
+    const root = "rush-debug-git-fixture-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+    try env.put("XDG_DATA_DIRS", "");
+    try env.put("XDG_DATA_HOME", "test/fixtures/completion-data");
+
+    const diff_text = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, "git diff --cached ma");
+    defer std.testing.allocator.free(diff_text);
+    try std.testing.expect(std.mem.indexOf(u8, diff_text, "source: manifest") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff_text, "path: diff") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff_text, "argument-state: source") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff_text, "spelling: --cached") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff_text, "exclusive-group: diff-source") != null);
+
+    const diff_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git diff --cached ma");
+    defer std.testing.allocator.free(diff_json);
+    var diff = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, diff_json, .{});
+    defer diff.deinit();
+    const diff_object = diff.value.object;
+    const diff_manifest = diff_object.get("manifest").?.object;
+    try std.testing.expectEqualStrings("test/fixtures/completion-data/rush/completions/git.json", diff_manifest.get("path").?.string);
+    try std.testing.expectEqualStrings("source", diff_manifest.get("activeArgumentState").?.object.get("name").?.string);
+    try std.testing.expectEqualStrings("git.diff-sources", diff_manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
+    try std.testing.expectEqualStrings("--cached", diff_manifest.get("parsedOptions").?.array.items[0].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("diff-source", diff_manifest.get("parsedOptions").?.array.items[0].object.get("exclusiveGroup").?.string);
+    const suppressed = diff_manifest.get("suppressedOptions").?.array.items;
+    try std.testing.expectEqualStrings("--staged", suppressed[1].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("exclusiveGroup", suppressed[1].object.get("reason").?.string);
+
+    const checkout_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git checkout main -- src/mai");
+    defer std.testing.allocator.free(checkout_json);
+    var checkout = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, checkout_json, .{});
+    defer checkout.deinit();
+    const checkout_object = checkout.value.object;
+    try std.testing.expect(checkout_object.get("semantic").?.object.get("optionsTerminated").?.bool);
+    try std.testing.expectEqualStrings("pathspec", checkout_object.get("manifest").?.object.get("activeArgumentState").?.object.get("name").?.string);
+    try std.testing.expectEqualStrings("git.tree-files", checkout_object.get("manifest").?.object.get("matchedProviders").?.array.items[0].object.get("id").?.string);
+    const operands = checkout_object.get("context").?.object.get("operands").?.array.items;
+    try std.testing.expectEqualStrings("main", operands[0].object.get("value").?.string);
+    try std.testing.expectEqualStrings("tree", operands[0].object.get("state").?.string);
 }
 
 test "completion debug output exposes active structured value segment" {

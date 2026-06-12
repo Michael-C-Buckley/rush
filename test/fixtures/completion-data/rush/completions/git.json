@@ -1,0 +1,115 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "git",
+    "description": "focused Git-shaped completion fixture",
+    "providers": {
+      "git.refs": { "function": "__rush_complete_git_fixture_refs" },
+      "git.diff-sources": { "function": "__rush_complete_git_fixture_diff_sources" },
+      "git.tree-files": { "function": "__rush_complete_git_fixture_tree_files" },
+      "git.changed-files": { "function": "__rush_complete_git_fixture_changed_files" },
+      "git.remotes": { "function": "__rush_complete_git_fixture_remotes" },
+      "git.remote-urls": { "function": "__rush_complete_git_fixture_remote_urls" }
+    },
+    "subcommands": [
+      {
+        "name": "diff",
+        "description": "show changes between commits or paths",
+        "optionGroups": [
+          { "name": "diff-source", "exclusive": true }
+        ],
+        "options": [
+          { "long": "cached", "exclusiveGroup": "diff-source" },
+          { "long": "staged", "exclusiveGroup": "diff-source" },
+          { "long": "no-index", "exclusiveGroup": "diff-source" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "provider": "git.diff-sources",
+              "description": "revision or --no-index filesystem path"
+            },
+            {
+              "name": "pathspec",
+              "index": 1,
+              "repeatable": true,
+              "provider": "git.changed-files",
+              "after": { "terminatorSeen": true },
+              "description": "post-terminator changed path"
+            }
+          ]
+        }
+      },
+      {
+        "name": "checkout",
+        "description": "switch branches or restore paths",
+        "optionGroups": [
+          { "name": "checkout-create", "exclusive": true }
+        ],
+        "options": [
+          {
+            "short": "b",
+            "exclusiveGroup": "checkout-create",
+            "value": { "name": "branch" }
+          },
+          {
+            "short": "B",
+            "exclusiveGroup": "checkout-create",
+            "value": { "name": "branch" }
+          },
+          { "long": "track" }
+        ],
+        "arguments": {
+          "terminator": "--",
+          "states": [
+            { "name": "tree", "index": 0, "provider": "git.refs" },
+            {
+              "name": "pathspec",
+              "index": 1,
+              "repeatable": true,
+              "provider": "git.tree-files",
+              "after": { "terminatorSeen": true }
+            }
+          ]
+        }
+      },
+      {
+        "name": "restore",
+        "description": "restore working tree files",
+        "options": [
+          {
+            "long": "source",
+            "value": { "name": "tree", "provider": "git.refs" }
+          },
+          { "long": "staged" },
+          { "long": "worktree" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "pathspec", "index": 0, "repeatable": true, "provider": "git.changed-files" }
+          ]
+        }
+      },
+      {
+        "name": "remote",
+        "description": "manage remotes",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a remote",
+            "arguments": {
+              "states": [
+                { "name": "name", "index": 0, "provider": "git.remotes" },
+                { "name": "url", "index": 1, "provider": "git.remote-urls" }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
