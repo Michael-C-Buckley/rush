@@ -29,6 +29,13 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - whitespace inside assignment subscripts, such as `name[ i + 1 ]=word`
   - whitespace-only assignment subscripts as index `0`, such as `name[   ]=word`
   - `${name[index]}` expansion against Rush's array runtime
+  - whole-array value expansion with `${name[@]}` and `${name[*]}`
+  - quoted whole-array expansion semantics for `"${name[@]}"` and `"${name[*]}"`
+  - array length and key operations: `${#name[@]}`, `${#name[index]}`,
+    and `${!name[@]}` / `${!name[*]}`
+  - `unset 'name[index]'` for individual indexed array elements
+  - negative relative subscripts against the current maximum set index, such as
+    `${name[-1]}`
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
@@ -63,9 +70,10 @@ Current examples:
 ## Tracked future work
 
 - Broader Bash indexed array semantics:
-  - whole-array expansion
-  - array-specific parameter operations
-  - negative relative indices
+  - associative arrays and declaration builtins
+  - array slicing and transformation forms
+  - long-tail edge cases for negative subscripts on empty arrays and compound
+    assignments
 - String parameter expansion extensions:
   - substring `${parameter:offset[:length]}`
   - replacement `${parameter/pattern/repl}`

@@ -1405,10 +1405,12 @@ const PromptAsyncRefresh = struct {
 
 pub const ArrayValue = struct {
     values: std.ArrayList([]const u8) = .empty,
+    set: std.ArrayList(bool) = .empty,
 
     pub fn deinit(self: *ArrayValue, allocator: std.mem.Allocator) void {
         for (self.values.items) |value| allocator.free(value);
         self.values.deinit(allocator);
+        self.set.deinit(allocator);
         self.* = undefined;
     }
 };
@@ -3060,9 +3062,11 @@ pub const Executor = struct {
         const array = result.value_ptr;
         while (array.values.items.len <= index) {
             try array.values.append(self.allocator, try self.allocator.alloc(u8, 0));
+            try array.set.append(self.allocator, false);
         }
         self.allocator.free(array.values.items[index]);
         array.values.items[index] = try self.allocator.dupe(u8, value);
+        array.set.items[index] = true;
     }
 
     fn replaceArrayElements(self: *Executor, name: []const u8, elements: []const ArrayAssignmentElement) !void {
@@ -3074,9 +3078,11 @@ pub const Executor = struct {
         for (elements) |element| {
             while (array.values.items.len <= element.index) {
                 try array.values.append(self.allocator, try self.allocator.alloc(u8, 0));
+                try array.set.append(self.allocator, false);
             }
             self.allocator.free(array.values.items[element.index]);
             array.values.items[element.index] = try self.allocator.dupe(u8, element.value);
+            array.set.items[element.index] = true;
         }
 
         const owned_name = try self.allocator.dupe(u8, name);
@@ -3092,7 +3098,53 @@ pub const Executor = struct {
     pub fn getArrayElement(self: Executor, name: []const u8, index: usize) ?[]const u8 {
         const array = self.arrays.get(name) orelse return null;
         if (index >= array.values.items.len) return null;
+        if (!array.set.items[index]) return null;
         return array.values.items[index];
+    }
+
+    pub fn unsetArrayElement(self: *Executor, name: []const u8, index: usize) !void {
+        if (self.isReadonly(name)) return error.ReadonlyVariable;
+        const array = self.arrays.getPtr(name) orelse return;
+        if (index >= array.values.items.len or !array.set.items[index]) return;
+        const empty = try self.allocator.alloc(u8, 0);
+        self.allocator.free(array.values.items[index]);
+        array.values.items[index] = empty;
+        array.set.items[index] = false;
+    }
+
+    fn arrayElementCount(self: Executor, name: []const u8) usize {
+        const array = self.arrays.get(name) orelse return 0;
+        var count: usize = 0;
+        for (array.set.items) |is_set| {
+            if (is_set) count += 1;
+        }
+        return count;
+    }
+
+    fn arrayKeyAt(self: Executor, name: []const u8, ordinal: usize) ?usize {
+        const array = self.arrays.get(name) orelse return null;
+        var seen: usize = 0;
+        for (array.set.items, 0..) |is_set, index| {
+            if (!is_set) continue;
+            if (seen == ordinal) return index;
+            seen += 1;
+        }
+        return null;
+    }
+
+    fn arrayValueAt(self: Executor, name: []const u8, ordinal: usize) ?[]const u8 {
+        const index = self.arrayKeyAt(name, ordinal) orelse return null;
+        return self.getArrayElement(name, index);
+    }
+
+    fn arrayMaxIndex(self: Executor, name: []const u8) ?usize {
+        const array = self.arrays.get(name) orelse return null;
+        var index = array.set.items.len;
+        while (index > 0) {
+            index -= 1;
+            if (array.set.items[index]) return index;
+        }
+        return null;
     }
 
     pub fn unsetArray(self: *Executor, name: []const u8) void {
@@ -3103,8 +3155,9 @@ pub const Executor = struct {
         const array = self.arrays.get(name) orelse return null;
         var clone: ArrayValue = .{};
         errdefer clone.deinit(self.allocator);
-        for (array.values.items) |value| {
+        for (array.values.items, array.set.items) |value, is_set| {
             try clone.values.append(self.allocator, try self.allocator.dupe(u8, value));
+            try clone.set.append(self.allocator, is_set);
         }
         return clone;
     }
@@ -6975,7 +7028,14 @@ pub const Executor = struct {
     }
 
     fn arrayLookup(self: *Executor) expand.ArrayLookup {
-        return .{ .context = self, .lookupFn = lookupArray };
+        return .{
+            .context = self,
+            .lookupFn = lookupArray,
+            .lenFn = lookupArrayLen,
+            .keyFn = lookupArrayKey,
+            .valueFn = lookupArrayValue,
+            .maxIndexFn = lookupArrayMaxIndex,
+        };
     }
 
     fn setEnvCallback(context: ?*anyopaque, name: []const u8, value: []const u8) !void {
@@ -7004,6 +7064,26 @@ pub const Executor = struct {
     fn lookupArray(context: ?*const anyopaque, name: []const u8, index: usize) ?[]const u8 {
         const self: *const Executor = @ptrCast(@alignCast(context.?));
         return self.getArrayElement(name, index);
+    }
+
+    fn lookupArrayLen(context: ?*const anyopaque, name: []const u8) usize {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        return self.arrayElementCount(name);
+    }
+
+    fn lookupArrayKey(context: ?*const anyopaque, name: []const u8, ordinal: usize) ?usize {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        return self.arrayKeyAt(name, ordinal);
+    }
+
+    fn lookupArrayValue(context: ?*const anyopaque, name: []const u8, ordinal: usize) ?[]const u8 {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        return self.arrayValueAt(name, ordinal);
+    }
+
+    fn lookupArrayMaxIndex(context: ?*const anyopaque, name: []const u8) ?usize {
+        const self: *const Executor = @ptrCast(@alignCast(context.?));
+        return self.arrayMaxIndex(name);
     }
 
     fn freeExpandedCommand(self: *Executor, command: ir.SimpleCommand) void {
@@ -7252,11 +7332,7 @@ pub const Executor = struct {
             var element_index = next_index;
             var value_raw = word;
             if (compoundIndexedArrayElementSyntax(word)) |element_syntax| {
-                const arithmetic_value = if (std.mem.trim(u8, element_syntax.index_text, " \t\r\n").len == 0)
-                    0
-                else
-                    expand.evalArithmetic(element_syntax.index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(element_syntax.index_text, err);
-                element_index = std.math.cast(usize, arithmetic_value) orelse return self.arraySubscriptExpansionFailed(element_syntax.index_text, error.InvalidArithmetic);
+                element_index = try self.evaluateArrayAssignmentIndex(syntax.name, element_syntax.index_text);
                 value_raw = element_syntax.value;
             }
 
@@ -7272,12 +7348,29 @@ pub const Executor = struct {
 
     fn indexedArrayAssignment(self: *Executor, text: []const u8) !?IndexedArrayAssignment {
         const syntax = indexedArrayAssignmentSyntax(text) orelse return null;
-        const value = if (std.mem.trim(u8, syntax.index_text, " \t\r\n").len == 0)
+        const index = try self.evaluateArrayAssignmentIndex(syntax.name, syntax.index_text);
+        return .{ .name = syntax.name, .index = index, .value = syntax.value };
+    }
+
+    fn indexedArrayReference(self: *Executor, text: []const u8) !?IndexedArrayReference {
+        const syntax = indexedArrayReferenceSyntax(text) orelse return null;
+        const index = try self.evaluateArrayAssignmentIndex(syntax.name, syntax.index_text);
+        return .{ .name = syntax.name, .index = index };
+    }
+
+    fn evaluateArrayAssignmentIndex(self: *Executor, name: []const u8, index_text: []const u8) !usize {
+        const value = if (std.mem.trim(u8, index_text, " \t\r\n").len == 0)
             0
         else
-            expand.evalArithmetic(syntax.index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(syntax.index_text, err);
-        const index = std.math.cast(usize, value) orelse return self.arraySubscriptExpansionFailed(syntax.index_text, error.InvalidArithmetic);
-        return .{ .name = syntax.name, .index = index, .value = syntax.value };
+            expand.evalArithmetic(index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(index_text, err);
+        if (value < 0) {
+            const max_index = self.arrayMaxIndex(name) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+            const base = std.math.cast(i64, max_index) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+            const resolved = base + 1 + value;
+            if (resolved < 0) return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+            return std.math.cast(usize, resolved) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
+        }
+        return std.math.cast(usize, value) orelse return self.arraySubscriptExpansionFailed(index_text, error.InvalidArithmetic);
     }
 
     fn arraySubscriptExpansionFailed(self: *Executor, index_text: []const u8, err: anyerror) anyerror {
@@ -12874,7 +12967,6 @@ fn listExported(self: *Executor) !CommandResult {
 
 fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     _ = stdin;
-    _ = options;
     var mode: enum { variable, function } = .variable;
     var index: usize = 1;
     while (index < command.argv.len) {
@@ -12895,13 +12987,23 @@ fn builtinUnset(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         }
     }
     for (command.argv[index..]) |arg| {
-        if (!isShellName(arg.text)) return variableBuiltinUsageError(self, "unset", "invalid variable name");
         switch (mode) {
             .variable => {
+                if (options.features.isBash()) {
+                    if (try self.indexedArrayReference(arg.text)) |array_reference| {
+                        if (self.isReadonly(array_reference.name)) return variableBuiltinUsageError(self, "unset", "readonly variable");
+                        try self.unsetArrayElement(array_reference.name, array_reference.index);
+                        continue;
+                    }
+                }
+                if (!isShellName(arg.text)) return variableBuiltinUsageError(self, "unset", "invalid variable name");
                 if (self.isReadonly(arg.text)) return variableBuiltinUsageError(self, "unset", "readonly variable");
                 self.unsetEnv(arg.text);
             },
-            .function => self.unsetFunction(arg.text),
+            .function => {
+                if (!isShellName(arg.text)) return variableBuiltinUsageError(self, "unset", "invalid variable name");
+                self.unsetFunction(arg.text);
+            },
         }
     }
     return emptyResult(self.allocator, 0);
@@ -14101,6 +14203,11 @@ const IndexedArrayAssignment = struct {
     value: []const u8,
 };
 
+const IndexedArrayReference = struct {
+    name: []const u8,
+    index: usize,
+};
+
 const ArrayAssignmentElement = struct {
     index: usize,
     value: []const u8,
@@ -14130,6 +14237,11 @@ const IndexedArrayAssignmentSyntax = struct {
     name: []const u8,
     index_text: []const u8,
     value: []const u8,
+};
+
+const IndexedArrayReferenceSyntax = struct {
+    name: []const u8,
+    index_text: []const u8,
 };
 
 fn appendExpandedCompoundIndexedArrayElement(allocator: std.mem.Allocator, text: *std.ArrayList(u8), first: *bool, index_text: ?[]const u8, value: []const u8) !void {
@@ -14254,6 +14366,22 @@ fn indexedArrayAssignmentSyntax(text: []const u8) ?IndexedArrayAssignmentSyntax 
     const index_text = text[index_start..close_index];
     if (index_text.len == 0) return null;
     return .{ .name = text[0..name_end], .index_text = index_text, .value = text[close_index + 2 ..] };
+}
+
+fn indexedArrayReferenceSyntax(text: []const u8) ?IndexedArrayReferenceSyntax {
+    if (text.len == 0 or !isShellNameStart(text[0])) return null;
+
+    var name_end: usize = 1;
+    while (name_end < text.len and isShellNameContinue(text[name_end])) : (name_end += 1) {}
+    if (name_end >= text.len or text[name_end] != '[') return null;
+
+    const index_start = name_end + 1;
+    const close_offset = std.mem.findScalar(u8, text[index_start..], ']') orelse return null;
+    const close_index = index_start + close_offset;
+    if (close_index + 1 != text.len) return null;
+    const index_text = text[index_start..close_index];
+    if (index_text.len == 0) return null;
+    return .{ .name = text[0..name_end], .index_text = index_text };
 }
 
 fn isShellNameStart(byte: u8) bool {
@@ -15748,9 +15876,15 @@ test "executor stores Bash array runtime data" {
     try executor.setArrayElement("arr", 0, "ZERO");
 
     try std.testing.expectEqualStrings("ZERO", executor.getArrayElement("arr", 0).?);
-    try std.testing.expectEqualStrings("", executor.getArrayElement("arr", 1).?);
+    try std.testing.expect(executor.getArrayElement("arr", 1) == null);
     try std.testing.expectEqualStrings("two", executor.getArrayElement("arr", 2).?);
     try std.testing.expect(executor.getArrayElement("arr", 3) == null);
+    try std.testing.expectEqual(@as(usize, 2), executor.arrayElementCount("arr"));
+    try std.testing.expectEqual(@as(usize, 0), executor.arrayKeyAt("arr", 0).?);
+    try std.testing.expectEqual(@as(usize, 2), executor.arrayKeyAt("arr", 1).?);
+    try executor.unsetArrayElement("arr", 0);
+    try std.testing.expect(executor.getArrayElement("arr", 0) == null);
+    try std.testing.expectEqual(@as(usize, 1), executor.arrayElementCount("arr"));
 
     executor.unsetArray("arr");
     try std.testing.expect(executor.getArrayElement("arr", 0) == null);
@@ -15914,6 +16048,52 @@ test "executor applies Bash compound indexed array element expansion per element
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "executor supports Bash whole indexed array expansion operations" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\arr=([0]=zero [2]='two words' [5]=five)
+        \\arr[-1]=FIVE
+        \\printf 'len:%s elem:%s keys:' "${#arr[@]}" "${#arr[2]}"
+        \\printf '<%s>' "${!arr[@]}"
+        \\printf ' qvals:'
+        \\printf '<%s>' "${arr[@]}"
+        \\printf ' star:<%s> neg:<%s>/<%s>\n' "${arr[*]}" "${arr[-1]}" "${arr[-4]}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("len:3 elem:9 keys:<0><2><5> qvals:<zero><two words><FIVE> star:<zero two words FIVE> neg:<FIVE>/<two words>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor unsets Bash indexed array elements" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\arr=([0]=zero [2]=two [5]=five)
+        \\unset 'arr[2]'
+        \\printf 'len:%s keys:' "${#arr[@]}"
+        \\printf '<%s>' "${!arr[@]}"
+        \\printf ' vals:'
+        \\printf '<%s>' "${arr[@]}"
+        \\printf ' idx2:<%s> neg:<%s>\n' "${arr[2]}" "${arr[-1]}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("len:2 keys:<0><5> vals:<zero><five> idx2:<> neg:<five>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor preserves default compound assignment parsing behavior" {
     var lowered = try parseAndLower(std.testing.allocator,
         \\arr=(zero one)
@@ -15946,6 +16126,30 @@ test "executor keeps indexed array expansion on POSIX bad-substitution path" {
     try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("parameter: bad substitution\n", result.stderr);
+}
+
+test "executor keeps Bash array operation forms on POSIX bad-substitution path" {
+    const cases = [_][]const u8{
+        "echo ${arr[@]}; echo after",
+        "echo ${#arr[@]}; echo after",
+        "echo ${!arr[@]}; echo after",
+    };
+
+    for (cases) |case| {
+        var lowered = try parseAndLower(std.testing.allocator, case);
+        defer lowered.parsed.deinit();
+        defer lowered.program.deinit();
+
+        var executor = Executor.init(std.testing.allocator);
+        defer executor.deinit();
+        try executor.setArrayElement("arr", 0, "zero");
+        var result = try executor.executeProgram(lowered.program, .{});
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(ExitStatus, 1), result.status);
+        try std.testing.expectEqualStrings("", result.stdout);
+        try std.testing.expectEqualStrings("parameter: bad substitution\n", result.stderr);
+    }
 }
 
 test "executor implements test and bracket builtins" {
