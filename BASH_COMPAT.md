@@ -26,6 +26,17 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
   - empty delimiter operand as NUL
 
+## Default common-shell compatibility
+
+These choices are accepted in Rush's default/POSIX-facing mode because dash and
+Bash POSIX mode both accept them. They are documented as compatibility behavior,
+not POSIX compliance claims, and remain excluded from POSIX scoring:
+
+- `printf` ignores sign and space flags on unsigned decimal conversions such as
+  `%+u` and `% u`.
+- `printf` preserves zero padding on string conversions such as `%05s`. POSIX
+  leaves the `0` flag with string conversions undefined.
+
 ## Explicitly not POSIX
 
 These features must remain gated behind Bash mode or another future explicit
@@ -58,12 +69,6 @@ Current examples:
   - `${!prefix*}` / `${!prefix@}`
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.
-- `printf` compatibility for non-portable flag/specifier combinations:
-  - decide whether Bash mode should match dash/bash for sign flags on unsigned
-    conversions such as `%+u` and `% u`;
-  - decide whether to preserve zero padding on `%s` as compatibility behavior.
-    POSIX leaves the `0` flag with string conversions undefined, so this must
-    stay out of POSIX compliance scoring.
 
 ## Implementation rule
 

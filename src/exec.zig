@@ -10478,7 +10478,10 @@ fn formatPrintfSignedInteger(allocator: std.mem.Allocator, spec: PrintfSpec, val
 }
 
 fn formatPrintfUnsignedInteger(allocator: std.mem.Allocator, spec: PrintfSpec, value: u64, base: PrintfIntegerBase) ![]u8 {
-    return formatPrintfInteger(allocator, spec, value, false, base);
+    var unsigned_spec = spec;
+    unsigned_spec.sign_plus = false;
+    unsigned_spec.sign_space = false;
+    return formatPrintfInteger(allocator, unsigned_spec, value, false, base);
 }
 
 fn formatPrintfInteger(allocator: std.mem.Allocator, spec: PrintfSpec, magnitude: u64, negative: bool, base: PrintfIntegerBase) ![]u8 {
@@ -15257,6 +15260,13 @@ test "executor implements read and printf builtins" {
     var integer_format_result = try executor.executeProgram(integer_format_lowered.program, .{});
     defer integer_format_result.deinit();
     try std.testing.expectEqualStrings("[+7][ 7][0007][    0007][0007    ][+0007][012][0xff][0XFF][0x00ff]\n", integer_format_result.stdout);
+
+    var non_portable_printf_lowered = try parseAndLower(std.testing.allocator, "printf '[%+u][% u][%+8u][% 8u][%+08u][% 08u][%05s][%-05s][%05.3s]\\n' 7 7 7 7 7 7 hi hi abcdef");
+    defer non_portable_printf_lowered.parsed.deinit();
+    defer non_portable_printf_lowered.program.deinit();
+    var non_portable_printf_result = try executor.executeProgram(non_portable_printf_lowered.program, .{});
+    defer non_portable_printf_result.deinit();
+    try std.testing.expectEqualStrings("[7][7][       7][       7][00000007][00000007][000hi][hi   ][00abc]\n", non_portable_printf_result.stdout);
 
     var integer_constant_lowered = try parseAndLower(std.testing.allocator, "printf '%d:%d:%d:%d:%u:%x:%d\\n' 010 +0x10 \"'A\" '\"B' -010 -0x10 ''");
     defer integer_constant_lowered.parsed.deinit();
