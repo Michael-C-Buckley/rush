@@ -315,3 +315,4 @@ eval "alias say='echo eval-ok'"\nsay\nprintf '%s\n' "alias dot='echo dot-ok'" > 
 alias echo='echo alias-ok'; echo same-line; echo same-line2\necho next-line
 printf '<%s:%d:%b>\n' only; printf '<%s:%d>\n' a 1 b
 printf '<%s%%>\n' a b; printf 'done:%%\n'
+printf '%i:%i:%i\n' 12 +0x10 -0x10
