@@ -2729,6 +2729,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  separators: {s}
         \\  path-segments: {s}
         \\semantic:
+        \\
     , .{
         source,
         effective_context.command,
@@ -2770,6 +2771,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  replace: {d}..{d}
         \\  parser-position: {s}
         \\  parser-offset: {d}
+        \\
     , .{
         semantic.root,
         semantic_path,
@@ -5988,6 +5990,10 @@ test "completion debug output shows semantic structured context and rules" {
     defer std.testing.allocator.free(output);
 
     try std.testing.expect(std.mem.indexOf(u8, output, "semantic:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "semantic:\n  parsed-options:\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "semantic:  parsed-options:") == null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "parser-offset: 0\n  parsed-options:\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "parser-offset: 0  parsed-options:") == null);
     try std.testing.expect(std.mem.indexOf(u8, output, "root: git") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "path: commit") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "position: option") != null);
