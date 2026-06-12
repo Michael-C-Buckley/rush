@@ -12230,7 +12230,6 @@ fn nextReadInput(self: *Executor, stdin: []const u8, read_options: ReadOptions, 
     }
     if (self.script_stdin_file) |file| return try readInputFromFile(self, file, read_options, readContinuationPrompt(self, file, execute_options));
     const script_stdin = self.script_stdin orelse {
-        if (!execute_options.interactive) return .{ .line = "", .status = 1 };
         const file = std.Io.File.stdin();
         return try readInputFromFile(self, file, read_options, readContinuationPrompt(self, file, execute_options));
     };

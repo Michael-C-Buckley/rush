@@ -7,6 +7,10 @@ const sqlite = @cImport({
     @cInclude("sqlite3.h");
 });
 
+extern "c" fn close(fd: c_int) c_int;
+extern "c" fn dup(fd: c_int) c_int;
+extern "c" fn dup2(oldfd: c_int, newfd: c_int) c_int;
+
 pub const compat = @import("compat.zig");
 pub const parser = @import("parser.zig");
 pub const expand = @import("expand.zig");
@@ -5634,6 +5638,54 @@ fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, i
     return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, invocation.positionals, interactive_options, invocation.shell_options);
 }
 
+const StdinGuard = struct {
+    saved_fd: c_int,
+
+    fn replaceWith(file: std.Io.File) !StdinGuard {
+        const saved_fd = dup(std.Io.File.stdin().handle);
+        if (saved_fd < 0) return error.SkipZigTest;
+        errdefer _ = close(saved_fd);
+        if (dup2(file.handle, std.Io.File.stdin().handle) < 0) return error.SkipZigTest;
+        return .{ .saved_fd = saved_fd };
+    }
+
+    fn restore(self: *StdinGuard) void {
+        _ = dup2(self.saved_fd, std.Io.File.stdin().handle);
+        _ = close(self.saved_fd);
+        self.* = undefined;
+    }
+};
+
+fn runInvocationWithPipeStdin(invocation: ShellInvocation, stdin: []const u8) !exec.CommandResult {
+    var pipe = try editor_driver.makePipe(std.testing.io);
+    defer pipe.read.close(std.testing.io);
+    var write_open = true;
+    defer if (write_open) pipe.write.close(std.testing.io);
+
+    try writeFileAll(pipe.write, stdin);
+    pipe.write.close(std.testing.io);
+    write_open = false;
+
+    var guard = try StdinGuard.replaceWith(pipe.read);
+    defer guard.restore();
+    return runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+}
+
+fn runInvocationWithFileStdin(invocation: ShellInvocation, path: []const u8) !exec.CommandResult {
+    var file = try std.Io.Dir.cwd().openFile(std.testing.io, path, .{});
+    defer file.close(std.testing.io);
+    var guard = try StdinGuard.replaceWith(file);
+    defer guard.restore();
+    return runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+}
+
+fn writeFileAll(file: std.Io.File, bytes: []const u8) !void {
+    var buffer: [4096]u8 = undefined;
+    var writer = file.writer(std.testing.io, &buffer);
+    try writer.interface.writeAll(bytes);
+    try writer.interface.flush();
+}
+
 fn readStandardInputScript(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
     var buffer: [4096]u8 = undefined;
     var reader = std.Io.File.stdin().reader(io, &buffer);
@@ -8824,6 +8876,56 @@ test "command string set -v does not echo already-read input" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("command-string-verbose\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "command string read consumes piped real stdin" {
+    const invocation = parseShellInvocation(&.{ "rush", "-c", "read x; status=$?; printf 'x=[%s] status=%s\n' \"$x\" \"$status\"" }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationWithPipeStdin(invocation, "pipe value\n");
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("x=[pipe value] status=0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "command string read consumes file real stdin" {
+    const path = "rush-command-string-read-stdin.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "file value\n" });
+
+    const invocation = parseShellInvocation(&.{ "rush", "-c", "read x; status=$?; printf 'x=[%s] status=%s\n' \"$x\" \"$status\"" }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationWithFileStdin(invocation, path);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("x=[file value] status=0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "command string read keeps explicit stdin redirection precedence" {
+    const path = "rush-command-string-read-redirection.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "redirected value\n" });
+
+    const invocation = parseShellInvocation(&.{ "rush", "-c", "read x < \"$1\"; status=$?; printf 'x=[%s] status=%s\n' \"$x\" \"$status\"", "rush", path }) orelse return error.ExpectedInvocation;
+    var result = try runInvocationWithPipeStdin(invocation, "real stdin value\n");
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("x=[redirected value] status=0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "standard input script source still leaves read at EOF" {
+    const invocation = parseShellInvocation(&.{"rush"}) orelse return error.ExpectedInvocation;
+    var result = try runInvocationWithPipeStdin(invocation, "read x; status=$?; printf 'x=[%s] status=%s\n' \"$x\" \"$status\"\n");
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("x=[] status=1\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

@@ -104,6 +104,26 @@ pub fn build(b: *std.Build) void {
         \\printf '%s\n' 'echo "$1"' | "$1" -s posarg >"$tmp/stdout" 2>"$tmp/stderr"
         \\test "$(cat "$tmp/stdout")" = posarg
         \\test ! -s "$tmp/stderr"
+        \\printf 'pipe value\n' | "$1" -c 'read x; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = 'x=[pipe value] status=0'
+        \\test ! -s "$tmp/stderr"
+        \\printf 'file value\n' >"$tmp/input"
+        \\"$1" -c 'read x; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' <"$tmp/input" >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = 'x=[file value] status=0'
+        \\test ! -s "$tmp/stderr"
+        \\printf 'redirected value\n' >"$tmp/redirect"
+        \\printf 'real stdin value\n' | "$1" -c 'read x < "$1"; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' rush "$tmp/redirect" >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = 'x=[redirected value] status=0'
+        \\test ! -s "$tmp/stderr"
+        \\cat >"$tmp/read-script.rush" <<'EOF'
+        \\read x; status=$?; printf 'x=[%s] status=%s\n' "$x" "$status"
+        \\EOF
+        \\printf 'script pipe value\n' | "$1" "$tmp/read-script.rush" >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = 'x=[script pipe value] status=0'
+        \\test ! -s "$tmp/stderr"
+        \\printf '%s\n' 'read x; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' | "$1" >"$tmp/stdout" 2>"$tmp/stderr"
+        \\test "$(cat "$tmp/stdout")" = 'x=[] status=1'
+        \\test ! -s "$tmp/stderr"
         ,
         "sh",
     });
