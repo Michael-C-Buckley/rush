@@ -24,6 +24,7 @@ const usage =
     \\       rush [-i] [--posix-strict] [set-options] SCRIPT_FILE [ARGS...]
     \\       rush complete --debug INPUT
     \\       rush complete --debug-json INPUT
+    \\       rush complete trace INPUT
     \\       rush complete validate [PATH]
     \\       rush --help
     \\
@@ -80,6 +81,11 @@ pub fn main(init: std.process.Init) !u8 {
     }
 
     if (args.len == 4 and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "--debug")) {
+        try debugCompletion(allocator, init.io, init.environ_map, args[3], .text);
+        return 0;
+    }
+
+    if (args.len == 4 and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "trace")) {
         try debugCompletion(allocator, init.io, init.environ_map, args[3], .text);
         return 0;
     }
@@ -2544,17 +2550,23 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         }
     }
     for (candidates) |candidate| {
-        const match_trace = completion_model.candidateMatchTrace(source, candidate, matcher_policy);
-        try out.writer.print("  - value: {s}\n    kind: {s}\n    description: {s}\n    replace: {d}..{d}\n    match-query: {s}\n    match-rank: {s}\n    suppressed: {}\n    suppression-reason: {s}\n    rank-class: {d}\n    rank-score: {d}\n", .{
+        const insert = try completion_model.candidateReplacementForInput(allocator, source, candidate);
+        defer allocator.free(insert);
+        const match_query = try completion_model.candidateQueryForInput(allocator, source, candidate);
+        defer allocator.free(match_query);
+        const match_rank = completion_model.candidateMatchRank(candidate, match_query, matcher_policy);
+        const suppression_reason = if (match_rank == null) completion_model.candidateSuppressionReason(candidate, match_query, matcher_policy) else null;
+        try out.writer.print("  - value: {s}\n    insert: {s}\n    kind: {s}\n    description: {s}\n    replace: {d}..{d}\n    match-query: {s}\n    match-rank: {s}\n    suppressed: {}\n    suppression-reason: {s}\n    rank-class: {d}\n    rank-score: {d}\n", .{
             candidate.value,
+            insert,
             @tagName(candidate.kind),
             candidate.description orelse "",
             candidate.replace_start,
             candidate.replace_end,
-            match_trace.query,
-            matchRankName(match_trace.rank),
-            match_trace.suppression_reason != null,
-            matchSuppressionReasonName(match_trace.suppression_reason),
+            match_query,
+            matchRankName(match_rank),
+            suppression_reason != null,
+            matchSuppressionReasonName(suppression_reason),
             completionRankClass(candidate),
             completionRankScore(history, cwd, candidate.value),
         });
@@ -2645,7 +2657,7 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     try json.endArray();
     try json.objectField("candidates");
     try json.beginArray();
-    for (candidates) |candidate| try writeCompletionCandidateJson(&json, history, cwd, source, candidate, matcher_policy);
+    for (candidates) |candidate| try writeCompletionCandidateJson(allocator, &json, history, cwd, source, candidate, matcher_policy);
     try json.endArray();
     try json.objectField("providerDiagnostics");
     try writeCompletionProviderDiagnosticsJson(&json, executor.completionProviderDiagnostics());
@@ -2784,13 +2796,20 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.endObject();
 }
 
-fn writeCompletionCandidateJson(json: *std.json.Stringify, history: History, cwd: []const u8, source: []const u8, candidate: completion_model.Candidate, matcher_policy: completion_model.MatcherPolicy) !void {
-    const match_trace = completion_model.candidateMatchTrace(source, candidate, matcher_policy);
+fn writeCompletionCandidateJson(allocator: std.mem.Allocator, json: *std.json.Stringify, history: History, cwd: []const u8, source: []const u8, candidate: completion_model.Candidate, matcher_policy: completion_model.MatcherPolicy) !void {
+    const insert = try completion_model.candidateReplacementForInput(allocator, source, candidate);
+    defer allocator.free(insert);
+    const match_query = try completion_model.candidateQueryForInput(allocator, source, candidate);
+    defer allocator.free(match_query);
+    const match_rank = completion_model.candidateMatchRank(candidate, match_query, matcher_policy);
+    const suppression_reason = if (match_rank == null) completion_model.candidateSuppressionReason(candidate, match_query, matcher_policy) else null;
     try json.beginObject();
     try json.objectField("value");
     try json.write(candidate.value);
     try json.objectField("display");
     try json.write(candidate.display);
+    try json.objectField("insert");
+    try json.write(insert);
     try json.objectField("description");
     try json.write(candidate.description);
     try json.objectField("kind");
@@ -2802,15 +2821,15 @@ fn writeCompletionCandidateJson(json: *std.json.Stringify, history: History, cwd
     try json.objectField("appendSpace");
     try json.write(candidate.append_space);
     try json.objectField("matchesPrefix");
-    try json.write(match_trace.rank != null);
+    try json.write(match_rank != null);
     try json.objectField("matchQuery");
-    try json.write(match_trace.query);
+    try json.write(match_query);
     try json.objectField("matchRank");
-    try json.write(matchRankName(match_trace.rank));
+    try json.write(matchRankName(match_rank));
     try json.objectField("suppressed");
-    try json.write(match_trace.suppression_reason != null);
+    try json.write(suppression_reason != null);
     try json.objectField("suppressionReason");
-    try json.write(matchSuppressionReasonName(match_trace.suppression_reason));
+    try json.write(matchSuppressionReasonName(suppression_reason));
     try json.objectField("rankClass");
     try json.write(completionRankClass(candidate));
     try json.objectField("rankScore");

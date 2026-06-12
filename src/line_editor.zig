@@ -2345,7 +2345,7 @@ pub const LineSession = struct {
         try self.editor.buffer.applyCompletionEdit(.{
             .replace_start = candidate.replace_start,
             .replace_end = candidate.replace_end,
-            .replacement = candidate.value,
+            .replacement = completion.candidateInsertText(candidate),
             .append_space = candidate.append_space,
         });
         self.completion_menu.clear(self.allocator);
@@ -4211,6 +4211,28 @@ test "completion menu selection accepts selected candidate" {
     try std.testing.expectEqualStrings("git cherry-pick ", session.editor.buffer.text());
     try std.testing.expectEqual(LineSession.State.editing, session.state);
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
+}
+
+test "completion menu acceptance uses insertion text while rendering display text" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("cat two\\ w");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "two words", .display = "two words", .insert = "two\\ words", .kind = .file, .replace_start = 4, .replace_end = "cat two\\ w".len },
+        .{ .value = "two ways", .display = "two ways", .insert = "two\\ ways", .kind = .file, .replace_start = 4, .replace_end = "cat two\\ w".len },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "two words") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "two\\ words") == null);
+
+    try session.handleKey(.{ .key = .down });
+    try session.handleKey(.{ .key = .enter });
+
+    try std.testing.expectEqualStrings("cat two\\ words ", session.editor.buffer.text());
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
 }
 
 test "accepting completion clears previously rendered menu rows" {

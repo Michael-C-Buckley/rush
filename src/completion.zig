@@ -115,6 +115,7 @@ pub const Kind = enum {
 pub const Candidate = struct {
     value: []const u8,
     display: ?[]const u8 = null,
+    insert: ?[]const u8 = null,
     description: ?[]const u8 = null,
     kind: Kind = .plain,
     option: ?Option = null,
@@ -244,6 +245,7 @@ pub fn freeCandidates(allocator: std.mem.Allocator, candidates: []Candidate) voi
 fn freeCandidateFields(allocator: std.mem.Allocator, candidate: Candidate) void {
     allocator.free(candidate.value);
     if (candidate.display) |display| allocator.free(display);
+    if (candidate.insert) |insert| allocator.free(insert);
     if (candidate.description) |description| allocator.free(description);
     if (candidate.option) |option| {
         if (option.long) |long| allocator.free(long);
@@ -266,7 +268,7 @@ pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candida
         return .{ .edit = .{
             .replace_start = replace_start,
             .replace_end = replace_end,
-            .replacement = try allocator.dupe(u8, candidates[0].value),
+            .replacement = try allocator.dupe(u8, candidateInsertText(candidates[0])),
             .append_space = candidates[0].append_space,
         } };
     }
@@ -316,19 +318,26 @@ pub fn applyCandidatesForInputWithPolicy(allocator: std.mem.Allocator, source: [
     defer matches.deinit(allocator);
     var exact_matches: std.ArrayList(Candidate) = .empty;
     defer exact_matches.deinit(allocator);
+    defer freeTemporaryCandidates(allocator, exact_matches.items);
     var prefix_matches: std.ArrayList(Candidate) = .empty;
     defer prefix_matches.deinit(allocator);
+    defer freeTemporaryCandidates(allocator, prefix_matches.items);
     var fuzzy_matches: std.ArrayList(Candidate) = .empty;
     defer fuzzy_matches.deinit(allocator);
+    defer freeTemporaryCandidates(allocator, fuzzy_matches.items);
     for (candidates) |candidate| {
         std.debug.assert(candidate.replace_start <= candidate.replace_end);
         std.debug.assert(candidate.replace_end <= source.len);
-        const prefix = source[candidate.replace_start..candidate.replace_end];
+        const prefix = try candidateQueryForInput(allocator, source, candidate);
+        defer allocator.free(prefix);
         if (candidateMatchRank(candidate, prefix, policy)) |rank| {
+            var insert_candidate = candidate;
+            insert_candidate.insert = try candidateReplacementForInput(allocator, source, candidate);
+            errdefer allocator.free(insert_candidate.insert.?);
             switch (rank) {
-                .exact => try exact_matches.append(allocator, candidate),
-                .prefix => try prefix_matches.append(allocator, candidate),
-                .fuzzy => try fuzzy_matches.append(allocator, candidate),
+                .exact => try exact_matches.append(allocator, insert_candidate),
+                .prefix => try prefix_matches.append(allocator, insert_candidate),
+                .fuzzy => try fuzzy_matches.append(allocator, insert_candidate),
             }
         }
     }
@@ -337,6 +346,187 @@ pub fn applyCandidatesForInputWithPolicy(allocator: std.mem.Allocator, source: [
     try matches.appendSlice(allocator, fuzzy_matches.items);
 
     return applyCandidates(allocator, matches.items);
+}
+
+fn freeTemporaryCandidates(allocator: std.mem.Allocator, candidates: []Candidate) void {
+    for (candidates) |candidate| {
+        if (candidate.insert) |insert| allocator.free(insert);
+    }
+}
+
+pub fn candidateInsertText(candidate: Candidate) []const u8 {
+    return candidate.insert orelse candidate.value;
+}
+
+pub fn candidateQueryForInput(allocator: std.mem.Allocator, source: []const u8, candidate: Candidate) ![]const u8 {
+    std.debug.assert(candidate.replace_start <= candidate.replace_end);
+    std.debug.assert(candidate.replace_end <= source.len);
+    return decodeShellCompletionSlice(allocator, source, candidate.replace_start, candidate.replace_end);
+}
+
+pub fn candidateReplacementForInput(allocator: std.mem.Allocator, source: []const u8, candidate: Candidate) ![]const u8 {
+    std.debug.assert(candidate.replace_start <= candidate.replace_end);
+    std.debug.assert(candidate.replace_end <= source.len);
+    return encodeShellCompletionReplacement(allocator, source, candidate.replace_start, candidate.replace_end, candidate.value, candidate.append_space);
+}
+
+pub fn decodeShellWordForCompletion(allocator: std.mem.Allocator, word: []const u8) ![]const u8 {
+    return decodeShellCompletionSlice(allocator, word, 0, word.len);
+}
+
+const ShellQuote = enum {
+    unquoted,
+    single,
+    double,
+};
+
+const ShellCompletionContext = struct {
+    quote: ShellQuote,
+    opening_quote: ?u8 = null,
+};
+
+fn shellCompletionContext(source: []const u8, replace_start: usize) ShellCompletionContext {
+    var quote: ShellQuote = .unquoted;
+    var index: usize = 0;
+    while (index < replace_start) : (index += 1) {
+        const byte = source[index];
+        switch (quote) {
+            .unquoted => {
+                if (byte == '\\') {
+                    if (index + 1 < replace_start) index += 1;
+                } else if (byte == '\'') {
+                    quote = .single;
+                } else if (byte == '"') {
+                    quote = .double;
+                }
+            },
+            .single => {
+                if (byte == '\'') quote = .unquoted;
+            },
+            .double => {
+                if (byte == '\\') {
+                    if (index + 1 < replace_start and isDoubleQuoteEscapable(source[index + 1])) index += 1;
+                } else if (byte == '"') {
+                    quote = .unquoted;
+                }
+            },
+        }
+    }
+    if (quote == .unquoted and replace_start < source.len) {
+        if (source[replace_start] == '\'') return .{ .quote = .single, .opening_quote = '\'' };
+        if (source[replace_start] == '"') return .{ .quote = .double, .opening_quote = '"' };
+    }
+    return .{ .quote = quote };
+}
+
+fn decodeShellCompletionSlice(allocator: std.mem.Allocator, source: []const u8, start: usize, end: usize) ![]const u8 {
+    const context = shellCompletionContext(source, start);
+    var quote = context.quote;
+    var index = start;
+    if (context.opening_quote != null and index < end) index += 1;
+
+    var decoded: std.ArrayList(u8) = .empty;
+    errdefer decoded.deinit(allocator);
+    while (index < end) : (index += 1) {
+        const byte = source[index];
+        switch (quote) {
+            .unquoted => {
+                if (byte == '\\' and index + 1 < end) {
+                    index += 1;
+                    try decoded.append(allocator, source[index]);
+                } else if (byte == '\'') {
+                    quote = .single;
+                } else if (byte == '"') {
+                    quote = .double;
+                } else {
+                    try decoded.append(allocator, byte);
+                }
+            },
+            .single => {
+                if (byte == '\'') {
+                    quote = .unquoted;
+                } else {
+                    try decoded.append(allocator, byte);
+                }
+            },
+            .double => {
+                if (byte == '"') {
+                    quote = .unquoted;
+                } else if (byte == '\\' and index + 1 < end and isDoubleQuoteEscapable(source[index + 1])) {
+                    index += 1;
+                    try decoded.append(allocator, source[index]);
+                } else {
+                    try decoded.append(allocator, byte);
+                }
+            },
+        }
+    }
+    return decoded.toOwnedSlice(allocator);
+}
+
+fn encodeShellCompletionReplacement(allocator: std.mem.Allocator, source: []const u8, replace_start: usize, replace_end: usize, value: []const u8, append_space: bool) ![]const u8 {
+    const context = shellCompletionContext(source, replace_start);
+    var encoded: std.ArrayList(u8) = .empty;
+    errdefer encoded.deinit(allocator);
+    if (context.opening_quote) |quote| try encoded.append(allocator, quote);
+    try appendShellEscapedValue(allocator, &encoded, context.quote, value);
+    if (append_space and shouldCloseQuoteForCompletion(source, replace_end, context.quote, context.opening_quote != null)) {
+        try encoded.append(allocator, switch (context.quote) {
+            .unquoted => unreachable,
+            .single => '\'',
+            .double => '"',
+        });
+    }
+    return encoded.toOwnedSlice(allocator);
+}
+
+fn appendShellEscapedValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), quote: ShellQuote, value: []const u8) !void {
+    switch (quote) {
+        .unquoted => {
+            for (value, 0..) |byte, index| {
+                if (needsUnquotedEscape(byte, index)) try out.append(allocator, '\\');
+                try out.append(allocator, byte);
+            }
+        },
+        .single => {
+            for (value) |byte| {
+                if (byte == '\'') {
+                    try out.appendSlice(allocator, "'\\''");
+                } else {
+                    try out.append(allocator, byte);
+                }
+            }
+        },
+        .double => {
+            for (value) |byte| {
+                if (isDoubleQuoteEscapable(byte) and byte != '\n') try out.append(allocator, '\\');
+                try out.append(allocator, byte);
+            }
+        },
+    }
+}
+
+fn needsUnquotedEscape(byte: u8, index: usize) bool {
+    if (std.ascii.isWhitespace(byte)) return true;
+    if (index == 0 and byte == '~') return true;
+    return switch (byte) {
+        '\\', '\'', '"', '`', '$', '&', '|', ';', '<', '>', '(', ')', '[', ']', '{', '}', '*', '?', '!', '#' => true,
+        else => false,
+    };
+}
+
+fn isDoubleQuoteEscapable(byte: u8) bool {
+    return switch (byte) {
+        '$', '`', '"', '\\', '\n' => true,
+        else => false,
+    };
+}
+
+fn shouldCloseQuoteForCompletion(source: []const u8, replace_end: usize, quote: ShellQuote, opened_at_replacement: bool) bool {
+    _ = source;
+    _ = replace_end;
+    _ = opened_at_replacement;
+    return quote != .unquoted;
 }
 
 pub fn candidateFuzzyMatchRank(candidate: Candidate, query: []const u8) ?MatchRank {
@@ -501,6 +691,8 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
     errdefer allocator.free(cloned.value);
     if (candidate.display) |display| cloned.display = try allocator.dupe(u8, display);
     errdefer if (cloned.display) |display| allocator.free(display);
+    if (candidate.insert) |insert| cloned.insert = try allocator.dupe(u8, insert);
+    errdefer if (cloned.insert) |insert| allocator.free(insert);
     if (candidate.description) |description| cloned.description = try allocator.dupe(u8, description);
     errdefer if (cloned.description) |description| allocator.free(description);
     if (candidate.option) |option| {
@@ -693,4 +885,72 @@ test "application filtering reports no matching candidates" {
     defer application.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(Application.none, application);
+}
+
+test "application escapes unquoted completion replacements" {
+    const source = "cat two";
+    const candidates = [_]Candidate{.{ .value = "two words&[x]*", .replace_start = 4, .replace_end = source.len }};
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("two\\ words\\&\\[x\\]\\*", edit.replacement);
+    try std.testing.expect(edit.append_space);
+}
+
+test "application preserves quote context when inserting completions" {
+    const double_source = "cat \"two";
+    const double_candidates = [_]Candidate{.{ .value = "two words$HOME", .replace_start = 4, .replace_end = double_source.len }};
+    const double_application = try applyCandidatesForInput(std.testing.allocator, double_source, &double_candidates);
+    defer double_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("\"two words\\$HOME\"", double_application.edit.replacement);
+    try std.testing.expect(double_application.edit.append_space);
+
+    const single_source = "cat 'two";
+    const single_candidates = [_]Candidate{.{ .value = "two words", .replace_start = 4, .replace_end = single_source.len }};
+    const single_application = try applyCandidatesForInput(std.testing.allocator, single_source, &single_candidates);
+    defer single_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("'two words'", single_application.edit.replacement);
+    try std.testing.expect(single_application.edit.append_space);
+}
+
+test "application decodes escaped prefixes before matching and reinserts escaped text" {
+    const source = "cat two\\ w";
+    const candidates = [_]Candidate{.{ .value = "two words", .replace_start = 4, .replace_end = source.len }};
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = application.edit;
+    try std.testing.expectEqualStrings("two\\ words", edit.replacement);
+}
+
+test "application escapes tilde and keeps directory completions open" {
+    const tilde_source = "cat ~li";
+    const tilde_candidates = [_]Candidate{.{ .value = "~literal?", .replace_start = 4, .replace_end = tilde_source.len }};
+    const tilde_application = try applyCandidatesForInput(std.testing.allocator, tilde_source, &tilde_candidates);
+    defer tilde_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("\\~literal\\?", tilde_application.edit.replacement);
+
+    const dir_source = "cat dir";
+    const dir_candidates = [_]Candidate{.{ .value = "dir name/", .kind = .directory, .replace_start = 4, .replace_end = dir_source.len, .append_space = false }};
+    const dir_application = try applyCandidatesForInput(std.testing.allocator, dir_source, &dir_candidates);
+    defer dir_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("dir\\ name/", dir_application.edit.replacement);
+    try std.testing.expect(!dir_application.edit.append_space);
+}
+
+test "ambiguous application keeps display values separate from insertion text" {
+    const source = "cat two\\ w";
+    const candidates = [_]Candidate{
+        .{ .value = "two ways", .display = "first", .replace_start = 4, .replace_end = source.len },
+        .{ .value = "two words", .display = "second", .replace_start = 4, .replace_end = source.len },
+    };
+    const application = try applyCandidatesForInput(std.testing.allocator, source, &candidates);
+    defer application.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), application.ambiguous.len);
+    try std.testing.expectEqualStrings("first", application.ambiguous[0].display.?);
+    try std.testing.expectEqualStrings("two\\ ways", application.ambiguous[0].insert.?);
+    try std.testing.expectEqualStrings("second", application.ambiguous[1].display.?);
+    try std.testing.expectEqualStrings("two\\ words", application.ambiguous[1].insert.?);
 }

@@ -381,6 +381,7 @@ pub const CompletionBuilder = struct {
         var owned_candidate = candidate;
         owned_candidate.value = try self.dupeField(allocator, candidate.value);
         if (candidate.display) |display| owned_candidate.display = try self.dupeField(allocator, display);
+        if (candidate.insert) |insert| owned_candidate.insert = try self.dupeField(allocator, insert);
         if (candidate.description) |description| owned_candidate.description = try self.dupeField(allocator, description);
         if (candidate.option) |option| {
             owned_candidate.option = .{
@@ -2336,6 +2337,7 @@ pub const Executor = struct {
         for (candidates) |candidate| {
             self.allocator.free(candidate.value);
             if (candidate.display) |display| self.allocator.free(display);
+            if (candidate.insert) |insert| self.allocator.free(insert);
             if (candidate.description) |description| self.allocator.free(description);
             if (candidate.option) |option| {
                 if (option.long) |long| self.allocator.free(long);
@@ -9495,8 +9497,9 @@ fn builtinCompletionFiles(self: *Executor, builder: *CompletionBuilder, command:
 
 fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io, prefix: []const u8, replace_start: usize, replace_end: usize, extension: ?[]const u8, directories_only: bool, append_slash: bool) !void {
     _ = append_slash;
-    const split = splitCompletionPathPrefix(prefix);
-    const candidate_replace_start = replace_start + split.display_prefix.len;
+    const split = try splitCompletionPathPrefix(self.allocator, prefix);
+    defer split.deinit(self.allocator);
+    const candidate_replace_start = replace_start + split.raw_display_prefix_len;
     var dir = try std.Io.Dir.cwd().openDir(io, split.directory, .{ .iterate = true });
     defer dir.close(io);
     var iterator = dir.iterate();
@@ -9526,15 +9529,27 @@ fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io
 
 const CompletionPathPrefix = struct {
     directory: []const u8,
-    display_prefix: []const u8,
+    raw_display_prefix_len: usize,
     base: []const u8,
+
+    fn deinit(self: CompletionPathPrefix, allocator: std.mem.Allocator) void {
+        allocator.free(self.directory);
+        allocator.free(self.base);
+    }
 };
 
-fn splitCompletionPathPrefix(prefix: []const u8) CompletionPathPrefix {
-    const slash_index = std.mem.lastIndexOfScalar(u8, prefix, '/') orelse return .{ .directory = ".", .display_prefix = "", .base = prefix };
+fn splitCompletionPathPrefix(allocator: std.mem.Allocator, prefix: []const u8) !CompletionPathPrefix {
+    const slash_index = std.mem.lastIndexOfScalar(u8, prefix, '/') orelse {
+        const directory = try allocator.dupe(u8, ".");
+        errdefer allocator.free(directory);
+        const base = try completion.decodeShellWordForCompletion(allocator, prefix);
+        return .{ .directory = directory, .raw_display_prefix_len = 0, .base = base };
+    };
     const display_prefix = prefix[0 .. slash_index + 1];
-    const directory = if (display_prefix.len == 0) "/" else display_prefix;
-    return .{ .directory = directory, .display_prefix = display_prefix, .base = prefix[slash_index + 1 ..] };
+    const decoded_directory = if (display_prefix.len == 0) try allocator.dupe(u8, "/") else try completion.decodeShellWordForCompletion(allocator, display_prefix);
+    errdefer allocator.free(decoded_directory);
+    const base = try completion.decodeShellWordForCompletion(allocator, prefix[slash_index + 1 ..]);
+    return .{ .directory = decoded_directory, .raw_display_prefix_len = display_prefix.len, .base = base };
 }
 
 fn builtinCompletionVariables(self: *Executor, builder: *CompletionBuilder, command: ir.SimpleCommand) !CommandResult {
@@ -20805,6 +20820,73 @@ test "default completion falls back to paths for unmatched arguments" {
     try std.testing.expectEqual(@as(usize, prefixed_source.len), edit.replace_end);
 }
 
+test "path completion application is quote and escape aware" {
+    const spaced_file = "rush completion path [x].txt";
+    const spaced_dir = "rush completion dir";
+    const parent_dir = "rush completion parent";
+    const nested_file = parent_dir ++ "/nested [file].txt";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, spaced_file) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, spaced_dir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, parent_dir) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = spaced_file, .data = "" });
+    std.Io.Dir.cwd().createDir(std.testing.io, spaced_dir, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    std.Io.Dir.cwd().createDir(std.testing.io, parent_dir, .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    };
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = nested_file, .data = "" });
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    const unquoted_source = "cat rush";
+    const unquoted_candidates = try executor.collectCompletionsForInput(unquoted_source, unquoted_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(unquoted_candidates);
+    const unquoted_file = findCandidate(unquoted_candidates, spaced_file) orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion.Kind.file, unquoted_file.kind);
+    const unquoted_application = try completion.applyCandidatesForInput(std.testing.allocator, unquoted_source, &.{unquoted_file});
+    defer unquoted_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("rush\\ completion\\ path\\ \\[x\\].txt", unquoted_application.edit.replacement);
+
+    const quoted_source = "cat \"rush completion path";
+    const quoted_candidates = try executor.collectCompletionsForInput(quoted_source, quoted_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(quoted_candidates);
+    const quoted_file = findCandidate(quoted_candidates, spaced_file) orelse return error.MissingCompletionCandidate;
+    const quoted_application = try completion.applyCandidatesForInput(std.testing.allocator, quoted_source, &.{quoted_file});
+    defer quoted_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("\"rush completion path [x].txt\"", quoted_application.edit.replacement);
+
+    const escaped_source = "cat rush\\ completion\\ path";
+    const escaped_candidates = try executor.collectCompletionsForInput(escaped_source, escaped_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(escaped_candidates);
+    const escaped_file = findCandidate(escaped_candidates, spaced_file) orelse return error.MissingCompletionCandidate;
+    const escaped_application = try completion.applyCandidatesForInput(std.testing.allocator, escaped_source, &.{escaped_file});
+    defer escaped_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("rush\\ completion\\ path\\ \\[x\\].txt", escaped_application.edit.replacement);
+
+    const dir_source = "cd rush";
+    const dir_candidates = try executor.collectCompletionsForInput(dir_source, dir_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(dir_candidates);
+    const dir_candidate = findCandidate(dir_candidates, spaced_dir ++ "/") orelse return error.MissingCompletionCandidate;
+    try std.testing.expect(!dir_candidate.append_space);
+    const dir_application = try completion.applyCandidatesForInput(std.testing.allocator, dir_source, &.{dir_candidate});
+    defer dir_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("rush\\ completion\\ dir/", dir_application.edit.replacement);
+    try std.testing.expect(!dir_application.edit.append_space);
+
+    const nested_source = "cat rush\\ completion\\ parent/nest";
+    const nested_candidates = try executor.collectCompletionsForInput(nested_source, nested_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(nested_candidates);
+    const nested = findCandidate(nested_candidates, "nested [file].txt") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "cat rush\\ completion\\ parent/".len), nested.replace_start);
+    const nested_application = try completion.applyCandidatesForInput(std.testing.allocator, nested_source, &.{nested});
+    defer nested_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("nested\\ \\[file\\].txt", nested_application.edit.replacement);
+}
+
 test "default completion preserves explicit non-file argument rules" {
     const file_path = "rush-explicit-completion-file.txt";
     var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
@@ -20834,6 +20916,10 @@ test "default completion skips option names and falls back for option values" {
     var file = try std.Io.Dir.cwd().createFile(std.testing.io, file_path, .{ .truncate = true });
     file.close(std.testing.io);
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch {};
+    const spaced_file_path = "rush option value path.txt";
+    var spaced_file = try std.Io.Dir.cwd().createFile(std.testing.io, spaced_file_path, .{ .truncate = true });
+    spaced_file.close(std.testing.io);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, spaced_file_path) catch {};
 
     var setup = try parseAndLower(std.testing.allocator, "complete tool --option --long config --value-name path");
     defer setup.parsed.deinit();
@@ -20852,6 +20938,14 @@ test "default completion skips option names and falls back for option values" {
     const value_candidates = try executor.collectCompletionsForInput("tool --config rush-option", "tool --config rush-option".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(value_candidates);
     try expectCandidate(value_candidates, file_path, .file);
+
+    const quoted_value_source = "tool --config \"rush option";
+    const quoted_value_candidates = try executor.collectCompletionsForInput(quoted_value_source, quoted_value_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(quoted_value_candidates);
+    const quoted_value = findCandidate(quoted_value_candidates, spaced_file_path) orelse return error.MissingCompletionCandidate;
+    const quoted_application = try completion.applyCandidatesForInput(std.testing.allocator, quoted_value_source, &.{quoted_value});
+    defer quoted_application.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("\"rush option value path.txt\"", quoted_application.edit.replacement);
 }
 
 test "default completion uses paths for redirection operands" {
