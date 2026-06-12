@@ -62,6 +62,8 @@
 
   <p>Rush completion manifests are structured JSON files for agent-authored and generated completions. They describe command grammar declaratively while companion <code>.rush</code> files provide dynamic completion functions.</p>
 
+  <p>The v1 manifest loader is implemented. Rush lazily loads <code>COMMAND.json</code> when completing COMMAND, compiles it into the same structured rule graph used by <code>.rush</code> completion scripts, and sources the companion <code>COMMAND.rush</code> only when a referenced function provider is needed.</p>
+
   <p>The v1 schema URL is:</p>
 
   <pre>https://rush.horse/completion/schema/v1.schema.json</pre>
@@ -87,11 +89,13 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <p>Rush v1 sources the companion <code>.rush</code> file lazily when a manifest function provider first needs a referenced Rush function. Keep the companion provider-only: static command structure should live in JSON, while referenced Rush functions live in the colocated <code>.rush</code> file. Static <code>complete</code> declarations in a manifest companion are ignored while the companion is loaded as provider code. Missing provider IDs are validation errors; missing Rush functions are reported as provider diagnostics when completion attempts to run them.</p>
 
+  <p>If a manifest and <code>.rush</code> script are colocated for the same command, the manifest is the static source of truth and the <code>.rush</code> script is not loaded as a second static completion file. If the manifest fails to load, Rush falls back to the <code>.rush</code> file at that location.</p>
+
   <h2 id="versioning"><a href="#versioning">Versioning</a></h2>
 
   <p><code>$schema</code> is for editors, validators, and documentation. <code>manifestVersion</code> is the semantic version Rush uses when loading the manifest.</p>
 
-  <p>Rush should dispatch on <code>manifestVersion</code>. The schema URL is advisory because users may vendor schemas locally or generate manifests without a public URL.</p>
+  <p>Rush dispatches on <code>manifestVersion</code>. The schema URL is advisory because users may vendor schemas locally or generate manifests without a public URL. Rush warns when a Rush schema URL appears to reference a different version than <code>manifestVersion</code>, and rejects unsupported manifest versions.</p>
 
   <h2 id="minimal-example"><a href="#minimal-example">Minimal example</a></h2>
 
@@ -103,10 +107,7 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
     <span class="str">"description"</span>: <span class="str">"the stupid content tracker"</span>,
     <span class="str">"providers"</span>: {
       <span class="str">"git.branches"</span>: { <span class="str">"function"</span>: <span class="str">"__rush_complete_git_branches"</span> },
-      <span class="str">"builtin.directories"</span>: {
-        <span class="str">"builtin"</span>: <span class="str">"directories"</span>,
-        <span class="str">"options"</span>: { <span class="str">"appendSlash"</span>: <span class="kw">true</span> }
-      }
+      <span class="str">"builtin.directories"</span>: { <span class="str">"builtin"</span>: <span class="str">"directories"</span> }
     },
     <span class="str">"options"</span>: [
       {
@@ -129,16 +130,123 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   }
 }</pre>
 
+  <p>The example compiles to a root <code>git</code> command, a static <code>-C</code> option that takes a value, a <code>checkout</code> subcommand, and an argument provider for the first checkout operand. The provider ID <code>git.branches</code> resolves to <code>__rush_complete_git_branches</code> in <code>git.rush</code>.</p>
+
+  <h2 id="implemented-fields"><a href="#implemented-fields">Implemented fields</a></h2>
+
+  <p>Rush currently consumes these fields when compiling manifests:</p>
+
+  <pre><span class="str">"command"</span>: {
+  <span class="str">"name"</span>: <span class="comment">string or non-empty string array; first item is canonical</span>
+  <span class="str">"aliases"</span>: <span class="comment">additional subcommand aliases</span>
+  <span class="str">"description"</span>: <span class="comment">menu description for subcommand candidates</span>
+  <span class="str">"providers"</span>: <span class="comment">provider IDs in lexical scope</span>
+  <span class="str">"options"</span>: <span class="comment">structured options inherited by subcommands</span>
+  <span class="str">"arguments"</span>: <span class="comment">argument states for this command path</span>
+  <span class="str">"subcommands"</span>: <span class="comment">nested command grammar</span>
+  <span class="str">"dynamicSubcommands"</span>: <span class="comment">providers for subcommand slots</span>
+  <span class="str">"dynamicOptions"</span>: <span class="comment">providers for option slots</span>
+}</pre>
+
+  <p>The schema also accepts metadata such as <code>hidden</code>, <code>deprecated</code>, <code>requires</code>, and <code>optionGroups</code>. Those fields are validated for shape, but current completion behavior is driven by the concrete option fields on each option, especially <code>exclusiveGroup</code>, <code>repeatable</code>, and <code>terminatesOptions</code>.</p>
+
+  <h2 id="providers"><a href="#providers">Providers</a></h2>
+
+  <p>Providers may be named and reused, or embedded inline for one-off builtins. Provider IDs are scoped lexically: a subcommand can see providers inherited from parents plus providers declared on itself; later nested providers with the same ID shadow earlier ones.</p>
+
+  <pre>{
+  <span class="str">"providers"</span>: {
+    <span class="str">"tool.modes"</span>: { <span class="str">"function"</span>: <span class="str">"__rush_complete_tool_modes"</span> },
+    <span class="str">"builtin.files"</span>: { <span class="str">"builtin"</span>: <span class="str">"files"</span> },
+    <span class="str">"builtin.directories"</span>: { <span class="str">"builtin"</span>: <span class="str">"directories"</span> }
+  }
+}</pre>
+
+  <p>Function providers run in the companion <code>.rush</code> file and emit candidates with the <code>completion</code> builtin documented in <a href="completion.html">Writing completions</a>. Builtin providers are <code>files</code>, <code>directories</code>, <code>executables</code>, and <code>variables</code>. The current runtime uses fixed builtin behavior: files complete paths, directories complete directories with slash/no-space behavior, executables search <code>PATH</code>, and variables use shell variables. Provider <code>options</code> objects are accepted by the schema but are not currently interpreted by the runtime.</p>
+
+  <h2 id="options-and-values"><a href="#options-and-values">Options and values</a></h2>
+
+  <p>Options use unprefixed spellings: <code>"long": "color"</code> means <code>--color</code>, and <code>"short": "C"</code> means <code>-C</code>. Long aliases register additional long spellings for the same option metadata and value provider.</p>
+
+  <pre>{
+  <span class="str">"short"</span>: <span class="str">"C"</span>,
+  <span class="str">"long"</span>: <span class="str">"directory"</span>,
+  <span class="str">"aliases"</span>: [<span class="str">"workdir"</span>],
+  <span class="str">"value"</span>: { <span class="str">"name"</span>: <span class="str">"path"</span>, <span class="str">"provider"</span>: <span class="str">"builtin.directories"</span> },
+  <span class="str">"repeatable"</span>: <span class="kw">true</span>,
+  <span class="str">"description"</span>: <span class="str">"run from path"</span>
+}</pre>
+
+  <p>A value object gives the option a value name and, optionally, a provider and grammar. The current engine detects detached values, attached long values with <code>=</code>, and attached short values when a value-taking short option is followed by text in the same word.</p>
+
+  <p>Options are non-repeatable unless <code>repeatable</code> is true. <code>exclusiveGroup</code> suppresses other options in the same group once any group member is present. <code>terminatesOptions</code> marks an option that ends option parsing after it is seen.</p>
+
+  <h2 id="argument-states"><a href="#argument-states">Argument states</a></h2>
+
+  <p>Arguments are selected after option parsing and option-value skipping. Simple positional states use <code>index</code>; trailing states use <code>repeatable</code>. Current runtime state transitions support <code>after.previousState</code>.</p>
+
+  <pre>{
+  <span class="str">"arguments"</span>: {
+    <span class="str">"states"</span>: [
+      { <span class="str">"name"</span>: <span class="str">"action"</span>, <span class="str">"index"</span>: <span class="var">0</span>, <span class="str">"provider"</span>: <span class="str">"tool.actions"</span> },
+      {
+        <span class="str">"name"</span>: <span class="str">"name"</span>,
+        <span class="str">"after"</span>: { <span class="str">"previousState"</span>: <span class="str">"action"</span> },
+        <span class="str">"repeatable"</span>: <span class="kw">true</span>,
+        <span class="str">"provider"</span>: <span class="str">"tool.names"</span>
+      }
+    ]
+  }
+}</pre>
+
+  <p>The schema also supports <code>terminator</code> on <code>arguments</code> and structured conditions such as <code>terminatorSeen</code>. The current semantic engine always treats a bare <code>--</code> as ending option parsing; manifest terminators and richer conditions are surfaced in trace output and are being kept schema-compatible for generated manifests.</p>
+
+  <h2 id="value-grammars"><a href="#value-grammars">Value grammars</a></h2>
+
+  <p>Runtime value grammar support is segment-based. A grammar changes the active provider prefix and replacement span so the provider completes only the active list item, key, or value.</p>
+
+  <pre>{
+  <span class="str">"long"</span>: <span class="str">"mode"</span>,
+  <span class="str">"value"</span>: {
+    <span class="str">"name"</span>: <span class="str">"mode"</span>,
+    <span class="str">"provider"</span>: <span class="str">"tool.modes"</span>,
+    <span class="str">"grammar"</span>: { <span class="str">"kind"</span>: <span class="str">"list"</span>, <span class="str">"separator"</span>: <span class="str">","</span>, <span class="str">"item"</span>: { <span class="str">"name"</span>: <span class="str">"mode"</span> } }
+  }
+}</pre>
+
+  <pre>{
+  <span class="str">"long"</span>: <span class="str">"define"</span>,
+  <span class="str">"value"</span>: {
+    <span class="str">"name"</span>: <span class="str">"pair"</span>,
+    <span class="str">"provider"</span>: <span class="str">"tool.defines"</span>,
+    <span class="str">"grammar"</span>: {
+      <span class="str">"kind"</span>: <span class="str">"keyValue"</span>,
+      <span class="str">"separator"</span>: <span class="str">"="</span>,
+      <span class="str">"keyPrefix"</span>: <span class="str">"+"</span>,
+      <span class="str">"key"</span>: { <span class="str">"name"</span>: <span class="str">"key"</span> },
+      <span class="str">"value"</span>: { <span class="str">"name"</span>: <span class="str">"value"</span> }
+    }
+  }
+}</pre>
+
+  <p>Separators and key prefixes must be one byte for the current runtime to use them. Enum, path, and string grammar objects are schema-valid, but current behavior comes from the selected provider rather than special enum/path/string grammar execution.</p>
+
+  <h2 id="trace"><a href="#trace">Trace workflow</a></h2>
+
+  <p>Use <code>rush complete trace INPUT</code> when authoring or debugging a manifest-backed completion. Text trace output shows matching manifest rules with <code>source: manifest</code>, the manifest path and version, parsed options, suppressed options, active argument state, value grammar, provider diagnostics, candidate match rank, and the insertion edit.</p>
+
+  <p>Use <code>rush complete --debug-json INPUT</code> for machine-readable output. Its <code>manifest</code> object includes the loaded manifest path/version, command path, parsed manifest options, active argument state, matched providers, and manifest-level suppressed options.</p>
+
   <h2 id="validation"><a href="#validation">Validation</a></h2>
 
   <p>The JSON Schema validates the shape of the manifest: required fields, field types, enum values, option spelling syntax, provider object shapes, and unknown fields.</p>
 
-  <p>Rush also performs semantic validation that JSON Schema cannot express well: duplicate options, duplicate subcommands, invalid provider references, invalid option groups, unreachable argument states, ambiguous transitions, and missing provider functions.</p>
+  <p>Rush also performs semantic validation that JSON Schema cannot express well: supported manifest version, schema-version mismatch warnings, duplicate options, duplicate subcommands, invalid provider references, invalid option groups, unreachable argument states, ambiguous transitions, and invalid provider shapes. Missing Rush functions are provider diagnostics because companions are sourced lazily.</p>
 
   <h2 id="status"><a href="#status">Status</a></h2>
 
-  <p>This schema is a design target. Current Rush releases still use <code>.rush</code> completion scripts as the implemented completion authoring format.</p>
+  <p>Manifest v1 is implemented and used by current Rush completions. <code>.rush</code> completion scripts remain supported for small human-authored completions and for manifest provider companions.</p>
 
-  <p>For the full design, see <code>COMPLETION_MANIFEST.md</code> in the Rush source tree.</p>
+  <p>For design background and future directions, see <code>COMPLETION_MANIFEST.md</code> in the Rush source tree.</p>
 </body>
 </html>
