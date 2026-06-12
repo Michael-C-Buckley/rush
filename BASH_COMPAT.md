@@ -175,7 +175,13 @@ not POSIX compliance claims, and remain excluded from POSIX scoring:
   creates an unset local shadow, `local name=value` assigns without exporting
   solely because an outer variable was exported, nested calls observe locals by
   dynamic scope, and returning from the function restores the prior value and
-  export state. `declare` and `typeset` remain out of scope.
+  export state. For command assignment prefixes on `local`, Rush follows Bash
+  POSIX mode rather than dash's leaking-prefix behavior: `x=temp local x`
+  initializes the new local `x` to `temp` and restores the outer `x` when the
+  function returns; `x=temp local x=arg` initializes the local to `arg`; and
+  prefixes for names not declared by that `local` invocation remain temporary
+  and do not become visible after the builtin returns. `declare` and `typeset`
+  remain out of scope.
 
 ## Explicitly not POSIX
 

@@ -7208,6 +7208,12 @@ pub const Executor = struct {
             };
             return self.runBuiltin(builtin, command, stdin, options);
         }
+        // `local` is a declaration builtin that mutates function-local state.
+        // Wrapping it in the normal temporary assignment scope would restore
+        // over the newly declared local and corrupt its saved outer value.
+        if (std.mem.eql(u8, command.argv[0].text, "local")) {
+            return self.runBuiltin(builtin, command, stdin, options);
+        }
         var assignment_scope = self.pushTemporaryAssignments(command.assignments, options.features) catch |err| switch (err) {
             error.ReadonlyVariable => return self.assignmentErrorResult(),
             else => return err,
@@ -13910,7 +13916,7 @@ fn builtinLocal(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
         const assignment = std.mem.indexOfScalar(u8, arg.text, '=');
         const name = if (assignment) |equals| arg.text[0..equals] else arg.text;
         if (!isShellName(name)) return localUsageError(self, "invalid variable name");
-        const value = if (assignment) |equals| arg.text[equals + 1 ..] else null;
+        const value = if (assignment) |equals| arg.text[equals + 1 ..] else localAssignmentPrefixValue(command.assignments, name);
         self.declareLocalVariable(frame, name, value) catch |err| switch (err) {
             error.ReadonlyVariable => return localUsageError(self, "readonly variable"),
             else => return err,
@@ -13918,6 +13924,15 @@ fn builtinLocal(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     }
 
     return emptyResult(self.allocator, 0);
+}
+
+fn localAssignmentPrefixValue(assignments: []const ir.WordRef, name: []const u8) ?[]const u8 {
+    var value: ?[]const u8 = null;
+    for (assignments) |assignment| {
+        const equals = std.mem.indexOfScalar(u8, assignment.text, '=') orelse continue;
+        if (std.mem.eql(u8, assignment.text[0..equals], name)) value = assignment.text[equals + 1 ..];
+    }
+    return value;
 }
 
 fn localUsageError(self: *Executor, message: []const u8) !CommandResult {
@@ -16515,6 +16530,32 @@ test "executor implements local function variables" {
     , .{});
     defer assignments.deinit();
     try std.testing.expectEqualStrings("<a b></tmp/rush-home><unset>\n", assignments.stdout);
+
+    var prefix_assignments = try executor.executeScriptSlice(
+        \\x=outer
+        \\f() { x=temp local x; echo "bare:$x"; }
+        \\f
+        \\echo "after-bare:$x"
+        \\f() { x=temp local x=arg; echo "explicit:$x"; }
+        \\f
+        \\echo "after-explicit:$x"
+        \\f() { x=temp local y; echo "other:$x/${y-unset}"; }
+        \\f
+        \\echo "after-other:$x/${y-unset}"
+        \\f() { x=temp local x=$x; echo "expanded:$x"; }
+        \\f
+        \\echo "after-expanded:$x"
+    , .{});
+    defer prefix_assignments.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), prefix_assignments.status);
+    try std.testing.expectEqualStrings("", prefix_assignments.stderr);
+    try std.testing.expectEqualStrings(
+        "bare:temp\nafter-bare:outer\n" ++
+            "explicit:arg\nafter-explicit:outer\n" ++
+            "other:outer/unset\nafter-other:outer/unset\n" ++
+            "expanded:outer\nafter-expanded:outer\n",
+        prefix_assignments.stdout,
+    );
 
     var outside = try executor.executeScriptSlice("local x", .{});
     defer outside.deinit();
