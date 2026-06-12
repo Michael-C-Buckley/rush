@@ -2144,18 +2144,18 @@ const SyntaxParser = struct {
         const token_start = self.index;
         var if_children: std.ArrayList(SyntaxChild) = .empty;
         defer if_children.deinit(self.allocator);
-        var saw_then = false;
+        var saw_if_then = false;
         var closed = false;
 
         try self.appendCurrentTokenChildTo(&if_children);
-        const condition = try self.parseListUntil(&.{ "then", "fi" }, &.{});
+        const condition = try self.parseListUntil(&.{ "then", "elif", "else", "fi" }, &.{});
         if (self.features.strict_diagnostics and !self.listContainsCommand(condition)) {
             const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
             try self.appendParseError(span, "missing condition in if command");
         }
         try if_children.append(self.allocator, .{ .node = condition });
         if (self.atWord("then")) {
-            saw_then = true;
+            saw_if_then = true;
             try self.appendCurrentTokenChildTo(&if_children);
             const then_body = try self.parseListUntil(&.{ "elif", "else", "fi" }, &.{});
             if (self.features.strict_diagnostics and !self.listContainsCommand(then_body)) {
@@ -2166,15 +2166,16 @@ const SyntaxParser = struct {
         }
         while (self.atWord("elif")) {
             const elif_token_start = self.index;
+            var saw_elif_then = false;
             try self.appendCurrentTokenChildTo(&if_children);
-            const elif_condition = try self.parseListUntil(&.{ "then", "fi" }, &.{});
+            const elif_condition = try self.parseListUntil(&.{ "then", "elif", "else", "fi" }, &.{});
             if (self.features.strict_diagnostics and !self.listContainsCommand(elif_condition)) {
                 const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, elif_token_start, self.index);
                 try self.appendParseError(span, "missing condition in elif clause");
             }
             try if_children.append(self.allocator, .{ .node = elif_condition });
             if (self.atWord("then")) {
-                saw_then = true;
+                saw_elif_then = true;
                 try self.appendCurrentTokenChildTo(&if_children);
                 const elif_body = try self.parseListUntil(&.{ "elif", "else", "fi" }, &.{});
                 if (self.features.strict_diagnostics and !self.listContainsCommand(elif_body)) {
@@ -2182,6 +2183,14 @@ const SyntaxParser = struct {
                     try self.appendParseError(span, "missing body in elif clause");
                 }
                 try if_children.append(self.allocator, .{ .node = elif_body });
+            }
+            if (!saw_elif_then) {
+                self.incomplete = true;
+                try self.diagnostics.append(self.allocator, .{
+                    .kind = .parse_error,
+                    .span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, elif_token_start, self.index),
+                    .message = "missing then in elif clause",
+                });
             }
         }
         if (self.atWord("else")) {
@@ -2199,7 +2208,7 @@ const SyntaxParser = struct {
             closed = true;
         }
 
-        if (!saw_then) {
+        if (!saw_if_then) {
             self.incomplete = true;
             try self.diagnostics.append(self.allocator, .{
                 .kind = .parse_error,
@@ -4625,6 +4634,17 @@ test "parser builds POSIX if command nodes" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "parser diagnoses missing then in POSIX elif clauses" {
+    var result = try parse(std.testing.allocator, "if false; then :; elif true; fi", .{ .features = .strictPosix() });
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.parse_error, result.diagnostics[0].kind);
+    try expectSpan(.init(29, 31), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing then in elif clause", result.diagnostics[0].message);
 }
 
 test "parser reports incomplete POSIX if commands" {

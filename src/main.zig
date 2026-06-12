@@ -9153,6 +9153,23 @@ test "command string invocation shell options affect execution" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 2), invalid_noexec.status);
     try std.testing.expectEqualStrings("", invalid_noexec.stdout);
     try std.testing.expect(std.mem.indexOf(u8, invalid_noexec.stderr, "misplaced reserved word") != null);
+
+    const invalid_elif_noexec_invocation = parseCommandStringInvocation(&.{ "rush", "-n", "-c", "if false; then :; elif true; fi" }) orelse return error.ExpectedInvocation;
+    var invalid_elif_noexec = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        invalid_elif_noexec_invocation.source,
+        .{ .io = std.testing.io, .arg_zero = invalid_elif_noexec_invocation.arg_zero },
+        null,
+        invalid_elif_noexec_invocation.positionals,
+        null,
+        invalid_elif_noexec_invocation.shell_options,
+    );
+    defer invalid_elif_noexec.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 2), invalid_elif_noexec.status);
+    try std.testing.expectEqualStrings("", invalid_elif_noexec.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, invalid_elif_noexec.stderr, "missing then in elif clause") != null);
 }
 
 test "command string set -v does not echo already-read input" {
