@@ -666,6 +666,31 @@ const ParameterPatternOperation = struct {
     word: []const u8,
 };
 
+const ParameterSubstringOperation = struct {
+    offset: []const u8,
+    length: ?[]const u8 = null,
+};
+
+const ParameterReplacementKind = enum {
+    first,
+    global,
+    prefix,
+    suffix,
+};
+
+const ParameterReplacementOperation = struct {
+    kind: ParameterReplacementKind,
+    pattern: []const u8,
+    replacement: []const u8,
+};
+
+const ParameterCaseOperation = enum {
+    uppercase_first,
+    uppercase_all,
+    lowercase_first,
+    lowercase_all,
+};
+
 const ParameterArrayWholeKind = enum {
     at,
     star,
@@ -690,6 +715,9 @@ const ParameterOperation = union(enum) {
     name_prefix: ParameterNamePrefixOperation,
     word: ParameterWordOperation,
     pattern: ParameterPatternOperation,
+    substring: ParameterSubstringOperation,
+    replacement: ParameterReplacementOperation,
+    case_modification: ParameterCaseOperation,
     array_index: ParameterArrayIndexOperation,
     array_element_length: ParameterArrayIndexOperation,
     array_values: ParameterArrayWholeOperation,
@@ -714,6 +742,9 @@ const ParameterExpression = struct {
     colon: bool = false,
     indirect: bool = false,
     name_prefix: ?ParameterArrayWholeKind = null,
+    substring: ?ParameterSubstringOperation = null,
+    replacement: ?ParameterReplacementOperation = null,
+    case_modification: ?ParameterCaseOperation = null,
     array_index: ?[]const u8 = null,
     array_whole: ?ParameterArrayWholeKind = null,
     array_keys: ?ParameterArrayWholeKind = null,
@@ -792,6 +823,28 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
         specialParameterValue(parsed.name, options) orelse options.env.get(parsed.name);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
+
+    if (parsed.substring) |operation| {
+        const base = value orelse {
+            if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
+            return allocator.alloc(u8, 0);
+        };
+        return renderSubstring(allocator, base, operation, options);
+    }
+    if (parsed.replacement) |operation| {
+        const base = value orelse {
+            if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
+            return allocator.alloc(u8, 0);
+        };
+        return renderReplacement(allocator, base, operation, options, in_double_quotes);
+    }
+    if (parsed.case_modification) |operation| {
+        const base = value orelse {
+            if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
+            return allocator.alloc(u8, 0);
+        };
+        return renderCaseModification(allocator, base, operation);
+    }
 
     switch (parsed.operator) {
         .none => {
@@ -890,6 +943,154 @@ fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8
         },
         .invalid => unreachable,
     }
+}
+
+fn renderSubstring(allocator: std.mem.Allocator, value: []const u8, operation: ParameterSubstringOperation, options: Options) anyerror![]const u8 {
+    const value_len = std.math.cast(i64, value.len) orelse std.math.maxInt(i64);
+    const offset = try evaluateArrayIndexValue(allocator, operation.offset, options);
+    const start_value = if (offset < 0) value_len + offset else offset;
+    const start: usize = if (start_value <= 0)
+        0
+    else if (start_value >= value_len)
+        value.len
+    else
+        @intCast(start_value);
+
+    const end = if (operation.length) |length_expression| blk: {
+        const length = try evaluateArrayIndexValue(allocator, length_expression, options);
+        if (length < 0) return invalidParameterExpansion(allocator, options);
+        const available = value.len - start;
+        const length_usize = std.math.cast(usize, length) orelse available;
+        break :blk start + @min(length_usize, available);
+    } else value.len;
+
+    return allocator.dupe(u8, value[start..end]);
+}
+
+fn renderReplacement(allocator: std.mem.Allocator, value: []const u8, operation: ParameterReplacementOperation, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+    var pattern = try expandPatternWord(allocator, operation.pattern, options);
+    defer pattern.deinit(allocator);
+
+    const replacement = try expandParameterWord(allocator, operation.replacement, options, in_double_quotes);
+    defer allocator.free(replacement);
+
+    return replacePattern(allocator, value, pattern, replacement, operation.kind);
+}
+
+fn renderCaseModification(allocator: std.mem.Allocator, value: []const u8, operation: ParameterCaseOperation) ![]const u8 {
+    const output = try allocator.dupe(u8, value);
+    switch (operation) {
+        .uppercase_first => {
+            if (output.len > 0) output[0] = std.ascii.toUpper(output[0]);
+        },
+        .uppercase_all => {
+            for (output) |*byte| byte.* = std.ascii.toUpper(byte.*);
+        },
+        .lowercase_first => {
+            if (output.len > 0) output[0] = std.ascii.toLower(output[0]);
+        },
+        .lowercase_all => {
+            for (output) |*byte| byte.* = std.ascii.toLower(byte.*);
+        },
+    }
+    return output;
+}
+
+const PatternMatch = struct {
+    start: usize,
+    end: usize,
+};
+
+fn replacePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8, kind: ParameterReplacementKind) ![]const u8 {
+    return switch (kind) {
+        .first => replaceFirstPattern(allocator, value, pattern, replacement),
+        .global => replaceGlobalPattern(allocator, value, pattern, replacement),
+        .prefix => replacePrefixPattern(allocator, value, pattern, replacement),
+        .suffix => replaceSuffixPattern(allocator, value, pattern, replacement),
+    };
+}
+
+fn replaceFirstPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8) ![]const u8 {
+    const match = findPatternMatch(value, pattern, 0) orelse return allocator.dupe(u8, value);
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    try output.appendSlice(allocator, value[0..match.start]);
+    try output.appendSlice(allocator, replacement);
+    try output.appendSlice(allocator, value[match.end..]);
+    return output.toOwnedSlice(allocator);
+}
+
+fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+
+    var cursor: usize = 0;
+    while (cursor < value.len) {
+        const match = findPatternMatch(value, pattern, cursor) orelse break;
+        try output.appendSlice(allocator, value[cursor..match.start]);
+        try output.appendSlice(allocator, replacement);
+        if (match.end == match.start) {
+            if (match.end < value.len) {
+                try output.append(allocator, value[match.end]);
+                cursor = match.end + 1;
+                continue;
+            }
+            cursor = match.end;
+            break;
+        }
+        cursor = match.end;
+    }
+    try output.appendSlice(allocator, value[cursor..]);
+    return output.toOwnedSlice(allocator);
+}
+
+fn replacePrefixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8) ![]const u8 {
+    const match_end = findPrefixPatternMatch(value, pattern) orelse return allocator.dupe(u8, value);
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    try output.appendSlice(allocator, replacement);
+    try output.appendSlice(allocator, value[match_end..]);
+    return output.toOwnedSlice(allocator);
+}
+
+fn replaceSuffixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: []const u8) ![]const u8 {
+    const match_start = findSuffixPatternMatch(value, pattern) orelse return allocator.dupe(u8, value);
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    try output.appendSlice(allocator, value[0..match_start]);
+    try output.appendSlice(allocator, replacement);
+    return output.toOwnedSlice(allocator);
+}
+
+fn findPatternMatch(value: []const u8, pattern: ExpansionPattern, start_index: usize) ?PatternMatch {
+    var start = start_index;
+    while (start <= value.len) : (start += 1) {
+        var end = value.len;
+        while (end >= start) {
+            if (globPatternMatches(pattern, value[start..end])) return .{ .start = start, .end = end };
+            if (end == start) break;
+            end -= 1;
+        }
+    }
+    return null;
+}
+
+fn findPrefixPatternMatch(value: []const u8, pattern: ExpansionPattern) ?usize {
+    var end = value.len;
+    while (true) {
+        if (globPatternMatches(pattern, value[0..end])) return end;
+        if (end == 0) break;
+        end -= 1;
+    }
+    return null;
+}
+
+fn findSuffixPatternMatch(value: []const u8, pattern: ExpansionPattern) ?usize {
+    var start: usize = 0;
+    while (start <= value.len) : (start += 1) {
+        if (globPatternMatches(pattern, value[start..])) return start;
+    }
+    return null;
 }
 
 fn renderArrayElement(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
@@ -1425,6 +1626,18 @@ fn parseParameterExpression(expression: []const u8, features: compat.Features) P
             .operator = operation.kind,
             .word = operation.word,
         },
+        .substring => |operation| .{
+            .name = expansion.target.text,
+            .substring = operation,
+        },
+        .replacement => |operation| .{
+            .name = expansion.target.text,
+            .replacement = operation,
+        },
+        .case_modification => |operation| .{
+            .name = expansion.target.text,
+            .case_modification = operation,
+        },
         .array_index => |operation| .{
             .name = expansion.target.text,
             .array_index = operation.index,
@@ -1507,6 +1720,15 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
         return parseBashArrayExpansion(expression, target, name_end);
     }
 
+    if (features.isBash()) {
+        if (parseBashStringOperation(expression, target, name_end)) |operation| {
+            return .{ .expansion = .{
+                .target = target,
+                .operation = operation,
+            } };
+        }
+    }
+
     var operator_index = name_end;
     var colon = false;
     if (expression[operator_index] == ':' and operator_index + 1 < expression.len) {
@@ -1556,6 +1778,97 @@ const BashNamePrefixExpansionTarget = struct {
     prefix: []const u8,
     kind: ParameterArrayWholeKind,
 };
+
+fn parseBashStringOperation(expression: []const u8, target: ParameterTarget, name_end: usize) ?ParameterOperation {
+    if (target.kind == .unknown or name_end >= expression.len) return null;
+    return switch (expression[name_end]) {
+        ':' => parseBashSubstringOperation(expression, name_end),
+        '/' => parseBashReplacementOperation(expression, name_end),
+        '^', ',' => parseBashCaseOperation(expression, name_end),
+        else => null,
+    };
+}
+
+fn parseBashSubstringOperation(expression: []const u8, name_end: usize) ?ParameterOperation {
+    std.debug.assert(name_end < expression.len);
+    std.debug.assert(expression[name_end] == ':');
+    const offset_start = name_end + 1;
+    if (offset_start >= expression.len) return null;
+
+    switch (expression[offset_start]) {
+        '-', '=', '+', '?' => return null,
+        else => {},
+    }
+
+    const length_separator = findUnescapedScalar(expression, offset_start, ':');
+    const offset = if (length_separator) |separator| expression[offset_start..separator] else expression[offset_start..];
+    if (offset.len == 0) return null;
+    if (length_separator) |separator| {
+        const length = expression[separator + 1 ..];
+        if (length.len == 0) return null;
+        return .{ .substring = .{ .offset = offset, .length = length } };
+    }
+    return .{ .substring = .{ .offset = offset } };
+}
+
+fn parseBashReplacementOperation(expression: []const u8, name_end: usize) ?ParameterOperation {
+    std.debug.assert(name_end < expression.len);
+    std.debug.assert(expression[name_end] == '/');
+
+    var pattern_start = name_end + 1;
+    var kind: ParameterReplacementKind = .first;
+    if (pattern_start < expression.len) {
+        switch (expression[pattern_start]) {
+            '/' => {
+                kind = .global;
+                pattern_start += 1;
+            },
+            '#' => {
+                kind = .prefix;
+                pattern_start += 1;
+            },
+            '%' => {
+                kind = .suffix;
+                pattern_start += 1;
+            },
+            else => {},
+        }
+    }
+    if (pattern_start >= expression.len) return null;
+
+    const replacement_separator = findUnescapedScalar(expression, pattern_start, '/');
+    const pattern = if (replacement_separator) |separator| expression[pattern_start..separator] else expression[pattern_start..];
+    if (pattern.len == 0) return null;
+    const replacement = if (replacement_separator) |separator| expression[separator + 1 ..] else "";
+    return .{ .replacement = .{ .kind = kind, .pattern = pattern, .replacement = replacement } };
+}
+
+fn parseBashCaseOperation(expression: []const u8, name_end: usize) ?ParameterOperation {
+    std.debug.assert(name_end < expression.len);
+    const operator = expression[name_end];
+    std.debug.assert(operator == '^' or operator == ',');
+    const double_operator = name_end + 1 < expression.len and expression[name_end + 1] == operator;
+    const end = name_end + @as(usize, if (double_operator) 2 else 1);
+    if (end != expression.len) return null;
+    return .{ .case_modification = switch (operator) {
+        '^' => if (double_operator) .uppercase_all else .uppercase_first,
+        ',' => if (double_operator) .lowercase_all else .lowercase_first,
+        else => unreachable,
+    } };
+}
+
+fn findUnescapedScalar(text: []const u8, start: usize, needle: u8) ?usize {
+    var index = start;
+    while (index < text.len) {
+        if (text[index] == '\\') {
+            index += if (index + 1 < text.len) 2 else 1;
+            continue;
+        }
+        if (text[index] == needle) return index;
+        index += 1;
+    }
+    return null;
+}
 
 fn parseBashArrayExpansion(expression: []const u8, target: ParameterTarget, name_end: usize) ParameterExpansionSyntax {
     std.debug.assert(name_end < expression.len);
@@ -3816,6 +4129,49 @@ test "structured parameter parser accepts Bash indirect and name-prefix operatio
     try expectInvalidParameterSyntax("!RUSH_PREFIX_*");
 }
 
+test "structured parameter parser accepts Bash string operations" {
+    const substring = try expectParameterSyntaxWithFeatures("USER:1:3", compat.Features.bash());
+    try expectParameterTarget(substring.target, .name, "USER");
+    switch (substring.operation) {
+        .substring => |operation| {
+            try std.testing.expectEqualStrings("1", operation.offset);
+            try std.testing.expectEqualStrings("3", operation.length.?);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const replacement = try expectParameterSyntaxWithFeatures("PATHLIKE//\\//_", compat.Features.bash());
+    try expectParameterTarget(replacement.target, .name, "PATHLIKE");
+    switch (replacement.operation) {
+        .replacement => |operation| {
+            try std.testing.expectEqual(ParameterReplacementKind.global, operation.kind);
+            try std.testing.expectEqualStrings("\\/", operation.pattern);
+            try std.testing.expectEqualStrings("_", operation.replacement);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const prefix = try expectParameterSyntaxWithFeatures("PATHLIKE/#\\/*/root", compat.Features.bash());
+    switch (prefix.operation) {
+        .replacement => |operation| {
+            try std.testing.expectEqual(ParameterReplacementKind.prefix, operation.kind);
+            try std.testing.expectEqualStrings("\\/*", operation.pattern);
+            try std.testing.expectEqualStrings("root", operation.replacement);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const case_modification = try expectParameterSyntaxWithFeatures("USER^^", compat.Features.bash());
+    switch (case_modification.operation) {
+        .case_modification => |operation| try std.testing.expectEqual(ParameterCaseOperation.uppercase_all, operation),
+        else => try std.testing.expect(false),
+    }
+
+    try expectInvalidParameterSyntax("USER:1");
+    try expectInvalidParameterSyntax("USER/a/b");
+    try expectInvalidParameterSyntax("USER^^");
+}
+
 test "parameter assignment expansion rejects non-variable targets when assignment is needed" {
     const params = [_][]const u8{ "one", "" };
 
@@ -3974,6 +4330,24 @@ test "parameter expansion supports Bash indirect and name-prefix operations" {
     try std.testing.expectEqual(@as(usize, 2), quoted_at.fields.len);
     try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA", quoted_at.fields[0]);
     try std.testing.expectEqualStrings("RUSH_PREFIX_BETA", quoted_at.fields[1]);
+}
+
+test "parameter expansion supports Bash string operations" {
+    const substring = try expandWordScalar(std.testing.allocator, "${PATHLIKE:1}:${PATHLIKE:5:5}:${PATHLIKE: -4:2}:${MISSING:1}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(substring);
+    try std.testing.expectEqualStrings("usr/local/bin/rush:local:ru:", substring);
+
+    const replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/local/LOCAL}:${PATHLIKE//\\//_}:${PATHLIKE/#\\/*/root}:${PATHLIKE/%rush/shell}:${PATHLIKE/bin}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(replacement);
+    try std.testing.expectEqualStrings("/usr/LOCAL/bin/rush:_usr_local_bin_rush:root:/usr/local/bin/shell:/usr/local//rush", replacement);
+
+    const pattern_replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/b*/X}:${PATHLIKE/#\\/*/ROOT}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(pattern_replacement);
+    try std.testing.expectEqualStrings("/usr/local/X:ROOT", pattern_replacement);
+
+    const case_modification = try expandWordScalar(std.testing.allocator, "${USER^}:${USER^^}:${USER,}:${USER,,}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(case_modification);
+    try std.testing.expectEqualStrings("Rush-user:RUSH-USER:rush-user:rush-user", case_modification);
 }
 
 test "parameter expansion diagnoses malformed Bash indirect array targets" {

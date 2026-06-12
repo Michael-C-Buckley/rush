@@ -16301,6 +16301,27 @@ test "executor supports Bash indirect and name-prefix parameter operations" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "executor supports Bash string parameter operations" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\value=/usr/local/bin/rush
+        \\mixed='rush User'
+        \\printf 'substring:%s|%s|%s\n' "${value:1}" "${value:5:5}" "${value: -4:2}"
+        \\printf 'replace:%s|%s|%s|%s|%s\n' "${value/local/LOCAL}" "${value//\//_}" "${value/#\/*/root}" "${value/%rush/shell}" "${value/bin}"
+        \\printf 'case:%s|%s|%s|%s\n' "${mixed^}" "${mixed^^}" "${mixed,}" "${mixed,,}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("substring:usr/local/bin/rush|local|ru\nreplace:/usr/LOCAL/bin/rush|_usr_local_bin_rush|root|/usr/local/bin/shell|/usr/local//rush\ncase:Rush User|RUSH USER|rush User|rush user\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor diagnoses malformed Bash indirect array targets" {
     const cases = [_]struct {
         script: []const u8,
@@ -16393,6 +16414,9 @@ test "executor keeps Bash array operation forms on POSIX bad-substitution path" 
         "ref='arr[0]'; echo ${!ref}; echo after",
         "echo ${!name}; echo after",
         "echo ${!prefix*}; echo after",
+        "echo ${value:1}; echo after",
+        "echo ${value/a/b}; echo after",
+        "echo ${value^^}; echo after",
     };
 
     for (cases) |case| {

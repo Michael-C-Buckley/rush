@@ -56,6 +56,16 @@ plans separately from POSIX compliance. POSIX status remains tracked in
     variable names with the requested prefix, sorted for deterministic output
   - `*` joins names with the first byte of `IFS`; quoted `@` emits one field
     per matching name, while unquoted forms are still subject to field splitting
+- String parameter expansion extensions for scalar, positional, and special
+  parameter values:
+  - substring `${parameter:offset}` and `${parameter:offset:length}` with
+    arithmetic offset/length expressions; negative offsets count back from the
+    end of the string, while negative lengths remain unsupported
+  - replacement `${parameter/pattern/repl}`, global `${parameter//pattern/repl}`,
+    anchored-prefix `${parameter/#pattern/repl}`, and anchored-suffix
+    `${parameter/%pattern/repl}` using Rush's existing shell glob pattern matcher
+  - ASCII case modification `${parameter^}`, `${parameter^^}`, `${parameter,}`,
+    and `${parameter,,}`
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
@@ -112,16 +122,19 @@ Current examples:
 - `[[ ... ]]` is parsed only in Bash mode.
 - `${!name}` and `${!prefix*}` / `${!prefix@}` are valid only in Bash mode;
   default/POSIX mode reports `parameter: bad substitution`.
+- `${name:1}`, `${name/pat/repl}`, and `${name^^}` are valid only in Bash mode;
+  default/POSIX mode reports `parameter: bad substitution`.
 
 ## Tracked future work
 
 - Broader Bash indexed array semantics:
   - associative arrays and declaration builtins
   - array slicing and transformation forms
-- String parameter expansion extensions:
-  - substring `${parameter:offset[:length]}`
-  - replacement `${parameter/pattern/repl}`
-  - case modification `${parameter^}` / `${parameter,}`
+- Remaining string parameter expansion edge cases:
+  - array-wide or element-specific string operations
+  - optional pattern operands for case modification, replacement `&` expansion,
+    and replacement/pattern delimiter edge cases involving quoted or nested `/`
+  - Bash-compatible diagnostics and semantics for negative substring lengths
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.
 
