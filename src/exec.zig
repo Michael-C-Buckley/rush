@@ -57,6 +57,17 @@ pub const ExecuteOptions = struct {
     alias_timing_chunks: bool = true,
 };
 
+const posix_shell_path = "/bin/sh";
+
+const ExternalSpawnOptions = struct {
+    argv: []const []const u8,
+    environ_map: *const std.process.Environ.Map,
+    stdin: std.process.SpawnOptions.StdIo = .inherit,
+    stdout: std.process.SpawnOptions.StdIo = .inherit,
+    stderr: std.process.SpawnOptions.StdIo = .inherit,
+    pgid: ?std.posix.pid_t = null,
+};
+
 const PipelineStageStdin = struct {
     active: bool = false,
     file: ?std.Io.File = null,
@@ -4520,9 +4531,32 @@ pub const Executor = struct {
             } else {
                 const argv = try argvForCommand(self.allocator, command_without_redirs);
                 defer self.allocator.free(argv);
+                const resolved_executable = self.resolveExternalArgv0(command_without_redirs, io, options) catch |err| switch (err) {
+                    error.CommandNotFound => {
+                        if (stdin_file) |file| file.close(io);
+                        if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
+                        for (pipes) |*pipe| pipe.close(io);
+                        capture_stdout.close(io);
+                        capture_stderr.close(io);
+                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 127, "command not found");
+                    },
+                    error.AccessDenied, error.PermissionDenied => {
+                        if (stdin_file) |file| file.close(io);
+                        if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
+                        for (pipes) |*pipe| pipe.close(io);
+                        capture_stdout.close(io);
+                        capture_stderr.close(io);
+                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 126, "permission denied");
+                    },
+                    else => return err,
+                };
+                defer if (resolved_executable) |executable| self.allocator.free(executable);
+                if (resolved_executable) |executable| argv[0] = executable;
                 var child_env = try self.buildProcessEnv(command.assignments);
                 defer child_env.deinit();
-                children[spawned] = std.process.spawn(io, .{
+                children[spawned] = self.spawnExternalCommand(io, .{
                     .argv = argv,
                     .environ_map = &child_env,
                     .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
@@ -4536,7 +4570,16 @@ pub const Executor = struct {
                         for (pipes) |*pipe| pipe.close(io);
                         capture_stdout.close(io);
                         capture_stderr.close(io);
-                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items);
+                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 127, "command not found");
+                    },
+                    error.AccessDenied, error.PermissionDenied, error.IsDir => {
+                        if (stdin_file) |file| file.close(io);
+                        if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
+                        for (pipes) |*pipe| pipe.close(io);
+                        capture_stdout.close(io);
+                        capture_stderr.close(io);
+                        return self.pipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], &threads, contexts.items, 126, "permission denied");
                     },
                     else => return err,
                 };
@@ -4687,12 +4730,12 @@ pub const Executor = struct {
         };
     }
 
-    fn pipelineSpawnFailureResult(self: *Executor, io: std.Io, name: []const u8, children: []std.process.Child, threads: *std.ArrayList(std.Thread), contexts: []const *BuiltinPipelineContext) !CommandResult {
+    fn pipelineSpawnFailureResult(self: *Executor, io: std.Io, name: []const u8, children: []std.process.Child, threads: *std.ArrayList(std.Thread), contexts: []const *BuiltinPipelineContext, status: ExitStatus, message: []const u8) !CommandResult {
         for (children) |*child| child.kill(io);
         for (threads.items) |thread| thread.join();
         for (contexts) |context| self.allocator.destroy(context);
         threads.clearRetainingCapacity();
-        return errorResult(self.allocator, 127, name, "command not found");
+        return errorResult(self.allocator, status, name, message);
     }
 
     fn applyPipelineStageRedirections(
@@ -5240,6 +5283,35 @@ pub const Executor = struct {
             const command = expanded_commands[index];
             const argv = try argvForCommand(self.allocator, command);
             defer self.allocator.free(argv);
+            const resolved_executable = self.resolveExternalArgv0(command, io, options) catch |err| switch (err) {
+                error.CommandNotFound => {
+                    const open_stdin = previous_stdout;
+                    previous_stdout = null;
+                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin, 127, "command not found");
+                    errdefer failure.deinit();
+                    if (trace_stderr.items.len != 0) {
+                        const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
+                        self.allocator.free(failure.stderr);
+                        failure.stderr = stderr;
+                    }
+                    return failure;
+                },
+                error.AccessDenied, error.PermissionDenied => {
+                    const open_stdin = previous_stdout;
+                    previous_stdout = null;
+                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin, 126, "permission denied");
+                    errdefer failure.deinit();
+                    if (trace_stderr.items.len != 0) {
+                        const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
+                        self.allocator.free(failure.stderr);
+                        failure.stderr = stderr;
+                    }
+                    return failure;
+                },
+                else => return err,
+            };
+            defer if (resolved_executable) |executable| self.allocator.free(executable);
+            if (resolved_executable) |executable| argv[0] = executable;
             var child_env = try self.buildProcessEnv(command.assignments);
             defer child_env.deinit();
 
@@ -5249,7 +5321,7 @@ pub const Executor = struct {
             // the output (command substitution, hidden refreshes, tests).
             const inherit_output = options.external_stdio == .inherit;
             const is_last = index + 1 == pipeline.command_indexes.len;
-            children[index] = std.process.spawn(io, .{
+            children[index] = self.spawnExternalCommand(io, .{
                 .argv = argv,
                 .environ_map = &child_env,
                 .stdin = if (previous_stdout) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
@@ -5260,7 +5332,19 @@ pub const Executor = struct {
                 error.FileNotFound => {
                     const open_stdin = previous_stdout;
                     previous_stdout = null;
-                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin);
+                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin, 127, "command not found");
+                    errdefer failure.deinit();
+                    if (trace_stderr.items.len != 0) {
+                        const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
+                        self.allocator.free(failure.stderr);
+                        failure.stderr = stderr;
+                    }
+                    return failure;
+                },
+                error.AccessDenied, error.PermissionDenied, error.IsDir => {
+                    const open_stdin = previous_stdout;
+                    previous_stdout = null;
+                    var failure = try self.externalPipelineSpawnFailureResult(io, command.argv[0].text, children[0..spawned], open_stdin, 126, "permission denied");
                     errdefer failure.deinit();
                     if (trace_stderr.items.len != 0) {
                         const stderr = try std.mem.concat(self.allocator, u8, &.{ trace_stderr.items, failure.stderr });
@@ -5329,10 +5413,10 @@ pub const Executor = struct {
         };
     }
 
-    fn externalPipelineSpawnFailureResult(self: *Executor, io: std.Io, name: []const u8, children: []std.process.Child, previous_stdout: ?std.Io.File) !CommandResult {
+    fn externalPipelineSpawnFailureResult(self: *Executor, io: std.Io, name: []const u8, children: []std.process.Child, previous_stdout: ?std.Io.File, status: ExitStatus, message: []const u8) !CommandResult {
         if (previous_stdout) |file| file.close(io);
         for (children) |*child| child.kill(io);
-        return errorResult(self.allocator, 127, name, "command not found");
+        return errorResult(self.allocator, status, name, message);
     }
 
     pub fn executeSimpleCommand(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions) !CommandResult {
@@ -5933,10 +6017,20 @@ pub const Executor = struct {
         return null;
     }
 
-    fn findReplacementExecutable(self: *Executor, io: std.Io, name: []const u8, use_default_path: bool) ![]const u8 {
+    fn findReplacementExecutable(self: *Executor, io: std.Io, command: ir.SimpleCommand, use_default_path: bool) ![]const u8 {
+        const name = command.argv[0].text;
         if (std.mem.indexOfScalar(u8, name, '/') != null) return self.executableReplacementPath(io, name);
-        const path_value = if (use_default_path) "/bin:/usr/bin" else self.getEnv("PATH") orelse return error.CommandNotFound;
+        const path_value = if (use_default_path) "/bin:/usr/bin" else self.commandLookupPath(command) orelse return error.CommandNotFound;
         return self.findReplacementExecutableInPathValue(io, name, path_value);
+    }
+
+    fn commandLookupPath(self: Executor, command: ir.SimpleCommand) ?[]const u8 {
+        var path_value: ?[]const u8 = null;
+        for (command.assignments) |assignment| {
+            const parsed = envAssignment(assignment.text) orelse continue;
+            if (std.mem.eql(u8, parsed.name, "PATH")) path_value = parsed.value;
+        }
+        return path_value orelse self.getEnv("PATH") orelse "/bin:/usr/bin";
     }
 
     fn findReplacementExecutableInPathValue(self: *Executor, io: std.Io, name: []const u8, path_value: []const u8) ![]const u8 {
@@ -6615,7 +6709,7 @@ pub const Executor = struct {
     }
 
     fn replaceWithExternal(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !CommandResult {
-        const executable = self.findReplacementExecutable(io, command.argv[0].text, options.default_path_lookup) catch |err| switch (err) {
+        const executable = self.findReplacementExecutable(io, command, options.default_path_lookup) catch |err| switch (err) {
             error.CommandNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
             else => return err,
@@ -6661,6 +6755,21 @@ pub const Executor = struct {
         const path = try self.allocator.dupeZ(u8, executable);
         defer self.allocator.free(path);
         execve(path.ptr, @ptrCast(argv_ptrs.ptr), @ptrCast(env_ptrs.ptr)) catch |err| switch (err) {
+            error.InvalidExe => {
+                const shell_path = try self.allocator.dupeZ(u8, posix_shell_path);
+                defer self.allocator.free(shell_path);
+                const fallback_argv_ptrs = try self.allocator.alloc(?[*:0]const u8, command.argv.len + 2);
+                defer self.allocator.free(fallback_argv_ptrs);
+                fallback_argv_ptrs[0] = shell_path.ptr;
+                fallback_argv_ptrs[1] = path.ptr;
+                for (argv_ptrs[1..command.argv.len], 0..) |arg, index| fallback_argv_ptrs[index + 2] = arg;
+                fallback_argv_ptrs[command.argv.len + 1] = null;
+                execve(shell_path.ptr, @ptrCast(fallback_argv_ptrs.ptr), @ptrCast(env_ptrs.ptr)) catch |fallback_err| switch (fallback_err) {
+                    error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
+                    error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
+                    else => return fallback_err,
+                };
+            },
             error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
             else => return err,
@@ -6788,7 +6897,7 @@ pub const Executor = struct {
 
         var child_env = try self.buildProcessEnv(command.assignments);
         defer child_env.deinit();
-        var child = std.process.spawn(io, .{
+        var child = self.spawnExternalCommand(io, .{
             .argv = argv,
             .environ_map = &child_env,
             .stdin = if (stdin_closed) .close else if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .close,
@@ -6797,7 +6906,7 @@ pub const Executor = struct {
             .pgid = if (self.monitorProcessGroupsEnabled()) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return errorResult(self.allocator, 127, command.argv[0].text, "command not found"),
-            error.AccessDenied, error.PermissionDenied => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
+            error.AccessDenied, error.PermissionDenied, error.IsDir => return errorResult(self.allocator, 126, command.argv[0].text, "permission denied"),
             else => return err,
         };
         errdefer child.kill(io);
@@ -7076,7 +7185,7 @@ pub const Executor = struct {
         // stdin; only stdout is captured.
         const inherit_stdin = externalStdioInheritsStdin(options.external_stdio) or
             (options.interactive and options.external_stdio == .capture_stdout);
-        var child = std.process.spawn(io, .{
+        var child = self.spawnExternalCommand(io, .{
             .argv = argv,
             .environ_map = &child_env,
             .stdin = if (stdin_redirected) .inherit else if (stdin_file) |file| .{ .file = file } else if (inherit_stdin) .inherit else .close,
@@ -7085,7 +7194,7 @@ pub const Executor = struct {
             .pgid = if (foreground_terminal != null) 0 else null,
         }) catch |err| switch (err) {
             error.FileNotFound => return error.CommandNotFound,
-            error.AccessDenied, error.PermissionDenied => return error.AccessDenied,
+            error.AccessDenied, error.PermissionDenied, error.IsDir => return error.AccessDenied,
             else => return err,
         };
         errdefer child.kill(io);
@@ -7232,13 +7341,49 @@ pub const Executor = struct {
         try self.markShellFdOpen(fd);
     }
 
+    fn spawnExternalCommand(self: *Executor, io: std.Io, spawn_options: ExternalSpawnOptions) !std.process.Child {
+        return std.process.spawn(io, .{
+            .argv = spawn_options.argv,
+            .environ_map = spawn_options.environ_map,
+            .stdin = spawn_options.stdin,
+            .stdout = spawn_options.stdout,
+            .stderr = spawn_options.stderr,
+            .pgid = spawn_options.pgid,
+        }) catch |err| switch (err) {
+            error.InvalidExe => return self.spawnExternalShellFallback(io, spawn_options),
+            else => return err,
+        };
+    }
+
+    fn spawnExternalShellFallback(self: *Executor, io: std.Io, spawn_options: ExternalSpawnOptions) !std.process.Child {
+        const fallback_argv = try self.shellFallbackArgv(spawn_options.argv);
+        defer self.allocator.free(fallback_argv);
+        return std.process.spawn(io, .{
+            .argv = fallback_argv,
+            .environ_map = spawn_options.environ_map,
+            .stdin = spawn_options.stdin,
+            .stdout = spawn_options.stdout,
+            .stderr = spawn_options.stderr,
+            .pgid = spawn_options.pgid,
+        });
+    }
+
+    fn shellFallbackArgv(self: *Executor, argv: []const []const u8) ![]const []const u8 {
+        std.debug.assert(argv.len > 0);
+        const fallback_argv = try self.allocator.alloc([]const u8, argv.len + 1);
+        fallback_argv[0] = posix_shell_path;
+        fallback_argv[1] = argv[0];
+        @memcpy(fallback_argv[2..], argv[1..]);
+        return fallback_argv;
+    }
+
     fn resolveExternalArgv0(self: *Executor, command: ir.SimpleCommand, io: std.Io, options: ExecuteOptions) !?[]const u8 {
-        const executable = try self.findReplacementExecutable(io, command.argv[0].text, options.default_path_lookup);
+        const executable = try self.findReplacementExecutable(io, command, options.default_path_lookup);
         return @as(?[]const u8, executable);
     }
 };
 
-const ExecveError = error{ FileNotFound, AccessDenied, PermissionDenied, ExecFailed, Unsupported };
+const ExecveError = error{ FileNotFound, AccessDenied, PermissionDenied, InvalidExe, ExecFailed, Unsupported };
 
 fn execve(path: [*:0]const u8, argv: [*:null]const ?[*:0]const u8, envp: [*:null]const ?[*:0]const u8) ExecveError!void {
     if (zig_builtin.os.tag == .windows or zig_builtin.os.tag == .wasi) return error.Unsupported;
@@ -7248,6 +7393,7 @@ fn execve(path: [*:0]const u8, argv: [*:null]const ?[*:0]const u8, envp: [*:null
             .SUCCESS => unreachable,
             .NOENT, .NOTDIR => error.FileNotFound,
             .ACCES, .PERM => error.AccessDenied,
+            .NOEXEC => error.InvalidExe,
             else => error.ExecFailed,
         };
     }
@@ -7257,6 +7403,7 @@ fn execve(path: [*:0]const u8, argv: [*:null]const ?[*:0]const u8, envp: [*:null
             .SUCCESS => unreachable,
             .NOENT, .NOTDIR => error.FileNotFound,
             .ACCES, .PERM => error.AccessDenied,
+            .NOEXEC => error.InvalidExe,
             else => error.ExecFailed,
         };
     }
@@ -14831,6 +14978,40 @@ test "executor resolves external commands from shell PATH" {
     defer result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ok", result.stdout);
+}
+
+test "executor falls back to sh for executable scripts without shebang" {
+    const root = "rush-enoexec-fallback-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = root ++ "/runner",
+        .data = "printf 'script:%s:%s:%s\n' \"$0\" \"$1\" \"$RUSH_ENOEXEC_TEST\"; exit \"$2\"\n",
+    });
+    const chmod_result = try std.process.run(std.testing.allocator, std.testing.io, .{ .argv = &.{ "/bin/chmod", "755", root ++ "/runner" } });
+    defer std.testing.allocator.free(chmod_result.stdout);
+    defer std.testing.allocator.free(chmod_result.stderr);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, chmod_result.term);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PATH", "/nope");
+
+    var result = try executor.executeScriptSlice(
+        \\PATH=rush-enoexec-fallback-test RUSH_ENOEXEC_TEST=ok runner arg 7 > rush-enoexec-fallback-test/out
+        \\printf 'status:%s\n' "$?"
+        \\/bin/cat rush-enoexec-fallback-test/out
+        \\./rush-enoexec-fallback-test/runner slash 9
+        \\printf 'slash-status:%s\n' "$?"
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings(
+        "status:7\nscript:rush-enoexec-fallback-test/runner:arg:ok\nscript:./rush-enoexec-fallback-test/runner:slash:\nslash-status:9\n",
+        result.stdout,
+    );
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor applies assignment-only commands to shell environment" {

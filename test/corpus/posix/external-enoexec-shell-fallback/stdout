@@ -1,0 +1,6 @@
+path-status:7
+fallback:scripts/no-shebang:arg:prefix
+fallback:./scripts/no-shebang:slash:
+slash-status:9
+fallback:scripts/no-shebang:assign:assign
+assign-status:11
