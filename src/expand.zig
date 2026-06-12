@@ -684,11 +684,16 @@ const ParameterReplacementOperation = struct {
     replacement: []const u8,
 };
 
-const ParameterCaseOperation = enum {
+const ParameterCaseKind = enum {
     uppercase_first,
     uppercase_all,
     lowercase_first,
     lowercase_all,
+};
+
+const ParameterCaseOperation = struct {
+    kind: ParameterCaseKind,
+    pattern: ?[]const u8 = null,
 };
 
 const ParameterArrayWholeKind = enum {
@@ -843,7 +848,7 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
             if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
             return allocator.alloc(u8, 0);
         };
-        return renderCaseModification(allocator, base, operation);
+        return renderCaseModification(allocator, base, operation, options);
     }
 
     switch (parsed.operator) {
@@ -977,23 +982,48 @@ fn renderReplacement(allocator: std.mem.Allocator, value: []const u8, operation:
     return replacePattern(allocator, value, pattern, replacement, operation.kind);
 }
 
-fn renderCaseModification(allocator: std.mem.Allocator, value: []const u8, operation: ParameterCaseOperation) ![]const u8 {
+fn renderCaseModification(allocator: std.mem.Allocator, value: []const u8, operation: ParameterCaseOperation, options: Options) ![]const u8 {
     const output = try allocator.dupe(u8, value);
-    switch (operation) {
+    errdefer allocator.free(output);
+
+    var pattern = if (operation.pattern) |pattern_text|
+        try expandPatternWord(allocator, pattern_text, options)
+    else
+        try anySingleCharacterPattern(allocator);
+    defer pattern.deinit(allocator);
+
+    switch (operation.kind) {
         .uppercase_first => {
-            if (output.len > 0) output[0] = std.ascii.toUpper(output[0]);
+            if (output.len > 0 and casePatternMatchesByte(pattern, output[0])) output[0] = std.ascii.toUpper(output[0]);
         },
         .uppercase_all => {
-            for (output) |*byte| byte.* = std.ascii.toUpper(byte.*);
+            for (output) |*byte| {
+                if (casePatternMatchesByte(pattern, byte.*)) byte.* = std.ascii.toUpper(byte.*);
+            }
         },
         .lowercase_first => {
-            if (output.len > 0) output[0] = std.ascii.toLower(output[0]);
+            if (output.len > 0 and casePatternMatchesByte(pattern, output[0])) output[0] = std.ascii.toLower(output[0]);
         },
         .lowercase_all => {
-            for (output) |*byte| byte.* = std.ascii.toLower(byte.*);
+            for (output) |*byte| {
+                if (casePatternMatchesByte(pattern, byte.*)) byte.* = std.ascii.toLower(byte.*);
+            }
         },
     }
     return output;
+}
+
+fn anySingleCharacterPattern(allocator: std.mem.Allocator) !ExpansionPattern {
+    const text = try allocator.dupe(u8, "?");
+    errdefer allocator.free(text);
+    const special = try allocator.alloc(bool, text.len);
+    @memset(special, true);
+    return .{ .text = text, .special = special };
+}
+
+fn casePatternMatchesByte(pattern: ExpansionPattern, byte: u8) bool {
+    const text = [_]u8{byte};
+    return globPatternMatches(pattern, &text);
 }
 
 const PatternMatch = struct {
@@ -1800,7 +1830,7 @@ fn parseBashSubstringOperation(expression: []const u8, name_end: usize) ?Paramet
         else => {},
     }
 
-    const length_separator = findUnescapedScalar(expression, offset_start, ':');
+    const length_separator = findBashSubstringLengthSeparator(expression, offset_start);
     const offset = if (length_separator) |separator| expression[offset_start..separator] else expression[offset_start..];
     if (offset.len == 0) return null;
     if (length_separator) |separator| {
@@ -1836,7 +1866,7 @@ fn parseBashReplacementOperation(expression: []const u8, name_end: usize) ?Param
     }
     if (pattern_start >= expression.len) return null;
 
-    const replacement_separator = findUnescapedScalar(expression, pattern_start, '/');
+    const replacement_separator = findBashReplacementSeparator(expression, pattern_start);
     const pattern = if (replacement_separator) |separator| expression[pattern_start..separator] else expression[pattern_start..];
     if (pattern.len == 0) return null;
     const replacement = if (replacement_separator) |separator| expression[separator + 1 ..] else "";
@@ -1848,24 +1878,210 @@ fn parseBashCaseOperation(expression: []const u8, name_end: usize) ?ParameterOpe
     const operator = expression[name_end];
     std.debug.assert(operator == '^' or operator == ',');
     const double_operator = name_end + 1 < expression.len and expression[name_end + 1] == operator;
-    const end = name_end + @as(usize, if (double_operator) 2 else 1);
-    if (end != expression.len) return null;
-    return .{ .case_modification = switch (operator) {
-        '^' => if (double_operator) .uppercase_all else .uppercase_first,
-        ',' => if (double_operator) .lowercase_all else .lowercase_first,
-        else => unreachable,
+    const pattern_start = name_end + @as(usize, if (double_operator) 2 else 1);
+    return .{ .case_modification = .{
+        .kind = switch (operator) {
+            '^' => if (double_operator) .uppercase_all else .uppercase_first,
+            ',' => if (double_operator) .lowercase_all else .lowercase_first,
+            else => unreachable,
+        },
+        .pattern = if (pattern_start < expression.len) expression[pattern_start..] else null,
     } };
 }
 
-fn findUnescapedScalar(text: []const u8, start: usize, needle: u8) ?usize {
+fn findBashReplacementSeparator(text: []const u8, start: usize) ?usize {
+    return findBashOperationDelimiter(text, start, '/', .shell_word);
+}
+
+fn findBashSubstringLengthSeparator(text: []const u8, start: usize) ?usize {
+    return findBashOperationDelimiter(text, start, ':', .arithmetic);
+}
+
+const BashOperationDelimiterMode = enum {
+    shell_word,
+    arithmetic,
+};
+
+fn findBashOperationDelimiter(text: []const u8, start: usize, needle: u8, mode: BashOperationDelimiterMode) ?usize {
     var index = start;
+    var paren_depth: usize = 0;
+    var bracket_depth: usize = 0;
+    var ternary_depth: usize = 0;
+
     while (index < text.len) {
-        if (text[index] == '\\') {
-            index += if (index + 1 < text.len) 2 else 1;
-            continue;
+        switch (text[index]) {
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '\'' => index = skipSingleQuotedText(text, index),
+            '"' => index = skipDoubleQuotedText(text, index),
+            '`' => index = skipBackquotedText(text, index),
+            '$' => index = skipDollarExpansionText(text, index) orelse index + 1,
+            '(' => {
+                if (mode == .arithmetic) paren_depth += 1;
+                index += 1;
+            },
+            ')' => {
+                if (mode == .arithmetic and paren_depth != 0) paren_depth -= 1;
+                index += 1;
+            },
+            '[' => {
+                if (mode == .arithmetic) bracket_depth += 1;
+                index += 1;
+            },
+            ']' => {
+                if (mode == .arithmetic and bracket_depth != 0) bracket_depth -= 1;
+                index += 1;
+            },
+            '?' => {
+                if (mode == .arithmetic and paren_depth == 0 and bracket_depth == 0) ternary_depth += 1;
+                index += 1;
+            },
+            else => |byte| {
+                if (byte == needle and paren_depth == 0 and bracket_depth == 0) {
+                    if (mode == .arithmetic and needle == ':' and ternary_depth != 0) {
+                        ternary_depth -= 1;
+                        index += 1;
+                        continue;
+                    }
+                    return index;
+                }
+                index += 1;
+            },
         }
-        if (text[index] == needle) return index;
-        index += 1;
+    }
+    return null;
+}
+
+fn skipSingleQuotedText(text: []const u8, start: usize) usize {
+    std.debug.assert(text[start] == '\'');
+    var index = start + 1;
+    while (index < text.len and text[index] != '\'') : (index += 1) {}
+    return if (index < text.len) index + 1 else index;
+}
+
+fn skipDoubleQuotedText(text: []const u8, start: usize) usize {
+    std.debug.assert(text[start] == '"');
+    var index = start + 1;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '$' => index = skipDollarExpansionText(text, index) orelse index + 1,
+            '`' => index = skipBackquotedText(text, index),
+            '"' => return index + 1,
+            else => index += 1,
+        }
+    }
+    return index;
+}
+
+fn skipBackquotedText(text: []const u8, start: usize) usize {
+    std.debug.assert(text[start] == '`');
+    var index = start + 1;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '`' => return index + 1,
+            else => index += 1,
+        }
+    }
+    return index;
+}
+
+fn skipDollarExpansionText(text: []const u8, start: usize) ?usize {
+    std.debug.assert(text[start] == '$');
+    if (start + 1 >= text.len) return null;
+    return switch (text[start + 1]) {
+        '{' => skipBracedParameterText(text, start),
+        '(' => if (start + 2 < text.len and text[start + 2] == '(')
+            skipArithmeticExpansionText(text, start)
+        else
+            skipCommandSubstitutionText(text, start),
+        '\'' => skipDollarSingleQuotedText(text, start),
+        else => null,
+    };
+}
+
+fn skipDollarSingleQuotedText(text: []const u8, start: usize) ?usize {
+    std.debug.assert(text[start] == '$');
+    if (start + 1 >= text.len or text[start + 1] != '\'') return null;
+    var index = start + 2;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '\'' => return index + 1,
+            else => index += 1,
+        }
+    }
+    return null;
+}
+
+fn skipBracedParameterText(text: []const u8, start: usize) ?usize {
+    std.debug.assert(text[start] == '$');
+    std.debug.assert(start + 1 < text.len and text[start + 1] == '{');
+    var index = start + 2;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '\'' => index = skipSingleQuotedText(text, index),
+            '"' => index = skipDoubleQuotedText(text, index),
+            '`' => index = skipBackquotedText(text, index),
+            '$' => index = skipDollarExpansionText(text, index) orelse index + 1,
+            '}' => return index + 1,
+            else => index += 1,
+        }
+    }
+    return null;
+}
+
+fn skipCommandSubstitutionText(text: []const u8, start: usize) ?usize {
+    std.debug.assert(text[start] == '$');
+    std.debug.assert(start + 1 < text.len and text[start + 1] == '(');
+    var index = start + 2;
+    var paren_depth: usize = 1;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '\'' => index = skipSingleQuotedText(text, index),
+            '"' => index = skipDoubleQuotedText(text, index),
+            '`' => index = skipBackquotedText(text, index),
+            '$' => index = skipDollarExpansionText(text, index) orelse index + 1,
+            '(' => {
+                paren_depth += 1;
+                index += 1;
+            },
+            ')' => {
+                paren_depth -= 1;
+                index += 1;
+                if (paren_depth == 0) return index;
+            },
+            else => index += 1,
+        }
+    }
+    return null;
+}
+
+fn skipArithmeticExpansionText(text: []const u8, start: usize) ?usize {
+    std.debug.assert(text[start] == '$');
+    std.debug.assert(start + 2 < text.len and text[start + 1] == '(' and text[start + 2] == '(');
+    var index = start + 3;
+    var paren_depth: usize = 0;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '\'' => index = skipSingleQuotedText(text, index),
+            '"' => index = skipDoubleQuotedText(text, index),
+            '`' => index = skipBackquotedText(text, index),
+            '$' => index = skipDollarExpansionText(text, index) orelse index + 1,
+            '(' => {
+                paren_depth += 1;
+                index += 1;
+            },
+            ')' => {
+                if (paren_depth == 0 and index + 1 < text.len and text[index + 1] == ')') return index + 2;
+                if (paren_depth != 0) paren_depth -= 1;
+                index += 1;
+            },
+            else => index += 1,
+        }
     }
     return null;
 }
@@ -3702,6 +3918,7 @@ fn isNameContinue(c: u8) bool {
 fn testCommandSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
     if (std.mem.eql(u8, script, "echo hi")) return allocator.dupe(u8, "hi\n\n");
     if (std.mem.eql(u8, script, "printf 2")) return allocator.dupe(u8, "2\n");
+    if (std.mem.eql(u8, script, "printf /")) return allocator.dupe(u8, "/");
     if (std.mem.eql(u8, script, "printf 'a}b'")) return allocator.dupe(u8, "a}b");
     if (std.mem.eql(u8, script, "printf '}cd'")) return allocator.dupe(u8, "}cd");
     return allocator.dupe(u8, "");
@@ -4140,12 +4357,50 @@ test "structured parameter parser accepts Bash string operations" {
         else => try std.testing.expect(false),
     }
 
+    const nested_substring = try expectParameterSyntaxWithFeatures("USER:${MISSING:-1}:1", compat.Features.bash());
+    switch (nested_substring.operation) {
+        .substring => |operation| {
+            try std.testing.expectEqualStrings("${MISSING:-1}", operation.offset);
+            try std.testing.expectEqualStrings("1", operation.length.?);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const ternary_substring = try expectParameterSyntaxWithFeatures("USER:1 ? 2 : 3:1", compat.Features.bash());
+    switch (ternary_substring.operation) {
+        .substring => |operation| {
+            try std.testing.expectEqualStrings("1 ? 2 : 3", operation.offset);
+            try std.testing.expectEqualStrings("1", operation.length.?);
+        },
+        else => try std.testing.expect(false),
+    }
+
     const replacement = try expectParameterSyntaxWithFeatures("PATHLIKE//\\//_", compat.Features.bash());
     try expectParameterTarget(replacement.target, .name, "PATHLIKE");
     switch (replacement.operation) {
         .replacement => |operation| {
             try std.testing.expectEqual(ParameterReplacementKind.global, operation.kind);
             try std.testing.expectEqualStrings("\\/", operation.pattern);
+            try std.testing.expectEqualStrings("_", operation.replacement);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const nested_replacement = try expectParameterSyntaxWithFeatures("PATHLIKE/$(printf /)/_", compat.Features.bash());
+    switch (nested_replacement.operation) {
+        .replacement => |operation| {
+            try std.testing.expectEqual(ParameterReplacementKind.first, operation.kind);
+            try std.testing.expectEqualStrings("$(printf /)", operation.pattern);
+            try std.testing.expectEqualStrings("_", operation.replacement);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const quoted_replacement = try expectParameterSyntaxWithFeatures("PATHLIKE/'/'/_", compat.Features.bash());
+    switch (quoted_replacement.operation) {
+        .replacement => |operation| {
+            try std.testing.expectEqual(ParameterReplacementKind.first, operation.kind);
+            try std.testing.expectEqualStrings("'/'", operation.pattern);
             try std.testing.expectEqualStrings("_", operation.replacement);
         },
         else => try std.testing.expect(false),
@@ -4163,7 +4418,19 @@ test "structured parameter parser accepts Bash string operations" {
 
     const case_modification = try expectParameterSyntaxWithFeatures("USER^^", compat.Features.bash());
     switch (case_modification.operation) {
-        .case_modification => |operation| try std.testing.expectEqual(ParameterCaseOperation.uppercase_all, operation),
+        .case_modification => |operation| {
+            try std.testing.expectEqual(ParameterCaseKind.uppercase_all, operation.kind);
+            try std.testing.expect(operation.pattern == null);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const patterned_case_modification = try expectParameterSyntaxWithFeatures("USER^^[[:lower:]]", compat.Features.bash());
+    switch (patterned_case_modification.operation) {
+        .case_modification => |operation| {
+            try std.testing.expectEqual(ParameterCaseKind.uppercase_all, operation.kind);
+            try std.testing.expectEqualStrings("[[:lower:]]", operation.pattern.?);
+        },
         else => try std.testing.expect(false),
     }
 
@@ -4337,9 +4604,17 @@ test "parameter expansion supports Bash string operations" {
     defer std.testing.allocator.free(substring);
     try std.testing.expectEqualStrings("usr/local/bin/rush:local:ru:", substring);
 
+    const nested_substring = try expandWordScalar(std.testing.allocator, "${PATHLIKE:${MISSING:-1}:3}:${PATHLIKE:1 + (0 ? 9 : 2):3}:${PATHLIKE:0 ? 9 : 2:3}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(nested_substring);
+    try std.testing.expectEqualStrings("usr:r/l:sr/", nested_substring);
+
     const replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/local/LOCAL}:${PATHLIKE//\\//_}:${PATHLIKE/#\\/*/root}:${PATHLIKE/%rush/shell}:${PATHLIKE/bin}", .{ .env = test_env, .features = compat.Features.bash() });
     defer std.testing.allocator.free(replacement);
     try std.testing.expectEqualStrings("/usr/LOCAL/bin/rush:_usr_local_bin_rush:root:/usr/local/bin/shell:/usr/local//rush", replacement);
+
+    const nested_replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/$(printf /)/_}:${PATHLIKE/'/'/_}", .{ .env = test_env, .features = compat.Features.bash(), .command_substitution = test_command_substitution });
+    defer std.testing.allocator.free(nested_replacement);
+    try std.testing.expectEqualStrings("_usr/local/bin/rush:_usr/local/bin/rush", nested_replacement);
 
     const pattern_replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/b*/X}:${PATHLIKE/#\\/*/ROOT}", .{ .env = test_env, .features = compat.Features.bash() });
     defer std.testing.allocator.free(pattern_replacement);
@@ -4348,6 +4623,10 @@ test "parameter expansion supports Bash string operations" {
     const case_modification = try expandWordScalar(std.testing.allocator, "${USER^}:${USER^^}:${USER,}:${USER,,}", .{ .env = test_env, .features = compat.Features.bash() });
     defer std.testing.allocator.free(case_modification);
     try std.testing.expectEqualStrings("Rush-user:RUSH-USER:rush-user:rush-user", case_modification);
+
+    const patterned_case_modification = try expandWordScalar(std.testing.allocator, "${USER^^[rs]}:${USER^^[[:lower:]]}:${USER^[!r]}:${USER,,[RU]}", .{ .env = test_env, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(patterned_case_modification);
+    try std.testing.expectEqualStrings("RuSh-uSeR:RUSH-USER:rush-user:rush-user", patterned_case_modification);
 }
 
 test "parameter expansion diagnoses malformed Bash indirect array targets" {

@@ -60,12 +60,16 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   parameter values:
   - substring `${parameter:offset}` and `${parameter:offset:length}` with
     arithmetic offset/length expressions; negative offsets count back from the
-    end of the string, while negative lengths remain unsupported
+    end of the string, while negative lengths remain unsupported; the offset
+    delimiter scanner skips nested parameter, command, arithmetic, and quoted
+    constructs, including arithmetic ternary `:` operands
   - replacement `${parameter/pattern/repl}`, global `${parameter//pattern/repl}`,
     anchored-prefix `${parameter/#pattern/repl}`, and anchored-suffix
-    `${parameter/%pattern/repl}` using Rush's existing shell glob pattern matcher
+    `${parameter/%pattern/repl}` using Rush's existing shell glob pattern matcher;
+    the pattern/replacement separator skips quoted and nested `/` constructs
   - ASCII case modification `${parameter^}`, `${parameter^^}`, `${parameter,}`,
-    and `${parameter,,}`
+    and `${parameter,,}`, including optional pattern operands such as
+    `${parameter^^[[:lower:]]}`
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
   - attached/grouped option spelling, e.g. `read -d: name` or `read -rd: name`
@@ -132,8 +136,8 @@ Current examples:
   - array slicing and transformation forms
 - Remaining string parameter expansion edge cases:
   - array-wide or element-specific string operations
-  - optional pattern operands for case modification, replacement `&` expansion,
-    and replacement/pattern delimiter edge cases involving quoted or nested `/`
+  - replacement `&` expansion and any remaining replacement/pattern delimiter
+    edge cases not covered by quoted or nested `/` constructs
   - Bash-compatible diagnostics and semantics for negative substring lengths
 - Transform flags such as `${parameter@Q}` are intentionally unsupported until
   a concrete compatibility use case justifies their design.

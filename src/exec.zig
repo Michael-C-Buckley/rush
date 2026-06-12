@@ -16306,8 +16306,11 @@ test "executor supports Bash string parameter operations" {
         \\value=/usr/local/bin/rush
         \\mixed='rush User'
         \\printf 'substring:%s|%s|%s\n' "${value:1}" "${value:5:5}" "${value: -4:2}"
+        \\printf 'substring-extra:%s|%s\n' "${value:${missing:-1}:3}" "${value:1 + (0 ? 9 : 2):3}"
         \\printf 'replace:%s|%s|%s|%s|%s\n' "${value/local/LOCAL}" "${value//\//_}" "${value/#\/*/root}" "${value/%rush/shell}" "${value/bin}"
+        \\printf 'replace-extra:%s|%s\n' "${value/$(printf /)/_}" "${value/'/'/_}"
         \\printf 'case:%s|%s|%s|%s\n' "${mixed^}" "${mixed^^}" "${mixed,}" "${mixed,,}"
+        \\printf 'case-pattern:%s|%s|%s\n' "${mixed^^[rs]}" "${mixed^^[[:lower:]]}" "${mixed^[!r]}"
     , .{ .features = compat.Features.bash() });
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
@@ -16318,7 +16321,7 @@ test "executor supports Bash string parameter operations" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("substring:usr/local/bin/rush|local|ru\nreplace:/usr/LOCAL/bin/rush|_usr_local_bin_rush|root|/usr/local/bin/shell|/usr/local//rush\ncase:Rush User|RUSH USER|rush User|rush user\n", result.stdout);
+    try std.testing.expectEqualStrings("substring:usr/local/bin/rush|local|ru\nsubstring-extra:usr|r/l\nreplace:/usr/LOCAL/bin/rush|_usr_local_bin_rush|root|/usr/local/bin/shell|/usr/local//rush\nreplace-extra:_usr/local/bin/rush|_usr/local/bin/rush\ncase:Rush User|RUSH USER|rush User|rush user\ncase-pattern:RuSh USeR|RUSH USER|rush User\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
@@ -16417,6 +16420,8 @@ test "executor keeps Bash array operation forms on POSIX bad-substitution path" 
         "echo ${value:1}; echo after",
         "echo ${value/a/b}; echo after",
         "echo ${value^^}; echo after",
+        "echo ${value^^[a]}; echo after",
+        "echo ${value:${missing:-1}:3}; echo after",
     };
 
     for (cases) |case| {
