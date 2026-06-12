@@ -559,6 +559,7 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.option.short) |short| allocator.free(short);
     if (rule.option.argument) |argument| allocator.free(argument);
     if (rule.description) |description| allocator.free(description);
+    if (rule.source.manifest_path) |path| allocator.free(path);
 }
 
 const MatchedCompletionOption = struct {
@@ -1498,6 +1499,11 @@ pub const Executor = struct {
                 .no_space = rule.option.no_space,
             },
             .description = if (rule.description) |description| try self.allocator.dupe(u8, description) else null,
+            .source = .{
+                .kind = rule.source.kind,
+                .manifest_path = if (rule.source.manifest_path) |path| try self.allocator.dupe(u8, path) else null,
+                .manifest_version = rule.source.manifest_version,
+            },
         };
         errdefer freeCompletionRule(self.allocator, owned_rule);
         var path: std.ArrayList([]const u8) = .empty;

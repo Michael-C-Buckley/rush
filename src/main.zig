@@ -23,6 +23,7 @@ const usage =
     \\       rush [-i] [--posix-strict] [set-options] -s [ARGS...]
     \\       rush [-i] [--posix-strict] [set-options] SCRIPT_FILE [ARGS...]
     \\       rush complete --debug INPUT
+    \\       rush complete --debug-json INPUT
     \\       rush complete validate [PATH]
     \\       rush --help
     \\
@@ -79,7 +80,12 @@ pub fn main(init: std.process.Init) !u8 {
     }
 
     if (args.len == 4 and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "--debug")) {
-        try debugCompletion(allocator, init.io, init.environ_map, args[3]);
+        try debugCompletion(allocator, init.io, init.environ_map, args[3], .text);
+        return 0;
+    }
+
+    if (args.len == 4 and std.mem.eql(u8, args[1], "complete") and std.mem.eql(u8, args[2], "--debug-json")) {
+        try debugCompletion(allocator, init.io, init.environ_map, args[3], .json);
         return 0;
     }
 
@@ -1248,10 +1254,14 @@ fn loadOptionalCompletionManifest(allocator: std.mem.Allocator, io: std.Io, exec
         else => return err,
     };
     defer allocator.free(contents);
-    try loadCompletionManifest(allocator, executor, contents);
+    try loadCompletionManifestWithPath(allocator, executor, contents, path);
 }
 
 fn loadCompletionManifest(allocator: std.mem.Allocator, executor: *exec.Executor, contents: []const u8) !void {
+    try loadCompletionManifestWithPath(allocator, executor, contents, null);
+}
+
+fn loadCompletionManifestWithPath(allocator: std.mem.Allocator, executor: *exec.Executor, contents: []const u8, source_path: ?[]const u8) !void {
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, contents, .{});
     defer parsed.deinit();
 
@@ -1265,15 +1275,20 @@ fn loadCompletionManifest(allocator: std.mem.Allocator, executor: *exec.Executor
         else => return error.CompletionManifestRootMustBeObject,
     };
     const manifest_version = root_object.get("manifestVersion") orelse return error.CompletionManifestMissingManifestVersion;
+    var version: i64 = completion_manifest_supported_version;
     switch (manifest_version) {
-        .integer => |version| if (version != 1) return error.UnsupportedCompletionManifestVersion,
+        .integer => |parsed_version| {
+            if (parsed_version != completion_manifest_supported_version) return error.UnsupportedCompletionManifestVersion;
+            version = parsed_version;
+        },
         else => return error.CompletionManifestVersionMustBeInteger,
     }
     const command = root_object.get("command") orelse return error.CompletionManifestMissingCommand;
-    try loadCompletionManifestCommand(executor, command, &.{});
+    const source: completion_model.RuleSource = .{ .kind = .manifest, .manifest_path = source_path, .manifest_version = version };
+    try loadCompletionManifestCommand(executor, command, &.{}, source);
 }
 
-fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8) !void {
+fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8, source: completion_model.RuleSource) !void {
     const command = switch (command_value) {
         .object => |object| object,
         else => return error.CompletionManifestCommandMustBeObject,
@@ -1281,12 +1296,12 @@ fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.js
     const name = try manifestCommandPrimaryName(command);
 
     if (path.len == 0) {
-        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, name, &.{}, options);
-        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, name, &.{}, subcommands);
+        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, name, &.{}, options, source);
+        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, name, &.{}, subcommands, source);
     } else {
-        try loadCompletionManifestSubcommandNames(executor, path[0], path[1..], command);
-        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, path[0], path[1..], options);
-        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, path[0], path[1..], subcommands);
+        try loadCompletionManifestSubcommandNames(executor, path[0], path[1..], command, source);
+        if (command.get("options")) |options| try loadCompletionManifestOptions(executor, path[0], path[1..], options, source);
+        if (command.get("subcommands")) |subcommands| try loadCompletionManifestSubcommands(executor, path[0], path[1..], subcommands, source);
     }
 }
 
@@ -1302,17 +1317,17 @@ fn manifestCommandPrimaryName(command: std.json.ObjectMap) ![]const u8 {
     };
 }
 
-fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, command: std.json.ObjectMap) !void {
+fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, command: std.json.ObjectMap, source: completion_model.RuleSource) !void {
     const description = manifestString(command.get("description"));
     const name_value = command.get("name") orelse return error.CompletionManifestCommandMissingName;
     switch (name_value) {
-        .string => |name| try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description }),
+        .string => |name| try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source }),
         .array => |names| for (names.items) |item| {
             const name = switch (item) {
                 .string => |value| value,
                 else => return error.CompletionManifestCommandNameMustBeString,
             };
-            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description });
+            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = name, .description = description, .source = source });
         },
         else => return error.CompletionManifestCommandNameMustBeString,
     }
@@ -1326,12 +1341,12 @@ fn loadCompletionManifestSubcommandNames(executor: *exec.Executor, root: []const
                 .string => |value| value,
                 else => continue,
             };
-            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = alias, .description = description });
+            try executor.registerCompletionRule(.{ .root = root, .path = parent_path, .kind = .subcommand, .value = alias, .description = description, .source = source });
         }
     }
 }
 
-fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, subcommands_value: std.json.Value) !void {
+fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8, parent_path: []const []const u8, subcommands_value: std.json.Value, source: completion_model.RuleSource) !void {
     const subcommands = switch (subcommands_value) {
         .array => |array| array,
         else => return error.CompletionManifestSubcommandsMustBeArray,
@@ -1342,18 +1357,18 @@ fn loadCompletionManifestSubcommands(executor: *exec.Executor, root: []const u8,
             else => return error.CompletionManifestSubcommandMustBeObject,
         };
         const name = try manifestCommandPrimaryName(subcommand);
-        try loadCompletionManifestSubcommandNames(executor, root, parent_path, subcommand);
+        try loadCompletionManifestSubcommandNames(executor, root, parent_path, subcommand, source);
 
         var child_path: std.ArrayList([]const u8) = .empty;
         defer child_path.deinit(executor.allocator);
         try child_path.appendSlice(executor.allocator, parent_path);
         try child_path.append(executor.allocator, name);
-        if (subcommand.get("options")) |options| try loadCompletionManifestOptions(executor, root, child_path.items, options);
-        if (subcommand.get("subcommands")) |nested| try loadCompletionManifestSubcommands(executor, root, child_path.items, nested);
+        if (subcommand.get("options")) |options| try loadCompletionManifestOptions(executor, root, child_path.items, options, source);
+        if (subcommand.get("subcommands")) |nested| try loadCompletionManifestSubcommands(executor, root, child_path.items, nested, source);
     }
 }
 
-fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, path: []const []const u8, options_value: std.json.Value) !void {
+fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, path: []const []const u8, options_value: std.json.Value, source: completion_model.RuleSource) !void {
     const options = switch (options_value) {
         .array => |array| array,
         else => return error.CompletionManifestOptionsMustBeArray,
@@ -1363,7 +1378,7 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
             .object => |object| object,
             else => return error.CompletionManifestOptionMustBeObject,
         };
-        var rule: completion_model.Rule = .{ .root = root, .path = path, .kind = .option, .description = manifestString(option.get("description")) };
+        var rule: completion_model.Rule = .{ .root = root, .path = path, .kind = .option, .description = manifestString(option.get("description")), .source = source };
         if (manifestString(option.get("long"))) |long| rule.option.long = long;
         if (manifestString(option.get("short"))) |short| rule.option.short = short;
         if (option.get("value")) |value| {
@@ -2300,8 +2315,13 @@ fn historyRecordContainsWord(command: []const u8, value: []const u8) bool {
     return false;
 }
 
-fn debugCompletion(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, source: []const u8) !void {
-    const output = try completionDebugOutput(allocator, io, environ_map, source);
+const CompletionDebugFormat = enum { text, json };
+
+fn debugCompletion(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, source: []const u8, format: CompletionDebugFormat) !void {
+    const output = switch (format) {
+        .text => try completionDebugOutput(allocator, io, environ_map, source),
+        .json => try completionDebugJsonOutput(allocator, io, environ_map, source),
+    };
     defer allocator.free(output);
     try writeAll(io, .stdout, output);
 }
@@ -2436,6 +2456,10 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     const cwd = cwd_buffer[0..cwd_len];
 
     const context = try exec.completionEvalContextForInput(allocator, source, source.len);
+    var loader = CompletionScriptLoader.init(allocator);
+    defer loader.deinit();
+    if (context.command.len != 0) try loader.ensureLoaded(io, &executor, context.command, "rush");
+
     var semantic = try executor.analyzeCompletionsForInput(source, source.len);
     defer semantic.deinit();
     const semantic_path = try semanticCompletionPath(allocator, semantic);
@@ -2488,12 +2512,19 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     });
     for (executor.completionRules()) |rule| {
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
-        try out.writer.print("  - kind: {s}\n    root: {s}\n    path:", .{
+        try out.writer.print("  - kind: {s}\n    source: {s}\n    root: {s}\n    path:", .{
             @tagName(rule.kind),
+            @tagName(rule.source.kind),
             rule.root,
         });
         for (rule.path) |segment| try out.writer.print(" {s}", .{segment});
         try out.writer.print("\n    value: {s}\n", .{rule.value orelse ""});
+        if (rule.source.kind == .manifest) {
+            try out.writer.print("    manifest-path: {s}\n    manifest-version: {d}\n", .{
+                rule.source.manifest_path orelse "",
+                rule.source.manifest_version orelse 0,
+            });
+        }
     }
     for (candidates) |candidate| {
         const prefix = if (candidate.replace_end <= source.len and candidate.replace_start <= candidate.replace_end) source[candidate.replace_start..candidate.replace_end] else "";
@@ -2522,6 +2553,822 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         .edit => |edit| try out.writer.print("  edit:\n    replace: {d}..{d}\n    replacement: {s}\n    append-space: {}\n", .{ edit.replace_start, edit.replace_end, edit.replacement, edit.append_space }),
     }
     return out.toOwnedSlice();
+}
+
+fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, source: []const u8) ![]const u8 {
+    var executor = exec.Executor.init(allocator);
+    defer executor.deinit();
+    try executor.importEnvironment(environ_map);
+    try executor.initializeShellVariables(io);
+    executor.arg_zero = "rush";
+    try loadInteractiveConfig(allocator, io, &executor, .{});
+
+    var history = History.init(allocator);
+    defer history.deinit();
+    const history_path = try historyPath(allocator, environ_map);
+    defer if (history_path) |path| allocator.free(path);
+    if (history_path) |path| history.load(io, path) catch {};
+
+    var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
+    const cwd = cwd_buffer[0..cwd_len];
+
+    const context = try exec.completionEvalContextForInput(allocator, source, source.len);
+    var loader = CompletionScriptLoader.init(allocator);
+    defer loader.deinit();
+    if (context.command.len != 0) try loader.ensureLoaded(io, &executor, context.command, "rush");
+
+    var semantic = try executor.analyzeCompletionsForInput(source, source.len);
+    defer semantic.deinit();
+    const semantic_path = try semanticCompletionPath(allocator, semantic);
+    defer allocator.free(semantic_path);
+    const candidates = try executor.collectCompletionsForInput(source, source.len, .{ .io = io, .allow_external = true });
+    defer executor.freeCompletions(candidates);
+    const effective_context = executor.lastCompletionContext() orelse context;
+    try rankCompletionCandidates(allocator, candidates, history, cwd, source);
+    const application = try completion_model.applyCandidatesForInput(allocator, source, candidates);
+    defer application.deinit(allocator);
+
+    var out: std.Io.Writer.Allocating = .init(allocator);
+    errdefer out.deinit();
+    var json: std.json.Stringify = .{
+        .writer = &out.writer,
+        .options = .{ .whitespace = .indent_2 },
+    };
+
+    try json.beginObject();
+    try json.objectField("input");
+    try json.write(source);
+    try json.objectField("context");
+    try writeCompletionEvalContextJson(&json, effective_context);
+    try json.objectField("semantic");
+    try writeCompletionSemanticContextJson(&json, semantic, semantic_path);
+    try json.objectField("manifest");
+    try writeCompletionManifestTraceJson(allocator, io, &json, executor, source, semantic);
+    try json.objectField("matchedRules");
+    try json.beginArray();
+    for (executor.completionRules()) |rule| {
+        if (!debugCompletionRuleMatches(rule, semantic)) continue;
+        try writeCompletionRuleJson(&json, rule);
+    }
+    try json.endArray();
+    try json.objectField("candidates");
+    try json.beginArray();
+    for (candidates) |candidate| try writeCompletionCandidateJson(&json, history, cwd, source, candidate);
+    try json.endArray();
+    try json.objectField("application");
+    try writeCompletionApplicationJson(&json, application);
+    try json.endObject();
+    try out.writer.writeByte('\n');
+    return out.toOwnedSlice();
+}
+
+fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.CompletionEvalContext) !void {
+    try json.beginObject();
+    try json.objectField("command");
+    try json.write(context.command);
+    try json.objectField("commandPath");
+    try json.write(if (context.command_path.len != 0) context.command_path else context.command);
+    try json.objectField("prefix");
+    try json.write(context.prefix);
+    try json.objectField("previous");
+    try json.write(context.previous);
+    try json.objectField("argumentIndex");
+    try json.write(context.argument_index);
+    try json.objectField("position");
+    try json.write(if (context.option_value != null) "option_value" else @tagName(context.position));
+    try json.objectField("optionName");
+    try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
+    try json.objectField("optionSpelling");
+    try json.write(if (context.option_value) |option_value| option_value.spelling else @as(?[]const u8, null));
+    try json.objectField("replaceStart");
+    try json.write(context.replace_start);
+    try json.objectField("replaceEnd");
+    try json.write(context.replace_end);
+    try json.endObject();
+}
+
+fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.CompletionSemanticContext, command_path: []const u8) !void {
+    try json.beginObject();
+    try json.objectField("root");
+    try json.write(context.root);
+    try json.objectField("path");
+    try json.beginArray();
+    for (context.path) |segment| try json.write(segment);
+    try json.endArray();
+    try json.objectField("commandPath");
+    try json.write(command_path);
+    try json.objectField("position");
+    try json.write(@tagName(context.position));
+    try json.objectField("prefix");
+    try json.write(context.prefix);
+    try json.objectField("previous");
+    try json.write(context.previous);
+    try json.objectField("optionName");
+    try json.write(if (context.option_value) |option_value| option_value.name else @as(?[]const u8, null));
+    try json.objectField("optionSpelling");
+    try json.write(if (context.option_value) |option_value| option_value.spelling else @as(?[]const u8, null));
+    try json.objectField("replaceStart");
+    try json.write(context.replace_start);
+    try json.objectField("replaceEnd");
+    try json.write(context.replace_end);
+    try json.objectField("suspiciousStart");
+    try json.write(context.suspicious_start);
+    try json.objectField("suspiciousEnd");
+    try json.write(context.suspicious_end);
+    try json.endObject();
+}
+
+fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rule) !void {
+    try json.beginObject();
+    try json.objectField("kind");
+    try json.write(@tagName(rule.kind));
+    try json.objectField("source");
+    try json.write(@tagName(rule.source.kind));
+    try json.objectField("manifestPath");
+    try json.write(rule.source.manifest_path);
+    try json.objectField("manifestVersion");
+    try json.write(rule.source.manifest_version);
+    try json.objectField("root");
+    try json.write(rule.root);
+    try json.objectField("path");
+    try json.beginArray();
+    for (rule.path) |segment| try json.write(segment);
+    try json.endArray();
+    try json.objectField("value");
+    try json.write(rule.value);
+    try json.objectField("description");
+    try json.write(rule.description);
+    try json.objectField("option");
+    try json.beginObject();
+    try json.objectField("long");
+    try json.write(rule.option.long);
+    try json.objectField("short");
+    try json.write(rule.option.short);
+    try json.objectField("argument");
+    try json.write(rule.option.argument);
+    try json.objectField("noSpace");
+    try json.write(rule.option.no_space);
+    try json.endObject();
+    try json.endObject();
+}
+
+fn writeCompletionCandidateJson(json: *std.json.Stringify, history: History, cwd: []const u8, source: []const u8, candidate: completion_model.Candidate) !void {
+    const prefix = if (candidate.replace_end <= source.len and candidate.replace_start <= candidate.replace_end) source[candidate.replace_start..candidate.replace_end] else "";
+    try json.beginObject();
+    try json.objectField("value");
+    try json.write(candidate.value);
+    try json.objectField("display");
+    try json.write(candidate.display);
+    try json.objectField("description");
+    try json.write(candidate.description);
+    try json.objectField("kind");
+    try json.write(@tagName(candidate.kind));
+    try json.objectField("replaceStart");
+    try json.write(candidate.replace_start);
+    try json.objectField("replaceEnd");
+    try json.write(candidate.replace_end);
+    try json.objectField("appendSpace");
+    try json.write(candidate.append_space);
+    try json.objectField("matchesPrefix");
+    try json.write(completion_model.candidateFuzzyMatchRank(candidate, prefix) != null);
+    try json.objectField("rankScore");
+    try json.write(completionRankScore(history, cwd, candidate.value));
+    try json.objectField("option");
+    if (candidate.option) |option| {
+        try json.beginObject();
+        try json.objectField("long");
+        try json.write(option.long);
+        try json.objectField("short");
+        try json.write(option.short);
+        try json.objectField("argument");
+        try json.write(option.argument);
+        try json.objectField("noSpace");
+        try json.write(option.no_space);
+        try json.endObject();
+    } else {
+        try json.write(@as(?[]const u8, null));
+    }
+    try json.endObject();
+}
+
+fn writeCompletionApplicationJson(json: *std.json.Stringify, application: completion_model.Application) !void {
+    try json.beginObject();
+    switch (application) {
+        .none => {
+            try json.objectField("kind");
+            try json.write("none");
+        },
+        .ambiguous => |candidates| {
+            try json.objectField("kind");
+            try json.write("ambiguous");
+            try json.objectField("candidateCount");
+            try json.write(candidates.len);
+        },
+        .edit => |edit| {
+            try json.objectField("kind");
+            try json.write("edit");
+            try json.objectField("replaceStart");
+            try json.write(edit.replace_start);
+            try json.objectField("replaceEnd");
+            try json.write(edit.replace_end);
+            try json.objectField("replacement");
+            try json.write(edit.replacement);
+            try json.objectField("appendSpace");
+            try json.write(edit.append_space);
+        },
+    }
+    try json.endObject();
+}
+
+const ManifestParsedOption = struct {
+    spelling: []const u8,
+    name: []const u8,
+    value: ?[]const u8 = null,
+    exclusive_group: ?[]const u8 = null,
+    repeatable: bool = false,
+};
+
+const ManifestOptionMatch = struct {
+    option: std.json.ObjectMap,
+    spelling: []const u8,
+    name: []const u8,
+    value: ?[]const u8 = null,
+    attached_value: bool = false,
+};
+
+const ManifestCompletionTrace = struct {
+    parsed_options: std.ArrayList(ManifestParsedOption) = .empty,
+    terminator_value: ?[]const u8 = null,
+    terminator_seen: bool = false,
+    active_argument_index: usize = 0,
+    active_argument_state: ?std.json.ObjectMap = null,
+
+    fn deinit(self: *ManifestCompletionTrace, allocator: std.mem.Allocator) void {
+        self.parsed_options.deinit(allocator);
+    }
+};
+
+fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext) !void {
+    const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
+
+    try json.beginObject();
+    try json.objectField("path");
+    try json.write(if (manifest_source) |rule_source| rule_source.manifest_path else @as(?[]const u8, null));
+    try json.objectField("manifestVersion");
+    try json.write(if (manifest_source) |rule_source| rule_source.manifest_version else @as(?i64, null));
+    try json.objectField("commandPath");
+    try writeSemanticCommandPathArrayJson(json, semantic);
+
+    const source_info = manifest_source orelse {
+        try writeEmptyManifestDecisionJson(json);
+        try json.endObject();
+        return;
+    };
+    const path = source_info.manifest_path orelse {
+        try writeEmptyManifestDecisionJson(json);
+        try json.endObject();
+        return;
+    };
+
+    const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch {
+        try writeEmptyManifestDecisionJson(json);
+        try json.endObject();
+        return;
+    };
+    defer allocator.free(contents);
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, contents, .{}) catch {
+        try writeEmptyManifestDecisionJson(json);
+        try json.endObject();
+        return;
+    };
+    defer parsed.deinit();
+
+    const root = switch (parsed.value) {
+        .object => |object| object,
+        else => {
+            try writeEmptyManifestDecisionJson(json);
+            try json.endObject();
+            return;
+        },
+    };
+    const command_value = root.get("command") orelse {
+        try writeEmptyManifestDecisionJson(json);
+        try json.endObject();
+        return;
+    };
+    const root_command = switch (command_value) {
+        .object => |object| object,
+        else => {
+            try writeEmptyManifestDecisionJson(json);
+            try json.endObject();
+            return;
+        },
+    };
+    const active_command = manifestCommandForPath(root_command, semantic.path) orelse root_command;
+    var trace = try analyzeManifestCompletionTrace(allocator, source, semantic, root_command, active_command);
+    defer trace.deinit(allocator);
+    var active_options: std.ArrayList(std.json.ObjectMap) = .empty;
+    defer active_options.deinit(allocator);
+    try appendManifestOptionsForPath(allocator, &active_options, root_command, semantic.path);
+
+    try json.objectField("parsedOptions");
+    try json.beginArray();
+    for (trace.parsed_options.items) |option| {
+        try json.beginObject();
+        try json.objectField("spelling");
+        try json.write(option.spelling);
+        try json.objectField("name");
+        try json.write(option.name);
+        try json.objectField("value");
+        try json.write(option.value);
+        try json.objectField("exclusiveGroup");
+        try json.write(option.exclusive_group);
+        try json.objectField("repeatable");
+        try json.write(option.repeatable);
+        try json.endObject();
+    }
+    try json.endArray();
+
+    try json.objectField("terminator");
+    try json.beginObject();
+    try json.objectField("defined");
+    try json.write(trace.terminator_value != null);
+    try json.objectField("value");
+    try json.write(trace.terminator_value);
+    try json.objectField("seen");
+    try json.write(trace.terminator_seen);
+    try json.endObject();
+
+    try json.objectField("activeArgumentState");
+    if (trace.active_argument_state) |state| {
+        try writeManifestArgumentStateJson(json, state, trace.active_argument_index);
+    } else {
+        try json.write(@as(?[]const u8, null));
+    }
+
+    try json.objectField("matchedProviders");
+    try writeManifestProvidersJson(json, semantic, active_command, active_options.items, trace);
+    try json.objectField("suppressedOptions");
+    try writeManifestSuppressedOptionsJson(json, active_options.items, trace.parsed_options.items);
+    try json.endObject();
+}
+
+fn writeEmptyManifestDecisionJson(json: *std.json.Stringify) !void {
+    try json.objectField("parsedOptions");
+    try json.beginArray();
+    try json.endArray();
+    try json.objectField("terminator");
+    try json.beginObject();
+    try json.objectField("defined");
+    try json.write(false);
+    try json.objectField("value");
+    try json.write(@as(?[]const u8, null));
+    try json.objectField("seen");
+    try json.write(false);
+    try json.endObject();
+    try json.objectField("activeArgumentState");
+    try json.write(@as(?[]const u8, null));
+    try json.objectField("matchedProviders");
+    try json.beginArray();
+    try json.endArray();
+    try json.objectField("suppressedOptions");
+    try json.beginArray();
+    try json.endArray();
+}
+
+fn primaryManifestRuleSource(rules: []const completion_model.Rule, semantic: exec.CompletionSemanticContext) ?completion_model.RuleSource {
+    for (rules) |rule| {
+        if (rule.source.kind == .manifest and debugCompletionRuleMatches(rule, semantic)) return rule.source;
+    }
+    for (rules) |rule| {
+        if (rule.source.kind == .manifest and std.mem.eql(u8, rule.root, semantic.root)) return rule.source;
+    }
+    return null;
+}
+
+fn writeSemanticCommandPathArrayJson(json: *std.json.Stringify, semantic: exec.CompletionSemanticContext) !void {
+    try json.beginArray();
+    if (semantic.root.len != 0) try json.write(semantic.root);
+    for (semantic.path) |segment| try json.write(segment);
+    try json.endArray();
+}
+
+fn manifestCommandForPath(root_command: std.json.ObjectMap, path: []const []const u8) ?std.json.ObjectMap {
+    var command = root_command;
+    for (path) |segment| {
+        const subcommands_value = command.get("subcommands") orelse return null;
+        const subcommands = switch (subcommands_value) {
+            .array => |array| array,
+            else => return null,
+        };
+        var matched: ?std.json.ObjectMap = null;
+        for (subcommands.items) |subcommand_value| {
+            const subcommand = switch (subcommand_value) {
+                .object => |object| object,
+                else => continue,
+            };
+            if (manifestCommandNameMatches(subcommand, segment)) {
+                matched = subcommand;
+                break;
+            }
+        }
+        command = matched orelse return null;
+    }
+    return command;
+}
+
+fn manifestCommandNameMatches(command: std.json.ObjectMap, name: []const u8) bool {
+    if (manifestNameValueMatches(command.get("name"), name)) return true;
+    return manifestNameValueMatches(command.get("aliases"), name);
+}
+
+fn manifestNameValueMatches(value: ?std.json.Value, name: []const u8) bool {
+    return switch (value orelse return false) {
+        .string => |string| std.mem.eql(u8, string, name),
+        .array => |array| for (array.items) |item| {
+            if (manifestString(item)) |string| if (std.mem.eql(u8, string, name)) break true;
+        } else false,
+        else => false,
+    };
+}
+
+fn analyzeManifestCompletionTrace(allocator: std.mem.Allocator, source: []const u8, semantic: exec.CompletionSemanticContext, root_command: std.json.ObjectMap, active_command: std.json.ObjectMap) !ManifestCompletionTrace {
+    var trace: ManifestCompletionTrace = .{};
+    errdefer trace.deinit(allocator);
+    if (active_command.get("arguments")) |arguments_value| {
+        if (arguments_value == .object) trace.terminator_value = manifestString(arguments_value.object.get("terminator"));
+    }
+
+    var parsed = try parser.parse(allocator, source, .{ .mode = .interactive, .cursor = source.len });
+    defer parsed.deinit();
+    const parser_context = parser.completionContext(parsed, source.len);
+
+    var path_index: usize = 0;
+    var word_index: usize = 0;
+    var token_index: usize = 0;
+    while (token_index < parsed.tokens.len) : (token_index += 1) {
+        const token = parsed.tokens[token_index];
+        if (token.kind != .word) continue;
+        if (token.span.start > parser_context.cursor) break;
+        const is_current = token_index == parser_context.token_index and parser_context.cursor <= token.span.end;
+        if (is_current or token.span.end > parser_context.cursor) break;
+        const word = token.lexeme(source);
+        if (word_index == 0) {
+            word_index += 1;
+            continue;
+        }
+        if (path_index < semantic.path.len and std.mem.eql(u8, word, semantic.path[path_index])) {
+            path_index += 1;
+            word_index += 1;
+            continue;
+        }
+        if (trace.terminator_value) |terminator| {
+            if (std.mem.eql(u8, word, terminator)) {
+                trace.terminator_seen = true;
+                word_index += 1;
+                continue;
+            }
+        }
+        if (!trace.terminator_seen) {
+            if (findManifestOptionForPath(root_command, semantic.path, word)) |matched| {
+                var parsed_option: ManifestParsedOption = .{
+                    .spelling = matched.spelling,
+                    .name = matched.name,
+                    .value = matched.value,
+                    .exclusive_group = manifestString(matched.option.get("exclusiveGroup")),
+                    .repeatable = manifestBool(matched.option.get("repeatable")),
+                };
+                if (manifestBool(matched.option.get("terminatesOptions"))) trace.terminator_seen = true;
+                if (manifestOptionTakesValue(matched.option) and !matched.attached_value) {
+                    if (nextCompleteWord(parsed, source, parser_context, token_index)) |next| {
+                        parsed_option.value = next.word;
+                        token_index = next.token_index;
+                    }
+                }
+                try trace.parsed_options.append(allocator, parsed_option);
+                word_index += 1;
+                continue;
+            }
+            if (std.mem.startsWith(u8, word, "-")) {
+                word_index += 1;
+                continue;
+            }
+        }
+        trace.active_argument_index += 1;
+        word_index += 1;
+    }
+
+    if (semantic.position == .argument or semantic.position == .subcommand) {
+        trace.active_argument_state = manifestActiveArgumentState(active_command, trace.active_argument_index, trace.terminator_seen);
+    }
+    return trace;
+}
+
+const ManifestNextWord = struct {
+    token_index: usize,
+    word: []const u8,
+};
+
+fn nextCompleteWord(parsed: parser.ParseResult, source: []const u8, context: parser.CompletionContext, start_token_index: usize) ?ManifestNextWord {
+    var index = start_token_index + 1;
+    while (index < parsed.tokens.len) : (index += 1) {
+        const token = parsed.tokens[index];
+        if (token.kind != .word) continue;
+        if (token.span.start > context.cursor) return null;
+        const is_current = index == context.token_index and context.cursor <= token.span.end;
+        if (is_current or token.span.end > context.cursor) return null;
+        return .{ .token_index = index, .word = token.lexeme(source) };
+    }
+    return null;
+}
+
+fn appendManifestOptionsForPath(allocator: std.mem.Allocator, options: *std.ArrayList(std.json.ObjectMap), root_command: std.json.ObjectMap, path: []const []const u8) !void {
+    try appendManifestCommandOptions(allocator, options, root_command);
+    var command = root_command;
+    for (path) |segment| {
+        command = manifestCommandForPath(command, &.{segment}) orelse return;
+        try appendManifestCommandOptions(allocator, options, command);
+    }
+}
+
+fn appendManifestCommandOptions(allocator: std.mem.Allocator, options: *std.ArrayList(std.json.ObjectMap), command: std.json.ObjectMap) !void {
+    const options_value = command.get("options") orelse return;
+    const array = switch (options_value) {
+        .array => |items| items,
+        else => return,
+    };
+    for (array.items) |option_value| {
+        if (option_value == .object) try options.append(allocator, option_value.object);
+    }
+}
+
+fn findManifestOptionForPath(root_command: std.json.ObjectMap, path: []const []const u8, word: []const u8) ?ManifestOptionMatch {
+    var options: [128]std.json.ObjectMap = undefined;
+    var len: usize = 0;
+    appendManifestOptionsForPathBounded(&options, &len, root_command, path);
+    for (options[0..len]) |option| {
+        if (manifestOptionMatchesWord(option, word)) |matched| return matched;
+    }
+    return null;
+}
+
+fn appendManifestOptionsForPathBounded(buffer: []std.json.ObjectMap, len: *usize, root_command: std.json.ObjectMap, path: []const []const u8) void {
+    appendManifestCommandOptionsBounded(buffer, len, root_command);
+    var command = root_command;
+    for (path) |segment| {
+        command = manifestCommandForPath(command, &.{segment}) orelse return;
+        appendManifestCommandOptionsBounded(buffer, len, command);
+    }
+}
+
+fn appendManifestCommandOptionsBounded(buffer: []std.json.ObjectMap, len: *usize, command: std.json.ObjectMap) void {
+    const options_value = command.get("options") orelse return;
+    const array = switch (options_value) {
+        .array => |items| items,
+        else => return,
+    };
+    for (array.items) |option_value| {
+        if (len.* >= buffer.len) return;
+        if (option_value == .object) {
+            buffer[len.*] = option_value.object;
+            len.* += 1;
+        }
+    }
+}
+
+fn manifestOptionMatchesWord(option: std.json.ObjectMap, word: []const u8) ?ManifestOptionMatch {
+    if (std.mem.startsWith(u8, word, "--")) {
+        const body = word[2..];
+        const equals_index = std.mem.indexOfScalar(u8, body, '=');
+        const name = if (equals_index) |index| body[0..index] else body;
+        if (manifestOptionHasLongName(option, name)) {
+            const spelling = word[0 .. 2 + name.len];
+            return .{ .option = option, .spelling = spelling, .name = name, .value = if (equals_index) |index| body[index + 1 ..] else null, .attached_value = equals_index != null };
+        }
+    }
+    if (std.mem.startsWith(u8, word, "-") and word.len == 2) {
+        const short = manifestString(option.get("short")) orelse return null;
+        if (short.len == 1 and short[0] == word[1]) return .{ .option = option, .spelling = word, .name = short };
+    }
+    return null;
+}
+
+fn manifestOptionHasLongName(option: std.json.ObjectMap, name: []const u8) bool {
+    if (manifestString(option.get("long"))) |long| if (std.mem.eql(u8, long, name)) return true;
+    const aliases_value = option.get("aliases") orelse return false;
+    const aliases = switch (aliases_value) {
+        .array => |array| array,
+        else => return false,
+    };
+    for (aliases.items) |alias_value| {
+        if (manifestString(alias_value)) |alias| if (std.mem.eql(u8, alias, name)) return true;
+    }
+    return false;
+}
+
+fn manifestOptionTakesValue(option: std.json.ObjectMap) bool {
+    return option.get("value") != null;
+}
+
+fn manifestActiveArgumentState(command: std.json.ObjectMap, active_index: usize, terminator_seen: bool) ?std.json.ObjectMap {
+    const arguments_value = command.get("arguments") orelse return null;
+    const arguments = switch (arguments_value) {
+        .object => |object| object,
+        else => return null,
+    };
+    const states_value = arguments.get("states") orelse return null;
+    const states = switch (states_value) {
+        .array => |array| array,
+        else => return null,
+    };
+    var next_index: usize = 0;
+    for (states.items) |state_value| {
+        const state = switch (state_value) {
+            .object => |object| object,
+            else => continue,
+        };
+        if (!manifestStateConditionsAllow(state, terminator_seen)) continue;
+        const explicit_index = manifestInteger(state.get("index"));
+        if (explicit_index) |index| if (index < 0) continue;
+        const state_index: usize = if (explicit_index) |index| @intCast(index) else next_index;
+        const repeatable = manifestBool(state.get("repeatable"));
+        if (active_index == state_index or (repeatable and active_index >= state_index)) return state;
+        if (explicit_index) |index| {
+            if (index >= 0) next_index = @max(next_index, @as(usize, @intCast(index)) + 1);
+        } else if (!repeatable) {
+            next_index += 1;
+        }
+    }
+    return null;
+}
+
+fn manifestStateConditionsAllow(state: std.json.ObjectMap, terminator_seen: bool) bool {
+    if (state.get("after")) |condition| {
+        if (manifestConditionTerminatorSeen(condition) == true and !terminator_seen) return false;
+    }
+    if (state.get("until")) |condition| {
+        if (manifestConditionTerminatorSeen(condition) == true and terminator_seen) return false;
+    }
+    return true;
+}
+
+fn manifestConditionTerminatorSeen(condition_value: std.json.Value) ?bool {
+    const condition = switch (condition_value) {
+        .object => |object| object,
+        else => return null,
+    };
+    return if (condition.get("terminatorSeen")) |value| manifestBool(value) else null;
+}
+
+fn writeManifestArgumentStateJson(json: *std.json.Stringify, state: std.json.ObjectMap, active_index: usize) !void {
+    try json.beginObject();
+    try json.objectField("name");
+    try json.write(manifestString(state.get("name")) orelse "");
+    try json.objectField("index");
+    try json.write(if (manifestInteger(state.get("index"))) |index| if (index >= 0) @as(?i64, index) else @as(?i64, @intCast(active_index)) else @as(?i64, @intCast(active_index)));
+    try json.objectField("repeatable");
+    try json.write(manifestBool(state.get("repeatable")));
+    try json.objectField("provider");
+    if (state.get("provider")) |provider| try writeManifestProviderRefValue(json, provider) else try json.write(@as(?[]const u8, null));
+    try json.endObject();
+}
+
+fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: exec.CompletionSemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace) !void {
+    try json.beginArray();
+    if (trace.active_argument_state) |state| {
+        if (state.get("provider")) |provider| try writeManifestProviderEntryJson(json, provider, "argumentState");
+    }
+    if (semantic.option_value) |option_value| {
+        if (findManifestOptionByName(active_options, option_value.name)) |option| {
+            if (option.get("value")) |value| {
+                if (value == .object) {
+                    if (value.object.get("provider")) |provider| try writeManifestProviderEntryJson(json, provider, "optionValue");
+                }
+            }
+        }
+    }
+    if (semantic.position == .subcommand) {
+        if (active_command.get("dynamicSubcommands")) |providers| try writeManifestProviderArrayEntriesJson(json, providers, "dynamicSubcommands");
+    }
+    if (semantic.position == .option) {
+        if (active_command.get("dynamicOptions")) |providers| try writeManifestProviderArrayEntriesJson(json, providers, "dynamicOptions");
+    }
+    try json.endArray();
+}
+
+fn writeManifestProviderArrayEntriesJson(json: *std.json.Stringify, providers_value: std.json.Value, reason: []const u8) !void {
+    const providers = switch (providers_value) {
+        .array => |array| array,
+        else => return,
+    };
+    for (providers.items) |provider| try writeManifestProviderEntryJson(json, provider, reason);
+}
+
+fn writeManifestProviderEntryJson(json: *std.json.Stringify, provider: std.json.Value, reason: []const u8) !void {
+    try json.beginObject();
+    try json.objectField("id");
+    try writeManifestProviderRefValue(json, provider);
+    try json.objectField("reason");
+    try json.write(reason);
+    try json.endObject();
+}
+
+fn writeManifestProviderRefValue(json: *std.json.Stringify, provider: std.json.Value) !void {
+    switch (provider) {
+        .string => |id| try json.write(id),
+        .object => |object| {
+            if (manifestString(object.get("builtin"))) |builtin| {
+                var buffer: [128]u8 = undefined;
+                const id = std.fmt.bufPrint(&buffer, "builtin.{s}", .{builtin}) catch builtin;
+                try json.write(id);
+            } else if (manifestString(object.get("function"))) |function| {
+                try json.write(function);
+            } else {
+                try json.write(@as(?[]const u8, null));
+            }
+        },
+        else => try json.write(@as(?[]const u8, null)),
+    }
+}
+
+fn findManifestOptionByName(options: []const std.json.ObjectMap, name: []const u8) ?std.json.ObjectMap {
+    for (options) |option| {
+        if (manifestString(option.get("long"))) |long| if (std.mem.eql(u8, long, name)) return option;
+        if (manifestString(option.get("short"))) |short| if (std.mem.eql(u8, short, name)) return option;
+        const aliases_value = option.get("aliases") orelse continue;
+        if (aliases_value != .array) continue;
+        for (aliases_value.array.items) |alias_value| {
+            if (manifestString(alias_value)) |alias| if (std.mem.eql(u8, alias, name)) return option;
+        }
+    }
+    return null;
+}
+
+fn writeManifestSuppressedOptionsJson(json: *std.json.Stringify, options: []const std.json.ObjectMap, parsed_options: []const ManifestParsedOption) !void {
+    try json.beginArray();
+    for (options) |option| {
+        const spelling = manifestOptionPrimarySpelling(option) orelse continue;
+        if (manifestParsedOptionForOption(parsed_options, option)) |parsed| {
+            if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionJson(json, spelling, "alreadyPresent", parsed.spelling, null);
+            continue;
+        }
+        const group = manifestString(option.get("exclusiveGroup")) orelse continue;
+        for (parsed_options) |parsed| {
+            if (parsed.exclusive_group) |parsed_group| {
+                if (std.mem.eql(u8, group, parsed_group)) {
+                    try writeManifestSuppressedOptionJson(json, spelling, "exclusiveGroup", parsed.spelling, group);
+                    break;
+                }
+            }
+        }
+    }
+    try json.endArray();
+}
+
+fn manifestOptionPrimarySpelling(option: std.json.ObjectMap) ?[]const u8 {
+    if (manifestString(option.get("long"))) |long| return long;
+    if (manifestString(option.get("short"))) |short| return short;
+    const aliases_value = option.get("aliases") orelse return null;
+    if (aliases_value != .array or aliases_value.array.items.len == 0) return null;
+    return manifestString(aliases_value.array.items[0]);
+}
+
+fn manifestParsedOptionForOption(parsed_options: []const ManifestParsedOption, option: std.json.ObjectMap) ?ManifestParsedOption {
+    for (parsed_options) |parsed| {
+        if (manifestOptionNameMatches(option, parsed.name)) return parsed;
+    }
+    return null;
+}
+
+fn manifestOptionNameMatches(option: std.json.ObjectMap, name: []const u8) bool {
+    if (manifestString(option.get("long"))) |long| if (std.mem.eql(u8, long, name)) return true;
+    if (manifestString(option.get("short"))) |short| if (std.mem.eql(u8, short, name)) return true;
+    const aliases_value = option.get("aliases") orelse return false;
+    if (aliases_value != .array) return false;
+    for (aliases_value.array.items) |alias_value| {
+        if (manifestString(alias_value)) |alias| if (std.mem.eql(u8, alias, name)) return true;
+    }
+    return false;
+}
+
+fn writeManifestSuppressedOptionJson(json: *std.json.Stringify, spelling_name: []const u8, reason: []const u8, by: []const u8, group: ?[]const u8) !void {
+    try json.beginObject();
+    try json.objectField("spelling");
+    if (spelling_name.len == 1) {
+        var buffer: [4]u8 = undefined;
+        try json.write(std.fmt.bufPrint(&buffer, "-{s}", .{spelling_name}) catch spelling_name);
+    } else {
+        var buffer: [256]u8 = undefined;
+        try json.write(std.fmt.bufPrint(&buffer, "--{s}", .{spelling_name}) catch spelling_name);
+    }
+    try json.objectField("reason");
+    try json.write(reason);
+    try json.objectField("by");
+    try json.write(by);
+    try json.objectField("group");
+    try json.write(group);
+    try json.endObject();
 }
 
 pub fn renderHighlightedInput(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
@@ -4018,6 +4865,69 @@ test "completion debug output shows semantic structured context and rules" {
     try std.testing.expect(std.mem.indexOf(u8, output, "position: option") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "kind: option") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "value: --amend") != null);
+}
+
+test "completion debug output exposes manifest source and JSON decision state" {
+    const root = "rush-debug-manifest-test";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/completions");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/completions/tool.json", .data =
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.targets": { "function": "__rush_complete_tool_targets" }
+        \\    },
+        \\    "optionGroups": [
+        \\      { "name": "mode", "exclusive": true }
+        \\    ],
+        \\    "options": [
+        \\      { "long": "debug", "exclusiveGroup": "mode" },
+        \\      { "long": "release", "exclusiveGroup": "mode" }
+        \\    ],
+        \\    "subcommands": [
+        \\      {
+        \\        "name": "run",
+        \\        "arguments": {
+        \\          "terminator": "--",
+        \\          "states": [
+        \\            { "name": "target", "provider": "tool.targets" }
+        \\          ]
+        \\        }
+        \\      }
+        \\    ]
+        \\  }
+        \\}
+    });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_DATA_DIRS", "");
+    try env.put("XDG_DATA_HOME", root);
+
+    const text_output = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, "tool run --debug ta");
+    defer std.testing.allocator.free(text_output);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "source: manifest") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "manifest-path: " ++ root ++ "/rush/completions/tool.json") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text_output, "manifest-version: 1") != null);
+
+    const json_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool run --debug ta");
+    defer std.testing.allocator.free(json_output);
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_output, .{});
+    defer parsed.deinit();
+    const object = parsed.value.object;
+    const manifest = object.get("manifest").?.object;
+    try std.testing.expectEqualStrings(root ++ "/rush/completions/tool.json", manifest.get("path").?.string);
+    try std.testing.expectEqual(@as(i64, 1), manifest.get("manifestVersion").?.integer);
+    try std.testing.expectEqualStrings("--debug", manifest.get("parsedOptions").?.array.items[0].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("target", manifest.get("activeArgumentState").?.object.get("name").?.string);
+    try std.testing.expectEqualStrings("tool.targets", manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
+    const suppressed = manifest.get("suppressedOptions").?.array.items;
+    try std.testing.expectEqualStrings("--debug", suppressed[0].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("alreadyPresent", suppressed[0].object.get("reason").?.string);
+    try std.testing.expectEqualStrings("--release", suppressed[1].object.get("spelling").?.string);
+    try std.testing.expectEqualStrings("exclusiveGroup", suppressed[1].object.get("reason").?.string);
 }
 
 test "interactive highlight renderer uses parser classifications" {

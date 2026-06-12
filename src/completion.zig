@@ -114,6 +114,17 @@ pub const RuleKind = enum {
     option,
 };
 
+pub const RuleSourceKind = enum {
+    rush,
+    manifest,
+};
+
+pub const RuleSource = struct {
+    kind: RuleSourceKind = .rush,
+    manifest_path: ?[]const u8 = null,
+    manifest_version: ?i64 = null,
+};
+
 pub const Rule = struct {
     root: []const u8,
     path: []const []const u8 = &.{},
@@ -121,6 +132,7 @@ pub const Rule = struct {
     value: ?[]const u8 = null,
     option: Option = .{},
     description: ?[]const u8 = null,
+    source: RuleSource = .{},
 };
 
 pub const Edit = struct {
