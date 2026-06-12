@@ -11,6 +11,9 @@
       "git.color-modes": {
         "values": ["always", "auto", "never"]
       },
+      "git.worktree-modes": {
+        "values": ["locked", "unlocked"]
+      },
       "builtin.directories": {
         "builtin": "directories"
       }
@@ -23,6 +26,20 @@
           "provider": "builtin.directories"
         },
         "description": "run as if git started in path"
+      },
+      {
+        "long": "worktree-mode",
+        "value": [
+          {
+            "name": "path",
+            "provider": "builtin.directories"
+          },
+          {
+            "name": "mode",
+            "provider": "git.worktree-modes"
+          }
+        ],
+        "description": "set mode for a worktree path"
       }
     ],
     "subcommands": [

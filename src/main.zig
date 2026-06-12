@@ -1554,7 +1554,7 @@ fn loadCompletionManifestProviderArray(executor: *exec.Executor, root: []const u
     };
     for (array.items) |provider_ref| {
         const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
-        try registerCompletionManifestProviderRule(executor, root, path, kind, provider, .{}, .{}, .{}, null, source, variant, disabled);
+        try registerCompletionManifestProviderRule(executor, root, path, kind, provider, .{}, .{}, 0, .{}, null, source, variant, disabled);
     }
 }
 
@@ -1641,7 +1641,10 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
         rule.option.terminates_options = manifestBool(option.get("terminatesOptions"));
         rule.option.inherit = manifestBoolDefault(option.get("inherit"), true);
         if (option.get("value")) |value| {
-            if (manifestValueName(value)) |name| rule.option.argument = name;
+            rule.option.value_count = manifestOptionValueCount(value);
+            if (manifestOptionValueAt(value, 0)) |first| {
+                if (manifestValueName(first)) |name| rule.option.argument = name;
+            }
         }
         if (rule.option.long == null and rule.option.short == null) return error.CompletionManifestOptionMissingSpelling;
         try executor.registerCompletionRule(rule);
@@ -1667,13 +1670,16 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
 }
 
 fn loadCompletionManifestOptionValueProvider(executor: *exec.Executor, root: []const u8, path: []const []const u8, option_rule: completion_model.Rule, value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
-    const object = switch (value) {
-        .object => |object| object,
-        else => return,
-    };
-    const provider_ref = object.get("provider") orelse return;
-    const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
-    try registerCompletionManifestProviderRule(executor, root, path, .dynamic_option_value, provider, option_rule.option, .{}, manifestValueGrammar(object.get("grammar")), manifestString(object.get("description")), source, variant, disabled);
+    var value_index: usize = 0;
+    while (manifestOptionValueAt(value, value_index)) |value_item| : (value_index += 1) {
+        const object = switch (value_item) {
+            .object => |object| object,
+            else => continue,
+        };
+        const provider_ref = object.get("provider") orelse continue;
+        const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
+        try registerCompletionManifestProviderRule(executor, root, path, .dynamic_option_value, provider, option_rule.option, .{}, value_index, manifestValueGrammar(object.get("grammar")), manifestString(object.get("description")), source, variant, disabled);
+    }
 }
 
 fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, path: []const []const u8, arguments_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
@@ -1701,7 +1707,7 @@ fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, p
             if (index >= 0) argument.index = @intCast(index);
         }
         if (state.get("after")) |after| argument.after_state = manifestConditionPreviousState(after);
-        try registerCompletionManifestProviderRule(executor, root, path, .dynamic_argument, provider, .{}, argument, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source, variant, disabled);
+        try registerCompletionManifestProviderRule(executor, root, path, .dynamic_argument, provider, .{}, argument, 0, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source, variant, disabled);
     }
 }
 
@@ -1713,6 +1719,7 @@ fn registerCompletionManifestProviderRule(
     provider: CompletionManifestProviderBinding,
     option: completion_model.Option,
     argument: completion_model.Argument,
+    value_index: usize,
     value_grammar: completion_model.ValueGrammar,
     description: ?[]const u8,
     source: completion_model.RuleSource,
@@ -1733,6 +1740,7 @@ fn registerCompletionManifestProviderRule(
         .static_values = static_values.items,
         .option = option,
         .argument = argument,
+        .value_index = value_index,
         .value_grammar = value_grammar,
         .description = description,
         .source = source,
@@ -1841,6 +1849,22 @@ fn manifestValueName(value: std.json.Value) ?[]const u8 {
         else => return null,
     };
     return manifestString(object.get("name"));
+}
+
+fn manifestOptionValueCount(value: std.json.Value) usize {
+    return switch (value) {
+        .object => 1,
+        .array => |array| array.items.len,
+        else => 0,
+    };
+}
+
+fn manifestOptionValueAt(value: std.json.Value, index: usize) ?std.json.Value {
+    return switch (value) {
+        .object => if (index == 0) value else null,
+        .array => |array| if (index < array.items.len) array.items[index] else null,
+        else => null,
+    };
 }
 
 const completion_manifest_supported_version: i64 = 1;
@@ -2251,7 +2275,37 @@ fn validateManifestOption(
     if (option.get("value")) |value| {
         const value_path = try manifestFieldPath(allocator, path, "value");
         defer allocator.free(value_path);
-        try validateManifestValueObject(allocator, diagnostics, value, providers, value_path);
+        try validateManifestOptionValue(allocator, diagnostics, value, providers, value_path);
+    }
+}
+
+fn validateManifestOptionValue(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const []const u8, path: []const u8) anyerror!void {
+    switch (value) {
+        .object => try validateManifestValueObject(allocator, diagnostics, value, providers, path),
+        .array => |array| {
+            var optional_started = false;
+            for (array.items, 0..) |value_item, index| {
+                const value_path = try manifestIndexPath(allocator, path, index);
+                defer allocator.free(value_path);
+                try validateManifestValueObject(allocator, diagnostics, value_item, providers, value_path);
+                const object = switch (value_item) {
+                    .object => |object| object,
+                    else => continue,
+                };
+                const required = manifestBoolDefault(object.get("required"), true);
+                if (!required) optional_started = true else if (optional_started) {
+                    try diagnostics.add(.err, "{s}.required: required option values cannot follow optional values", .{value_path});
+                }
+                if (index != 0) {
+                    if (manifestString(object.get("style"))) |style| {
+                        if (!std.mem.eql(u8, style, "detached")) {
+                            try diagnostics.add(.err, "{s}.style: only the first option value may use non-detached styles", .{value_path});
+                        }
+                    }
+                }
+            }
+        },
+        else => {},
     }
 }
 
@@ -3134,6 +3188,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         \\  position: {s}
         \\  option-name: {s}
         \\  option-spelling: {s}
+        \\  option-value-index: {d}
         \\  value-segment: {s}
         \\  value-separator: {s}
         \\  value-position: {s}
@@ -3158,6 +3213,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         if (effective_context.option_value != null) "option_value" else @tagName(effective_context.position),
         if (effective_context.option_value) |option_value| option_value.name else "",
         effective_option_spelling,
+        if (effective_context.option_value) |option_value| option_value.value_index else 0,
         if (effective_context.value_segment) |segment| segment.segment else "",
         effective_value_separator,
         if (effective_context.value_segment) |segment| @tagName(segment.position) else "",
@@ -3286,10 +3342,11 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
             completionRankScore(history, cwd, candidate.value),
         });
         if (candidate.option) |option| {
-            try out.writer.print("    option:\n      long: {s}\n      short: {s}\n      argument: {s}\n      exclusive-group: {s}\n      repeatable: {}\n      terminates-options: {}\n", .{
+            try out.writer.print("    option:\n      long: {s}\n      short: {s}\n      argument: {s}\n      value-count: {d}\n      exclusive-group: {s}\n      repeatable: {}\n      terminates-options: {}\n", .{
                 option.long orelse "",
                 option.short orelse "",
                 option.argument orelse "",
+                option.value_count,
                 option.exclusive_group orelse "",
                 option.repeatable,
                 option.terminates_options,
@@ -3483,6 +3540,8 @@ fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.Compl
     } else {
         try json.write(@as(?[]const u8, null));
     }
+    try json.objectField("optionValueIndex");
+    try json.write(if (context.option_value) |option_value| option_value.value_index else @as(?usize, null));
     try json.objectField("valueSegment");
     try json.write(if (context.value_segment) |segment| segment.segment else @as(?[]const u8, null));
     try json.objectField("valueSeparator");
@@ -3548,6 +3607,8 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     } else {
         try json.write(@as(?[]const u8, null));
     }
+    try json.objectField("optionValueIndex");
+    try json.write(if (context.option_value) |option_value| option_value.value_index else @as(?usize, null));
     try json.objectField("valueSegment");
     try json.write(if (context.value_segment) |segment| segment.segment else @as(?[]const u8, null));
     try json.objectField("valueSeparator");
@@ -3644,6 +3705,8 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.write(rule.option.short);
     try json.objectField("argument");
     try json.write(rule.option.argument);
+    try json.objectField("valueCount");
+    try json.write(rule.option.value_count);
     try json.objectField("exclusiveGroup");
     try json.write(rule.option.exclusive_group);
     try json.objectField("repeatable");
@@ -3668,6 +3731,8 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.objectField("repeatable");
     try json.write(rule.argument.repeatable);
     try json.endObject();
+    try json.objectField("valueIndex");
+    try json.write(rule.value_index);
     try json.objectField("valueGrammar");
     try json.beginObject();
     try json.objectField("listSeparator");
@@ -3911,6 +3976,8 @@ fn writeCompletionManifestTraceText(allocator: std.mem.Allocator, io: std.Io, wr
     try writer.print("  command-path:", .{});
     if (semantic.root.len != 0) try writer.print(" {s}", .{semantic.root});
     for (semantic.path) |segment| try writer.print(" {s}", .{segment});
+    try writer.print("\n  option-name: {s}\n  option-value-index: ", .{if (semantic.option_value) |option_value| option_value.name else ""});
+    if (semantic.option_value) |option_value| try writer.print("{d}", .{option_value.value_index});
     try writer.print("\n  platform-gate:\n    platform: {s}\n    allowed: {}\n", .{
         if (manifest_state) |state| state.platform else completionManifestCurrentPlatform(),
         if (manifest_state) |state| state.platform_allowed else true,
@@ -4047,12 +4114,10 @@ fn writeManifestProvidersText(writer: *std.Io.Writer, semantic: exec.CompletionS
     }
     if (semantic.option_value) |option_value| {
         if (findManifestOptionByName(active_options, option_value.name)) |option| {
-            if (option.get("value")) |value| {
-                if (value == .object) {
-                    if (value.object.get("provider")) |provider| {
-                        try writeManifestProviderEntryText(writer, provider, "optionValue", candidates, indent);
-                        count += 1;
-                    }
+            if (manifestOptionValueObjectAt(option, option_value.value_index)) |value| {
+                if (value.get("provider")) |provider| {
+                    try writeManifestProviderEntryText(writer, provider, "optionValue", candidates, indent);
+                    count += 1;
                 }
             }
         }
@@ -4064,6 +4129,15 @@ fn writeManifestProvidersText(writer: *std.Io.Writer, semantic: exec.CompletionS
         if (active_command.get("dynamicOptions")) |providers| count += try writeManifestProviderArrayEntriesText(writer, providers, "dynamicOptions", candidates, indent);
     }
     return count;
+}
+
+fn manifestOptionValueObjectAt(option: std.json.ObjectMap, value_index: usize) ?std.json.ObjectMap {
+    const value = option.get("value") orelse return null;
+    const item = manifestOptionValueAt(value, value_index) orelse return null;
+    return switch (item) {
+        .object => |object| object,
+        else => null,
+    };
 }
 
 fn writeManifestProviderArrayEntriesText(writer: *std.Io.Writer, providers_value: std.json.Value, reason: []const u8, candidates: []const completion_model.Candidate, indent: []const u8) !usize {
@@ -4174,6 +4248,10 @@ fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, js
     try json.write(if (manifest_source) |rule_source| rule_source.manifest_version else if (manifest_state) |state| state.manifest_version else @as(?i64, null));
     try json.objectField("commandPath");
     try writeSemanticCommandPathArrayJson(json, semantic);
+    try json.objectField("optionName");
+    try json.write(if (semantic.option_value) |option_value| option_value.name else @as(?[]const u8, null));
+    try json.objectField("optionValueIndex");
+    try json.write(if (semantic.option_value) |option_value| option_value.value_index else @as(?usize, null));
     try json.objectField("platformGate");
     try json.beginObject();
     try json.objectField("platform");
@@ -4693,12 +4771,10 @@ fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: exec.Completi
     }
     if (semantic.option_value) |option_value| {
         if (findManifestOptionByName(active_options, option_value.name)) |option| {
-            if (option.get("value")) |value| {
-                if (value == .object) {
-                    if (value.object.get("provider")) |provider| {
-                        try writeManifestProviderEntryJson(json, provider, "optionValue", candidates);
-                        count += 1;
-                    }
+            if (manifestOptionValueObjectAt(option, option_value.value_index)) |value| {
+                if (value.get("provider")) |provider| {
+                    try writeManifestProviderEntryJson(json, provider, "optionValue", candidates);
+                    count += 1;
                 }
             }
         }
@@ -6046,6 +6122,69 @@ test "completion manifest static enum providers emit scoped candidates" {
     try expectCompletionCandidate(argument_candidates, "auto");
 }
 
+test "completion manifest multi-value options select each provider and preserve operand indexes" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "displayctl",
+        \\    "providers": {
+        \\      "display.outputs": { "values": ["HDMI-1", "DP-1"] },
+        \\      "display.modes": { "values": ["1920x1080", "2560x1440"] },
+        \\      "display.targets": { "values": ["target-a", "target-b"] }
+        \\    },
+        \\    "options": [
+        \\      {
+        \\        "long": "mode",
+        \\        "value": [
+        \\          { "name": "output", "provider": "display.outputs" },
+        \\          { "name": "mode", "provider": "display.modes", "grammar": { "kind": "list", "separator": ",", "item": { "provider": "display.modes" } } }
+        \\        ]
+        \\      }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "index": 0, "provider": "display.targets" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+
+    const output_candidates = try executor.collectCompletionsForInput("displayctl --mode HD", "displayctl --mode HD".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(output_candidates);
+    try expectCompletionCandidate(output_candidates, "HDMI-1");
+    try expectNoCompletionCandidate(output_candidates, "1920x1080");
+    var context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    try std.testing.expectEqual(@as(usize, 0), context.option_value.?.value_index);
+
+    const mode_source = "displayctl --mode HDMI-1 current,19";
+    const mode_candidates = try executor.collectCompletionsForInput(mode_source, mode_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(mode_candidates);
+    const mode = findCompletionCandidate(mode_candidates, "1920x1080") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(@as(usize, "displayctl --mode HDMI-1 current,".len), mode.replace_start);
+    try expectNoCompletionCandidate(mode_candidates, "HDMI-1");
+    context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    try std.testing.expectEqual(@as(usize, 1), context.option_value.?.value_index);
+
+    const attached_mode_candidates = try executor.collectCompletionsForInput("displayctl --mode=HDMI-1 25", "displayctl --mode=HDMI-1 25".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(attached_mode_candidates);
+    try expectCompletionCandidate(attached_mode_candidates, "2560x1440");
+    context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    try std.testing.expectEqual(@as(usize, 1), context.option_value.?.value_index);
+
+    const target_source = "displayctl --mode HDMI-1 1920x1080 target";
+    const target_candidates = try executor.collectCompletionsForInput(target_source, target_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(target_candidates);
+    try expectCompletionCandidate(target_candidates, "target-a");
+    context = executor.lastCompletionContext() orelse return error.MissingCompletionContext;
+    try std.testing.expectEqual(@as(usize, 0), context.argument_index);
+    try std.testing.expectEqualStrings("target", context.argument_state.?);
+}
+
 test "completion manifest variants select lazily and cache probe result" {
     const platform = completionManifestCurrentPlatform();
     const manifest = try std.fmt.allocPrint(std.testing.allocator,
@@ -6477,6 +6616,41 @@ test "completion manifest semantic validation allows non-inherited option spelli
     defer diagnostics.deinit();
 
     try std.testing.expect(!diagnostics.hasErrors());
+}
+
+test "completion manifest semantic validation rejects invalid multi-value option sequences" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.values": { "values": ["one"] }
+        \\    },
+        \\    "options": [
+        \\      {
+        \\        "long": "pair",
+        \\        "value": [
+        \\          { "name": "first", "provider": "tool.values", "required": false },
+        \\          { "name": "second", "provider": "tool.values" }
+        \\        ]
+        \\      },
+        \\      {
+        \\        "long": "style",
+        \\        "value": [
+        \\          { "name": "first", "provider": "tool.values" },
+        \\          { "name": "second", "provider": "tool.values", "style": "equals" }
+        \\        ]
+        \\      }
+        \\    ]
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try std.testing.expect(diagnostics.hasErrors());
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[0].value[1].required: required option values cannot follow optional values");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[1].value[1].style: only the first option value may use non-detached styles");
 }
 
 test "completion manifest semantic validation rejects builtin provider options" {

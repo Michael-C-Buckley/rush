@@ -467,6 +467,7 @@ pub const CompletionEvalContext = struct {
 pub const CompletionOptionValue = struct {
     name: []const u8,
     spelling: []const u8,
+    value_index: usize = 0,
     from: ?[]const u8 = null,
     from_offset: ?usize = null,
 
@@ -797,6 +798,7 @@ fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const comple
 const MatchedCompletionOption = struct {
     takes_value: bool,
     attached_value: bool,
+    value_count: usize = 0,
     name: []const u8,
     key: []const u8,
     spelling: []const u8,
@@ -862,20 +864,21 @@ fn attachedShortCompletionOptionValue(rules: []const completion.Rule, root: []co
 fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?MatchedCompletionOption {
     for (rules) |rule| {
         if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
-        const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
+        const value_count = completionRuleValueCount(rule);
+        const takes_value = value_count != 0;
         const key = completionOptionKey(rule.option) orelse continue;
         if (rule.option.long) |long| {
             var spelling_buffer: [256]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = long, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = long, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
             if (takes_value and std.mem.startsWith(u8, word, spelling) and word.len > spelling.len and word[spelling.len] == '=') {
-                return .{ .takes_value = true, .attached_value = true, .name = long, .key = key, .spelling = word[0..spelling.len], .value = word[spelling.len + 1 ..], .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+                return .{ .takes_value = true, .attached_value = true, .value_count = value_count, .name = long, .key = key, .spelling = word[0..spelling.len], .value = word[spelling.len + 1 ..], .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
             }
         }
         if (rule.option.short) |short| {
             var spelling_buffer: [32]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .name = short, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = short, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
         }
     }
     return null;
@@ -886,11 +889,18 @@ fn findShortCompletionOption(rules: []const completion.Rule, root: []const u8, p
         if ((rule.kind != .option and rule.kind != .dynamic_option_value) or !completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
         const option_short = rule.option.short orelse continue;
         if (option_short.len != 1 or option_short[0] != short) continue;
-        const takes_value = rule.option.argument != null or rule.kind == .dynamic_option_value;
+        const value_count = completionRuleValueCount(rule);
+        const takes_value = value_count != 0;
         const key = completionOptionKey(rule.option) orelse option_short;
-        return .{ .takes_value = takes_value, .attached_value = false, .name = option_short, .key = key, .spelling = option_short, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+        return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = option_short, .key = key, .spelling = option_short, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
     }
     return null;
+}
+
+fn completionRuleValueCount(rule: completion.Rule) usize {
+    if (rule.option.value_count != 0) return rule.option.value_count;
+    if (rule.option.argument != null or rule.kind == .dynamic_option_value) return 1;
+    return 0;
 }
 
 fn analyzeShortOptionCluster(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?ShortOptionCluster {
@@ -1128,6 +1138,43 @@ fn appendShortCompletionClusterParsedOptions(allocator: std.mem.Allocator, parse
     return first_suppression;
 }
 
+fn consumeDetachedCompletionOptionValues(
+    parsed_options: *std.ArrayList(CompletionParsedOption),
+    words: []const CompletionWord,
+    source: []const u8,
+    parser_context: parser.CompletionContext,
+    clamped_cursor: usize,
+    index: *usize,
+    previous: *([]const u8),
+    matched: MatchedCompletionOption,
+) ?CompletionOptionValue {
+    if (!matched.takes_value) return null;
+    if (matched.value) |value| setLastParsedCompletionOptionValue(parsed_options, value);
+
+    var value_index: usize = if (matched.attached_value) 1 else 0;
+    while (value_index < matched.value_count) : (value_index += 1) {
+        if (index.* + 1 >= words.len) return .{ .name = matched.name, .spelling = matched.spelling, .value_index = value_index };
+        const value_token = words[index.* + 1].token;
+        const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
+        if (value_is_current or value_token.span.end > clamped_cursor) return .{ .name = matched.name, .spelling = matched.spelling, .value_index = value_index };
+        index.* += 1;
+        previous.* = value_token.lexeme(source);
+        if (value_index == 0) setLastParsedCompletionOptionValue(parsed_options, previous.*);
+    }
+    return null;
+}
+
+fn skipCompletedDetachedCompletionOptionValues(words: []const parser.Token, clamped_cursor: usize, index: *usize, matched: MatchedCompletionOption) bool {
+    if (!matched.takes_value) return false;
+    var value_index: usize = if (matched.attached_value) 1 else 0;
+    while (value_index < matched.value_count) : (value_index += 1) {
+        if (index.* + 1 >= words.len or words[index.* + 1].span.start > clamped_cursor) return false;
+        if (words[index.* + 1].span.end > clamped_cursor) return false;
+        index.* += 1;
+    }
+    return true;
+}
+
 fn builtinCompletionSawWord(context: CompletionSemanticContext, word: []const u8) bool {
     if (std.mem.eql(u8, context.previous, word)) return true;
     for (context.path) |segment| {
@@ -1236,6 +1283,7 @@ fn completionExplicitArgumentStateMatches(argument: completion.Argument, state: 
 
 fn completionOptionValueMatches(rule: completion.Rule, option_value: ?CompletionOptionValue) bool {
     const active = option_value orelse return false;
+    if (rule.value_index != active.value_index) return false;
     if (rule.option.long) |long| if (std.mem.eql(u8, active.name, long)) return true;
     if (rule.option.short) |short| if (std.mem.eql(u8, active.name, short)) return true;
     return rule.option.long == null and rule.option.short == null;
@@ -2128,6 +2176,7 @@ pub const Executor = struct {
                 .long = if (rule.option.long) |long| try self.allocator.dupe(u8, long) else null,
                 .short = if (rule.option.short) |short| try self.allocator.dupe(u8, short) else null,
                 .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
+                .value_count = rule.option.value_count,
                 .exclusive_group = if (rule.option.exclusive_group) |group| try self.allocator.dupe(u8, group) else null,
                 .repeatable = rule.option.repeatable,
                 .terminates_options = rule.option.terminates_options,
@@ -2141,6 +2190,7 @@ pub const Executor = struct {
                 .after_value = if (rule.argument.after_value) |value| try self.allocator.dupe(u8, value) else null,
                 .repeatable = rule.argument.repeatable,
             },
+            .value_index = rule.value_index,
             .value_grammar = rule.value_grammar,
             .description = if (rule.description) |description| try self.allocator.dupe(u8, description) else null,
             .source = .{
@@ -2615,21 +2665,7 @@ pub const Executor = struct {
                 options_terminated = true;
             } else if (findCompletionOption(self.completion_rules.items, root, path.items, word)) |matched| {
                 try appendParsedCompletionOption(self.allocator, &parsed_options, matched);
-                if (matched.takes_value and !matched.attached_value) {
-                    if (index + 1 < words.items.len) {
-                        const value_token = words.items[index + 1].token;
-                        const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
-                        if (!value_is_current and value_token.span.end <= clamped_cursor) {
-                            index += 1;
-                            previous = value_token.lexeme(view.source);
-                            setLastParsedCompletionOptionValue(&parsed_options, previous);
-                        } else {
-                            option_value = .{ .name = matched.name, .spelling = matched.spelling };
-                        }
-                    } else {
-                        option_value = .{ .name = matched.name, .spelling = matched.spelling };
-                    }
-                }
+                if (consumeDetachedCompletionOptionValues(&parsed_options, words.items, view.source, parser_context, clamped_cursor, &index, &previous, matched)) |active| option_value = active;
                 if (matched.terminates_options) options_terminated = true;
             } else if (analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word)) |cluster| {
                 if (!cluster.valid) {
@@ -2638,27 +2674,27 @@ pub const Executor = struct {
                 } else if (cluster.takes_next_value) {
                     _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word);
                     if (shortCompletionClusterTerminatesOptions(self.completion_rules.items, root, path.items, word)) options_terminated = true;
-                    var consumed_next_value = false;
-                    if (index + 1 < words.items.len) {
-                        const value_token = words.items[index + 1].token;
-                        const value_is_current = value_token.span.start == parser_context.span.start and clamped_cursor <= value_token.span.end;
-                        if (!value_is_current and value_token.span.end <= clamped_cursor) {
-                            index += 1;
-                            previous = value_token.lexeme(view.source);
-                            setLastParsedCompletionOptionValue(&parsed_options, previous);
-                            consumed_next_value = true;
-                        }
-                    }
-                    if (!consumed_next_value) {
-                        if (cluster.value_offset) |value_offset| {
-                            if (findShortCompletionOption(self.completion_rules.items, root, path.items, word[value_offset])) |matched| {
-                                option_value = .{ .name = matched.name, .spelling = word, .from = word, .from_offset = value_offset };
+                    if (cluster.value_offset) |value_offset| {
+                        if (findShortCompletionOption(self.completion_rules.items, root, path.items, word[value_offset])) |matched| {
+                            if (consumeDetachedCompletionOptionValues(&parsed_options, words.items, view.source, parser_context, clamped_cursor, &index, &previous, matched)) |active| {
+                                option_value = .{ .name = active.name, .spelling = word, .value_index = active.value_index, .from = word, .from_offset = value_offset };
                             }
                         }
                     }
                 } else {
                     _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_rules.items, root, path.items, word);
                     if (shortCompletionClusterTerminatesOptions(self.completion_rules.items, root, path.items, word)) options_terminated = true;
+                    if (cluster.value_offset) |value_offset| {
+                        if (findShortCompletionOption(self.completion_rules.items, root, path.items, word[value_offset])) |matched| {
+                            var attached = matched;
+                            attached.attached_value = true;
+                            attached.spelling = word;
+                            attached.value = word[value_offset + 1 ..];
+                            if (consumeDetachedCompletionOptionValues(&parsed_options, words.items, view.source, parser_context, clamped_cursor, &index, &previous, attached)) |active| {
+                                option_value = .{ .name = active.name, .spelling = word, .value_index = active.value_index, .from = word, .from_offset = value_offset };
+                            }
+                        }
+                    }
                 }
             } else if (isOptionLike(word)) {
                 suspicious = token.span;
@@ -2807,18 +2843,14 @@ pub const Executor = struct {
                     });
                 }
                 try appendParsedCompletionOption(self.allocator, &parsed_options, matched);
-                if (matched.takes_value and !matched.attached_value) {
-                    if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
-                        try diagnostics.append(self.allocator, .{
-                            .kind = .missing_option_value,
-                            .severity = .warning,
-                            .start = token.span.start,
-                            .end = token.span.end,
-                            .message = "option requires a value",
-                        });
-                    } else if (words.items[index + 1].span.end <= clamped_cursor) {
-                        index += 1;
-                    }
+                if (matched.takes_value and !skipCompletedDetachedCompletionOptionValues(words.items, clamped_cursor, &index, matched)) {
+                    try diagnostics.append(self.allocator, .{
+                        .kind = .missing_option_value,
+                        .severity = .warning,
+                        .start = token.span.start,
+                        .end = token.span.end,
+                        .message = "option requires a value",
+                    });
                 }
                 if (matched.terminates_options) options_terminated = true;
             } else if (if (has_option_rules) analyzeShortOptionCluster(self.completion_rules.items, root, path.items, word) else null) |cluster| {
@@ -2844,7 +2876,21 @@ pub const Executor = struct {
                     }
                     if (shortCompletionClusterTerminatesOptions(self.completion_rules.items, root, path.items, word)) options_terminated = true;
                     if (cluster.takes_next_value) {
-                        if (index + 1 >= words.items.len or words.items[index + 1].span.start > clamped_cursor) {
+                        if (cluster.value_offset) |value_offset| {
+                            const missing_value = if (findShortCompletionOption(self.completion_rules.items, root, path.items, word[value_offset])) |matched|
+                                !skipCompletedDetachedCompletionOptionValues(words.items, clamped_cursor, &index, matched)
+                            else
+                                true;
+                            if (missing_value) {
+                                try diagnostics.append(self.allocator, .{
+                                    .kind = .missing_option_value,
+                                    .severity = .warning,
+                                    .start = token.span.start,
+                                    .end = token.span.end,
+                                    .message = "option requires a value",
+                                });
+                            }
+                        } else {
                             try diagnostics.append(self.allocator, .{
                                 .kind = .missing_option_value,
                                 .severity = .warning,
@@ -2852,8 +2898,13 @@ pub const Executor = struct {
                                 .end = token.span.end,
                                 .message = "option requires a value",
                             });
-                        } else if (words.items[index + 1].span.end <= clamped_cursor) {
-                            index += 1;
+                        }
+                    } else if (cluster.value_offset) |value_offset| {
+                        if (findShortCompletionOption(self.completion_rules.items, root, path.items, word[value_offset])) |matched| {
+                            var attached = matched;
+                            attached.attached_value = true;
+                            attached.value = word[value_offset + 1 ..];
+                            _ = skipCompletedDetachedCompletionOptionValues(words.items, clamped_cursor, &index, attached);
                         }
                     }
                 }
@@ -3045,14 +3096,14 @@ pub const Executor = struct {
                         if (completionOptionSuppressionForOption(context, rule.option) != null) continue;
                         var spelling_buffer: [256]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
-                        try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
+                        try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, completionRuleValueCount(rule) == 0 and !rule.option.no_space);
                     }
                     if (rule.option.short) |short| {
                         if (rule.option.long != null and context.prefix.len == 0) continue;
                         if (completionOptionSuppressionForOption(context, rule.option) != null) continue;
                         var spelling_buffer: [32]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch continue;
-                        try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, rule.option.argument == null and !rule.option.no_space);
+                        try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, completionRuleValueCount(rule) == 0 and !rule.option.no_space);
                     }
                 },
             }
@@ -10731,6 +10782,11 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
         const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         return stdoutLine(self.allocator, if (context.option_value != null) "option_value" else @tagName(context.position), 0);
     }
+    if (std.mem.eql(u8, subcommand, "option-value-index")) {
+        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const option_value = context.option_value orelse return errorResult(self.allocator, 2, "completion", "missing active option");
+        return stdoutLineFmt(self.allocator, "{d}", .{option_value.value_index}, 0);
+    }
     if (std.mem.eql(u8, subcommand, "option-name")) return completionOptionContextLine(self, subcommand, .name);
     if (std.mem.eql(u8, subcommand, "option-spelling")) return completionOptionContextLine(self, subcommand, .spelling);
     if (std.mem.eql(u8, subcommand, "value-segment")) return completionValueSegmentContextLine(self, subcommand, .segment);
@@ -10991,11 +11047,15 @@ fn setCompletionContextVariables(self: *Executor, context: CompletionEvalContext
     try self.setEnv("rush_completion_options_terminated", if (context.options_terminated) "true" else "false");
     if (context.option_value) |option_value| {
         var spelling_buffer: [2]u8 = undefined;
+        var value_index_buffer: [64]u8 = undefined;
+        const option_value_index = try std.fmt.bufPrint(&value_index_buffer, "{d}", .{option_value.value_index});
         try self.setEnv("rush_completion_option_name", option_value.name);
         try self.setEnv("rush_completion_option_spelling", option_value.displaySpelling(&spelling_buffer));
+        try self.setEnv("rush_completion_option_value_index", option_value_index);
     } else {
         try self.setEnv("rush_completion_option_name", "");
         try self.setEnv("rush_completion_option_spelling", "");
+        try self.setEnv("rush_completion_option_value_index", "");
     }
     if (context.value_segment) |segment| {
         var separator_buffer: [1]u8 = undefined;

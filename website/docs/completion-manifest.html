@@ -209,6 +209,18 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <p>A value object gives the option a value name and, optionally, a provider and grammar. The current engine detects detached values, attached long values with <code>=</code>, and attached short values when a value-taking short option is followed by text in the same word.</p>
 
+  <p><code>value</code> may also be an ordered array of value objects for options that consume multiple words:</p>
+
+  <pre>{
+  <span class="str">"long"</span>: <span class="str">"mode"</span>,
+  <span class="str">"value"</span>: [
+    { <span class="str">"name"</span>: <span class="str">"output"</span>, <span class="str">"provider"</span>: <span class="str">"xrandr.outputs"</span> },
+    { <span class="str">"name"</span>: <span class="str">"mode"</span>, <span class="str">"provider"</span>: <span class="str">"xrandr.modes"</span> }
+  ]
+}</pre>
+
+  <p>Each value position selects its own provider and grammar. Only the first value may use attached or equals-style spellings; later values are detached words. Optional values with <code>"required": false</code> must be a trailing run. Rush skips all consumed option values when computing argument indexes.</p>
+
   <p>Options are non-repeatable unless <code>repeatable</code> is true. <code>exclusiveGroup</code> suppresses other options in the same group once any group member is present. <code>terminatesOptions</code> marks an option that ends option parsing after it is seen.</p>
 
   <h2 id="argument-states"><a href="#argument-states">Argument states</a></h2>
@@ -263,9 +275,9 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <h2 id="trace"><a href="#trace">Trace workflow</a></h2>
 
-  <p>Use <code>rush complete trace INPUT</code> when authoring or debugging a manifest-backed completion. Text trace output includes a dedicated <code>manifest</code> section with the loaded path/version, selected command path, platform and variant state, manifest-parsed options, active argument state, matched providers with candidate counts, suppressed options, and fallback behavior when no manifest/provider applies or a provider returns no candidates. The rest of the trace shows matching rules with <code>source: manifest</code>, value grammar, provider diagnostics, candidate match rank, and the insertion edit.</p>
+  <p>Use <code>rush complete trace INPUT</code> when authoring or debugging a manifest-backed completion. Text trace output includes a dedicated <code>manifest</code> section with the loaded path/version, selected command path, active option name/value index, platform and variant state, manifest-parsed options, active argument state, matched providers with candidate counts, suppressed options, and fallback behavior when no manifest/provider applies or a provider returns no candidates. The rest of the trace shows matching rules with <code>source: manifest</code>, value grammar, provider diagnostics, candidate match rank, and the insertion edit.</p>
 
-  <p>Use <code>rush complete trace --json INPUT</code> for machine-readable output. Its <code>manifest</code> object is emitted from the same trace model as the text renderer and includes <code>loaded</code>, path/version, command path, parsed manifest options, active argument state, matched providers with <code>candidateCount</code>, manifest-level suppressed options, and a fallback object.</p>
+  <p>Use <code>rush complete trace --json INPUT</code> for machine-readable output. Its <code>manifest</code> object is emitted from the same trace model as the text renderer and includes <code>loaded</code>, path/version, command path, active option name and <code>optionValueIndex</code> when completing an option value, parsed manifest options, active argument state, matched providers with <code>candidateCount</code>, manifest-level suppressed options, and a fallback object.</p>
 
   <h2 id="validation"><a href="#validation">Validation</a></h2>
 

@@ -121,6 +121,28 @@ def check_value(value, providers, path):
         check_provider_ref(value["provider"], providers, path_join(path, "provider"))
 
 
+def check_option_value(value, providers, path):
+    if isinstance(value, dict):
+        check_value(value, providers, path)
+        return
+    if not isinstance(value, list) or not value:
+        errors.append(f"{path}: value must be an object or non-empty array")
+        return
+    optional_started = False
+    for i, item in enumerate(value):
+        item_path = path_join(path, i)
+        check_value(item, providers, item_path)
+        if not isinstance(item, dict):
+            continue
+        required = item.get("required", True)
+        if required is False:
+            optional_started = True
+        elif optional_started:
+            errors.append(f"{item_path}.required: required option values cannot follow optional values")
+        if i != 0 and item.get("style", "detached") != "detached":
+            errors.append(f"{item_path}.style: only the first option value may use non-detached styles")
+
+
 def check_option(option, providers, path):
     if not isinstance(option, dict):
         errors.append(f"{path}: option must be an object")
@@ -135,7 +157,7 @@ def check_option(option, providers, path):
         if not isinstance(alias, str) or not long_re.match(alias):
             errors.append(f"{path}.aliases[{i}]: invalid long option alias")
     if "value" in option:
-        check_value(option["value"], providers, path_join(path, "value"))
+        check_option_value(option["value"], providers, path_join(path, "value"))
 
 
 def check_arguments(arguments, providers, path):

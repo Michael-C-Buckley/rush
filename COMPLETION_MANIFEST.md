@@ -237,7 +237,7 @@ type Option = {
   aliases?: string[]
   description?: string
   platforms?: Platform[]
-  value?: Value
+  value?: Value | Value[]
   repeatable?: boolean
   exclusiveGroup?: string
   inherit?: boolean
@@ -326,6 +326,28 @@ Parent options are inherited into subcommand contexts by default. Set
 `"inherit": false` for options that are only valid before selecting a
 subcommand, such as Git's global `-C` and `-c` options, so subcommands may reuse
 the same short spelling for local meanings.
+
+An option value may be a single value object or an ordered array of value
+objects. Arrays describe options that consume multiple following words, such as
+zsh's `-o:arg1:act1:arg2:act2` shape. Each value object may name its own
+provider and grammar:
+
+```json
+{
+  "long": "mode",
+  "value": [
+    { "name": "output", "provider": "xrandr.outputs" },
+    { "name": "mode", "provider": "xrandr.modes" }
+  ]
+}
+```
+
+Only the first value may use attached or equals-style spellings; later values
+are always detached words. Optional values (`"required": false`) are valid only
+as a trailing run so a required value never follows an optional value. During
+operand indexing, Rush skips every consumed option value, so operands after a
+multi-value option keep the same argument indexes they would have without the
+option occurrence.
 
 ### Option groups
 
@@ -658,6 +680,8 @@ model in the top-level `manifest` object:
   "path": "share/rush/completions/git.json",
   "manifestVersion": 1,
   "commandPath": ["git", "diff"],
+  "optionName": null,
+  "optionValueIndex": null,
   "parsedOptions": [
     { "spelling": "--cached", "name": "cached", "exclusiveGroup": "diff-source" }
   ],
@@ -681,6 +705,8 @@ model in the top-level `manifest` object:
 Trace output makes it clear whether a rule came from `.rush` declarations or
 from a manifest, which providers were selected for the cursor position, and
 which fallback path applied when no manifest/provider match produced candidates.
+When completing an option value, `optionValueIndex` reports the zero-based value
+position within a multi-value option.
 
 ## Implementation follow-up tasks
 
