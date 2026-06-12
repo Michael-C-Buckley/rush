@@ -3104,7 +3104,10 @@ const SyntaxParser = struct {
         var saw_subscript_byte = false;
         while (index < self.source.len) {
             switch (self.source[index]) {
-                ' ', '\t', '\r', '\n' => index += 1,
+                ' ', '\t', '\r', '\n' => {
+                    saw_subscript_byte = true;
+                    index += 1;
+                },
                 ']' => {
                     if (!saw_subscript_byte) return null;
                     if (index + 1 >= self.source.len or self.source[index + 1] != '=') return null;
@@ -3652,6 +3655,24 @@ test "parser gates indexed array assignment words behind Bash mode" {
             .{ .kind = .assignment_word, .span = .init(0, 17), .token_start = 0, .token_end = 9 },
             .{ .kind = .command_word, .span = .init(18, 22), .token_start = 10, .token_end = 11 },
             .{ .kind = .simple_command, .span = .init(0, 22) },
+        },
+    });
+
+    try expectParse("arr[   ]=zero echo", .{
+        .options = .{ .features = compat.Features.bash() },
+        .tokens = &.{
+            .{ .kind = .word, .span = .init(0, 4) },
+            .{ .kind = .whitespace, .span = .init(4, 7) },
+            .{ .kind = .word, .span = .init(7, 13) },
+            .{ .kind = .whitespace, .span = .init(13, 14) },
+            .{ .kind = .word, .span = .init(14, 18) },
+            .{ .kind = .eof, .span = .empty(18) },
+        },
+        .nodes = &.{
+            .{ .kind = .root, .span = .init(0, 18) },
+            .{ .kind = .assignment_word, .span = .init(0, 13), .token_start = 0, .token_end = 3 },
+            .{ .kind = .command_word, .span = .init(14, 18), .token_start = 4, .token_end = 5 },
+            .{ .kind = .simple_command, .span = .init(0, 18) },
         },
     });
 

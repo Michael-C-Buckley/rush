@@ -7150,7 +7150,10 @@ pub const Executor = struct {
 
     fn indexedArrayAssignment(self: *Executor, text: []const u8) !?IndexedArrayAssignment {
         const syntax = indexedArrayAssignmentSyntax(text) orelse return null;
-        const value = expand.evalArithmetic(syntax.index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(syntax.index_text, err);
+        const value = if (std.mem.trim(u8, syntax.index_text, " \t\r\n").len == 0)
+            0
+        else
+            expand.evalArithmetic(syntax.index_text, self.envLookup(), self.envSet()) catch |err| return self.arraySubscriptExpansionFailed(syntax.index_text, err);
         const index = std.math.cast(usize, value) orelse return self.arraySubscriptExpansionFailed(syntax.index_text, error.InvalidArithmetic);
         return .{ .name = syntax.name, .index = index, .value = syntax.value };
     }
@@ -15554,6 +15557,24 @@ test "executor supports Bash indexed array assignment subscripts with whitespace
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("<two words>|<three>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "executor treats Bash whitespace-only array assignment subscript as zero" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\arr[   ]=zero
+        \\printf '<%s>\n' "${arr[0]}"
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("<zero>\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

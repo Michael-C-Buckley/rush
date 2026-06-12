@@ -20,6 +20,7 @@ plans separately from POSIX compliance. POSIX status remains tracked in
   - arithmetic subscript expressions such as `name[i + 1]=word`
   - subscript expressions containing nested parameter, command, or arithmetic substitutions
   - whitespace inside assignment subscripts, such as `name[ i + 1 ]=word`
+  - whitespace-only assignment subscripts as index `0`, such as `name[   ]=word`
   - `${name[index]}` expansion against Rush's array runtime
 - `read -d delimiter` delimiter selection:
   - separate delimiter operand, e.g. `read -d : name`
@@ -59,7 +60,6 @@ Current examples:
   - whole-array expansion
   - array-specific parameter operations
   - negative relative indices
-  - whitespace-only assignment subscripts as index `0`
 - String parameter expansion extensions:
   - substring `${parameter:offset[:length]}`
   - replacement `${parameter/pattern/repl}`
