@@ -7,8 +7,12 @@
 const std = @import("std");
 const command_plan = @import("command_plan.zig");
 const context = @import("context.zig");
+const trap_semantics = @import("trap.zig");
 
 pub const ExitStatus = u8;
+pub const TrapSignal = trap_semantics.Signal;
+pub const TrapDisposition = trap_semantics.Disposition;
+pub const TrapDelivery = trap_semantics.Delivery;
 
 pub const Scope = enum {
     current_shell,
@@ -114,6 +118,22 @@ pub const Alias = struct {
 
 pub const Trap = struct {
     action: []const u8,
+
+    pub fn kind(self: Trap) trap_semantics.ActionKind {
+        self.validate();
+        return trap_semantics.actionKind(self.action);
+    }
+
+    pub fn disposition(self: Trap) TrapDisposition {
+        return switch (self.kind()) {
+            .command => .caught,
+            .ignore => .ignore,
+        };
+    }
+
+    pub fn validate(self: Trap) void {
+        trap_semantics.assertValidAction(self.action);
+    }
 };
 
 pub const ShellState = struct {
@@ -128,6 +148,14 @@ pub const ShellState = struct {
     logical_cwd: []const u8 = "",
     last_status: ExitStatus = 0,
     last_pipeline_statuses: std.ArrayList(ExitStatus) = .empty,
+    pending_traps: std.ArrayList(TrapSignal) = .empty,
+    trap_execution: TrapExecution = .idle,
+    pending_exit: ?ExitStatus = null,
+
+    pub const TrapExecution = enum {
+        idle,
+        running,
+    };
 
     pub fn init(allocator: std.mem.Allocator) ShellState {
         return .{ .allocator = allocator };
@@ -166,6 +194,7 @@ pub const ShellState = struct {
         self.positionals.deinit(self.allocator);
         if (self.logical_cwd.len != 0) self.allocator.free(self.logical_cwd);
         self.last_pipeline_statuses.deinit(self.allocator);
+        self.pending_traps.deinit(self.allocator);
 
         self.* = undefined;
     }
@@ -177,6 +206,8 @@ pub const ShellState = struct {
         cloned.scope = self.scope;
         cloned.options = self.options;
         cloned.last_status = self.last_status;
+        cloned.pending_exit = self.pending_exit;
+        cloned.trap_execution = self.trap_execution;
 
         var variables = self.variables.iterator();
         while (variables.next()) |entry| {
@@ -198,6 +229,7 @@ pub const ShellState = struct {
         try cloned.replacePositionals(self.positionals.items);
         if (self.logical_cwd.len != 0) try cloned.setLogicalCwd(self.logical_cwd);
         try cloned.last_pipeline_statuses.appendSlice(allocator, self.last_pipeline_statuses.items);
+        try cloned.pending_traps.appendSlice(allocator, self.pending_traps.items);
 
         cloned.validate();
         return cloned;
@@ -384,8 +416,20 @@ pub const ShellState = struct {
         return self.traps.get(name);
     }
 
+    pub fn getTrapForSignal(self: ShellState, signal: TrapSignal) ?Trap {
+        signal.validate();
+        return self.getTrap(signal.name());
+    }
+
+    pub fn trapDisposition(self: ShellState, signal: TrapSignal) TrapDisposition {
+        signal.validate();
+        const registered = self.getTrapForSignal(signal) orelse return .default;
+        return registered.disposition();
+    }
+
     pub fn setTrap(self: *ShellState, name: []const u8, action: []const u8) !void {
         assertValidTrapName(name);
+        trap_semantics.assertValidAction(action);
 
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
@@ -404,12 +448,66 @@ pub const ShellState = struct {
         self.validate();
     }
 
+    pub fn setTrapForSignal(self: *ShellState, signal: TrapSignal, action: []const u8) !void {
+        signal.validate();
+        try self.setTrap(signal.name(), action);
+    }
+
     pub fn clearTrap(self: *ShellState, name: []const u8) void {
         assertValidTrapName(name);
         if (self.traps.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value.action);
         }
+        self.validate();
+    }
+
+    pub fn clearTrapForSignal(self: *ShellState, signal: TrapSignal) void {
+        signal.validate();
+        self.clearTrap(signal.name());
+    }
+
+    pub fn appendPendingTrap(self: *ShellState, signal: TrapSignal) !void {
+        signal.validate();
+        try self.pending_traps.append(self.allocator, signal);
+        self.validate();
+    }
+
+    pub fn consumePendingTraps(self: *ShellState, count: usize) void {
+        std.debug.assert(count <= self.pending_traps.items.len);
+        var consumed: usize = 0;
+        while (consumed < count) : (consumed += 1) _ = self.pending_traps.orderedRemove(0);
+        self.validate();
+    }
+
+    pub fn nextPendingTrap(self: ShellState) ?TrapSignal {
+        self.validate();
+        return if (self.pending_traps.items.len == 0) null else self.pending_traps.items[0];
+    }
+
+    pub fn beginTrapExecution(self: *ShellState) void {
+        self.validate();
+        std.debug.assert(self.trap_execution == .idle);
+        self.trap_execution = .running;
+        self.validate();
+    }
+
+    pub fn endTrapExecution(self: *ShellState) void {
+        self.validate();
+        std.debug.assert(self.trap_execution == .running);
+        self.trap_execution = .idle;
+        self.validate();
+    }
+
+    pub fn setPendingExit(self: *ShellState, status: ExitStatus) void {
+        self.validate();
+        self.pending_exit = status;
+        self.validate();
+    }
+
+    pub fn clearPendingExit(self: *ShellState) void {
+        self.validate();
+        self.pending_exit = null;
         self.validate();
     }
 
@@ -461,7 +559,11 @@ pub const ShellState = struct {
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| assertValidAliasName(entry.key_ptr.*);
         var traps = self.traps.iterator();
-        while (traps.next()) |entry| assertValidTrapName(entry.key_ptr.*);
+        while (traps.next()) |entry| {
+            assertValidTrapName(entry.key_ptr.*);
+            entry.value_ptr.validate();
+        }
+        for (self.pending_traps.items) |signal| signal.validate();
         if (self.logical_cwd.len != 0) assertValidLogicalCwd(self.logical_cwd);
     }
 };
@@ -487,17 +589,11 @@ pub fn assertValidAliasName(name: []const u8) void {
 }
 
 pub fn assertValidTrapName(name: []const u8) void {
-    std.debug.assert(isValidTrapName(name));
+    trap_semantics.assertValidName(name);
 }
 
 pub fn isValidTrapName(name: []const u8) bool {
-    return std.mem.eql(u8, name, "EXIT") or
-        std.mem.eql(u8, name, "HUP") or
-        std.mem.eql(u8, name, "INT") or
-        std.mem.eql(u8, name, "QUIT") or
-        std.mem.eql(u8, name, "TERM") or
-        std.mem.eql(u8, name, "USR1") or
-        std.mem.eql(u8, name, "USR2");
+    return trap_semantics.isValidName(name);
 }
 
 fn freePositionals(allocator: std.mem.Allocator, args: []const []const u8) void {
@@ -595,4 +691,36 @@ test "ShellState reports readonly assignment as semantic error" {
     try std.testing.expect(shell_state.isVariableReadonly("LOCKED"));
     try std.testing.expectError(error.ReadonlyVariable, shell_state.putVariable("LOCKED", "second", .{}));
     try std.testing.expectEqualStrings("first", shell_state.getVariable("LOCKED").?.value);
+}
+
+test "ShellState models trap dispositions pending queue and execution guard" {
+    var shell_state = ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    try std.testing.expectEqual(TrapDisposition.default, shell_state.trapDisposition(.TERM));
+
+    try shell_state.setTrapForSignal(.TERM, "echo term");
+    try std.testing.expectEqual(TrapDisposition.caught, shell_state.trapDisposition(.TERM));
+    try std.testing.expectEqualStrings("echo term", shell_state.getTrapForSignal(.TERM).?.action);
+
+    try shell_state.setTrapForSignal(.INT, "");
+    try std.testing.expectEqual(TrapDisposition.ignore, shell_state.trapDisposition(.INT));
+
+    try shell_state.appendPendingTrap(.TERM);
+    try shell_state.appendPendingTrap(.INT);
+    try std.testing.expectEqual(@as(usize, 2), shell_state.pending_traps.items.len);
+    try std.testing.expectEqual(TrapSignal.TERM, shell_state.nextPendingTrap().?);
+
+    shell_state.beginTrapExecution();
+    try std.testing.expectEqual(ShellState.TrapExecution.running, shell_state.trap_execution);
+    shell_state.endTrapExecution();
+    try std.testing.expectEqual(ShellState.TrapExecution.idle, shell_state.trap_execution);
+
+    shell_state.consumePendingTraps(1);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_traps.items.len);
+    try std.testing.expectEqual(TrapSignal.INT, shell_state.nextPendingTrap().?);
+    shell_state.setPendingExit(143);
+    try std.testing.expectEqual(@as(?ExitStatus, 143), shell_state.pending_exit);
+    shell_state.clearPendingExit();
+    try std.testing.expectEqual(@as(?ExitStatus, null), shell_state.pending_exit);
 }

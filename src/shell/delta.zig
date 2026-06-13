@@ -61,6 +61,10 @@ pub const StateDelta = struct {
     alias_unsets: std.ArrayList([]const u8) = .empty,
     clear_aliases: bool = false,
     trap_mutations: std.ArrayList(TrapMutation) = .empty,
+    pending_trap_enqueues: std.ArrayList(state.TrapSignal) = .empty,
+    pending_trap_consume_count: usize = 0,
+    pending_exit: ?state.ExitStatus = null,
+    clear_pending_exit: bool = false,
     positionals: ?[][]const u8 = null,
     logical_cwd: ?[]const u8 = null,
     last_status: ?state.ExitStatus = null,
@@ -102,6 +106,7 @@ pub const StateDelta = struct {
             if (mutation.action) |action| self.allocator.free(action);
         }
         self.trap_mutations.deinit(self.allocator);
+        self.pending_trap_enqueues.deinit(self.allocator);
 
         if (self.positionals) |args| {
             for (args) |arg| self.allocator.free(arg);
@@ -138,6 +143,10 @@ pub const StateDelta = struct {
         for (self.alias_unsets.items) |name| try cloned.unsetAlias(name);
         if (self.clear_aliases) cloned.clearAliases();
         for (self.trap_mutations.items) |mutation| try cloned.setTrap(mutation.name, mutation.action);
+        for (self.pending_trap_enqueues.items) |signal| try cloned.enqueuePendingTrap(signal);
+        if (self.pending_trap_consume_count != 0) cloned.consumePendingTraps(self.pending_trap_consume_count);
+        if (self.pending_exit) |status| cloned.setPendingExit(status);
+        if (self.clear_pending_exit) cloned.clearPendingExit();
         if (self.positionals) |args| try cloned.replacePositionals(args);
         if (self.logical_cwd) |cwd| try cloned.setLogicalCwd(cwd);
         if (self.last_status) |status| cloned.setLastStatus(status);
@@ -157,6 +166,10 @@ pub const StateDelta = struct {
             self.alias_unsets.items.len == 0 and
             !self.clear_aliases and
             self.trap_mutations.items.len == 0 and
+            self.pending_trap_enqueues.items.len == 0 and
+            self.pending_trap_consume_count == 0 and
+            self.pending_exit == null and
+            !self.clear_pending_exit and
             self.positionals == null and
             self.logical_cwd == null and
             self.last_status == null and
@@ -332,6 +345,48 @@ pub const StateDelta = struct {
         try self.trap_mutations.append(self.allocator, .{ .name = owned_name, .action = owned_action });
     }
 
+    pub fn enqueuePendingTrap(self: *StateDelta, signal: state.TrapSignal) !void {
+        self.assertPending();
+        signal.validate();
+        try self.pending_trap_enqueues.append(self.allocator, signal);
+    }
+
+    pub fn consumePendingTraps(self: *StateDelta, count: usize) void {
+        self.assertPending();
+        std.debug.assert(count != 0);
+        self.pending_trap_consume_count = std.math.add(usize, self.pending_trap_consume_count, count) catch unreachable;
+    }
+
+    pub fn setPendingExit(self: *StateDelta, status: state.ExitStatus) void {
+        self.assertPending();
+        std.debug.assert(!self.clear_pending_exit);
+        self.pending_exit = status;
+    }
+
+    pub fn clearPendingExit(self: *StateDelta) void {
+        self.assertPending();
+        std.debug.assert(self.pending_exit == null);
+        self.clear_pending_exit = true;
+    }
+
+    pub fn appendSignalDelivery(self: *StateDelta, shell_state: state.ShellState, signal: state.TrapSignal) !state.TrapDelivery {
+        self.assertPending();
+        shell_state.validate();
+        signal.validate();
+        std.debug.assert(signal.isRuntimeSignal());
+        return switch (shell_state.trapDisposition(signal)) {
+            .caught => blk: {
+                try self.enqueuePendingTrap(signal);
+                break :blk .queued;
+            },
+            .ignore => .ignored,
+            .default => blk: {
+                self.setPendingExit(signal.defaultExitStatus().?);
+                break :blk .default_action;
+            },
+        };
+    }
+
     pub fn replacePositionals(self: *StateDelta, args: []const []const u8) !void {
         self.assertPending();
         std.debug.assert(self.positionals == null);
@@ -432,6 +487,10 @@ pub const StateDelta = struct {
                 shell_state.clearTrap(mutation.name);
             }
         }
+        if (self.pending_trap_consume_count != 0) shell_state.consumePendingTraps(self.pending_trap_consume_count);
+        for (self.pending_trap_enqueues.items) |signal| try shell_state.appendPendingTrap(signal);
+        if (self.clear_pending_exit) shell_state.clearPendingExit();
+        if (self.pending_exit) |status| shell_state.setPendingExit(status);
         if (self.positionals) |args| try shell_state.replacePositionals(args);
         if (self.logical_cwd) |cwd| try shell_state.setLogicalCwd(cwd);
         if (self.last_status) |status| shell_state.last_status = status;
@@ -641,4 +700,39 @@ test "StateDelta command assignments use allexport and last assignment wins" {
 
     try std.testing.expectEqualStrings("two", shell_state.getVariable("A").?.value);
     try std.testing.expect(shell_state.getVariable("A").?.exported);
+}
+
+test "StateDelta commits signal delivery to pending traps default exit or ignore" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setTrapForSignal(.TERM, "echo term");
+    try shell_state.setTrapForSignal(.INT, "");
+
+    var caught_delta = StateDelta.init(std.testing.allocator, .current_shell);
+    defer caught_delta.deinit();
+    try std.testing.expectEqual(state.TrapDelivery.queued, try caught_delta.appendSignalDelivery(shell_state, .TERM));
+    try caught_delta.commit(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_traps.items.len);
+    try std.testing.expectEqual(state.TrapSignal.TERM, shell_state.pending_traps.items[0]);
+
+    var ignored_delta = StateDelta.init(std.testing.allocator, .current_shell);
+    defer ignored_delta.deinit();
+    try std.testing.expectEqual(state.TrapDelivery.ignored, try ignored_delta.appendSignalDelivery(shell_state, .INT));
+    try ignored_delta.commit(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_traps.items.len);
+
+    shell_state.clearTrapForSignal(.TERM);
+    var default_delta = StateDelta.init(std.testing.allocator, .current_shell);
+    defer default_delta.deinit();
+    try std.testing.expectEqual(state.TrapDelivery.default_action, try default_delta.appendSignalDelivery(shell_state, .TERM));
+    try default_delta.commit(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.ExitStatus, 143), shell_state.pending_exit);
+
+    var consume_delta = StateDelta.init(std.testing.allocator, .current_shell);
+    defer consume_delta.deinit();
+    consume_delta.consumePendingTraps(1);
+    consume_delta.clearPendingExit();
+    try consume_delta.commit(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_traps.items.len);
+    try std.testing.expectEqual(@as(?state.ExitStatus, null), shell_state.pending_exit);
 }

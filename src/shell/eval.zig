@@ -17,6 +17,7 @@ const pipeline_plan = @import("pipeline_plan.zig");
 const redirection_plan = @import("redirection_plan.zig");
 const runtime = @import("../runtime.zig");
 const state = @import("state.zig");
+const trap_semantics = @import("trap.zig");
 
 extern "c" fn snprintf(s: [*]u8, n: usize, format: [*:0]const u8, ...) c_int;
 
@@ -29,6 +30,7 @@ pub const Evaluator = struct {
     fd_port: ?runtime.fd.Port = null,
     fs_port: ?runtime.fs.Port = null,
     process_port: ?runtime.process.Port = null,
+    signal_port: ?runtime.signal.Port = null,
     function_frame: ?*FunctionFrame = null,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
@@ -48,7 +50,63 @@ pub const Evaluator = struct {
     }
 
     pub fn initWithRuntimePorts(allocator: std.mem.Allocator, ports: runtime.Ports) Evaluator {
-        return .{ .allocator = allocator, .fd_port = ports.fd, .fs_port = ports.fs, .process_port = ports.process };
+        return .{ .allocator = allocator, .fd_port = ports.fd, .fs_port = ports.fs, .process_port = ports.process, .signal_port = ports.signal };
+    }
+
+    pub fn initWithSignalPort(allocator: std.mem.Allocator, signal_port: runtime.signal.Port) Evaluator {
+        return .{ .allocator = allocator, .signal_port = signal_port };
+    }
+};
+
+pub const TrapActionBody = union(enum) {
+    simple: command_plan.CommandPlan,
+    compound: command_plan.CompoundCommandPlan,
+    pipeline: pipeline_plan.PipelinePlan,
+
+    pub fn validate(self: TrapActionBody) void {
+        switch (self) {
+            .simple => |plan| plan.validate(),
+            .compound => |plan| plan.validate(),
+            .pipeline => |plan| plan.validate(),
+        }
+    }
+};
+
+pub const TrapActionResolver = struct {
+    context: ?*anyopaque = null,
+    resolveFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8, state.TrapSignal, context.EvalContext) anyerror!?TrapActionBody = null,
+
+    pub fn resolve(self: TrapActionResolver, allocator: std.mem.Allocator, action: []const u8, signal: state.TrapSignal, eval_context: context.EvalContext) !?TrapActionBody {
+        trap_semanticActionAssert(action, signal, eval_context);
+        const resolve_fn = self.resolveFn orelse return null;
+        const body = try resolve_fn(self.context, allocator, action, signal, eval_context);
+        if (body) |resolved| resolved.validate();
+        return body;
+    }
+
+    pub fn validate(self: TrapActionResolver) void {
+        std.debug.assert(self.resolveFn != null);
+    }
+};
+
+pub const RuntimeSignalObservation = struct {
+    signal: state.TrapSignal,
+    delivery: state.TrapDelivery,
+    command_outcome: outcome.CommandOutcome,
+
+    pub fn deinit(self: *RuntimeSignalObservation) void {
+        self.command_outcome.deinit();
+        self.* = undefined;
+    }
+
+    pub fn validate(self: RuntimeSignalObservation, eval_context: context.EvalContext) void {
+        self.signal.validate();
+        self.command_outcome.validateForContext(eval_context);
+        switch (self.delivery) {
+            .queued => std.debug.assert(self.command_outcome.state_delta.pending_trap_enqueues.items.len == 1),
+            .ignored => std.debug.assert(self.command_outcome.state_delta.pending_trap_enqueues.items.len == 0),
+            .default_action => std.debug.assert(self.command_outcome.control_flow != .normal),
+        }
     }
 };
 
@@ -358,6 +416,125 @@ pub fn evaluatePipelinePlan(evaluator: *Evaluator, shell_state: *state.ShellStat
     }
 
     return try finishPipelineOutcome(evaluator.allocator, shell_state.options, eval_context, plan, statuses, state_delta, &buffers);
+}
+
+pub fn configureRuntimeTrapSignal(evaluator: *Evaluator, shell_state: state.ShellState, signal: state.TrapSignal) EvalError!void {
+    shell_state.validate();
+    signal.validate();
+    const signal_number = signal.runtimeNumber() orelse return;
+    const signal_port = evaluator.signal_port orelse return error.Unimplemented;
+    const disposition = runtimeDispositionForTrapDisposition(shell_state.trapDisposition(signal));
+    signal_port.configure(.{ .signal = signal_number, .disposition = disposition }) catch |err| switch (err) {
+        error.Unsupported, error.Unexpected => return error.Unimplemented,
+    };
+}
+
+pub fn observeRuntimeSignal(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext) EvalError!?RuntimeSignalObservation {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+
+    const signal_port = evaluator.signal_port orelse return error.Unimplemented;
+    const event = signal_port.poll() catch |err| switch (err) {
+        error.Unsupported, error.Unexpected => return error.Unimplemented,
+    } orelse return null;
+    event.validate();
+    const signal = state.TrapSignal.fromRuntimeNumber(event.signal) orelse return error.Unimplemented;
+
+    var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
+    errdefer state_delta.deinit();
+    const delivery = try state_delta.appendSignalDelivery(shell_state.*, signal);
+    const status = switch (delivery) {
+        .default_action => signal.defaultExitStatus().?,
+        .ignored, .queued => shell_state.last_status,
+    };
+    const control_flow: outcome.ControlFlow = switch (delivery) {
+        .default_action => .{ .exit = status },
+        .ignored, .queued => .normal,
+    };
+    if (delivery == .default_action) state_delta.setLastStatus(status);
+
+    var command_outcome = outcome.CommandOutcome.withControlFlow(evaluator.allocator, status, state_delta, control_flow);
+    command_outcome.validateForContext(eval_context);
+    const observation: RuntimeSignalObservation = .{ .signal = signal, .delivery = delivery, .command_outcome = command_outcome };
+    observation.validate(eval_context);
+    return observation;
+}
+
+pub fn executePendingTraps(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, resolver: TrapActionResolver) EvalError!?outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    resolver.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+    std.debug.assert(shell_state.trap_execution == .idle);
+
+    if (shell_state.pending_traps.items.len == 0) {
+        const pending_exit = shell_state.pending_exit orelse return null;
+        var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
+        errdefer state_delta.deinit();
+        state_delta.clearPendingExit();
+        state_delta.setLastStatus(pending_exit);
+        var command_outcome = outcome.CommandOutcome.withControlFlow(evaluator.allocator, pending_exit, state_delta, .{ .exit = pending_exit });
+        command_outcome.validateForContext(eval_context);
+        return command_outcome;
+    }
+
+    shell_state.beginTrapExecution();
+    defer shell_state.endTrapExecution();
+
+    var working_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    defer working_state.deinit();
+
+    var buffers = EvaluationBuffers.init(evaluator.allocator);
+    defer buffers.deinit();
+
+    const pending_count = shell_state.pending_traps.items.len;
+    const preserved_status = shell_state.last_status;
+    var result = SimpleEvalResult{ .status = preserved_status };
+
+    for (shell_state.pending_traps.items[0..pending_count]) |signal| {
+        signal.validate();
+        const registered = shell_state.getTrapForSignal(signal) orelse continue;
+        registered.validate();
+        if (registered.kind() == .ignore) continue;
+
+        const body = (resolver.resolve(evaluator.allocator, registered.action, signal, eval_context) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return error.Unimplemented,
+        }) orelse return error.Unimplemented;
+        var action_outcome = try evaluateTrapActionBody(evaluator, &working_state, eval_context, body);
+        defer action_outcome.deinit();
+
+        try appendOutcomeBuffers(&buffers, action_outcome);
+        try applyOutcomeToWorkingState(&working_state, &action_outcome, action_outcome.state_delta.target);
+        result = .{ .status = action_outcome.status, .control_flow = action_outcome.control_flow };
+        if (action_outcome.control_flow != .normal) break;
+    }
+
+    var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
+    errdefer state_delta.deinit();
+    try appendShellStateDiff(shell_state.*, working_state, &state_delta);
+    state_delta.consumePendingTraps(pending_count);
+
+    var control_flow = result.control_flow;
+    var status = if (control_flow == .normal) preserved_status else control_flow.status(result.status);
+    if (control_flow == .normal) {
+        if (shell_state.pending_exit) |pending_exit| {
+            status = pending_exit;
+            control_flow = .{ .exit = pending_exit };
+            state_delta.clearPendingExit();
+        }
+    } else if (shell_state.pending_exit != null) {
+        state_delta.clearPendingExit();
+    }
+    state_delta.setLastStatus(status);
+
+    return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, control_flow, &buffers);
 }
 
 pub fn evaluateCommandSubstitution(evaluator: *Evaluator, parent_state: *state.ShellState, parent_context: context.EvalContext, body: CommandSubstitutionBody) EvalError!CommandSubstitutionResult {
@@ -796,6 +973,34 @@ fn evaluatePipelineStage(evaluator: *Evaluator, shell_state: *state.ShellState, 
         .simple => |simple| evaluatePlan(evaluator, shell_state, eval_context, simple),
         .compound => |compound| evaluateCompoundPlan(evaluator, shell_state, eval_context, compound),
     };
+}
+
+fn evaluateTrapActionBody(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, body: TrapActionBody) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    body.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    return switch (body) {
+        .simple => |plan| evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
+        .compound => |plan| evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
+        .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+    };
+}
+
+fn runtimeDispositionForTrapDisposition(disposition: state.TrapDisposition) runtime.signal.Disposition {
+    return switch (disposition) {
+        .default => .default,
+        .ignore => .ignore,
+        .caught => .caught,
+    };
+}
+
+fn trap_semanticActionAssert(action: []const u8, signal: state.TrapSignal, eval_context: context.EvalContext) void {
+    trap_semantics.assertValidAction(action);
+    std.debug.assert(action.len != 0);
+    signal.validate();
+    eval_context.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
 }
 
 fn stageWithTarget(stage: pipeline_plan.PipelineStagePlan, target: context.ExecutionTarget) pipeline_plan.PipelineStagePlan {
@@ -1719,6 +1924,11 @@ fn shellStateMutationFingerprint(shell_state: state.ShellState) u64 {
     hasher.update(std.mem.asBytes(&shell_state.options));
     hasher.update(shell_state.logical_cwd);
     hasher.update(std.mem.asBytes(&shell_state.last_status));
+    if (shell_state.pending_exit) |pending_exit| hasher.update(std.mem.asBytes(&pending_exit));
+    for (shell_state.pending_traps.items) |signal| {
+        const signal_byte: u8 = @intFromEnum(signal);
+        hasher.update(&.{signal_byte});
+    }
     for (shell_state.positionals.items) |arg| hasher.update(arg);
     return hasher.final();
 }
@@ -3516,6 +3726,10 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
             std.debug.assert(state_delta.alias_unsets.items.len == 0);
             std.debug.assert(!state_delta.clear_aliases);
             std.debug.assert(state_delta.trap_mutations.items.len == 0);
+            std.debug.assert(state_delta.pending_trap_enqueues.items.len == 0);
+            std.debug.assert(state_delta.pending_trap_consume_count == 0);
+            std.debug.assert(state_delta.pending_exit == null);
+            std.debug.assert(!state_delta.clear_pending_exit);
             std.debug.assert(state_delta.positionals == null);
             std.debug.assert(state_delta.logical_cwd == null);
             std.debug.assert(state_delta.last_status != null);
@@ -3550,6 +3764,10 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
     std.debug.assert(state_delta.alias_unsets.items.len == 0);
     std.debug.assert(!state_delta.clear_aliases);
     std.debug.assert(state_delta.trap_mutations.items.len == 0);
+    std.debug.assert(state_delta.pending_trap_enqueues.items.len == 0);
+    std.debug.assert(state_delta.pending_trap_consume_count == 0);
+    std.debug.assert(state_delta.pending_exit == null);
+    std.debug.assert(!state_delta.clear_pending_exit);
     std.debug.assert(state_delta.positionals == null);
     std.debug.assert(state_delta.logical_cwd == null);
     std.debug.assert(state_delta.last_status != null);
@@ -3952,6 +4170,132 @@ test "semantic evaluator models alias unalias and trap registration deltas" {
     list_trap.discardDelta(.current_shell);
 }
 
+test "semantic evaluator polls fake runtime signals into pending trap state" {
+    var fake_signal = FakeSignalRuntime.init();
+    var evaluator = Evaluator.initWithSignalPort(std.testing.allocator, fake_signal.port());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    try shell_state.setTrapForSignal(.TERM, "echo term");
+    try configureRuntimeTrapSignal(&evaluator, shell_state, .TERM);
+    try std.testing.expectEqual(@as(runtime.signal.Number, 15), fake_signal.configured_signals[0]);
+    try std.testing.expectEqual(runtime.signal.Disposition.caught, fake_signal.configured_dispositions[0]);
+
+    fake_signal.push(.{ .signal = 15 });
+    var observed = (try observeRuntimeSignal(&evaluator, &shell_state, eval_context)).?;
+    defer observed.deinit();
+    try std.testing.expectEqual(state.TrapSignal.TERM, observed.signal);
+    try std.testing.expectEqual(state.TrapDelivery.queued, observed.delivery);
+    try observed.command_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_traps.items.len);
+    try std.testing.expectEqual(state.TrapSignal.TERM, shell_state.pending_traps.items[0]);
+
+    try shell_state.setTrapForSignal(.INT, "");
+    try configureRuntimeTrapSignal(&evaluator, shell_state, .INT);
+    try std.testing.expectEqual(runtime.signal.Disposition.ignore, fake_signal.configured_dispositions[1]);
+    fake_signal.push(.{ .signal = 2 });
+    var ignored = (try observeRuntimeSignal(&evaluator, &shell_state, eval_context)).?;
+    defer ignored.deinit();
+    try std.testing.expectEqual(state.TrapDelivery.ignored, ignored.delivery);
+    try ignored.command_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_traps.items.len);
+
+    shell_state.clearTrapForSignal(.TERM);
+    try configureRuntimeTrapSignal(&evaluator, shell_state, .TERM);
+    try std.testing.expectEqual(runtime.signal.Disposition.default, fake_signal.configured_dispositions[2]);
+    fake_signal.push(.{ .signal = 15 });
+    var defaulted = (try observeRuntimeSignal(&evaluator, &shell_state, eval_context)).?;
+    defer defaulted.deinit();
+    try std.testing.expectEqual(state.TrapDelivery.default_action, defaulted.delivery);
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 143 }, defaulted.command_outcome.control_flow);
+    try defaulted.command_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.ExitStatus, 143), shell_state.pending_exit);
+}
+
+test "semantic evaluator executes pending traps and preserves pre-trap status" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    shell_state.last_status = 7;
+    try shell_state.setTrapForSignal(.TERM, "echo term");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, simpleTrapResolver())).?;
+    defer trap_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 7), trap_outcome.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, trap_outcome.control_flow);
+    try std.testing.expectEqualStrings("term\n", trap_outcome.stdout.items);
+    try std.testing.expectEqual(@as(usize, 1), trap_outcome.state_delta.pending_trap_consume_count);
+
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_traps.items.len);
+    try std.testing.expectEqual(@as(state.ExitStatus, 7), shell_state.last_status);
+    try std.testing.expectEqual(state.ShellState.TrapExecution.idle, shell_state.trap_execution);
+}
+
+test "semantic evaluator lets trap exit override pending signal exit" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    shell_state.setPendingExit(143);
+    try shell_state.setTrapForSignal(.TERM, "exit 9");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, simpleTrapResolver())).?;
+    defer trap_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 9), trap_outcome.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 9 }, trap_outcome.control_flow);
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.ExitStatus, null), shell_state.pending_exit);
+    try std.testing.expectEqual(@as(state.ExitStatus, 9), shell_state.last_status);
+}
+
+test "semantic evaluator consumes pending default exit when no trap action is queued" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    shell_state.setPendingExit(143);
+    var pending_exit = (try executePendingTraps(&evaluator, &shell_state, eval_context, simpleTrapResolver())).?;
+    defer pending_exit.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 143), pending_exit.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 143 }, pending_exit.control_flow);
+    try pending_exit.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.ExitStatus, null), shell_state.pending_exit);
+}
+
+test "semantic trap execution in subshell and command substitution does not mutate parent trap state" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setTrapForSignal(.TERM, "echo parent");
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const trap_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{ "trap", "echo sub", "TERM" } },
+        .target = .subshell,
+    });
+    var substitution = try evaluateCommandSubstitution(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), .{ .simple = trap_plan });
+    defer substitution.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), substitution.status);
+    try std.testing.expectEqualStrings("echo parent", shell_state.getTrapForSignal(.TERM).?.action);
+
+    var subshell = try shell_state.snapshotForSubshell(std.testing.allocator);
+    defer subshell.deinit();
+    try subshell.setTrapForSignal(.TERM, "echo term");
+    try subshell.appendPendingTrap(.TERM);
+    var trap_outcome = (try executePendingTraps(&evaluator, &subshell, context.EvalContext.forTarget(.subshell), simpleTrapResolver())).?;
+    defer trap_outcome.deinit();
+    try trap_outcome.commitDelta(&subshell, .subshell);
+    try std.testing.expectEqualStrings("echo parent", shell_state.getTrapForSignal(.TERM).?.action);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_traps.items.len);
+}
+
 test "semantic command substitution captures owned output and trims only trailing newlines" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -4097,6 +4441,77 @@ const FakeFdOperation = union(enum) {
         write: runtime.fd.Descriptor,
     },
 };
+
+const FakeSignalRuntime = struct {
+    events: [8]runtime.signal.Event = undefined,
+    event_count: usize = 0,
+    configured_signals: [8]runtime.signal.Number = undefined,
+    configured_dispositions: [8]runtime.signal.Disposition = undefined,
+    configure_count: usize = 0,
+
+    fn init() FakeSignalRuntime {
+        return .{};
+    }
+
+    fn port(self: *FakeSignalRuntime) runtime.signal.Port {
+        return .{
+            .context = self,
+            .configure_fn = configure,
+            .poll_fn = poll,
+        };
+    }
+
+    fn push(self: *FakeSignalRuntime, event: runtime.signal.Event) void {
+        event.validate();
+        std.debug.assert(self.event_count < self.events.len);
+        self.events[self.event_count] = event;
+        self.event_count += 1;
+    }
+
+    fn fromContext(opaque_context: *anyopaque) *FakeSignalRuntime {
+        return @ptrCast(@alignCast(opaque_context));
+    }
+
+    fn configure(opaque_context: *anyopaque, request: runtime.signal.ConfigureRequest) runtime.signal.ConfigureError!void {
+        const self = fromContext(opaque_context);
+        request.validate();
+        std.debug.assert(self.configure_count < self.configured_signals.len);
+        self.configured_signals[self.configure_count] = request.signal;
+        self.configured_dispositions[self.configure_count] = request.disposition;
+        self.configure_count += 1;
+    }
+
+    fn poll(opaque_context: *anyopaque) runtime.signal.PollError!?runtime.signal.Event {
+        const self = fromContext(opaque_context);
+        if (self.event_count == 0) return null;
+        const event = self.events[0];
+        var index: usize = 1;
+        while (index < self.event_count) : (index += 1) self.events[index - 1] = self.events[index];
+        self.event_count -= 1;
+        return event;
+    }
+};
+
+fn simpleTrapResolver() TrapActionResolver {
+    return .{ .resolveFn = resolveSimpleTrapAction };
+}
+
+fn resolveSimpleTrapAction(_: ?*anyopaque, _: std.mem.Allocator, action: []const u8, signal: state.TrapSignal, eval_context: context.EvalContext) anyerror!?TrapActionBody {
+    trap_semanticActionAssert(action, signal, eval_context);
+    if (std.mem.eql(u8, action, "echo term")) {
+        return .{ .simple = command_plan.classifyExpandedSimpleCommand(.{
+            .command = .{ .argv = &[_][]const u8{ "echo", "term" } },
+            .target = eval_context.target,
+        }) };
+    }
+    if (std.mem.eql(u8, action, "exit 9")) {
+        return .{ .simple = command_plan.classifyExpandedSimpleCommand(.{
+            .command = .{ .argv = &[_][]const u8{ "exit", "9" } },
+            .target = eval_context.target,
+        }) };
+    }
+    return null;
+}
 
 const FakeExternalRuntime = struct {
     allocator: std.mem.Allocator,
