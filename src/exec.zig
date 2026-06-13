@@ -6816,23 +6816,7 @@ pub const Executor = struct {
         const wait_status = try waitForegroundProcess(pid);
         const status = exitStatusFromWaitStatus(wait_status);
         if (std.posix.W.IFSTOPPED(wait_status)) {
-            const command = try self.allocator.dupe(u8, std.mem.trim(u8, pipelineText(program, pipeline), " \t\r\n;&"));
-            errdefer self.allocator.free(command);
-            try self.background_jobs.append(self.allocator, .{
-                .id = self.next_job_id,
-                .pid = @intCast(pid),
-                .pgrp = @intCast(pid),
-                .command = command,
-                .child = child,
-                .state = .stopped,
-                .status = status,
-                .stop_signal = signalStatusNumber(std.posix.W.STOPSIG(wait_status)),
-            });
-            const job = &self.background_jobs.items[self.background_jobs.items.len - 1];
-            saveJobTerminalModes(job);
-            self.queueJobNotification(job) catch {};
-            self.selectCurrentJob(self.next_job_id);
-            self.next_job_id += 1;
+            try self.registerStoppedForegroundJob(pid, child, pipelineText(program, pipeline), wait_status, status);
             kill_child_on_error = false;
         } else {
             child.id = null;
@@ -6842,6 +6826,28 @@ pub const Executor = struct {
         errdefer result.deinit();
         try appendInteractiveSignalDeathNotice(self.allocator, &result.stderr, options, terminationSignalFromWaitStatus(wait_status));
         return result;
+    }
+
+    fn registerStoppedForegroundJob(self: *Executor, pid: std.posix.pid_t, child: std.process.Child, command_text: []const u8, wait_status: u32, status: ExitStatus) !void {
+        std.debug.assert(std.posix.W.IFSTOPPED(wait_status));
+
+        const command = try self.allocator.dupe(u8, std.mem.trim(u8, command_text, " \t\r\n;&"));
+        errdefer self.allocator.free(command);
+        try self.background_jobs.append(self.allocator, .{
+            .id = self.next_job_id,
+            .pid = @intCast(pid),
+            .pgrp = @intCast(pid),
+            .command = command,
+            .child = child,
+            .state = .stopped,
+            .status = status,
+            .stop_signal = signalStatusNumber(std.posix.W.STOPSIG(wait_status)),
+        });
+        const job = &self.background_jobs.items[self.background_jobs.items.len - 1];
+        saveJobTerminalModes(job);
+        self.queueJobNotification(job) catch {};
+        self.selectCurrentJob(self.next_job_id);
+        self.next_job_id += 1;
     }
 
     fn redirectionFailureDiagnostic(self: *Executor, command: ir.SimpleCommand, err: anyerror) !?[]u8 {
@@ -9828,6 +9834,7 @@ pub const Executor = struct {
         const merged_stderr_write: ?std.Io.File = if (merged_capture) |pipe| .{ .handle = try rawDup(pipe.write.?.handle), .flags = pipe.write.?.flags } else null;
         const foreground_terminal = try prepareForegroundTerminal(options.foreground_terminal and options.external_stdio == .inherit and stdin_file == null and !stdin_redirected);
         try checkCanceled(options);
+        const monitor_foreground_job = self.monitorProcessGroupsEnabled() and foreground_terminal != null;
 
         // Interactive command substitutions still need the shell's tty on
         // stdin; only stdout is captured.
@@ -9847,7 +9854,9 @@ pub const Executor = struct {
             error.IsDir => return error.IsDir,
             else => return commandSpawnFailureError(err) orelse err,
         };
-        errdefer child.kill(io);
+        var keep_child_for_job = false;
+        errdefer if (!keep_child_for_job) child.kill(io);
+        defer if (!keep_child_for_job) child.kill(io);
         try moveExternalRedirectionHandlesFromGuard(inherited_redirections, &stdin_file, &stdout_file, &stderr_file, &manual_stdout_capture, &manual_stderr_capture, io);
         inherited_redirections.restore(self, io);
         if (stdin_file) |file| {
@@ -9864,7 +9873,6 @@ pub const Executor = struct {
         }
         const cancel_pid = registerCancelableChild(options, child, child_pgid != null);
         defer unregisterCancelableChild(options, cancel_pid);
-        defer child.kill(io);
         if (merged_capture) |*pipe| {
             pipe.write.?.close(io);
             pipe.write = null;
@@ -9934,11 +9942,32 @@ pub const Executor = struct {
             }
         }
 
-        const term = try child.wait(io);
-        try appendInteractiveSignalDeathNotice(self.allocator, &stderr, options, terminationSignalFromTerm(term));
+        var status: ExitStatus = undefined;
+        var termination_signal: ?u8 = null;
+        if (monitor_foreground_job) {
+            const pid = child.id orelse return error.ProcessNotFound;
+            const wait_status = try waitForegroundProcess(pid);
+            status = exitStatusFromWaitStatus(wait_status);
+            if (std.posix.W.IFSTOPPED(wait_status)) {
+                const command_argv = try argvForCommand(self.allocator, command);
+                defer self.allocator.free(command_argv);
+                const command_text = try joinParams(self.allocator, command_argv);
+                defer self.allocator.free(command_text);
+                try self.registerStoppedForegroundJob(pid, child, command_text, wait_status, status);
+                keep_child_for_job = true;
+            } else {
+                cleanupWaitedChild(io, &child);
+            }
+            termination_signal = terminationSignalFromWaitStatus(wait_status);
+        } else {
+            const term = try child.wait(io);
+            status = exitStatusFromTerm(term);
+            termination_signal = terminationSignalFromTerm(term);
+        }
+        try appendInteractiveSignalDeathNotice(self.allocator, &stderr, options, termination_signal);
         return .{
             .allocator = self.allocator,
-            .status = exitStatusFromTerm(term),
+            .status = status,
             .stdout = stdout,
             .stderr = stderr,
         };
@@ -24289,6 +24318,7 @@ fn runStoppedForegroundMixedPipelinePtyTest(slave: c_int) anyerror!void {
     try std.testing.expectEqual(@as(ExitStatus, 0), monitor.status);
 
     try expectMonitorAsyncJobKeepsShellForeground(allocator, &executor, shell_pgrp);
+    try expectStoppedForegroundSimpleSignal(allocator, &executor, shell_pgrp, "TSTP", .TSTP);
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TSTP", .TSTP);
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TTIN", .TTIN);
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TTOU", .TTOU);
@@ -24418,6 +24448,47 @@ fn waitForWaitContextDone(done: *std.atomic.Value(bool)) !void {
         sleepPtyTestPollInterval();
     }
     return error.TestTimedOut;
+}
+
+fn expectStoppedForegroundSimpleSignal(allocator: std.mem.Allocator, executor: *Executor, shell_pgrp: std.posix.pid_t, signal_name: []const u8, signal: std.posix.SIG) anyerror!void {
+    const path = try std.fmt.allocPrint(allocator, "rush-stopped-foreground-simple-{s}.tmp", .{signal_name});
+    defer allocator.free(path);
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    const script = try std.fmt.allocPrint(allocator,
+        \\/bin/sh -c 'kill -s {s} 0; printf {s}-resumed > {s}'
+    , .{ signal_name, signal_name, path });
+    defer allocator.free(script);
+
+    const job_count = executor.background_jobs.items.len;
+    var stopped = try executor.executeScriptSlice(script, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer stopped.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 128) + signalStatusNumber(signal), stopped.status);
+    try std.testing.expectEqual(job_count + 1, executor.background_jobs.items.len);
+
+    const job = &executor.background_jobs.items[executor.background_jobs.items.len - 1];
+    try std.testing.expectEqual(JobState.stopped, job.state);
+    try std.testing.expectEqual(@as(?i64, job.pid), job.pgrp);
+    try std.testing.expect(job.saved_termios != null);
+    try std.testing.expectEqual(shell_pgrp, try terminalGetPgrp(std.Io.File.stdin().handle));
+
+    var jobs = try executor.executeScriptSlice("jobs", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer jobs.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, jobs.stdout, "Stopped /bin/sh -c") != null);
+
+    var foreground = try executor.executeScriptSlice("fg", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true });
+    defer foreground.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), foreground.status);
+    try std.testing.expect(std.mem.indexOf(u8, foreground.stdout, "/bin/sh -c") != null);
+    try std.testing.expectEqual(JobState.done, job.state);
+    try std.testing.expectEqual(shell_pgrp, try terminalGetPgrp(std.Io.File.stdin().handle));
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, allocator, .limited(1024));
+    defer allocator.free(contents);
+    const expected = try std.fmt.allocPrint(allocator, "{s}-resumed", .{signal_name});
+    defer allocator.free(expected);
+    try std.testing.expectEqualStrings(expected, contents);
 }
 
 fn expectStoppedForegroundMixedSignal(allocator: std.mem.Allocator, executor: *Executor, shell_pgrp: std.posix.pid_t, signal_name: []const u8, signal: std.posix.SIG) anyerror!void {
