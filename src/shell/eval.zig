@@ -1253,6 +1253,25 @@ const BackgroundStartResult = union(enum) {
     failure: outcome.ExitStatus,
 };
 
+const BackgroundSemanticContext = struct {
+    evaluator: *Evaluator,
+    parent_state: *const state.ShellState,
+    eval_context: context.EvalContext,
+    plan: pipeline_plan.PipelinePlan,
+    redirections_already_applied: bool = false,
+
+    fn validate(self: BackgroundSemanticContext) void {
+        _ = self.evaluator.allocator;
+        self.parent_state.validate();
+        self.eval_context.validate();
+        self.plan.validate();
+        std.debug.assert(self.plan.strategy == .background_deferred);
+        std.debug.assert(self.eval_context.target.allowsShellStateCommit());
+        std.debug.assert(self.parent_state.acceptsExecutionTarget(self.eval_context.target));
+        if (self.redirections_already_applied) std.debug.assert(self.plan.stages.len == 1);
+    }
+};
+
 fn evaluateBackgroundPipelinePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: pipeline_plan.PipelinePlan) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
@@ -1268,7 +1287,7 @@ fn evaluateBackgroundPipelinePlan(evaluator: *Evaluator, shell_state: *state.She
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
     errdefer state_delta.deinit();
 
-    var start_result = try startBackgroundPipeline(evaluator, shell_state.*, plan, &buffers);
+    var start_result = try startBackgroundPipeline(evaluator, shell_state.*, eval_context, plan, &buffers);
     switch (start_result) {
         .started => |*job| {
             defer job.deinit(evaluator.allocator);
@@ -1288,25 +1307,188 @@ fn evaluateBackgroundPipelinePlan(evaluator: *Evaluator, shell_state: *state.She
     }
 }
 
-fn startBackgroundPipeline(evaluator: *Evaluator, shell_state: state.ShellState, plan: pipeline_plan.PipelinePlan, buffers: *EvaluationBuffers) EvalError!BackgroundStartResult {
+fn startBackgroundPipeline(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: pipeline_plan.PipelinePlan, buffers: *EvaluationBuffers) EvalError!BackgroundStartResult {
     shell_state.validate();
+    eval_context.validate();
     plan.validate();
     std.debug.assert(plan.strategy == .background_deferred);
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
     if (plan.stages.len == 1) {
         return switch (plan.stages[0]) {
             .simple => |simple| if (simple.class() == .external)
                 startBackgroundSingleExternal(evaluator, shell_state, simple, buffers)
             else
-                error.Unimplemented,
-            .compound => error.Unimplemented,
+                startBackgroundSemanticPipeline(evaluator, shell_state, eval_context, plan, buffers),
+            .compound => startBackgroundSemanticPipeline(evaluator, shell_state, eval_context, plan, buffers),
         };
     }
 
     for (plan.stages) |stage| {
-        if (!stage.isExternalOnlyRealEligible()) return error.Unimplemented;
+        if (!stage.isExternalOnlyRealEligible()) return startBackgroundSemanticPipeline(evaluator, shell_state, eval_context, plan, buffers);
     }
     return startBackgroundExternalOnlyPipeline(evaluator, shell_state, plan, buffers);
+}
+
+fn startBackgroundSemanticPipeline(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: pipeline_plan.PipelinePlan, buffers: *EvaluationBuffers) EvalError!BackgroundStartResult {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+    std.debug.assert(!backgroundPlanIsExternalOnlyRealEligible(plan));
+
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+    const use_process_group = shell_state.options.enabled(.monitor);
+
+    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (applied_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    const redirections_already_applied = try applySingleStageBackgroundRedirections(evaluator, plan, buffers, &applied_redirections) orelse return .{ .failure = 1 };
+
+    var semantic_context: BackgroundSemanticContext = .{
+        .evaluator = evaluator,
+        .parent_state = &shell_state,
+        .eval_context = eval_context,
+        .plan = plan,
+        .redirections_already_applied = redirections_already_applied,
+    };
+    semantic_context.validate();
+
+    const child = (process_port.startSubshell(.{
+        .context = &semantic_context,
+        .main_fn = runBackgroundSemanticSubshell,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+        .process_group = if (use_process_group) 0 else null,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => |spawn_err| {
+            const failure = spawnFailure(spawn_err);
+            try buffers.addBuiltinDiagnostic("pipeline", failure.message);
+            return .{ .failure = failure.status };
+        },
+    }).child;
+
+    if (applied_redirections) |*applied| applied.restore();
+
+    const command_text = try pipelineCommandText(evaluator.allocator, plan);
+    errdefer evaluator.allocator.free(command_text);
+    const pid = child.id();
+    var job: state.BackgroundJob = .{
+        .id = shell_state.next_job_id,
+        .pid = pid,
+        .process_group = if (use_process_group) pid else null,
+        .command = command_text,
+    };
+    errdefer job.deinit(evaluator.allocator);
+    try job.appendProcess(evaluator.allocator, .{ .stage_index = 0, .child = child });
+    return .{ .started = job };
+}
+
+fn runBackgroundSemanticSubshell(opaque_context: *anyopaque) u8 {
+    const semantic_context: *BackgroundSemanticContext = @ptrCast(@alignCast(opaque_context));
+    semantic_context.validate();
+
+    var child_state = semantic_context.parent_state.snapshotForSubshell(semantic_context.evaluator.allocator) catch return 126;
+    defer child_state.deinit();
+
+    const child_context = semantic_context.eval_context.enterSubshell();
+    const foreground_plan = foregroundPlanForBackgroundSubshell(semantic_context.evaluator.allocator, semantic_context.plan, semantic_context.redirections_already_applied) catch return 126;
+    defer semantic_context.evaluator.allocator.free(foreground_plan.stages);
+
+    var result = evaluatePipelinePlan(semantic_context.evaluator, &child_state, child_context, foreground_plan) catch return 126;
+    defer result.deinit();
+
+    const status = result.control_flow.status(result.status);
+    if (result.state_delta.target.allowsShellStateCommit() and child_state.acceptsExecutionTarget(result.state_delta.target)) {
+        result.commitDelta(&child_state, result.state_delta.target) catch return 126;
+    } else {
+        result.discardDelta(result.state_delta.target);
+    }
+    return status;
+}
+
+fn backgroundPlanIsExternalOnlyRealEligible(plan: pipeline_plan.PipelinePlan) bool {
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+    if (plan.stages.len == 1) return switch (plan.stages[0]) {
+        .simple => |simple| simple.class() == .external,
+        .compound => false,
+    };
+    for (plan.stages) |stage| if (!stage.isExternalOnlyRealEligible()) return false;
+    return true;
+}
+
+fn applySingleStageBackgroundRedirections(evaluator: *Evaluator, plan: pipeline_plan.PipelinePlan, buffers: *EvaluationBuffers, applied_redirections: *?redirection_plan.AppliedRedirections) EvalError!?bool {
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+    std.debug.assert(applied_redirections.* == null);
+    if (plan.stages.len != 1) return false;
+
+    const redirections = switch (plan.stages[0]) {
+        .simple => |simple| blk: {
+            if (simple.class() == .external or !hasRedirections(simple)) return false;
+            break :blk simple.redirections;
+        },
+        .compound => |compound| blk: {
+            if (!hasCompoundRedirections(compound)) return false;
+            break :blk compound.redirections;
+        },
+    };
+
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    const apply_result = try redirections.apply(evaluator.allocator, fd_port);
+    switch (apply_result) {
+        .applied => |applied| {
+            applied_redirections.* = applied;
+            return true;
+        },
+        .failure => |failure| {
+            try buffers.addBuiltinDiagnostic(backgroundSingleStageName(plan.stages[0]), redirectionFailureMessage(failure));
+            return null;
+        },
+    }
+}
+
+fn foregroundPlanForBackgroundSubshell(allocator: std.mem.Allocator, plan: pipeline_plan.PipelinePlan, redirections_already_applied: bool) !pipeline_plan.PipelinePlan {
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+    if (redirections_already_applied) std.debug.assert(plan.stages.len == 1);
+
+    const stages = try allocator.alloc(pipeline_plan.PipelineStagePlan, plan.stages.len);
+    errdefer allocator.free(stages);
+    for (plan.stages, 0..) |stage, index| {
+        const target: context.ExecutionTarget = if (stage.isExternal()) .child_process else .subshell;
+        stages[index] = stageWithTarget(stage, target);
+        if (redirections_already_applied and index == 0) clearStageRedirections(&stages[index]);
+    }
+
+    return pipeline_plan.PipelinePlan.init(stages, .{
+        .negated = plan.negated,
+        .status_rule = plan.status_rule,
+        .background = .foreground,
+    });
+}
+
+fn clearStageRedirections(stage: *pipeline_plan.PipelineStagePlan) void {
+    stage.validate();
+    switch (stage.*) {
+        .simple => |*simple| simple.redirections = .{},
+        .compound => |*compound| compound.redirections = .{},
+    }
+    stage.validate();
+}
+
+fn backgroundSingleStageName(stage: pipeline_plan.PipelineStagePlan) []const u8 {
+    stage.validate();
+    return switch (stage) {
+        .simple => |simple| if (simple.argv.len == 0) "command" else simple.argv[0],
+        .compound => |compound| compound.kindName(),
+    };
 }
 
 fn startBackgroundSingleExternal(evaluator: *Evaluator, shell_state: state.ShellState, plan: command_plan.CommandPlan, buffers: *EvaluationBuffers) EvalError!BackgroundStartResult {
@@ -1855,11 +2037,24 @@ fn pipelineCommandText(allocator: std.mem.Allocator, plan: pipeline_plan.Pipelin
     for (plan.stages, 0..) |stage, index| {
         if (index != 0) try text.appendSlice(allocator, " | ");
         switch (stage) {
-            .simple => |simple| try appendCommandTextFromArgv(allocator, &text, simple.argv),
-            .compound => unreachable,
+            .simple => |simple| try appendSimpleCommandText(allocator, &text, simple),
+            .compound => |compound| try text.appendSlice(allocator, compound.kindName()),
         }
     }
     return text.toOwnedSlice(allocator);
+}
+
+fn appendSimpleCommandText(allocator: std.mem.Allocator, text: *std.ArrayList(u8), plan: command_plan.CommandPlan) !void {
+    plan.validate();
+    if (plan.argv.len != 0) return appendCommandTextFromArgv(allocator, text, plan.argv);
+    if (plan.assignments.len == 0) return text.append(allocator, ':');
+    for (plan.assignments, 0..) |assignment, index| {
+        assignment.validate();
+        if (index != 0) try text.append(allocator, ' ');
+        try text.appendSlice(allocator, assignment.name);
+        try text.append(allocator, '=');
+        try appendShellSingleQuoted(allocator, text, assignment.value);
+    }
 }
 
 fn commandTextFromArgv(allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
@@ -5629,8 +5824,10 @@ const FakeExternalRuntime = struct {
     observed_spawn_stderr: [8]runtime.process.StandardIo = undefined,
     observed_spawn_process_group: [8]?runtime.process.ProcessId = undefined,
     observed_process_group: ?runtime.process.ProcessId = null,
+    observed_subshell_process_group: ?runtime.process.ProcessId = null,
     observed_run_stdin: std.ArrayList(u8) = .empty,
     spawn_count: usize = 0,
+    start_subshell_count: usize = 0,
     run_count: usize = 0,
     wait_count: usize = 0,
     wait_status: runtime.process.WaitStatus = .{ .exited = 7 },
@@ -5671,6 +5868,7 @@ const FakeExternalRuntime = struct {
         return .{
             .context = self,
             .spawn_fn = spawn,
+            .start_subshell_fn = startSubshell,
             .wait_fn = wait,
             .run_fn = run,
         };
@@ -5803,6 +6001,15 @@ const FakeExternalRuntime = struct {
         self.observed_spawn_process_group[spawn_index] = request.process_group;
         self.spawn_count += 1;
         return .{ .child = fakeChild(9001 + @as(runtime.process.ProcessId, @intCast(spawn_index))) };
+    }
+
+    fn startSubshell(opaque_context: *anyopaque, request: runtime.process.StartSubshellRequest) runtime.process.SpawnError!runtime.process.SpawnResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        std.debug.assert(self.start_subshell_count < self.observed_spawn_process_group.len);
+        self.observed_subshell_process_group = request.process_group;
+        self.start_subshell_count += 1;
+        return .{ .child = fakeChild(9100 + @as(runtime.process.ProcessId, @intCast(self.start_subshell_count))) };
     }
 
     fn wait(opaque_context: *anyopaque, request: runtime.process.WaitRequest) runtime.process.WaitError!runtime.process.WaitResult {
@@ -6032,6 +6239,131 @@ test "semantic background single external applies redirections and records proce
     try std.testing.expectEqual(@as(runtime.process.ProcessId, 9001), job.pid);
     try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9001), job.process_group);
     try std.testing.expectEqualStrings("'tool' 'arg'", job.command);
+}
+
+test "semantic background builtin starts tracked subshell without parent mutation leakage" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.monitor, true);
+
+    const export_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "export", "BG_LEAK=child" } } });
+    const pipeline = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{.{ .simple = export_plan }}, .{ .background = .background });
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), pipeline);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 0), fake.spawn_count);
+    try std.testing.expectEqual(@as(usize, 1), fake.start_subshell_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.wait_count);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 0), fake.observed_subshell_process_group);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{0}, result.state_delta.last_pipeline_statuses.?);
+    try std.testing.expectEqual(@as(usize, 1), result.state_delta.background_jobs.items.len);
+
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("BG_LEAK"));
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{0}, shell_state.last_pipeline_statuses.items);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9101), shell_state.last_background_pid);
+    try std.testing.expectEqual(@as(?usize, 1), shell_state.current_job_id);
+    const job = shell_state.background_jobs.items[0];
+    try std.testing.expectEqual(@as(runtime.process.ProcessId, 9101), job.pid);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9101), job.process_group);
+    try std.testing.expectEqual(@as(usize, 1), job.processes.items.len);
+    try std.testing.expectEqualStrings("'export' 'BG_LEAK=child'", job.command);
+}
+
+test "semantic background compound command is tracked as one subshell job" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const export_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "export", "COMPOUND_LEAK=child" } } });
+    const compound: command_plan.CompoundCommandPlan = .{
+        .target = .current_shell,
+        .body = .{ .brace_group = .{ .commands = &[_]command_plan.CommandPlan{export_plan} } },
+    };
+    const pipeline = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{.{ .compound = compound }}, .{ .background = .background });
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), pipeline);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), fake.start_subshell_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.spawn_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.wait_count);
+
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("COMPOUND_LEAK"));
+    try std.testing.expectEqualStrings("brace group", shell_state.background_jobs.items[0].command);
+}
+
+test "semantic background mixed pipeline starts one subshell without foreground streaming" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "sink", .path = "/bin/sink" }};
+    const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
+    const producer = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "printf", "payload" } } });
+    const sink = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"sink"} }, .lookup = lookup });
+    const pipeline = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{ .{ .simple = producer }, .{ .simple = sink } }, .{ .background = .background });
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), pipeline);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), fake.start_subshell_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.spawn_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.run_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.wait_count);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
+
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("'printf' 'payload' | 'sink'", shell_state.background_jobs.items[0].command);
+}
+
+test "semantic background builtin redirections are guarded and restored around launch" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 1, "semantic-out", .{ .access = .write_only, .create = true, .truncate = true })};
+    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .argv = &[_][]const u8{ "printf", "payload" },
+        .redirections = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps },
+    } });
+    const pipeline = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{.{ .simple = plan }}, .{ .background = .background });
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), pipeline);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), fake.start_subshell_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.wait_count);
+    try std.testing.expectEqual(@as(usize, 6), fake.fd_operation_count);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate = 1 }, fake.fd_operations[0]);
+    switch (fake.fd_operations[1]) {
+        .open => |path| try std.testing.expectEqualStrings("semantic-out", path),
+        else => return error.TestUnexpectedResult,
+    }
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 11, .target = 1 } }, fake.fd_operations[2]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 11 }, fake.fd_operations[3]);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 10, .target = 1 } }, fake.fd_operations[4]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 10 }, fake.fd_operations[5]);
+
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("'printf' 'payload'", shell_state.background_jobs.items[0].command);
 }
 
 test "semantic pipeline evaluation streams builtin output into read builtin stdin" {

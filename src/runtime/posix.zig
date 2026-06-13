@@ -45,6 +45,7 @@ pub const Adapter = struct {
         return .{
             .context = self,
             .spawn_fn = spawn,
+            .start_subshell_fn = startSubshell,
             .wait_fn = wait,
             .run_fn = run,
         };
@@ -203,6 +204,35 @@ fn spawn(context: *anyopaque, request: process.SpawnRequest) process.SpawnError!
     return .{ .child = process.ChildProcess.init(child) };
 }
 
+fn startSubshell(context: *anyopaque, request: process.StartSubshellRequest) process.SpawnError!process.SpawnResult {
+    _ = adapterFromContext(context);
+    request.validate();
+
+    const pid = std.c.fork();
+    switch (std.c.errno(pid)) {
+        .SUCCESS => {},
+        .AGAIN => return error.SystemResources,
+        .NOMEM => return error.SystemResources,
+        else => return error.Unexpected,
+    }
+
+    if (pid == 0) {
+        configureForkedChild(request);
+        const status = request.main_fn(request.context);
+        std.c._exit(status);
+    }
+
+    const child: std.process.Child = .{
+        .id = @intCast(pid),
+        .thread_handle = {},
+        .stdin = null,
+        .stdout = null,
+        .stderr = null,
+        .request_resource_usage_statistics = false,
+    };
+    return .{ .child = process.ChildProcess.init(child) };
+}
+
 fn wait(context: *anyopaque, request: process.WaitRequest) process.WaitError!process.WaitResult {
     const adapter = adapterFromContext(context);
     request.validate();
@@ -274,6 +304,30 @@ fn waitStatusFromTerm(term: std.process.Child.Term) process.WaitStatus {
         .stopped => |signal| .{ .stopped = @intCast(@intFromEnum(signal)) },
         .unknown => |status| .{ .unknown = status },
     };
+}
+
+fn configureForkedChild(request: process.StartSubshellRequest) void {
+    request.validate();
+    if (request.process_group) |requested_group| {
+        const group = if (requested_group == 0) std.c.getpid() else requested_group;
+        if (std.c.setpgid(0, group) != 0) std.c._exit(126);
+    }
+    configureForkedStdio(request.stdin, 0);
+    configureForkedStdio(request.stdout, 1);
+    configureForkedStdio(request.stderr, 2);
+}
+
+fn configureForkedStdio(stdio: process.StandardIo, target: fd.Descriptor) void {
+    stdio.validate();
+    fd.assertValidDescriptor(target);
+    switch (stdio) {
+        .inherit => {},
+        .fd => |source| {
+            if (source != target) duplicateDescriptorTo(source, target) catch std.c._exit(126);
+        },
+        .close => closeDescriptor(target) catch std.c._exit(126),
+        .ignore, .pipe => std.c._exit(126),
+    }
 }
 
 fn pathIdentity(path: []const u8, follow_symlinks: bool) ?fs.PathIdentity {
@@ -494,6 +548,27 @@ test "runtime posix adapter spawns and waits for a simple process" {
     })).child;
     const result = try process_port.wait(.{ .child = &child });
     try std.testing.expectEqual(process.WaitStatus{ .exited = 7 }, result.status);
+}
+
+fn testSubshellMain(context: *anyopaque) u8 {
+    const value: *const u8 = @ptrCast(@alignCast(context));
+    return value.*;
+}
+
+test "runtime posix adapter starts and waits for a forked subshell callback" {
+    var adapter = Adapter.init(std.testing.io);
+    const process_port = adapter.processPort();
+    const status: u8 = 6;
+
+    var child = (try process_port.startSubshell(.{
+        .context = @ptrCast(@constCast(&status)),
+        .main_fn = testSubshellMain,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+    })).child;
+    const result = try process_port.wait(.{ .child = &child });
+    try std.testing.expectEqual(process.WaitStatus{ .exited = 6 }, result.status);
 }
 
 test "runtime posix adapter runs a process with byte stdin and captured output" {

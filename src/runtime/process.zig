@@ -18,6 +18,7 @@ pub const WaitStatus = union(enum) {
 
 pub const Operation = enum {
     spawn,
+    start_subshell,
     wait,
     run,
 };
@@ -144,6 +145,35 @@ pub const SpawnResult = struct {
     }
 };
 
+pub const SubshellMainFn = *const fn (*anyopaque) u8;
+
+pub const StartSubshellRequest = struct {
+    context: *anyopaque,
+    main_fn: SubshellMainFn,
+    stdin: StandardIo = .inherit,
+    stdout: StandardIo = .inherit,
+    stderr: StandardIo = .inherit,
+    process_group: ?ProcessId = null,
+
+    /// Forks a child process and invokes `main_fn` in that child. Runtime owns
+    /// only the low-level fork/stdio/process-group mechanics; the callback is
+    /// supplied by the shell layer and returns the child's exit status.
+    pub fn init(context: *anyopaque, main_fn: SubshellMainFn) StartSubshellRequest {
+        const request: StartSubshellRequest = .{ .context = context, .main_fn = main_fn };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: StartSubshellRequest) void {
+        _ = self.context;
+        _ = self.main_fn;
+        self.stdin.validate();
+        self.stdout.validate();
+        self.stderr.validate();
+        if (self.process_group) |process_group| std.debug.assert(process_group >= 0);
+    }
+};
+
 pub const WaitRequest = struct {
     child: *ChildProcess,
 
@@ -216,18 +246,28 @@ pub const WaitError = std.process.Child.WaitError;
 pub const RunError = anyerror;
 
 pub const SpawnFn = *const fn (*anyopaque, SpawnRequest) SpawnError!SpawnResult;
+pub const StartSubshellFn = *const fn (*anyopaque, StartSubshellRequest) SpawnError!SpawnResult;
 pub const WaitFn = *const fn (*anyopaque, WaitRequest) WaitError!WaitResult;
 pub const RunFn = *const fn (*anyopaque, RunRequest) RunError!RunResult;
 
 pub const Port = struct {
     context: *anyopaque,
     spawn_fn: SpawnFn,
+    start_subshell_fn: ?StartSubshellFn = null,
     wait_fn: WaitFn,
     run_fn: RunFn,
 
     pub fn spawn(self: Port, request: SpawnRequest) SpawnError!SpawnResult {
         request.validate();
         const result = try self.spawn_fn(self.context, request);
+        result.validate();
+        return result;
+    }
+
+    pub fn startSubshell(self: Port, request: StartSubshellRequest) SpawnError!SpawnResult {
+        request.validate();
+        const start_subshell_fn = self.start_subshell_fn orelse return error.OperationUnsupported;
+        const result = try start_subshell_fn(self.context, request);
         result.validate();
         return result;
     }
@@ -261,6 +301,20 @@ test "runtime process spawn request documents argv and stdio invariants" {
     try std.testing.expectEqual(std.process.SpawnOptions.StdIo.ignore, request.stdin.toStdIo());
     try std.testing.expectEqual(std.process.SpawnOptions.StdIo.ignore, request.stdout.toStdIo());
     try std.testing.expectEqual(std.process.SpawnOptions.StdIo.ignore, request.stderr.toStdIo());
+}
+
+fn testSubshellMain(context: *anyopaque) u8 {
+    const value: *const u8 = @ptrCast(@alignCast(context));
+    return value.*;
+}
+
+test "runtime process subshell request owns only low-level launch shape" {
+    const status: u8 = 5;
+    const request = StartSubshellRequest.init(@ptrCast(@constCast(&status)), testSubshellMain);
+    request.validate();
+
+    try std.testing.expectEqual(StandardIo.inherit, request.stdin);
+    try std.testing.expectEqual(@as(?ProcessId, null), request.process_group);
 }
 
 test "runtime process cwd and descriptor-backed stdio are low-level values" {
