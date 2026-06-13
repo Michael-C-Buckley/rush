@@ -1787,6 +1787,9 @@ pub const Executor = struct {
     hook_depth: usize = 0,
     running_exit_trap: bool = false,
     warned_stopped_jobs_on_exit: bool = false,
+    deferred_trap_signal: u8 = 0,
+    subshell_parent_trap_executor: ?*Executor = null,
+    subshell_parent_trap_signal_mask: u64 = 0,
     arg_zero: []const u8 = "rush",
     last_status_text: [3]u8 = .{ '0', 0, 0 },
     last_status_text_len: usize = 1,
@@ -4199,13 +4202,53 @@ pub const Executor = struct {
     }
 
     pub fn executePendingSignalTrap(self: *Executor, options: ExecuteOptions) !?CommandResult {
-        const raw = pending_trap_signal.swap(0, .seq_cst);
+        if (self.deferred_trap_signal != 0) return try self.executeDeferredSignalTrap(options);
+
+        const raw = pending_trap_signal.load(.seq_cst);
         if (raw == 0) return null;
+        const name = signalNameFromNumber(raw) orelse {
+            _ = pending_trap_signal.cmpxchgStrong(raw, 0, .seq_cst, .seq_cst);
+            return null;
+        };
+        if (self.shouldDeferTrapSignal(raw)) {
+            if (pending_trap_signal.cmpxchgStrong(raw, 0, .seq_cst, .seq_cst) == null) self.deferTrapSignalToParent(raw);
+            return null;
+        }
+        const action = self.traps.get(name) orelse {
+            _ = pending_trap_signal.cmpxchgStrong(raw, 0, .seq_cst, .seq_cst);
+            return null;
+        };
+        if (pending_trap_signal.cmpxchgStrong(raw, 0, .seq_cst, .seq_cst) != null) return null;
+        const trap_result = try self.executeScriptSlice(action, options);
+        self.setLastStatus(trap_result.status);
+        return trap_result;
+    }
+
+    fn executeDeferredSignalTrap(self: *Executor, options: ExecuteOptions) !?CommandResult {
+        const raw = self.deferred_trap_signal;
+        self.deferred_trap_signal = 0;
         const name = signalNameFromNumber(raw) orelse return null;
+        if (self.shouldDeferTrapSignal(raw)) {
+            self.deferTrapSignalToParent(raw);
+            return null;
+        }
         const action = self.traps.get(name) orelse return null;
         const trap_result = try self.executeScriptSlice(action, options);
         self.setLastStatus(trap_result.status);
         return trap_result;
+    }
+
+    fn shouldDeferTrapSignal(self: Executor, raw: u8) bool {
+        return self.subshell_parent_trap_executor != null and self.subshell_parent_trap_signal_mask & signalBitRaw(raw) != 0;
+    }
+
+    fn deferTrapSignalToParent(self: *Executor, raw: u8) void {
+        const parent = self.subshell_parent_trap_executor orelse return;
+        if (parent.shouldDeferTrapSignal(raw)) {
+            parent.deferTrapSignalToParent(raw);
+        } else {
+            parent.deferred_trap_signal = raw;
+        }
     }
 
     fn dispatchPendingSignalTrap(self: *Executor, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8)) !void {
@@ -4313,7 +4356,7 @@ pub const Executor = struct {
         var child = Executor.init(self.allocator);
         defer child.deinit();
         try child.copyStateFrom(self);
-        try child.resetCaughtTrapsForSubshell();
+        try child.resetCaughtTrapsForInProcessSubshell(self);
         child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
         var process_state = try self.savePipelineSubshellProcessState(options);
@@ -4532,14 +4575,28 @@ pub const Executor = struct {
     }
 
     fn resetCaughtTrapsForSubshell(self: *Executor) !void {
+        try self.resetCaughtTrapsForSubshellWithParent(null);
+    }
+
+    fn resetCaughtTrapsForInProcessSubshell(self: *Executor, parent: *Executor) !void {
+        try self.resetCaughtTrapsForSubshellWithParent(parent);
+    }
+
+    fn resetCaughtTrapsForSubshellWithParent(self: *Executor, parent: ?*Executor) !void {
         var caught: std.ArrayList([]const u8) = .empty;
         defer caught.deinit(self.allocator);
+        var caught_signal_mask: u64 = if (parent) |parent_executor| parent_executor.subshell_parent_trap_signal_mask else 0;
 
         var trap_iter = self.traps.iterator();
         while (trap_iter.next()) |entry| {
-            if (entry.value_ptr.*.len != 0) try caught.append(self.allocator, entry.key_ptr.*);
+            if (entry.value_ptr.*.len != 0) {
+                if (signalFromTrapName(entry.key_ptr.*)) |signal| caught_signal_mask |= signalBit(signal);
+                try caught.append(self.allocator, entry.key_ptr.*);
+            }
         }
         for (caught.items) |name| self.clearTrap(name);
+        self.subshell_parent_trap_executor = parent;
+        self.subshell_parent_trap_signal_mask = caught_signal_mask;
     }
 
     fn isShellFdOpen(self: Executor, fd: std.posix.fd_t) bool {
@@ -6012,7 +6069,7 @@ pub const Executor = struct {
         var child = Executor.init(self.allocator);
         defer child.deinit();
         try child.copyStateFrom(self);
-        try child.resetCaughtTrapsForSubshell();
+        try child.resetCaughtTrapsForInProcessSubshell(self);
         child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
 
@@ -6037,7 +6094,7 @@ pub const Executor = struct {
         var child = Executor.init(self.allocator);
         defer child.deinit();
         try child.copyStateFrom(self);
-        try child.resetCaughtTrapsForSubshell();
+        try child.resetCaughtTrapsForInProcessSubshell(self);
         child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
 
@@ -8505,7 +8562,7 @@ pub const Executor = struct {
         var child = Executor.init(substitution_context.executor.allocator);
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
-        try child.resetCaughtTrapsForSubshell();
+        try child.resetCaughtTrapsForInProcessSubshell(substitution_context.executor);
         child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = substitution_context.executor.loop_depth + substitution_context.executor.loop_control_boundary_outer_depth;
         var process_state = try substitution_context.executor.savePipelineSubshellProcessState(sub_options);
@@ -10758,6 +10815,10 @@ fn ignoredTrapSignalsAtEntry() u64 {
 
 fn signalBit(signal: std.posix.SIG) u64 {
     const raw = @intFromEnum(signal);
+    return signalBitRaw(@intCast(raw));
+}
+
+fn signalBitRaw(raw: u8) u64 {
     return if (raw < 64) @as(u64, 1) << @intCast(raw) else 0;
 }
 
@@ -19547,6 +19608,31 @@ test "executor resets caught traps for subshell environments" {
     defer signal_command_substitution_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), signal_command_substitution_result.status);
     try std.testing.expectEqualStrings("<>\ntrap -- 'echo usr1' USR1\n", signal_command_substitution_result.stdout);
+}
+
+test "executor defers parent signal traps across in-process subshell environments" {
+    pending_trap_signal.store(0, .seq_cst);
+    defer pending_trap_signal.store(0, .seq_cst);
+
+    var subshell = try parseAndLower(std.testing.allocator, "trap 'echo t_fired' TERM; (/bin/kill -TERM $$; echo inner); echo after");
+    defer subshell.parsed.deinit();
+    defer subshell.program.deinit();
+    var subshell_executor = Executor.init(std.testing.allocator);
+    defer subshell_executor.deinit();
+    var subshell_result = try subshell_executor.executeProgram(subshell.program, .{ .io = std.testing.io, .allow_external = true });
+    defer subshell_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), subshell_result.status);
+    try std.testing.expectEqualStrings("inner\nt_fired\nafter\n", subshell_result.stdout);
+
+    var command_substitution = try parseAndLower(std.testing.allocator, "trap 'echo outer_t' TERM; x=$( (/bin/kill -TERM $$; echo cs_done) ); echo \"x=[$x]\"");
+    defer command_substitution.parsed.deinit();
+    defer command_substitution.program.deinit();
+    var command_substitution_executor = Executor.init(std.testing.allocator);
+    defer command_substitution_executor.deinit();
+    var command_substitution_result = try command_substitution_executor.executeProgram(command_substitution.program, .{ .io = std.testing.io, .allow_external = true });
+    defer command_substitution_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), command_substitution_result.status);
+    try std.testing.expectEqualStrings("outer_t\nx=[cs_done]\n", command_substitution_result.stdout);
 }
 
 test "executor restores trap signal handlers on clear and deinit" {
