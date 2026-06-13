@@ -8,14 +8,18 @@ const std = @import("std");
 const assignment_runtime = @import("assignment.zig");
 const builtin = @import("builtin.zig");
 const command_plan = @import("command_plan.zig");
+const compat = @import("../compat.zig");
 const consequence = @import("consequence.zig");
 const context = @import("context.zig");
 const delta = @import("delta.zig");
 const expand = @import("../expand.zig");
+const ir = @import("../ir.zig");
 const outcome = @import("outcome.zig");
+const parser = @import("../parser.zig");
 const pipeline_plan = @import("pipeline_plan.zig");
 const redirection_plan = @import("redirection_plan.zig");
 const runtime = @import("../runtime.zig");
+const shell_expand = @import("expand.zig");
 const state = @import("state.zig");
 const trap_semantics = @import("trap.zig");
 
@@ -58,34 +62,491 @@ pub const Evaluator = struct {
     }
 };
 
+pub const TrapActionBodyPayload = union(enum) {
+    simple: command_plan.CommandPlan,
+    compound: command_plan.CompoundCommandPlan,
+    pipeline: pipeline_plan.PipelinePlan,
+    failure: TrapActionFailure,
+
+    fn validate(self: TrapActionBodyPayload) void {
+        switch (self) {
+            .simple => |plan| plan.validate(),
+            .compound => |plan| plan.validate(),
+            .pipeline => |plan| plan.validate(),
+            .failure => |failure| failure.validate(),
+        }
+    }
+};
+
+pub const TrapActionFailureKind = enum {
+    parse_error,
+    lowering_error,
+    expansion_error,
+    unsupported_shape,
+};
+
+pub const TrapActionFailure = struct {
+    kind: TrapActionFailureKind,
+    status: outcome.ExitStatus = 2,
+    message: []const u8,
+
+    pub fn validate(self: TrapActionFailure) void {
+        std.debug.assert(self.status != 0);
+        std.debug.assert(self.message.len != 0);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.message, 0) == null);
+    }
+};
+
+pub const OwnedTrapActionBody = struct {
+    allocator: std.mem.Allocator,
+    arena: *std.heap.ArenaAllocator,
+    body: TrapActionBodyPayload,
+
+    fn init(allocator: std.mem.Allocator, arena: *std.heap.ArenaAllocator, body: TrapActionBodyPayload) OwnedTrapActionBody {
+        body.validate();
+        const owned: OwnedTrapActionBody = .{ .allocator = allocator, .arena = arena, .body = body };
+        owned.validate();
+        return owned;
+    }
+
+    fn deinit(self: *OwnedTrapActionBody) void {
+        self.validate();
+        self.arena.deinit();
+        self.allocator.destroy(self.arena);
+        self.* = undefined;
+    }
+
+    fn validate(self: OwnedTrapActionBody) void {
+        self.body.validate();
+    }
+};
+
 pub const TrapActionBody = union(enum) {
     simple: command_plan.CommandPlan,
     compound: command_plan.CompoundCommandPlan,
     pipeline: pipeline_plan.PipelinePlan,
+    failure: TrapActionFailure,
+    owned: OwnedTrapActionBody,
+
+    pub fn deinit(self: *TrapActionBody) void {
+        switch (self.*) {
+            .owned => |*owned| owned.deinit(),
+            .simple, .compound, .pipeline, .failure => {},
+        }
+        self.* = undefined;
+    }
 
     pub fn validate(self: TrapActionBody) void {
         switch (self) {
             .simple => |plan| plan.validate(),
             .compound => |plan| plan.validate(),
             .pipeline => |plan| plan.validate(),
+            .failure => |failure| failure.validate(),
+            .owned => |owned| owned.validate(),
         }
     }
 };
 
 pub const TrapActionResolver = struct {
     context: ?*anyopaque = null,
-    resolveFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8, state.TrapSignal, context.EvalContext) anyerror!?TrapActionBody = null,
+    resolveFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8, state.TrapSignal, context.EvalContext, *state.ShellState) anyerror!?TrapActionBody = null,
 
-    pub fn resolve(self: TrapActionResolver, allocator: std.mem.Allocator, action: []const u8, signal: state.TrapSignal, eval_context: context.EvalContext) !?TrapActionBody {
+    pub fn resolve(self: TrapActionResolver, allocator: std.mem.Allocator, action: []const u8, signal: state.TrapSignal, eval_context: context.EvalContext, shell_state: *state.ShellState) !?TrapActionBody {
         trap_semanticActionAssert(action, signal, eval_context);
+        shell_state.validate();
+        std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
         const resolve_fn = self.resolveFn orelse return null;
-        const body = try resolve_fn(self.context, allocator, action, signal, eval_context);
+        const body = try resolve_fn(self.context, allocator, action, signal, eval_context, shell_state);
         if (body) |resolved| resolved.validate();
         return body;
     }
 
     pub fn validate(self: TrapActionResolver) void {
         std.debug.assert(self.resolveFn != null);
+    }
+};
+
+pub const ParserTrapActionResolver = struct {
+    evaluator: *Evaluator,
+    features: compat.Features = .{},
+    externals: []const command_plan.ExternalResolution = &.{},
+
+    pub fn init(evaluator: *Evaluator) ParserTrapActionResolver {
+        return .{ .evaluator = evaluator };
+    }
+
+    pub fn resolver(self: *ParserTrapActionResolver) TrapActionResolver {
+        self.validate();
+        return .{ .context = self, .resolveFn = resolve };
+    }
+
+    pub fn validate(self: ParserTrapActionResolver) void {
+        _ = self.evaluator.allocator;
+        for (self.externals) |external| external.validate();
+    }
+
+    fn resolve(opaque_context: ?*anyopaque, allocator: std.mem.Allocator, action: []const u8, signal: state.TrapSignal, eval_context: context.EvalContext, shell_state: *state.ShellState) anyerror!?TrapActionBody {
+        std.debug.assert(opaque_context != null);
+        const self: *ParserTrapActionResolver = @ptrCast(@alignCast(opaque_context.?));
+        self.validate();
+        trap_semanticActionAssert(action, signal, eval_context);
+        shell_state.validate();
+        std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        errdefer allocator.destroy(arena);
+        arena.* = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+
+        const arena_allocator = arena.allocator();
+        var lowerer: TrapActionLowerer = .{
+            .allocator = arena_allocator,
+            .owner = self,
+            .shell_state = shell_state,
+            .eval_context = eval_context,
+            .signal = signal,
+        };
+
+        const payload = try lowerer.lower(action);
+        payload.validate();
+        return .{ .owned = OwnedTrapActionBody.init(allocator, arena, payload) };
+    }
+};
+
+const TrapActionLowerer = struct {
+    allocator: std.mem.Allocator,
+    owner: *ParserTrapActionResolver,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    signal: state.TrapSignal,
+
+    fn lower(self: *TrapActionLowerer, action: []const u8) !TrapActionBodyPayload {
+        trap_semanticActionAssert(action, self.signal, self.eval_context);
+        var parsed = try parser.parse(self.allocator, action, .{ .features = self.owner.features.withStrictDiagnostics() });
+        defer parsed.deinit();
+
+        if (parsed.diagnostics.len != 0) return self.parserDiagnosticFailure(parsed.diagnostics[0]);
+        if (parsed.incomplete) return self.failure(.parse_error, "trap {s}: parse error: incomplete trap action", .{self.signal.name()});
+
+        var program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        defer program.deinit();
+        return self.lowerProgram(program, self.eval_context.target, .trap_body);
+    }
+
+    const ProgramRole = enum {
+        trap_body,
+        command_list,
+    };
+
+    fn lowerProgram(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget, role: ProgramRole) !TrapActionBodyPayload {
+        std.debug.assert(target.allowsShellStateCommit());
+        self.shell_state.validate();
+        if (program.statements.len == 0) {
+            const plan = command_plan.classifyExpandedSimpleCommand(.{ .target = target });
+            return .{ .simple = plan };
+        }
+
+        if (program.statements.len == 1 and role == .trap_body) return self.lowerSingleTrapStatement(program, program.statements[0], target);
+        return self.lowerSimpleStatementList(program, target);
+    }
+
+    fn lowerSingleTrapStatement(self: *TrapActionLowerer, program: ir.Program, statement: ir.Statement, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        if (statement.async_after) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background commands are not supported by the semantic trap resolver", .{self.signal.name()});
+        return switch (statement.kind) {
+            .pipeline => self.lowerPipeline(program, program.pipelines[statement.index], target),
+            .brace_group => self.lowerBraceGroup(program.brace_groups[statement.index], target),
+            .subshell => self.lowerSubshell(program.subshells[statement.index]),
+            .if_command => self.lowerIfCommand(program.if_commands[statement.index], target),
+            .loop_command => self.lowerLoopCommand(program.loop_commands[statement.index], target),
+            .for_command => self.lowerForCommand(program.for_commands[statement.index], target),
+            .case_command => self.lowerCaseCommand(program.case_commands[statement.index], target),
+            .function_definition => self.failure(.unsupported_shape, "trap {s}: unsupported trap action: function definitions need owned function-body lowering", .{self.signal.name()}),
+            .bash_test_command => self.failure(.unsupported_shape, "trap {s}: unsupported trap action: bash [[ ]] lowering is not implemented in the semantic trap resolver", .{self.signal.name()}),
+        };
+    }
+
+    fn lowerSimpleStatementList(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        std.debug.assert(program.statements.len != 0);
+        var saw_and_or = false;
+        var saw_sequence = false;
+        for (program.statements, 0..) |statement, index| {
+            if (statement.kind != .pipeline) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: mixed compound command lists need semantic statement-list lowering", .{self.signal.name()});
+            if (statement.async_after) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background commands are not supported by the semantic trap resolver", .{self.signal.name()});
+            if (index == 0) {
+                std.debug.assert(statement.op_before == .sequence);
+                continue;
+            }
+            switch (statement.op_before) {
+                .sequence => saw_sequence = true,
+                .and_if, .or_if => saw_and_or = true,
+            }
+        }
+        if (saw_and_or and saw_sequence) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: mixed ';' and &&/|| lists need semantic statement-list lowering", .{self.signal.name()});
+
+        if (saw_and_or) {
+            const commands = try self.allocator.alloc(command_plan.AndOrCommand, program.statements.len);
+            for (program.statements, 0..) |statement, index| {
+                const command = (try self.lowerSingleSimplePipeline(program, program.pipelines[statement.index], target)) orelse return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: &&/|| lists currently require simple commands", .{self.signal.name()});
+                const operator: ?command_plan.AndOrOperator = if (index == 0) null else switch (statement.op_before) {
+                    .and_if => .and_if,
+                    .or_if => .or_if,
+                    .sequence => unreachable,
+                };
+                commands[index] = .{ .operator = operator, .command = command };
+            }
+            const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .and_or_list = .{ .commands = commands } } };
+            plan.validate();
+            return .{ .compound = plan };
+        }
+
+        const commands = try self.allocator.alloc(command_plan.CommandPlan, program.statements.len);
+        for (program.statements, 0..) |statement, index| {
+            commands[index] = (try self.lowerSingleSimplePipeline(program, program.pipelines[statement.index], target)) orelse return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: command lists currently require simple commands", .{self.signal.name()});
+        }
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .sequence = .{ .commands = commands } } };
+        plan.validate();
+        return .{ .compound = plan };
+    }
+
+    fn lowerPipeline(self: *TrapActionLowerer, program: ir.Program, pipeline: ir.Pipeline, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        if (pipeline.async_after) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background pipelines are not supported by the semantic trap resolver", .{self.signal.name()});
+        if (pipeline.command_indexes.len == 1 and !pipeline.negated) {
+            if (program.commands[pipeline.command_indexes[0]].redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: simple-command redirections need redirection lowering", .{self.signal.name()});
+            const plan = try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
+            return .{ .simple = plan };
+        }
+        if (pipeline.command_indexes.len == 0 or pipeline.command_indexes.len != pipeline.stage_spans.len) {
+            return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound pipeline stages need semantic pipeline-stage lowering", .{self.signal.name()});
+        }
+
+        const stages = try self.allocator.alloc(pipeline_plan.PipelineStagePlan, pipeline.command_indexes.len);
+        for (pipeline.command_indexes, 0..) |command_index, index| {
+            stages[index] = .{ .simple = try self.lowerIrSimpleCommand(program.commands[command_index], target) };
+        }
+        const status_rule: pipeline_plan.PipelineStatusRule = if (self.shell_state.options.pipefail) .pipefail else .last_command;
+        const plan = pipeline_plan.PipelinePlan.init(stages, .{ .negated = pipeline.negated, .status_rule = status_rule });
+        return .{ .pipeline = plan };
+    }
+
+    fn lowerSingleSimplePipeline(self: *TrapActionLowerer, program: ir.Program, pipeline: ir.Pipeline, target: context.ExecutionTarget) !?command_plan.CommandPlan {
+        if (pipeline.async_after or pipeline.negated or pipeline.command_indexes.len != 1 or pipeline.stage_spans.len != 1) return null;
+        if (program.commands[pipeline.command_indexes[0]].redirections.len != 0) return null;
+        return try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
+    }
+
+    fn lowerBraceGroup(self: *TrapActionLowerer, group: ir.BraceGroup, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        if (group.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const list = try self.lowerSimpleCommandListSource(group.body, target);
+        switch (list) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |command_list| {
+                const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .brace_group = command_list } };
+                plan.validate();
+                return .{ .compound = plan };
+            },
+        }
+    }
+
+    fn lowerSubshell(self: *TrapActionLowerer, subshell: ir.Subshell) !TrapActionBodyPayload {
+        if (subshell.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const list = try self.lowerSimpleCommandListSource(subshell.body, .subshell);
+        switch (list) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |command_list| {
+                const plan: command_plan.CompoundCommandPlan = .{ .target = .subshell, .body = .{ .subshell = command_list } };
+                plan.validate();
+                return .{ .compound = plan };
+            },
+        }
+    }
+
+    fn lowerIfCommand(self: *TrapActionLowerer, command: ir.IfCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        if (command.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const condition_result = try self.lowerSimpleCommandListSource(command.condition, target);
+        const condition = switch (condition_result) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |list| list,
+        };
+        const then_result = try self.lowerSimpleCommandListSource(command.then_body, target);
+        const then_body = switch (then_result) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |list| list,
+        };
+        var else_body: command_plan.CommandList = .{};
+        if (command.else_body) |source| {
+            const lowered_else = try self.lowerSimpleCommandListSource(source, target);
+            else_body = switch (lowered_else) {
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+                .list => |list| list,
+            };
+        }
+        const branches = try self.allocator.alloc(command_plan.IfBranch, 1);
+        branches[0] = .{ .condition = condition, .body = then_body };
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .if_clause = .{ .branches = branches, .else_body = else_body } } };
+        plan.validate();
+        return .{ .compound = plan };
+    }
+
+    fn lowerLoopCommand(self: *TrapActionLowerer, command: ir.LoopCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        if (command.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const condition_result = try self.lowerSimpleCommandListSource(command.condition, target);
+        const condition = switch (condition_result) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |list| list,
+        };
+        const body_result = try self.lowerSimpleCommandListSource(command.body, target);
+        const body = switch (body_result) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |list| list,
+        };
+        const loop: command_plan.LoopPlan = .{ .condition = condition, .body = body };
+        const compound_body: command_plan.CompoundBody = switch (command.kind) {
+            .while_loop => .{ .while_loop = loop },
+            .until_loop => .{ .until_loop = loop },
+        };
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = compound_body };
+        plan.validate();
+        return .{ .compound = plan };
+    }
+
+    fn lowerForCommand(self: *TrapActionLowerer, command: ir.ForCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        if (command.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const body_result = try self.lowerSimpleCommandListSource(command.body, target);
+        const body = switch (body_result) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |list| list,
+        };
+        const words = if (command.use_positionals) command_plan.ForWords.positional_parameters else blk: {
+            const explicit = try self.allocator.alloc([]const u8, command.words.len);
+            for (command.words, 0..) |word, index| explicit[index] = try self.expandScalar(word.raw, target);
+            break :blk command_plan.ForWords{ .explicit = explicit };
+        };
+        const name = try self.allocator.dupe(u8, command.name);
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .for_loop = .{ .variable_name = name, .words = words, .body = body } } };
+        plan.validate();
+        return .{ .compound = plan };
+    }
+
+    fn lowerCaseCommand(self: *TrapActionLowerer, command: ir.CaseCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        if (command.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const arms = try self.allocator.alloc(command_plan.CaseArm, command.arms.len);
+        for (command.arms, 0..) |arm, arm_index| {
+            const patterns = try self.allocator.alloc([]const u8, arm.patterns.len);
+            for (arm.patterns, 0..) |pattern, pattern_index| patterns[pattern_index] = try self.expandScalar(pattern.raw, target);
+            const body_result = try self.lowerSimpleCommandListSource(arm.body, target);
+            const body = switch (body_result) {
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+                .list => |list| list,
+            };
+            arms[arm_index] = .{ .patterns = patterns, .body = body };
+        }
+        const word = try self.expandScalar(command.word.raw, target);
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .case_clause = .{ .word = word, .arms = arms } } };
+        plan.validate();
+        return .{ .compound = plan };
+    }
+
+    const CommandListLowering = union(enum) {
+        list: command_plan.CommandList,
+        failure: TrapActionFailure,
+    };
+
+    fn lowerSimpleCommandListSource(self: *TrapActionLowerer, source: []const u8, target: context.ExecutionTarget) !CommandListLowering {
+        var parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
+        defer parsed.deinit();
+        if (parsed.diagnostics.len != 0) return .{ .failure = (try self.parserDiagnosticFailure(parsed.diagnostics[0])).failure };
+
+        var program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        defer program.deinit();
+        const payload = try self.lowerProgram(program, target, .command_list);
+        return switch (payload) {
+            .compound => |compound| switch (compound.body) {
+                .sequence => |list| .{ .list = list },
+                else => .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound bodies currently require simple command lists", .{self.signal.name()})).failure },
+            },
+            .simple => |simple| blk: {
+                const commands = try self.allocator.alloc(command_plan.CommandPlan, 1);
+                commands[0] = simple;
+                break :blk .{ .list = .{ .commands = commands } };
+            },
+            .failure => |trap_failure| .{ .failure = trap_failure },
+            .pipeline => .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: pipelines inside compound bodies need semantic statement-list lowering", .{self.signal.name()})).failure },
+        };
+    }
+
+    fn lowerIrSimpleCommand(self: *TrapActionLowerer, command: ir.SimpleCommand, target: context.ExecutionTarget) !command_plan.CommandPlan {
+        std.debug.assert(command.redirections.len == 0);
+        const assignment_words = try self.allocator.alloc([]const u8, command.assignments.len);
+        for (command.assignments, 0..) |word, index| assignment_words[index] = word.raw;
+        const argv_words = try self.allocator.alloc([]const u8, command.argv.len);
+        for (command.argv, 0..) |word, index| argv_words[index] = word.raw;
+
+        const expansion_target = self.expansionTarget(target);
+        var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
+            .shell_state = self.shell_state,
+            .eval_context = self.eval_context.withTarget(expansion_target),
+            .fs_port = self.owner.evaluator.fs_port,
+            .features = self.owner.features,
+        });
+        defer expansion.deinit();
+
+        var expanded = expansion.expandSimpleCommand(assignment_words, argv_words) catch |err| {
+            if (expansion.classifyError(err)) |expansion_failure| {
+                const message = try std.fmt.allocPrint(self.allocator, "trap {s}: expansion error: {s}: {s}", .{ self.signal.name(), expansion_failure.name, expansion_failure.message });
+                return command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{message} }, .target = target });
+            }
+            return err;
+        };
+        expanded.command.validate();
+        const lookup = try self.lookupSnapshot();
+        const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = expanded.command, .lookup = lookup, .target = target });
+        plan.validate();
+        return plan;
+    }
+
+    fn lookupSnapshot(self: *TrapActionLowerer) !command_plan.LookupSnapshot {
+        var functions: std.ArrayList(command_plan.FunctionDefinition) = .empty;
+        errdefer functions.deinit(self.allocator);
+        var iterator = self.shell_state.functions.iterator();
+        while (iterator.next()) |entry| try functions.append(self.allocator, entry.value_ptr.*);
+        return .{
+            .functions = try functions.toOwnedSlice(self.allocator),
+            .externals = self.owner.externals,
+        };
+    }
+
+    fn expandScalar(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
+        const expansion_target = self.expansionTarget(target);
+        var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
+            .shell_state = self.shell_state,
+            .eval_context = self.eval_context.withTarget(expansion_target),
+            .fs_port = self.owner.evaluator.fs_port,
+            .features = self.owner.features,
+        });
+        defer expansion.deinit();
+        return expansion.expandWordScalar(raw) catch |err| {
+            if (expansion.classifyError(err)) |expansion_failure| return std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ expansion_failure.name, expansion_failure.message });
+            return err;
+        };
+    }
+
+    fn expansionTarget(self: TrapActionLowerer, target: context.ExecutionTarget) context.ExecutionTarget {
+        std.debug.assert(target.allowsShellStateCommit());
+        if (self.shell_state.acceptsExecutionTarget(target)) return target;
+        std.debug.assert(target == .subshell);
+        std.debug.assert(self.shell_state.acceptsExecutionTarget(self.eval_context.target));
+        return self.eval_context.target;
+    }
+
+    fn parserDiagnosticFailure(self: *TrapActionLowerer, diagnostic: parser.Diagnostic) !TrapActionBodyPayload {
+        return self.failure(.parse_error, "trap {s}: parse error: {s}", .{ self.signal.name(), diagnostic.message });
+    }
+
+    fn failure(self: *TrapActionLowerer, kind: TrapActionFailureKind, comptime fmt: []const u8, args: anytype) !TrapActionBodyPayload {
+        const message = try std.fmt.allocPrint(self.allocator, fmt, args);
+        const trap_failure: TrapActionFailure = .{ .kind = kind, .message = message };
+        trap_failure.validate();
+        return .{ .failure = trap_failure };
     }
 };
 
@@ -503,10 +964,11 @@ pub fn executePendingTraps(evaluator: *Evaluator, shell_state: *state.ShellState
         registered.validate();
         if (registered.kind() == .ignore) continue;
 
-        const body = (resolver.resolve(evaluator.allocator, registered.action, signal, eval_context) catch |err| switch (err) {
+        var body = (resolver.resolve(evaluator.allocator, registered.action, signal, eval_context, &working_state) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => return error.Unimplemented,
         }) orelse return error.Unimplemented;
+        defer body.deinit();
         var action_outcome = try evaluateTrapActionBody(evaluator, &working_state, eval_context, body);
         defer action_outcome.deinit();
 
@@ -984,7 +1446,37 @@ fn evaluateTrapActionBody(evaluator: *Evaluator, shell_state: *state.ShellState,
         .simple => |plan| evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
         .compound => |plan| evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
         .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+        .owned => |owned| evaluateTrapActionBodyPayload(evaluator, shell_state, eval_context, owned.body),
     };
+}
+
+fn evaluateTrapActionBodyPayload(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, body: TrapActionBodyPayload) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    body.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    return switch (body) {
+        .simple => |plan| evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
+        .compound => |plan| evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
+        .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+    };
+}
+
+fn trapActionFailureOutcome(allocator: std.mem.Allocator, eval_context: context.EvalContext, failure: TrapActionFailure) EvalError!outcome.CommandOutcome {
+    eval_context.validate();
+    failure.validate();
+    var state_delta = delta.StateDelta.init(allocator, eval_context.target);
+    errdefer state_delta.deinit();
+    state_delta.setLastStatus(failure.status);
+    var command_outcome = outcome.CommandOutcome.init(allocator, failure.status, state_delta);
+    errdefer command_outcome.deinit();
+    try command_outcome.addDiagnostic(failure.message);
+    try command_outcome.appendStderr(failure.message);
+    try command_outcome.appendStderr("\n");
+    command_outcome.validateForContext(eval_context);
+    return command_outcome;
 }
 
 fn runtimeDispositionForTrapDisposition(disposition: state.TrapDisposition) runtime.signal.Disposition {
@@ -4236,6 +4728,113 @@ test "semantic evaluator executes pending traps and preserves pre-trap status" {
     try std.testing.expectEqual(state.ShellState.TrapExecution.idle, shell_state.trap_execution);
 }
 
+test "semantic parser trap resolver lowers arbitrary simple actions at delivery time" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("TRAP_MESSAGE", "semantic", .{});
+    shell_state.last_status = 23;
+    try shell_state.setTrapForSignal(.TERM, "TRAP_MUTATED=ok; echo \"$TRAP_MESSAGE\"");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), parser_resolver.resolver())).?;
+    defer trap_outcome.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 23), trap_outcome.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, trap_outcome.control_flow);
+    try std.testing.expectEqualStrings("semantic\n", trap_outcome.stdout.items);
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("TRAP_MUTATED").?.value);
+    try std.testing.expectEqual(@as(state.ExitStatus, 23), shell_state.last_status);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_traps.items.len);
+}
+
+test "semantic parser trap resolver lowers compound pipeline and and-or actions" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    shell_state.last_status = 5;
+    try shell_state.setTrapForSignal(.TERM, "if false; then echo bad; else echo compound; fi");
+    try shell_state.appendPendingTrap(.TERM);
+    var compound_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, parser_resolver.resolver())).?;
+    defer compound_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 5), compound_outcome.status);
+    try std.testing.expectEqualStrings("compound\n", compound_outcome.stdout.items);
+    try compound_outcome.commitDelta(&shell_state, .current_shell);
+
+    shell_state.last_status = 6;
+    try shell_state.setTrapForSignal(.TERM, "false && echo bad || echo and-or");
+    try shell_state.appendPendingTrap(.TERM);
+    var and_or_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, parser_resolver.resolver())).?;
+    defer and_or_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 6), and_or_outcome.status);
+    try std.testing.expectEqualStrings("and-or\n", and_or_outcome.stdout.items);
+    try and_or_outcome.commitDelta(&shell_state, .current_shell);
+
+    shell_state.last_status = 7;
+    try shell_state.setTrapForSignal(.TERM, "false | true");
+    try shell_state.appendPendingTrap(.TERM);
+    var pipeline_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, parser_resolver.resolver())).?;
+    defer pipeline_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 7), pipeline_outcome.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, pipeline_outcome.control_flow);
+    try pipeline_outcome.commitDelta(&shell_state, .current_shell);
+}
+
+test "semantic parser trap resolver models parse failures as trap diagnostics" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+
+    shell_state.last_status = 11;
+    try shell_state.setTrapForSignal(.TERM, "if true; then");
+    try shell_state.appendPendingTrap(.TERM);
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), parser_resolver.resolver())).?;
+    defer trap_outcome.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 11), trap_outcome.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, trap_outcome.control_flow);
+    try std.testing.expect(trap_outcome.diagnostics.items.len != 0);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.diagnostics.items[0].message, "trap TERM: parse error") != null);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.stderr.items, "trap TERM: parse error") != null);
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_traps.items.len);
+    try std.testing.expectEqual(@as(state.ExitStatus, 11), shell_state.last_status);
+}
+
+test "semantic parser trap resolver preserves subshell isolation and exit overrides" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    shell_state.last_status = 12;
+    try shell_state.setTrapForSignal(.TERM, "( TRAP_SUBSHELL_ONLY=leak )");
+    try shell_state.appendPendingTrap(.TERM);
+    var subshell_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, parser_resolver.resolver())).?;
+    defer subshell_outcome.deinit();
+    try subshell_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("TRAP_SUBSHELL_ONLY"));
+    try std.testing.expectEqual(@as(state.ExitStatus, 12), shell_state.last_status);
+
+    shell_state.setPendingExit(143);
+    try shell_state.setTrapForSignal(.TERM, "exit 9");
+    try shell_state.appendPendingTrap(.TERM);
+    var exit_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, parser_resolver.resolver())).?;
+    defer exit_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 9), exit_outcome.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 9 }, exit_outcome.control_flow);
+    try exit_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.ExitStatus, null), shell_state.pending_exit);
+    try std.testing.expectEqual(@as(state.ExitStatus, 9), shell_state.last_status);
+}
+
 test "semantic evaluator lets trap exit override pending signal exit" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -4496,8 +5095,10 @@ fn simpleTrapResolver() TrapActionResolver {
     return .{ .resolveFn = resolveSimpleTrapAction };
 }
 
-fn resolveSimpleTrapAction(_: ?*anyopaque, _: std.mem.Allocator, action: []const u8, signal: state.TrapSignal, eval_context: context.EvalContext) anyerror!?TrapActionBody {
+fn resolveSimpleTrapAction(_: ?*anyopaque, _: std.mem.Allocator, action: []const u8, signal: state.TrapSignal, eval_context: context.EvalContext, shell_state: *state.ShellState) anyerror!?TrapActionBody {
     trap_semanticActionAssert(action, signal, eval_context);
+    shell_state.validate();
+    std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
     if (std.mem.eql(u8, action, "echo term")) {
         return .{ .simple = command_plan.classifyExpandedSimpleCommand(.{
             .command = .{ .argv = &[_][]const u8{ "echo", "term" } },
