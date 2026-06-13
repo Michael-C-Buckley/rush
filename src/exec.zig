@@ -2604,6 +2604,8 @@ pub const Executor = struct {
         self.parameter_error.clear(self.allocator);
         self.arithmetic_error.clear(self.allocator);
         self.command_substitution_stderr.deinit(self.allocator);
+        var open_fd_iter = self.open_fds.iterator();
+        while (open_fd_iter.next()) |entry| rawClose(entry.key_ptr.*) catch {};
         self.open_fds.deinit(self.allocator);
         if (self.prompt_builder) |*builder| builder.deinit(self.allocator);
         self.waitForPromptAsyncRefreshes();
@@ -21997,7 +21999,7 @@ test "fd quota failure during redirection dup fails the command and continues" {
         \\i=3
         \\failed=0
         \\while [ $i -lt 20 ]; do
-        \\  eval "exec $i>rush-fd-quota-redirection-test/fd$i" || { failed=1; break; }
+        \\  eval "exec $i>rush-fd-quota-redirection-test/fd$i" 2>/dev/null || { failed=1; break; }
         \\  i=$((i+1))
         \\done
         \\continued=$failed
