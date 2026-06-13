@@ -18,6 +18,7 @@ pub const BuiltinSemanticClass = enum {
     predicate,
     declaration,
     shell_state,
+    job_control,
     control_flow,
 
     pub fn isNonMutating(self: BuiltinSemanticClass) bool {
@@ -28,13 +29,13 @@ pub const BuiltinSemanticClass = enum {
             .predicate,
             .control_flow,
             => true,
-            .unsupported, .declaration, .shell_state => false,
+            .unsupported, .declaration, .shell_state, .job_control => false,
         };
     }
 
     pub fn isStateful(self: BuiltinSemanticClass) bool {
         return switch (self) {
-            .declaration, .shell_state => true,
+            .declaration, .shell_state, .job_control => true,
             .unsupported, .no_op, .status_constant, .output, .predicate, .control_flow => false,
         };
     }
@@ -75,6 +76,7 @@ pub const Builtin = struct {
             .predicate => std.debug.assert(std.mem.eql(u8, self.name, "test") or std.mem.eql(u8, self.name, "[")),
             .declaration => std.debug.assert(std.mem.eql(u8, self.name, "export") or std.mem.eql(u8, self.name, "readonly") or std.mem.eql(u8, self.name, "unset")),
             .shell_state => std.debug.assert(std.mem.eql(u8, self.name, "set") or std.mem.eql(u8, self.name, "shift") or std.mem.eql(u8, self.name, "alias") or std.mem.eql(u8, self.name, "unalias") or std.mem.eql(u8, self.name, "trap") or std.mem.eql(u8, self.name, "local") or std.mem.eql(u8, self.name, "read")),
+            .job_control => std.debug.assert(std.mem.eql(u8, self.name, "jobs") or std.mem.eql(u8, self.name, "fg") or std.mem.eql(u8, self.name, "bg")),
             .control_flow => std.debug.assert(std.mem.eql(u8, self.name, "break") or std.mem.eql(u8, self.name, "continue") or std.mem.eql(u8, self.name, "exit") or std.mem.eql(u8, self.name, "return")),
         }
     }
@@ -100,7 +102,7 @@ pub const default_builtins = [_]Builtin{
     Builtin.initWithSemantics("[", .regular, .predicate),
     Builtin.init("abbr", .regular),
     Builtin.initWithSemantics("alias", .regular, .shell_state),
-    Builtin.init("bg", .regular),
+    Builtin.initWithSemantics("bg", .regular, .job_control),
     Builtin.init("cd", .regular),
     Builtin.init("color", .regular),
     Builtin.init("command", .regular),
@@ -110,11 +112,11 @@ pub const default_builtins = [_]Builtin{
     Builtin.init("event", .regular),
     Builtin.initWithSemantics("false", .regular, .status_constant),
     Builtin.init("fc", .regular),
-    Builtin.init("fg", .regular),
+    Builtin.initWithSemantics("fg", .regular, .job_control),
     Builtin.init("getopts", .regular),
     Builtin.init("hash", .regular),
     Builtin.init("interval", .regular),
-    Builtin.init("jobs", .regular),
+    Builtin.initWithSemantics("jobs", .regular, .job_control),
     Builtin.init("kill", .regular),
     Builtin.initWithSemantics("local", .regular, .shell_state),
     Builtin.initWithSemantics("printf", .regular, .output),

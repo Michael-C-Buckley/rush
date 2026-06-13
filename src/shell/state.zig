@@ -139,15 +139,25 @@ pub const Trap = struct {
 
 pub const JobState = enum {
     running,
+    stopped,
     done,
 };
 
 pub const BackgroundJobProcess = struct {
     stage_index: usize,
     child: runtime_process.ChildProcess,
+    status: ?ExitStatus = null,
+    stop_signal: ?u8 = null,
+    termination_signal: ?u8 = null,
 
     pub fn validate(self: BackgroundJobProcess) void {
-        self.child.validateRunning();
+        switch (self.child.state) {
+            .running => std.debug.assert(self.status == null or self.stop_signal != null),
+            .waited => std.debug.assert(self.status != null and self.stop_signal == null),
+        }
+        if (self.stop_signal) |signal| std.debug.assert(signal != 0);
+        if (self.termination_signal) |signal| std.debug.assert(signal != 0);
+        if (self.stop_signal != null) std.debug.assert(self.termination_signal == null);
     }
 };
 
@@ -159,6 +169,9 @@ pub const BackgroundJob = struct {
     processes: std.ArrayList(BackgroundJobProcess) = .empty,
     state: JobState = .running,
     status: ExitStatus = 0,
+    stop_signal: ?u8 = null,
+    termination_signal: ?u8 = null,
+    notified_state: ?JobState = null,
 
     pub fn deinit(self: *BackgroundJob, allocator: std.mem.Allocator) void {
         allocator.free(self.command);
@@ -183,6 +196,9 @@ pub const BackgroundJob = struct {
             .processes = processes,
             .state = self.state,
             .status = self.status,
+            .stop_signal = self.stop_signal,
+            .termination_signal = self.termination_signal,
+            .notified_state = self.notified_state,
         };
         cloned.validate();
         return cloned;
@@ -201,6 +217,101 @@ pub const BackgroundJob = struct {
         std.debug.assert(self.command.len != 0);
         std.debug.assert(self.processes.items.len != 0);
         for (self.processes.items) |process| process.validate();
+        if (self.stop_signal) |signal| std.debug.assert(signal != 0);
+        if (self.termination_signal) |signal| std.debug.assert(signal != 0);
+        switch (self.state) {
+            .running => {
+                std.debug.assert(self.stop_signal == null);
+                std.debug.assert(self.termination_signal == null);
+                std.debug.assert(self.hasRunningProcess());
+            },
+            .stopped => {
+                std.debug.assert(self.status != 0);
+                std.debug.assert(self.termination_signal == null);
+                std.debug.assert(self.hasRunningProcess());
+            },
+            .done => {
+                std.debug.assert(self.stop_signal == null);
+                std.debug.assert(self.allProcessesWaited());
+            },
+        }
+        if (self.notified_state) |notified| std.debug.assert(notified != .running);
+    }
+
+    pub fn hasRunningProcess(self: BackgroundJob) bool {
+        for (self.processes.items) |process| {
+            if (process.child.state == .running) return true;
+        }
+        return false;
+    }
+
+    pub fn allProcessesWaited(self: BackgroundJob) bool {
+        for (self.processes.items) |process| {
+            if (process.child.state != .waited) return false;
+        }
+        return true;
+    }
+};
+
+pub const BackgroundJobNotification = struct {
+    job_id: usize,
+    state: JobState,
+    command: []const u8,
+    status: ExitStatus = 0,
+    stop_signal: ?u8 = null,
+    termination_signal: ?u8 = null,
+
+    pub fn deinit(self: *BackgroundJobNotification, allocator: std.mem.Allocator) void {
+        allocator.free(self.command);
+        self.* = undefined;
+    }
+
+    pub fn clone(self: BackgroundJobNotification, allocator: std.mem.Allocator) !BackgroundJobNotification {
+        self.validate();
+        const owned_command = try allocator.dupe(u8, self.command);
+        errdefer allocator.free(owned_command);
+        const cloned: BackgroundJobNotification = .{
+            .job_id = self.job_id,
+            .state = self.state,
+            .command = owned_command,
+            .status = self.status,
+            .stop_signal = self.stop_signal,
+            .termination_signal = self.termination_signal,
+        };
+        cloned.validate();
+        return cloned;
+    }
+
+    pub fn fromJob(job: BackgroundJob) BackgroundJobNotification {
+        job.validate();
+        std.debug.assert(job.state != .running);
+        const notification: BackgroundJobNotification = .{
+            .job_id = job.id,
+            .state = job.state,
+            .command = job.command,
+            .status = job.status,
+            .stop_signal = job.stop_signal,
+            .termination_signal = job.termination_signal,
+        };
+        notification.validate();
+        return notification;
+    }
+
+    pub fn validate(self: BackgroundJobNotification) void {
+        std.debug.assert(self.job_id != 0);
+        std.debug.assert(self.command.len != 0);
+        switch (self.state) {
+            .running => unreachable,
+            .stopped => {
+                std.debug.assert(self.status != 0);
+                if (self.stop_signal) |signal| std.debug.assert(signal != 0);
+                std.debug.assert(self.termination_signal == null);
+            },
+            .done => {
+                std.debug.assert(self.stop_signal == null);
+                if (self.termination_signal) |signal| std.debug.assert(signal != 0);
+            },
+        }
     }
 };
 
@@ -220,6 +331,7 @@ pub const ShellState = struct {
     trap_execution: TrapExecution = .idle,
     pending_exit: ?ExitStatus = null,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
+    pending_job_notifications: std.ArrayList(BackgroundJobNotification) = .empty,
     next_job_id: usize = 1,
     current_job_id: ?usize = null,
     previous_job_id: ?usize = null,
@@ -270,6 +382,8 @@ pub const ShellState = struct {
         self.pending_traps.deinit(self.allocator);
         self.clearBackgroundJobs();
         self.background_jobs.deinit(self.allocator);
+        self.clearPendingJobNotifications();
+        self.pending_job_notifications.deinit(self.allocator);
 
         self.* = undefined;
     }
@@ -283,10 +397,6 @@ pub const ShellState = struct {
         cloned.last_status = self.last_status;
         cloned.pending_exit = self.pending_exit;
         cloned.trap_execution = self.trap_execution;
-        cloned.next_job_id = self.next_job_id;
-        cloned.current_job_id = self.current_job_id;
-        cloned.previous_job_id = self.previous_job_id;
-        cloned.last_background_pid = self.last_background_pid;
 
         var variables = self.variables.iterator();
         while (variables.next()) |entry| {
@@ -310,6 +420,11 @@ pub const ShellState = struct {
         try cloned.last_pipeline_statuses.appendSlice(allocator, self.last_pipeline_statuses.items);
         try cloned.pending_traps.appendSlice(allocator, self.pending_traps.items);
         for (self.background_jobs.items) |job| try cloned.appendBackgroundJobCopy(job);
+        cloned.next_job_id = self.next_job_id;
+        cloned.current_job_id = self.current_job_id;
+        cloned.previous_job_id = self.previous_job_id;
+        cloned.last_background_pid = self.last_background_pid;
+        for (self.pending_job_notifications.items) |notification| try cloned.appendJobNotification(notification);
 
         cloned.validate();
         return cloned;
@@ -322,6 +437,7 @@ pub const ShellState = struct {
         snapshot.current_job_id = null;
         snapshot.previous_job_id = null;
         snapshot.last_background_pid = null;
+        snapshot.clearPendingJobNotifications();
         snapshot.scope = .subshell;
         snapshot.validate();
         return snapshot;
@@ -647,6 +763,120 @@ pub const ShellState = struct {
         return null;
     }
 
+    pub fn findBackgroundJobIndexById(self: ShellState, id: usize) ?usize {
+        std.debug.assert(id != 0);
+        for (self.background_jobs.items, 0..) |job, index| {
+            if (job.id == id) return index;
+        }
+        return null;
+    }
+
+    pub fn replaceBackgroundJob(self: *ShellState, job: BackgroundJob) !void {
+        job.validate();
+        const index = self.findBackgroundJobIndexById(job.id) orelse unreachable;
+        var owned_job = try job.clone(self.allocator);
+        errdefer owned_job.deinit(self.allocator);
+        self.background_jobs.items[index].deinit(self.allocator);
+        self.background_jobs.items[index] = owned_job;
+        self.validate();
+    }
+
+    pub fn removeBackgroundJobById(self: *ShellState, id: usize) void {
+        const index = self.findBackgroundJobIndexById(id) orelse unreachable;
+        self.background_jobs.items[index].deinit(self.allocator);
+        _ = self.background_jobs.orderedRemove(index);
+        self.repairCurrentJobsAfterRemoval(id);
+        self.validate();
+    }
+
+    pub fn appendJobNotification(self: *ShellState, notification: BackgroundJobNotification) !void {
+        notification.validate();
+        var owned_notification = try notification.clone(self.allocator);
+        errdefer owned_notification.deinit(self.allocator);
+        try self.pending_job_notifications.append(self.allocator, owned_notification);
+        self.validate();
+    }
+
+    pub fn consumeJobNotifications(self: *ShellState, count: usize) void {
+        std.debug.assert(count <= self.pending_job_notifications.items.len);
+        var consumed: usize = 0;
+        while (consumed < count) : (consumed += 1) {
+            var notification = self.pending_job_notifications.orderedRemove(0);
+            notification.deinit(self.allocator);
+        }
+        self.validate();
+    }
+
+    pub fn queueJobNotification(self: *ShellState, job_id: usize) !void {
+        const index = self.findBackgroundJobIndexById(job_id) orelse unreachable;
+        var job = &self.background_jobs.items[index];
+        job.validate();
+        if (job.state == .running or job.notified_state == job.state) return;
+        const notification = BackgroundJobNotification.fromJob(job.*);
+        try self.appendJobNotification(notification);
+        job.notified_state = job.state;
+        self.validate();
+    }
+
+    pub fn refreshJobMarkers(self: *ShellState) void {
+        const old_current = self.current_job_id;
+        const old_previous = self.previous_job_id;
+        var current_stopped: ?usize = null;
+        var previous_stopped: ?usize = null;
+        var index = self.background_jobs.items.len;
+        while (index > 0) {
+            index -= 1;
+            const job = self.background_jobs.items[index];
+            if (job.state != .stopped) continue;
+            if (current_stopped == null) {
+                current_stopped = job.id;
+            } else {
+                previous_stopped = job.id;
+                break;
+            }
+        }
+
+        const current = current_stopped orelse {
+            self.dropMissingCurrentJobIds();
+            self.validate();
+            return;
+        };
+        self.current_job_id = current;
+        if (previous_stopped) |previous| {
+            self.previous_job_id = previous;
+            self.validate();
+            return;
+        }
+        if (old_current != null and old_current.? != current and self.findBackgroundJobById(old_current.?) != null) {
+            self.previous_job_id = old_current;
+            self.validate();
+            return;
+        }
+        if (old_previous != null and old_previous.? != current and self.findBackgroundJobById(old_previous.?) != null) {
+            self.previous_job_id = old_previous;
+            self.validate();
+            return;
+        }
+        var fallback_index = self.background_jobs.items.len;
+        while (fallback_index > 0) {
+            fallback_index -= 1;
+            const job = self.background_jobs.items[fallback_index];
+            if (job.id == current) continue;
+            self.previous_job_id = job.id;
+            self.validate();
+            return;
+        }
+        self.previous_job_id = null;
+        self.validate();
+    }
+
+    pub fn jobMarker(self: ShellState, job: BackgroundJob) u8 {
+        job.validate();
+        if (self.current_job_id == job.id) return '+';
+        if (self.previous_job_id == job.id) return '-';
+        return ' ';
+    }
+
     fn appendBackgroundJobCopy(self: *ShellState, job: BackgroundJob) !void {
         std.debug.assert(self.findBackgroundJobById(job.id) == null);
         var owned_job = try job.clone(self.allocator);
@@ -662,10 +892,33 @@ pub const ShellState = struct {
         self.last_background_pid = null;
     }
 
+    fn clearPendingJobNotifications(self: *ShellState) void {
+        for (self.pending_job_notifications.items) |*notification| notification.deinit(self.allocator);
+        self.pending_job_notifications.clearRetainingCapacity();
+    }
+
     fn selectCurrentJob(self: *ShellState, id: usize) void {
         std.debug.assert(id != 0);
         if (self.current_job_id != null and self.current_job_id.? != id) self.previous_job_id = self.current_job_id;
         self.current_job_id = id;
+    }
+
+    fn repairCurrentJobsAfterRemoval(self: *ShellState, id: usize) void {
+        if (self.previous_job_id == id) self.previous_job_id = null;
+        if (self.current_job_id == id) {
+            self.current_job_id = self.previous_job_id;
+            self.previous_job_id = null;
+        }
+        self.dropMissingCurrentJobIds();
+    }
+
+    fn dropMissingCurrentJobIds(self: *ShellState) void {
+        if (self.current_job_id) |current| {
+            if (self.findBackgroundJobById(current) == null) self.current_job_id = null;
+        }
+        if (self.previous_job_id) |previous| {
+            if (self.findBackgroundJobById(previous) == null) self.previous_job_id = null;
+        }
     }
 
     pub fn validate(self: ShellState) void {
@@ -691,6 +944,7 @@ pub const ShellState = struct {
             job.validate();
             std.debug.assert(job.id < self.next_job_id);
         }
+        for (self.pending_job_notifications.items) |notification| notification.validate();
         if (self.current_job_id) |id| std.debug.assert(self.findBackgroundJobById(id) != null);
         if (self.previous_job_id) |id| std.debug.assert(self.findBackgroundJobById(id) != null);
         if (self.current_job_id != null and self.previous_job_id != null) std.debug.assert(self.current_job_id.? != self.previous_job_id.?);

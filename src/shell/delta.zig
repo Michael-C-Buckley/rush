@@ -70,6 +70,10 @@ pub const StateDelta = struct {
     last_status: ?state.ExitStatus = null,
     last_pipeline_statuses: ?[]state.ExitStatus = null,
     background_jobs: std.ArrayList(state.BackgroundJob) = .empty,
+    background_job_updates: std.ArrayList(state.BackgroundJob) = .empty,
+    background_job_removals: std.ArrayList(usize) = .empty,
+    job_notifications: std.ArrayList(state.BackgroundJobNotification) = .empty,
+    job_notification_consume_count: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator, target: context.ExecutionTarget) StateDelta {
         return .{ .allocator = allocator, .target = target };
@@ -117,6 +121,11 @@ pub const StateDelta = struct {
         if (self.last_pipeline_statuses) |statuses| self.allocator.free(statuses);
         for (self.background_jobs.items) |*job| job.deinit(self.allocator);
         self.background_jobs.deinit(self.allocator);
+        for (self.background_job_updates.items) |*job| job.deinit(self.allocator);
+        self.background_job_updates.deinit(self.allocator);
+        self.background_job_removals.deinit(self.allocator);
+        for (self.job_notifications.items) |*notification| notification.deinit(self.allocator);
+        self.job_notifications.deinit(self.allocator);
 
         self.* = undefined;
     }
@@ -155,6 +164,10 @@ pub const StateDelta = struct {
         if (self.last_status) |status| cloned.setLastStatus(status);
         if (self.last_pipeline_statuses) |statuses| try cloned.setLastPipelineStatuses(statuses);
         for (self.background_jobs.items) |job| try cloned.appendBackgroundJob(job);
+        for (self.background_job_updates.items) |job| try cloned.updateBackgroundJob(job);
+        for (self.background_job_removals.items) |id| try cloned.removeBackgroundJob(id);
+        for (self.job_notifications.items) |notification| try cloned.appendJobNotification(notification);
+        if (self.job_notification_consume_count != 0) cloned.consumeJobNotifications(self.job_notification_consume_count);
 
         return cloned;
     }
@@ -178,7 +191,11 @@ pub const StateDelta = struct {
             self.logical_cwd == null and
             self.last_status == null and
             self.last_pipeline_statuses == null and
-            self.background_jobs.items.len == 0;
+            self.background_jobs.items.len == 0 and
+            self.background_job_updates.items.len == 0 and
+            self.background_job_removals.items.len == 0 and
+            self.job_notifications.items.len == 0 and
+            self.job_notification_consume_count == 0;
     }
 
     pub fn assignVariable(self: *StateDelta, name: []const u8, value: []const u8, attributes: state.VariableAttributes) !void {
@@ -443,6 +460,47 @@ pub const StateDelta = struct {
         try self.background_jobs.append(self.allocator, owned_job);
     }
 
+    pub fn updateBackgroundJob(self: *StateDelta, job: state.BackgroundJob) !void {
+        self.assertPending();
+        job.validate();
+        for (self.background_jobs.items) |existing| std.debug.assert(existing.id != job.id);
+        for (self.background_job_removals.items) |id| std.debug.assert(id != job.id);
+        for (self.background_job_updates.items) |*existing| {
+            if (existing.id != job.id) continue;
+            var owned_job = try job.clone(self.allocator);
+            errdefer owned_job.deinit(self.allocator);
+            existing.deinit(self.allocator);
+            existing.* = owned_job;
+            return;
+        }
+        var owned_job = try job.clone(self.allocator);
+        errdefer owned_job.deinit(self.allocator);
+        try self.background_job_updates.append(self.allocator, owned_job);
+    }
+
+    pub fn removeBackgroundJob(self: *StateDelta, id: usize) !void {
+        self.assertPending();
+        std.debug.assert(id != 0);
+        for (self.background_jobs.items) |job| std.debug.assert(job.id != id);
+        for (self.background_job_updates.items) |job| std.debug.assert(job.id != id);
+        for (self.background_job_removals.items) |existing| std.debug.assert(existing != id);
+        try self.background_job_removals.append(self.allocator, id);
+    }
+
+    pub fn appendJobNotification(self: *StateDelta, notification: state.BackgroundJobNotification) !void {
+        self.assertPending();
+        notification.validate();
+        var owned_notification = try notification.clone(self.allocator);
+        errdefer owned_notification.deinit(self.allocator);
+        try self.job_notifications.append(self.allocator, owned_notification);
+    }
+
+    pub fn consumeJobNotifications(self: *StateDelta, count: usize) void {
+        self.assertPending();
+        std.debug.assert(self.job_notification_consume_count == 0);
+        self.job_notification_consume_count = count;
+    }
+
     pub fn firstReadonlyVariableAssignment(self: StateDelta, shell_state: state.ShellState) ?[]const u8 {
         self.assertPending();
         for (self.variable_assignments.items) |assignment| {
@@ -512,6 +570,10 @@ pub const StateDelta = struct {
         if (self.last_status) |status| shell_state.last_status = status;
         if (self.last_pipeline_statuses) |statuses| try shell_state.setLastPipelineStatuses(statuses);
         for (self.background_jobs.items) |job| try shell_state.appendBackgroundJob(job);
+        for (self.background_job_updates.items) |job| try shell_state.replaceBackgroundJob(job);
+        for (self.background_job_removals.items) |id| shell_state.removeBackgroundJobById(id);
+        if (self.job_notification_consume_count != 0) shell_state.consumeJobNotifications(self.job_notification_consume_count);
+        for (self.job_notifications.items) |notification| try shell_state.appendJobNotification(notification);
 
         shell_state.validate();
         self.state = .consumed;

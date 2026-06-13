@@ -47,6 +47,7 @@ pub const Adapter = struct {
             .spawn_fn = spawn,
             .start_subshell_fn = startSubshell,
             .wait_fn = wait,
+            .poll_wait_fn = pollWait,
             .run_fn = run,
         };
     }
@@ -264,6 +265,49 @@ const StdinWriter = struct {
     }
 };
 
+fn pollWait(context: *anyopaque, request: process.PollWaitRequest) process.WaitError!process.PollWaitResult {
+    _ = adapterFromContext(context);
+    request.validate();
+    const pid = request.child.id();
+    const flags: c_int = @intCast(std.posix.W.NOHANG | std.posix.W.UNTRACED);
+
+    if (builtin.link_libc) {
+        var status: c_int = 0;
+        const rc = std.c.waitpid(pid, &status, flags);
+        switch (std.c.errno(rc)) {
+            .SUCCESS => {
+                if (rc == 0) return .{ .status = null };
+                std.debug.assert(rc == pid);
+                const wait_status = waitStatusFromRaw(@bitCast(status));
+                markPollWaitStatus(request.child, wait_status);
+                return .{ .status = wait_status };
+            },
+            .INTR => return .{ .status = null },
+            .CHILD => return error.Unexpected,
+            else => return error.Unexpected,
+        }
+    }
+
+    if (builtin.os.tag == .linux) {
+        var status: u32 = 0;
+        const rc = std.os.linux.waitpid(pid, &status, @intCast(flags));
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => {
+                if (rc == 0) return .{ .status = null };
+                std.debug.assert(rc == pid);
+                const wait_status = waitStatusFromRaw(status);
+                markPollWaitStatus(request.child, wait_status);
+                return .{ .status = wait_status };
+            },
+            .INTR => return .{ .status = null },
+            .CHILD => return error.Unexpected,
+            else => return error.Unexpected,
+        }
+    }
+
+    return error.Unsupported;
+}
+
 fn run(context: *anyopaque, request: process.RunRequest) process.RunError!process.RunResult {
     const adapter = adapterFromContext(context);
     request.validate();
@@ -333,6 +377,24 @@ fn waitStatusFromTerm(term: std.process.Child.Term) process.WaitStatus {
         .stopped => |signal| .{ .stopped = @intCast(@intFromEnum(signal)) },
         .unknown => |status| .{ .unknown = status },
     };
+}
+
+fn waitStatusFromRaw(status: u32) process.WaitStatus {
+    if (std.posix.W.IFEXITED(status)) return .{ .exited = std.posix.W.EXITSTATUS(status) };
+    if (std.posix.W.IFSIGNALED(status)) return .{ .signaled = @intCast(@intFromEnum(std.posix.W.TERMSIG(status))) };
+    if (std.posix.W.IFSTOPPED(status)) return .{ .stopped = @intCast(@intFromEnum(std.posix.W.STOPSIG(status))) };
+    return .{ .unknown = status };
+}
+
+fn markPollWaitStatus(child: *process.ChildProcess, wait_status: process.WaitStatus) void {
+    (process.WaitResult{ .status = wait_status }).validate();
+    switch (wait_status) {
+        .stopped => child.validateRunning(),
+        .exited, .signaled, .unknown => {
+            child.child.id = null;
+            child.markWaited();
+        },
+    }
 }
 
 fn configureForkedChild(request: process.StartSubshellRequest) void {

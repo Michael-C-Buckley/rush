@@ -981,6 +981,32 @@ pub fn observeRuntimeSignal(evaluator: *Evaluator, shell_state: *state.ShellStat
     return observation;
 }
 
+pub fn drainJobNotifications(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+
+    var refreshed_state = try refreshedBackgroundJobState(evaluator, shell_state.*, null);
+    defer refreshed_state.deinit();
+
+    var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
+    errdefer state_delta.deinit();
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(evaluator.allocator);
+
+    for (refreshed_state.pending_job_notifications.items) |notification| try appendJobNotificationLine(evaluator.allocator, &output, notification);
+    const consumed_count = refreshed_state.pending_job_notifications.items.len;
+    if (consumed_count != 0) refreshed_state.consumeJobNotifications(consumed_count);
+    try appendJobTableDiff(shell_state.*, refreshed_state, &state_delta);
+
+    var command_outcome = outcome.CommandOutcome.init(evaluator.allocator, shell_state.last_status, state_delta);
+    errdefer command_outcome.deinit();
+    command_outcome.stdout = output;
+    command_outcome.validateForContext(eval_context);
+    return command_outcome;
+}
+
 pub fn executePendingTraps(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, resolver: TrapActionResolver) EvalError!?outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
@@ -3112,6 +3138,7 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, "trap")) return normalEvaluation(try evaluateTrap(evaluator.allocator, shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "local")) return normalEvaluation(try evaluateLocal(evaluator, shell_state, eval_context, plan, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "read")) return normalEvaluation(try evaluateRead(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "jobs")) return normalEvaluation(try evaluateJobs(evaluator, shell_state, plan.argv, state_delta, buffers));
     return error.Unimplemented;
 }
 
@@ -3425,6 +3452,296 @@ fn assignReadFields(line: []const u8, names: []const []const u8, state_delta: *d
 
 fn isReadFieldSeparator(byte: u8) bool {
     return byte == ' ' or byte == '\t';
+}
+
+const JobPrintMode = enum {
+    normal,
+    long,
+    pids,
+};
+
+fn evaluateJobs(evaluator: *Evaluator, shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "jobs"));
+
+    var refreshed_state = try refreshedBackgroundJobState(evaluator, shell_state, buffers);
+    defer refreshed_state.deinit();
+
+    var mode: JobPrintMode = .normal;
+    var index: usize = 1;
+    while (index < argv.len) : (index += 1) {
+        const arg = argv[index];
+        if (std.mem.eql(u8, arg, "--")) {
+            index += 1;
+            break;
+        }
+        if (arg.len == 0 or arg[0] != '-' or std.mem.eql(u8, arg, "-")) break;
+        if (std.mem.eql(u8, arg, "-l")) {
+            mode = .long;
+        } else if (std.mem.eql(u8, arg, "-p")) {
+            mode = .pids;
+        } else {
+            try appendJobTableDiff(shell_state, refreshed_state, state_delta);
+            return builtinUsageError(buffers, "jobs", "unsupported option");
+        }
+    }
+
+    var reported_done_ids: std.ArrayList(usize) = .empty;
+    defer reported_done_ids.deinit(evaluator.allocator);
+    if (index >= argv.len) {
+        for (refreshed_state.background_jobs.items) |job| {
+            try appendJobLine(evaluator.allocator, &buffers.stdout, refreshed_state, job, mode);
+            if (mode != .pids and job.state == .done) try reported_done_ids.append(evaluator.allocator, job.id);
+        }
+    } else {
+        for (argv[index..]) |arg| {
+            const job = findBackgroundJobBySpec(refreshed_state, arg) orelse {
+                try appendJobTableDiff(shell_state, refreshed_state, state_delta);
+                return builtinStatusError(buffers, 127, "jobs", "unknown job");
+            };
+            try appendJobLine(evaluator.allocator, &buffers.stdout, refreshed_state, job, mode);
+            if (mode != .pids and job.state == .done) try reported_done_ids.append(evaluator.allocator, job.id);
+        }
+    }
+
+    for (reported_done_ids.items) |id| refreshed_state.removeBackgroundJobById(id);
+    try appendJobTableDiff(shell_state, refreshed_state, state_delta);
+    return 0;
+}
+
+fn refreshedBackgroundJobState(evaluator: *Evaluator, shell_state: state.ShellState, buffers: ?*EvaluationBuffers) EvalError!state.ShellState {
+    shell_state.validate();
+    var refreshed_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    errdefer refreshed_state.deinit();
+    try refreshBackgroundJobs(evaluator, &refreshed_state, buffers);
+    refreshed_state.refreshJobMarkers();
+    return refreshed_state;
+}
+
+fn refreshBackgroundJobs(evaluator: *Evaluator, shell_state: *state.ShellState, buffers: ?*EvaluationBuffers) !void {
+    shell_state.validate();
+    const process_port = evaluator.process_port orelse return;
+    for (shell_state.background_jobs.items) |*job| {
+        job.validate();
+        if (job.state == .done) continue;
+        const before_state = job.state;
+        for (job.processes.items, 0..) |*process, process_index| {
+            process.validate();
+            if (process.child.state != .running) continue;
+            const poll_result = process_port.pollWait(.{ .child = &process.child }) catch |err| {
+                if (buffers) |active_buffers| {
+                    const failure = waitFailure(err);
+                    try active_buffers.addBuiltinDiagnostic("jobs", failure.message);
+                }
+                continue;
+            };
+            const wait_status = poll_result.status orelse continue;
+            applyBackgroundProcessStatus(job, process_index, wait_status);
+        }
+        job.validate();
+        if (job.state != before_state and job.state != .running) try shell_state.queueJobNotification(job.id);
+    }
+    shell_state.validate();
+}
+
+fn applyBackgroundProcessStatus(job: *state.BackgroundJob, process_index: usize, wait_status: runtime.process.WaitStatus) void {
+    std.debug.assert(job.id != 0);
+    std.debug.assert(job.processes.items.len != 0);
+    std.debug.assert(process_index < job.processes.items.len);
+    (runtime.process.WaitResult{ .status = wait_status }).validate();
+
+    var process = &job.processes.items[process_index];
+    const process_pid = process.child.child.id;
+    const process_status = normalizeWaitStatus(wait_status);
+    process.status = process_status;
+    process.stop_signal = null;
+    process.termination_signal = null;
+
+    switch (wait_status) {
+        .stopped => |signal| {
+            process.stop_signal = signal;
+            job.state = .stopped;
+            job.status = process_status;
+            job.stop_signal = signal;
+            job.termination_signal = null;
+        },
+        .exited, .unknown => {
+            process.stop_signal = null;
+            if (process_pid == null or process_pid.? == job.pid) {
+                job.status = process_status;
+                job.termination_signal = null;
+            }
+        },
+        .signaled => |signal| {
+            process.termination_signal = signal;
+            if (process_pid == null or process_pid.? == job.pid) {
+                job.status = process_status;
+                job.termination_signal = signal;
+            }
+        },
+    }
+
+    if (job.allProcessesWaited()) {
+        job.state = .done;
+        job.stop_signal = null;
+        if (job.processes.items.len != 0) {
+            if (job.processes.items[job.processes.items.len - 1].status) |last_status| {
+                if (job.status == 0 or process_pid == null or process_pid.? != job.pid) job.status = last_status;
+            }
+        }
+        return;
+    }
+    if (job.state != .stopped) job.state = .running;
+}
+
+fn appendJobTableDiff(before: state.ShellState, after: state.ShellState, state_delta: *delta.StateDelta) !void {
+    before.validate();
+    after.validate();
+    for (after.background_jobs.items) |job| {
+        if (before.findBackgroundJobById(job.id) == null) {
+            try state_delta.appendBackgroundJob(job);
+        } else {
+            try state_delta.updateBackgroundJob(job);
+        }
+    }
+    for (before.background_jobs.items) |job| {
+        if (after.findBackgroundJobById(job.id) == null) try state_delta.removeBackgroundJob(job.id);
+    }
+    if (after.pending_job_notifications.items.len < before.pending_job_notifications.items.len) {
+        state_delta.consumeJobNotifications(before.pending_job_notifications.items.len - after.pending_job_notifications.items.len);
+    }
+    std.debug.assert(after.pending_job_notifications.items.len >= before.pending_job_notifications.items.len or state_delta.job_notification_consume_count != 0);
+    const common_notifications = @min(before.pending_job_notifications.items.len, after.pending_job_notifications.items.len);
+    for (after.pending_job_notifications.items[common_notifications..]) |notification| try state_delta.appendJobNotification(notification);
+}
+
+fn findBackgroundJobBySpec(shell_state: state.ShellState, spec: []const u8) ?state.BackgroundJob {
+    shell_state.validate();
+    std.debug.assert(spec.len != 0);
+    const text = if (std.mem.startsWith(u8, spec, "%")) spec[1..] else spec;
+    if (text.len == 0 or std.mem.eql(u8, text, "+") or std.mem.eql(u8, text, "%")) {
+        const id = shell_state.current_job_id orelse return null;
+        return shell_state.findBackgroundJobById(id);
+    }
+    if (std.mem.eql(u8, text, "-")) {
+        const id = shell_state.previous_job_id orelse return null;
+        return shell_state.findBackgroundJobById(id);
+    }
+    if (std.fmt.parseInt(usize, text, 10)) |id| {
+        return shell_state.findBackgroundJobById(id);
+    } else |_| {}
+    if (std.mem.startsWith(u8, text, "?")) return findBackgroundJobBySubstring(shell_state, text[1..]);
+    return findBackgroundJobByPrefix(shell_state, text);
+}
+
+fn findBackgroundJobByPrefix(shell_state: state.ShellState, prefix: []const u8) ?state.BackgroundJob {
+    var match: ?state.BackgroundJob = null;
+    for (shell_state.background_jobs.items) |job| {
+        if (!std.mem.startsWith(u8, job.command, prefix)) continue;
+        if (match != null) return null;
+        match = job;
+    }
+    return match;
+}
+
+fn findBackgroundJobBySubstring(shell_state: state.ShellState, needle: []const u8) ?state.BackgroundJob {
+    var match: ?state.BackgroundJob = null;
+    for (shell_state.background_jobs.items) |job| {
+        if (std.mem.indexOf(u8, job.command, needle) == null) continue;
+        if (match != null) return null;
+        match = job;
+    }
+    return match;
+}
+
+fn appendJobLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), shell_state: state.ShellState, job: state.BackgroundJob, mode: JobPrintMode) !void {
+    job.validate();
+    switch (mode) {
+        .pids => try stdout.print(allocator, "{d}\n", .{job.pid}),
+        .long => {
+            try stdout.print(allocator, "[{d}] {c} {d} ", .{ job.id, shell_state.jobMarker(job), job.pid });
+            try appendJobState(allocator, stdout, job.state, job.status, job.stop_signal, job.termination_signal);
+            try stdout.print(allocator, " {s}\n", .{job.command});
+        },
+        .normal => {
+            try stdout.print(allocator, "[{d}] {c} ", .{ job.id, shell_state.jobMarker(job) });
+            try appendJobState(allocator, stdout, job.state, job.status, job.stop_signal, job.termination_signal);
+            try stdout.print(allocator, " {s}\n", .{job.command});
+        },
+    }
+}
+
+fn appendJobNotificationLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), notification: state.BackgroundJobNotification) !void {
+    notification.validate();
+    try stdout.print(allocator, "[{d}] ", .{notification.job_id});
+    try appendJobState(allocator, stdout, notification.state, notification.status, notification.stop_signal, notification.termination_signal);
+    try stdout.print(allocator, " {s}\n", .{notification.command});
+}
+
+fn appendJobState(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), job_state: state.JobState, status: outcome.ExitStatus, stop_signal: ?u8, termination_signal: ?u8) !void {
+    switch (job_state) {
+        .running => try stdout.appendSlice(allocator, "Running"),
+        .stopped => try appendStoppedJobState(allocator, stdout, stop_signal),
+        .done => {
+            if (termination_signal) |signal| {
+                try stdout.appendSlice(allocator, "Terminated(");
+                try appendSignalName(allocator, stdout, signal);
+                try stdout.append(allocator, ')');
+            } else if (status == 0) {
+                try stdout.appendSlice(allocator, "Done");
+            } else {
+                try stdout.print(allocator, "Done({d})", .{status});
+            }
+        },
+    }
+}
+
+fn appendStoppedJobState(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), signal: ?u8) !void {
+    const stopped_signal = signal orelse {
+        try stdout.appendSlice(allocator, "Stopped");
+        return;
+    };
+    if (stopped_signal == signalNumber(.STOP) or stopped_signal == signalNumber(.TSTP) or stopped_signal == signalNumber(.TTIN) or stopped_signal == signalNumber(.TTOU)) {
+        try stdout.appendSlice(allocator, "Stopped (");
+        try appendSignalName(allocator, stdout, stopped_signal);
+        try stdout.append(allocator, ')');
+        return;
+    }
+    try stdout.appendSlice(allocator, "Stopped");
+}
+
+fn appendSignalName(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), signal: u8) !void {
+    if (signalName(signal)) |name| {
+        try stdout.appendSlice(allocator, name);
+    } else {
+        try stdout.print(allocator, "signal {d}", .{signal});
+    }
+}
+
+fn signalName(signal: u8) ?[]const u8 {
+    if (signal == signalNumber(.HUP)) return "SIGHUP";
+    if (signal == signalNumber(.INT)) return "SIGINT";
+    if (signal == signalNumber(.QUIT)) return "SIGQUIT";
+    if (signal == signalNumber(.ILL)) return "SIGILL";
+    if (signal == signalNumber(.ABRT)) return "SIGABRT";
+    if (signal == signalNumber(.FPE)) return "SIGFPE";
+    if (signal == signalNumber(.KILL)) return "SIGKILL";
+    if (signal == signalNumber(.SEGV)) return "SIGSEGV";
+    if (signal == signalNumber(.PIPE)) return "SIGPIPE";
+    if (signal == signalNumber(.ALRM)) return "SIGALRM";
+    if (signal == signalNumber(.TERM)) return "SIGTERM";
+    if (signal == signalNumber(.STOP)) return "SIGSTOP";
+    if (signal == signalNumber(.TSTP)) return "SIGTSTP";
+    if (signal == signalNumber(.TTIN)) return "SIGTTIN";
+    if (signal == signalNumber(.TTOU)) return "SIGTTOU";
+    return null;
+}
+
+fn signalNumber(signal: std.posix.SIG) u8 {
+    return @intCast(@intFromEnum(signal));
 }
 
 fn evaluateAlias(shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
@@ -5837,9 +6154,12 @@ const FakeExternalRuntime = struct {
     start_subshell_count: usize = 0,
     run_count: usize = 0,
     wait_count: usize = 0,
+    poll_wait_count: usize = 0,
     wait_status: runtime.process.WaitStatus = .{ .exited = 7 },
     wait_statuses: [8]runtime.process.WaitStatus = undefined,
     wait_status_count: usize = 0,
+    poll_wait_statuses: [8]?runtime.process.WaitStatus = undefined,
+    poll_wait_status_count: usize = 0,
     run_status: runtime.process.WaitStatus = .{ .exited = 0 },
     run_stdout: []const u8 = &.{},
     run_stderr: []const u8 = &.{},
@@ -5877,6 +6197,7 @@ const FakeExternalRuntime = struct {
             .spawn_fn = spawn,
             .start_subshell_fn = startSubshell,
             .wait_fn = wait,
+            .poll_wait_fn = pollWait,
             .run_fn = run,
         };
     }
@@ -5885,6 +6206,13 @@ const FakeExternalRuntime = struct {
         std.debug.assert(statuses.len <= self.wait_statuses.len);
         for (statuses, 0..) |status_value, index| self.wait_statuses[index] = status_value;
         self.wait_status_count = statuses.len;
+    }
+
+    fn setPollWaitStatuses(self: *FakeExternalRuntime, statuses: []const ?runtime.process.WaitStatus) void {
+        std.debug.assert(statuses.len <= self.poll_wait_statuses.len);
+        for (statuses, 0..) |status_value, index| self.poll_wait_statuses[index] = status_value;
+        self.poll_wait_status_count = statuses.len;
+        self.poll_wait_count = 0;
     }
 
     fn setRunResult(self: *FakeExternalRuntime, stdout_bytes: []const u8, stderr_bytes: []const u8, status_value: runtime.process.WaitStatus) void {
@@ -6030,6 +6358,23 @@ const FakeExternalRuntime = struct {
         return .{ .status = status_value };
     }
 
+    fn pollWait(opaque_context: *anyopaque, request: runtime.process.PollWaitRequest) runtime.process.WaitError!runtime.process.PollWaitResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        const poll_index = self.poll_wait_count;
+        self.poll_wait_count += 1;
+        if (poll_index >= self.poll_wait_status_count) return .{ .status = null };
+        const status_value = self.poll_wait_statuses[poll_index] orelse return .{ .status = null };
+        switch (status_value) {
+            .stopped => {},
+            .exited, .signaled, .unknown => {
+                request.child.child.id = null;
+                request.child.markWaited();
+            },
+        }
+        return .{ .status = status_value };
+    }
+
     fn run(opaque_context: *anyopaque, request: runtime.process.RunRequest) runtime.process.RunError!runtime.process.RunResult {
         const self = fromContext(opaque_context);
         request.validate();
@@ -6066,6 +6411,94 @@ fn fakeChild(id: runtime.process.ProcessId) runtime.process.ChildProcess {
         .request_resource_usage_statistics = false,
     };
     return runtime.process.ChildProcess.init(child);
+}
+
+test "semantic jobs builtin refreshes stopped and done jobs and drains notifications" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.monitor, true);
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "sleep", .path = "/bin/sleep" }};
+    const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
+    const sleep_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "sleep", "1" } }, .lookup = lookup });
+    const background = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{.{ .simple = sleep_plan }}, .{ .background = .background });
+
+    var background_result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), background);
+    defer background_result.deinit();
+    try background_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.background_jobs.items.len);
+
+    fake.setPollWaitStatuses(&.{.{ .stopped = signalNumber(.STOP) }});
+    const jobs_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"jobs"} } });
+    var stopped_jobs = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), jobs_plan);
+    defer stopped_jobs.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), stopped_jobs.status);
+    try std.testing.expectEqualStrings("[1] + Stopped (SIGSTOP) 'sleep' '1'\n", stopped_jobs.stdout.items);
+    try stopped_jobs.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(state.JobState.stopped, shell_state.background_jobs.items[0].state);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_job_notifications.items.len);
+
+    var stopped_notifications = try drainJobNotifications(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell));
+    defer stopped_notifications.deinit();
+    try std.testing.expectEqualStrings("[1] Stopped (SIGSTOP) 'sleep' '1'\n", stopped_notifications.stdout.items);
+    try stopped_notifications.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
+
+    fake.setPollWaitStatuses(&.{.{ .exited = 5 }});
+    var done_jobs = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), jobs_plan);
+    defer done_jobs.deinit();
+    try std.testing.expectEqualStrings("[1] + Done(5) 'sleep' '1'\n", done_jobs.stdout.items);
+    try done_jobs.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.background_jobs.items.len);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.pending_job_notifications.items.len);
+
+    var done_notifications = try drainJobNotifications(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell));
+    defer done_notifications.deinit();
+    try std.testing.expectEqualStrings("[1] Done(5) 'sleep' '1'\n", done_notifications.stdout.items);
+    try done_notifications.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
+}
+
+test "semantic jobs builtin supports pid and long operands with diagnostics" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/bin/tool" }};
+    const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
+    const first_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "tool", "alpha" } }, .lookup = lookup });
+    const second_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "tool", "beta" } }, .lookup = lookup });
+
+    var first = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{.{ .simple = first_plan }}, .{ .background = .background }));
+    defer first.deinit();
+    try first.commitDelta(&shell_state, .current_shell);
+    var second = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{.{ .simple = second_plan }}, .{ .background = .background }));
+    defer second.deinit();
+    try second.commitDelta(&shell_state, .current_shell);
+
+    const jobs_pid = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "jobs", "-p", "%1" } } });
+    var pid_result = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), jobs_pid);
+    defer pid_result.deinit();
+    try std.testing.expectEqualStrings("9001\n", pid_result.stdout.items);
+    try pid_result.commitDelta(&shell_state, .current_shell);
+
+    const jobs_long_previous = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "jobs", "-l", "%-" } } });
+    var long_result = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), jobs_long_previous);
+    defer long_result.deinit();
+    try std.testing.expectEqualStrings("[1] - 9001 Running 'tool' 'alpha'\n", long_result.stdout.items);
+    try long_result.commitDelta(&shell_state, .current_shell);
+
+    const jobs_unknown = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "jobs", "%99" } } });
+    var unknown_result = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), jobs_unknown);
+    defer unknown_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 127), unknown_result.status);
+    try std.testing.expectEqualStrings("jobs: unknown job\n", unknown_result.stderr.items);
+    try unknown_result.commitDelta(&shell_state, .current_shell);
 }
 
 test "semantic pipeline evaluation isolates builtin mutations from parent stages" {

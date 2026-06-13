@@ -20,6 +20,7 @@ pub const Operation = enum {
     spawn,
     start_subshell,
     wait,
+    poll_wait,
     run,
 };
 
@@ -201,6 +202,28 @@ pub const WaitResult = struct {
     }
 };
 
+pub const PollWaitRequest = struct {
+    child: *ChildProcess,
+
+    pub fn init(child: *ChildProcess) PollWaitRequest {
+        const request: PollWaitRequest = .{ .child = child };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: PollWaitRequest) void {
+        self.child.validateRunning();
+    }
+};
+
+pub const PollWaitResult = struct {
+    status: ?WaitStatus,
+
+    pub fn validate(self: PollWaitResult) void {
+        if (self.status) |status| (WaitResult{ .status = status }).validate();
+    }
+};
+
 pub const RunRequest = struct {
     allocator: std.mem.Allocator,
     argv: []const []const u8,
@@ -251,6 +274,7 @@ pub const RunError = anyerror;
 pub const SpawnFn = *const fn (*anyopaque, SpawnRequest) SpawnError!SpawnResult;
 pub const StartSubshellFn = *const fn (*anyopaque, StartSubshellRequest) SpawnError!SpawnResult;
 pub const WaitFn = *const fn (*anyopaque, WaitRequest) WaitError!WaitResult;
+pub const PollWaitFn = *const fn (*anyopaque, PollWaitRequest) WaitError!PollWaitResult;
 pub const RunFn = *const fn (*anyopaque, RunRequest) RunError!RunResult;
 
 pub const Port = struct {
@@ -258,6 +282,7 @@ pub const Port = struct {
     spawn_fn: SpawnFn,
     start_subshell_fn: ?StartSubshellFn = null,
     wait_fn: WaitFn,
+    poll_wait_fn: ?PollWaitFn = null,
     run_fn: RunFn,
 
     pub fn spawn(self: Port, request: SpawnRequest) SpawnError!SpawnResult {
@@ -279,6 +304,18 @@ pub const Port = struct {
         request.validate();
         const result = try self.wait_fn(self.context, request);
         request.child.validateWaited();
+        result.validate();
+        return result;
+    }
+
+    pub fn pollWait(self: Port, request: PollWaitRequest) WaitError!PollWaitResult {
+        request.validate();
+        const poll_wait_fn = self.poll_wait_fn orelse return .{ .status = null };
+        const result = try poll_wait_fn(self.context, request);
+        switch (result.status orelse return result) {
+            .exited, .signaled, .unknown => request.child.validateWaited(),
+            .stopped => request.child.validateRunning(),
+        }
         result.validate();
         return result;
     }
@@ -318,6 +355,74 @@ test "runtime process subshell request owns only low-level launch shape" {
 
     try std.testing.expectEqual(StandardIo.inherit, request.stdin);
     try std.testing.expectEqual(@as(?ProcessId, null), request.process_group);
+}
+
+fn testPollSpawn(_: *anyopaque, request: SpawnRequest) SpawnError!SpawnResult {
+    _ = request;
+    unreachable;
+}
+
+fn testPollWait(_: *anyopaque, request: WaitRequest) WaitError!WaitResult {
+    _ = request;
+    unreachable;
+}
+
+fn testPollRun(_: *anyopaque, request: RunRequest) RunError!RunResult {
+    _ = request;
+    unreachable;
+}
+
+fn testStoppedPollWait(_: *anyopaque, request: PollWaitRequest) WaitError!PollWaitResult {
+    request.validate();
+    return .{ .status = .{ .stopped = 19 } };
+}
+
+fn testExitedPollWait(_: *anyopaque, request: PollWaitRequest) WaitError!PollWaitResult {
+    request.validate();
+    request.child.child.id = null;
+    request.child.markWaited();
+    return .{ .status = .{ .exited = 7 } };
+}
+
+test "runtime process poll wait preserves stopped children and consumes exited children" {
+    var context: u8 = 0;
+    var stopped_child = ChildProcess.init(.{
+        .id = 123,
+        .thread_handle = {},
+        .stdin = null,
+        .stdout = null,
+        .stderr = null,
+        .request_resource_usage_statistics = false,
+    });
+    const stopped_port: Port = .{
+        .context = &context,
+        .spawn_fn = testPollSpawn,
+        .wait_fn = testPollWait,
+        .poll_wait_fn = testStoppedPollWait,
+        .run_fn = testPollRun,
+    };
+    const stopped = try stopped_port.pollWait(.{ .child = &stopped_child });
+    try std.testing.expectEqual(WaitStatus{ .stopped = 19 }, stopped.status.?);
+    stopped_child.validateRunning();
+
+    var exited_child = ChildProcess.init(.{
+        .id = 124,
+        .thread_handle = {},
+        .stdin = null,
+        .stdout = null,
+        .stderr = null,
+        .request_resource_usage_statistics = false,
+    });
+    const exited_port: Port = .{
+        .context = &context,
+        .spawn_fn = testPollSpawn,
+        .wait_fn = testPollWait,
+        .poll_wait_fn = testExitedPollWait,
+        .run_fn = testPollRun,
+    };
+    const exited = try exited_port.pollWait(.{ .child = &exited_child });
+    try std.testing.expectEqual(WaitStatus{ .exited = 7 }, exited.status.?);
+    exited_child.validateWaited();
 }
 
 test "runtime process cwd and descriptor-backed stdio are low-level values" {
