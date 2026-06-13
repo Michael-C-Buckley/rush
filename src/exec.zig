@@ -22582,26 +22582,40 @@ const InheritedBrokenStdoutRun = struct {
     }
 };
 
+fn moveFileOffFd(file: *std.Io.File, fd: std.posix.fd_t, io: std.Io) !void {
+    if (file.handle != fd) return;
+    const moved = try dupFileCloseOnExec(file.*);
+    file.close(io);
+    file.* = moved;
+}
+
 fn runInheritedWithBrokenStdout(allocator: std.mem.Allocator, script: []const u8) !InheritedBrokenStdoutRun {
     const stderr_path = "rush-test-inherited-write-failure.err";
+    const script_stdout_copy_fd: std.posix.fd_t = 9;
     std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch |err| switch (err) {
         error.FileNotFound => {},
         else => return err,
     };
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, stderr_path) catch {};
 
-    const saved_stdout = try rawDup(std.Io.File.stdout().handle);
+    // The script deliberately replaces fd 9; keep helper-owned descriptors off
+    // that process-wide fd so its redirections cannot invalidate our cleanup.
+    const saved_stdout = (try dupFileExcept(std.Io.File.stdout(), script_stdout_copy_fd)).handle;
     defer closeRawFd(std.testing.io, saved_stdout);
-    const saved_stderr = try rawDup(std.Io.File.stderr().handle);
+    const saved_stderr = (try dupFileExcept(std.Io.File.stderr(), script_stdout_copy_fd)).handle;
     defer closeRawFd(std.testing.io, saved_stderr);
 
     var pipe = try makePipelinePipe(std.testing.io);
     defer pipe.close(std.testing.io);
+    if (pipe.write.?.handle == script_stdout_copy_fd) {
+        try moveFileOffFd(&pipe.write.?, script_stdout_copy_fd, std.testing.io);
+    }
     pipe.read.?.close(std.testing.io);
     pipe.read = null;
 
     var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{ .truncate = true });
     defer stderr_file.close(std.testing.io);
+    try moveFileOffFd(&stderr_file, script_stdout_copy_fd, std.testing.io);
 
     try rawDup2(pipe.write.?.handle, std.Io.File.stdout().handle);
     try rawDup2(stderr_file.handle, std.Io.File.stderr().handle);
