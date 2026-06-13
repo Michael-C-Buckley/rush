@@ -12616,7 +12616,8 @@ fn builtinExit(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     _ = stdin;
     if (command.argv.len > 2) return exitUsageError(self, "too many arguments");
     const status: ExitStatus = if (command.argv.len == 2) blk: {
-        const parsed = std.fmt.parseInt(u64, command.argv[1].text, 10) catch return exitUsageError(self, "numeric argument required");
+        const operand = std.mem.trim(u8, command.argv[1].text, &std.ascii.whitespace);
+        const parsed = std.fmt.parseInt(u64, operand, 10) catch return exitUsageError(self, "numeric argument required");
         break :blk @truncate(parsed);
     } else self.lastStatus();
     if (options.interactive and self.shouldWarnBeforeExitWithStoppedJobs()) {
@@ -19676,6 +19677,17 @@ test "executor implements command eval exec and exit builtins" {
     defer exit_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 7), exit_result.status);
     try std.testing.expectEqualStrings("before\n", exit_result.stdout);
+
+    var padded_exit_executor = Executor.init(std.testing.allocator);
+    defer padded_exit_executor.deinit();
+    var padded_exit_lowered = try parseAndLower(std.testing.allocator, "(exit ' 5 '); echo status=$?; exit '\t7\t'");
+    defer padded_exit_lowered.parsed.deinit();
+    defer padded_exit_lowered.program.deinit();
+    var padded_exit_result = try padded_exit_executor.executeProgram(padded_exit_lowered.program, .{});
+    defer padded_exit_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 7), padded_exit_result.status);
+    try std.testing.expectEqualStrings("status=5\n", padded_exit_result.stdout);
+    try std.testing.expectEqualStrings("", padded_exit_result.stderr);
 
     var exec_lowered = try parseAndLower(std.testing.allocator, "exec echo exec-ok; echo after");
     defer exec_lowered.parsed.deinit();
