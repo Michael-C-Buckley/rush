@@ -4,10 +4,26 @@
 //! mutations are allowed to land. It deliberately contains semantic facts, not
 //! POSIX adapter objects.
 
+const std = @import("std");
+
 pub const ExecutionTarget = enum {
     current_shell,
     subshell,
     child_process,
+
+    pub fn allowsShellStateCommit(self: ExecutionTarget) bool {
+        return switch (self) {
+            .current_shell, .subshell => true,
+            .child_process => false,
+        };
+    }
+
+    pub fn isIsolatedFromParent(self: ExecutionTarget) bool {
+        return switch (self) {
+            .current_shell => false,
+            .subshell, .child_process => true,
+        };
+    }
 };
 
 pub const InputSource = enum {
@@ -20,8 +36,161 @@ pub const InputSource = enum {
 pub const EvalContext = struct {
     target: ExecutionTarget,
     source: InputSource = .command_string,
+    interactive: bool = false,
+    errexit_ignored: bool = false,
+    loop_depth: u32 = 0,
+    function_depth: u32 = 0,
+    source_depth: u32 = 0,
+    subshell_depth: u32 = 0,
+    pipeline_depth: u32 = 0,
+    command_substitution_depth: u32 = 0,
+    special_builtin: bool = false,
 
     pub fn forTarget(target: ExecutionTarget) EvalContext {
-        return .{ .target = target };
+        return EvalContext.init(.{ .target = target });
+    }
+
+    pub const Init = struct {
+        target: ExecutionTarget,
+        source: InputSource = .command_string,
+        interactive: bool = false,
+        errexit_ignored: bool = false,
+        loop_depth: u32 = 0,
+        function_depth: u32 = 0,
+        source_depth: u32 = 0,
+        subshell_depth: u32 = 0,
+        pipeline_depth: u32 = 0,
+        command_substitution_depth: u32 = 0,
+        special_builtin: bool = false,
+    };
+
+    pub fn init(options: Init) EvalContext {
+        const eval_context: EvalContext = .{
+            .target = options.target,
+            .source = options.source,
+            .interactive = options.interactive,
+            .errexit_ignored = options.errexit_ignored,
+            .loop_depth = options.loop_depth,
+            .function_depth = options.function_depth,
+            .source_depth = options.source_depth,
+            .subshell_depth = options.subshell_depth,
+            .pipeline_depth = options.pipeline_depth,
+            .command_substitution_depth = options.command_substitution_depth,
+            .special_builtin = options.special_builtin,
+        };
+        eval_context.validate();
+        return eval_context;
+    }
+
+    pub fn withTarget(self: EvalContext, target: ExecutionTarget) EvalContext {
+        var next = self;
+        next.target = target;
+        next.validate();
+        return next;
+    }
+
+    pub fn enterLoop(self: EvalContext) EvalContext {
+        var next = self;
+        next.loop_depth = checkedIncrement(next.loop_depth);
+        next.validate();
+        return next;
+    }
+
+    pub fn enterFunction(self: EvalContext) EvalContext {
+        var next = self;
+        next.function_depth = checkedIncrement(next.function_depth);
+        next.validate();
+        return next;
+    }
+
+    pub fn enterSource(self: EvalContext) EvalContext {
+        var next = self;
+        next.source_depth = checkedIncrement(next.source_depth);
+        next.validate();
+        return next;
+    }
+
+    pub fn enterSubshell(self: EvalContext) EvalContext {
+        var next = self.withTarget(.subshell);
+        next.subshell_depth = checkedIncrement(next.subshell_depth);
+        next.validate();
+        return next;
+    }
+
+    pub fn enterPipeline(self: EvalContext) EvalContext {
+        var next = self;
+        next.pipeline_depth = checkedIncrement(next.pipeline_depth);
+        next.validate();
+        return next;
+    }
+
+    pub fn enterCommandSubstitution(self: EvalContext) EvalContext {
+        var next = self.withTarget(.subshell);
+        next.command_substitution_depth = checkedIncrement(next.command_substitution_depth);
+        next.validate();
+        return next;
+    }
+
+    pub fn canReturnFromFunction(self: EvalContext) bool {
+        return self.function_depth != 0;
+    }
+
+    pub fn canReturnFromSource(self: EvalContext) bool {
+        return self.source_depth != 0;
+    }
+
+    pub fn canBreakOrContinue(self: EvalContext, depth: u32) bool {
+        std.debug.assert(depth != 0);
+        return depth <= self.loop_depth;
+    }
+
+    pub fn validate(self: EvalContext) void {
+        if (self.command_substitution_depth != 0) {
+            std.debug.assert(self.target != .current_shell);
+        }
     }
 };
+
+fn checkedIncrement(value: u32) u32 {
+    std.debug.assert(value != std.math.maxInt(u32));
+    return value + 1;
+}
+
+test "EvalContext constructors preserve target and scoped nesting invariants" {
+    const root = EvalContext.forTarget(.current_shell);
+    try std.testing.expectEqual(ExecutionTarget.current_shell, root.target);
+    try std.testing.expect(!root.target.isIsolatedFromParent());
+    try std.testing.expect(root.target.allowsShellStateCommit());
+
+    const loop_context = root.enterLoop().enterLoop();
+    try std.testing.expect(loop_context.canBreakOrContinue(1));
+    try std.testing.expect(loop_context.canBreakOrContinue(2));
+    try std.testing.expect(!loop_context.canBreakOrContinue(3));
+
+    const function_context = root.enterFunction();
+    try std.testing.expect(function_context.canReturnFromFunction());
+    try std.testing.expect(!function_context.canReturnFromSource());
+
+    const source_context = root.enterSource();
+    try std.testing.expect(source_context.canReturnFromSource());
+
+    const command_substitution = root.enterCommandSubstitution();
+    try std.testing.expectEqual(ExecutionTarget.subshell, command_substitution.target);
+    try std.testing.expect(command_substitution.target.isIsolatedFromParent());
+    try std.testing.expectEqual(@as(u32, 1), command_substitution.command_substitution_depth);
+
+    const subshell_child = root.enterSubshell().withTarget(.child_process);
+    try std.testing.expectEqual(ExecutionTarget.child_process, subshell_child.target);
+    try std.testing.expectEqual(@as(u32, 1), subshell_child.subshell_depth);
+}
+
+test "ExecutionTarget commit permissions are explicit" {
+    const targets = [_]ExecutionTarget{ .current_shell, .subshell, .child_process };
+    const expected_commit = [_]bool{ true, true, false };
+    const expected_isolated = [_]bool{ false, true, true };
+
+    for (targets, expected_commit, expected_isolated) |target, can_commit, isolated| {
+        try std.testing.expectEqual(can_commit, target.allowsShellStateCommit());
+        try std.testing.expectEqual(isolated, target.isIsolatedFromParent());
+    }
+}

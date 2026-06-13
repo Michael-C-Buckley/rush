@@ -13,23 +13,335 @@ pub const DeltaState = enum {
     consumed,
 };
 
+pub const VariableAssignment = struct {
+    name: []const u8,
+    value: []const u8,
+    exported: ?bool = null,
+    readonly: bool = false,
+};
+
+pub const VariableFlag = enum {
+    exported,
+    readonly,
+};
+
+pub const VariableFlagMutation = struct {
+    name: []const u8,
+    flag: VariableFlag,
+    enabled: bool = true,
+};
+
+pub const OptionChange = struct {
+    option: state.ShellOption,
+    enabled: bool,
+};
+
 pub const StateDelta = struct {
+    allocator: std.mem.Allocator,
     target: context.ExecutionTarget,
     state: DeltaState = .pending,
+    variable_assignments: std.ArrayList(VariableAssignment) = .empty,
+    variable_flags: std.ArrayList(VariableFlagMutation) = .empty,
+    option_changes: std.ArrayList(OptionChange) = .empty,
+    positionals: ?[][]const u8 = null,
+    logical_cwd: ?[]const u8 = null,
+    last_status: ?state.ExitStatus = null,
 
-    pub fn init(target: context.ExecutionTarget) StateDelta {
-        return .{ .target = target };
+    pub fn init(allocator: std.mem.Allocator, target: context.ExecutionTarget) StateDelta {
+        return .{ .allocator = allocator, .target = target };
     }
 
-    pub fn commit(self: *StateDelta, shell_state: *state.ShellState, target: context.ExecutionTarget) void {
+    pub fn deinit(self: *StateDelta) void {
+        for (self.variable_assignments.items) |assignment| {
+            self.allocator.free(assignment.name);
+            self.allocator.free(assignment.value);
+        }
+        self.variable_assignments.deinit(self.allocator);
+
+        for (self.variable_flags.items) |mutation| {
+            self.allocator.free(mutation.name);
+        }
+        self.variable_flags.deinit(self.allocator);
+        self.option_changes.deinit(self.allocator);
+
+        if (self.positionals) |args| {
+            for (args) |arg| self.allocator.free(arg);
+            self.allocator.free(args);
+        }
+        if (self.logical_cwd) |cwd| self.allocator.free(cwd);
+
+        self.* = undefined;
+    }
+
+    pub fn clone(self: *const StateDelta, allocator: std.mem.Allocator) !StateDelta {
+        std.debug.assert(self.state == .pending);
+
+        var cloned = StateDelta.init(allocator, self.target);
+        errdefer cloned.deinit();
+
+        for (self.variable_assignments.items) |assignment| {
+            try cloned.assignVariable(assignment.name, assignment.value, .{
+                .exported = assignment.exported,
+                .readonly = assignment.readonly,
+            });
+        }
+        for (self.variable_flags.items) |mutation| {
+            try cloned.appendVariableFlag(mutation.name, mutation.flag, mutation.enabled);
+        }
+        for (self.option_changes.items) |change| {
+            try cloned.setOption(change.option, change.enabled);
+        }
+        if (self.positionals) |args| try cloned.replacePositionals(args);
+        if (self.logical_cwd) |cwd| try cloned.setLogicalCwd(cwd);
+        if (self.last_status) |status| cloned.setLastStatus(status);
+
+        return cloned;
+    }
+
+    pub fn isEmpty(self: StateDelta) bool {
+        return self.variable_assignments.items.len == 0 and
+            self.variable_flags.items.len == 0 and
+            self.option_changes.items.len == 0 and
+            self.positionals == null and
+            self.logical_cwd == null and
+            self.last_status == null;
+    }
+
+    pub fn assignVariable(self: *StateDelta, name: []const u8, value: []const u8, attributes: state.VariableAttributes) !void {
+        self.assertPending();
+        state.assertValidVariableName(name);
+        std.debug.assert(findVariableAssignment(self, name) == null);
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+
+        try self.variable_assignments.append(self.allocator, .{
+            .name = owned_name,
+            .value = owned_value,
+            .exported = attributes.exported,
+            .readonly = attributes.readonly,
+        });
+    }
+
+    pub fn setVariableExported(self: *StateDelta, name: []const u8, enabled: bool) !void {
+        self.assertPending();
+        state.assertValidVariableName(name);
+
+        if (findVariableAssignment(self, name)) |assignment| {
+            if (assignment.exported) |existing| std.debug.assert(existing == enabled);
+            assignment.exported = enabled;
+            return;
+        }
+        try self.appendVariableFlag(name, .exported, enabled);
+    }
+
+    pub fn setVariableReadonly(self: *StateDelta, name: []const u8) !void {
+        self.assertPending();
+        state.assertValidVariableName(name);
+
+        if (findVariableAssignment(self, name)) |assignment| {
+            assignment.readonly = true;
+            return;
+        }
+        try self.appendVariableFlag(name, .readonly, true);
+    }
+
+    pub fn setOption(self: *StateDelta, option: state.ShellOption, enabled: bool) !void {
+        self.assertPending();
+        for (self.option_changes.items) |change| {
+            std.debug.assert(change.option != option);
+        }
+        try self.option_changes.append(self.allocator, .{ .option = option, .enabled = enabled });
+    }
+
+    pub fn replacePositionals(self: *StateDelta, args: []const []const u8) !void {
+        self.assertPending();
+        std.debug.assert(self.positionals == null);
+
+        const owned_args = try self.allocator.alloc([]const u8, args.len);
+        errdefer self.allocator.free(owned_args);
+
+        var initialized: usize = 0;
+        errdefer for (owned_args[0..initialized]) |arg| self.allocator.free(arg);
+
+        for (args, 0..) |arg, index| {
+            owned_args[index] = try self.allocator.dupe(u8, arg);
+            initialized += 1;
+        }
+
+        self.positionals = owned_args;
+    }
+
+    pub fn setLogicalCwd(self: *StateDelta, cwd: []const u8) !void {
+        self.assertPending();
+        std.debug.assert(self.logical_cwd == null);
+        state.assertValidLogicalCwd(cwd);
+        self.logical_cwd = try self.allocator.dupe(u8, cwd);
+    }
+
+    pub fn setLastStatus(self: *StateDelta, status: state.ExitStatus) void {
+        self.assertPending();
+        std.debug.assert(self.last_status == null);
+        self.last_status = status;
+    }
+
+    pub fn commit(self: *StateDelta, shell_state: *state.ShellState, target: context.ExecutionTarget) !void {
         std.debug.assert(self.state == .pending);
         std.debug.assert(self.target == target);
-        _ = shell_state;
+        std.debug.assert(target.allowsShellStateCommit());
+        std.debug.assert(shell_state.acceptsExecutionTarget(target));
+
+        for (self.variable_assignments.items) |assignment| {
+            try shell_state.putVariable(assignment.name, assignment.value, .{
+                .exported = assignment.exported,
+                .readonly = assignment.readonly,
+            });
+        }
+        for (self.variable_flags.items) |mutation| {
+            switch (mutation.flag) {
+                .exported => try shell_state.setVariableExported(mutation.name, mutation.enabled),
+                .readonly => {
+                    std.debug.assert(mutation.enabled);
+                    try shell_state.setVariableReadonly(mutation.name);
+                },
+            }
+        }
+        for (self.option_changes.items) |change| {
+            shell_state.options.set(change.option, change.enabled);
+        }
+        if (self.positionals) |args| try shell_state.replacePositionals(args);
+        if (self.logical_cwd) |cwd| try shell_state.setLogicalCwd(cwd);
+        if (self.last_status) |status| shell_state.last_status = status;
+
+        shell_state.validate();
         self.state = .consumed;
     }
 
-    pub fn discard(self: *StateDelta) void {
+    pub fn discard(self: *StateDelta, target: context.ExecutionTarget) void {
         std.debug.assert(self.state == .pending);
+        std.debug.assert(self.target == target);
         self.state = .consumed;
     }
+
+    fn assertPending(self: StateDelta) void {
+        std.debug.assert(self.state == .pending);
+    }
+
+    fn appendVariableFlag(self: *StateDelta, name: []const u8, flag: VariableFlag, enabled: bool) !void {
+        self.assertPending();
+        state.assertValidVariableName(name);
+        if (flag == .readonly) std.debug.assert(enabled);
+
+        for (self.variable_flags.items) |mutation| {
+            std.debug.assert(!std.mem.eql(u8, mutation.name, name) or mutation.flag != flag);
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.variable_flags.append(self.allocator, .{ .name = owned_name, .flag = flag, .enabled = enabled });
+    }
 };
+
+fn findVariableAssignment(delta: *StateDelta, name: []const u8) ?*VariableAssignment {
+    for (delta.variable_assignments.items) |*assignment| {
+        if (std.mem.eql(u8, assignment.name, name)) return assignment;
+    }
+    return null;
+}
+
+test "StateDelta commits current-shell mutations explicitly" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    var state_delta = StateDelta.init(std.testing.allocator, .current_shell);
+    defer state_delta.deinit();
+
+    try state_delta.assignVariable("USER", "rush", .{ .exported = true });
+    try state_delta.assignVariable("answer", "42", .{});
+    try state_delta.setVariableReadonly("answer");
+    try state_delta.setOption(.errexit, true);
+    try state_delta.replacePositionals(&.{ "a", "b" });
+    try state_delta.setLogicalCwd("/tmp");
+    state_delta.setLastStatus(3);
+
+    try state_delta.commit(&shell_state, .current_shell);
+
+    try std.testing.expectEqual(DeltaState.consumed, state_delta.state);
+    try std.testing.expectEqualStrings("rush", shell_state.getVariable("USER").?.value);
+    try std.testing.expect(shell_state.getVariable("USER").?.exported);
+    try std.testing.expect(shell_state.getVariable("answer").?.readonly);
+    try std.testing.expect(shell_state.options.enabled(.errexit));
+    try std.testing.expectEqualStrings("a", shell_state.positionals.items[0]);
+    try std.testing.expectEqualStrings("/tmp", shell_state.logical_cwd);
+    try std.testing.expectEqual(@as(state.ExitStatus, 3), shell_state.last_status);
+}
+
+test "StateDelta discard consumes child mutations without touching parent state" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("KEEP", "parent", .{});
+
+    var child_delta = StateDelta.init(std.testing.allocator, .child_process);
+    defer child_delta.deinit();
+
+    try child_delta.assignVariable("KEEP", "child", .{});
+    try child_delta.setOption(.nounset, true);
+    child_delta.setLastStatus(9);
+
+    child_delta.discard(.child_process);
+
+    try std.testing.expectEqual(DeltaState.consumed, child_delta.state);
+    try std.testing.expectEqualStrings("parent", shell_state.getVariable("KEEP").?.value);
+    try std.testing.expect(!shell_state.options.enabled(.nounset));
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+}
+
+test "StateDelta clone is deep and preserves pending mutations" {
+    var original = StateDelta.init(std.testing.allocator, .subshell);
+    defer original.deinit();
+
+    try original.assignVariable("name", "value", .{});
+    try original.setVariableExported("name", true);
+    try original.setOption(.pipefail, true);
+    try original.replacePositionals(&.{"one"});
+    original.setLastStatus(4);
+
+    var cloned = try original.clone(std.testing.allocator);
+    defer cloned.deinit();
+
+    try std.testing.expectEqual(DeltaState.pending, cloned.state);
+    try std.testing.expectEqual(context.ExecutionTarget.subshell, cloned.target);
+    try std.testing.expectEqual(@as(usize, 1), cloned.variable_assignments.items.len);
+    try std.testing.expectEqualStrings("name", cloned.variable_assignments.items[0].name);
+    try std.testing.expectEqualStrings("value", cloned.variable_assignments.items[0].value);
+    try std.testing.expect(cloned.variable_assignments.items[0].exported.?);
+    try std.testing.expectEqual(@as(state.ExitStatus, 4), cloned.last_status.?);
+
+    try original.assignVariable("other", "original-only", .{});
+    try std.testing.expectEqual(@as(usize, 1), cloned.variable_assignments.items.len);
+}
+
+test "StateDelta deterministic target matrix documents commit versus discard" {
+    const targets = [_]context.ExecutionTarget{ .current_shell, .subshell, .child_process };
+
+    for (targets) |target| {
+        var shell_state = state.ShellState.init(std.testing.allocator);
+        defer shell_state.deinit();
+        if (target == .subshell) shell_state.scope = .subshell;
+
+        var state_delta = StateDelta.init(std.testing.allocator, target);
+        defer state_delta.deinit();
+        state_delta.setLastStatus(11);
+
+        if (target.allowsShellStateCommit()) {
+            try state_delta.commit(&shell_state, target);
+            try std.testing.expectEqual(@as(state.ExitStatus, 11), shell_state.last_status);
+        } else {
+            state_delta.discard(target);
+            try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+        }
+        try std.testing.expectEqual(DeltaState.consumed, state_delta.state);
+    }
+}
