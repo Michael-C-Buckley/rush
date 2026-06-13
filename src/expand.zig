@@ -4000,7 +4000,7 @@ fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches:
     while (try iterator.next(io)) |entry| {
         if (entry.name.len == 0) continue;
         if (entry.name[0] == '.' and !options.dotglob and (component.text.len == 0 or component.text[0] != '.')) continue;
-        if (globPatternMatchesWithOptions(component, entry.name, .{ .extglob = options.extglob })) {
+        if (globPatternMatchesWithOptions(component, entry.name, .{ .extglob = options.extglob, .backslash_escape = false })) {
             try matches.append(allocator, try joinPathComponent(allocator, prefix, entry.name));
         }
     }
@@ -4087,6 +4087,7 @@ fn startsExtglobOperator(pattern: []const u8, special: ?[]const bool, index: usi
 
 pub const PatternMatchOptions = struct {
     extglob: bool = false,
+    backslash_escape: bool = true,
 };
 
 const GlobMatchOptions = PatternMatchOptions;
@@ -4140,6 +4141,11 @@ fn globMatchesAt(pattern: []const u8, special: ?[]const bool, options: GlobMatch
                 return matched.ok and globMatchesAt(pattern, special, options, matched.next_pattern, text, text_index + 1);
             }
             return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
+        '\\' => if (options.backslash_escape and isGlobSpecial(special, pattern_index)) {
+            const escaped_index = pattern_index + 1;
+            if (escaped_index >= pattern.len) return false;
+            return text_index < text.len and pattern[escaped_index] == text[text_index] and globMatchesAt(pattern, special, options, escaped_index + 1, text, text_index + 1);
         } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
         else => |c| return text_index < text.len and c == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
     }
@@ -5701,6 +5707,40 @@ test "parameter expansion supports pattern removal operators" {
     const extglob_on = try expandWordScalar(std.testing.allocator, "${USER#@(rush|bash)-}", .{ .env = test_env, .features = compat.Features.bash(), .extglob = true });
     defer std.testing.allocator.free(extglob_on);
     try std.testing.expectEqualStrings("user", extglob_on);
+}
+
+test "parameter pattern removal treats unquoted expansion backslashes as pattern escapes" {
+    const env: EnvLookup = .{ .lookupFn = struct {
+        fn lookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+            if (std.mem.eql(u8, name, "ABC")) return "abc";
+            if (std.mem.eql(u8, name, "AB_BACKSLASH")) return "ab\\";
+            if (std.mem.eql(u8, name, "ESC_A")) return "\\a";
+            if (std.mem.eql(u8, name, "ESC_C")) return "\\c";
+            if (std.mem.eql(u8, name, "ONE_BACKSLASH")) return "\\";
+            if (std.mem.eql(u8, name, "TWO_BACKSLASHES")) return "\\\\";
+            return null;
+        }
+    }.lookup };
+
+    const prefix = try expandWordScalar(std.testing.allocator, "${ABC#$ESC_A}", .{ .env = env });
+    defer std.testing.allocator.free(prefix);
+    try std.testing.expectEqualStrings("bc", prefix);
+
+    const suffix = try expandWordScalar(std.testing.allocator, "${ABC%$ESC_C}", .{ .env = env });
+    defer std.testing.allocator.free(suffix);
+    try std.testing.expectEqualStrings("ab", suffix);
+
+    const escaped_backslash = try expandWordScalar(std.testing.allocator, "${AB_BACKSLASH%$TWO_BACKSLASHES}", .{ .env = env });
+    defer std.testing.allocator.free(escaped_backslash);
+    try std.testing.expectEqualStrings("ab", escaped_backslash);
+
+    const trailing_escape = try expandWordScalar(std.testing.allocator, "${AB_BACKSLASH%$ONE_BACKSLASH}", .{ .env = env });
+    defer std.testing.allocator.free(trailing_escape);
+    try std.testing.expectEqualStrings("ab\\", trailing_escape);
+
+    const quoted = try expandWordScalar(std.testing.allocator, "${AB_BACKSLASH%\"$ONE_BACKSLASH\"}", .{ .env = env });
+    defer std.testing.allocator.free(quoted);
+    try std.testing.expectEqualStrings("ab", quoted);
 }
 
 test "parameter pattern removal operators honor nounset" {
