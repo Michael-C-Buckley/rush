@@ -6242,6 +6242,22 @@ const InteractiveShell = struct {
         self.semantic_enabled = true;
     }
 
+    fn initializeSemanticStartup(self: *InteractiveShell, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !void {
+        std.debug.assert(self.executor.execution_depth == 0);
+        self.semantic_state.deinit();
+        self.semantic_state = shell.ShellState.init(self.allocator);
+        self.semantic_enabled = false;
+
+        var startup_shell_options = options.shell_options;
+        setInteractiveStartupShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
+        try initializeSemanticInteractiveStartupState(self.allocator, io, &self.semantic_state, environ_map, options.positionals, startup_shell_options);
+        self.semantic_enabled = true;
+
+        try self.executor.importEnvironment(environ_map);
+        self.executor.arg_zero = options.arg_zero;
+        try self.syncExecutorFromSemantic();
+    }
+
     fn syncExecutorFromSemantic(self: *InteractiveShell) !void {
         if (!self.semantic_enabled) return;
         try syncExecutorFromSemanticInteractiveState(&self.executor, self.semantic_state);
@@ -6275,17 +6291,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer interactive_shell.deinit();
     const executor = &interactive_shell.executor;
     history_service.attachFc(executor);
-    try executor.importEnvironment(environ_map);
-    try executor.initializeShellVariables(io);
-    executor.arg_zero = options.arg_zero;
     const prompt_service: InteractivePromptService = .{ .executor = executor, .arg_zero = options.arg_zero, .features = options.features };
-    var startup_shell_options = options.shell_options;
-    setInteractiveStartupShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
-    executor.shell_options = legacyShellOptions(startup_shell_options, .{});
-    if (options.positionals.len != 0) try executor.global_positionals.set(allocator, options.positionals);
-    try InteractiveConfigService.init(allocator, io, executor, options.arg_zero).load(options);
+    try interactive_shell.initializeSemanticStartup(io, environ_map, options);
+    try InteractiveConfigService.initInteractive(allocator, io, &interactive_shell, options.arg_zero).load(options);
     if (executor.pending_exit) |status| return status;
-    try interactive_shell.syncSemanticFromExecutor(io);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
     runtime.signal.setWakeFd(terminal.trapSignalWakeFd());
@@ -7470,7 +7479,8 @@ fn initializeSemanticInvocationState(allocator: std.mem.Allocator, io: std.Io, s
     if (environ_map) |map| {
         var iterator = map.iterator();
         while (iterator.next()) |entry| {
-            std.debug.assert(isValidShellVariableName(entry.key_ptr.*));
+            if (!isValidShellVariableName(entry.key_ptr.*)) continue;
+            if (std.mem.indexOfScalar(u8, entry.value_ptr.*, 0) != null) continue;
             try shell_state.putVariable(entry.key_ptr.*, entry.value_ptr.*, .{ .exported = true });
         }
     }
@@ -7494,6 +7504,11 @@ fn initializeSemanticInvocationState(allocator: std.mem.Allocator, io: std.Io, s
     }
 
     try shell_state.replacePositionals(positionals);
+    shell_state.validate();
+}
+
+fn initializeSemanticInteractiveStartupState(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, environ_map: *const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !void {
+    try initializeSemanticInvocationState(allocator, io, shell_state, environ_map, positionals, shell_options);
     shell_state.validate();
 }
 
@@ -7944,46 +7959,53 @@ fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executo
 const InteractiveConfigService = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
-    executor: *exec.Executor,
+    executor: ?*exec.Executor = null,
+    interactive_shell: ?*InteractiveShell = null,
     arg_zero: []const u8 = "rush",
 
     fn init(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, arg_zero: []const u8) InteractiveConfigService {
         return .{ .allocator = allocator, .io = io, .executor = executor, .arg_zero = arg_zero };
     }
 
+    fn initInteractive(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, arg_zero: []const u8) InteractiveConfigService {
+        std.debug.assert(interactive_shell.semantic_enabled);
+        interactive_shell.semantic_state.validate();
+        return .{ .allocator = allocator, .io = io, .interactive_shell = interactive_shell, .arg_zero = arg_zero };
+    }
+
     fn load(self: InteractiveConfigService, options: InteractiveOptions) !void {
         try self.sourceScript(embedded_config, embedded_config_path);
-        if (self.executor.pending_exit != null) return;
+        if (self.pendingExit() != null) return;
 
-        if (self.executor.getEnv("ENV")) |env_path| {
+        if (self.getEnv("ENV")) |env_path| {
             if (env_path.len != 0) {
-                const expanded_env_path = try self.executor.expandParametersScalar(self.allocator, env_path, .{ .io = self.io, .allow_external = true, .arg_zero = self.arg_zero });
+                const expanded_env_path = try self.expandParametersScalar(env_path, options.features);
                 defer self.allocator.free(expanded_env_path);
                 if (expanded_env_path.len != 0) {
                     try self.sourceOptional(expanded_env_path);
-                    if (self.executor.pending_exit != null) return;
+                    if (self.pendingExit() != null) return;
                 }
             }
         }
 
         if (options.login) {
             try self.sourceOptional(system_profile_path);
-            if (self.executor.pending_exit != null) return;
+            if (self.pendingExit() != null) return;
             const user_profile_path = try self.userStartupPath("profile.rush");
             defer if (user_profile_path) |path| self.allocator.free(path);
             if (user_profile_path) |path| {
                 try self.sourceOptional(path);
-                if (self.executor.pending_exit != null) return;
+                if (self.pendingExit() != null) return;
             }
         }
 
         try self.sourceOptional(system_config_path);
-        if (self.executor.pending_exit != null) return;
+        if (self.pendingExit() != null) return;
         const user_path = try self.userStartupPath("config.rush");
         defer if (user_path) |path| self.allocator.free(path);
         if (user_path) |path| {
             try self.sourceOptional(path);
-            if (self.executor.pending_exit != null) return;
+            if (self.pendingExit() != null) return;
         }
     }
 
@@ -8001,7 +8023,10 @@ const InteractiveConfigService = struct {
     }
 
     fn sourceScript(self: InteractiveConfigService, contents: []const u8, source_path: []const u8) !void {
-        var result = try runScriptWithExecutor(self.allocator, self.executor, contents, .{ .io = self.io, .allow_external = true, .arg_zero = self.arg_zero, .source_path = source_path });
+        var result = if (self.interactive_shell) |interactive_shell|
+            try runInteractiveScript(self.allocator, self.io, interactive_shell, contents, .{ .io = self.io, .allow_external = true, .external_stdio = .capture, .interactive = true, .arg_zero = self.arg_zero, .source_path = source_path })
+        else
+            try runScriptWithExecutor(self.allocator, self.executor.?, contents, .{ .io = self.io, .allow_external = true, .arg_zero = self.arg_zero, .source_path = source_path });
         defer result.deinit();
         if (result.stdout.len != 0) try writeAll(self.io, .stdout, result.stdout);
         if (result.stderr.len != 0) try writeAll(self.io, .stderr, result.stderr);
@@ -8016,7 +8041,8 @@ const InteractiveConfigService = struct {
     }
 
     fn userStartupPath(self: InteractiveConfigService, file_name: []const u8) !?[]const u8 {
-        return userStartupPathForExecutor(self.allocator, self.executor.*, file_name);
+        if (self.interactive_shell) |interactive_shell| return userStartupPathForShellState(self.allocator, interactive_shell.semantic_state, file_name);
+        return userStartupPathForExecutor(self.allocator, self.executor.?.*, file_name);
     }
 
     fn userStartupPathForExecutor(allocator: std.mem.Allocator, executor: exec.Executor, file_name: []const u8) !?[]const u8 {
@@ -8027,6 +8053,50 @@ const InteractiveConfigService = struct {
             if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".config", "rush", file_name });
         }
         return null;
+    }
+
+    fn userStartupPathForShellState(allocator: std.mem.Allocator, shell_state: shell.ShellState, file_name: []const u8) !?[]const u8 {
+        shell_state.validate();
+        if (shell_state.getVariable("XDG_CONFIG_HOME")) |xdg_config_home| {
+            if (xdg_config_home.value.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home.value, "rush", file_name });
+        }
+        if (shell_state.getVariable("HOME")) |home| {
+            if (home.value.len != 0) return try std.fs.path.join(allocator, &.{ home.value, ".config", "rush", file_name });
+        }
+        return null;
+    }
+
+    fn getEnv(self: InteractiveConfigService, name: []const u8) ?[]const u8 {
+        if (self.interactive_shell) |interactive_shell| {
+            interactive_shell.semantic_state.validate();
+            return if (interactive_shell.semantic_state.getVariable(name)) |variable| variable.value else null;
+        }
+        return self.executor.?.getEnv(name);
+    }
+
+    fn pendingExit(self: InteractiveConfigService) ?shell.ExitStatus {
+        if (self.interactive_shell) |interactive_shell| {
+            interactive_shell.semantic_state.validate();
+            return interactive_shell.semantic_state.pending_exit;
+        }
+        return self.executor.?.pending_exit;
+    }
+
+    fn expandParametersScalar(self: InteractiveConfigService, text: []const u8, features: compat.Features) ![]const u8 {
+        if (self.interactive_shell) |interactive_shell| {
+            interactive_shell.semantic_state.validate();
+            var adapter = runtime.PosixAdapter.init(self.io);
+            var expansion = shell.ShellExpansion.init(self.allocator, .{
+                .shell_state = &interactive_shell.semantic_state,
+                .eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true }),
+                .fs_port = runtime.posixPorts(&adapter).fs,
+                .features = features,
+                .arg_zero = self.arg_zero,
+            });
+            defer expansion.deinit();
+            return expansion.expandParametersScalar(text);
+        }
+        return self.executor.?.expandParametersScalar(self.allocator, text, .{ .io = self.io, .allow_external = true, .features = features, .arg_zero = self.arg_zero });
     }
 };
 
@@ -11311,6 +11381,50 @@ test "semantic interactive shell state persists variable mutations without legac
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), readback.status);
     try std.testing.expectEqualStrings("state\n", readback.stdout);
     try std.testing.expectEqualStrings("", readback.stderr);
+}
+
+test "semantic interactive startup initializes ShellState without executor shell variables as source" {
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("RUSH_INTERACTIVE_IMPORTED", "present");
+    try env.put("SHLVL", "2");
+
+    var interactive_shell = InteractiveShell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{
+        .arg_zero = "rush",
+        .positionals = &.{ "one", "two" },
+        .shell_options = .{ .ignoreeof = true },
+    });
+
+    try std.testing.expect(interactive_shell.semantic_enabled);
+    try std.testing.expectEqualStrings("present", interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_IMPORTED").?.value);
+    try std.testing.expectEqualStrings("3", interactive_shell.semantic_state.getVariable("SHLVL").?.value);
+    try std.testing.expectEqualStrings(" \t\n", interactive_shell.semantic_state.getVariable("IFS").?.value);
+    try std.testing.expectEqualStrings("1", interactive_shell.semantic_state.getVariable("OPTIND").?.value);
+    try std.testing.expect(interactive_shell.semantic_state.options.ignoreeof);
+    try std.testing.expectEqual(@as(usize, 2), interactive_shell.semantic_state.positionals.items.len);
+    try std.testing.expectEqualStrings("one", interactive_shell.semantic_state.positionals.items[0]);
+    try std.testing.expectEqualStrings("two", interactive_shell.semantic_state.positionals.items[1]);
+    try std.testing.expectEqualStrings("present", interactive_shell.executor.getEnv("RUSH_INTERACTIVE_IMPORTED").?);
+}
+
+test "interactive config service sources simple config through semantic ShellState" {
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+
+    var interactive_shell = InteractiveShell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
+
+    try InteractiveConfigService.initInteractive(std.testing.allocator, std.testing.io, &interactive_shell, "rush").sourceScript(
+        \\RUSH_SEMANTIC_CONFIG=loaded
+        \\RUSH_SEMANTIC_CONFIG_SECOND=ok
+    , "semantic-config-test.rush");
+
+    try std.testing.expectEqualStrings("loaded", interactive_shell.semantic_state.getVariable("RUSH_SEMANTIC_CONFIG").?.value);
+    try std.testing.expectEqualStrings("ok", interactive_shell.semantic_state.getVariable("RUSH_SEMANTIC_CONFIG_SECOND").?.value);
+    try std.testing.expectEqualStrings("loaded", interactive_shell.executor.getEnv("RUSH_SEMANTIC_CONFIG").?);
 }
 
 test "semantic interactive command falls back for function-shadowed builtins" {
