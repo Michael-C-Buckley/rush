@@ -7608,7 +7608,6 @@ fn semanticPreflightUnsupported(allocator: std.mem.Allocator, program: ir.Progra
             if (commandUsesUnsupportedSemanticBuiltin(command, false)) return "semantic executor preflight found an unsupported builtin";
             if (commandUsesUnsupportedProductionExpansion(command)) return "semantic executor production preflight found an expansion shape outside the switched slice";
             if (command.argv.len == 0 and command.redirections.len != 0) return "semantic executor does not yet support redirection-only commands";
-            if (command.redirections.len != 0) return "semantic executor production preflight keeps redirections unsupported outside the switched slice";
         }
     }
     for (program.function_definitions) |definition| {
@@ -7800,7 +7799,6 @@ fn semanticCommandListUnsupportedMessage(list: shell.StatementList, legacy_fallb
 fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan, legacy_fallback_gates: bool) ?[]const u8 {
     plan.validate();
     if (legacy_fallback_gates and plan.assignments.len != 0 and plan.class() != .assignment_only) return "semantic executor production preflight keeps assignment-bearing commands unsupported outside the switched slice";
-    if (legacy_fallback_gates and (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0)) return "semantic executor production preflight keeps redirections unsupported outside the switched slice";
     return switch (plan.classification) {
         .regular_builtin, .special_builtin => |definition| blk: {
             if (definition.semantic_class == .unsupported) break :blk "semantic evaluator does not yet implement this builtin";
@@ -11473,8 +11471,8 @@ test "semantic interactive unset function stays on legacy state bridge" {
     try std.testing.expect(!executor.functions.contains("rush_semantic_unset_fn"));
 }
 
-test "semantic interactive fallback happens before any partial execution" {
-    const path = "rush-semantic-interactive-fallback.tmp";
+test "semantic interactive invocation executes simple command redirections without legacy fallback" {
+    const path = "rush-semantic-interactive-redirection.tmp";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
@@ -11488,15 +11486,13 @@ test "semantic interactive fallback happens before any partial execution" {
     var semantic = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
     defer semantic.deinit(std.testing.allocator);
     switch (semantic) {
-        .unsupported => {},
-        .output => return error.ExpectedSemanticUnsupported,
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
     }
-    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, path, .{}));
-
-    var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
-    defer result.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("", result.stderr);
 
     const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
     defer std.testing.allocator.free(output);
