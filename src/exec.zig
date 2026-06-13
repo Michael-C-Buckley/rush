@@ -19445,6 +19445,37 @@ test "executor supports Bash string parameter operations" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "executor supports Bash array string parameter operations" {
+    var lowered = try parseAndLowerWithOptions(std.testing.allocator,
+        \\arr=([0]=zero [2]='two words' [3]=three [5]=five)
+        \\printf 'elem:%s|%s|%s\n' "${arr[2]:1:3}" "${arr[2]/words/WORDS}" "${arr[2]^^[tw]}"
+        \\printf 'slice:'
+        \\printf '<%s>' "${arr[@]:2:2}"
+        \\printf '\n'
+        \\IFS=,
+        \\printf 'star-slice:<%s>\n' "${arr[*]:2:2}"
+        \\printf 'repl-q:'
+        \\printf '<%s>' "${arr[@]//o/O}"
+        \\printf '\n'
+        \\printf 'repl-star:<%s>\n' "${arr[*]//o/O}"
+        \\IFS=' '
+        \\printf 'case-unquoted:'
+        \\for value in ${arr[@]^^[of]}; do printf '<%s>' "$value"; done
+        \\printf '\n'
+    , .{ .features = compat.Features.bash() });
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .features = compat.Features.bash() });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("elem:wo |two WORDS|TWo Words\nslice:<two words><three>\nstar-slice:<two words,three>\nrepl-q:<zerO><twO wOrds><three><five>\nrepl-star:<zerO,twO wOrds,three,five>\ncase-unquoted:<zerO><twO><wOrds><three><Five>\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "executor supports Bash positional parameter slices" {
     var lowered = try parseAndLowerWithOptions(std.testing.allocator,
         \\set -- "a b" "" c d
@@ -19648,6 +19679,9 @@ test "executor keeps Bash array operation forms on POSIX bad-substitution path" 
         "echo ${value^^}; echo after",
         "echo ${value^^[a]}; echo after",
         "echo ${value:${missing:-1}:3}; echo after",
+        "echo ${arr[0]:1}; echo after",
+        "echo ${arr[@]//o/O}; echo after",
+        "echo ${arr[*]^^[o]}; echo after",
     };
 
     for (cases) |case| {
