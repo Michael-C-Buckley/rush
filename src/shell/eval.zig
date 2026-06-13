@@ -726,37 +726,6 @@ const FunctionFrame = struct {
     }
 };
 
-const EvaluationBuffers = struct {
-    allocator: std.mem.Allocator,
-    stdin: *EvaluationInput,
-    stdout: std.ArrayList(u8) = .empty,
-    stderr: std.ArrayList(u8) = .empty,
-    diagnostics: std.ArrayList([]const u8) = .empty,
-
-    fn init(allocator: std.mem.Allocator, stdin: *EvaluationInput) EvaluationBuffers {
-        stdin.validate();
-        return .{ .allocator = allocator, .stdin = stdin };
-    }
-
-    fn deinit(self: *EvaluationBuffers) void {
-        self.stdout.deinit(self.allocator);
-        self.stderr.deinit(self.allocator);
-        for (self.diagnostics.items) |message| self.allocator.free(message);
-        self.diagnostics.deinit(self.allocator);
-        self.* = undefined;
-    }
-
-    fn addBuiltinDiagnostic(self: *EvaluationBuffers, command: []const u8, message: []const u8) !void {
-        std.debug.assert(command.len != 0);
-        std.debug.assert(message.len != 0);
-
-        try self.stderr.print(self.allocator, "{s}: {s}\n", .{ command, message });
-        const diagnostic = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ command, message });
-        errdefer self.allocator.free(diagnostic);
-        try self.diagnostics.append(self.allocator, diagnostic);
-    }
-};
-
 const EvaluationInput = struct {
     bytes: []const u8 = &.{},
     cursor: usize = 0,
@@ -797,6 +766,37 @@ const EvaluationInput = struct {
         if (self.cursor < self.bytes.len and self.bytes[self.cursor] == '\n') self.cursor += 1;
         self.validate();
         return self.bytes[start..end];
+    }
+};
+
+const EvaluationBuffers = struct {
+    allocator: std.mem.Allocator,
+    stdin: *EvaluationInput,
+    stdout: std.ArrayList(u8) = .empty,
+    stderr: std.ArrayList(u8) = .empty,
+    diagnostics: std.ArrayList([]const u8) = .empty,
+
+    fn init(allocator: std.mem.Allocator, stdin: *EvaluationInput) EvaluationBuffers {
+        stdin.validate();
+        return .{ .allocator = allocator, .stdin = stdin };
+    }
+
+    fn deinit(self: *EvaluationBuffers) void {
+        self.stdout.deinit(self.allocator);
+        self.stderr.deinit(self.allocator);
+        for (self.diagnostics.items) |message| self.allocator.free(message);
+        self.diagnostics.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn addBuiltinDiagnostic(self: *EvaluationBuffers, command: []const u8, message: []const u8) !void {
+        std.debug.assert(command.len != 0);
+        std.debug.assert(message.len != 0);
+
+        try self.stderr.print(self.allocator, "{s}: {s}\n", .{ command, message });
+        const diagnostic = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ command, message });
+        errdefer self.allocator.free(diagnostic);
+        try self.diagnostics.append(self.allocator, diagnostic);
     }
 };
 
@@ -1938,13 +1938,20 @@ fn evaluateExternalPipelineStage(evaluator: *Evaluator, shell_state: *state.Shel
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
     errdefer state_delta.deinit();
-    var buffers = EvaluationBuffers.init(evaluator.allocator, input);
-    defer buffers.deinit();
+    if (plan.assignmentEffect() == .persistent) {
+        state_delta.appendPersistentCommandAssignments(shell_state.*, plan.assignments) catch |err| switch (err) {
+            error.ReadonlyVariable => unreachable,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    }
 
-    const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &buffers);
+    var stage_buffers = EvaluationBuffers.init(evaluator.allocator, input);
+    defer stage_buffers.deinit();
+
+    const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &stage_buffers);
     state_delta.setLastStatus(status);
     assertCommandDeltaCompatible(plan, state_delta);
-    return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, .normal, &buffers);
+    return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, .normal, &stage_buffers);
 }
 
 fn evaluateTrapActionBody(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, body: TrapActionBody) EvalError!outcome.CommandOutcome {
@@ -5823,9 +5830,9 @@ const FakeExternalRuntime = struct {
     observed_spawn_stdout: [8]runtime.process.StandardIo = undefined,
     observed_spawn_stderr: [8]runtime.process.StandardIo = undefined,
     observed_spawn_process_group: [8]?runtime.process.ProcessId = undefined,
+    observed_run_stdin: std.ArrayList(u8) = .empty,
     observed_process_group: ?runtime.process.ProcessId = null,
     observed_subshell_process_group: ?runtime.process.ProcessId = null,
-    observed_run_stdin: std.ArrayList(u8) = .empty,
     spawn_count: usize = 0,
     start_subshell_count: usize = 0,
     run_count: usize = 0,
@@ -5834,8 +5841,8 @@ const FakeExternalRuntime = struct {
     wait_statuses: [8]runtime.process.WaitStatus = undefined,
     wait_status_count: usize = 0,
     run_status: runtime.process.WaitStatus = .{ .exited = 0 },
-    run_stdout: []const u8 = "",
-    run_stderr: []const u8 = "",
+    run_stdout: []const u8 = &.{},
+    run_stderr: []const u8 = &.{},
 
     fn init(allocator: std.mem.Allocator) FakeExternalRuntime {
         return .{
@@ -5846,8 +5853,8 @@ const FakeExternalRuntime = struct {
 
     fn deinit(self: *FakeExternalRuntime) void {
         self.clearObservedArgv();
-        self.observed_argv.deinit(self.allocator);
         self.observed_run_stdin.deinit(self.allocator);
+        self.observed_argv.deinit(self.allocator);
         self.observed_environment.deinit();
         self.* = undefined;
     }
@@ -6158,6 +6165,38 @@ test "semantic pipeline evaluation wires external-only real pipelines through ru
     try result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(state.ExitStatus, 4), shell_state.last_status);
     try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 3, 0, 4 }, shell_state.last_pipeline_statuses.items);
+}
+
+test "semantic mixed pipeline streams large input while external captures large stdout and stderr" {
+    var adapter = runtime.PosixAdapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, adapter.fdPort(), adapter.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    var large_input: std.ArrayList(u8) = .empty;
+    defer large_input.deinit(std.testing.allocator);
+    try large_input.appendNTimes(std.testing.allocator, 'i', 256 * 1024);
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "sh", .path = "/bin/sh" }};
+    const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
+    const producer = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "printf", large_input.items } } });
+    const sink = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{
+        "sh",
+        "-c",
+        "dd if=/dev/zero bs=1024 count=128 2>/dev/null; dd if=/dev/zero bs=1024 count=128 1>&2 2>/dev/null; wc -c >/dev/null",
+    } }, .lookup = lookup });
+    const plan = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{ .{ .simple = producer }, .{ .simple = sink } }, .{});
+    try std.testing.expectEqual(pipeline_plan.PipelineExecutionStrategy.mixed_in_memory, plan.strategy);
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), plan);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 128 * 1024), result.stdout.items.len);
+    try std.testing.expectEqual(@as(usize, 128 * 1024), result.stderr.items.len);
+    for (result.stdout.items) |byte| try std.testing.expectEqual(@as(u8, 0), byte);
+    for (result.stderr.items) |byte| try std.testing.expectEqual(@as(u8, 0), byte);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
 }
 
 test "semantic background external pipeline starts a tracked job without waiting" {

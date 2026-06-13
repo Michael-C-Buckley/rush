@@ -208,6 +208,9 @@ pub const RunRequest = struct {
     environment: ?*const std.process.Environ.Map = null,
     stdin: []const u8 = &.{},
 
+    /// `argv`, `environment`, `stdin`, and path slices are borrowed only until
+    /// the run call returns. Captured output in the result is owned by
+    /// `allocator`.
     pub fn init(allocator: std.mem.Allocator, argv: []const []const u8) RunRequest {
         const request: RunRequest = .{ .allocator = allocator, .argv = argv };
         request.validate();

@@ -241,6 +241,29 @@ fn wait(context: *anyopaque, request: process.WaitRequest) process.WaitError!pro
     return .{ .status = waitStatusFromTerm(term) };
 }
 
+const StdinWriter = struct {
+    io: std.Io,
+    file: std.Io.File,
+    bytes: []const u8,
+    err: ?anyerror = null,
+
+    fn run(self: *@This()) void {
+        defer self.file.close(self.io);
+        if (self.bytes.len == 0) return;
+
+        var buffer: [4096]u8 = undefined;
+        var writer = self.file.writerStreaming(self.io, &buffer);
+        writer.interface.writeAll(self.bytes) catch |err| {
+            self.err = writer.err orelse err;
+            return;
+        };
+        writer.interface.flush() catch |err| {
+            self.err = writer.err orelse err;
+            return;
+        };
+    }
+};
+
 fn run(context: *anyopaque, request: process.RunRequest) process.RunError!process.RunResult {
     const adapter = adapterFromContext(context);
     request.validate();
@@ -253,24 +276,26 @@ fn run(context: *anyopaque, request: process.RunRequest) process.RunError!proces
         .stdout = .pipe,
         .stderr = .pipe,
     });
-    defer child.kill(adapter.io);
 
     std.debug.assert(child.stdin != null);
     std.debug.assert(child.stdout != null);
     std.debug.assert(child.stderr != null);
 
-    if (request.stdin.len != 0) {
-        var stdin_buffer: [4096]u8 = undefined;
-        var stdin_writer = child.stdin.?.writerStreaming(adapter.io, &stdin_buffer);
-        stdin_writer.interface.writeAll(request.stdin) catch |err| switch (err) {
-            error.WriteFailed => return stdin_writer.err orelse err,
-        };
-        stdin_writer.interface.flush() catch |err| switch (err) {
-            error.WriteFailed => return stdin_writer.err orelse err,
-        };
-    }
-    child.stdin.?.close(adapter.io);
+    var stdin_writer: StdinWriter = .{
+        .io = adapter.io,
+        .file = child.stdin.?,
+        .bytes = request.stdin,
+    };
     child.stdin = null;
+    var stdin_thread = std.Thread.spawn(.{}, StdinWriter.run, .{&stdin_writer}) catch |err| {
+        child.kill(adapter.io);
+        return err;
+    };
+    var stdin_joined = false;
+    defer {
+        child.kill(adapter.io);
+        if (!stdin_joined) stdin_thread.join();
+    }
 
     var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
     var multi_reader: std.Io.File.MultiReader = undefined;
@@ -284,6 +309,10 @@ fn run(context: *anyopaque, request: process.RunRequest) process.RunError!proces
     try multi_reader.checkAnyError();
 
     const term = try child.wait(adapter.io);
+    stdin_thread.join();
+    stdin_joined = true;
+    if (stdin_writer.err) |err| return err;
+
     const stdout_slice = try multi_reader.toOwnedSlice(0);
     errdefer request.allocator.free(stdout_slice);
     const stderr_slice = try multi_reader.toOwnedSlice(1);
@@ -586,4 +615,31 @@ test "runtime posix adapter runs a process with byte stdin and captured output" 
     try std.testing.expectEqual(process.WaitStatus{ .exited = 0 }, result.status);
     try std.testing.expectEqualStrings("captured stdin", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "runtime posix adapter runs stdin writer concurrently with stdout and stderr capture" {
+    var adapter = Adapter.init(std.testing.io);
+    const process_port = adapter.processPort();
+
+    var input: std.ArrayList(u8) = .empty;
+    defer input.deinit(std.testing.allocator);
+    try input.appendNTimes(std.testing.allocator, 'i', 256 * 1024);
+
+    const argv = [_][]const u8{
+        "/bin/sh",
+        "-c",
+        "dd if=/dev/zero bs=1024 count=128 2>/dev/null; dd if=/dev/zero bs=1024 count=128 1>&2 2>/dev/null; wc -c >/dev/null",
+    };
+    var result = try process_port.run(.{
+        .allocator = std.testing.allocator,
+        .argv = &argv,
+        .stdin = input.items,
+    });
+    defer result.deinit();
+
+    try std.testing.expectEqual(process.WaitStatus{ .exited = 0 }, result.status);
+    try std.testing.expectEqual(@as(usize, 128 * 1024), result.stdout.len);
+    try std.testing.expectEqual(@as(usize, 128 * 1024), result.stderr.len);
+    for (result.stdout) |byte| try std.testing.expectEqual(@as(u8, 0), byte);
+    for (result.stderr) |byte| try std.testing.expectEqual(@as(u8, 0), byte);
 }
