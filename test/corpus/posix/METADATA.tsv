@@ -164,7 +164,7 @@ dash-smoke-case-function-loop	grammar	external-suite-smoke	dash-compatible funct
 dash-smoke-dot-current-env	builtin	external-suite-smoke	dash-compatible dot utility current-shell environment smoke case
 dash-smoke-function-redirection	grammar	external-suite-smoke	dash-compatible function redirection smoke case
 dash-smoke-loop-case	grammar	external-suite-smoke	dash-compatible loop and case smoke case
-dash-smoke-shift-operands	builtin	external-suite-smoke	dash-compatible shift operand smoke case
+dash-smoke-shift-operands	builtin	external-suite-smoke	dash-compatible shift operand smoke case, including whitespace-padded counts
 dash-smoke-subshell-env	grammar	external-suite-smoke	dash-compatible subshell environment isolation smoke case
 dash-smoke-subshell-status	grammar	external-suite-smoke	dash-compatible subshell status and environment smoke case
 errexit-and-or-final-exits	options	option	final AND-OR list command failure triggers errexit
@@ -337,7 +337,7 @@ builtin-dot-path-search	builtin	behavior	dot searches PATH for scripts without s
 builtin-printf-b-c-conversions	builtin	behavior	printf %b expands escapes and %c uses the first character
 builtin-printf-b-precision	builtin	behavior	printf %b applies precision after escape expansion before width padding
 builtin-unalias-all	builtin	behavior	unalias -a removes all aliases
-builtin-return-status-default	builtin	behavior	return uses explicit status or previous command status when omitted
+builtin-return-status-default	builtin	behavior	return uses explicit status, trims whitespace-padded numeric operands, or uses previous command status when omitted
 builtin-exit-status-default	builtin	behavior	exit without operands exits with previous command status
 builtin-loop-control-nested-levels	builtin	behavior	break and continue honor nested loop count operands, clamping over-depth counts to the outermost loop
 builtin-break-outside-loop	builtin	behavior	break outside a loop succeeds and does not stop execution

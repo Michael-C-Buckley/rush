@@ -42,6 +42,7 @@ until true; do echo bad; done; echo after
 for x in a b; do if test "$x" = b; then echo hit; else echo miss; fi; done
 case zzz in a*) echo a ;; b*) echo b ;; *) echo star ;; esac
 f() { false; return 7; }; f; echo $?
+f() { return " 5"; }; f; echo $?
 f() { echo $1/$2/$#; }; f alpha beta
 FOO=outer; ( FOO=inner; echo $FOO ); echo $FOO
 FOO=outer; { FOO=inner; }; echo $FOO
@@ -53,6 +54,7 @@ echo before; exit 7; echo after
 exec echo exec-ok; echo after
 readonly RO=value; echo $RO
 f() { shift; echo $1/$#; }; f a b c
+set -- a b c; shift " 2"; echo "$1/$#/$?"
 wait; echo waited
 umask 022; umask
 IFS=:; LIST=:a::b:; for x in $LIST; do echo "<$x>"; done

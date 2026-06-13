@@ -15003,7 +15003,8 @@ fn builtinShift(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, o
     const positionals = self.currentPositionalsPtr();
     const amount: usize = if (command.argv.len == 1) 1 else blk: {
         if (command.argv.len > 2) return shiftUsageError(self, "too many arguments");
-        break :blk std.fmt.parseInt(usize, command.argv[1].text, 10) catch return shiftUsageError(self, "numeric argument required");
+        const operand = std.mem.trim(u8, command.argv[1].text, &std.ascii.whitespace);
+        break :blk std.fmt.parseInt(usize, operand, 10) catch return shiftUsageError(self, "numeric argument required");
     };
     if (amount > positionals.params.len) {
         setSpecialBuiltinErrorConsequence(self, 1);
@@ -15976,7 +15977,8 @@ fn builtinReturn(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
     if (self.function_depth == 0 and self.source_depth == 0) return returnUsageError(self, "not in a function or dot script");
     if (command.argv.len > 2) return returnUsageError(self, "too many arguments");
     const status: ExitStatus = if (command.argv.len == 2) blk: {
-        const parsed = std.fmt.parseInt(u8, command.argv[1].text, 10) catch return returnUsageError(self, "numeric argument required");
+        const operand = std.mem.trim(u8, command.argv[1].text, &std.ascii.whitespace);
+        const parsed = std.fmt.parseInt(u8, operand, 10) catch return returnUsageError(self, "numeric argument required");
         break :blk parsed;
     } else self.lastStatus();
     self.pending_return = status;
@@ -17781,6 +17783,25 @@ test "executor supports return builtin in shell functions" {
     defer outside_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 2), outside_result.status);
     try std.testing.expect(std.mem.indexOf(u8, outside_result.stderr, "not in a function") != null);
+}
+
+test "executor trims return and shift numeric operands" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\f() { return " 5 "; }
+        \\f
+        \\printf 'return:%s\n' "$?"
+        \\set -- a b c
+        \\shift " 2 "
+        \\printf 'shift:%s/%s/%s\n' "$1" "$#" "$?"
+    , .{});
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("return:5\nshift:c/1/0\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor provides positional parameters to shell functions" {
