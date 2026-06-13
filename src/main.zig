@@ -6767,27 +6767,81 @@ fn runSemanticComparisonScript(allocator: std.mem.Allocator, io: std.Io, script:
     var resolver = parser_resolver.resolver();
     const eval_context = shell.EvalContext.forTarget(.current_shell);
 
-    var body = (try resolver.resolve(allocator, script, .TERM, eval_context, &shell_state)) orelse {
-        const message = try allocator.dupe(u8, "semantic parser lowering did not produce a comparison body");
+    var parsed = try parser.parse(allocator, script, .{ .features = case.features.withStrictDiagnostics() });
+    defer parsed.deinit();
+    if (parsed.diagnostics.len != 0) {
+        const message = try std.fmt.allocPrint(allocator, "semantic comparison parser rejected '{s}': {s}", .{ case.source_name, parsed.diagnostics[0].message });
         return .{ .unsupported = message };
-    };
-    defer body.deinit();
-
-    if (semanticComparisonFailureMessage(body)) |message| {
-        return .{ .unsupported = try allocator.dupe(u8, message) };
     }
 
-    var command_outcome = evaluateSemanticComparisonBody(&evaluator, &shell_state, eval_context, body) catch |err| switch (err) {
-        error.Unimplemented => {
-            const message = try std.fmt.allocPrint(allocator, "semantic evaluator returned Unimplemented for comparison subset script '{s}'", .{case.source_name});
-            return .{ .unsupported = message };
-        },
-        else => |e| return e,
-    };
-    defer command_outcome.deinit();
+    var program = try ir.lowerSimpleCommands(allocator, parsed);
+    defer program.deinit();
 
-    command_outcome.validateForContext(eval_context);
-    const output = try ExecutorComparisonOutput.init(allocator, command_outcome.status, command_outcome.stdout.items, command_outcome.stderr.items, command_outcome.control_flow);
+    var accumulated_stdout: std.ArrayList(u8) = .empty;
+    defer accumulated_stdout.deinit(allocator);
+    var accumulated_stderr: std.ArrayList(u8) = .empty;
+    defer accumulated_stderr.deinit(allocator);
+
+    var status: exec.ExitStatus = 0;
+    var control_flow: shell.ControlFlow = .normal;
+    for (program.statements, 0..) |statement, statement_index| {
+        std.debug.assert(statement.span.start <= statement.span.end);
+        std.debug.assert(statement.span.end <= script.len);
+        if (statement.async_after) {
+            const message = try std.fmt.allocPrint(allocator, "semantic comparison does not support background statement #{d} in '{s}'", .{ statement_index + 1, case.source_name });
+            return .{ .unsupported = message };
+        }
+        const should_run = if (statement_index == 0) blk: {
+            std.debug.assert(statement.op_before == .sequence);
+            break :blk true;
+        } else switch (statement.op_before) {
+            .sequence => true,
+            .and_if => status == 0,
+            .or_if => status != 0,
+        };
+        if (!should_run) continue;
+
+        const statement_script = std.mem.trim(u8, statement.span.slice(script), " \t\r\n;");
+        std.debug.assert(statement_script.len != 0);
+        var body = (try resolver.resolve(allocator, statement_script, .TERM, eval_context, &shell_state)) orelse {
+            const message = try std.fmt.allocPrint(allocator, "semantic parser lowering did not produce comparison body for statement #{d} in '{s}'", .{ statement_index + 1, case.source_name });
+            return .{ .unsupported = message };
+        };
+        defer body.deinit();
+
+        if (semanticComparisonFailureMessage(body)) |message| {
+            const owned_message = try std.fmt.allocPrint(allocator, "statement #{d} in '{s}': {s}", .{ statement_index + 1, case.source_name, message });
+            return .{ .unsupported = owned_message };
+        }
+
+        var command_outcome = evaluateSemanticComparisonBody(&evaluator, &shell_state, eval_context, body) catch |err| switch (err) {
+            error.Unimplemented => {
+                const message = try std.fmt.allocPrint(allocator, "semantic evaluator returned Unimplemented for statement #{d} in comparison subset script '{s}'", .{ statement_index + 1, case.source_name });
+                return .{ .unsupported = message };
+            },
+            else => |e| return e,
+        };
+        defer command_outcome.deinit();
+
+        command_outcome.validateForContext(eval_context);
+        try accumulated_stdout.appendSlice(allocator, command_outcome.stdout.items);
+        try accumulated_stderr.appendSlice(allocator, command_outcome.stderr.items);
+        status = command_outcome.status;
+        control_flow = command_outcome.control_flow;
+        const outcome_target = command_outcome.state_delta.target;
+        if (outcome_target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(outcome_target)) {
+            try command_outcome.commitDelta(&shell_state, outcome_target);
+        } else {
+            std.debug.assert(outcome_target.isIsolatedFromParent());
+            command_outcome.discardDelta(outcome_target);
+            shell_state.last_status = status;
+        }
+        shell_state.validate();
+        if (control_flow != .normal) break;
+    }
+
+    control_flow.validate();
+    const output = try ExecutorComparisonOutput.init(allocator, control_flow.status(status), accumulated_stdout.items, accumulated_stderr.items, control_flow);
     return .{ .output = output };
 }
 
@@ -10687,6 +10741,27 @@ test "old new executor compare harness matches assignment and builtin state" {
         .script =
         \\export VALUE=new
         \\export -p
+        ,
+    });
+}
+
+test "old new executor compare harness expands each statement after prior commits" {
+    try expectOldNewExecutorComparison(.{
+        .source_name = "compare/statement-by-statement-expansion",
+        .script =
+        \\VALUE=new
+        \\printf '%s\n' "$VALUE"
+        ,
+    });
+}
+
+test "old new executor compare harness preserves top-level and-or sequencing" {
+    try expectOldNewExecutorComparison(.{
+        .source_name = "compare/and-or-sequencing",
+        .script =
+        \\false && printf 'bad-and\n'
+        \\true || printf 'bad-or\n'
+        \\printf 'after\n'
         ,
     });
 }

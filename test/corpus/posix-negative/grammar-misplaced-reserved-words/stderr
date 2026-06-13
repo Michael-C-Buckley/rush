@@ -25,3 +25,9 @@ rush: parse_error: misplaced reserved word
 rush: parse_error: misplaced reserved word
   }
   ^
+rush: parse_error: misplaced reserved word
+  ! then
+    ^^^^
+rush: parse_error: misplaced reserved word
+  echo ok | then
+            ^^^^
