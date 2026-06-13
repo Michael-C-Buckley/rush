@@ -38,7 +38,6 @@ pub const FunctionDefinition = struct {
             std.debug.assert(std.mem.indexOfScalar(u8, source_body, 0) == null);
         }
         validateRedirections(self.redirections);
-        std.debug.assert(self.redirections.allocator == null);
     }
 
     pub fn hasExecutableBody(self: FunctionDefinition) bool {
@@ -688,11 +687,13 @@ pub fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: Functio
     errdefer freeStatementList(allocator, owned_body);
     const owned_source_body = if (definition.source_body) |source_body| try allocator.dupe(u8, source_body) else null;
     errdefer if (owned_source_body) |source_body| allocator.free(source_body);
+    var owned_redirections = try definition.redirections.clone(allocator);
+    errdefer owned_redirections.deinit();
     return .{
         .name = owned_name,
         .body = owned_body,
         .source_body = owned_source_body,
-        .redirections = definition.redirections,
+        .redirections = owned_redirections,
     };
 }
 
@@ -700,6 +701,8 @@ pub fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: Function
     allocator.free(definition.name);
     freeStatementList(allocator, definition.body);
     if (definition.source_body) |source_body| allocator.free(source_body);
+    var redirections = definition.redirections;
+    redirections.deinit();
 }
 
 fn targetForClassification(default_target: context.ExecutionTarget, classification: Classification) context.ExecutionTarget {
@@ -797,13 +800,15 @@ fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.All
     errdefer freeAssignments(allocator, assignments);
     const argv = try cloneArgv(allocator, plan.argv);
     errdefer freeArgv(allocator, argv);
+    var redirections = try plan.redirections.clone(allocator);
+    errdefer redirections.deinit();
     const classification = try cloneClassification(allocator, plan.classification, argv);
     errdefer freeClassification(allocator, classification);
     const owned: CommandPlan = .{
         .target = plan.target,
         .assignments = assignments,
         .argv = argv,
-        .redirections = plan.redirections,
+        .redirections = redirections,
         .classification = classification,
     };
     owned.validate();
@@ -813,6 +818,8 @@ fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.All
 fn freeCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) void {
     freeAssignments(allocator, plan.assignments);
     freeArgv(allocator, plan.argv);
+    var redirections = plan.redirections;
+    redirections.deinit();
     freeClassification(allocator, plan.classification);
 }
 
@@ -896,12 +903,16 @@ fn freeClassification(allocator: std.mem.Allocator, classification: Classificati
 
 fn cloneCompoundCommandPlan(allocator: std.mem.Allocator, plan: CompoundCommandPlan) std.mem.Allocator.Error!CompoundCommandPlan {
     plan.validate();
+    var redirections = try plan.redirections.clone(allocator);
+    errdefer redirections.deinit();
     const body = try cloneCompoundBody(allocator, plan.body);
     errdefer freeCompoundBody(allocator, body);
-    return .{ .target = plan.target, .redirections = plan.redirections, .body = body };
+    return .{ .target = plan.target, .redirections = redirections, .body = body };
 }
 
 fn freeCompoundCommandPlan(allocator: std.mem.Allocator, plan: CompoundCommandPlan) void {
+    var redirections = plan.redirections;
+    redirections.deinit();
     freeCompoundBody(allocator, plan.body);
 }
 

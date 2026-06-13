@@ -258,6 +258,31 @@ pub const RedirectionPlan = struct {
     failure_consequence: FailureConsequence = .command_failure,
     allocator: ?std.mem.Allocator = null,
 
+    pub fn clone(self: RedirectionPlan, allocator: std.mem.Allocator) std.mem.Allocator.Error!RedirectionPlan {
+        self.validate();
+
+        const owned_steps = try allocator.alloc(RedirectionStep, self.steps.len);
+        errdefer allocator.free(owned_steps);
+        var initialized: usize = 0;
+        errdefer for (owned_steps[0..initialized]) |step| freeStepData(allocator, step);
+        for (self.steps, 0..) |step, index| {
+            owned_steps[index] = try cloneStep(allocator, step);
+            initialized += 1;
+        }
+
+        const owned_rollback_steps = try allocator.dupe(RestorationStep, self.rollback_steps);
+        errdefer allocator.free(owned_rollback_steps);
+
+        const plan: RedirectionPlan = .{
+            .steps = owned_steps,
+            .rollback_steps = owned_rollback_steps,
+            .failure_consequence = self.failure_consequence,
+            .allocator = allocator,
+        };
+        plan.validate();
+        return plan;
+    }
+
     pub fn build(allocator: std.mem.Allocator, specs: []const RedirectionSpec, options: PlanOptions) std.mem.Allocator.Error!PlanResult {
         var steps: std.ArrayList(RedirectionStep) = .empty;
         errdefer steps.deinit(allocator);
@@ -299,6 +324,7 @@ pub const RedirectionPlan = struct {
             self.* = undefined;
             return;
         };
+        for (self.steps) |step| freeStepData(allocator, step);
         allocator.free(self.steps);
         allocator.free(self.rollback_steps);
         self.* = undefined;
@@ -344,6 +370,53 @@ pub const RedirectionPlan = struct {
         return .{ .applied = applied };
     }
 };
+
+fn cloneStep(allocator: std.mem.Allocator, step: RedirectionStep) std.mem.Allocator.Error!RedirectionStep {
+    step.validate();
+    return .{
+        .ordinal = step.ordinal,
+        .effect = try cloneEffect(allocator, step.effect),
+    };
+}
+
+fn cloneEffect(allocator: std.mem.Allocator, effect: RedirectionEffect) std.mem.Allocator.Error!RedirectionEffect {
+    effect.validate();
+    return switch (effect) {
+        .open_path => |step| blk: {
+            const path = try cloneDataSlice(allocator, step.path);
+            break :blk .{ .open_path = .{
+                .target = step.target,
+                .path = path,
+                .options = step.options,
+                .noclobber = step.noclobber,
+            } };
+        },
+        .here_doc => |step| blk: {
+            const data = try cloneDataSlice(allocator, step.data);
+            break :blk .{ .here_doc = .{ .target = step.target, .data = data } };
+        },
+        .duplicate => |step| .{ .duplicate = step },
+        .close => |step| .{ .close = step },
+    };
+}
+
+fn cloneDataSlice(allocator: std.mem.Allocator, data: DataSlice) std.mem.Allocator.Error!DataSlice {
+    data.validateAllowingEmpty();
+    const bytes = try allocator.dupe(u8, data.bytes);
+    return .{ .bytes = bytes, .ownership = .owned_by_plan };
+}
+
+fn freeStepData(allocator: std.mem.Allocator, step: RedirectionStep) void {
+    switch (step.effect) {
+        .open_path => |open_step| freeDataSlice(allocator, open_step.path),
+        .here_doc => |here_doc_step| freeDataSlice(allocator, here_doc_step.data),
+        .duplicate, .close => {},
+    }
+}
+
+fn freeDataSlice(allocator: std.mem.Allocator, data: DataSlice) void {
+    if (data.ownership == .owned_by_plan) allocator.free(data.bytes);
+}
 
 pub const PlanResult = union(enum) {
     plan: RedirectionPlan,
@@ -655,6 +728,41 @@ test "RedirectionPlan builds ordered semantic operations and failure policy" {
     }
     switch (plan.steps[3].effect) {
         .here_doc => |step| try std.testing.expectEqualStrings("body\n", step.data.bytes),
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "RedirectionPlan clone owns path and here-doc data" {
+    const steps = [_]RedirectionStep{
+        RedirectionStep.openPath(0, 1, "out", .{ .access = .write_only, .create = true, .truncate = true }),
+        .{ .ordinal = 1, .effect = .{ .here_doc = .{ .target = 0, .data = .{ .bytes = "body\n" } } } },
+    };
+    const rollback_steps = [_]RestorationStep{
+        .{ .ordinal = 0, .target = 1 },
+        .{ .ordinal = 1, .target = 0 },
+    };
+    const plan: RedirectionPlan = .{ .steps = &steps, .rollback_steps = &rollback_steps };
+
+    var cloned = try plan.clone(std.testing.allocator);
+    defer cloned.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), cloned.steps.len);
+    try std.testing.expect(cloned.steps.ptr != plan.steps.ptr);
+    try std.testing.expect(cloned.rollback_steps.ptr != plan.rollback_steps.ptr);
+    switch (cloned.steps[0].effect) {
+        .open_path => |step| {
+            try std.testing.expectEqualStrings("out", step.path.bytes);
+            try std.testing.expectEqual(Ownership.owned_by_plan, step.path.ownership);
+            try std.testing.expect(step.path.bytes.ptr != steps[0].effect.open_path.path.bytes.ptr);
+        },
+        else => return error.TestUnexpectedResult,
+    }
+    switch (cloned.steps[1].effect) {
+        .here_doc => |step| {
+            try std.testing.expectEqualStrings("body\n", step.data.bytes);
+            try std.testing.expectEqual(Ownership.owned_by_plan, step.data.ownership);
+            try std.testing.expect(step.data.bytes.ptr != steps[1].effect.here_doc.data.bytes.ptr);
+        },
         else => return error.TestUnexpectedResult,
     }
 }

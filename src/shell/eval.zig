@@ -573,10 +573,11 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerFunctionDefinition(self: *TrapActionLowerer, definition: ir.FunctionDefinition, target: context.ExecutionTarget) !TrapActionBodyPayload {
-        if (definition.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: function-definition redirections need redirection lowering", .{self.signal.name()});
+        const redirections = try self.lowerRedirections(definition.redirections, .regular_command);
+        if (redirections == .failure) return .{ .failure = redirections.failure };
         const name = try self.allocator.dupe(u8, definition.name);
         const source_body = try self.allocator.dupe(u8, definition.body);
-        const function_definition: command_plan.FunctionDefinition = .{ .name = name, .source_body = source_body };
+        const function_definition: command_plan.FunctionDefinition = .{ .name = name, .source_body = source_body, .redirections = redirections.plan };
         const plan: command_plan.CommandPlan = .{ .target = target, .classification = .{ .function_definition = function_definition } };
         plan.validate();
         return .{ .simple = plan };
@@ -6512,6 +6513,49 @@ test "semantic parser trap resolver classifies same-list function calls" {
     defer call_outcome.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call_outcome.status);
     try std.testing.expectEqualStrings("hi\n", call_outcome.stdout.items);
+}
+
+test "semantic parser trap resolver stores parser-backed function definition redirections" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.initWithFdPort(std.testing.allocator, fake.fdPort());
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    shell_state.last_status = 33;
+    try shell_state.setTrapForSignal(.TERM, "fn() { echo redirected; } > trap-function-out");
+    try shell_state.appendPendingTrap(.TERM);
+    {
+        var definition_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, parser_resolver.resolver())).?;
+        defer definition_outcome.deinit();
+        try std.testing.expectEqual(@as(outcome.ExitStatus, 33), definition_outcome.status);
+        try definition_outcome.commitDelta(&shell_state, .current_shell);
+    }
+
+    const stored = shell_state.getFunction("fn").?;
+    try std.testing.expect(stored.source_body != null);
+    try std.testing.expectEqual(@as(usize, 1), stored.redirections.steps.len);
+    switch (stored.redirections.steps[0].effect) {
+        .open_path => |step| try std.testing.expectEqualStrings("trap-function-out", step.path.bytes),
+        else => return error.TestUnexpectedResult,
+    }
+
+    const lookup_functions = [_]command_plan.FunctionDefinition{stored};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"} },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+    var call_outcome = try evaluatePlan(&evaluator, &shell_state, eval_context, call_plan);
+    defer call_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call_outcome.status);
+    try std.testing.expectEqualStrings("redirected\n", call_outcome.stdout.items);
+    try std.testing.expectEqual(@as(usize, 6), fake.fd_operation_count);
+    switch (fake.fd_operations[1]) {
+        .open => |path| try std.testing.expectEqualStrings("trap-function-out", path),
+        else => return error.TestUnexpectedResult,
+    }
 }
 
 test "semantic parser trap resolver models parse failures as trap diagnostics" {
