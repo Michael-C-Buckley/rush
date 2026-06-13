@@ -2658,8 +2658,9 @@ const ArithmeticParser = struct {
 
     fn lookupNumber(self: ArithmeticParser, name: []const u8) !i64 {
         const value = self.env.get(name) orelse return 0;
-        if (value.len == 0) return 0;
-        return parseIntegerConstant(value);
+        const trimmed = std.mem.trim(u8, value, " \t");
+        if (trimmed.len == 0) return 0;
+        return parseIntegerConstant(trimmed);
     }
 
     fn setNumber(self: ArithmeticParser, name: []const u8, value: i64) !void {
@@ -4745,11 +4746,17 @@ fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, name, "ARRAY_UNCLOSED_SUBSCRIPT_REF")) return "arr[1";
     if (std.mem.eql(u8, name, "ARRAY_BAD_NAME_REF")) return "bad-name[0]";
     if (std.mem.eql(u8, name, "USER_NUM")) return "3";
+    if (std.mem.eql(u8, name, "PADDED_NUM")) return " 42 ";
+    if (std.mem.eql(u8, name, "TAB_PADDED_NUM")) return "\t42\t";
+    if (std.mem.eql(u8, name, "PADDED_NEGATIVE_NUM")) return " -7 ";
+    if (std.mem.eql(u8, name, "PADDED_BLANK_NUM")) return " \t ";
+    if (std.mem.eql(u8, name, "WC_COUNT")) return "      12";
     if (std.mem.eql(u8, name, "MIN_INT")) return "-9223372036854775808";
     if (std.mem.eql(u8, name, "OCTAL_NUM")) return "010";
     if (std.mem.eql(u8, name, "HEX_NUM")) return "0x2f";
     if (std.mem.eql(u8, name, "NEGATIVE_OCTAL_NUM")) return "-010";
     if (std.mem.eql(u8, name, "EXPRESSION_VALUE")) return "1 + 2";
+    if (std.mem.eql(u8, name, "PADDED_JUNK_VALUE")) return "42 junk";
     if (std.mem.eql(u8, name, "NESTED_PARAMETER_TEXT")) return "${MISSING:-2} + 1";
     if (std.mem.eql(u8, name, "WORDS")) return "one two\tthree";
     if (std.mem.eql(u8, name, "EMPTY")) return "";
@@ -6168,6 +6175,19 @@ test "arithmetic expansion evaluates integer expressions" {
     try std.testing.expectEqualStrings("value=7", result.fields[0]);
 }
 
+test "arithmetic expansion trims shell blanks around variable integer values" {
+    try std.testing.expectEqual(@as(i64, 42), try evalArithmetic("PADDED_NUM", test_env, .{}));
+    try std.testing.expectEqual(@as(i64, 42), try evalArithmetic("TAB_PADDED_NUM", test_env, .{}));
+    try std.testing.expectEqual(@as(i64, -5), try evalArithmetic("PADDED_NEGATIVE_NUM + 2", test_env, .{}));
+    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("PADDED_BLANK_NUM", test_env, .{}));
+    try std.testing.expectEqual(@as(i64, 13), try evalArithmetic("WC_COUNT + 1", test_env, .{}));
+
+    var unbraced = try expandWord(std.testing.allocator, "$(($PADDED_NUM))", .{ .env = test_env });
+    defer unbraced.deinit();
+    try std.testing.expectEqual(@as(usize, 1), unbraced.fields.len);
+    try std.testing.expectEqualStrings("42", unbraced.fields[0]);
+}
+
 const ArithmeticSetRecorder = struct {
     count: usize = 0,
     last_name: [64]u8 = undefined,
@@ -6255,6 +6275,7 @@ test "arithmetic expansion evaluates only the selected conditional operand" {
 test "arithmetic expansion rejects invalid variable values" {
     try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("USER", test_env, .{}));
     try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("EXPRESSION_VALUE", test_env, .{}));
+    try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("PADDED_JUNK_VALUE", test_env, .{}));
     try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("NESTED_PARAMETER_TEXT", test_env, .{}));
     try std.testing.expectError(error.InvalidArithmetic, evalArithmetic("USER += 1", test_env, .{}));
 
