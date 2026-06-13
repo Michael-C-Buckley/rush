@@ -13519,7 +13519,7 @@ fn analyzePrintfFormat(format: []const u8) error{MixedArguments}!PrintfArgumentM
         switch (format[index]) {
             '\\' => {
                 index += 1;
-                if (index < format.len) index += 1;
+                if (index < format.len) skipPrintfFormatEscape(format, &index);
             },
             '%' => {
                 index += 1;
@@ -13542,6 +13542,27 @@ fn analyzePrintfFormat(format: []const u8) error{MixedArguments}!PrintfArgumentM
         }
     }
     return result;
+}
+
+fn skipPrintfFormatEscape(format: []const u8, index: *usize) void {
+    switch (format[index.*]) {
+        'a', 'b', 'f', 'n', 'r', 't', 'v', '\\' => index.* += 1,
+        'x' => {
+            index.* += 1;
+            var count: usize = 0;
+            while (index.* < format.len and count < 2) : (count += 1) {
+                _ = std.fmt.charToDigit(format[index.*], 16) catch break;
+                index.* += 1;
+            }
+        },
+        '0'...'7' => {
+            var count: usize = 0;
+            while (index.* < format.len and count < 3 and format[index.*] >= '0' and format[index.*] <= '7') : (count += 1) {
+                index.* += 1;
+            }
+        },
+        else => {},
+    }
 }
 
 fn printfDiagnostic(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), status: *ExitStatus, message: []const u8) !void {
@@ -14041,6 +14062,10 @@ fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8
         'a' => try stdout.append(allocator, 0x07),
         'b' => try stdout.append(allocator, 0x08),
         'c' => {
+            if (mode == .format) {
+                try stdout.append(allocator, '\\');
+                return true;
+            }
             index.* += 1;
             return false;
         },
@@ -14060,6 +14085,7 @@ fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8
         },
         else => {
             try stdout.append(allocator, '\\');
+            if (mode == .format) return true;
             try stdout.append(allocator, byte);
         },
     }
@@ -20013,6 +20039,20 @@ test "executor implements read and printf builtins" {
     var unknown_escape_result = try executor.executeProgram(unknown_escape.program, .{});
     defer unknown_escape_result.deinit();
     try std.testing.expectEqualStrings("a\\ b", unknown_escape_result.stdout);
+
+    var format_c_escape = try parseAndLower(std.testing.allocator, "printf 'a\\cb'; echo END");
+    defer format_c_escape.parsed.deinit();
+    defer format_c_escape.program.deinit();
+    var format_c_escape_result = try executor.executeProgram(format_c_escape.program, .{});
+    defer format_c_escape_result.deinit();
+    try std.testing.expectEqualStrings("a\\cbEND\n", format_c_escape_result.stdout);
+
+    var format_percent_escape = try parseAndLower(std.testing.allocator, "printf 'a\\%sb\\n'");
+    defer format_percent_escape.parsed.deinit();
+    defer format_percent_escape.program.deinit();
+    var format_percent_escape_result = try executor.executeProgram(format_percent_escape.program, .{});
+    defer format_percent_escape_result.deinit();
+    try std.testing.expectEqualStrings("a\\b\n", format_percent_escape_result.stdout);
 
     var numbered_lowered = try parseAndLower(std.testing.allocator, "printf '[%2$s:%1$d:%%][%3$.2s]\\n' 7 two three 8 four five");
     defer numbered_lowered.parsed.deinit();
