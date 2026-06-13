@@ -5,6 +5,7 @@ const zig_builtin = @import("builtin");
 const compat = @import("compat.zig");
 const completion = @import("completion.zig");
 const expand = @import("expand.zig");
+const history_module = @import("history.zig");
 const ir = @import("ir.zig");
 const parser = @import("parser.zig");
 const vaxis = @import("vaxis");
@@ -307,16 +308,8 @@ pub const CommandResult = struct {
     }
 };
 
-pub const HistoryEntry = struct {
-    number: i64,
-    command: []const u8,
-};
-
-pub const CommandHistory = struct {
-    context: *anyopaque,
-    list: *const fn (*anyopaque, std.mem.Allocator) anyerror![]HistoryEntry,
-    append: ?*const fn (*anyopaque, std.Io, []const u8, ExitStatus, i64, i64) anyerror!void = null,
-};
+pub const HistoryEntry = history_module.HistoryEntry;
+pub const CommandHistory = history_module.CommandHistory;
 
 pub const PromptBuilder = struct {
     text: std.ArrayList(u8) = .empty,
