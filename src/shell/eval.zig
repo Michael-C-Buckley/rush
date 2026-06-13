@@ -502,12 +502,14 @@ const TrapActionLowerer = struct {
         for (command.argv, 0..) |word, index| argv_words[index] = word.raw;
 
         const expansion_target = self.expansionTarget(target);
+        var last_background_pid_buffer: [32]u8 = undefined;
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
             .eval_context = self.eval_context.withTarget(expansion_target),
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
             .arg_zero = self.owner.arg_zero,
+            .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
 
@@ -621,12 +623,14 @@ const TrapActionLowerer = struct {
 
     fn expandScalar(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
+        var last_background_pid_buffer: [32]u8 = undefined;
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
             .eval_context = self.eval_context.withTarget(expansion_target),
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
             .arg_zero = self.owner.arg_zero,
+            .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
         return expansion.expandWordScalar(raw) catch |err| {
@@ -637,12 +641,14 @@ const TrapActionLowerer = struct {
 
     fn expandFields(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) !expand.ExpansionResult {
         const expansion_target = self.expansionTarget(target);
+        var last_background_pid_buffer: [32]u8 = undefined;
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
             .eval_context = self.eval_context.withTarget(expansion_target),
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
             .arg_zero = self.owner.arg_zero,
+            .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
         return expansion.expandWordFields(raw) catch |err| {
@@ -653,15 +659,22 @@ const TrapActionLowerer = struct {
 
     fn expandHereDoc(self: *TrapActionLowerer, text: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
+        var last_background_pid_buffer: [32]u8 = undefined;
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
             .eval_context = self.eval_context.withTarget(expansion_target),
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
             .arg_zero = self.owner.arg_zero,
+            .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
         return expansion.expandHereDocBody(text);
+    }
+
+    fn lastBackgroundPidText(self: TrapActionLowerer, buffer: []u8) []const u8 {
+        if (self.shell_state.last_background_pid) |pid| return std.fmt.bufPrint(buffer, "{d}", .{pid}) catch "";
+        return "";
     }
 
     fn expansionTarget(self: TrapActionLowerer, target: context.ExecutionTarget) context.ExecutionTarget {

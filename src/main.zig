@@ -6770,7 +6770,6 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
     for (program.statements, 0..) |statement, statement_index| {
         std.debug.assert(statement.span.start <= statement.span.end);
         std.debug.assert(statement.span.end <= script.len);
-        if (statement.async_after) return semanticUnsupported(allocator, "semantic executor does not yet start top-level background statements without old executor fallback");
 
         const should_run = if (statement_index == 0) blk: {
             std.debug.assert(statement.op_before == .sequence);
@@ -6793,7 +6792,14 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
         }
         if (semanticBodyUnsupportedMessage(body)) |message| return semanticUnsupported(allocator, message);
 
-        var command_outcome = evaluateSemanticComparisonBody(evaluator, shell_state, eval_context, body) catch |err| switch (err) {
+        var command_outcome = if (statement.async_after) blk: {
+            var background_plan = (try semanticBackgroundPipelinePlan(allocator, body)) orelse return semanticUnsupported(allocator, "semantic executor production preflight keeps unsupported background statements on the old executor");
+            defer background_plan.deinit(allocator);
+            break :blk shell.eval.evaluatePipelinePlan(evaluator, shell_state, eval_context, background_plan.plan) catch |err| switch (err) {
+                error.Unimplemented => return semanticUnsupported(allocator, "semantic evaluator reported an unimplemented background command shape"),
+                else => |e| return e,
+            };
+        } else evaluateSemanticComparisonBody(evaluator, shell_state, eval_context, body) catch |err| switch (err) {
             error.Unimplemented => return semanticUnsupported(allocator, "semantic evaluator reported an unimplemented command shape"),
             else => |e| return e,
         };
@@ -6829,6 +6835,50 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
         .stdout = stdout,
         .stderr = stderr,
     } };
+}
+
+const SemanticBackgroundPipelinePlan = struct {
+    plan: shell.PipelinePlan,
+    allocated_stages: []shell.PipelineStagePlan = &.{},
+
+    fn deinit(self: *SemanticBackgroundPipelinePlan, allocator: std.mem.Allocator) void {
+        if (self.allocated_stages.len != 0) allocator.free(self.allocated_stages);
+        self.* = undefined;
+    }
+};
+
+fn semanticBackgroundPipelinePlan(allocator: std.mem.Allocator, body: shell.TrapActionBody) !?SemanticBackgroundPipelinePlan {
+    body.validate();
+    return switch (body) {
+        .simple => |plan| try semanticBackgroundSingleStagePlan(allocator, plan),
+        .pipeline => |plan| semanticBackgroundPipelineFromPipeline(plan),
+        .owned => |owned| switch (owned.body) {
+            .simple => |plan| try semanticBackgroundSingleStagePlan(allocator, plan),
+            .pipeline => |plan| semanticBackgroundPipelineFromPipeline(plan),
+            .compound, .failure => null,
+        },
+        .compound, .failure => null,
+    };
+}
+
+fn semanticBackgroundSingleStagePlan(allocator: std.mem.Allocator, plan: shell.CommandPlan) !SemanticBackgroundPipelinePlan {
+    plan.validate();
+    const stages = try allocator.alloc(shell.PipelineStagePlan, 1);
+    errdefer allocator.free(stages);
+    stages[0] = .{ .simple = plan };
+    return .{
+        .plan = shell.PipelinePlan.init(stages, .{ .background = .background }),
+        .allocated_stages = stages,
+    };
+}
+
+fn semanticBackgroundPipelineFromPipeline(plan: shell.PipelinePlan) SemanticBackgroundPipelinePlan {
+    plan.validate();
+    return .{ .plan = shell.PipelinePlan.init(plan.stages, .{
+        .negated = plan.negated,
+        .status_rule = plan.status_rule,
+        .background = .background,
+    }) };
 }
 
 fn assertSemanticInteractiveOptions(script: []const u8, options: exec.ExecuteOptions) void {
@@ -7030,6 +7080,9 @@ fn semanticPreflightUnsupported(program: ir.Program) ?[]const u8 {
     if (program.if_commands.len != 0 or program.loop_commands.len != 0 or program.for_commands.len != 0 or program.case_commands.len != 0 or program.brace_groups.len != 0 or program.subshells.len != 0) {
         return "semantic executor production preflight keeps compound commands on the old executor until dynamic expansion is complete";
     }
+    for (program.statements, 0..) |statement, index| {
+        if (semanticAsyncStatementPreflightUnsupported(program, statement, index)) |message| return message;
+    }
     for (program.commands) |command| {
         if (command.assignments.len != 0) return "semantic executor production preflight keeps assignment-bearing commands on the old executor";
         if (commandUsesUnsupportedSemanticBuiltin(command)) return "semantic executor preflight found an unsupported builtin";
@@ -7045,9 +7098,17 @@ fn semanticPreflightUnsupported(program: ir.Program) ?[]const u8 {
     return null;
 }
 
+fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir.Statement, index: usize) ?[]const u8 {
+    std.debug.assert(index < program.statements.len);
+    if (!statement.async_after) return null;
+    if (statement.kind != .pipeline) return "semantic executor production preflight keeps non-pipeline background statements on the old executor";
+    if (statement.op_before != .sequence) return "semantic executor production preflight keeps asynchronous and-or lists on the old executor";
+    if (index + 1 < program.statements.len and program.statements[index + 1].op_before != .sequence) return "semantic executor production preflight keeps asynchronous and-or lists on the old executor";
+    return null;
+}
+
 fn semanticPipelinePreflightUnsupported(program: ir.Program, pipeline: ir.Pipeline) ?[]const u8 {
     std.debug.assert(program.commands.len != 0 or pipeline.command_indexes.len == 0);
-    if (pipeline.async_after) return "semantic executor production preflight keeps background pipelines on the old executor";
     if (pipeline.command_indexes.len == 0 or pipeline.command_indexes.len != pipeline.stage_spans.len) {
         return "semantic executor production preflight keeps compound pipeline stages on the old executor";
     }
@@ -10942,6 +11003,47 @@ test "semantic non-interactive invocation executes foreground simple pipelines" 
     }
 }
 
+fn expectBackgroundStatusAndPidLine(prefix: []const u8, line: []const u8) !void {
+    var fields = std.mem.splitScalar(u8, line, ':');
+    try std.testing.expectEqualStrings(prefix, fields.next() orelse return error.ExpectedBackgroundLinePrefix);
+    try std.testing.expectEqualStrings("0", fields.next() orelse return error.ExpectedBackgroundStatus);
+    const pid_text = fields.next() orelse return error.ExpectedBackgroundPid;
+    try std.testing.expect(fields.next() == null);
+    const pid = try std.fmt.parseUnsigned(usize, pid_text, 10);
+    try std.testing.expect(pid != 0);
+}
+
+test "semantic non-interactive invocation starts top-level background pipelines" {
+    var execution = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        \\: & printf 'builtin:%s:%s\n' "$?" "$!"
+        \\/bin/cat /dev/null | /bin/cat & printf 'pipeline:%s:%s\n' "$?" "$!"
+    ,
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stderr);
+
+            var lines = std.mem.splitScalar(u8, result.stdout, '\n');
+            const builtin = lines.next() orelse return error.ExpectedBackgroundBuiltinLine;
+            const pipeline = lines.next() orelse return error.ExpectedBackgroundPipelineLine;
+            try std.testing.expectEqualStrings("", lines.next() orelse return error.ExpectedTrailingNewline);
+            try std.testing.expect(lines.next() == null);
+            try expectBackgroundStatusAndPidLine("builtin", builtin);
+            try expectBackgroundStatusAndPidLine("pipeline", pipeline);
+        },
+    }
+}
+
 test "semantic non-interactive invocation reports unsupported shapes before fallback" {
     var execution = try runSemanticCommandString(
         std.testing.allocator,
@@ -10961,19 +11063,19 @@ test "semantic non-interactive invocation reports unsupported shapes before fall
 }
 
 test "semantic non-interactive invocation still rejects unsupported production pipeline shapes" {
-    var background = try runSemanticCommandString(
+    var async_and_or = try runSemanticCommandString(
         std.testing.allocator,
         std.testing.io,
-        "printf 'background\n' | /bin/cat &",
+        "true && : &",
         .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
         null,
         &.{},
         .{},
     );
-    defer background.deinit(std.testing.allocator);
-    switch (background) {
+    defer async_and_or.deinit(std.testing.allocator);
+    switch (async_and_or) {
         .output => return error.ExpectedSemanticUnsupported,
-        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "background") != null),
+        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "asynchronous and-or") != null),
     }
 
     var compound_stage = try runSemanticCommandString(
