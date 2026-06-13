@@ -6128,16 +6128,22 @@ pub const Executor = struct {
 
     const PipelineSubshellProcessState = struct {
         allocator: std.mem.Allocator,
+        executor: *Executor,
         io: ?std.Io,
         cwd: ?[:0]u8,
         umask: u16,
         rlimits: SavedRlimits,
+        stdio: ?FdRedirectionGuard,
 
         fn restore(self: *PipelineSubshellProcessState) void {
             if (self.cwd) |cwd| {
                 if (self.io) |io| std.process.setCurrentPath(io, cwd) catch {};
                 self.allocator.free(cwd);
                 self.cwd = null;
+            }
+            if (self.stdio) |*stdio| {
+                if (self.io) |io| stdio.restore(self.executor, io);
+                self.stdio = null;
             }
             restoreShellUmask(self.umask);
             restoreSavedRlimits(self.rlimits);
@@ -6147,12 +6153,26 @@ pub const Executor = struct {
     fn savePipelineSubshellProcessState(self: *Executor, options: ExecuteOptions) !PipelineSubshellProcessState {
         const cwd = if (options.io) |io| try std.process.currentPathAlloc(io, self.allocator) else null;
         errdefer if (cwd) |path| self.allocator.free(path);
+        var stdio: ?FdRedirectionGuard = null;
+        errdefer if (stdio) |*guard| {
+            if (options.io) |io| guard.restore(self, io);
+        };
+        if (options.external_stdio == .inherit) {
+            if (options.io) |io| {
+                stdio = try FdRedirectionGuard.init(self.allocator, io);
+                try stdio.?.saveFd(self, 0);
+                try stdio.?.saveFd(self, 1);
+                try stdio.?.saveFd(self, 2);
+            }
+        }
         return .{
             .allocator = self.allocator,
+            .executor = self,
             .io = options.io,
             .cwd = cwd,
             .umask = readShellUmask(),
             .rlimits = saveUlimitRlimits(),
+            .stdio = stdio,
         };
     }
 
@@ -17643,6 +17663,69 @@ test "executor executes POSIX subshells with isolated state" {
     defer cwd_isolation_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), cwd_isolation_result.status);
     try std.testing.expectEqualStrings("/\n", cwd_isolation_result.stdout);
+}
+
+test "redirection-only exec in subshell does not leak inherited stdio" {
+    const stdout_parent_path = "rush-task-644-parent-stdout.tmp";
+    const stdout_subshell_path = "rush-task-644-subshell-stdout.tmp";
+    const stderr_parent_path = "rush-task-644-parent-stderr.tmp";
+    const stderr_subshell_path = "rush-task-644-subshell-stderr.tmp";
+    const paths: []const []const u8 = &.{ stdout_parent_path, stdout_subshell_path, stderr_parent_path, stderr_subshell_path };
+    for (paths) |path| std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer for (paths) |path| std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    const saved_stdout = try rawDup(std.Io.File.stdout().handle);
+    defer closeRawFd(std.testing.io, saved_stdout);
+    var stdout_restored = false;
+    defer if (!stdout_restored) rawDup2(saved_stdout, std.Io.File.stdout().handle) catch {};
+    var stdout_file = try std.Io.Dir.cwd().createFile(std.testing.io, stdout_parent_path, .{ .truncate = true });
+    try rawDup2(stdout_file.handle, std.Io.File.stdout().handle);
+    stdout_file.close(std.testing.io);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var stdout_result = try executor.executeScriptSlice(
+        \\( exec >rush-task-644-subshell-stdout.tmp; printf subshell-out )
+        \\printf parent-out
+    , .{ .io = std.testing.io, .external_stdio = .inherit });
+    defer stdout_result.deinit();
+
+    try rawDup2(saved_stdout, std.Io.File.stdout().handle);
+    stdout_restored = true;
+    try std.testing.expectEqual(@as(ExitStatus, 0), stdout_result.status);
+    const stdout_parent = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stdout_parent_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(stdout_parent);
+    try std.testing.expectEqualStrings("parent-out", stdout_parent);
+    const stdout_subshell = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stdout_subshell_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(stdout_subshell);
+    try std.testing.expectEqualStrings("subshell-out", stdout_subshell);
+
+    const saved_stderr = try rawDup(std.Io.File.stderr().handle);
+    defer closeRawFd(std.testing.io, saved_stderr);
+    var stderr_restored = false;
+    defer if (!stderr_restored) rawDup2(saved_stderr, std.Io.File.stderr().handle) catch {};
+    var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_parent_path, .{ .truncate = true });
+    try rawDup2(stderr_file.handle, std.Io.File.stderr().handle);
+    stderr_file.close(std.testing.io);
+
+    var stderr_result = try executor.executeScriptSlice(
+        \\( exec 2>rush-task-644-subshell-stderr.tmp; printf subshell-err >&2 )
+        \\printf parent-err >&2
+    , .{ .io = std.testing.io, .external_stdio = .inherit });
+    defer stderr_result.deinit();
+
+    try rawDup2(saved_stderr, std.Io.File.stderr().handle);
+    stderr_restored = true;
+    try std.testing.expectEqual(@as(ExitStatus, 0), stderr_result.status);
+    const stderr_parent = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_parent_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(stderr_parent);
+    try std.testing.expectEqualStrings("parent-err", stderr_parent);
+    const stderr_subshell = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_subshell_path, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(stderr_subshell);
+    try std.testing.expectEqualStrings("subshell-err", stderr_subshell);
 }
 
 test "executor executes POSIX brace groups in current shell" {
