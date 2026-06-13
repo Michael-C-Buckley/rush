@@ -131,6 +131,18 @@ pub const EvalContext = struct {
         return next;
     }
 
+    pub fn ignoreErrexit(self: EvalContext) EvalContext {
+        var next = self;
+        next.errexit_ignored = true;
+        next.validate();
+        return next;
+    }
+
+    pub fn observesErrexit(self: EvalContext) bool {
+        self.validate();
+        return !self.errexit_ignored;
+    }
+
     pub fn canReturnFromFunction(self: EvalContext) bool {
         return self.function_depth != 0;
     }
@@ -182,6 +194,11 @@ test "EvalContext constructors preserve target and scoped nesting invariants" {
     const subshell_child = root.enterSubshell().withTarget(.child_process);
     try std.testing.expectEqual(ExecutionTarget.child_process, subshell_child.target);
     try std.testing.expectEqual(@as(u32, 1), subshell_child.subshell_depth);
+
+    const ignored = root.ignoreErrexit();
+    try std.testing.expect(ignored.errexit_ignored);
+    try std.testing.expect(!ignored.observesErrexit());
+    try std.testing.expect(root.observesErrexit());
 }
 
 test "ExecutionTarget commit permissions are explicit" {

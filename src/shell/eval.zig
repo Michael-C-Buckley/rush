@@ -8,6 +8,7 @@ const std = @import("std");
 const assignment_runtime = @import("assignment.zig");
 const builtin = @import("builtin.zig");
 const command_plan = @import("command_plan.zig");
+const consequence = @import("consequence.zig");
 const context = @import("context.zig");
 const delta = @import("delta.zig");
 const outcome = @import("outcome.zig");
@@ -132,6 +133,7 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
     if (delta.firstReadonlyAssignment(shell_state.*, plan.assignments)) |name| {
         var failure = try outcome.readonlyVariableFailure(evaluator.allocator, plan.target, name);
         failure.state_delta.setLastStatus(failure.status);
+        consequence.applyToOutcome(&failure, eval_context, consequence.decideForShellError(shell_state.options, eval_context, .readonly_assignment, failure.status));
         failure.validateForContext(eval_context);
         return failure;
     }
@@ -151,8 +153,9 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
     const result = try evaluateSimpleCommand(evaluator, shell_state, eval_context, plan, &state_delta, &buffers);
     state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(plan, state_delta);
+    const decision = consequence.decideForSimpleCommand(shell_state.options, eval_context, plan, result.status, result.control_flow);
 
-    var command_outcome = outcome.CommandOutcome.withControlFlow(evaluator.allocator, result.status, state_delta, result.control_flow);
+    var command_outcome = outcome.CommandOutcome.withControlFlow(evaluator.allocator, result.status, state_delta, decision.control_flow);
     errdefer command_outcome.deinit();
     try command_outcome.appendStdout(buffers.stdout.items);
     try command_outcome.appendStderr(buffers.stderr.items);
@@ -186,11 +189,11 @@ pub fn evaluateCompoundPlan(evaluator: *Evaluator, shell_state: *state.ShellStat
         switch (apply_result) {
             .applied => |applied| applied_redirections = applied,
             .failure => |failure| {
-                const status: outcome.ExitStatus = if (failure.consequence == .fatal_shell_error) 2 else 1;
+                const status = consequence.statusForRedirectionFailure(failure.consequence);
+                const decision = consequence.decideForRedirectionFailure(shell_state.options, eval_context, failure.consequence, status);
                 try buffers.addBuiltinDiagnostic(plan.kindName(), redirectionFailureMessage(failure));
                 state_delta.setLastStatus(status);
-                const flow: outcome.ControlFlow = if (failure.consequence == .fatal_shell_error) .{ .fatal = status } else .normal;
-                return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, flow, &buffers);
+                return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, decision.control_flow, &buffers);
             },
         }
     }
@@ -206,6 +209,11 @@ pub fn evaluateCompoundPlan(evaluator: *Evaluator, shell_state: *state.ShellStat
 
     if (plan.target.allowsShellStateCommit()) try appendShellStateDiff(shell_state.*, working_state, &state_delta);
     state_delta.setLastStatus(result.status);
+
+    if (!compoundBodySuppressesFinalErrexit(plan.body)) {
+        const decision = consequence.decideForCompoundCommand(working_state.options, eval_context, result.status, result.control_flow);
+        result.control_flow = decision.control_flow;
+    }
 
     return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, result.status, state_delta, result.control_flow, &buffers);
 }
@@ -225,6 +233,14 @@ fn evaluateSimpleCommand(evaluator: *Evaluator, shell_state: *state.ShellState, 
 
 fn normalEvaluation(status: outcome.ExitStatus) SimpleEvalResult {
     return .{ .status = status };
+}
+
+fn evaluationFromRedirectionFailure(shell_options: state.ShellOptions, eval_context: context.EvalContext, failure: redirection_plan.ApplyFailure) SimpleEvalResult {
+    eval_context.validate();
+    runtime.fd.assertValidDescriptor(failure.target);
+    const status = consequence.statusForRedirectionFailure(failure.consequence);
+    const decision = consequence.decideForRedirectionFailure(shell_options, eval_context, failure.consequence, status);
+    return .{ .status = status, .control_flow = decision.control_flow };
 }
 
 fn commandOutcomeFromBuffers(allocator: std.mem.Allocator, eval_context: context.EvalContext, status: outcome.ExitStatus, state_delta: delta.StateDelta, control_flow: outcome.ControlFlow, buffers: *EvaluationBuffers) EvalError!outcome.CommandOutcome {
@@ -320,7 +336,11 @@ fn evaluateAndOrList(evaluator: *Evaluator, shell_state: *state.ShellState, eval
         };
         if (!should_run) continue;
 
-        var child_outcome = try evaluatePlan(evaluator, shell_state, eval_context.withTarget(entry.command.target), entry.command);
+        const child_context = if (index + 1 < and_or.commands.len)
+            eval_context.ignoreErrexit().withTarget(entry.command.target)
+        else
+            eval_context.withTarget(entry.command.target);
+        var child_outcome = try evaluatePlan(evaluator, shell_state, child_context, entry.command);
         defer child_outcome.deinit();
 
         try appendOutcomeBuffers(buffers, child_outcome);
@@ -334,7 +354,7 @@ fn evaluateAndOrList(evaluator: *Evaluator, shell_state: *state.ShellState, eval
 
 fn evaluateNegation(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, negation: command_plan.NegationPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
     negation.validate();
-    var result = try evaluateCommandList(evaluator, shell_state, eval_context, negation.body, buffers);
+    var result = try evaluateCommandList(evaluator, shell_state, eval_context.ignoreErrexit(), negation.body, buffers);
     if (result.control_flow == .normal) result.status = if (result.status == 0) 1 else 0;
     return result;
 }
@@ -342,7 +362,7 @@ fn evaluateNegation(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
 fn evaluateIfClause(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, if_plan: command_plan.IfPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
     if_plan.validate();
     for (if_plan.branches) |branch| {
-        const condition = try evaluateCommandList(evaluator, shell_state, eval_context, branch.condition, buffers);
+        const condition = try evaluateCommandList(evaluator, shell_state, eval_context.ignoreErrexit(), branch.condition, buffers);
         if (condition.control_flow != .normal) return condition;
         if (condition.status == 0) return evaluateCommandList(evaluator, shell_state, eval_context, branch.body, buffers);
     }
@@ -357,7 +377,7 @@ fn evaluateLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_cont
     var result = normalEvaluation(0);
 
     while (true) {
-        const condition = try evaluateCommandList(evaluator, shell_state, loop_context, loop.condition, buffers);
+        const condition = try evaluateCommandList(evaluator, shell_state, loop_context.ignoreErrexit(), loop.condition, buffers);
         if (condition.control_flow != .normal) {
             switch (consumeLoopControl(condition.control_flow)) {
                 .stop => return normalEvaluation(0),
@@ -494,6 +514,24 @@ fn hasCompoundRedirections(plan: command_plan.CompoundCommandPlan) bool {
     return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
 }
 
+fn compoundBodySuppressesFinalErrexit(body: command_plan.CompoundBody) bool {
+    body.validate();
+    return switch (body) {
+        .and_or_list,
+        .negation,
+        => true,
+        .sequence,
+        .brace_group,
+        .subshell,
+        .if_clause,
+        .while_loop,
+        .until_loop,
+        .for_loop,
+        .case_clause,
+        => false,
+    };
+}
+
 fn evaluateFunctionDefinition(definition: command_plan.FunctionDefinition, state_delta: *delta.StateDelta) EvalError!SimpleEvalResult {
     definition.validate();
     try state_delta.setFunction(definition);
@@ -522,7 +560,7 @@ fn evaluateFunction(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
             .applied => |applied| call_redirections = applied,
             .failure => |failure| {
                 try buffers.addBuiltinDiagnostic(definition.name, redirectionFailureMessage(failure));
-                return normalEvaluation(1);
+                return evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
             },
         }
     }
@@ -539,7 +577,7 @@ fn evaluateFunction(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
             .applied => |applied| definition_redirections = applied,
             .failure => |failure| {
                 try buffers.addBuiltinDiagnostic(definition.name, redirectionFailureMessage(failure));
-                return normalEvaluation(1);
+                return evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
             },
         }
     }
@@ -3497,6 +3535,150 @@ fn fakeChild(id: runtime.process.ProcessId) runtime.process.ChildProcess {
     return runtime.process.ChildProcess.init(child);
 }
 
+test "semantic evaluator centralizes simple-command errexit and readonly consequences" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.errexit, true);
+    try shell_state.putVariable("LOCKED", "old", .{ .readonly = true });
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const false_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } });
+    var failed = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), false_plan);
+    defer failed.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), failed.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 1 }, failed.control_flow);
+    try std.testing.expectEqual(@as(state.ExitStatus, 1), failed.state_delta.last_status.?);
+    failed.discardDelta(.current_shell);
+
+    var suppressed = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell).ignoreErrexit(), false_plan);
+    defer suppressed.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), suppressed.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, suppressed.control_flow);
+    suppressed.discardDelta(.current_shell);
+
+    const readonly_assignments = [_]command_plan.Assignment{.{ .name = "LOCKED", .value = "new" }};
+    const readonly_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &readonly_assignments } });
+    var readonly = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell).ignoreErrexit(), readonly_plan);
+    defer readonly.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), readonly.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .fatal = 1 }, readonly.control_flow);
+    try std.testing.expectEqualStrings("LOCKED: readonly variable", readonly.diagnostics.items[0].message);
+    try readonly.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("old", shell_state.getVariable("LOCKED").?.value);
+    try std.testing.expectEqual(@as(state.ExitStatus, 1), shell_state.last_status);
+}
+
+test "semantic evaluator suppresses errexit in POSIX condition and list contexts" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.errexit, true);
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const if_assignment = [_]command_plan.Assignment{.{ .name = "IF_ERREXIT", .value = "else" }};
+    const if_branches = [_]command_plan.IfBranch{.{
+        .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } })} },
+        .body = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "echo", "unreached" } } })} },
+    }};
+    const if_plan: command_plan.CompoundCommandPlan = .{
+        .target = .current_shell,
+        .body = .{ .if_clause = .{
+            .branches = &if_branches,
+            .else_body = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &if_assignment } })} },
+        } },
+    };
+    var if_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, if_plan);
+    defer if_result.deinit();
+    try std.testing.expectEqual(outcome.ControlFlow.normal, if_result.control_flow);
+    try if_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("else", shell_state.getVariable("IF_ERREXIT").?.value);
+
+    const skipped_assignment = [_]command_plan.Assignment{.{ .name = "AND_ERREXIT_SKIPPED", .value = "bad" }};
+    const and_or_commands = [_]command_plan.AndOrCommand{
+        .{ .command = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } }) },
+        .{ .operator = .and_if, .command = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &skipped_assignment } }) },
+    };
+    const and_or_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .and_or_list = .{ .commands = &and_or_commands } } };
+    var and_or_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, and_or_plan);
+    defer and_or_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), and_or_result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, and_or_result.control_flow);
+    try and_or_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("AND_ERREXIT_SKIPPED"));
+
+    const negation_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } })};
+    const negation_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .negation = .{ .body = .{ .commands = &negation_commands } } } };
+    var negation_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, negation_plan);
+    defer negation_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), negation_result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, negation_result.control_flow);
+    negation_result.discardDelta(.current_shell);
+
+    const terminal_and_or = [_]command_plan.AndOrCommand{
+        .{ .command = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } }) },
+        .{ .operator = .and_if, .command = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } }) },
+    };
+    const terminal_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .and_or_list = .{ .commands = &terminal_and_or } } };
+    var terminal_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, terminal_plan);
+    defer terminal_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), terminal_result.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 1 }, terminal_result.control_flow);
+    terminal_result.discardDelta(.current_shell);
+}
+
+test "semantic evaluator keeps shell-error fatality outside errexit suppression" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.errexit, true);
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const if_branches = [_]command_plan.IfBranch{.{
+        .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"return"} } })} },
+        .body = .{},
+    }};
+    const if_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .if_clause = .{ .branches = &if_branches } } };
+    var result = try evaluateCompoundPlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), if_plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), result.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .fatal = 2 }, result.control_flow);
+    try std.testing.expectEqualStrings("return: not in a function or dot script", result.diagnostics.items[0].message);
+    result.discardDelta(.current_shell);
+}
+
+test "semantic evaluator routes redirection failure consequences through central policy" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithFdPort(std.testing.allocator, fake.fdPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.errexit, true);
+
+    const command_failure_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 0, "missing", .{ .access = .read_only })};
+    const command_failure_rollback = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 0 }};
+    const command_failure_redirections: redirection_plan.RedirectionPlan = .{ .steps = &command_failure_steps, .rollback_steps = &command_failure_rollback };
+    const command_failure_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .redirections = command_failure_redirections, .body = .{ .brace_group = .{} } };
+    var command_failure = try evaluateCompoundPlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), command_failure_plan);
+    defer command_failure.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), command_failure.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 1 }, command_failure.control_flow);
+    command_failure.discardDelta(.current_shell);
+
+    const fatal_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 0, "missing", .{ .access = .read_only })};
+    const fatal_rollback = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 0 }};
+    const fatal_redirections: redirection_plan.RedirectionPlan = .{
+        .steps = &fatal_steps,
+        .rollback_steps = &fatal_rollback,
+        .failure_consequence = .fatal_shell_error,
+    };
+    const fatal_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .redirections = fatal_redirections, .body = .{ .brace_group = .{} } };
+    var fatal = try evaluateCompoundPlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell).ignoreErrexit(), fatal_plan);
+    defer fatal.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), fatal.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .fatal = 2 }, fatal.control_flow);
+    fatal.discardDelta(.current_shell);
+}
+
 test "semantic evaluator evaluates compound if loop for and case forms" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -3767,7 +3949,7 @@ test "semantic evaluator consumes return control flow at function boundary" {
     var outside = try evaluatePlan(&evaluator, &shell_state, eval_context, outside_return);
     defer outside.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 2), outside.status);
-    try std.testing.expectEqual(outcome.ControlFlow.normal, outside.control_flow);
+    try std.testing.expectEqual(outcome.ControlFlow{ .fatal = 2 }, outside.control_flow);
     try std.testing.expectEqualStrings("return: not in a function or dot script", outside.diagnostics.items[0].message);
     outside.discardDelta(.current_shell);
 }
