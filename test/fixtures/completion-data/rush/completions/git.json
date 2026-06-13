@@ -5,23 +5,24 @@
     "name": "git",
     "description": "focused Git-shaped completion fixture",
     "providers": {
-      "git.refs": { "function": "__rush_complete_git_fixture_refs" },
-      "git.branches": { "function": "__rush_complete_git_fixture_branches" },
-      "git.tags": { "function": "__rush_complete_git_fixture_tags" },
+      "git.refs": { "function": "__rush_complete_git_fixture_refs", "tag": "refs" },
+      "git.branches": { "function": "__rush_complete_git_fixture_branches", "tag": "branches" },
+      "git.tags": { "function": "__rush_complete_git_fixture_tags", "tag": "tags" },
       "git.diff-sources": { "function": "__rush_complete_git_fixture_diff_sources" },
-      "git.tree-files": { "function": "__rush_complete_git_fixture_tree_files" },
-      "git.staged-files": { "function": "__rush_complete_git_fixture_staged_files" },
-      "git.worktree-files": { "function": "__rush_complete_git_fixture_worktree_files" },
-      "git.changed-files": { "function": "__rush_complete_git_fixture_changed_files" },
-      "git.untracked-files": { "function": "__rush_complete_git_fixture_untracked_files" },
-      "git.ignored-files": { "function": "__rush_complete_git_fixture_ignored_files" },
-      "git.remotes": { "function": "__rush_complete_git_fixture_remotes" },
-      "git.remote-urls": { "function": "__rush_complete_git_fixture_remote_urls" },
-      "git.remote-refs": { "function": "__rush_complete_git_fixture_remote_refs" },
+      "git.tree-files": { "function": "__rush_complete_git_fixture_tree_files", "tag": "tree-files" },
+      "git.staged-files": { "function": "__rush_complete_git_fixture_staged_files", "tag": "staged-files" },
+      "git.worktree-files": { "function": "__rush_complete_git_fixture_worktree_files", "tag": "worktree-files" },
+      "git.changed-files": { "function": "__rush_complete_git_fixture_changed_files", "tag": "changed-files" },
+      "git.untracked-files": { "function": "__rush_complete_git_fixture_untracked_files", "tag": "untracked-files" },
+      "git.ignored-files": { "function": "__rush_complete_git_fixture_ignored_files", "tag": "ignored-files" },
+      "git.remotes": { "function": "__rush_complete_git_fixture_remotes", "tag": "remotes" },
+      "git.remote-urls": { "function": "__rush_complete_git_fixture_remote_urls", "tag": "remote-urls" },
+      "git.remote-refs": { "function": "__rush_complete_git_fixture_remote_refs", "tag": "remote-refs" },
       "git.restore-paths": { "function": "__rush_complete_git_fixture_restore_paths" },
       "git.reset-arguments": { "function": "__rush_complete_git_fixture_reset_arguments" },
       "git.clean-paths": { "function": "__rush_complete_git_fixture_clean_paths" },
-      "git.push-arguments": { "function": "__rush_complete_git_fixture_push_arguments" }
+      "git.push-arguments": { "function": "__rush_complete_git_fixture_push_arguments" },
+      "builtin.files": { "builtin": "files" }
     },
     "subcommands": [
       {
@@ -70,7 +71,7 @@
         "arguments": {
           "terminator": "--",
           "states": [
-            { "name": "tree", "index": 0, "provider": "git.refs" },
+            { "name": "tree", "index": 0, "provider": ["git.refs", "builtin.files"] },
             {
               "name": "pathspec",
               "index": 1,

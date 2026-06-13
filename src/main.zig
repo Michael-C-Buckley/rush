@@ -1431,6 +1431,8 @@ const CompletionManifestProviderBinding = struct {
     kind: completion_model.ProviderKind,
     value: ?[]const u8 = null,
     static_values: ?std.json.Array = null,
+    tag: ?[]const u8 = null,
+    provider_order: ?usize = null,
 };
 
 fn loadCompletionManifestCommand(executor: *exec.Executor, command_value: std.json.Value, path: []const []const u8, inherited_providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) anyerror!void {
@@ -1567,18 +1569,20 @@ fn completionManifestProviderBinding(provider_value: std.json.Value) !Completion
         .object => |object| object,
         else => return error.CompletionManifestProviderMustBeObject,
     };
+    const tag = manifestString(provider.get("tag"));
     if (manifestString(provider.get("function"))) |function| {
-        return .{ .kind = .function, .value = function };
+        return .{ .kind = .function, .value = function, .tag = tag };
     }
     if (manifestString(provider.get("builtin"))) |builtin| {
-        return .{ .kind = completionManifestBuiltinProviderKind(builtin) orelse return error.UnsupportedCompletionManifestBuiltinProvider, .value = builtin };
+        const kind = completionManifestBuiltinProviderKind(builtin) orelse return error.UnsupportedCompletionManifestBuiltinProvider;
+        return .{ .kind = kind, .value = builtin, .tag = tag orelse completionManifestBuiltinProviderTag(kind) };
     }
     if (provider.get("values")) |values_value| {
         const values = switch (values_value) {
             .array => |array| array,
             else => return error.CompletionManifestStaticProviderValuesMustBeArray,
         };
-        return .{ .kind = .static_enum, .static_values = values };
+        return .{ .kind = .static_enum, .static_values = values, .tag = tag };
     }
     return error.CompletionManifestProviderMissingBinding;
 }
@@ -1607,13 +1611,24 @@ fn completionManifestBuiltinProviderKind(name: []const u8) ?completion_model.Pro
     return null;
 }
 
+fn completionManifestBuiltinProviderTag(kind: completion_model.ProviderKind) []const u8 {
+    return switch (kind) {
+        .builtin_files => "files",
+        .builtin_directories => "directories",
+        .builtin_executables => "executables",
+        .builtin_variables => "variables",
+        .function, .static_enum => "",
+    };
+}
+
 fn loadCompletionManifestProviderArray(executor: *exec.Executor, root: []const u8, path: []const []const u8, kind: completion_model.RuleKind, providers_value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
     const array = switch (providers_value) {
         .array => |array| array,
         else => return error.CompletionManifestProviderArrayMustBeArray,
     };
-    for (array.items) |provider_ref| {
-        const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
+    for (array.items, 0..) |provider_ref, index| {
+        var provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
+        provider.provider_order = index;
         try registerCompletionManifestProviderRule(executor, root, path, kind, provider, .{}, .{}, 0, .{}, null, source, variant, disabled);
     }
 }
@@ -1767,8 +1782,7 @@ fn loadCompletionManifestOptionValueProvider(executor: *exec.Executor, root: []c
             else => continue,
         };
         const provider_ref = object.get("provider") orelse continue;
-        const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
-        try registerCompletionManifestProviderRule(executor, root, path, .dynamic_option_value, provider, option_rule.option, .{}, value_index, manifestValueGrammar(object.get("grammar")), manifestString(object.get("description")), source, variant, disabled);
+        try registerCompletionManifestProviderRefs(executor, root, path, .dynamic_option_value, provider_ref, providers, option_rule.option, .{}, value_index, manifestValueGrammar(object.get("grammar")), manifestString(object.get("description")), source, variant, disabled);
     }
 }
 
@@ -1807,8 +1821,7 @@ fn loadCompletionManifestArguments(executor: *exec.Executor, root: []const u8, p
             continue;
         }
         const provider_ref = state.get("provider") orelse continue;
-        const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
-        try registerCompletionManifestProviderRule(executor, root, path, .dynamic_argument, provider, .{}, argument, 0, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source, variant, disabled);
+        try registerCompletionManifestProviderRefs(executor, root, path, .dynamic_argument, provider_ref, providers, .{}, argument, 0, manifestValueGrammar(state.get("grammar")), manifestString(state.get("description")), source, variant, disabled);
     }
 }
 
@@ -2014,10 +2027,43 @@ fn registerCompletionManifestProviderRule(
         .value_index = value_index,
         .value_grammar = value_grammar,
         .description = description,
+        .tag = provider.tag,
+        .provider_order = provider.provider_order,
         .source = source,
         .variant = variant,
         .disabled = disabled,
     });
+}
+
+fn registerCompletionManifestProviderRefs(
+    executor: *exec.Executor,
+    root: []const u8,
+    path: []const []const u8,
+    kind: completion_model.RuleKind,
+    provider_ref: std.json.Value,
+    providers: []const CompletionManifestProviderBinding,
+    option: completion_model.Option,
+    argument: completion_model.Argument,
+    value_index: usize,
+    value_grammar: completion_model.ValueGrammar,
+    description: ?[]const u8,
+    source: completion_model.RuleSource,
+    variant: ?[]const u8,
+    disabled: bool,
+) !void {
+    switch (provider_ref) {
+        .array => |array| {
+            for (array.items, 0..) |item, index| {
+                var provider = try resolveCompletionManifestProviderRef(item, providers);
+                provider.provider_order = index;
+                try registerCompletionManifestProviderRule(executor, root, path, kind, provider, option, argument, value_index, value_grammar, description, source, variant, disabled);
+            }
+        },
+        else => {
+            const provider = try resolveCompletionManifestProviderRef(provider_ref, providers);
+            try registerCompletionManifestProviderRule(executor, root, path, kind, provider, option, argument, value_index, value_grammar, description, source, variant, disabled);
+        },
+    }
 }
 
 fn manifestStaticProviderValue(value: std.json.Value) !completion_model.StaticProviderValue {
@@ -2030,6 +2076,7 @@ fn manifestStaticProviderValue(value: std.json.Value) !completion_model.StaticPr
                 .value = choice,
                 .display = manifestString(object.get("display")),
                 .description = manifestString(object.get("description")),
+                .tag = manifestString(object.get("tag")),
                 .suffix = suffix,
                 .removable_suffix = manifestBool(object.get("removableSuffix")),
                 .append_space = suffix == null and !manifestBool(object.get("noSpace")),
@@ -2829,7 +2876,7 @@ fn validateManifestArguments(
         if (state.get("provider")) |provider| {
             const provider_path = try manifestFieldPath(allocator, state_path, "provider");
             defer allocator.free(provider_path);
-            try validateManifestProviderRef(allocator, diagnostics, provider, providers, provider_path);
+            try validateManifestProviderRefOrArray(allocator, diagnostics, provider, providers, provider_path);
         }
         if (state.get("grammar")) |grammar| {
             const grammar_path = try manifestFieldPath(allocator, state_path, "grammar");
@@ -2964,7 +3011,7 @@ fn validateManifestValueObject(allocator: std.mem.Allocator, diagnostics: *Compl
     if (object.get("provider")) |provider| {
         const provider_path = try manifestFieldPath(allocator, path, "provider");
         defer allocator.free(provider_path);
-        try validateManifestProviderRef(allocator, diagnostics, provider, providers, provider_path);
+        try validateManifestProviderRefOrArray(allocator, diagnostics, provider, providers, provider_path);
     }
     if (object.get("grammar")) |grammar| {
         const grammar_path = try manifestFieldPath(allocator, path, "grammar");
@@ -3002,6 +3049,29 @@ fn validateManifestProviderRefArray(allocator: std.mem.Allocator, diagnostics: *
         const provider_path = try manifestIndexPath(allocator, path, index);
         defer allocator.free(provider_path);
         try validateManifestProviderRef(allocator, diagnostics, provider, providers, provider_path);
+    }
+}
+
+fn validateManifestProviderRefOrArray(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const CompletionManifestProviderInfo, path: []const u8) !void {
+    switch (value) {
+        .array => |array| {
+            if (array.items.len == 0) try diagnostics.add(.err, "{s}: provider array must not be empty", .{path});
+            var seen: std.StringHashMapUnmanaged(void) = .empty;
+            defer seen.deinit(allocator);
+            for (array.items, 0..) |provider, index| {
+                const provider_path = try manifestIndexPath(allocator, path, index);
+                defer allocator.free(provider_path);
+                if (manifestString(provider)) |provider_id| {
+                    if (seen.contains(provider_id)) {
+                        try diagnostics.add(.err, "{s}: duplicate provider ref '{s}'", .{ provider_path, provider_id });
+                    } else {
+                        try seen.put(allocator, provider_id, {});
+                    }
+                }
+                try validateManifestProviderRef(allocator, diagnostics, provider, providers, provider_path);
+            }
+        },
+        else => try validateManifestProviderRef(allocator, diagnostics, value, providers, path),
     }
 }
 
@@ -3053,6 +3123,9 @@ fn validateManifestProvider(allocator: std.mem.Allocator, diagnostics: *Completi
     if (provider.get("function")) |function| {
         if (manifestString(function) == null) try diagnostics.add(.err, "{s}.function: provider function must be a string", .{path});
     }
+    if (provider.get("tag")) |tag| {
+        if (manifestString(tag) == null) try diagnostics.add(.err, "{s}.tag: provider tag must be a string", .{path});
+    }
     if (provider.get("builtin")) |builtin_value| {
         const builtin = manifestString(builtin_value) orelse {
             try diagnostics.add(.err, "{s}.builtin: provider builtin must be a string", .{path});
@@ -3097,6 +3170,9 @@ fn validateManifestStaticProviderValues(allocator: std.mem.Allocator, diagnostic
                 continue;
             },
         };
+        if (value == .object and value.object.get("tag") != null and manifestString(value.object.get("tag")) == null) {
+            try diagnostics.add(.err, "{s}.tag: static provider value tag must be a string", .{value_path});
+        }
         if (seen.contains(choice)) {
             try diagnostics.add(.err, "{s}: duplicate static provider value '{s}'", .{ value_path, choice });
         } else {
@@ -3436,6 +3512,9 @@ const CompletionRankContext = struct {
 };
 
 fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.Candidate, b: completion_model.Candidate) bool {
+    const a_provider_order = completionCandidateProviderOrder(a);
+    const b_provider_order = completionCandidateProviderOrder(b);
+    if (a_provider_order != b_provider_order) return a_provider_order < b_provider_order;
     const a_class = completionRankClass(a);
     const b_class = completionRankClass(b);
     if (a_class != b_class) return a_class < b_class;
@@ -3446,6 +3525,10 @@ fn lessThanRankedCompletion(context: CompletionRankContext, a: completion_model.
     const b_score = completionRankScore(context.history, context.cwd, b.value);
     if (a_score != b_score) return a_score > b_score;
     return lessThanCompletionLabel(a, b);
+}
+
+fn completionCandidateProviderOrder(candidate: completion_model.Candidate) usize {
+    return candidate.provider_order orelse std.math.maxInt(usize);
 }
 
 fn completionCandidateRankSortKey(source: []const u8, candidate: completion_model.Candidate, matcher_policy: completion_model.MatcherPolicy) u8 {
@@ -3843,11 +3926,12 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         defer allocator.free(match_query);
         const match_rank = completion_model.candidateMatchRank(candidate, match_query, matcher_policy);
         const suppression_reason = if (match_rank == null) completion_model.candidateSuppressionReason(candidate, match_query, matcher_policy) else null;
-        try out.writer.print("  - value: {s}\n    insert: {s}\n    kind: {s}\n    description: {s}\n    suffix: {s}\n    removable-suffix: {}\n    replace: {d}..{d}\n    match-query: {s}\n    match-rank: {s}\n    suppressed: {}\n    suppression-reason: {s}\n    rank-class: {d}\n    rank-score: {d}\n", .{
+        try out.writer.print("  - value: {s}\n    insert: {s}\n    kind: {s}\n    description: {s}\n    tag: {s}\n    suffix: {s}\n    removable-suffix: {}\n    replace: {d}..{d}\n    match-query: {s}\n    match-rank: {s}\n    suppressed: {}\n    suppression-reason: {s}\n    rank-class: {d}\n    rank-score: {d}\n", .{
             candidate.value,
             insert,
             @tagName(candidate.kind),
             candidate.description orelse "",
+            candidate.tag orelse "",
             candidate.suffix orelse "",
             candidate.removable_suffix,
             candidate.replace_start,
@@ -4320,6 +4404,8 @@ fn writeCompletionCandidateJson(allocator: std.mem.Allocator, json: *std.json.St
     try json.write(insert);
     try json.objectField("description");
     try json.write(candidate.description);
+    try json.objectField("tag");
+    try json.write(candidate.tag);
     try json.objectField("suffix");
     try json.write(candidate.suffix);
     try json.objectField("removableSuffix");
@@ -4662,16 +4748,14 @@ fn writeManifestProvidersText(writer: *std.Io.Writer, semantic: exec.CompletionS
     var count: usize = 0;
     if (trace.active_argument_state) |state| {
         if (state.get("provider")) |provider| {
-            try writeManifestProviderEntryText(writer, provider, "argumentState", candidates, indent);
-            count += 1;
+            count += try writeManifestProviderEntriesText(writer, provider, "argumentState", candidates, indent);
         }
     }
     if (semantic.option_value) |option_value| {
         if (findManifestOptionByName(active_options, option_value.name)) |option| {
             if (manifestOptionValueObjectAt(option, option_value.value_index)) |value| {
                 if (value.get("provider")) |provider| {
-                    try writeManifestProviderEntryText(writer, provider, "optionValue", candidates, indent);
-                    count += 1;
+                    count += try writeManifestProviderEntriesText(writer, provider, "optionValue", candidates, indent);
                 }
             }
         }
@@ -4683,6 +4767,16 @@ fn writeManifestProvidersText(writer: *std.Io.Writer, semantic: exec.CompletionS
         if (active_command.get("dynamicOptions")) |providers| count += try writeManifestProviderArrayEntriesText(writer, providers, "dynamicOptions", candidates, indent);
     }
     return count;
+}
+
+fn writeManifestProviderEntriesText(writer: *std.Io.Writer, provider_value: std.json.Value, reason: []const u8, candidates: []const completion_model.Candidate, indent: []const u8) !usize {
+    switch (provider_value) {
+        .array => return writeManifestProviderArrayEntriesText(writer, provider_value, reason, candidates, indent),
+        else => {
+            try writeManifestProviderEntryText(writer, provider_value, reason, candidates, indent);
+            return 1;
+        },
+    }
 }
 
 fn manifestOptionValueObjectAt(option: std.json.ObjectMap, value_index: usize) ?std.json.ObjectMap {
@@ -4817,6 +4911,7 @@ fn manifestParsedOptionsExcludeOperands(parsed_options: []const ManifestParsedOp
 fn manifestProviderRefLabel(provider: std.json.Value, buffer: *[128]u8) ?[]const u8 {
     switch (provider) {
         .string => |id| return id,
+        .array => return "",
         .object => |object| {
             if (manifestString(object.get("builtin"))) |builtin| return std.fmt.bufPrint(buffer, "builtin.{s}", .{builtin}) catch builtin;
             if (manifestString(object.get("function"))) |function| return function;
@@ -5668,16 +5763,14 @@ fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: exec.Completi
     try json.beginArray();
     if (trace.active_argument_state) |state| {
         if (state.get("provider")) |provider| {
-            try writeManifestProviderEntryJson(json, provider, "argumentState", candidates);
-            count += 1;
+            count += try writeManifestProviderEntriesJson(json, provider, "argumentState", candidates);
         }
     }
     if (semantic.option_value) |option_value| {
         if (findManifestOptionByName(active_options, option_value.name)) |option| {
             if (manifestOptionValueObjectAt(option, option_value.value_index)) |value| {
                 if (value.get("provider")) |provider| {
-                    try writeManifestProviderEntryJson(json, provider, "optionValue", candidates);
-                    count += 1;
+                    count += try writeManifestProviderEntriesJson(json, provider, "optionValue", candidates);
                 }
             }
         }
@@ -5690,6 +5783,16 @@ fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: exec.Completi
     }
     try json.endArray();
     return count;
+}
+
+fn writeManifestProviderEntriesJson(json: *std.json.Stringify, provider_value: std.json.Value, reason: []const u8, candidates: []const completion_model.Candidate) !usize {
+    switch (provider_value) {
+        .array => return writeManifestProviderArrayEntriesJson(json, provider_value, reason, candidates),
+        else => {
+            try writeManifestProviderEntryJson(json, provider_value, reason, candidates);
+            return 1;
+        },
+    }
 }
 
 fn writeManifestProviderArrayEntriesJson(json: *std.json.Stringify, providers_value: std.json.Value, reason: []const u8, candidates: []const completion_model.Candidate) !usize {
@@ -5715,6 +5818,11 @@ fn writeManifestProviderEntryJson(json: *std.json.Stringify, provider: std.json.
 fn writeManifestProviderRefValue(json: *std.json.Stringify, provider: std.json.Value) !void {
     switch (provider) {
         .string => |id| try json.write(id),
+        .array => |array| {
+            try json.beginArray();
+            for (array.items) |item| try writeManifestProviderRefValue(json, item);
+            try json.endArray();
+        },
         .object => |object| {
             if (manifestString(object.get("builtin"))) |builtin| {
                 var buffer: [128]u8 = undefined;
@@ -7295,6 +7403,62 @@ test "completion manifest option excludes suppress candidates asymmetrically" {
     try expectCompletionCandidate(pretty_options, "--raw");
 }
 
+test "completion manifest provider arrays preserve tags order and first duplicate metadata" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var script_result = try executor.executeScriptSlice(
+        \\__rush_complete_tool_func() {
+        \\  completion candidate emitted --kind plain --tag emitted-tag --description emitted
+        \\  completion candidate default --kind plain --description default
+        \\}
+    , .{ .io = std.testing.io });
+    defer script_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), script_result.status);
+    try loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.refs": {
+        \\        "values": [
+        \\          { "value": "shared", "description": "ref-shared" },
+        \\          "zbranch"
+        \\        ],
+        \\        "tag": "refs"
+        \\      },
+        \\      "tool.files": {
+        \\        "values": [
+        \\          { "value": "shared", "description": "file-shared", "tag": "files" },
+        \\          "afile"
+        \\        ],
+        \\        "tag": "files"
+        \\      },
+        \\      "tool.func": { "function": "__rush_complete_tool_func", "tag": "function-tag" }
+        \\    },
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "provider": ["tool.refs", "tool.files", "tool.func"] }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+
+    const candidates = try executor.collectCompletionsForInput("tool ", "tool ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(candidates);
+    try std.testing.expectEqualStrings("shared", candidates[0].value);
+    try std.testing.expectEqualStrings("refs", candidates[0].tag.?);
+    try std.testing.expectEqualStrings("ref-shared", candidates[0].description.?);
+    try std.testing.expectEqualStrings("zbranch", candidates[1].value);
+    try std.testing.expectEqualStrings("refs", candidates[1].tag.?);
+    const afile = findCompletionCandidate(candidates, "afile") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("files", afile.tag.?);
+    const emitted = findCompletionCandidate(candidates, "emitted") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("emitted-tag", emitted.tag.?);
+    const default = findCompletionCandidate(candidates, "default") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqualStrings("function-tag", default.tag.?);
+}
 test "completion manifest multi-value options select each provider and preserve operand indexes" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
@@ -7729,6 +7893,16 @@ test "Git manifest fixture selects representative zsh-class providers" {
     const ordinary_path = "rush-git-fixture-left.txt";
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = ordinary_path, .data = "fixture" });
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, ordinary_path) catch {};
+    var created_main_file = false;
+    if (std.Io.Dir.cwd().createFile(std.testing.io, "main", .{ .truncate = false, .exclusive = true })) |file| {
+        var main_file = file;
+        main_file.close(std.testing.io);
+        created_main_file = true;
+    } else |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => return err,
+    }
+    defer if (created_main_file) std.Io.Dir.cwd().deleteFile(std.testing.io, "main") catch {};
 
     const diff_refs = try executor.collectCompletionsForInput("git diff ma", "git diff ma".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(diff_refs);
@@ -7749,6 +7923,19 @@ test "Git manifest fixture selects representative zsh-class providers" {
     const ordinary_second_file = findCompletionCandidate(no_index_second_paths, ordinary_path) orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqual(completion_model.Kind.file, ordinary_second_file.kind);
     try std.testing.expectEqual(@as(usize, "git diff --no-index left ".len), ordinary_second_file.replace_start);
+
+    const checkout_refs_and_files = try executor.collectCompletionsForInput("git checkout ma", "git checkout ma".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(checkout_refs_and_files);
+    const checkout_main = findCompletionCandidate(checkout_refs_and_files, "main") orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.plain, checkout_main.kind);
+    try std.testing.expectEqualStrings("refs", checkout_main.tag.?);
+    try std.testing.expectEqualStrings("ref:argument:::tree:0:false", checkout_main.description.?);
+
+    const checkout_files = try executor.collectCompletionsForInput("git checkout rush-git-fixture", "git checkout rush-git-fixture".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(checkout_files);
+    const checkout_file = findCompletionCandidate(checkout_files, ordinary_path) orelse return error.MissingCompletionCandidate;
+    try std.testing.expectEqual(completion_model.Kind.file, checkout_file.kind);
+    try std.testing.expectEqualStrings("files", checkout_file.tag.?);
 
     const cached_path_source = "git diff --cached src/st";
     const cached_paths = try executor.collectCompletionsForInput(cached_path_source, cached_path_source.len, .{ .io = std.testing.io });
@@ -8115,6 +8302,33 @@ test "completion manifest semantic validation reports clear invalid manifest dia
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.variantProbe.matches.gnu: empty pattern is only allowed for the final fallback");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.variantProbe.matches.missing: unknown variant 'missing'");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.variants.gnu.options[0]: duplicate option spelling '--verbose'");
+}
+
+test "completion manifest semantic validation rejects invalid provider arrays" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.values": { "values": ["ok"] }
+        \\    },
+        \\    "options": [
+        \\      { "long": "target", "value": { "name": "target", "provider": ["missing.provider", "tool.values"] } }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "provider": ["tool.values", "tool.values"] }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try std.testing.expect(diagnostics.hasErrors());
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[0].value.provider[0]: unknown provider 'missing.provider'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.arguments.states[0].provider[1]: duplicate provider ref 'tool.values'");
 }
 
 test "completion manifest semantic validation rejects unsupported versions before compiling rules" {
@@ -8705,7 +8919,7 @@ test "completion debug JSON includes candidate suffix fields" {
     try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data =
         \\__rush_complete_git() {
-        \\  completion candidate status --suffix , --removable-suffix
+        \\  completion candidate status --suffix , --removable-suffix --tag statuses
         \\}
         \\complete git --argument --function __rush_complete_git
     });
@@ -8721,6 +8935,7 @@ test "completion debug JSON includes candidate suffix fields" {
     const object = parsed.value.object;
     const candidate = object.get("candidates").?.array.items[0].object;
     try std.testing.expectEqualStrings("status", candidate.get("value").?.string);
+    try std.testing.expectEqualStrings("statuses", candidate.get("tag").?.string);
     try std.testing.expectEqualStrings(",", candidate.get("suffix").?.string);
     try std.testing.expect(candidate.get("removableSuffix").?.bool);
     try std.testing.expectEqualStrings("status,", candidate.get("insert").?.string);
@@ -9191,6 +9406,18 @@ test "completion debug output traces Git fixture manifest state" {
     const suppressed = diff_manifest.get("suppressedOptions").?.array.items;
     try std.testing.expectEqualStrings("--staged", suppressed[1].object.get("spelling").?.string);
     try std.testing.expectEqualStrings("exclusiveGroup", suppressed[1].object.get("reason").?.string);
+
+    const checkout_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git checkout ma");
+    defer std.testing.allocator.free(checkout_json);
+    var checkout = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, checkout_json, .{});
+    defer checkout.deinit();
+    const checkout_object = checkout.value.object;
+    const checkout_manifest = checkout_object.get("manifest").?.object;
+    try std.testing.expectEqualStrings("git.refs", checkout_manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
+    try std.testing.expectEqualStrings("builtin.files", checkout_manifest.get("matchedProviders").?.array.items[1].object.get("id").?.string);
+    const checkout_candidate = checkout_object.get("candidates").?.array.items[0].object;
+    try std.testing.expectEqualStrings("main", checkout_candidate.get("value").?.string);
+    try std.testing.expectEqualStrings("refs", checkout_candidate.get("tag").?.string);
 }
 
 test "completion debug output exposes active structured value segment" {

@@ -117,6 +117,7 @@ pub const Candidate = struct {
     display: ?[]const u8 = null,
     insert: ?[]const u8 = null,
     description: ?[]const u8 = null,
+    tag: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
     removable_suffix: bool = false,
     kind: Kind = .plain,
@@ -124,6 +125,7 @@ pub const Candidate = struct {
     replace_start: usize,
     replace_end: usize,
     append_space: bool = true,
+    provider_order: ?usize = null,
 };
 
 pub const MatchRank = enum(u8) {
@@ -378,6 +380,7 @@ pub const StaticProviderValue = struct {
     value: []const u8,
     display: ?[]const u8 = null,
     description: ?[]const u8 = null,
+    tag: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
     removable_suffix: bool = false,
     append_space: bool = true,
@@ -395,6 +398,8 @@ pub const Rule = struct {
     value_index: usize = 0,
     value_grammar: ValueGrammar = .{},
     description: ?[]const u8 = null,
+    tag: ?[]const u8 = null,
+    provider_order: ?usize = null,
     source: RuleSource = .{},
     variant: ?[]const u8 = null,
     disabled: bool = false,
@@ -438,6 +443,7 @@ fn freeCandidateFields(allocator: std.mem.Allocator, candidate: Candidate) void 
     if (candidate.display) |display| allocator.free(display);
     if (candidate.insert) |insert| allocator.free(insert);
     if (candidate.description) |description| allocator.free(description);
+    if (candidate.tag) |tag| allocator.free(tag);
     if (candidate.suffix) |suffix| allocator.free(suffix);
     if (candidate.option) |option| {
         if (option.long) |long| allocator.free(long);
@@ -484,10 +490,17 @@ pub fn sortCandidates(candidates: []Candidate) void {
 }
 
 fn lessThanCandidate(_: void, a: Candidate, b: Candidate) bool {
+    const a_provider_order = candidateProviderOrder(a);
+    const b_provider_order = candidateProviderOrder(b);
+    if (a_provider_order != b_provider_order) return a_provider_order < b_provider_order;
     const a_class = candidateSortClass(a);
     const b_class = candidateSortClass(b);
     if (a_class != b_class) return a_class < b_class;
     return std.mem.lessThan(u8, candidateSortKey(a), candidateSortKey(b));
+}
+
+fn candidateProviderOrder(candidate: Candidate) usize {
+    return candidate.provider_order orelse std.math.maxInt(usize);
 }
 
 fn candidateSortClass(candidate: Candidate) u8 {
@@ -931,6 +944,8 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
     errdefer if (cloned.insert) |insert| allocator.free(insert);
     if (candidate.description) |description| cloned.description = try allocator.dupe(u8, description);
     errdefer if (cloned.description) |description| allocator.free(description);
+    if (candidate.tag) |tag| cloned.tag = try allocator.dupe(u8, tag);
+    errdefer if (cloned.tag) |tag| allocator.free(tag);
     if (candidate.suffix) |suffix| cloned.suffix = try allocator.dupe(u8, suffix);
     errdefer if (cloned.suffix) |suffix| allocator.free(suffix);
     if (candidate.option) |option| {

@@ -403,6 +403,7 @@ pub const CompletionBuilder = struct {
         if (candidate.display) |display| owned_candidate.display = try self.dupeField(allocator, display);
         if (candidate.insert) |insert| owned_candidate.insert = try self.dupeField(allocator, insert);
         if (candidate.description) |description| owned_candidate.description = try self.dupeField(allocator, description);
+        if (candidate.tag) |tag| owned_candidate.tag = try self.dupeField(allocator, tag);
         if (candidate.suffix) |suffix| owned_candidate.suffix = try self.dupeField(allocator, suffix);
         if (candidate.option) |option| {
             owned_candidate.option = .{
@@ -429,6 +430,13 @@ pub const CompletionBuilder = struct {
             candidate.removable_suffix = true;
             candidate.append_space = false;
         }
+    }
+
+    fn applyOwnedRuleProviderMetadata(self: *CompletionBuilder, allocator: std.mem.Allocator, candidate: *completion.Candidate, rule: completion.Rule) !void {
+        if (candidate.tag == null) {
+            if (rule.tag) |tag| candidate.tag = try self.dupeField(allocator, tag);
+        }
+        if (candidate.provider_order == null) candidate.provider_order = rule.provider_order;
     }
 
     pub fn appendCandidateIfMissing(self: *CompletionBuilder, allocator: std.mem.Allocator, candidate: completion.Candidate) !void {
@@ -750,6 +758,7 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
             allocator.free(value.value);
             if (value.display) |display| allocator.free(display);
             if (value.description) |description| allocator.free(description);
+            if (value.tag) |tag| allocator.free(tag);
             if (value.suffix) |suffix| allocator.free(suffix);
         }
         allocator.free(rule.static_values);
@@ -768,6 +777,7 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     freeOptionValueConditions(allocator, rule.argument.require_option_values);
     freeOptionValueConditions(allocator, rule.argument.reject_option_values);
     if (rule.description) |description| allocator.free(description);
+    if (rule.tag) |tag| allocator.free(tag);
     if (rule.source.manifest_path) |path| allocator.free(path);
     if (rule.source.companion_path) |path| allocator.free(path);
     if (rule.variant) |variant| allocator.free(variant);
@@ -816,6 +826,7 @@ fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const comple
             allocator.free(value.value);
             if (value.display) |display| allocator.free(display);
             if (value.description) |description| allocator.free(description);
+            if (value.tag) |tag| allocator.free(tag);
             if (value.suffix) |suffix| allocator.free(suffix);
         }
         allocator.free(owned);
@@ -831,16 +842,24 @@ fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const comple
             if (owned_display) |display| allocator.free(display);
             return err;
         } else null;
+        const owned_tag = if (value.tag) |tag| allocator.dupe(u8, tag) catch |err| {
+            allocator.free(owned_value);
+            if (owned_display) |display| allocator.free(display);
+            if (owned_description) |description| allocator.free(description);
+            return err;
+        } else null;
         const owned_suffix = if (value.suffix) |suffix| allocator.dupe(u8, suffix) catch |err| {
             allocator.free(owned_value);
             if (owned_display) |display| allocator.free(display);
             if (owned_description) |description| allocator.free(description);
+            if (owned_tag) |tag| allocator.free(tag);
             return err;
         } else null;
         owned[index] = .{
             .value = owned_value,
             .display = owned_display,
             .description = owned_description,
+            .tag = owned_tag,
             .suffix = owned_suffix,
             .removable_suffix = value.removable_suffix,
             .append_space = value.append_space,
@@ -2575,6 +2594,8 @@ pub const Executor = struct {
             .value_index = rule.value_index,
             .value_grammar = rule.value_grammar,
             .description = if (rule.description) |description| try self.allocator.dupe(u8, description) else null,
+            .tag = if (rule.tag) |tag| try self.allocator.dupe(u8, tag) else null,
+            .provider_order = rule.provider_order,
             .source = .{
                 .kind = rule.source.kind,
                 .manifest_path = if (rule.source.manifest_path) |path| try self.allocator.dupe(u8, path) else null,
@@ -3870,6 +3891,7 @@ pub const Executor = struct {
                     for (candidates) |candidate| {
                         if (completionOptionCandidateSuppression(self.completion_rules.items, semantic, candidate) != null) continue;
                         var provider_candidate = candidate;
+                        applyRuleProviderMetadata(&provider_candidate, rule);
                         var suffix_buffer: [1]u8 = undefined;
                         applyCandidateValueSegmentSuffix(&provider_candidate, provider_context.value_segment, &suffix_buffer);
                         try builder.appendCandidateIfMissing(self.allocator, provider_candidate);
@@ -3878,16 +3900,17 @@ pub const Executor = struct {
                 .builtin_files, .builtin_directories, .builtin_executables, .builtin_variables => {
                     const start = builder.candidates.items.len;
                     try self.appendBuiltinProviderCompletionCandidates(builder, rule.provider_kind, provider_context, options);
+                    for (builder.candidates.items[start..]) |*candidate| try builder.applyOwnedRuleProviderMetadata(self.allocator, candidate, rule);
                     try builder.applyValueSegmentSuffix(self.allocator, start, provider_context.value_segment);
                 },
-                .static_enum => try self.appendStaticProviderCompletionCandidates(builder, rule.static_values, provider_context, rule.kind),
+                .static_enum => try self.appendStaticProviderCompletionCandidates(builder, rule.static_values, provider_context, rule),
             }
         }
     }
 
-    fn appendStaticProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, values: []const completion.StaticProviderValue, context: CompletionEvalContext, rule_kind: completion.RuleKind) !void {
+    fn appendStaticProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, values: []const completion.StaticProviderValue, context: CompletionEvalContext, rule: completion.Rule) !void {
         self.last_completion_context = context;
-        const kind: completion.Kind = switch (rule_kind) {
+        const kind: completion.Kind = switch (rule.kind) {
             .dynamic_subcommands => .subcommand,
             else => .plain,
         };
@@ -3896,18 +3919,25 @@ pub const Executor = struct {
                 .value = value.value,
                 .display = value.display,
                 .description = value.description,
+                .tag = value.tag orelse rule.tag,
                 .kind = kind,
                 .replace_start = context.replace_start,
                 .replace_end = context.replace_end,
                 .append_space = value.append_space,
                 .suffix = value.suffix,
                 .removable_suffix = value.removable_suffix,
+                .provider_order = rule.provider_order,
             };
             var suffix_buffer: [1]u8 = undefined;
             applyCandidateValueSegmentSuffix(&candidate, context.value_segment, &suffix_buffer);
             if (completion.candidateFuzzyMatchRank(candidate, context.prefix) == null) continue;
             try builder.appendCandidateIfMissing(self.allocator, candidate);
         }
+    }
+
+    fn applyRuleProviderMetadata(candidate: *completion.Candidate, rule: completion.Rule) void {
+        if (candidate.tag == null) candidate.tag = rule.tag;
+        if (candidate.provider_order == null) candidate.provider_order = rule.provider_order;
     }
 
     fn appendBuiltinProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, provider_kind: completion.ProviderKind, context: CompletionEvalContext, options: ExecuteOptions) !void {
@@ -3995,6 +4025,7 @@ pub const Executor = struct {
             if (candidate.display) |display| self.allocator.free(display);
             if (candidate.insert) |insert| self.allocator.free(insert);
             if (candidate.description) |description| self.allocator.free(description);
+            if (candidate.tag) |tag| self.allocator.free(tag);
             if (candidate.suffix) |suffix| self.allocator.free(suffix);
             if (candidate.option) |option| {
                 if (option.long) |long| self.allocator.free(long);
@@ -6551,10 +6582,12 @@ pub const Executor = struct {
             if (is_last and options.external_stdio != .inherit) {
                 capture_stdout = makePipelinePipe(io) catch |err| {
                     const message = pipeFailureMessage(err) orelse return err;
+                    for (children[0..spawned]) |*child| child.kill(io);
                     return errorResult(self.allocator, 1, "pipe", message);
                 };
                 capture_stderr = makePipelinePipe(io) catch |err| {
                     const message = pipeFailureMessage(err) orelse return err;
+                    for (children[0..spawned]) |*child| child.kill(io);
                     return errorResult(self.allocator, 1, "pipe", message);
                 };
             }
@@ -12551,6 +12584,10 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing description text");
             candidate.description = command.argv[index].text;
             index += 1;
+        } else if (std.mem.eql(u8, arg, "--tag")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing tag name");
+            candidate.tag = command.argv[index].text;
+            index += 1;
         } else if (std.mem.eql(u8, arg, "--kind")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing kind");
             candidate.kind = parseCompletionKind(command.argv[index].text) orelse return errorResult(self.allocator, 2, "completion", "unsupported kind");
@@ -12691,6 +12728,10 @@ fn builtinCompletionCandidates(self: *Executor, builder: *CompletionBuilder, com
         if (std.mem.eql(u8, arg, "--description")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing description text");
             candidate.description = command.argv[index].text;
+            index += 1;
+        } else if (std.mem.eql(u8, arg, "--tag")) {
+            if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing tag name");
+            candidate.tag = command.argv[index].text;
             index += 1;
         } else if (std.mem.eql(u8, arg, "--kind")) {
             if (index >= command.argv.len) return errorResult(self.allocator, 2, "completion", "missing kind");
@@ -12961,7 +13002,7 @@ fn appendPathCandidates(self: *Executor, builder: *CompletionBuilder, io: std.Io
             break :value try std.mem.concat(self.allocator, u8, &.{ entry.name, slash });
         } else entry.name;
         defer if (value.ptr != entry.name.ptr) self.allocator.free(value);
-        try builder.appendCandidate(self.allocator, .{
+        try builder.appendCandidateIfMissing(self.allocator, .{
             .value = value,
             .kind = if (is_directory) .directory else .file,
             .replace_start = candidate_replace_start,
@@ -26942,7 +26983,9 @@ test "dynamic structured argument provider is scoped to command path" {
 
     const commit = try executor.collectCompletionsForInput("git commit ma", "git commit ma".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(commit);
-    try expectNoCandidate(commit, "main");
+    for (commit) |candidate| {
+        if (std.mem.eql(u8, candidate.value, "main") and candidate.kind == .plain) return error.UnexpectedCompletionCandidate;
+    }
 }
 
 test "dynamic structured argument provider runs after subcommand path" {

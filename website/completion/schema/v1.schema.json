@@ -271,7 +271,7 @@
           "enum": ["detached", "attached", "attached-or-detached", "equals", "optional"]
         },
         "provider": {
-          "$ref": "#/$defs/providerRef"
+          "$ref": "#/$defs/providerRefOrArray"
         },
         "grammar": {
           "$ref": "#/$defs/valueGrammar"
@@ -333,7 +333,7 @@
           "type": "boolean"
         },
         "provider": {
-          "$ref": "#/$defs/providerRef"
+          "$ref": "#/$defs/providerRefOrArray"
         },
         "grammar": {
           "$ref": "#/$defs/valueGrammar"
@@ -367,6 +367,9 @@
         "function": {
           "$ref": "#/$defs/functionName"
         },
+        "tag": {
+          "$ref": "#/$defs/name"
+        },
         "description": {
           "type": "string"
         },
@@ -382,6 +385,9 @@
       "properties": {
         "builtin": {
           "enum": ["files", "directories", "executables", "variables"]
+        },
+        "tag": {
+          "$ref": "#/$defs/name"
         },
         "description": {
           "type": "string"
@@ -400,10 +406,24 @@
             "$ref": "#/$defs/enumValue"
           }
         },
+        "tag": {
+          "$ref": "#/$defs/name"
+        },
         "description": {
           "type": "string"
         }
       }
+    },
+    "providerRefOrArray": {
+      "oneOf": [
+        { "$ref": "#/$defs/providerRef" },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/providerRef" },
+          "uniqueItems": true
+        }
+      ]
     },
     "providerRef": {
       "oneOf": [
@@ -445,6 +465,7 @@
             "value": { "type": "string" },
             "description": { "type": "string" },
             "display": { "type": "string" },
+            "tag": { "$ref": "#/$defs/name" },
             "suffix": { "type": "string" },
             "removableSuffix": { "type": "boolean" },
             "noSpace": { "type": "boolean" }

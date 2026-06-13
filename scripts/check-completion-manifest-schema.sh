@@ -68,6 +68,23 @@ def check_provider_ref(value, providers, path):
         errors.append(f"{path}: expected provider id or provider object")
 
 
+def check_provider_ref_or_array(value, providers, path):
+    if isinstance(value, list):
+        if not value:
+            errors.append(f"{path}: provider array must be non-empty")
+            return
+        seen = set()
+        for i, item in enumerate(value):
+            item_path = path_join(path, i)
+            if isinstance(item, str):
+                if item in seen:
+                    errors.append(f"{item_path}: duplicate provider ref {item!r}")
+                seen.add(item)
+            check_provider_ref(item, providers, item_path)
+        return
+    check_provider_ref(value, providers, path)
+
+
 def check_provider(value, path):
     if not isinstance(value, dict):
         errors.append(f"{path}: provider must be an object")
@@ -83,6 +100,8 @@ def check_provider(value, path):
         errors.append(f"{path}.builtin: invalid builtin provider {value['builtin']!r}")
     if has_builtin and "options" in value:
         errors.append(f"{path}.options: builtin provider options are not supported in v1")
+    if "tag" in value and (not isinstance(value["tag"], str) or not name_re.match(value["tag"])):
+        errors.append(f"{path}.tag: invalid provider tag")
     if has_values:
         check_static_provider_values(value["values"], path_join(path, "values"))
 
@@ -101,6 +120,9 @@ def check_static_provider_values(values, path):
             if not isinstance(choice, str):
                 errors.append(f"{value_path}.value: static provider value is required")
                 continue
+            tag = value.get("tag")
+            if tag is not None and (not isinstance(tag, str) or not name_re.match(tag)):
+                errors.append(f"{value_path}.tag: invalid static provider value tag")
         else:
             errors.append(f"{value_path}: static provider value must be a string or object")
             continue
@@ -118,7 +140,7 @@ def check_value(value, providers, path):
     if "style" in value and value["style"] not in allowed_value_style:
         errors.append(f"{path}.style: invalid value style")
     if "provider" in value:
-        check_provider_ref(value["provider"], providers, path_join(path, "provider"))
+        check_provider_ref_or_array(value["provider"], providers, path_join(path, "provider"))
 
 
 def check_option_value(value, providers, path):
@@ -191,7 +213,7 @@ def check_arguments(arguments, providers, path):
                 if field in state:
                     errors.append(f"{state_path}.{field}: command-line rest state must not define {field}")
         if "provider" in state:
-            check_provider_ref(state["provider"], providers, path_join(state_path, "provider"))
+            check_provider_ref_or_array(state["provider"], providers, path_join(state_path, "provider"))
 
 
 def check_command(command, inherited_providers, path):

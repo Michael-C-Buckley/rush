@@ -6,13 +6,16 @@
     "description": "the stupid content tracker",
     "providers": {
       "git.branches": {
-        "function": "__rush_complete_git_branches"
+        "function": "__rush_complete_git_branches",
+        "tag": "branches"
       },
       "git.color-modes": {
-        "values": ["always", "auto", "never"]
+        "values": ["always", "auto", "never"],
+        "tag": "modes"
       },
       "git.worktree-modes": {
-        "values": ["locked", "unlocked"]
+        "values": ["locked", { "value": "unlocked", "tag": "modes" }],
+        "tag": "modes"
       },
       "builtin.directories": {
         "builtin": "directories"
@@ -67,7 +70,7 @@
           "states": [
             {
               "name": "branch",
-              "provider": "git.branches"
+              "provider": ["git.branches", "builtin.directories"]
             }
           ]
         }

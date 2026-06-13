@@ -266,7 +266,7 @@ type Value = {
   name?: string
   required?: boolean
   style?: "detached" | "attached" | "attached-or-detached" | "equals" | "optional"
-  provider?: ProviderRef
+  provider?: ProviderRef | ProviderRef[]
   grammar?: ValueGrammar
   description?: string
 }
@@ -281,7 +281,7 @@ type ArgumentState = {
   index?: number
   repeatable?: boolean
   rest?: "command-line"
-  provider?: ProviderRef
+  provider?: ProviderRef | ProviderRef[]
   grammar?: ValueGrammar
   description?: string
   when?: Condition
@@ -290,15 +290,15 @@ type ArgumentState = {
 }
 
 type Provider =
-  | { function: string, description?: string, lazy?: boolean }
-  | { builtin: "files" | "directories" | "executables" | "variables", description?: string }
-  | { values: EnumValue[], description?: string }
+  | { function: string, tag?: string, description?: string, lazy?: boolean }
+  | { builtin: "files" | "directories" | "executables" | "variables", tag?: string, description?: string }
+  | { values: EnumValue[], tag?: string, description?: string }
 
 type ProviderRef = string | Provider
 
 type EnumValue =
   | string
-  | { value: string, description?: string, display?: string,
+  | { value: string, tag?: string, description?: string, display?: string,
       suffix?: string, removableSuffix?: boolean, noSpace?: boolean }
 ```
 
@@ -565,11 +565,23 @@ Providers should be named when reused:
 }
 ```
 
-A value or argument state can reference providers by ID:
+A value or argument state can reference one provider by ID, or an ordered array
+of providers when one position accepts several labeled candidate sources:
 
 ```json
 { "name": "branch", "provider": "git.branches" }
 ```
+
+```json
+{ "name": "tree-or-path", "provider": ["git.refs", "builtin.files"] }
+```
+
+Provider arrays run left to right. Rush concatenates their candidates and
+deduplicates identical replacement values by keeping the first provider's
+candidate metadata, including tag and description. The matcher and ranking
+policy still choose exact/prefix/fuzzy matches and history scores first; declared
+provider order is the default tie-break between tagged sources after those rank
+keys.
 
 Inline provider objects are allowed for one-off built-ins, but not for shell
 snippets:
@@ -583,8 +595,9 @@ Do not embed shell in JSON. Dynamic behavior belongs in `.rush` functions.
 Builtin providers have fixed v1 behavior and do not accept provider `options`:
 `files` completes paths, `directories` completes directory paths with trailing
 slashes and no inserted space, `executables` searches `PATH`, and `variables`
-uses shell variables. Add a Rush function provider when a completion needs
-filtering or behavior beyond those fixed builtins.
+uses shell variables. Builtin providers also get default tags `files`,
+`directories`, `executables`, and `variables`. Add a Rush function provider when
+a completion needs filtering or behavior beyond those fixed builtins.
 
 Static enum providers keep small, fixed option-value or argument candidate sets
 in the manifest instead of a companion Rush function:
@@ -605,13 +618,17 @@ in the manifest instead of a companion Rush function:
 ```
 
 Each value emits a plain candidate. Object entries may set a display label,
-description, `suffix`, `removableSuffix`, and `noSpace` for prefix-like values
-such as `format:`. Static enum providers are lexically scoped and may be
+description, `tag`, `suffix`, `removableSuffix`, and `noSpace` for prefix-like
+values such as `format:`. Static enum providers are lexically scoped and may be
 referenced anywhere a provider ID is accepted; they are intended for finite
 enum-like values, not dynamic repository or filesystem data. When a list value
 grammar completes an item, Rush automatically applies the list separator as a
 removable suffix so the next item can be completed immediately; typing the
 separator keeps it, while typing a space or accepting the line removes it first.
+
+Function providers can tag emitted candidates with `completion candidate --tag
+NAME`. If a candidate omits `--tag`, Rush applies the provider definition's
+`tag` when present.
 
 ## Provider context API dependency
 
