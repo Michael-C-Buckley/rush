@@ -767,6 +767,7 @@ const ParameterOperation = union(enum) {
 const ParameterExpansion = struct {
     target: ParameterTarget,
     operation: ParameterOperation,
+    array_subscript: ?BashArraySubscript = null,
 };
 
 const ParameterExpansionSyntax = union(enum) {
@@ -848,11 +849,19 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
     if (parsed.array_keys) |kind| return renderArrayKeysJoined(allocator, parsed.name, kind, options, in_double_quotes);
     if (parsed.array_whole) |kind| {
         if (parsed.operator == .length) return std.fmt.allocPrint(allocator, "{d}", .{options.arrays.len(parsed.name)});
+        if (hasParameterStringOperation(parsed)) {
+            var values = try renderArrayStringOperationValues(allocator, parsed.name, kind, parsed, options, in_double_quotes);
+            defer values.deinit(allocator);
+            return joinValues(allocator, values.fields, arrayValueScalarJoinSeparator(kind, options));
+        }
         return renderArrayValuesJoined(allocator, parsed.name, kind, options);
     }
     if (parsed.array_index) |index_text| {
         if (parsed.operator == .length) return renderArrayElementLength(allocator, parsed.name, index_text, options);
-        return renderArrayElement(allocator, parsed.name, index_text, options);
+        const base = try renderArrayElement(allocator, parsed.name, index_text, options);
+        defer allocator.free(base);
+        if (hasParameterStringOperation(parsed)) return renderStringOperation(allocator, base, parsed, options, in_double_quotes);
+        return allocator.dupe(u8, base);
     }
 
     if (parsed.substring) |operation| {
@@ -956,6 +965,10 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
     }
 }
 
+fn hasParameterStringOperation(parsed: ParameterExpression) bool {
+    return parsed.substring != null or parsed.replacement != null or parsed.case_modification != null;
+}
+
 fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror!SegmentedText {
     const parsed = parseParameterExpression(expression, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
@@ -1021,6 +1034,13 @@ fn renderSubstring(allocator: std.mem.Allocator, value: []const u8, operation: P
     return allocator.dupe(u8, value[start..end]);
 }
 
+fn renderStringOperation(allocator: std.mem.Allocator, value: []const u8, parsed: ParameterExpression, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+    if (parsed.substring) |operation| return renderSubstring(allocator, value, operation, options);
+    if (parsed.replacement) |operation| return renderReplacement(allocator, value, operation, options, in_double_quotes);
+    if (parsed.case_modification) |operation| return renderCaseModification(allocator, value, operation, options);
+    unreachable;
+}
+
 fn badSubstringExpressionExpansion(allocator: std.mem.Allocator, options: Options, expression: []const u8) anyerror {
     if (options.parameter_error) |parameter_error| {
         const name = try allocator.dupe(u8, expression);
@@ -1044,30 +1064,34 @@ fn renderReplacement(allocator: std.mem.Allocator, value: []const u8, operation:
 }
 
 fn renderCaseModification(allocator: std.mem.Allocator, value: []const u8, operation: ParameterCaseOperation, options: Options) ![]const u8 {
-    const output = try allocator.dupe(u8, value);
-    errdefer allocator.free(output);
-
     var pattern = if (operation.pattern) |pattern_text|
         try expandPatternWord(allocator, pattern_text, options)
     else
         try anySingleCharacterPattern(allocator);
     defer pattern.deinit(allocator);
 
-    switch (operation.kind) {
+    return renderCaseModificationWithPattern(allocator, value, operation.kind, pattern, options.extglob);
+}
+
+fn renderCaseModificationWithPattern(allocator: std.mem.Allocator, value: []const u8, kind: ParameterCaseKind, pattern: ExpansionPattern, extglob: bool) ![]const u8 {
+    const output = try allocator.dupe(u8, value);
+    errdefer allocator.free(output);
+
+    switch (kind) {
         .uppercase_first => {
-            if (output.len > 0 and casePatternMatchesByte(pattern, output[0], options.extglob)) output[0] = std.ascii.toUpper(output[0]);
+            if (output.len > 0 and casePatternMatchesByte(pattern, output[0], extglob)) output[0] = std.ascii.toUpper(output[0]);
         },
         .uppercase_all => {
             for (output) |*byte| {
-                if (casePatternMatchesByte(pattern, byte.*, options.extglob)) byte.* = std.ascii.toUpper(byte.*);
+                if (casePatternMatchesByte(pattern, byte.*, extglob)) byte.* = std.ascii.toUpper(byte.*);
             }
         },
         .lowercase_first => {
-            if (output.len > 0 and casePatternMatchesByte(pattern, output[0], options.extglob)) output[0] = std.ascii.toLower(output[0]);
+            if (output.len > 0 and casePatternMatchesByte(pattern, output[0], extglob)) output[0] = std.ascii.toLower(output[0]);
         },
         .lowercase_all => {
             for (output) |*byte| {
-                if (casePatternMatchesByte(pattern, byte.*, options.extglob)) byte.* = std.ascii.toLower(byte.*);
+                if (casePatternMatchesByte(pattern, byte.*, extglob)) byte.* = std.ascii.toLower(byte.*);
             }
         },
     }
@@ -1232,6 +1256,49 @@ fn renderArrayElementLength(allocator: std.mem.Allocator, name: []const u8, inde
 
 fn renderArrayValuesJoined(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, options: Options) ![]const u8 {
     return joinArrayValues(allocator, name, options, arrayValueScalarJoinSeparator(kind, options));
+}
+
+fn renderArrayStringOperationValues(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, parsed: ParameterExpression, options: Options, in_double_quotes: bool) anyerror!ExpandedWordFields {
+    _ = kind;
+    if (parsed.substring) |operation| return arraySliceValues(allocator, name, operation, options);
+
+    var values: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (values.items) |value| allocator.free(value);
+        values.deinit(allocator);
+    }
+
+    if (parsed.replacement) |operation| {
+        var pattern = try expandPatternWord(allocator, operation.pattern, options);
+        defer pattern.deinit(allocator);
+
+        var replacement = try expandParameterReplacementWord(allocator, operation.replacement, options, in_double_quotes);
+        defer replacement.deinit(allocator);
+
+        const len = options.arrays.len(name);
+        for (0..len) |ordinal| {
+            const value = options.arrays.value(name, ordinal) orelse continue;
+            try values.append(allocator, try replacePattern(allocator, value, pattern, replacement, operation.kind, options.extglob));
+        }
+        return .{ .fields = try values.toOwnedSlice(allocator) };
+    }
+
+    if (parsed.case_modification) |operation| {
+        var pattern = if (operation.pattern) |pattern_text|
+            try expandPatternWord(allocator, pattern_text, options)
+        else
+            try anySingleCharacterPattern(allocator);
+        defer pattern.deinit(allocator);
+
+        const len = options.arrays.len(name);
+        for (0..len) |ordinal| {
+            const value = options.arrays.value(name, ordinal) orelse continue;
+            try values.append(allocator, try renderCaseModificationWithPattern(allocator, value, operation.kind, pattern, options.extglob));
+        }
+        return .{ .fields = try values.toOwnedSlice(allocator) };
+    }
+
+    unreachable;
 }
 
 fn renderArrayKeysJoined(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, options: Options, in_double_quotes: bool) ![]const u8 {
@@ -1856,14 +1923,20 @@ fn parseParameterExpression(expression: []const u8, features: compat.Features) P
         .substring => |operation| .{
             .name = expansion.target.text,
             .substring = operation,
+            .array_index = arrayIndexSubscript(expansion.array_subscript),
+            .array_whole = arrayWholeSubscript(expansion.array_subscript),
         },
         .replacement => |operation| .{
             .name = expansion.target.text,
             .replacement = operation,
+            .array_index = arrayIndexSubscript(expansion.array_subscript),
+            .array_whole = arrayWholeSubscript(expansion.array_subscript),
         },
         .case_modification => |operation| .{
             .name = expansion.target.text,
             .case_modification = operation,
+            .array_index = arrayIndexSubscript(expansion.array_subscript),
+            .array_whole = arrayWholeSubscript(expansion.array_subscript),
         },
         .array_index => |operation| .{
             .name = expansion.target.text,
@@ -1887,6 +1960,20 @@ fn parseParameterExpression(expression: []const u8, features: compat.Features) P
             .operator = .length,
             .array_whole = operation.kind,
         },
+    };
+}
+
+fn arrayIndexSubscript(subscript: ?BashArraySubscript) ?[]const u8 {
+    return switch (subscript orelse return null) {
+        .index => |index| index,
+        .whole => null,
+    };
+}
+
+fn arrayWholeSubscript(subscript: ?BashArraySubscript) ?ParameterArrayWholeKind {
+    return switch (subscript orelse return null) {
+        .index => null,
+        .whole => |kind| kind,
     };
 }
 
@@ -1999,6 +2086,11 @@ const BashArraySubscript = union(enum) {
 const BashArrayExpansionTarget = struct {
     target: ParameterTarget,
     subscript: BashArraySubscript,
+};
+
+const BashArraySubscriptSpan = struct {
+    subscript: BashArraySubscript,
+    end: usize,
 };
 
 const BashNamePrefixExpansionTarget = struct {
@@ -2287,7 +2379,17 @@ fn parseBashArrayExpansion(expression: []const u8, target: ParameterTarget, name
     std.debug.assert(name_end < expression.len);
     std.debug.assert(expression[name_end] == '[');
 
-    const subscript = parseBashArraySubscript(expression, name_end) orelse return .invalid;
+    const parsed_subscript = parseBashArraySubscriptSpan(expression, name_end) orelse return .invalid;
+    if (parsed_subscript.end < expression.len) {
+        const operation = parseBashStringOperation(expression, target, parsed_subscript.end) orelse return .invalid;
+        return .{ .expansion = .{
+            .target = target,
+            .operation = operation,
+            .array_subscript = parsed_subscript.subscript,
+        } };
+    }
+
+    const subscript = parsed_subscript.subscript;
     return .{ .expansion = .{
         .target = target,
         .operation = switch (subscript) {
@@ -2324,15 +2426,58 @@ fn classifyIndirectParameterTarget(expression: []const u8) ?ParameterTarget {
 }
 
 fn parseBashArraySubscript(expression: []const u8, name_end: usize) ?BashArraySubscript {
+    const parsed = parseBashArraySubscriptSpan(expression, name_end) orelse return null;
+    if (parsed.end != expression.len) return null;
+    return parsed.subscript;
+}
+
+fn parseBashArraySubscriptSpan(expression: []const u8, name_end: usize) ?BashArraySubscriptSpan {
     const index_start = name_end + 1;
-    const close = std.mem.findScalar(u8, expression[index_start..], ']') orelse return null;
-    const close_index = index_start + close;
-    if (close_index + 1 != expression.len) return null;
+    const close_index = findBashArraySubscriptEnd(expression, index_start) orelse return null;
     const index_text = expression[index_start..close_index];
     if (index_text.len == 0) return null;
-    if (std.mem.eql(u8, index_text, "@")) return .{ .whole = .at };
-    if (std.mem.eql(u8, index_text, "*")) return .{ .whole = .star };
-    return .{ .index = index_text };
+    const subscript: BashArraySubscript = if (std.mem.eql(u8, index_text, "@"))
+        .{ .whole = .at }
+    else if (std.mem.eql(u8, index_text, "*"))
+        .{ .whole = .star }
+    else
+        .{ .index = index_text };
+    return .{ .subscript = subscript, .end = close_index + 1 };
+}
+
+fn findBashArraySubscriptEnd(text: []const u8, start: usize) ?usize {
+    var index = start;
+    var paren_depth: usize = 0;
+    var bracket_depth: usize = 0;
+
+    while (index < text.len) {
+        switch (text[index]) {
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '\'' => index = skipSingleQuotedText(text, index),
+            '"' => index = skipDoubleQuotedText(text, index),
+            '`' => index = skipBackquotedText(text, index),
+            '$' => index = skipDollarExpansionText(text, index) orelse index + 1,
+            '(' => {
+                paren_depth += 1;
+                index += 1;
+            },
+            ')' => {
+                if (paren_depth != 0) paren_depth -= 1;
+                index += 1;
+            },
+            '[' => {
+                bracket_depth += 1;
+                index += 1;
+            },
+            ']' => {
+                if (paren_depth == 0 and bracket_depth == 0) return index;
+                if (bracket_depth != 0) bracket_depth -= 1;
+                index += 1;
+            },
+            else => index += 1,
+        }
+    }
+    return null;
 }
 
 fn classifyParameterTarget(text: []const u8) ParameterTarget {
@@ -3036,6 +3181,19 @@ fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.A
         }
         return;
     }
+    if (bashWholeArrayStringOperation(parameter, options.features)) |parsed| {
+        const kind = parsed.array_whole.?;
+        var values = try renderArrayStringOperationValues(allocator, parsed.name, kind, parsed, options, false);
+        defer values.deinit(allocator);
+        const separator: []const u8 = switch (kind) {
+            .at => " ",
+            .star => arrayJoinSeparatorFromIfs(ifs),
+        };
+        const joined = try joinValues(allocator, values.fields, separator);
+        defer allocator.free(joined);
+        try appendSplitText(allocator, fields, current, joined, ifs);
+        return;
+    }
     if (bashWholeArrayExpansion(parameter, options.features)) |array_expansion| {
         switch (array_expansion.kind) {
             .values => switch (array_expansion.whole) {
@@ -3297,6 +3455,16 @@ fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.Arr
         }
         return;
     }
+    if (bashWholeArrayStringOperation(parameter, options.features)) |parsed| {
+        const kind = parsed.array_whole.?;
+        var values = try renderArrayStringOperationValues(allocator, parsed.name, kind, parsed, options, true);
+        defer values.deinit(allocator);
+        switch (kind) {
+            .at => try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, values.fields, true),
+            .star => try appendQuotedStar(allocator, current, quoted_glob, values.fields, ifs),
+        }
+        return;
+    }
     if (bashWholeArrayExpansion(parameter, options.features)) |array_expansion| {
         switch (array_expansion.kind) {
             .values => switch (array_expansion.whole) {
@@ -3466,6 +3634,13 @@ fn bashWholeArrayExpansion(expression: []const u8, features: compat.Features) ?B
     };
 }
 
+fn bashWholeArrayStringOperation(expression: []const u8, features: compat.Features) ?ParameterExpression {
+    if (!features.isBash()) return null;
+    const parsed = parseParameterExpression(expression, features);
+    if (parsed.operator == .invalid or parsed.array_whole == null or !hasParameterStringOperation(parsed)) return null;
+    return parsed;
+}
+
 fn bashNamePrefixExpansion(expression: []const u8, features: compat.Features) ?BashNamePrefixExpansion {
     if (!features.isBash()) return null;
     const syntax = parseParameterExpansionSyntax(expression, features);
@@ -3547,6 +3722,48 @@ fn positionalSliceValues(allocator: std.mem.Allocator, operation: ParameterSubst
         value.* = if (position == 0) options.env.get("0") orelse "" else options.positionals[@intCast(position - 1)];
     }
     return values;
+}
+
+fn arraySliceValues(allocator: std.mem.Allocator, name: []const u8, operation: ParameterSubstringOperation, options: Options) anyerror!ExpandedWordFields {
+    const max_index = options.arrays.maxIndex(name) orelse return emptyExpandedWordFields(allocator);
+    const max_value = std.math.cast(i64, max_index) orelse std.math.maxInt(i64) - 1;
+    const offset = try evaluateArrayIndexValue(allocator, operation.offset, options);
+    const start_value = if (offset < 0) max_value + 1 + offset else offset;
+    const out_of_range = start_value < 0 or start_value > max_value;
+
+    const requested_count = if (operation.length) |length_expression| blk: {
+        const length = try evaluateArrayIndexValue(allocator, length_expression, options);
+        if (length < 0) {
+            if (out_of_range) break :blk @as(i64, 0);
+            return badSubstringExpressionExpansion(allocator, options, length_expression);
+        }
+        break :blk length;
+    } else std.math.maxInt(i64);
+
+    if (out_of_range or requested_count == 0) return emptyExpandedWordFields(allocator);
+
+    var values: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (values.items) |value| allocator.free(value);
+        values.deinit(allocator);
+    }
+
+    const value_limit = std.math.cast(usize, requested_count) orelse std.math.maxInt(usize);
+    const len = options.arrays.len(name);
+    for (0..len) |ordinal| {
+        const key = options.arrays.key(name, ordinal) orelse continue;
+        const key_value = std.math.cast(i64, key) orelse std.math.maxInt(i64);
+        if (key_value < start_value) continue;
+        if (values.items.len >= value_limit) break;
+        const value = options.arrays.value(name, ordinal) orelse continue;
+        try values.append(allocator, try allocator.dupe(u8, value));
+    }
+
+    return .{ .fields = try values.toOwnedSlice(allocator) };
+}
+
+fn emptyExpandedWordFields(allocator: std.mem.Allocator) !ExpandedWordFields {
+    return .{ .fields = try allocator.alloc([]const u8, 0) };
 }
 
 fn positionalSliceAvailableCount(positional_count: i64, start_value: i64) i64 {
@@ -3645,9 +3862,13 @@ fn joinPositionalsWithIfs(allocator: std.mem.Allocator, positionals: []const []c
 }
 
 fn joinPositionals(allocator: std.mem.Allocator, positionals: []const []const u8, separator: []const u8) ![]const u8 {
+    return joinValues(allocator, positionals, separator);
+}
+
+fn joinValues(allocator: std.mem.Allocator, values: []const []const u8, separator: []const u8) ![]const u8 {
     var joined: std.ArrayList(u8) = .empty;
     errdefer joined.deinit(allocator);
-    for (positionals, 0..) |param, index| {
+    for (values, 0..) |param, index| {
         if (index > 0) try joined.appendSlice(allocator, separator);
         try joined.appendSlice(allocator, param);
     }
@@ -5099,6 +5320,8 @@ test "structured parameter parser rejects malformed POSIX forms" {
         "USER^",
         "1abc",
         "USER[0]",
+        "arr[2]/two/TWO",
+        "arr[@]^^",
     };
 
     for (cases) |case| try expectInvalidParameterSyntax(case);
@@ -5116,6 +5339,13 @@ test "structured parameter parser accepts Bash indexed array expansion" {
     try expectParameterTarget(arithmetic.target, .name, "arr");
     switch (arithmetic.operation) {
         .array_index => |operation| try std.testing.expectEqualStrings("USER_NUM - 1", operation.index),
+        else => try std.testing.expect(false),
+    }
+
+    const nested_subscript = try expectParameterSyntaxWithFeatures("arr[$(printf ']')]", compat.Features.bash());
+    try expectParameterTarget(nested_subscript.target, .name, "arr");
+    switch (nested_subscript.operation) {
+        .array_index => |operation| try std.testing.expectEqualStrings("$(printf ']')", operation.index),
         else => try std.testing.expect(false),
     }
 
@@ -5260,6 +5490,31 @@ test "structured parameter parser accepts Bash string operations" {
         else => try std.testing.expect(false),
     }
 
+    const nested_array_replacement = try expectParameterSyntaxWithFeatures("arr[$(printf ']')]/two/TWO", compat.Features.bash());
+    try expectParameterTarget(nested_array_replacement.target, .name, "arr");
+    switch (nested_array_replacement.array_subscript.?) {
+        .index => |index| try std.testing.expectEqualStrings("$(printf ']')", index),
+        .whole => try std.testing.expect(false),
+    }
+    switch (nested_array_replacement.operation) {
+        .replacement => |operation| {
+            try std.testing.expectEqual(ParameterReplacementKind.first, operation.kind);
+            try std.testing.expectEqualStrings("two", operation.pattern);
+            try std.testing.expectEqualStrings("TWO", operation.replacement);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const at_array_case_modification = try expectParameterSyntaxWithFeatures("arr[@]^^", compat.Features.bash());
+    switch (at_array_case_modification.array_subscript.?) {
+        .whole => |kind| try std.testing.expectEqual(ParameterArrayWholeKind.at, kind),
+        .index => try std.testing.expect(false),
+    }
+    switch (at_array_case_modification.operation) {
+        .case_modification => |operation| try std.testing.expectEqual(ParameterCaseKind.uppercase_all, operation.kind),
+        else => try std.testing.expect(false),
+    }
+
     const case_modification = try expectParameterSyntaxWithFeatures("USER^^", compat.Features.bash());
     switch (case_modification.operation) {
         .case_modification => |operation| {
@@ -5274,6 +5529,47 @@ test "structured parameter parser accepts Bash string operations" {
         .case_modification => |operation| {
             try std.testing.expectEqual(ParameterCaseKind.uppercase_all, operation.kind);
             try std.testing.expectEqualStrings("[[:lower:]]", operation.pattern.?);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const array_substring = try expectParameterSyntaxWithFeatures("arr[2]:1:3", compat.Features.bash());
+    try expectParameterTarget(array_substring.target, .name, "arr");
+    switch (array_substring.array_subscript.?) {
+        .index => |index| try std.testing.expectEqualStrings("2", index),
+        .whole => try std.testing.expect(false),
+    }
+    switch (array_substring.operation) {
+        .substring => |operation| {
+            try std.testing.expectEqualStrings("1", operation.offset);
+            try std.testing.expectEqualStrings("3", operation.length.?);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const array_replacement = try expectParameterSyntaxWithFeatures("arr[@]//o/O", compat.Features.bash());
+    switch (array_replacement.array_subscript.?) {
+        .whole => |kind| try std.testing.expectEqual(ParameterArrayWholeKind.at, kind),
+        .index => try std.testing.expect(false),
+    }
+    switch (array_replacement.operation) {
+        .replacement => |operation| {
+            try std.testing.expectEqual(ParameterReplacementKind.global, operation.kind);
+            try std.testing.expectEqualStrings("o", operation.pattern);
+            try std.testing.expectEqualStrings("O", operation.replacement);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const array_case_modification = try expectParameterSyntaxWithFeatures("arr[*]^^[of]", compat.Features.bash());
+    switch (array_case_modification.array_subscript.?) {
+        .whole => |kind| try std.testing.expectEqual(ParameterArrayWholeKind.star, kind),
+        .index => try std.testing.expect(false),
+    }
+    switch (array_case_modification.operation) {
+        .case_modification => |operation| {
+            try std.testing.expectEqual(ParameterCaseKind.uppercase_all, operation.kind);
+            try std.testing.expectEqualStrings("[of]", operation.pattern.?);
         },
         else => try std.testing.expect(false),
     }
@@ -5329,6 +5625,8 @@ test "parameter expansion rejects malformed braced forms" {
         "${1abc}",
         "${!USER_REF}",
         "${!RUSH_PREFIX_*}",
+        "${arr[2]/two/TWO}",
+        "${arr[@]^^}",
     };
 
     for (cases) |case| {
@@ -5477,6 +5775,10 @@ test "parameter expansion supports Bash string operations" {
     defer std.testing.allocator.free(pattern_replacement);
     try std.testing.expectEqualStrings("/usr/local/X:ROOT", pattern_replacement);
 
+    const array_string_operations = try expandWordScalar(std.testing.allocator, "${arr[2]/two/TWO}:${arr[@]/e/E}:${arr[*]^^}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(array_string_operations);
+    try std.testing.expectEqualStrings("TWO words:zEro two words thrEe fivE:ZERO TWO WORDS THREE FIVE", array_string_operations);
+
     const case_modification = try expandWordScalar(std.testing.allocator, "${USER^}:${USER^^}:${USER,}:${USER,,}", .{ .env = test_env, .features = compat.Features.bash() });
     defer std.testing.allocator.free(case_modification);
     try std.testing.expectEqualStrings("Rush-user:RUSH-USER:rush-user:rush-user", case_modification);
@@ -5484,6 +5786,45 @@ test "parameter expansion supports Bash string operations" {
     const patterned_case_modification = try expandWordScalar(std.testing.allocator, "${USER^^[rs]}:${USER^^[[:lower:]]}:${USER^[!r]}:${USER,,[RU]}", .{ .env = test_env, .features = compat.Features.bash() });
     defer std.testing.allocator.free(patterned_case_modification);
     try std.testing.expectEqualStrings("RuSh-uSeR:RUSH-USER:rush-user:rush-user", patterned_case_modification);
+}
+
+test "parameter expansion supports Bash array string operations" {
+    const element = try expandWordScalar(std.testing.allocator, "${arr[2]:1:3}:${arr[2]/words/WORDS}:${arr[2]^^[tw]}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(element);
+    try std.testing.expectEqualStrings("wo :two WORDS:TWo Words", element);
+
+    var quoted_slice = try expandWord(std.testing.allocator, "\"${arr[@]:2:2}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_slice.deinit();
+    try std.testing.expectEqual(@as(usize, 2), quoted_slice.fields.len);
+    try std.testing.expectEqualStrings("two words", quoted_slice.fields[0]);
+    try std.testing.expectEqualStrings("three", quoted_slice.fields[1]);
+
+    var quoted_star_slice = try expandWord(std.testing.allocator, "\"${arr[*]:2:2}\"", .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_star_slice.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_star_slice.fields.len);
+    try std.testing.expectEqualStrings("two words,three", quoted_star_slice.fields[0]);
+
+    var quoted_replacement = try expandWord(std.testing.allocator, "\"${arr[@]//o/O}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_replacement.deinit();
+    try std.testing.expectEqual(@as(usize, 4), quoted_replacement.fields.len);
+    try std.testing.expectEqualStrings("zerO", quoted_replacement.fields[0]);
+    try std.testing.expectEqualStrings("twO wOrds", quoted_replacement.fields[1]);
+    try std.testing.expectEqualStrings("three", quoted_replacement.fields[2]);
+    try std.testing.expectEqualStrings("five", quoted_replacement.fields[3]);
+
+    var quoted_star_replacement = try expandWord(std.testing.allocator, "\"${arr[*]//o/O}\"", .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_star_replacement.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_star_replacement.fields.len);
+    try std.testing.expectEqualStrings("zerO,twO wOrds,three,five", quoted_star_replacement.fields[0]);
+
+    var unquoted_case_modification = try expandWord(std.testing.allocator, "${arr[@]^^[of]}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer unquoted_case_modification.deinit();
+    try std.testing.expectEqual(@as(usize, 5), unquoted_case_modification.fields.len);
+    try std.testing.expectEqualStrings("zerO", unquoted_case_modification.fields[0]);
+    try std.testing.expectEqualStrings("twO", unquoted_case_modification.fields[1]);
+    try std.testing.expectEqualStrings("wOrds", unquoted_case_modification.fields[2]);
+    try std.testing.expectEqualStrings("three", unquoted_case_modification.fields[3]);
+    try std.testing.expectEqualStrings("Five", unquoted_case_modification.fields[4]);
 }
 
 test "parameter expansion supports Bash positional slice fields" {
