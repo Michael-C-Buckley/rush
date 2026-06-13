@@ -185,10 +185,22 @@ pub const Option = struct {
     argument: ?[]const u8 = null,
     value_count: usize = 0,
     exclusive_group: ?[]const u8 = null,
+    excludes: []const OptionExclusion = &.{},
     repeatable: bool = false,
     terminates_options: bool = false,
     no_space: bool = false,
     inherit: bool = true,
+};
+
+pub const OptionExclusionKind = enum {
+    option,
+    operands,
+    everything,
+};
+
+pub const OptionExclusion = struct {
+    kind: OptionExclusionKind,
+    selector: ?[]const u8 = null,
 };
 
 pub const Argument = struct {
@@ -432,7 +444,14 @@ fn freeCandidateFields(allocator: std.mem.Allocator, candidate: Candidate) void 
         if (option.short) |short| allocator.free(short);
         if (option.argument) |argument| allocator.free(argument);
         if (option.exclusive_group) |group| allocator.free(group);
+        freeOptionExclusions(allocator, option.excludes);
     }
+}
+
+fn freeOptionExclusions(allocator: std.mem.Allocator, excludes: []const OptionExclusion) void {
+    if (excludes.len == 0) return;
+    for (excludes) |exclusion| if (exclusion.selector) |selector| allocator.free(selector);
+    allocator.free(excludes);
 }
 
 pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) !Application {
@@ -920,6 +939,7 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
             .short = if (option.short) |short| try allocator.dupe(u8, short) else null,
             .argument = if (option.argument) |argument| try allocator.dupe(u8, argument) else null,
             .exclusive_group = if (option.exclusive_group) |group| try allocator.dupe(u8, group) else null,
+            .excludes = try cloneOptionExclusions(allocator, option.excludes),
             .repeatable = option.repeatable,
             .terminates_options = option.terminates_options,
             .no_space = option.no_space,
@@ -931,7 +951,26 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
         if (option.short) |short| allocator.free(short);
         if (option.argument) |argument| allocator.free(argument);
         if (option.exclusive_group) |group| allocator.free(group);
+        freeOptionExclusions(allocator, option.excludes);
     };
+    return cloned;
+}
+
+fn cloneOptionExclusions(allocator: std.mem.Allocator, excludes: []const OptionExclusion) ![]const OptionExclusion {
+    if (excludes.len == 0) return &.{};
+    const cloned = try allocator.alloc(OptionExclusion, excludes.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (cloned[0..initialized]) |exclusion| if (exclusion.selector) |selector| allocator.free(selector);
+        allocator.free(cloned);
+    }
+    for (excludes, 0..) |exclusion, index| {
+        cloned[index] = .{
+            .kind = exclusion.kind,
+            .selector = if (exclusion.selector) |selector| try allocator.dupe(u8, selector) else null,
+        };
+        initialized += 1;
+    }
     return cloned;
 }
 

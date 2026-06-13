@@ -131,6 +131,9 @@
         "exclusiveGroup": {
           "$ref": "#/$defs/name"
         },
+        "excludes": {
+          "$ref": "#/$defs/optionExclusions"
+        },
         "requires": {
           "type": "array",
           "items": {
@@ -534,6 +537,25 @@
           "uniqueItems": true
         }
       ]
+    },
+    "optionExclusions": {
+      "oneOf": [
+        { "$ref": "#/$defs/optionExclusionSentinel" },
+        {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/optionSelector" },
+              { "$ref": "#/$defs/optionExclusionSentinel" }
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      ]
+    },
+    "optionExclusionSentinel": {
+      "enum": ["operands", "everything"]
     },
     "optionSelector": {
       "type": "string",

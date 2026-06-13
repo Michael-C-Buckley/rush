@@ -386,8 +386,11 @@ pub const PromptBuilder = struct {
 pub const CompletionBuilder = struct {
     candidates: std.ArrayList(completion.Candidate) = .empty,
     owned: std.ArrayList([]const u8) = .empty,
+    owned_option_exclusions: std.ArrayList([]const completion.OptionExclusion) = .empty,
 
     pub fn deinit(self: *CompletionBuilder, allocator: std.mem.Allocator) void {
+        for (self.owned_option_exclusions.items) |excludes| allocator.free(excludes);
+        self.owned_option_exclusions.deinit(allocator);
         for (self.owned.items) |value| allocator.free(value);
         self.owned.deinit(allocator);
         self.candidates.deinit(allocator);
@@ -407,6 +410,7 @@ pub const CompletionBuilder = struct {
                 .short = if (option.short) |short| try self.dupeField(allocator, short) else null,
                 .argument = if (option.argument) |argument| try self.dupeField(allocator, argument) else null,
                 .exclusive_group = if (option.exclusive_group) |group| try self.dupeField(allocator, group) else null,
+                .excludes = try self.dupeOptionExclusions(allocator, option.excludes),
                 .repeatable = option.repeatable,
                 .terminates_options = option.terminates_options,
                 .no_space = option.no_space,
@@ -446,9 +450,24 @@ pub const CompletionBuilder = struct {
         return owned;
     }
 
+    fn dupeOptionExclusions(self: *CompletionBuilder, allocator: std.mem.Allocator, excludes: []const completion.OptionExclusion) ![]const completion.OptionExclusion {
+        if (excludes.len == 0) return &.{};
+        const owned = try allocator.alloc(completion.OptionExclusion, excludes.len);
+        errdefer allocator.free(owned);
+        for (excludes, 0..) |exclusion, index| {
+            owned[index] = .{
+                .kind = exclusion.kind,
+                .selector = if (exclusion.selector) |selector| try self.dupeField(allocator, selector) else null,
+            };
+        }
+        try self.owned_option_exclusions.append(allocator, owned);
+        return owned;
+    }
+
     pub fn finish(self: *CompletionBuilder, allocator: std.mem.Allocator) ![]completion.Candidate {
         const candidates = try self.candidates.toOwnedSlice(allocator);
         completion.sortCandidates(candidates);
+        self.owned_option_exclusions.deinit(allocator);
         self.owned.deinit(allocator);
         self.* = undefined;
         return candidates;
@@ -501,6 +520,7 @@ pub const CompletionParsedOption = struct {
     from: ?[]const u8 = null,
     from_offset: ?usize = null,
     exclusive_group: ?[]const u8 = null,
+    excludes: []const completion.OptionExclusion = &.{},
     repeatable: bool = false,
     terminates_options: bool = false,
 
@@ -529,12 +549,14 @@ pub const CompletionParsedOperand = struct {
 pub const CompletionOptionSuppressionReason = enum {
     already_present,
     exclusive_group,
+    excluded,
 };
 
 pub const CompletionOptionSuppression = struct {
     reason: CompletionOptionSuppressionReason,
     by: []const u8,
     group: ?[]const u8 = null,
+    exclusion: ?[]const u8 = null,
 };
 
 pub const CompletionValuePosition = enum {
@@ -736,6 +758,7 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.option.short) |short| allocator.free(short);
     if (rule.option.argument) |argument| allocator.free(argument);
     if (rule.option.exclusive_group) |group| allocator.free(group);
+    freeOptionExclusions(allocator, rule.option.excludes);
     if (rule.argument.state) |state| allocator.free(state);
     if (rule.argument.after_state) |state| allocator.free(state);
     if (rule.argument.after_value) |value| allocator.free(value);
@@ -758,6 +781,12 @@ fn freeOptionValueConditions(allocator: std.mem.Allocator, conditions: []const c
         allocator.free(condition.values);
     }
     allocator.free(conditions);
+}
+
+fn freeOptionExclusions(allocator: std.mem.Allocator, excludes: []const completion.OptionExclusion) void {
+    if (excludes.len == 0) return;
+    for (excludes) |exclusion| if (exclusion.selector) |selector| allocator.free(selector);
+    allocator.free(excludes);
 }
 
 fn freeCompletionManifestCommandState(allocator: std.mem.Allocator, state: CompletionManifestCommandState) void {
@@ -852,6 +881,24 @@ fn dupeOptionValueConditions(allocator: std.mem.Allocator, conditions: []const c
     return owned;
 }
 
+fn dupeOptionExclusions(allocator: std.mem.Allocator, excludes: []const completion.OptionExclusion) ![]const completion.OptionExclusion {
+    if (excludes.len == 0) return &.{};
+    const owned = try allocator.alloc(completion.OptionExclusion, excludes.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned[0..initialized]) |exclusion| if (exclusion.selector) |selector| allocator.free(selector);
+        allocator.free(owned);
+    }
+    for (excludes, 0..) |exclusion, index| {
+        owned[index] = .{
+            .kind = exclusion.kind,
+            .selector = if (exclusion.selector) |selector| try allocator.dupe(u8, selector) else null,
+        };
+        initialized += 1;
+    }
+    return owned;
+}
+
 const MatchedCompletionOption = struct {
     takes_value: bool,
     attached_value: bool,
@@ -861,6 +908,7 @@ const MatchedCompletionOption = struct {
     spelling: []const u8,
     value: ?[]const u8 = null,
     exclusive_group: ?[]const u8 = null,
+    excludes: []const completion.OptionExclusion = &.{},
     repeatable: bool = false,
     terminates_options: bool = false,
 };
@@ -927,15 +975,15 @@ fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: 
         if (rule.option.long) |long| {
             var spelling_buffer: [256]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = long, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = long, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .excludes = rule.option.excludes, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
             if (takes_value and std.mem.startsWith(u8, word, spelling) and word.len > spelling.len and word[spelling.len] == '=') {
-                return .{ .takes_value = true, .attached_value = true, .value_count = value_count, .name = long, .key = key, .spelling = word[0..spelling.len], .value = word[spelling.len + 1 ..], .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+                return .{ .takes_value = true, .attached_value = true, .value_count = value_count, .name = long, .key = key, .spelling = word[0..spelling.len], .value = word[spelling.len + 1 ..], .exclusive_group = rule.option.exclusive_group, .excludes = rule.option.excludes, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
             }
         }
         if (rule.option.short) |short| {
             var spelling_buffer: [32]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return null;
-            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = short, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+            if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = short, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .excludes = rule.option.excludes, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
         }
     }
     return null;
@@ -949,7 +997,7 @@ fn findShortCompletionOption(rules: []const completion.Rule, root: []const u8, p
         const value_count = completionRuleValueCount(rule);
         const takes_value = value_count != 0;
         const key = completionOptionKey(rule.option) orelse option_short;
-        return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = option_short, .key = key, .spelling = option_short, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+        return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = option_short, .key = key, .spelling = option_short, .exclusive_group = rule.option.exclusive_group, .excludes = rule.option.excludes, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
     }
     return null;
 }
@@ -1038,11 +1086,50 @@ pub fn completionOptionSuppressionForOption(context: CompletionSemanticContext, 
             if (std.mem.eql(u8, parsed.key, key.?)) return .{ .reason = .already_present, .by = parsed.spelling };
         }
     }
-    const group = option.exclusive_group orelse return null;
+    if (option.exclusive_group) |group| {
+        for (context.parsed_options) |parsed| {
+            const parsed_group = parsed.exclusive_group orelse continue;
+            if (key != null and option.repeatable and std.mem.eql(u8, parsed.key, key.?)) continue;
+            if (std.mem.eql(u8, parsed_group, group)) return .{ .reason = .exclusive_group, .by = parsed.spelling, .group = group };
+        }
+    }
     for (context.parsed_options) |parsed| {
-        const parsed_group = parsed.exclusive_group orelse continue;
-        if (key != null and option.repeatable and std.mem.eql(u8, parsed.key, key.?)) continue;
-        if (std.mem.eql(u8, parsed_group, group)) return .{ .reason = .exclusive_group, .by = parsed.spelling, .group = group };
+        for (parsed.excludes) |exclusion| {
+            switch (exclusion.kind) {
+                .everything => return .{ .reason = .excluded, .by = parsed.spelling, .exclusion = "everything" },
+                .operands => {},
+                .option => {
+                    const selector = exclusion.selector orelse continue;
+                    if (completionOptionMatchesSelector(option, selector)) return .{ .reason = .excluded, .by = parsed.spelling, .exclusion = selector };
+                },
+            }
+        }
+    }
+    return null;
+}
+
+pub fn completionExcludesAllCandidates(context: CompletionSemanticContext) ?CompletionOptionSuppression {
+    for (context.parsed_options) |parsed| {
+        for (parsed.excludes) |exclusion| {
+            if (exclusion.kind == .everything) return .{ .reason = .excluded, .by = parsed.spelling, .exclusion = "everything" };
+        }
+    }
+    return null;
+}
+
+pub fn completionExcludesOperands(context: CompletionSemanticContext) ?CompletionOptionSuppression {
+    return completionParsedOptionsExcludeOperands(context.parsed_options);
+}
+
+fn completionParsedOptionsExcludeOperands(parsed_options: []const CompletionParsedOption) ?CompletionOptionSuppression {
+    for (parsed_options) |parsed| {
+        for (parsed.excludes) |exclusion| {
+            switch (exclusion.kind) {
+                .everything => return .{ .reason = .excluded, .by = parsed.spelling, .exclusion = "everything" },
+                .operands => return .{ .reason = .excluded, .by = parsed.spelling, .exclusion = "operands" },
+                .option => {},
+            }
+        }
     }
     return null;
 }
@@ -1054,6 +1141,7 @@ pub fn completionOptionCandidateSuppression(rules: []const completion.Rule, cont
     var inherited_option = option;
     if (inherited_metadata) |metadata| {
         if (inherited_option.exclusive_group == null) inherited_option.exclusive_group = metadata.exclusive_group;
+        if (inherited_option.excludes.len == 0) inherited_option.excludes = metadata.excludes;
         inherited_option.repeatable = inherited_option.repeatable or metadata.repeatable;
         inherited_option.terminates_options = inherited_option.terminates_options or metadata.terminates_options;
     }
@@ -1062,6 +1150,7 @@ pub fn completionOptionCandidateSuppression(rules: []const completion.Rule, cont
 
 const CompletionOptionMetadata = struct {
     exclusive_group: ?[]const u8 = null,
+    excludes: []const completion.OptionExclusion = &.{},
     repeatable: bool = false,
     terminates_options: bool = false,
 };
@@ -1071,6 +1160,7 @@ fn completionRuleOptionMetadataForCandidate(rules: []const completion.Rule, root
         if (rule.kind != .option or !completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
         if (completionOptionSpellingMatches(rule.option, candidate.value)) return .{
             .exclusive_group = rule.option.exclusive_group,
+            .excludes = rule.option.excludes,
             .repeatable = rule.option.repeatable,
             .terminates_options = rule.option.terminates_options,
         };
@@ -1082,6 +1172,20 @@ fn completionOptionKey(option: completion.Option) ?[]const u8 {
     if (option.long) |long| return long;
     if (option.short) |short| return short;
     return null;
+}
+
+fn completionOptionMatchesSelector(option: completion.Option, selector: []const u8) bool {
+    if (std.mem.startsWith(u8, selector, "--")) {
+        const long_selector = selector[2..];
+        if (option.long) |long| return std.mem.eql(u8, long, long_selector);
+        return false;
+    }
+    if (std.mem.startsWith(u8, selector, "-") and selector.len == 2) {
+        const short_selector = selector[1..];
+        if (option.short) |short| return std.mem.eql(u8, short, short_selector);
+        return false;
+    }
+    return false;
 }
 
 fn completionOptionSpellingMatches(option: completion.Option, value: []const u8) bool {
@@ -1133,6 +1237,7 @@ fn appendParsedCompletionOption(allocator: std.mem.Allocator, parsed_options: *s
         .key = matched.key,
         .value = matched.value,
         .exclusive_group = matched.exclusive_group,
+        .excludes = matched.excludes,
         .repeatable = matched.repeatable,
         .terminates_options = matched.terminates_options,
     });
@@ -1149,19 +1254,39 @@ fn matchedCompletionOptionSuppression(parsed_options: []const CompletionParsedOp
             if (std.mem.eql(u8, parsed.key, matched.key)) return .{ .reason = .already_present, .by = parsed.spelling };
         }
     }
-    const group = matched.exclusive_group orelse return null;
+    if (matched.exclusive_group) |group| {
+        for (parsed_options) |parsed| {
+            const parsed_group = parsed.exclusive_group orelse continue;
+            if (matched.repeatable and std.mem.eql(u8, parsed.key, matched.key)) continue;
+            if (std.mem.eql(u8, parsed_group, group)) return .{ .reason = .exclusive_group, .by = parsed.spelling, .group = group };
+        }
+    }
     for (parsed_options) |parsed| {
-        const parsed_group = parsed.exclusive_group orelse continue;
-        if (matched.repeatable and std.mem.eql(u8, parsed.key, matched.key)) continue;
-        if (std.mem.eql(u8, parsed_group, group)) return .{ .reason = .exclusive_group, .by = parsed.spelling, .group = group };
+        for (parsed.excludes) |exclusion| {
+            switch (exclusion.kind) {
+                .everything => return .{ .reason = .excluded, .by = parsed.spelling, .exclusion = "everything" },
+                .operands => {},
+                .option => {
+                    const selector = exclusion.selector orelse continue;
+                    if (completionMatchedOptionMatchesSelector(matched, selector)) return .{ .reason = .excluded, .by = parsed.spelling, .exclusion = selector };
+                },
+            }
+        }
     }
     return null;
+}
+
+fn completionMatchedOptionMatchesSelector(matched: MatchedCompletionOption, selector: []const u8) bool {
+    if (std.mem.startsWith(u8, selector, "--")) return std.mem.eql(u8, matched.name, selector[2..]) or std.mem.eql(u8, matched.key, selector[2..]);
+    if (std.mem.startsWith(u8, selector, "-") and selector.len == 2) return std.mem.eql(u8, matched.name, selector[1..]);
+    return false;
 }
 
 fn completionDiagnosticKindForOptionSuppression(suppression: CompletionOptionSuppression) CompletionDiagnosticKind {
     return switch (suppression.reason) {
         .already_present => .repeated_option,
         .exclusive_group => .conflicting_option,
+        .excluded => .conflicting_option,
     };
 }
 
@@ -1169,6 +1294,7 @@ fn completionDiagnosticMessageForOptionSuppression(suppression: CompletionOption
     return switch (suppression.reason) {
         .already_present => "option may not be repeated",
         .exclusive_group => "option conflicts with previous option",
+        .excluded => "option is excluded by previous option",
     };
 }
 
@@ -1187,6 +1313,7 @@ fn appendShortCompletionClusterParsedOptions(allocator: std.mem.Allocator, parse
             .from = word,
             .from_offset = index,
             .exclusive_group = matched.exclusive_group,
+            .excludes = matched.excludes,
             .repeatable = matched.repeatable,
             .terminates_options = matched.terminates_options,
         });
@@ -1266,6 +1393,7 @@ fn completionOptionRuleContextAppliesToPath(rule: completion.Rule, root: []const
 }
 
 fn completionDynamicRuleMatches(rule: completion.Rule, context: CompletionSemanticContext) bool {
+    if ((rule.kind == .dynamic_argument or rule.kind == .dynamic_subcommands) and completionExcludesOperands(context) != null) return false;
     return switch (rule.kind) {
         .dynamic_subcommands => context.position == .subcommand and completionRuleContextMatches(rule, context.root, context.path),
         .dynamic_options => context.position == .option and completionRuleContextAppliesToPath(rule, context.root, context.path),
@@ -1289,6 +1417,7 @@ fn completionArgumentRuleMatches(rule: completion.Rule, context: CompletionSeman
 }
 
 fn completionActiveArgumentState(rules: []const completion.Rule, root: []const u8, path: []const []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8, parsed_options: []const CompletionParsedOption, options_terminated: bool) ?[]const u8 {
+    if (completionParsedOptionsExcludeOperands(parsed_options) != null) return null;
     const condition_context: CompletionArgumentConditionContext = .{
         .previous_state = previous_state,
         .parsed_options = parsed_options,
@@ -2424,6 +2553,7 @@ pub const Executor = struct {
                 .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
                 .value_count = rule.option.value_count,
                 .exclusive_group = if (rule.option.exclusive_group) |group| try self.allocator.dupe(u8, group) else null,
+                .excludes = try dupeOptionExclusions(self.allocator, rule.option.excludes),
                 .repeatable = rule.option.repeatable,
                 .terminates_options = rule.option.terminates_options,
                 .no_space = rule.option.no_space,
@@ -2927,10 +3057,16 @@ pub const Executor = struct {
             .option, .option_value, .subcommand, .redirect_target, .argument => .argument,
         };
 
+        const all_excluded = semantic.position != .command and semantic.position != .option_value and completionExcludesAllCandidates(semantic) != null;
         if (completing_parameter) {
             try self.storeLastCompletionSemantic(semantic);
             try self.storeLastCompletionTracePath(semantic.root, semantic.path);
             return try self.collectParameterCompletions(parameter_context);
+        }
+        if (all_excluded) {
+            try self.storeLastCompletionSemantic(semantic);
+            try self.storeLastCompletionTracePath(semantic.root, semantic.path);
+            return self.allocator.alloc(completion.Candidate, 0);
         }
 
         const candidates = try self.collectCompletionsWithContext(context.command, context, options);
@@ -3478,6 +3614,7 @@ pub const Executor = struct {
                 .dynamic_subcommands, .dynamic_options, .dynamic_argument, .dynamic_option_value => {},
                 .subcommand => {
                     if (context.position != .subcommand) continue;
+                    if (completionExcludesOperands(context) != null) continue;
                     if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
                     const value = rule.value orelse continue;
                     try self.appendStructuredCompletionCandidate(builder, value, rule.description, .subcommand, null, context, true);
@@ -3554,6 +3691,7 @@ pub const Executor = struct {
             try self.appendBuiltinOptionCandidates(builder, context);
         }
         if (context.position != .subcommand and context.position != .argument) return;
+        if (completionExcludesOperands(context) != null) return;
 
         if (std.mem.eql(u8, context.root, "cd")) {
             if (options.io) |io| try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, true, true);
@@ -3819,6 +3957,7 @@ pub const Executor = struct {
 
     fn appendDefaultCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext, options: ExecuteOptions) !void {
         if (builder.candidates.items.len != 0 and context.position != .redirect_target) return;
+        if ((context.position == .subcommand or context.position == .argument) and completionExcludesOperands(context) != null) return;
         const io = options.io orelse return;
         switch (context.position) {
             .redirect_target => try appendPathCandidates(self, builder, io, context.prefix, context.replace_start, context.replace_end, null, false, false),
@@ -3862,6 +4001,7 @@ pub const Executor = struct {
                 if (option.short) |short| self.allocator.free(short);
                 if (option.argument) |argument| self.allocator.free(argument);
                 if (option.exclusive_group) |group| self.allocator.free(group);
+                freeOptionExclusions(self.allocator, option.excludes);
             }
         }
         self.allocator.free(candidates);

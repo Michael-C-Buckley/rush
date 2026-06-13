@@ -240,12 +240,15 @@ type Option = {
   value?: Value | Value[]
   repeatable?: boolean
   exclusiveGroup?: string
+  excludes?: OptionExclusion[] | "operands" | "everything"
   inherit?: boolean
   requires?: string[]
   terminatesOptions?: boolean
   hidden?: boolean
   deprecated?: boolean | string
 }
+
+type OptionExclusion = string | "operands" | "everything"
 
 type Platform = "darwin" | "linux" | "freebsd" | "openbsd" | "netbsd" | "dragonfly" | "windows" | "wasi" | "haiku"
 
@@ -367,8 +370,38 @@ Option groups model zsh-like exclusion sets declaratively:
 }
 ```
 
-For v1, only exclusive groups are required. `requires`/`implies` can wait unless
-implementation falls out naturally.
+An exclusive group is the symmetric special case for mutually exclusive option
+sets and remains the preferred spelling when every member excludes every other
+member.
+
+For one-directional exclusions, put `excludes` on the option that changes later
+completion behavior:
+
+```json
+{
+  "options": [
+    { "long": "help", "excludes": "everything" },
+    { "long": "all", "excludes": "operands" },
+    { "long": "raw", "excludes": ["--pretty"] },
+    { "long": "pretty" }
+  ]
+}
+```
+
+`excludes` accepts option selectors plus two sentinels:
+
+- `"everything"`: once the declaring option is present, Rush offers nothing
+  else on that command line.
+- `"operands"`: once present, Rush stops selecting positional operand states
+  and operand providers, while later options can still be offered.
+- option selectors such as `"--pretty"` or `"-p"`: once present, Rush stops
+  offering the selected option. The excluded option does not implicitly exclude
+  the declarer.
+
+Use an array when excluding option selectors; the bare string form is only for
+`"operands"` and `"everything"`. Selector entries must name options in the
+effective command scope and an option must not exclude itself.
+`requires`/`implies` can wait unless implementation falls out naturally.
 
 ### Argument states
 
@@ -765,9 +798,11 @@ model in the top-level `manifest` object:
       "spelling": "--no-index",
       "reason": "exclusiveGroup",
       "by": "--cached",
-      "group": "diff-source"
+      "group": "diff-source",
+      "exclusion": null
     }
   ],
+  "suppressedOperands": [],
   "fallback": { "kind": "none", "reason": "manifest provider or static manifest candidates matched" }
 }
 ```

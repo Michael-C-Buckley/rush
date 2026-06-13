@@ -1697,6 +1697,9 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
         if (manifestString(option.get("long"))) |long| rule.option.long = long;
         if (manifestString(option.get("short"))) |short| rule.option.short = short;
         if (manifestString(option.get("exclusiveGroup"))) |group| rule.option.exclusive_group = group;
+        const excludes = try completionManifestOptionExclusions(executor.allocator, option.get("excludes"));
+        defer if (excludes.len != 0) executor.allocator.free(excludes);
+        rule.option.excludes = excludes;
         rule.option.repeatable = manifestBool(option.get("repeatable"));
         rule.option.terminates_options = manifestBool(option.get("terminatesOptions"));
         rule.option.inherit = manifestBoolDefault(option.get("inherit"), true);
@@ -1727,6 +1730,33 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
             }
         }
     }
+}
+
+fn completionManifestOptionExclusions(allocator: std.mem.Allocator, excludes_value: ?std.json.Value) ![]const completion_model.OptionExclusion {
+    const value = excludes_value orelse return &.{};
+    switch (value) {
+        .string => |string| {
+            const excludes = try allocator.alloc(completion_model.OptionExclusion, 1);
+            excludes[0] = completionManifestOptionExclusion(string);
+            return excludes;
+        },
+        .array => |array| {
+            var excludes: std.ArrayList(completion_model.OptionExclusion) = .empty;
+            errdefer excludes.deinit(allocator);
+            for (array.items) |item| {
+                const string = manifestString(item) orelse continue;
+                try excludes.append(allocator, completionManifestOptionExclusion(string));
+            }
+            return excludes.toOwnedSlice(allocator);
+        },
+        else => return &.{},
+    }
+}
+
+fn completionManifestOptionExclusion(value: []const u8) completion_model.OptionExclusion {
+    if (std.mem.eql(u8, value, "operands")) return .{ .kind = .operands };
+    if (std.mem.eql(u8, value, "everything")) return .{ .kind = .everything };
+    return .{ .kind = .option, .selector = value };
 }
 
 fn loadCompletionManifestOptionValueProvider(executor: *exec.Executor, root: []const u8, path: []const []const u8, option_rule: completion_model.Rule, value: std.json.Value, providers: []const CompletionManifestProviderBinding, source: completion_model.RuleSource, variant: ?[]const u8, disabled: bool) !void {
@@ -2360,6 +2390,15 @@ fn validateManifestCommand(
                 defer allocator.free(option_path);
                 try validateManifestOption(allocator, diagnostics, option_value, providers.items, &options, &child_options, groups.items, option_path);
             }
+            for (array.items, 0..) |option_value, index| {
+                const option = switch (option_value) {
+                    .object => |object| object,
+                    else => continue,
+                };
+                const option_path = try manifestIndexPath(allocator, options_path, index);
+                defer allocator.free(option_path);
+                try validateManifestOptionExcludes(allocator, diagnostics, option, options.items, option_path);
+            }
         }
     }
 
@@ -2462,6 +2501,15 @@ fn validateManifestCommandOverlay(allocator: std.mem.Allocator, diagnostics: *Co
             const option_path = try manifestIndexPath(allocator, options_path, index);
             defer allocator.free(option_path);
             try validateManifestOption(allocator, diagnostics, option_value, providers.items, &options, &child_options, groups.items, option_path);
+        }
+        for (options_value.array.items, 0..) |option_value, index| {
+            const option = switch (option_value) {
+                .object => |object| object,
+                else => continue,
+            };
+            const option_path = try manifestIndexPath(allocator, options_path, index);
+            defer allocator.free(option_path);
+            try validateManifestOptionExcludes(allocator, diagnostics, option, options.items, option_path);
         }
     };
     if (overlay.get("arguments")) |arguments| {
@@ -2574,6 +2622,60 @@ fn validateManifestOption(
         defer allocator.free(value_path);
         try validateManifestOptionValue(allocator, diagnostics, value, providers, value_path);
     }
+}
+
+fn validateManifestOptionExcludes(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, option: std.json.ObjectMap, options: []const CompletionManifestOptionSpelling, path: []const u8) !void {
+    const excludes = option.get("excludes") orelse return;
+    const excludes_path = try manifestFieldPath(allocator, path, "excludes");
+    defer allocator.free(excludes_path);
+    switch (excludes) {
+        .string => |selector| {
+            if (!completionManifestExcludeSentinel(selector)) {
+                try diagnostics.add(.err, "{s}: bare excludes string must be 'operands' or 'everything' (use an array for option selectors)", .{excludes_path});
+            }
+        },
+        .array => |array| {
+            for (array.items, 0..) |item, index| {
+                const selector = manifestString(item) orelse continue;
+                const selector_path = try manifestIndexPath(allocator, excludes_path, index);
+                defer allocator.free(selector_path);
+                try validateManifestOptionExclude(diagnostics, option, options, selector, selector_path);
+            }
+        },
+        else => {},
+    }
+}
+
+fn validateManifestOptionExclude(diagnostics: *CompletionManifestDiagnostics, option: std.json.ObjectMap, options: []const CompletionManifestOptionSpelling, selector: []const u8, path: []const u8) !void {
+    if (completionManifestExcludeSentinel(selector)) return;
+    const excluded = findManifestOptionSelector(options, selector) orelse {
+        try validateManifestOptionSelector(diagnostics, selector, options, path);
+        return;
+    };
+    if (manifestOptionObjectHasSelector(option, excluded.kind, excluded.value)) {
+        try diagnostics.add(.err, "{s}: option must not exclude itself ('{s}')", .{ path, selector });
+    }
+}
+
+fn completionManifestExcludeSentinel(value: []const u8) bool {
+    return std.mem.eql(u8, value, "operands") or std.mem.eql(u8, value, "everything");
+}
+
+fn manifestOptionObjectHasSelector(option: std.json.ObjectMap, kind: CompletionManifestOptionSpellingKind, value: []const u8) bool {
+    switch (kind) {
+        .short => if (manifestString(option.get("short"))) |short| return std.mem.eql(u8, short, value),
+        .long => {
+            if (manifestString(option.get("long"))) |long| if (std.mem.eql(u8, long, value)) return true;
+            const aliases = switch (option.get("aliases") orelse return false) {
+                .array => |array| array,
+                else => return false,
+            };
+            for (aliases.items) |alias_value| {
+                if (manifestString(alias_value)) |alias| if (std.mem.eql(u8, alias, value)) return true;
+            }
+        },
+    }
+    return false;
 }
 
 fn validateManifestOptionValue(allocator: std.mem.Allocator, diagnostics: *CompletionManifestDiagnostics, value: std.json.Value, providers: []const CompletionManifestProviderInfo, path: []const u8) anyerror!void {
@@ -4197,6 +4299,8 @@ fn writeCompletionSuppressedOptionJson(json: *std.json.Stringify, prefix: []cons
     try json.write(suppression.by);
     try json.objectField("group");
     try json.write(suppression.group);
+    try json.objectField("exclusion");
+    try json.write(suppression.exclusion);
     try json.endObject();
 }
 
@@ -4354,6 +4458,7 @@ const ManifestParsedOption = struct {
     from: ?[]const u8 = null,
     from_offset: ?usize = null,
     exclusive_group: ?[]const u8 = null,
+    excludes: ?std.json.Value = null,
     repeatable: bool = false,
 
     fn displaySpelling(self: ManifestParsedOption, buffer: *[2]u8) []const u8 {
@@ -4493,6 +4598,8 @@ fn writeCompletionManifestTraceText(allocator: std.mem.Allocator, io: std.Io, wr
     const provider_count = try writeManifestProvidersText(writer, semantic, active_command, active_options.items, trace, candidates, "    ");
     try writer.print("  suppressed-options:\n", .{});
     try writeManifestSuppressedOptionsText(writer, active_options.items, trace.parsed_options.items, "    ");
+    try writer.print("  suppressed-operands:\n", .{});
+    try writeManifestSuppressedOperandsText(writer, trace.parsed_options.items, "    ");
     try writeManifestFallbackText(writer, manifestFallbackKind(loaded, provider_count, candidates), manifestFallbackReason(loaded, provider_count, candidates));
 }
 
@@ -4507,6 +4614,7 @@ fn writeEmptyManifestTraceText(writer: *std.Io.Writer, fallback_kind: []const u8
         \\    none
         \\  matched-providers:
         \\  suppressed-options:
+        \\  suppressed-operands:
         \\
     , .{});
     try writeManifestFallbackText(writer, fallback_kind, fallback_reason);
@@ -4612,29 +4720,98 @@ fn writeManifestSuppressedOptionsText(writer: *std.Io.Writer, options: []const s
         const spelling = manifestOptionPrimarySpelling(option) orelse continue;
         if (manifestParsedOptionForOption(parsed_options, option)) |parsed| {
             var parsed_spelling_buffer: [2]u8 = undefined;
-            if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionText(writer, spelling, "alreadyPresent", parsed.displaySpelling(&parsed_spelling_buffer), null, indent);
+            if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionText(writer, spelling, "alreadyPresent", parsed.displaySpelling(&parsed_spelling_buffer), null, null, indent);
             continue;
         }
-        const group = manifestString(option.get("exclusiveGroup")) orelse continue;
-        for (parsed_options) |parsed| {
-            if (parsed.exclusive_group) |parsed_group| {
-                if (std.mem.eql(u8, group, parsed_group)) {
-                    var parsed_spelling_buffer: [2]u8 = undefined;
-                    try writeManifestSuppressedOptionText(writer, spelling, "exclusiveGroup", parsed.displaySpelling(&parsed_spelling_buffer), group, indent);
-                    break;
+        var suppressed = false;
+        if (manifestString(option.get("exclusiveGroup"))) |group| {
+            for (parsed_options) |parsed| {
+                if (parsed.exclusive_group) |parsed_group| {
+                    if (std.mem.eql(u8, group, parsed_group)) {
+                        var parsed_spelling_buffer: [2]u8 = undefined;
+                        try writeManifestSuppressedOptionText(writer, spelling, "exclusiveGroup", parsed.displaySpelling(&parsed_spelling_buffer), group, null, indent);
+                        suppressed = true;
+                        break;
+                    }
                 }
             }
+        }
+        if (suppressed) continue;
+        for (parsed_options) |parsed| {
+            const exclusion = manifestParsedOptionExcludesOption(parsed, option) orelse continue;
+            var parsed_spelling_buffer: [2]u8 = undefined;
+            try writeManifestSuppressedOptionText(writer, spelling, "excluded", parsed.displaySpelling(&parsed_spelling_buffer), null, exclusion, indent);
+            break;
         }
     }
 }
 
-fn writeManifestSuppressedOptionText(writer: *std.Io.Writer, spelling_name: []const u8, reason: []const u8, by: []const u8, group: ?[]const u8, indent: []const u8) !void {
+fn writeManifestSuppressedOperandsText(writer: *std.Io.Writer, parsed_options: []const ManifestParsedOption, indent: []const u8) !void {
+    for (parsed_options) |parsed| {
+        const exclusion = manifestParsedOptionExcludesOperands(parsed) orelse continue;
+        var parsed_spelling_buffer: [2]u8 = undefined;
+        try writer.print("{s}- reason: excluded\n{s}  by: {s}\n{s}  exclusion: {s}\n", .{
+            indent,
+            indent,
+            parsed.displaySpelling(&parsed_spelling_buffer),
+            indent,
+            exclusion,
+        });
+        break;
+    }
+}
+
+fn writeManifestSuppressedOptionText(writer: *std.Io.Writer, spelling_name: []const u8, reason: []const u8, by: []const u8, group: ?[]const u8, exclusion: ?[]const u8, indent: []const u8) !void {
     if (spelling_name.len == 1) {
         try writer.print("{s}- spelling: -{s}\n", .{ indent, spelling_name });
     } else {
         try writer.print("{s}- spelling: --{s}\n", .{ indent, spelling_name });
     }
-    try writer.print("{s}  reason: {s}\n{s}  by: {s}\n{s}  group: {s}\n", .{ indent, reason, indent, by, indent, group orelse "" });
+    try writer.print("{s}  reason: {s}\n{s}  by: {s}\n{s}  group: {s}\n{s}  exclusion: {s}\n", .{ indent, reason, indent, by, indent, group orelse "", indent, exclusion orelse "" });
+}
+
+fn manifestParsedOptionExcludesOperands(parsed: ManifestParsedOption) ?[]const u8 {
+    const excludes = parsed.excludes orelse return null;
+    switch (excludes) {
+        .string => |string| if (std.mem.eql(u8, string, "operands") or std.mem.eql(u8, string, "everything")) return string,
+        .array => |array| for (array.items) |item| {
+            const string = manifestString(item) orelse continue;
+            if (std.mem.eql(u8, string, "operands") or std.mem.eql(u8, string, "everything")) return string;
+        },
+        else => {},
+    }
+    return null;
+}
+
+fn manifestParsedOptionExcludesOption(parsed: ManifestParsedOption, option: std.json.ObjectMap) ?[]const u8 {
+    const excludes = parsed.excludes orelse return null;
+    switch (excludes) {
+        .string => |string| if (manifestExcludeMatchesOption(string, option)) return string,
+        .array => |array| for (array.items) |item| {
+            const string = manifestString(item) orelse continue;
+            if (manifestExcludeMatchesOption(string, option)) return string;
+        },
+        else => {},
+    }
+    return null;
+}
+
+fn manifestExcludeMatchesOption(exclusion: []const u8, option: std.json.ObjectMap) bool {
+    if (std.mem.eql(u8, exclusion, "everything")) return true;
+    if (std.mem.eql(u8, exclusion, "operands")) return false;
+    if (std.mem.startsWith(u8, exclusion, "--")) return manifestOptionNameMatches(option, exclusion[2..]);
+    if (std.mem.startsWith(u8, exclusion, "-") and exclusion.len == 2) {
+        const short = manifestString(option.get("short")) orelse return false;
+        return short.len == 1 and short[0] == exclusion[1];
+    }
+    return false;
+}
+
+fn manifestParsedOptionsExcludeOperands(parsed_options: []const ManifestParsedOption) bool {
+    for (parsed_options) |parsed| {
+        if (manifestParsedOptionExcludesOperands(parsed) != null) return true;
+    }
+    return false;
 }
 
 fn manifestProviderRefLabel(provider: std.json.Value, buffer: *[128]u8) ?[]const u8 {
@@ -4813,6 +4990,8 @@ fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, js
     const provider_count = try writeManifestProvidersJson(json, semantic, active_command, active_options.items, trace, candidates);
     try json.objectField("suppressedOptions");
     try writeManifestSuppressedOptionsJson(json, active_options.items, trace.parsed_options.items);
+    try json.objectField("suppressedOperands");
+    try writeManifestSuppressedOperandsJson(json, trace.parsed_options.items);
     try json.objectField("fallback");
     try writeManifestFallbackJson(json, manifestFallbackKind(loaded, provider_count, candidates), manifestFallbackReason(loaded, provider_count, candidates));
     try json.endObject();
@@ -4837,6 +5016,9 @@ fn writeEmptyManifestDecisionJson(json: *std.json.Stringify, fallback_kind: []co
     try json.beginArray();
     try json.endArray();
     try json.objectField("suppressedOptions");
+    try json.beginArray();
+    try json.endArray();
+    try json.objectField("suppressedOperands");
     try json.beginArray();
     try json.endArray();
     try json.objectField("fallback");
@@ -4960,6 +5142,7 @@ fn analyzeManifestCompletionTrace(allocator: std.mem.Allocator, source: []const 
                     .short = manifestOptionMatchShort(matched),
                     .value = matched.value,
                     .exclusive_group = manifestString(matched.option.get("exclusiveGroup")),
+                    .excludes = matched.option.get("excludes"),
                     .repeatable = manifestBool(matched.option.get("repeatable")),
                 };
                 if (manifestBool(matched.option.get("terminatesOptions"))) trace.terminator_seen = true;
@@ -4987,6 +5170,7 @@ fn analyzeManifestCompletionTrace(allocator: std.mem.Allocator, source: []const 
                             .from = word,
                             .from_offset = offset,
                             .exclusive_group = manifestString(matched.option.get("exclusiveGroup")),
+                            .excludes = matched.option.get("excludes"),
                             .repeatable = manifestBool(matched.option.get("repeatable")),
                         };
                         if (manifestBool(matched.option.get("terminatesOptions"))) trace.terminator_seen = true;
@@ -5156,6 +5340,7 @@ fn manifestOptionTakesValue(option: std.json.ObjectMap) bool {
 }
 
 fn manifestActiveArgumentState(command: std.json.ObjectMap, active_index: usize, previous_state: ?[]const u8, terminator_seen: bool, parsed_options: []const ManifestParsedOption) ?std.json.ObjectMap {
+    if (manifestParsedOptionsExcludeOperands(parsed_options)) return null;
     const arguments_value = command.get("arguments") orelse return null;
     const arguments = switch (arguments_value) {
         .object => |object| object,
@@ -5564,19 +5749,47 @@ fn writeManifestSuppressedOptionsJson(json: *std.json.Stringify, options: []cons
         const spelling = manifestOptionPrimarySpelling(option) orelse continue;
         if (manifestParsedOptionForOption(parsed_options, option)) |parsed| {
             var parsed_spelling_buffer: [2]u8 = undefined;
-            if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionJson(json, spelling, "alreadyPresent", parsed.displaySpelling(&parsed_spelling_buffer), null);
+            if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionJson(json, spelling, "alreadyPresent", parsed.displaySpelling(&parsed_spelling_buffer), null, null);
             continue;
         }
-        const group = manifestString(option.get("exclusiveGroup")) orelse continue;
-        for (parsed_options) |parsed| {
-            if (parsed.exclusive_group) |parsed_group| {
-                if (std.mem.eql(u8, group, parsed_group)) {
-                    var parsed_spelling_buffer: [2]u8 = undefined;
-                    try writeManifestSuppressedOptionJson(json, spelling, "exclusiveGroup", parsed.displaySpelling(&parsed_spelling_buffer), group);
-                    break;
+        var suppressed = false;
+        if (manifestString(option.get("exclusiveGroup"))) |group| {
+            for (parsed_options) |parsed| {
+                if (parsed.exclusive_group) |parsed_group| {
+                    if (std.mem.eql(u8, group, parsed_group)) {
+                        var parsed_spelling_buffer: [2]u8 = undefined;
+                        try writeManifestSuppressedOptionJson(json, spelling, "exclusiveGroup", parsed.displaySpelling(&parsed_spelling_buffer), group, null);
+                        suppressed = true;
+                        break;
+                    }
                 }
             }
         }
+        if (suppressed) continue;
+        for (parsed_options) |parsed| {
+            const exclusion = manifestParsedOptionExcludesOption(parsed, option) orelse continue;
+            var parsed_spelling_buffer: [2]u8 = undefined;
+            try writeManifestSuppressedOptionJson(json, spelling, "excluded", parsed.displaySpelling(&parsed_spelling_buffer), null, exclusion);
+            break;
+        }
+    }
+    try json.endArray();
+}
+
+fn writeManifestSuppressedOperandsJson(json: *std.json.Stringify, parsed_options: []const ManifestParsedOption) !void {
+    try json.beginArray();
+    for (parsed_options) |parsed| {
+        const exclusion = manifestParsedOptionExcludesOperands(parsed) orelse continue;
+        var parsed_spelling_buffer: [2]u8 = undefined;
+        try json.beginObject();
+        try json.objectField("reason");
+        try json.write("excluded");
+        try json.objectField("by");
+        try json.write(parsed.displaySpelling(&parsed_spelling_buffer));
+        try json.objectField("exclusion");
+        try json.write(exclusion);
+        try json.endObject();
+        break;
     }
     try json.endArray();
 }
@@ -5607,7 +5820,7 @@ fn manifestOptionNameMatches(option: std.json.ObjectMap, name: []const u8) bool 
     return false;
 }
 
-fn writeManifestSuppressedOptionJson(json: *std.json.Stringify, spelling_name: []const u8, reason: []const u8, by: []const u8, group: ?[]const u8) !void {
+fn writeManifestSuppressedOptionJson(json: *std.json.Stringify, spelling_name: []const u8, reason: []const u8, by: []const u8, group: ?[]const u8, exclusion: ?[]const u8) !void {
     try json.beginObject();
     try json.objectField("spelling");
     if (spelling_name.len == 1) {
@@ -5623,6 +5836,8 @@ fn writeManifestSuppressedOptionJson(json: *std.json.Stringify, spelling_name: [
     try json.write(by);
     try json.objectField("group");
     try json.write(group);
+    try json.objectField("exclusion");
+    try json.write(exclusion);
     try json.endObject();
 }
 
@@ -7026,6 +7241,60 @@ test "completion manifest static enum providers emit scoped candidates" {
     try expectCompletionCandidate(argument_candidates, "auto");
 }
 
+test "completion manifest option excludes suppress candidates asymmetrically" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    try loadCompletionManifest(std.testing.allocator, &executor,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "providers": {
+        \\      "tool.targets": { "values": ["target"] }
+        \\    },
+        \\    "options": [
+        \\      { "long": "help", "excludes": "everything" },
+        \\      { "long": "all", "excludes": "operands" },
+        \\      { "long": "raw", "excludes": ["--pretty"] },
+        \\      { "long": "pretty" },
+        \\      { "long": "verbose" }
+        \\    ],
+        \\    "arguments": {
+        \\      "states": [
+        \\        { "name": "target", "index": 0, "provider": "tool.targets" }
+        \\      ]
+        \\    }
+        \\  }
+        \\}
+    );
+
+    const help_candidates = try executor.collectCompletionsForInput("tool --help ", "tool --help ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(help_candidates);
+    try std.testing.expectEqual(@as(usize, 0), help_candidates.len);
+
+    const help_options = try executor.collectCompletionsForInput("tool --help --", "tool --help --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(help_options);
+    try std.testing.expectEqual(@as(usize, 0), help_options.len);
+
+    const all_arguments = try executor.collectCompletionsForInput("tool --all t", "tool --all t".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(all_arguments);
+    try expectNoCompletionCandidate(all_arguments, "target");
+
+    const all_options = try executor.collectCompletionsForInput("tool --all --", "tool --all --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(all_options);
+    try expectCompletionCandidate(all_options, "--verbose");
+
+    const raw_options = try executor.collectCompletionsForInput("tool --raw --", "tool --raw --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(raw_options);
+    try expectNoCompletionCandidate(raw_options, "--pretty");
+    try expectCompletionCandidate(raw_options, "--verbose");
+
+    const pretty_options = try executor.collectCompletionsForInput("tool --pretty --", "tool --pretty --".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(pretty_options);
+    try expectCompletionCandidate(pretty_options, "--raw");
+}
+
 test "completion manifest multi-value options select each provider and preserve operand indexes" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
@@ -7500,6 +7769,11 @@ test "Git manifest fixture selects representative zsh-class providers" {
     defer executor.freeCompletions(push_delete);
     const delete_ref = findCompletionCandidate(push_delete, "main") orelse return error.MissingCompletionCandidate;
     try std.testing.expectEqualStrings("remote-ref:refspec:1:false", delete_ref.description.?);
+
+    const push_all_source = "git push --all or";
+    const push_all = try executor.collectCompletionsForInput(push_all_source, push_all_source.len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(push_all);
+    try expectNoCompletionCandidate(push_all, "origin");
 }
 
 test "completion manifest function providers lazy-load provider-only companions" {
@@ -7625,6 +7899,9 @@ test "completion manifest semantic validation accepts resolved providers groups 
         \\    "options": [
         \\      { "long": "debug", "exclusiveGroup": "mode" },
         \\      { "long": "release", "exclusiveGroup": "mode" },
+        \\      { "long": "help", "excludes": "everything" },
+        \\      { "long": "all", "excludes": "operands" },
+        \\      { "long": "raw", "excludes": ["--release"] },
         \\      { "long": "target", "value": { "name": "target", "provider": "tool.targets" } }
         \\    ],
         \\    "arguments": {
@@ -7801,7 +8078,10 @@ test "completion manifest semantic validation reports clear invalid manifest dia
         \\      { "long": "verbose" },
         \\      { "long": "verbose" },
         \\      { "long": "mode", "exclusiveGroup": "missing" },
-        \\      { "long": "target", "value": { "name": "target", "provider": "missing.provider" } }
+        \\      { "long": "target", "value": { "name": "target", "provider": "missing.provider" } },
+        \\      { "long": "self", "excludes": ["--self"] },
+        \\      { "long": "bad", "excludes": ["--missing"] },
+        \\      { "long": "bare", "excludes": "--verbose" }
         \\    ],
         \\    "variants": {
         \\      "gnu": { "options": [ { "long": "verbose" } ] }
@@ -7826,6 +8106,9 @@ test "completion manifest semantic validation reports clear invalid manifest dia
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[1]: duplicate option spelling '--verbose'");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[2].exclusiveGroup: undefined option group 'missing'");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[3].value.provider: unknown provider 'missing.provider'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[4].excludes[0]: option must not exclude itself ('--self')");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[5].excludes[0]: unknown option selector '--missing'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[6].excludes: bare excludes string must be 'operands' or 'everything' (use an array for option selectors)");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.subcommands[1].aliases[0]: duplicate subcommand name or alias 'r'");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.arguments.states[0].index: argument state 'target' is unreachable");
     try expectCompletionManifestDiagnostic(diagnostics, .err, "command.platforms[0]: unknown platform 'bogus'");
@@ -8628,7 +8911,9 @@ test "completion debug output exposes manifest source and JSON decision state" {
         \\    ],
         \\    "options": [
         \\      { "long": "debug", "exclusiveGroup": "mode" },
-        \\      { "long": "release", "exclusiveGroup": "mode" }
+        \\      { "long": "release", "exclusiveGroup": "mode" },
+        \\      { "long": "all", "excludes": "operands" },
+        \\      { "long": "raw", "excludes": ["--release"] }
         \\    ],
         \\    "subcommands": [
         \\      {
@@ -8697,6 +8982,35 @@ test "completion debug output exposes manifest source and JSON decision state" {
     var terminated = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, terminated_output, .{});
     defer terminated.deinit();
     try std.testing.expect(terminated.value.object.get("semantic").?.object.get("optionsTerminated").?.bool);
+
+    const excluded_option_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool run --raw --");
+    defer std.testing.allocator.free(excluded_option_output);
+    var excluded_option = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, excluded_option_output, .{});
+    defer excluded_option.deinit();
+    const excluded_options = excluded_option.value.object.get("manifest").?.object.get("suppressedOptions").?.array.items;
+    var found_excluded_option = false;
+    for (excluded_options) |suppression| {
+        const object_value = suppression.object;
+        if (std.mem.eql(u8, object_value.get("spelling").?.string, "--release")) {
+            try std.testing.expectEqualStrings("excluded", object_value.get("reason").?.string);
+            try std.testing.expectEqualStrings("--raw", object_value.get("by").?.string);
+            try std.testing.expectEqualStrings("--release", object_value.get("exclusion").?.string);
+            found_excluded_option = true;
+        }
+    }
+    try std.testing.expect(found_excluded_option);
+
+    const excluded_operands_output = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "tool run --all ta");
+    defer std.testing.allocator.free(excluded_operands_output);
+    var excluded_operands = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, excluded_operands_output, .{});
+    defer excluded_operands.deinit();
+    const excluded_operands_manifest = excluded_operands.value.object.get("manifest").?.object;
+    try std.testing.expect(excluded_operands_manifest.get("activeArgumentState").? == .null);
+    const suppressed_operands = excluded_operands_manifest.get("suppressedOperands").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), suppressed_operands.len);
+    try std.testing.expectEqualStrings("excluded", suppressed_operands[0].object.get("reason").?.string);
+    try std.testing.expectEqualStrings("--all", suppressed_operands[0].object.get("by").?.string);
+    try std.testing.expectEqualStrings("operands", suppressed_operands[0].object.get("exclusion").?.string);
 }
 
 test "completion debug JSON traces manifest optionValue condition results" {

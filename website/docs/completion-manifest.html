@@ -151,7 +151,7 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   <span class="str">"dynamicOptions"</span>: <span class="comment">providers for option slots</span>
 }</pre>
 
-  <p>The schema also accepts metadata such as <code>hidden</code>, <code>deprecated</code>, <code>requires</code>, and <code>optionGroups</code>. Those fields are validated for shape, but current completion behavior is driven by the concrete option fields on each option, especially <code>exclusiveGroup</code>, <code>repeatable</code>, and <code>terminatesOptions</code>.</p>
+  <p>The schema also accepts metadata such as <code>hidden</code>, <code>deprecated</code>, <code>requires</code>, and <code>optionGroups</code>. Those fields are validated for shape, but current completion behavior is driven by the concrete option fields on each option, especially <code>exclusiveGroup</code>, <code>excludes</code>, <code>repeatable</code>, and <code>terminatesOptions</code>.</p>
 
   <h2 id="platforms-and-variants"><a href="#platforms-and-variants">Platforms and installed variants</a></h2>
 
@@ -221,7 +221,18 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <p>Each value position selects its own provider and grammar. Only the first value may use attached or equals-style spellings; later values are detached words. Optional values with <code>"required": false</code> must be a trailing run. Rush skips all consumed option values when computing argument indexes.</p>
 
-  <p>Options are non-repeatable unless <code>repeatable</code> is true. <code>exclusiveGroup</code> suppresses other options in the same group once any group member is present. <code>terminatesOptions</code> marks an option that ends option parsing after it is seen.</p>
+  <p>Options are non-repeatable unless <code>repeatable</code> is true. <code>exclusiveGroup</code> suppresses other options in the same group once any group member is present; it is the symmetric special case and remains the preferred spelling for mutually exclusive option sets. <code>excludes</code> is one-directional: the declaring option suppresses selected later completions, but excluded options do not implicitly suppress the declarer. Use option selectors such as <code>"--pretty"</code> or <code>"-p"</code>, or the sentinels <code>"operands"</code> and <code>"everything"</code>. <code>terminatesOptions</code> marks an option that ends option parsing after it is seen.</p>
+
+  <pre>{
+  <span class="str">"options"</span>: [
+    { <span class="str">"long"</span>: <span class="str">"help"</span>, <span class="str">"excludes"</span>: <span class="str">"everything"</span> },
+    { <span class="str">"long"</span>: <span class="str">"all"</span>, <span class="str">"excludes"</span>: <span class="str">"operands"</span> },
+    { <span class="str">"long"</span>: <span class="str">"raw"</span>, <span class="str">"excludes"</span>: [<span class="str">"--pretty"</span>] },
+    { <span class="str">"long"</span>: <span class="str">"pretty"</span> }
+  ]
+}</pre>
+
+  <p>Use an array when excluding option selectors; the bare string form is only for <code>"operands"</code> and <code>"everything"</code>. Selector entries must resolve to options in the effective command scope, and an option cannot exclude itself. <code>"operands"</code> stops positional operand state/provider completions while allowing later options; <code>"everything"</code> suppresses all later completions on that command line.</p>
 
   <h2 id="argument-states"><a href="#argument-states">Argument states</a></h2>
 
@@ -305,9 +316,9 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <h2 id="trace"><a href="#trace">Trace workflow</a></h2>
 
-  <p>Use <code>rush complete trace INPUT</code> when authoring or debugging a manifest-backed completion. Text trace output includes a dedicated <code>manifest</code> section with the loaded path/version, selected command path, active option name/value index, platform and variant state, manifest-parsed options, active argument state, matched providers with candidate counts, suppressed options, and fallback behavior when no manifest/provider applies or a provider returns no candidates. The rest of the trace shows matching rules with <code>source: manifest</code>, value grammar, provider diagnostics, candidate match rank, and the insertion edit.</p>
+  <p>Use <code>rush complete trace INPUT</code> when authoring or debugging a manifest-backed completion. Text trace output includes a dedicated <code>manifest</code> section with the loaded path/version, selected command path, active option name/value index, platform and variant state, manifest-parsed options, active argument state, matched providers with candidate counts, suppressed options and operands, and fallback behavior when no manifest/provider applies or a provider returns no candidates. The rest of the trace shows matching rules with <code>source: manifest</code>, value grammar, provider diagnostics, candidate match rank, and the insertion edit.</p>
 
-  <p>Use <code>rush complete trace --json INPUT</code> for machine-readable output. Its <code>manifest</code> object is emitted from the same trace model as the text renderer and includes <code>loaded</code>, path/version, command path, active option name and <code>optionValueIndex</code> when completing an option value, parsed manifest options, active argument state with evaluated <code>conditionResults</code>, matched providers with <code>candidateCount</code>, manifest-level suppressed options, and a fallback object.</p>
+  <p>Use <code>rush complete trace --json INPUT</code> for machine-readable output. Its <code>manifest</code> object is emitted from the same trace model as the text renderer and includes <code>loaded</code>, path/version, command path, active option name and <code>optionValueIndex</code> when completing an option value, parsed manifest options, active argument state with evaluated <code>conditionResults</code>, matched providers with <code>candidateCount</code>, manifest-level suppressed options and <code>suppressedOperands</code>, and a fallback object.</p>
 
   <h2 id="validation"><a href="#validation">Validation</a></h2>
 

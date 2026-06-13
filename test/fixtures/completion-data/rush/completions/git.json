@@ -152,8 +152,8 @@
         "options": [
           { "long": "set-upstream", "short": "u" },
           { "long": "delete", "short": "d", "exclusiveGroup": "push-mode" },
-          { "long": "all", "exclusiveGroup": "push-mode" },
-          { "long": "mirror", "exclusiveGroup": "push-mode" },
+          { "long": "all", "exclusiveGroup": "push-mode", "excludes": "operands" },
+          { "long": "mirror", "exclusiveGroup": "push-mode", "excludes": "operands" },
           { "long": "repo", "value": { "name": "repository", "provider": "git.remotes" } },
           { "long": "force", "short": "f" },
           { "long": "dry-run", "short": "n" }
