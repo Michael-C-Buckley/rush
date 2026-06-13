@@ -739,6 +739,9 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     if (rule.argument.state) |state| allocator.free(state);
     if (rule.argument.after_state) |state| allocator.free(state);
     if (rule.argument.after_value) |value| allocator.free(value);
+    completion.freeArgumentCondition(allocator, rule.argument.when_condition);
+    completion.freeArgumentCondition(allocator, rule.argument.after_condition);
+    completion.freeArgumentCondition(allocator, rule.argument.until_condition);
     freeOptionValueConditions(allocator, rule.argument.require_option_values);
     freeOptionValueConditions(allocator, rule.argument.reject_option_values);
     if (rule.description) |description| allocator.free(description);
@@ -1285,17 +1288,22 @@ fn completionArgumentRuleMatches(rule: completion.Rule, context: CompletionSeman
     return true;
 }
 
-fn completionActiveArgumentState(rules: []const completion.Rule, root: []const u8, path: []const []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8, parsed_options: []const CompletionParsedOption) ?[]const u8 {
+fn completionActiveArgumentState(rules: []const completion.Rule, root: []const u8, path: []const []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8, parsed_options: []const CompletionParsedOption, options_terminated: bool) ?[]const u8 {
+    const condition_context: CompletionArgumentConditionContext = .{
+        .previous_state = previous_state,
+        .parsed_options = parsed_options,
+        .options_terminated = options_terminated,
+    };
     for (rules, 0..) |rule, rule_index| {
         const state = completionArgumentStateForRule(rules, root, path, rule, rule_index) orelse continue;
-        if (!completionArgumentOptionValueConditionsAllow(rule.argument, parsed_options)) continue;
+        if (!completionArgumentConditionsAllow(rule.argument, condition_context)) continue;
         if (completionExplicitArgumentStateMatches(rule.argument, state, argument_index, previous_state, previous_argument)) return state;
     }
 
     var implicit_index: usize = 0;
     for (rules, 0..) |rule, rule_index| {
         const state = completionArgumentStateForRule(rules, root, path, rule, rule_index) orelse continue;
-        if (!completionArgumentOptionValueConditionsAllow(rule.argument, parsed_options)) continue;
+        if (!completionArgumentConditionsAllow(rule.argument, condition_context)) continue;
         if (completionArgumentStateHasExplicitTransition(rule.argument)) continue;
         if (argument_index == implicit_index or ((rule.argument.repeatable or rule.argument.rest_command_line) and argument_index >= implicit_index)) return state;
         implicit_index += 1;
@@ -1303,14 +1311,70 @@ fn completionActiveArgumentState(rules: []const completion.Rule, root: []const u
     return null;
 }
 
-fn completionArgumentOptionValueConditionsAllow(argument: completion.Argument, parsed_options: []const CompletionParsedOption) bool {
+const CompletionArgumentConditionContext = struct {
+    previous_state: ?[]const u8,
+    parsed_options: []const CompletionParsedOption,
+    options_terminated: bool,
+};
+
+fn completionArgumentConditionsAllow(argument: completion.Argument, context: CompletionArgumentConditionContext) bool {
+    if (argument.when_condition) |condition| {
+        if (!completionArgumentConditionAllows(condition.*, context)) return false;
+    }
+    if (argument.after_condition) |condition| {
+        if (!completionArgumentConditionAllows(condition.*, context)) return false;
+    }
+    if (argument.until_condition) |condition| {
+        if (completionArgumentConditionAllows(condition.*, context)) return false;
+    }
     for (argument.require_option_values) |condition| {
-        if (!completionOptionValueConditionMatches(condition, parsed_options)) return false;
+        if (!completionOptionValueConditionMatches(condition, context.parsed_options)) return false;
     }
     for (argument.reject_option_values) |condition| {
-        if (completionOptionValueConditionMatches(condition, parsed_options)) return false;
+        if (completionOptionValueConditionMatches(condition, context.parsed_options)) return false;
     }
     return true;
+}
+
+fn completionArgumentConditionAllows(condition: completion.ArgumentCondition, context: CompletionArgumentConditionContext) bool {
+    switch (condition) {
+        .unsupported => return true,
+        .all => |children| {
+            for (children) |child| {
+                if (!completionArgumentConditionAllows(child, context)) return false;
+            }
+            return true;
+        },
+        .any => |children| {
+            for (children) |child| {
+                if (completionArgumentConditionAllows(child, context)) return true;
+            }
+            return false;
+        },
+        .not => |child| return !completionArgumentConditionAllows(child.*, context),
+        .terminator_seen => |expected| return expected == context.options_terminated,
+        .previous_state => |expected| {
+            const previous_state = context.previous_state orelse return false;
+            return std.mem.eql(u8, previous_state, expected);
+        },
+        .option_present => |keys| return completionOptionPresenceConditionMatches(keys, context.parsed_options, true),
+        .option_absent => |keys| return completionOptionPresenceConditionMatches(keys, context.parsed_options, false),
+        .option_value => |condition_value| return completionOptionValueConditionMatches(condition_value, context.parsed_options),
+    }
+}
+
+fn completionOptionPresenceConditionMatches(keys: []const []const u8, parsed_options: []const CompletionParsedOption, expected: bool) bool {
+    for (keys) |key| {
+        if ((completionParsedOptionsContainKey(parsed_options, key) == expected) != true) return false;
+    }
+    return true;
+}
+
+fn completionParsedOptionsContainKey(parsed_options: []const CompletionParsedOption, key: []const u8) bool {
+    for (parsed_options) |parsed| {
+        if (std.mem.eql(u8, parsed.key, key)) return true;
+    }
+    return false;
 }
 
 fn completionOptionValueConditionMatches(condition: completion.OptionValueCondition, parsed_options: []const CompletionParsedOption) bool {
@@ -1337,7 +1401,7 @@ fn completionArgumentStateForRule(rules: []const completion.Rule, root: []const 
 }
 
 fn completionArgumentStateHasExplicitTransition(argument: completion.Argument) bool {
-    return argument.index != null or argument.after_state != null or argument.after_value != null;
+    return argument.index != null or argument.after_state != null or argument.after_value != null or completionArgumentConditionRequiresPreviousState(argument.after_condition);
 }
 
 fn completionExplicitArgumentStateMatches(argument: completion.Argument, state: []const u8, argument_index: usize, previous_state: ?[]const u8, previous_argument: []const u8) bool {
@@ -1355,7 +1419,31 @@ fn completionExplicitArgumentStateMatches(argument: completion.Argument, state: 
             if (previous_state) |active| if (std.mem.eql(u8, active, state)) return true;
         }
     }
+    if (completionArgumentConditionRequiresPreviousState(argument.after_condition)) return true;
     return false;
+}
+
+fn completionArgumentConditionRequiresPreviousState(condition: ?*const completion.ArgumentCondition) bool {
+    const condition_value = condition orelse return false;
+    return completionArgumentConditionValueRequiresPreviousState(condition_value.*);
+}
+
+fn completionArgumentConditionValueRequiresPreviousState(condition: completion.ArgumentCondition) bool {
+    return switch (condition) {
+        .unsupported, .terminator_seen, .option_present, .option_absent, .option_value => false,
+        .previous_state => true,
+        .all => |children| for (children) |child| {
+            if (completionArgumentConditionValueRequiresPreviousState(child)) break true;
+        } else false,
+        .any => |children| {
+            if (children.len == 0) return false;
+            for (children) |child| {
+                if (!completionArgumentConditionValueRequiresPreviousState(child)) return false;
+            }
+            return true;
+        },
+        .not => false,
+    };
 }
 
 fn completionArgumentStateIsRestCommandLine(rules: []const completion.Rule, root: []const u8, path: []const []const u8, state: ?[]const u8) bool {
@@ -2348,6 +2436,9 @@ pub const Executor = struct {
                 .after_value = if (rule.argument.after_value) |value| try self.allocator.dupe(u8, value) else null,
                 .repeatable = rule.argument.repeatable,
                 .rest_command_line = rule.argument.rest_command_line,
+                .when_condition = try completion.cloneArgumentCondition(self.allocator, rule.argument.when_condition),
+                .after_condition = try completion.cloneArgumentCondition(self.allocator, rule.argument.after_condition),
+                .until_condition = try completion.cloneArgumentCondition(self.allocator, rule.argument.until_condition),
                 .require_option_values = try dupeOptionValueConditions(self.allocator, rule.argument.require_option_values),
                 .reject_option_values = try dupeOptionValueConditions(self.allocator, rule.argument.reject_option_values),
             },
@@ -2946,7 +3037,7 @@ pub const Executor = struct {
             if (stop_after_unknown_option and !findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) break;
             stop_after_unknown_option = false;
             if (options_terminated) {
-                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
+                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
                 const rest_command_line = completionArgumentStateIsRestCommandLine(self.completion_rules.items, root, path.items, operand_state);
                 if (rest_command_line and precommand_start == null) precommand_start = view.offset + token.span.start;
                 try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = true, .rest_command_line = rest_command_line });
@@ -2994,7 +3085,7 @@ pub const Executor = struct {
             } else if (argument_index == 0 and findCompletionSubcommand(self.completion_rules.items, root, path.items, word)) {
                 try path.append(self.allocator, word);
             } else {
-                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
+                const operand_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
                 const rest_command_line = completionArgumentStateIsRestCommandLine(self.completion_rules.items, root, path.items, operand_state);
                 if (rest_command_line and precommand_start == null) precommand_start = view.offset + token.span.start;
                 try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = false, .rest_command_line = rest_command_line });
@@ -3005,7 +3096,7 @@ pub const Executor = struct {
             index += 1;
         }
 
-        const argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items);
+        const argument_state = completionActiveArgumentState(self.completion_rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
         if (precommand_start == null and completionArgumentStateIsRestCommandLine(self.completion_rules.items, root, path.items, argument_state)) {
             precommand_start = replace_start;
         }

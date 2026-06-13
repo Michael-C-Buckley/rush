@@ -198,18 +198,129 @@ pub const Argument = struct {
     after_value: ?[]const u8 = null,
     repeatable: bool = false,
     rest_command_line: bool = false,
+    when_condition: ?*const ArgumentCondition = null,
+    after_condition: ?*const ArgumentCondition = null,
+    until_condition: ?*const ArgumentCondition = null,
     require_option_values: []const OptionValueCondition = &.{},
     reject_option_values: []const OptionValueCondition = &.{},
 
     pub fn hasSelector(self: Argument) bool {
-        return self.state != null or self.index != null or self.after_state != null or self.after_value != null or self.repeatable or self.rest_command_line or self.require_option_values.len != 0 or self.reject_option_values.len != 0;
+        return self.state != null or self.index != null or self.after_state != null or self.after_value != null or self.repeatable or self.rest_command_line or self.when_condition != null or self.after_condition != null or self.until_condition != null or self.require_option_values.len != 0 or self.reject_option_values.len != 0;
     }
+};
+
+pub const ArgumentCondition = union(enum) {
+    unsupported: void,
+    all: []const ArgumentCondition,
+    any: []const ArgumentCondition,
+    not: *const ArgumentCondition,
+    terminator_seen: bool,
+    previous_state: []const u8,
+    option_present: []const []const u8,
+    option_absent: []const []const u8,
+    option_value: OptionValueCondition,
 };
 
 pub const OptionValueCondition = struct {
     key: []const u8,
     values: []const []const u8,
 };
+
+pub fn cloneArgumentCondition(allocator: std.mem.Allocator, condition: ?*const ArgumentCondition) !?*const ArgumentCondition {
+    const source = condition orelse return null;
+    const owned = try allocator.create(ArgumentCondition);
+    errdefer allocator.destroy(owned);
+    owned.* = try cloneArgumentConditionValue(allocator, source.*);
+    return owned;
+}
+
+pub fn cloneArgumentConditionValue(allocator: std.mem.Allocator, condition: ArgumentCondition) anyerror!ArgumentCondition {
+    return switch (condition) {
+        .unsupported => .{ .unsupported = {} },
+        .all => |children| .{ .all = try cloneArgumentConditionSlice(allocator, children) },
+        .any => |children| .{ .any = try cloneArgumentConditionSlice(allocator, children) },
+        .not => |child| blk: {
+            const owned_child = try allocator.create(ArgumentCondition);
+            errdefer allocator.destroy(owned_child);
+            owned_child.* = try cloneArgumentConditionValue(allocator, child.*);
+            break :blk .{ .not = owned_child };
+        },
+        .terminator_seen => |expected| .{ .terminator_seen = expected },
+        .previous_state => |state| .{ .previous_state = try allocator.dupe(u8, state) },
+        .option_present => |keys| .{ .option_present = try cloneArgumentConditionStringSlice(allocator, keys) },
+        .option_absent => |keys| .{ .option_absent = try cloneArgumentConditionStringSlice(allocator, keys) },
+        .option_value => |condition_value| .{ .option_value = try cloneOptionValueCondition(allocator, condition_value) },
+    };
+}
+
+fn cloneArgumentConditionSlice(allocator: std.mem.Allocator, children: []const ArgumentCondition) anyerror![]const ArgumentCondition {
+    if (children.len == 0) return &.{};
+    const owned = try allocator.alloc(ArgumentCondition, children.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned[0..initialized]) |child| freeArgumentConditionValue(allocator, child);
+        allocator.free(owned);
+    }
+    for (children, 0..) |child, index| {
+        owned[index] = try cloneArgumentConditionValue(allocator, child);
+        initialized += 1;
+    }
+    return owned;
+}
+
+fn cloneArgumentConditionStringSlice(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {
+    if (values.len == 0) return &.{};
+    const owned = try allocator.alloc([]const u8, values.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned[0..initialized]) |value| allocator.free(value);
+        allocator.free(owned);
+    }
+    for (values, 0..) |value, index| {
+        owned[index] = try allocator.dupe(u8, value);
+        initialized += 1;
+    }
+    return owned;
+}
+
+fn cloneOptionValueCondition(allocator: std.mem.Allocator, condition: OptionValueCondition) !OptionValueCondition {
+    const key = try allocator.dupe(u8, condition.key);
+    errdefer allocator.free(key);
+    return .{
+        .key = key,
+        .values = try cloneArgumentConditionStringSlice(allocator, condition.values),
+    };
+}
+
+pub fn freeArgumentCondition(allocator: std.mem.Allocator, condition: ?*const ArgumentCondition) void {
+    const condition_ptr = condition orelse return;
+    freeArgumentConditionValue(allocator, condition_ptr.*);
+    allocator.destroy(@constCast(condition_ptr));
+}
+
+pub fn freeArgumentConditionValue(allocator: std.mem.Allocator, condition: ArgumentCondition) void {
+    switch (condition) {
+        .unsupported, .terminator_seen => {},
+        .all, .any => |children| {
+            for (children) |child| freeArgumentConditionValue(allocator, child);
+            if (children.len != 0) allocator.free(children);
+        },
+        .not => |child| {
+            freeArgumentCondition(allocator, child);
+        },
+        .previous_state => |state| allocator.free(state),
+        .option_present, .option_absent => |keys| freeArgumentConditionStringSlice(allocator, keys),
+        .option_value => |condition_value| {
+            allocator.free(condition_value.key);
+            freeArgumentConditionStringSlice(allocator, condition_value.values);
+        },
+    }
+}
+
+fn freeArgumentConditionStringSlice(allocator: std.mem.Allocator, values: []const []const u8) void {
+    for (values) |value| allocator.free(value);
+    if (values.len != 0) allocator.free(values);
+}
 
 pub const ValueGrammar = struct {
     list_separator: ?u8 = null,
