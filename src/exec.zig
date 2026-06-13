@@ -6235,16 +6235,10 @@ pub const Executor = struct {
 
         for (pipeline.stage_spans, 0..) |stage_span, index| {
             const is_last = index + 1 == pipeline.stage_spans.len;
-            const stage_failure_name = if (stageSimpleCommandIndex(program, pipeline, index)) |command_index| blk: {
-                const command = program.commands[command_index];
-                break :blk if (command.argv.len == 0) "cannot fork" else command.argv[0].text;
-            } else "cannot fork";
             var next_pipe: ?PipelinePipe = if (!is_last) makePipelinePipe(io) catch |err| {
-                const message = if (std.mem.eql(u8, stage_failure_name, "cannot fork"))
-                    spawnResourceMessage(err) orelse return err
-                else
-                    spawnResourceDiagnostic(err) orelse return err;
-                return errorResult(self.allocator, 126, stage_failure_name, message);
+                const message = pipeFailureMessage(err) orelse return err;
+                for (children[0..spawned]) |*child| child.kill(io);
+                return errorResult(self.allocator, 1, "pipe", message);
             } else null;
             errdefer if (next_pipe) |*pipe| pipe.close(io);
 
@@ -6513,26 +6507,25 @@ pub const Executor = struct {
         const pipe_count = pipeline.command_indexes.len - 1;
         const pipes = try self.allocator.alloc(PipelinePipe, pipe_count);
         defer self.allocator.free(pipes);
-        const first_command_name = program.commands[pipeline.command_indexes[0]].argv[0].text;
         var pipes_initialized: usize = 0;
         for (pipes) |*pipe| {
             pipe.* = makePipelinePipe(io) catch |err| {
-                const message = spawnResourceDiagnostic(err) orelse return err;
+                const message = pipeFailureMessage(err) orelse return err;
                 for (pipes[0..pipes_initialized]) |*initialized_pipe| initialized_pipe.close(io);
-                return errorResult(self.allocator, 126, first_command_name, message);
+                return errorResult(self.allocator, 1, "pipe", message);
             };
             pipes_initialized += 1;
         }
         defer for (pipes[0..pipes_initialized]) |*pipe| pipe.close(io);
 
         var capture_stdout = makePipelinePipe(io) catch |err| {
-            const message = spawnResourceDiagnostic(err) orelse return err;
-            return errorResult(self.allocator, 126, first_command_name, message);
+            const message = pipeFailureMessage(err) orelse return err;
+            return errorResult(self.allocator, 1, "pipe", message);
         };
         defer capture_stdout.close(io);
         var capture_stderr = makePipelinePipe(io) catch |err| {
-            const message = spawnResourceDiagnostic(err) orelse return err;
-            return errorResult(self.allocator, 126, first_command_name, message);
+            const message = pipeFailureMessage(err) orelse return err;
+            return errorResult(self.allocator, 1, "pipe", message);
         };
         defer capture_stderr.close(io);
 
@@ -7858,7 +7851,7 @@ pub const Executor = struct {
             else => redirectionTargetName(command),
         };
         const result = try errorResult(self.allocator, 1, name, message);
-        if (special_builtin) self.pending_exit = result.status;
+        if (special_builtin and redirectionFailureExitsSpecialBuiltin(err)) self.pending_exit = result.status;
         return result;
     }
 
@@ -10341,8 +10334,25 @@ fn spawnResourceMessage(err: anyerror) ?[]const u8 {
     };
 }
 
+fn pipeFailureMessage(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.ProcessFdQuotaExceeded => "too many open files",
+        error.SystemFdQuotaExceeded => "too many open files in system",
+        else => null,
+    };
+}
+
 fn isRedirectionFailure(err: anyerror) bool {
     return redirectionFailureMessage(err) != null;
+}
+
+fn redirectionFailureExitsSpecialBuiltin(err: anyerror) bool {
+    return switch (err) {
+        error.ProcessFdQuotaExceeded,
+        error.SystemFdQuotaExceeded,
+        => false,
+        else => true,
+    };
 }
 
 fn redirectionFailureMessage(err: anyerror) ?[]const u8 {
@@ -10381,6 +10391,7 @@ fn rawDup(fd: std.posix.fd_t) !std.posix.fd_t {
             .SUCCESS => return @intCast(rc),
             .BADF => return error.BadFileDescriptor,
             .MFILE => return error.ProcessFdQuotaExceeded,
+            .NFILE => return error.SystemFdQuotaExceeded,
             else => return error.Unexpected,
         }
     }
@@ -10391,6 +10402,7 @@ fn rawDup(fd: std.posix.fd_t) !std.posix.fd_t {
             .BADF => return error.BadFileDescriptor,
             .INTR => continue,
             .MFILE => return error.ProcessFdQuotaExceeded,
+            .NFILE => return error.SystemFdQuotaExceeded,
             else => return error.Unexpected,
         }
     }
@@ -10406,6 +10418,7 @@ fn rawDup2(old_fd: std.posix.fd_t, new_fd: std.posix.fd_t) !void {
             .BUSY => return error.FileBusy,
             .INTR => return rawDup2(old_fd, new_fd),
             .MFILE => return error.ProcessFdQuotaExceeded,
+            .NFILE => return error.SystemFdQuotaExceeded,
             else => return error.Unexpected,
         }
     }
@@ -10416,6 +10429,7 @@ fn rawDup2(old_fd: std.posix.fd_t, new_fd: std.posix.fd_t) !void {
             .BADF => return error.BadFileDescriptor,
             .INTR => continue,
             .MFILE => return error.ProcessFdQuotaExceeded,
+            .NFILE => return error.SystemFdQuotaExceeded,
             else => return error.Unexpected,
         }
     }
@@ -21303,6 +21317,65 @@ test "external spawn error mapping reports resource failures as command failures
     try expectDeferredSpawnFailure(error.CommandSpawnSystemFdQuotaExceeded, 126, "cannot fork: too many open files in system");
     try expectDeferredSpawnFailure(error.CommandSpawnOutOfMemory, 126, "cannot fork: out of memory");
     try std.testing.expect(commandSpawnFailure(error.ProcessFdQuotaExceeded) == null);
+}
+
+test "fd quota failure while creating pipeline pipes fails the pipeline and continues" {
+    const saved_limits = try lowerSoftNoFileLimit(8);
+    defer restoreNoFileLimit(saved_limits);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\echo a | /bin/cat | /bin/cat | /bin/cat
+        \\echo rc=$?
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("rc=1\n", result.stdout);
+    try std.testing.expectEqualStrings("pipe: too many open files\n", result.stderr);
+}
+
+test "fd quota failure during redirection dup fails the command and continues" {
+    const root = "rush-fd-quota-redirection-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+
+    const saved_limits = try lowerSoftNoFileLimit(16);
+    defer restoreNoFileLimit(saved_limits);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\i=3
+        \\failed=0
+        \\while [ $i -lt 20 ]; do
+        \\  eval "exec $i>rush-fd-quota-redirection-test/fd$i" || { failed=1; break; }
+        \\  i=$((i+1))
+        \\done
+        \\continued=$failed
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("1", executor.getEnv("continued").?);
+}
+
+fn lowerSoftNoFileLimit(limit: std.posix.rlim_t) !std.posix.rlimit {
+    const saved_limits = try std.posix.getrlimit(.NOFILE);
+    if (saved_limits.max < limit) return error.SkipZigTest;
+
+    var lowered = saved_limits;
+    lowered.cur = limit;
+    std.posix.setrlimit(.NOFILE, lowered) catch return error.SkipZigTest;
+    return saved_limits;
+}
+
+fn restoreNoFileLimit(limits: std.posix.rlimit) void {
+    std.posix.setrlimit(.NOFILE, limits) catch {};
 }
 
 fn expectExternalFailure(err: anyerror, status: ExitStatus, message: []const u8) !void {
