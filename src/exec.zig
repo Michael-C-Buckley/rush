@@ -21986,6 +21986,10 @@ test "external spawn error mapping reports resource failures as command failures
 }
 
 test "fd quota failure while creating pipeline pipes fails the pipeline and continues" {
+    try expectForkedNoFileLimitCheck(runFdQuotaPipelinePipeTest);
+}
+
+fn runFdQuotaPipelinePipeTest() anyerror!void {
     const saved_limits = try lowerSoftNoFileLimit(8);
     defer restoreNoFileLimit(saved_limits);
 
@@ -22004,6 +22008,10 @@ test "fd quota failure while creating pipeline pipes fails the pipeline and cont
 }
 
 test "fd quota failure during redirection dup fails the command and continues" {
+    try expectForkedNoFileLimitCheck(runFdQuotaRedirectionDupTest);
+}
+
+fn runFdQuotaRedirectionDupTest() anyerror!void {
     const root = "rush-fd-quota-redirection-test";
     std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
@@ -22028,6 +22036,36 @@ test "fd quota failure during redirection dup fails the command and continues" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("1", executor.getEnv("continued").?);
+}
+
+fn expectForkedNoFileLimitCheck(comptime run: fn () anyerror!void) !void {
+    const child_pid = forkProcess() catch return error.SkipZigTest;
+    if (child_pid == 0) {
+        run() catch |err| switch (err) {
+            error.SkipZigTest => exitForkedChild(77),
+            else => exitForkedChild(1),
+        };
+        exitForkedChild(0);
+    }
+
+    var attempts: usize = 0;
+    while (attempts < 500) : (attempts += 1) {
+        var status: c_int = 0;
+        const result = std.c.waitpid(child_pid, &status, @intCast(std.posix.W.NOHANG));
+        if (result == child_pid) {
+            const wait_status: u32 = @bitCast(status);
+            if (std.posix.W.IFEXITED(wait_status) and std.posix.W.EXITSTATUS(wait_status) == 77) return error.SkipZigTest;
+            try std.testing.expect(std.posix.W.IFEXITED(wait_status));
+            try std.testing.expectEqual(@as(u8, 0), std.posix.W.EXITSTATUS(wait_status));
+            return;
+        }
+        if (result < 0) return error.SkipZigTest;
+        sleepPtyTestPollInterval();
+    }
+
+    std.posix.kill(child_pid, .KILL) catch {};
+    _ = std.c.waitpid(child_pid, null, 0);
+    return error.TestTimedOut;
 }
 
 fn lowerSoftNoFileLimit(limit: std.posix.rlim_t) !std.posix.rlimit {
