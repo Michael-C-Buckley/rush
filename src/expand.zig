@@ -2065,6 +2065,7 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
         if (!colon and word_start == expression.len and isAmbiguousHashSpecialOmittedWordOperator(operator)) return .invalid;
     }
     if (operator == .remove_small_suffix or operator == .remove_large_suffix or operator == .remove_small_prefix or operator == .remove_large_prefix) {
+        if (colon) return .invalid;
         return .{ .expansion = .{
             .target = target,
             .operation = .{ .pattern = .{
@@ -5454,6 +5455,10 @@ test "structured parameter parser rejects malformed POSIX forms" {
         ":",
         "USER/",
         "USER:1",
+        "USER:%",
+        "USER:#",
+        "USER:%%",
+        "USER:##",
         "USER^",
         "1abc",
         "USER[0]",
@@ -5759,6 +5764,10 @@ test "parameter expansion rejects malformed braced forms" {
         "${:}",
         "${USER/}",
         "${USER:1}",
+        "${USER:%}",
+        "${USER:#}",
+        "${USER:%%}",
+        "${USER:##}",
         "${USER:1:-1}",
         "${@:1:2}",
         "${*:1:2}",
