@@ -7,9 +7,6 @@
 # #663 signal during in-process subshell/cmdsub never fires parent trap
 match:; (kill -
 
-# #700 last-pipeline-stage variable assignments persist (ksh-style; dash/bash discard)
-match:| { read
-
 # #694 cd .. after symlink: physical chdir desyncs PWD
 match:cd l1; pwd; cd ..
 

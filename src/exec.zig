@@ -5900,7 +5900,7 @@ pub const Executor = struct {
             if (self.shouldSkipForNoexec(options)) break;
             last.deinit();
             const is_last = index + 1 == pipeline.stage_spans.len;
-            last = try self.executePipelineStageSpan(program.source[stage_span.start..stage_span.end], stdin, options, is_last);
+            last = try self.executePipelineStageSpan(program.source[stage_span.start..stage_span.end], stdin, options, is_last, index > 0);
             statuses[index] = last.status;
             statuses_len = index + 1;
             if (self.shouldSkipForNoexec(options)) break;
@@ -5916,11 +5916,8 @@ pub const Executor = struct {
     }
 
     fn executeSimplePipelineStage(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, is_last: bool, has_pipe_input: bool) !CommandResult {
-        if (is_last) {
-            return if (has_pipe_input)
-                self.executeSimpleCommandWithPipelineInput(command, stdin, options)
-            else
-                self.executeSimpleCommandWithInput(command, stdin, options);
+        if (is_last and !has_pipe_input) {
+            return self.executeSimpleCommandWithInput(command, stdin, options);
         }
 
         var child = Executor.init(self.allocator);
@@ -5938,8 +5935,8 @@ pub const Executor = struct {
             child.executeSimpleCommandWithInput(command, stdin, options);
     }
 
-    fn executePipelineStageSpan(self: *Executor, source: []const u8, stdin: []const u8, options: ExecuteOptions, is_last: bool) !CommandResult {
-        if (is_last) return self.executePipelineStageSpanInCurrentShell(source, stdin, options);
+    fn executePipelineStageSpan(self: *Executor, source: []const u8, stdin: []const u8, options: ExecuteOptions, is_last: bool, has_pipe_input: bool) !CommandResult {
+        if (is_last and !has_pipe_input) return self.executePipelineStageSpanInCurrentShell(source, stdin, options);
 
         var child = Executor.init(self.allocator);
         defer child.deinit();
@@ -6295,11 +6292,11 @@ pub const Executor = struct {
         const foreground_terminal = try prepareForegroundTerminal(options.interactive and options.foreground_terminal and options.external_stdio == .inherit);
         if (foreground_terminal) |terminal| return self.executeForegroundMixedPipeline(program, pipeline, options, io, terminal);
 
-        // Mixed pipelines run builtin/function stages on shell threads in the
-        // parent only when no foreground terminal handoff is active. Interactive
-        // inherited-stdio jobs with a controlling terminal fork through
-        // executeForegroundMixedPipeline first so the shell-implemented stages
-        // live in the foreground job's process group before tcsetpgrp.
+        // Mixed pipelines run shell-implemented stages in forked children so
+        // their assignments and process-state changes stay isolated like the
+        // external stages. Interactive inherited-stdio jobs with a controlling
+        // terminal fork through executeForegroundMixedPipeline first so those
+        // stages live in the foreground job's process group before tcsetpgrp.
         const pipe_count = pipeline.command_indexes.len - 1;
         const pipes = try self.allocator.alloc(PipelinePipe, pipe_count);
         defer self.allocator.free(pipes);
@@ -6409,30 +6406,24 @@ pub const Executor = struct {
                     // redirection retargeted the stage's output.
                     .stage_stdio = if (is_last and inherit_output and command.redirections.len == 0) .inherit_output else .capture,
                 };
-                if (is_last) {
-                    const thread = try std.Thread.spawn(.{}, runBuiltinPipelineStage, .{context});
-                    try threads.append(self.allocator, thread);
-                    try contexts.append(self.allocator, context);
-                } else {
-                    children[spawned] = forkBuiltinPipelineStage(context, pipes, capture_stdout, capture_stderr) catch |err| {
-                        const message = spawnResourceMessage(err) orelse return err;
-                        if (stdin_file) |file| file.close(io);
-                        if (stdout_file) |file| file.close(io);
-                        if (stderr_file) |file| file.close(io);
-                        for (pipes) |*pipe| pipe.close(io);
-                        capture_stdout.close(io);
-                        capture_stderr.close(io);
-                        self.allocator.destroy(context);
-                        return self.pipelineSpawnFailureResult(io, "cannot fork", children[0..spawned], &threads, contexts.items, 126, message);
-                    };
-                    cancel_pids[spawned] = registerCancelableChild(options, children[spawned], false);
-                    child_stage_indexes[spawned] = index;
-                    spawned += 1;
+                children[spawned] = forkBuiltinPipelineStage(context, pipes, capture_stdout, capture_stderr) catch |err| {
+                    const message = spawnResourceMessage(err) orelse return err;
                     if (stdin_file) |file| file.close(io);
                     if (stdout_file) |file| file.close(io);
                     if (stderr_file) |file| file.close(io);
+                    for (pipes) |*pipe| pipe.close(io);
+                    capture_stdout.close(io);
+                    capture_stderr.close(io);
                     self.allocator.destroy(context);
-                }
+                    return self.pipelineSpawnFailureResult(io, "cannot fork", children[0..spawned], &threads, contexts.items, 126, message);
+                };
+                cancel_pids[spawned] = registerCancelableChild(options, children[spawned], false);
+                child_stage_indexes[spawned] = index;
+                spawned += 1;
+                if (stdin_file) |file| file.close(io);
+                if (stdout_file) |file| file.close(io);
+                if (stderr_file) |file| file.close(io);
+                self.allocator.destroy(context);
             } else {
                 const argv = try argvForCommand(self.allocator, command_without_redirs);
                 defer self.allocator.free(argv);
@@ -23445,14 +23436,14 @@ test "executor supports mixed builtin and external pipeline stages" {
     try std.testing.expectEqual(@as(ExitStatus, 0), builtin_to_external_result.status);
     try std.testing.expectEqualStrings("hello\n", builtin_to_external_result.stdout);
 
-    var external_to_builtin = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | read x; echo \"got:$x\"");
+    var external_to_builtin = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | read x; echo \"got:${x:-empty}\"");
     defer external_to_builtin.parsed.deinit();
     defer external_to_builtin.program.deinit();
 
     var external_to_builtin_result = try executor.executeProgram(external_to_builtin.program, .{ .io = std.testing.io, .allow_external = true });
     defer external_to_builtin_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), external_to_builtin_result.status);
-    try std.testing.expectEqualStrings("got:hello\n", external_to_builtin_result.stdout);
+    try std.testing.expectEqualStrings("got:empty\n", external_to_builtin_result.stdout);
 
     var external_status = try parseAndLower(std.testing.allocator, "true | /bin/sh -c 'exit 7'");
     defer external_status.parsed.deinit();
@@ -23471,11 +23462,34 @@ test "executor supports mixed builtin and external pipeline stages" {
     try std.testing.expectEqual(@as(ExitStatus, 1), builtin_status_result.status);
 }
 
-test "mixed pipeline without foreground terminal preserves last builtin side effects" {
+test "executor isolates shell pipeline stage side effects" {
+    var simple = try parseAndLower(std.testing.allocator, "echo hello | read x; echo \"got:${x:-empty}\"");
+    defer simple.parsed.deinit();
+    defer simple.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var simple_result = try executor.executeProgram(simple.program, .{});
+    defer simple_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), simple_result.status);
+    try std.testing.expectEqualStrings("got:empty\n", simple_result.stdout);
+
+    var compound = try parseAndLower(std.testing.allocator, "echo hello | { read y; }; echo \"got:${y:-empty}\"");
+    defer compound.parsed.deinit();
+    defer compound.program.deinit();
+
+    var compound_result = try executor.executeProgram(compound.program, .{});
+    defer compound_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), compound_result.status);
+    try std.testing.expectEqualStrings("got:empty\n", compound_result.stdout);
+}
+
+test "mixed pipeline without foreground terminal isolates last builtin side effects" {
     const path = "rush-mixed-pipe-no-foreground-terminal.tmp";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
-    var lowered = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | read x; echo \"$x\" > rush-mixed-pipe-no-foreground-terminal.tmp");
+    var lowered = try parseAndLower(std.testing.allocator, "/usr/bin/printf hello | read x; echo \"${x:-empty}\" > rush-mixed-pipe-no-foreground-terminal.tmp");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -23488,7 +23502,7 @@ test "mixed pipeline without foreground terminal preserves last builtin side eff
 
     const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(contents);
-    try std.testing.expectEqualStrings("hello\n", contents);
+    try std.testing.expectEqualStrings("empty\n", contents);
 }
 
 test "interactive foreground mixed pipeline gives terminal to wrapper process group" {
@@ -23847,7 +23861,7 @@ test "executor streams large pipeline input into builtin stages" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
 
-    var read_lowered = try parseAndLower(std.testing.allocator, "/bin/cat < rush-large-pipeline-builtin-stdin.tmp | read x; echo \"$x\"");
+    var read_lowered = try parseAndLower(std.testing.allocator, "f() { read x; echo \"$x\"; }; /bin/cat < rush-large-pipeline-builtin-stdin.tmp | f");
     defer read_lowered.parsed.deinit();
     defer read_lowered.program.deinit();
 
