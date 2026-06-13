@@ -2025,6 +2025,7 @@ const SyntaxParser = struct {
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     pending_here_docs: std.ArrayList(PendingHereDoc) = .empty,
     incomplete: bool = false,
+    right_paren_list_terminator_depth: usize = 0,
 
     fn deinit(self: *SyntaxParser) void {
         self.nodes.deinit(self.allocator);
@@ -2076,6 +2077,11 @@ const SyntaxParser = struct {
         const token_start = self.index;
         var list_children: std.ArrayList(SyntaxChild) = .empty;
         defer list_children.deinit(self.allocator);
+        const tracks_right_paren_terminator = tokenTerminatorsContain(token_terminators, .right_paren);
+        if (tracks_right_paren_terminator) self.right_paren_list_terminator_depth += 1;
+        defer {
+            if (tracks_right_paren_terminator) self.right_paren_list_terminator_depth -= 1;
+        }
 
         while (!self.at(.eof) and !self.atListTerminator(word_terminators, token_terminators)) {
             if (self.startsPosixCompoundCommand()) {
@@ -2529,7 +2535,7 @@ const SyntaxParser = struct {
                     try self.appendCurrentTokenChildTo(&case_children);
                     continue;
                 }
-                if (self.atWord("esac") and !self.esacStartsCaseItemPattern()) break;
+                if (self.atWord("esac") and !self.esacStartsCaseItemPatternAtItemStart()) break;
                 const item = try self.parseCaseItem();
                 try case_children.append(self.allocator, .{ .node = item });
             }
@@ -2622,6 +2628,15 @@ const SyntaxParser = struct {
             if (isListSeparator(kind) or kind == .eof) return false;
         }
         return false;
+    }
+
+    fn esacStartsCaseItemPatternAtItemStart(self: SyntaxParser) bool {
+        if (!self.esacStartsCaseItemPattern()) return false;
+        if (self.right_paren_list_terminator_depth == 0) return true;
+
+        var index = self.index + 1;
+        while (index < self.tokens.len and self.tokens[index].kind.isTrivia()) : (index += 1) {}
+        return index >= self.tokens.len or self.tokens[index].kind != .right_paren;
     }
 
     fn parseBashTestCommand(self: *SyntaxParser) !NodeId {
@@ -3411,6 +3426,13 @@ fn isListSeparator(kind: TokenKind) bool {
         => true,
         else => false,
     };
+}
+
+fn tokenTerminatorsContain(token_terminators: []const TokenKind, kind: TokenKind) bool {
+    for (token_terminators) |terminator| {
+        if (terminator == kind) return true;
+    }
+    return false;
 }
 
 fn isForHeaderSeparator(kind: TokenKind) bool {
@@ -4442,6 +4464,30 @@ test "parser keeps nested POSIX case statements inside case item bodies" {
     try std.testing.expectEqual(@as(usize, 2), item_count);
     try std.testing.expect(saw_outer_item);
     try std.testing.expect(saw_nested_item);
+}
+
+test "parser keeps POSIX case terminator before enclosing subshell close" {
+    const cases = [_][]const u8{
+        "(case a in a) echo hit ;; esac)",
+        "(case a in (a) echo hit ;; esac)",
+    };
+
+    for (cases) |source| {
+        var result = try parse(std.testing.allocator, source, .{});
+        defer result.deinit();
+
+        try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+        try std.testing.expect(!result.incomplete);
+
+        var saw_subshell = false;
+        var saw_case = false;
+        for (result.nodes) |node| {
+            if (node.kind == .subshell) saw_subshell = true;
+            if (node.kind == .case_command) saw_case = true;
+        }
+        try std.testing.expect(saw_subshell);
+        try std.testing.expect(saw_case);
+    }
 }
 
 test "parser accepts in as POSIX case subject word" {
