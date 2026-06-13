@@ -706,6 +706,7 @@ const FakeFdRuntime = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .is_tty_fn = isTty,
         };
     }
 
@@ -765,6 +766,13 @@ const FakeFdRuntime = struct {
         const read = self.next();
         const write = self.next();
         return .{ .read = read, .write = write };
+    }
+
+    fn isTty(context: *anyopaque, request: fd.IsTtyRequest) fd.IsTtyError!fd.IsTtyResult {
+        const self = fromContext(context);
+        request.validate();
+        _ = self;
+        return .{ .is_tty = false };
     }
 };
 

@@ -21,10 +21,15 @@ pub const EvalError = std.mem.Allocator.Error || error{
 
 pub const Evaluator = struct {
     allocator: std.mem.Allocator,
+    fd_port: ?runtime.fd.Port = null,
     fs_port: ?runtime.fs.Port = null,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
         return .{ .allocator = allocator };
+    }
+
+    pub fn initWithFdPort(allocator: std.mem.Allocator, fd_port: runtime.fd.Port) Evaluator {
+        return .{ .allocator = allocator, .fd_port = fd_port };
     }
 
     pub fn initWithFsPort(allocator: std.mem.Allocator, fs_port: runtime.fs.Port) Evaluator {
@@ -127,7 +132,7 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, "false")) return 1;
     if (std.mem.eql(u8, definition.name, "echo")) return evaluateEcho(evaluator.allocator, plan.argv, &buffers.stdout);
     if (std.mem.eql(u8, definition.name, "printf")) return evaluatePrintf(evaluator.allocator, plan.argv, &buffers.stdout, &buffers.stderr);
-    if (std.mem.eql(u8, definition.name, "test") or std.mem.eql(u8, definition.name, "[")) return evaluateTestBuiltin(evaluator.fs_port, plan.argv);
+    if (std.mem.eql(u8, definition.name, "test") or std.mem.eql(u8, definition.name, "[")) return evaluateTestBuiltin(evaluator.fs_port, evaluator.fd_port, plan.argv);
     if (std.mem.eql(u8, definition.name, "export")) return evaluateExport(shell_state, plan.argv, state_delta, buffers);
     if (std.mem.eql(u8, definition.name, "readonly")) return evaluateReadonly(shell_state, plan.argv, state_delta, buffers);
     if (std.mem.eql(u8, definition.name, "unset")) return evaluateUnset(shell_state, plan.argv, state_delta, buffers);
@@ -1535,48 +1540,48 @@ fn appendOctalEscape(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), t
     }
 }
 
-fn evaluateTestBuiltin(fs_port: ?runtime.fs.Port, argv: []const []const u8) outcome.ExitStatus {
+fn evaluateTestBuiltin(fs_port: ?runtime.fs.Port, fd_port: ?runtime.fd.Port, argv: []const []const u8) outcome.ExitStatus {
     std.debug.assert(argv.len != 0);
     const is_bracket = std.mem.eql(u8, argv[0], "[");
     const args = argv[1..];
     if (is_bracket) {
         if (args.len == 0 or !std.mem.eql(u8, args[args.len - 1], "]")) return 2;
         std.debug.assert(args.len != 0 and std.mem.eql(u8, args[args.len - 1], "]"));
-        const matched = evalTest(fs_port, args[0 .. args.len - 1]) catch return 2;
+        const matched = evalTest(fs_port, fd_port, args[0 .. args.len - 1]) catch return 2;
         return if (matched) 0 else 1;
     }
     std.debug.assert(std.mem.eql(u8, argv[0], "test"));
-    const matched = evalTest(fs_port, args) catch return 2;
+    const matched = evalTest(fs_port, fd_port, args) catch return 2;
     return if (matched) 0 else 1;
 }
 
 const TestExpressionError = error{InvalidTestExpression};
 
-fn evalTest(fs_port: ?runtime.fs.Port, args: []const []const u8) TestExpressionError!bool {
+fn evalTest(fs_port: ?runtime.fs.Port, fd_port: ?runtime.fd.Port, args: []const []const u8) TestExpressionError!bool {
     if (args.len == 3 and isBinaryTestOperator(args[1])) {
         return evalBinaryTest(fs_port, args[0], args[1], args[2]);
     }
     if (hasTestExpressionOperator(args)) {
-        var test_parser: TestExpressionParser = .{ .fs_port = fs_port, .args = args };
+        var test_parser: TestExpressionParser = .{ .fs_port = fs_port, .fd_port = fd_port, .args = args };
         const result = try test_parser.parseOr();
         if (test_parser.index != args.len) return error.InvalidTestExpression;
         return result;
     }
-    return evalSimpleTest(fs_port, args);
+    return evalSimpleTest(fs_port, fd_port, args);
 }
 
-fn evalSimpleTest(fs_port: ?runtime.fs.Port, args: []const []const u8) TestExpressionError!bool {
+fn evalSimpleTest(fs_port: ?runtime.fs.Port, fd_port: ?runtime.fd.Port, args: []const []const u8) TestExpressionError!bool {
     return switch (args.len) {
         0 => false,
         1 => args[0].len != 0,
-        2 => evalUnaryTest(fs_port, args[0], args[1]),
+        2 => evalUnaryTest(fs_port, fd_port, args[0], args[1]),
         3 => if (isBinaryTestOperator(args[1]))
             evalBinaryTest(fs_port, args[0], args[1], args[2])
         else if (std.mem.eql(u8, args[0], "!"))
-            !(try evalSimpleTest(fs_port, args[1..]))
+            !(try evalSimpleTest(fs_port, fd_port, args[1..]))
         else
             error.InvalidTestExpression,
-        4 => if (std.mem.eql(u8, args[0], "!")) !(try evalSimpleTest(fs_port, args[1..])) else error.InvalidTestExpression,
+        4 => if (std.mem.eql(u8, args[0], "!")) !(try evalSimpleTest(fs_port, fd_port, args[1..])) else error.InvalidTestExpression,
         else => error.InvalidTestExpression,
     };
 }
@@ -1590,6 +1595,7 @@ fn hasTestExpressionOperator(args: []const []const u8) bool {
 
 const TestExpressionParser = struct {
     fs_port: ?runtime.fs.Port,
+    fd_port: ?runtime.fd.Port,
     args: []const []const u8,
     index: usize = 0,
 
@@ -1634,7 +1640,7 @@ const TestExpressionParser = struct {
             const op = self.args[self.index];
             const operand = self.args[self.index + 1];
             self.index += 2;
-            return evalUnaryTest(self.fs_port, op, operand);
+            return evalUnaryTest(self.fs_port, self.fd_port, op, operand);
         }
         const value = self.args[self.index].len != 0;
         self.index += 1;
@@ -1664,7 +1670,7 @@ fn isBinaryTestOperator(op: []const u8) bool {
         std.mem.eql(u8, op, "-ef") or std.mem.eql(u8, op, "-nt") or std.mem.eql(u8, op, "-ot");
 }
 
-fn evalUnaryTest(fs_port: ?runtime.fs.Port, op: []const u8, operand: []const u8) TestExpressionError!bool {
+fn evalUnaryTest(fs_port: ?runtime.fs.Port, fd_port: ?runtime.fd.Port, op: []const u8, operand: []const u8) TestExpressionError!bool {
     if (std.mem.eql(u8, op, "!")) return operand.len == 0;
     if (std.mem.eql(u8, op, "-n")) return operand.len != 0;
     if (std.mem.eql(u8, op, "-z")) return operand.len == 0;
@@ -1705,8 +1711,16 @@ fn evalUnaryTest(fs_port: ?runtime.fs.Port, op: []const u8, operand: []const u8)
         return true;
     }
     if (std.mem.eql(u8, op, "-t")) {
-        _ = std.fmt.parseInt(i32, operand, 10) catch return error.InvalidTestExpression;
-        return false;
+        const descriptor = std.fmt.parseInt(runtime.fd.Descriptor, operand, 10) catch return error.InvalidTestExpression;
+        if (!runtime.fd.isValidDescriptor(descriptor)) return false;
+        const port = fd_port orelse {
+            std.debug.assert(false);
+            return false;
+        };
+        const request = runtime.fd.IsTtyRequest.init(descriptor);
+        const result = port.isTty(request) catch return false;
+        result.validate();
+        return result.is_tty;
     }
     return error.InvalidTestExpression;
 }
@@ -1882,6 +1896,83 @@ test "semantic evaluator executes string and integer test predicates" {
     try std.testing.expectEqual(@as(outcome.ExitStatus, 2), invalid.status);
     try std.testing.expectEqualStrings("[: missing ]", invalid.diagnostics.items[0].message);
     invalid.discardDelta(.current_shell);
+}
+
+test "semantic evaluator routes test -t through fd runtime port" {
+    const FakeFdRuntime = struct {
+        requested_descriptor: ?runtime.fd.Descriptor = null,
+        tty_descriptor: runtime.fd.Descriptor = 7,
+
+        fn port(self: *@This()) runtime.fd.Port {
+            return .{
+                .context = self,
+                .open_fn = open,
+                .close_fn = close,
+                .duplicate_fn = duplicate,
+                .duplicate_to_fn = duplicateTo,
+                .pipe_fn = pipe,
+                .is_tty_fn = isTty,
+            };
+        }
+
+        fn fromContext(context_value: *anyopaque) *@This() {
+            return @ptrCast(@alignCast(context_value));
+        }
+
+        fn open(_: *anyopaque, _: runtime.fd.OpenRequest) runtime.fd.OpenError!runtime.fd.OpenResult {
+            unreachable;
+        }
+
+        fn close(_: *anyopaque, _: runtime.fd.CloseRequest) runtime.fd.CloseError!void {
+            unreachable;
+        }
+
+        fn duplicate(_: *anyopaque, _: runtime.fd.DuplicateRequest) runtime.fd.DuplicateError!runtime.fd.DuplicateResult {
+            unreachable;
+        }
+
+        fn duplicateTo(_: *anyopaque, _: runtime.fd.DuplicateToRequest) runtime.fd.DuplicateError!void {
+            unreachable;
+        }
+
+        fn pipe(_: *anyopaque, _: runtime.fd.PipeRequest) runtime.fd.PipeError!runtime.fd.PipeResult {
+            unreachable;
+        }
+
+        fn isTty(context_value: *anyopaque, request: runtime.fd.IsTtyRequest) runtime.fd.IsTtyError!runtime.fd.IsTtyResult {
+            const self = fromContext(context_value);
+            request.validate();
+            self.requested_descriptor = request.descriptor;
+            return .{ .is_tty = request.descriptor == self.tty_descriptor };
+        }
+    };
+
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var fake: FakeFdRuntime = .{};
+    var evaluator = Evaluator.initWithFdPort(std.testing.allocator, fake.port());
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const tty_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "test", "-t", "7" } } });
+    var tty = try evaluatePlan(&evaluator, &shell_state, eval_context, tty_plan);
+    defer tty.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), tty.status);
+    try std.testing.expectEqual(@as(?runtime.fd.Descriptor, 7), fake.requested_descriptor);
+    tty.discardDelta(.current_shell);
+
+    const non_tty_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "[", "-t", "8", "]" } } });
+    var non_tty = try evaluatePlan(&evaluator, &shell_state, eval_context, non_tty_plan);
+    defer non_tty.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), non_tty.status);
+    try std.testing.expectEqual(@as(?runtime.fd.Descriptor, 8), fake.requested_descriptor);
+    non_tty.discardDelta(.current_shell);
+
+    const invalid_fd_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "test", "-t", "-1" } } });
+    var invalid_fd = try evaluatePlan(&evaluator, &shell_state, eval_context, invalid_fd_plan);
+    defer invalid_fd.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), invalid_fd.status);
+    try std.testing.expectEqual(@as(?runtime.fd.Descriptor, 8), fake.requested_descriptor);
+    invalid_fd.discardDelta(.current_shell);
 }
 
 test "semantic evaluator captures printf output and operand errors in CommandOutcome" {

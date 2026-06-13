@@ -26,6 +26,7 @@ pub const Adapter = struct {
             .duplicate_fn = duplicate,
             .duplicate_to_fn = duplicateTo,
             .pipe_fn = pipe,
+            .is_tty_fn = isTty,
         };
     }
 
@@ -121,6 +122,12 @@ fn pipe(context: *anyopaque, request: fd.PipeRequest) fd.PipeError!fd.PipeResult
     };
 
     return .{ .read = descriptors[0], .write = descriptors[1] };
+}
+
+fn isTty(context: *anyopaque, request: fd.IsTtyRequest) fd.IsTtyError!fd.IsTtyResult {
+    _ = context;
+    request.validate();
+    return .{ .is_tty = try descriptorIsTty(request.descriptor) };
 }
 
 fn getCwd(context: *anyopaque, request: fs.GetCwdRequest) fs.GetCwdError!fs.GetCwdResult {
@@ -317,6 +324,32 @@ fn setCloseOnExec(descriptor: fd.Descriptor) fd.DuplicateError!void {
     }
 }
 
+fn descriptorIsTty(descriptor: fd.Descriptor) fd.IsTtyError!bool {
+    fd.assertValidDescriptor(descriptor);
+    if (builtin.os.tag == .linux and !builtin.link_libc) {
+        while (true) {
+            var window_size: std.posix.winsize = undefined;
+            const descriptor_arg: usize = @bitCast(@as(isize, descriptor));
+            const rc = std.os.linux.syscall3(.ioctl, descriptor_arg, std.os.linux.T.IOCGWINSZ, @intFromPtr(&window_size));
+            switch (std.os.linux.errno(rc)) {
+                .SUCCESS => return true,
+                .INTR => continue,
+                .BADF, .NOTTY, .INVAL => return false,
+                else => return error.Unexpected,
+            }
+        }
+    }
+    while (true) {
+        const rc = std.c.isatty(descriptor);
+        switch (std.c.errno(rc - 1)) {
+            .SUCCESS => return true,
+            .INTR => continue,
+            .BADF, .NOTTY, .INVAL => return false,
+            else => return error.Unexpected,
+        }
+    }
+}
+
 test "runtime posix adapter performs fd open duplicate close and pipe smoke operations" {
     var adapter = Adapter.init(std.testing.io);
     const fd_port = adapter.fdPort();
@@ -336,6 +369,9 @@ test "runtime posix adapter performs fd open duplicate close and pipe smoke oper
         },
     });
     errdefer fd_port.close(.{ .descriptor = opened.descriptor }) catch {};
+
+    const opened_tty = try fd_port.isTty(.{ .descriptor = opened.descriptor });
+    try std.testing.expect(!opened_tty.is_tty);
 
     const duplicate_fd = try fd_port.duplicate(.{ .descriptor = opened.descriptor, .close_on_exec = true });
     try fd_port.close(.{ .descriptor = duplicate_fd.descriptor });

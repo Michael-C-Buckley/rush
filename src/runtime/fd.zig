@@ -14,6 +14,7 @@ pub const Operation = enum {
     duplicate,
     duplicate_to,
     pipe,
+    is_tty,
 };
 
 pub const OpenAccess = enum {
@@ -158,6 +159,26 @@ pub const PipeResult = struct {
     }
 };
 
+pub const IsTtyRequest = struct {
+    descriptor: Descriptor,
+
+    pub fn init(descriptor: Descriptor) IsTtyRequest {
+        const request: IsTtyRequest = .{ .descriptor = descriptor };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: IsTtyRequest) void {
+        assertValidDescriptor(self.descriptor);
+    }
+};
+
+pub const IsTtyResult = struct {
+    is_tty: bool,
+
+    pub fn validate(_: IsTtyResult) void {}
+};
+
 pub const OpenError = std.posix.OpenError;
 pub const CloseError = error{
     BadFileDescriptor,
@@ -175,12 +196,14 @@ pub const PipeError = error{
     Unsupported,
     Unexpected,
 };
+pub const IsTtyError = error{Unexpected};
 
 pub const OpenFn = *const fn (*anyopaque, OpenRequest) OpenError!OpenResult;
 pub const CloseFn = *const fn (*anyopaque, CloseRequest) CloseError!void;
 pub const DuplicateFn = *const fn (*anyopaque, DuplicateRequest) DuplicateError!DuplicateResult;
 pub const DuplicateToFn = *const fn (*anyopaque, DuplicateToRequest) DuplicateError!void;
 pub const PipeFn = *const fn (*anyopaque, PipeRequest) PipeError!PipeResult;
+pub const IsTtyFn = *const fn (*anyopaque, IsTtyRequest) IsTtyError!IsTtyResult;
 
 pub const Port = struct {
     context: *anyopaque,
@@ -189,6 +212,7 @@ pub const Port = struct {
     duplicate_fn: DuplicateFn,
     duplicate_to_fn: DuplicateToFn,
     pipe_fn: PipeFn,
+    is_tty_fn: IsTtyFn,
 
     pub fn open(self: Port, request: OpenRequest) OpenError!OpenResult {
         request.validate();
@@ -217,6 +241,13 @@ pub const Port = struct {
     pub fn pipe(self: Port, request: PipeRequest) PipeError!PipeResult {
         request.validate();
         const result = try self.pipe_fn(self.context, request);
+        result.validate();
+        return result;
+    }
+
+    pub fn isTty(self: Port, request: IsTtyRequest) IsTtyError!IsTtyResult {
+        request.validate();
+        const result = try self.is_tty_fn(self.context, request);
         result.validate();
         return result;
     }
@@ -271,4 +302,10 @@ test "runtime fd request validation accepts explicit low-level lifetimes" {
 
     const pipe_result: PipeResult = .{ .read = 3, .write = 4 };
     pipe_result.validate();
+
+    const is_tty_request = IsTtyRequest.init(0);
+    is_tty_request.validate();
+
+    const is_tty_result: IsTtyResult = .{ .is_tty = false };
+    is_tty_result.validate();
 }
