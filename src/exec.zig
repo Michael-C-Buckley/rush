@@ -1809,6 +1809,7 @@ pub const Executor = struct {
     prompt_async_refreshes: std.ArrayList(*PromptAsyncRefresh) = .empty,
     prompt_async_owner: ?*Executor = null,
     completion_builder: ?CompletionBuilder = null,
+    completion_builder_ref: ?*CompletionBuilder = null,
     completion_context: ?CompletionEvalContext = null,
     last_completion_context: ?CompletionEvalContext = null,
     command_history: ?CommandHistory = null,
@@ -2690,6 +2691,12 @@ pub const Executor = struct {
         return self.last_completion_context;
     }
 
+    fn activeCompletionBuilder(self: *Executor) ?*CompletionBuilder {
+        if (self.completion_builder_ref) |builder| return builder;
+        if (self.completion_builder) |*builder| return builder;
+        return null;
+    }
+
     pub fn lastCompletionTracePath(self: Executor) ?[]const []const u8 {
         return self.last_completion_trace_path;
     }
@@ -3235,7 +3242,7 @@ pub const Executor = struct {
     }
 
     fn collectCompletionsFromFunction(self: *Executor, function: []const u8, command: []const u8, context: CompletionEvalContext, options: ExecuteOptions, companion_path: ?[]const u8) ![]completion.Candidate {
-        if (self.completion_builder != null) return error.RecursiveCompletion;
+        if (self.activeCompletionBuilder() != null) return error.RecursiveCompletion;
         if (companion_path) |path| {
             if (options.io) |io| try self.ensureCompletionCompanionLoaded(io, path, options);
         }
@@ -3253,6 +3260,7 @@ pub const Executor = struct {
         var function_value = try provider.cloneFunctionValue(stored_function_value);
         defer function_value.deinit(provider.allocator);
         provider.completion_builder = .{};
+        if (provider.completion_builder) |*builder| provider.completion_builder_ref = builder;
         provider.completion_context = context;
         try setCompletionContextVariables(&provider, context);
         errdefer {
@@ -3260,6 +3268,7 @@ pub const Executor = struct {
                 completion_builder.deinit(self.allocator);
                 provider.completion_builder = null;
             }
+            provider.completion_builder_ref = null;
             provider.completion_context = null;
         }
 
@@ -3273,6 +3282,7 @@ pub const Executor = struct {
         var result = provider.executeFunctionBody(call, &function_value, completion_options) catch |err| {
             provider.completion_builder.?.deinit(self.allocator);
             provider.completion_builder = null;
+            provider.completion_builder_ref = null;
             provider.completion_context = null;
             switch (err) {
                 error.OutOfMemory => return err,
@@ -3286,6 +3296,7 @@ pub const Executor = struct {
 
         var builder = provider.completion_builder.?;
         provider.completion_builder = null;
+        provider.completion_builder_ref = null;
         errdefer builder.deinit(self.allocator);
         const final_context = provider.completion_context orelse context;
         var stored_context = final_context;
@@ -4503,6 +4514,7 @@ pub const Executor = struct {
         self.prompt_repaint_handler = other.prompt_repaint_handler;
         self.prompt_async_owner = other.prompt_async_owner orelse @constCast(other);
         self.completion_context = other.completion_context;
+        self.completion_builder_ref = other.completion_builder_ref;
         self.last_completion_context = other.last_completion_context;
         self.command_history = other.command_history;
         self.process_state_isolated = other.process_state_isolated;
@@ -6405,7 +6417,7 @@ pub const Executor = struct {
     }
 
     fn canExecuteRealPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
-        if (self.completion_builder != null or self.completion_context != null) return false;
+        if (self.completion_builder != null or self.completion_builder_ref != null or self.completion_context != null) return false;
         if (pipeline.stage_spans.len != pipeline.command_indexes.len) return false;
         if (!options.allow_external or options.io == null or pipeline.command_indexes.len < 2) return false;
         for (pipeline.command_indexes) |command_index| {
@@ -11248,7 +11260,7 @@ fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
         if (std.mem.eql(u8, name, "prompt_async")) return builtinPromptAsync;
         if (std.mem.eql(u8, name, "prompt_time")) return builtinPromptTime;
     }
-    if (self.completion_builder != null) {
+    if (self.completion_builder != null or self.completion_builder_ref != null) {
         if (std.mem.eql(u8, name, "completion")) return builtinCompletion;
     }
     return builtinFor(name);
@@ -12049,7 +12061,7 @@ fn parseCompletionPattern(allocator: std.mem.Allocator, pattern: []const u8) !Co
 }
 
 fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
-    const builder = if (self.completion_builder) |*builder| builder else return errorResult(self.allocator, 2, "completion", "not completing a command");
+    const builder = self.activeCompletionBuilder() orelse return errorResult(self.allocator, 2, "completion", "not completing a command");
     if (command.argv.len < 2) return errorResult(self.allocator, 2, "completion", "missing subcommand");
     const subcommand = command.argv[1].text;
     if (std.mem.eql(u8, subcommand, "prefix")) return completionContextLine(self, subcommand, completionContextValue(self.*, .prefix));
