@@ -381,7 +381,19 @@ pub fn expandParametersScalar(allocator: std.mem.Allocator, raw: []const u8, opt
     return output.toOwnedSlice(allocator);
 }
 
+const WordPartParseOptions = struct {
+    single_quotes: bool = true,
+};
+
 pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts {
+    return parseWordPartsWithOptions(allocator, raw, .{});
+}
+
+fn parseParameterWordPartsInDoubleQuotes(allocator: std.mem.Allocator, raw: []const u8) !WordParts {
+    return parseWordPartsWithOptions(allocator, raw, .{ .single_quotes = false });
+}
+
+fn parseWordPartsWithOptions(allocator: std.mem.Allocator, raw: []const u8, parse_options: WordPartParseOptions) !WordParts {
     var parts: std.ArrayList(WordPart) = .empty;
     errdefer parts.deinit(allocator);
 
@@ -419,7 +431,7 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                 if (unquoted_start == null) unquoted_start = index;
                 index += 1;
             },
-            '\'' => {
+            '\'' => if (parse_options.single_quotes) {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
                 const start = index;
                 index += 1;
@@ -432,6 +444,9 @@ pub fn parseWordParts(allocator: std.mem.Allocator, raw: []const u8) !WordParts 
                     .span = .init(start, index),
                     .value_span = .init(value_start, value_end),
                 });
+            } else {
+                if (unquoted_start == null) unquoted_start = index;
+                index += 1;
             },
             '"' => {
                 try flushUnquoted(allocator, raw, &parts, &unquoted_start, index);
@@ -1728,7 +1743,7 @@ fn isNounsetExemptParameter(name: []const u8) bool {
 /// applies when the surrounding expansion is unquoted (POSIX XCU 2.6.1).
 fn expandParameterWord(allocator: std.mem.Allocator, word: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
     if (!in_double_quotes) return expandWordScalar(allocator, word, options);
-    var parts = try parseWordParts(allocator, word);
+    var parts = try parseParameterWordPartsInDoubleQuotes(allocator, word);
     defer parts.deinit();
     return renderParameterWordParts(allocator, parts, options, true);
 }
@@ -3369,7 +3384,7 @@ fn appendParameterWordOperatorQuoted(allocator: std.mem.Allocator, fields: *std.
 }
 
 fn expandParameterWordQuotedFields(allocator: std.mem.Allocator, word: []const u8, options: Options, ifs: []const u8) anyerror!ExpandedWordFields {
-    var parts = try parseWordParts(allocator, word);
+    var parts = try parseParameterWordPartsInDoubleQuotes(allocator, word);
     defer parts.deinit();
 
     var fields: std.ArrayList([]const u8) = .empty;
@@ -5854,6 +5869,40 @@ test "parameter operator word quotes suppress field splitting" {
     defer empty.deinit();
     try std.testing.expectEqual(@as(usize, 1), empty.fields.len);
     try std.testing.expectEqualStrings("", empty.fields[0]);
+}
+
+test "quoted parameter operator words keep single quotes literal" {
+    var default = try expandWord(std.testing.allocator, "\"${MISSING-'a'}\"", .{ .env = test_env });
+    defer default.deinit();
+    try std.testing.expectEqual(@as(usize, 1), default.fields.len);
+    try std.testing.expectEqualStrings("'a'", default.fields[0]);
+
+    var colon_default = try expandWord(std.testing.allocator, "\"${EMPTY:-'a b'}\"", .{ .env = test_env });
+    defer colon_default.deinit();
+    try std.testing.expectEqual(@as(usize, 1), colon_default.fields.len);
+    try std.testing.expectEqualStrings("'a b'", colon_default.fields[0]);
+
+    var alternate = try expandWord(std.testing.allocator, "\"${USER:+'$USER'}\"", .{ .env = test_env });
+    defer alternate.deinit();
+    try std.testing.expectEqual(@as(usize, 1), alternate.fields.len);
+    try std.testing.expectEqualStrings("'rush-user'", alternate.fields[0]);
+
+    var assign_recorder: ArithmeticSetRecorder = .{};
+    var assign = try expandWord(std.testing.allocator, "\"${ASSIGNED:='a'}\"", .{ .env = test_env, .env_set = assign_recorder.envSet() });
+    defer assign.deinit();
+    try std.testing.expectEqual(@as(usize, 1), assign.fields.len);
+    try std.testing.expectEqualStrings("'a'", assign.fields[0]);
+    try std.testing.expectEqualStrings("'a'", assign_recorder.lastValue());
+
+    var parameter_error: ParameterError = .{};
+    defer parameter_error.clear(std.testing.allocator);
+    try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "\"${MISSING?'$USER'}\"", .{ .env = test_env, .parameter_error = &parameter_error }));
+    try std.testing.expectEqualStrings("'rush-user'", parameter_error.message);
+
+    var unquoted = try expandWord(std.testing.allocator, "${MISSING-'a'}", .{ .env = test_env });
+    defer unquoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), unquoted.fields.len);
+    try std.testing.expectEqualStrings("a", unquoted.fields[0]);
 }
 
 test "expand word returns fields through an explicit result" {
