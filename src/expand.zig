@@ -1517,6 +1517,10 @@ pub fn expandWordPatterns(allocator: std.mem.Allocator, raw: []const u8, options
                 continue;
             }
             if (std.mem.eql(u8, parameter, "*")) {
+                if (ifs.len == 0) {
+                    try appendUnquotedAtPattern(allocator, &fields, &current_text, &current_special, options.positionals, ifs);
+                    continue;
+                }
                 const joined = try joinPositionalsWithIfs(allocator, options.positionals, ifs);
                 defer allocator.free(joined);
                 try appendSplitPatternText(allocator, &fields, &current_text, &current_special, joined, ifs, true);
@@ -3557,6 +3561,10 @@ fn appendUnquotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const
 }
 
 fn appendUnquotedStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), positionals: []const []const u8, ifs: []const u8) !void {
+    if (ifs.len == 0) {
+        try appendUnquotedAt(allocator, fields, current, positionals, ifs);
+        return;
+    }
     const joined = try joinPositionalsWithIfs(allocator, positionals, ifs);
     defer allocator.free(joined);
     try appendSplitText(allocator, fields, current, joined, ifs);
@@ -5948,6 +5956,31 @@ test "unquoted positional parameters split field-aware values" {
     try std.testing.expectEqualStrings("a", star.fields[0]);
     try std.testing.expectEqualStrings("b", star.fields[1]);
     try std.testing.expectEqualStrings("c", star.fields[2]);
+
+    const spaced_params = [_][]const u8{ "a b", "c d" };
+    var empty_ifs_star = try expandWord(std.testing.allocator, "$*", .{ .positionals = &spaced_params, .env = test_empty_ifs_env });
+    defer empty_ifs_star.deinit();
+    try std.testing.expectEqual(@as(usize, 2), empty_ifs_star.fields.len);
+    try std.testing.expectEqualStrings("a b", empty_ifs_star.fields[0]);
+    try std.testing.expectEqualStrings("c d", empty_ifs_star.fields[1]);
+
+    var empty_ifs_at = try expandWord(std.testing.allocator, "$@", .{ .positionals = &spaced_params, .env = test_empty_ifs_env });
+    defer empty_ifs_at.deinit();
+    try std.testing.expectEqual(@as(usize, 2), empty_ifs_at.fields.len);
+    try std.testing.expectEqualStrings("a b", empty_ifs_at.fields[0]);
+    try std.testing.expectEqualStrings("c d", empty_ifs_at.fields[1]);
+
+    var embedded_empty_ifs_star = try expandWord(std.testing.allocator, "pre$*post", .{ .positionals = &spaced_params, .env = test_empty_ifs_env });
+    defer embedded_empty_ifs_star.deinit();
+    try std.testing.expectEqual(@as(usize, 2), embedded_empty_ifs_star.fields.len);
+    try std.testing.expectEqualStrings("prea b", embedded_empty_ifs_star.fields[0]);
+    try std.testing.expectEqualStrings("c dpost", embedded_empty_ifs_star.fields[1]);
+
+    var embedded_empty_ifs_at = try expandWord(std.testing.allocator, "pre$@post", .{ .positionals = &spaced_params, .env = test_empty_ifs_env });
+    defer embedded_empty_ifs_at.deinit();
+    try std.testing.expectEqual(@as(usize, 2), embedded_empty_ifs_at.fields.len);
+    try std.testing.expectEqualStrings("prea b", embedded_empty_ifs_at.fields[0]);
+    try std.testing.expectEqualStrings("c dpost", embedded_empty_ifs_at.fields[1]);
 }
 
 test "braced multi-digit positional parameters use the full decimal index" {
