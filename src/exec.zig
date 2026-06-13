@@ -6221,15 +6221,15 @@ pub const Executor = struct {
     }
 
     fn canExecuteRealSpanPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
+        if (self.completion_builder != null or self.completion_builder_ref != null or self.completion_context != null) return false;
         if (pipeline.stage_spans.len == pipeline.command_indexes.len) return false;
         if (!options.allow_external or options.io == null or pipeline.stage_spans.len < 2) return false;
-        const last_command_index = stageSimpleCommandIndex(program, pipeline, pipeline.stage_spans.len - 1) orelse return false;
-        const last_command = program.commands[last_command_index];
-        if (last_command.argv.len == 0 or last_command.redirections.len != 0) return false;
         for (pipeline.command_indexes) |command_index| {
-            if (program.commands[command_index].redirections.len != 0) return false;
+            const command = program.commands[command_index];
+            if (command.argv.len == 0 or command.redirections.len != 0) return false;
+            if (commandNameNeedsRuntimeExpansion(command)) return false;
         }
-        return builtinForName(self, last_command.argv[0].text) == null and self.functions.get(last_command.argv[0].text) == null;
+        return true;
     }
 
     fn executeRealSpanPipeline(self: *Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions, io: std.Io) !CommandResult {
@@ -6244,6 +6244,10 @@ pub const Executor = struct {
 
         var previous_stdout: ?std.Io.File = null;
         defer if (previous_stdout) |file| file.close(io);
+        var capture_stdout: ?PipelinePipe = null;
+        defer if (capture_stdout) |*pipe| pipe.close(io);
+        var capture_stderr: ?PipelinePipe = null;
+        defer if (capture_stderr) |*pipe| pipe.close(io);
 
         for (pipeline.stage_spans, 0..) |stage_span, index| {
             const is_last = index + 1 == pipeline.stage_spans.len;
@@ -6253,37 +6257,60 @@ pub const Executor = struct {
                 return errorResult(self.allocator, 1, "pipe", message);
             } else null;
             errdefer if (next_pipe) |*pipe| pipe.close(io);
+            if (is_last and options.external_stdio != .inherit) {
+                capture_stdout = makePipelinePipe(io) catch |err| {
+                    const message = if (std.mem.eql(u8, stage_failure_name, "cannot fork"))
+                        spawnResourceMessage(err) orelse return err
+                    else
+                        spawnResourceDiagnostic(err) orelse return err;
+                    return errorResult(self.allocator, 126, stage_failure_name, message);
+                };
+                capture_stderr = makePipelinePipe(io) catch |err| {
+                    const message = if (std.mem.eql(u8, stage_failure_name, "cannot fork"))
+                        spawnResourceMessage(err) orelse return err
+                    else
+                        spawnResourceDiagnostic(err) orelse return err;
+                    return errorResult(self.allocator, 126, stage_failure_name, message);
+                };
+            }
 
             const stdin_file = previous_stdout;
             previous_stdout = null;
-            const stdout_file: ?std.Io.File = if (next_pipe) |pipe| pipe.write.? else null;
+            const stdout_file: ?std.Io.File = if (next_pipe) |pipe| pipe.write.? else if (capture_stdout) |*pipe| takeWrite(pipe) else null;
+            const stderr_file: ?std.Io.File = if (is_last) if (capture_stderr) |*pipe| takeWrite(pipe) else null else null;
             errdefer if (stdin_file) |file| file.close(io);
             errdefer if (stdout_file) |file| file.close(io);
+            errdefer if (stderr_file) |file| file.close(io);
 
             if (stageSimpleCommandIndex(program, pipeline, index)) |command_index| {
                 const command = program.commands[command_index];
                 if (builtinForName(self.*, command.argv[0].text) != null or self.functions.get(command.argv[0].text) != null) {
-                    children[spawned] = self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, null, io) catch |err| {
+                    children[spawned] = self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, stderr_file, io) catch |err| {
                         const message = spawnResourceMessage(err) orelse return err;
                         if (stdin_file) |file| file.close(io);
+                        if (is_last) if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
                         if (next_pipe) |*pipe| pipe.close(io);
                         for (children[0..spawned]) |*child| child.kill(io);
                         return errorResult(self.allocator, 126, "cannot fork", message);
                     };
                 } else {
-                    children[spawned] = self.spawnSpanPipelineExternalStage(command, options, stdin_file, stdout_file, is_last, io) catch |err| {
+                    children[spawned] = self.spawnSpanPipelineExternalStage(command, options, stdin_file, stdout_file, stderr_file, is_last, io) catch |err| {
                         const failure = spawnErrorCommandFailure(err) orelse return err;
                         if (stdin_file) |file| file.close(io);
+                        if (is_last) if (stdout_file) |file| file.close(io);
+                        if (stderr_file) |file| file.close(io);
                         if (next_pipe) |*pipe| pipe.close(io);
                         for (children[0..spawned]) |*child| child.kill(io);
                         return errorResult(self.allocator, failure.status, command.argv[0].text, failure.message);
                     };
                 }
             } else {
-                std.debug.assert(!is_last);
-                children[spawned] = self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, null, io) catch |err| {
+                children[spawned] = self.forkSpanPipelineShellStage(program.source[stage_span.start..stage_span.end], options, stdin_file, stdout_file, stderr_file, io) catch |err| {
                     const message = spawnResourceMessage(err) orelse return err;
                     if (stdin_file) |file| file.close(io);
+                    if (is_last) if (stdout_file) |file| file.close(io);
+                    if (stderr_file) |file| file.close(io);
                     if (next_pipe) |*pipe| pipe.close(io);
                     for (children[0..spawned]) |*child| child.kill(io);
                     return errorResult(self.allocator, 126, "cannot fork", message);
@@ -6294,6 +6321,7 @@ pub const Executor = struct {
 
             if (stdin_file) |file| file.close(io);
             if (stdout_file) |file| file.close(io);
+            if (stderr_file) |file| file.close(io);
             if (next_pipe) |*pipe| {
                 pipe.write = null;
                 previous_stdout = pipe.read;
@@ -6307,11 +6335,11 @@ pub const Executor = struct {
         var stderr_bytes: []u8 = try self.allocator.alloc(u8, 0);
         errdefer self.allocator.free(stderr_bytes);
 
-        const last_child = &children[pipeline.stage_spans.len - 1];
-        if (options.external_stdio != .inherit) {
+        if (capture_stdout) |*stdout_pipe| {
+            const stderr_pipe = if (capture_stderr) |*pipe| pipe else unreachable;
             var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
             var multi_reader: std.Io.File.MultiReader = undefined;
-            multi_reader.init(self.allocator, io, multi_reader_buffer.toStreams(), &.{ last_child.stdout.?, last_child.stderr.? });
+            multi_reader.init(self.allocator, io, multi_reader_buffer.toStreams(), &.{ stdout_pipe.read.?, stderr_pipe.read.? });
             defer multi_reader.deinit();
 
             while (multi_reader.fill(64, .none)) |_| {} else |err| switch (err) {
@@ -6340,7 +6368,7 @@ pub const Executor = struct {
         };
     }
 
-    fn spawnSpanPipelineExternalStage(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions, stdin_file: ?std.Io.File, stdout_file: ?std.Io.File, is_last: bool, io: std.Io) !std.process.Child {
+    fn spawnSpanPipelineExternalStage(self: *Executor, command: ir.SimpleCommand, options: ExecuteOptions, stdin_file: ?std.Io.File, stdout_file: ?std.Io.File, stderr_file: ?std.Io.File, is_last: bool, io: std.Io) !std.process.Child {
         if (command.redirections.len != 0) return error.Unsupported;
         const expanded = try self.expandSimpleCommand(command, options);
         defer self.freeExpandedCommand(expanded);
@@ -6360,9 +6388,9 @@ pub const Executor = struct {
         return self.spawnExternalCommand(io, .{
             .argv = argv,
             .environ_map = &child_env,
-            .stdin = if (stdin_file) |file| .{ .file = file } else .ignore,
+            .stdin = if (stdin_file) |file| .{ .file = file } else if (options.external_stdio == .inherit) .inherit else .ignore,
             .stdout = if (stdout_file) |file| .{ .file = file } else if (is_last and options.external_stdio == .inherit) .inherit else .pipe,
-            .stderr = if (is_last and options.external_stdio == .inherit) .inherit else .pipe,
+            .stderr = if (stderr_file) |file| .{ .file = file } else if (is_last and options.external_stdio != .inherit) .pipe else .inherit,
         });
     }
 
@@ -24705,6 +24733,12 @@ test "forked builtin pipeline stages close inherited pipe readers" {
     try expectForkedScriptCompletes("printf '%0100000d' 7 | true; echo rc=$?", "rc=0\n");
     try expectForkedScriptCompletes("( while :; do echo y; done ) | /usr/bin/head -2; echo rc=$?", "y\ny\nrc=0\n");
     try expectForkedScriptCompletes("( i=0; while [ $i -lt 100000 ]; do echo line$i; i=$((i+1)); done ) | /usr/bin/head -1", "line0\n");
+}
+
+test "executor streams pipelines into compound last stages" {
+    try expectForkedScriptCompletes("/usr/bin/yes | { /usr/bin/head -2; }; echo rc=$?", "y\ny\nrc=0\n");
+    try expectForkedScriptCompletes("/usr/bin/yes | { read line; echo \"$line\"; }", "y\n");
+    try expectForkedScriptCompletes("x=$(/usr/bin/yes | { /usr/bin/head -1; }); echo \"x=$x\"", "x=y\n");
 }
 
 test "executor streams large pipeline input into builtin stages" {
