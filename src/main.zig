@@ -1558,7 +1558,7 @@ fn registerCompletionManifestVariantProbe(allocator: std.mem.Allocator, executor
         .object => |object| object,
         else => return error.CompletionManifestVariantProbeMatchesMustBeObject,
     };
-    var patterns: std.ArrayList(exec.CompletionVariantPattern) = .empty;
+    var patterns: std.ArrayList(completion_model.VariantPattern) = .empty;
     defer patterns.deinit(allocator);
     var iter = matches.iterator();
     while (iter.next()) |entry| {
@@ -3668,7 +3668,7 @@ fn debugCompletion(allocator: std.mem.Allocator, io: std.Io, environ_map: *const
     try writeAll(io, .stdout, output);
 }
 
-fn semanticCompletionPath(allocator: std.mem.Allocator, context: exec.CompletionSemanticContext) ![]const u8 {
+fn semanticCompletionPath(allocator: std.mem.Allocator, context: completion_model.SemanticContext) ![]const u8 {
     var path: std.ArrayList(u8) = .empty;
     errdefer path.deinit(allocator);
     for (context.path, 0..) |segment, index| {
@@ -3678,7 +3678,7 @@ fn semanticCompletionPath(allocator: std.mem.Allocator, context: exec.Completion
     return path.toOwnedSlice(allocator);
 }
 
-fn debugCompletionRuleMatches(rule: completion_model.Rule, context: exec.CompletionSemanticContext) bool {
+fn debugCompletionRuleMatches(rule: completion_model.Rule, context: completion_model.SemanticContext) bool {
     if (rule.disabled) return false;
     if (!std.mem.eql(u8, rule.root, context.root)) return false;
     if (rule.path.len > context.path.len) return false;
@@ -4035,7 +4035,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
     return out.toOwnedSlice();
 }
 
-fn writeCompletionParsedOptionsText(writer: *std.Io.Writer, options: []const exec.CompletionParsedOption, indent: []const u8) !void {
+fn writeCompletionParsedOptionsText(writer: *std.Io.Writer, options: []const completion_model.ParsedOption, indent: []const u8) !void {
     for (options) |option| {
         var spelling_buffer: [2]u8 = undefined;
         const spelling = option.displaySpelling(&spelling_buffer);
@@ -4060,7 +4060,7 @@ fn writeCompletionParsedOptionsText(writer: *std.Io.Writer, options: []const exe
     }
 }
 
-fn writeCompletionOperandsText(writer: *std.Io.Writer, operands: []const exec.CompletionParsedOperand, indent: []const u8) !void {
+fn writeCompletionOperandsText(writer: *std.Io.Writer, operands: []const completion_model.ParsedOperand, indent: []const u8) !void {
     for (operands) |operand| {
         try writer.print("{s}- value: {s}\n{s}  index: {d}\n{s}  state: {s}\n{s}  after-terminator: {}\n{s}  rest-command-line: {}\n", .{
             indent,
@@ -4166,7 +4166,7 @@ fn completionDebugJsonOutput(allocator: std.mem.Allocator, io: std.Io, environ_m
     return out.toOwnedSlice();
 }
 
-fn writeCompletionProviderDiagnosticsJson(json: *std.json.Stringify, diagnostics: []const exec.CompletionProviderDiagnostic) !void {
+fn writeCompletionProviderDiagnosticsJson(json: *std.json.Stringify, diagnostics: []const completion_model.ProviderDiagnostic) !void {
     try json.beginArray();
     for (diagnostics) |diagnostic| {
         try json.beginObject();
@@ -4185,7 +4185,7 @@ fn writeCompletionProviderDiagnosticsJson(json: *std.json.Stringify, diagnostics
     try json.endArray();
 }
 
-fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: exec.CompletionEvalContext) !void {
+fn writeCompletionEvalContextJson(json: *std.json.Stringify, context: completion_model.EvalContext) !void {
     try json.beginObject();
     try json.objectField("command");
     try json.write(context.command);
@@ -4248,7 +4248,7 @@ fn writeCompletionMatcherPolicyJson(json: *std.json.Stringify, policy: completio
     try json.endObject();
 }
 
-fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.CompletionSemanticContext, command_path: []const u8) !void {
+fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: completion_model.SemanticContext, command_path: []const u8) !void {
     try json.beginObject();
     try json.objectField("root");
     try json.write(context.root);
@@ -4308,7 +4308,7 @@ fn writeCompletionSemanticContextJson(json: *std.json.Stringify, context: exec.C
     try json.endObject();
 }
 
-fn writeCompletionParsedOptionsJson(json: *std.json.Stringify, options: []const exec.CompletionParsedOption) !void {
+fn writeCompletionParsedOptionsJson(json: *std.json.Stringify, options: []const completion_model.ParsedOption) !void {
     try json.beginArray();
     for (options) |option| {
         var spelling_buffer: [2]u8 = undefined;
@@ -4334,7 +4334,7 @@ fn writeCompletionParsedOptionsJson(json: *std.json.Stringify, options: []const 
     try json.endArray();
 }
 
-fn writeCompletionOperandsJson(json: *std.json.Stringify, operands: []const exec.CompletionParsedOperand) !void {
+fn writeCompletionOperandsJson(json: *std.json.Stringify, operands: []const completion_model.ParsedOperand) !void {
     try json.beginArray();
     for (operands) |operand| {
         try json.beginObject();
@@ -4425,7 +4425,7 @@ fn writeCompletionRuleJson(json: *std.json.Stringify, rule: completion_model.Rul
     try json.endObject();
 }
 
-fn writeCompletionSuppressedOptionsJson(json: *std.json.Stringify, rules: []const completion_model.Rule, semantic: exec.CompletionSemanticContext) !void {
+fn writeCompletionSuppressedOptionsJson(json: *std.json.Stringify, rules: []const completion_model.Rule, semantic: completion_model.SemanticContext) !void {
     try json.beginArray();
     for (rules) |rule| {
         if (rule.kind != .option or !debugCompletionRuleMatches(rule, semantic)) continue;
@@ -4436,7 +4436,7 @@ fn writeCompletionSuppressedOptionsJson(json: *std.json.Stringify, rules: []cons
     try json.endArray();
 }
 
-fn writeCompletionSuppressedOptionJson(json: *std.json.Stringify, prefix: []const u8, name: []const u8, suppression: exec.CompletionOptionSuppression) !void {
+fn writeCompletionSuppressedOptionJson(json: *std.json.Stringify, prefix: []const u8, name: []const u8, suppression: completion_model.OptionSuppression) !void {
     try json.beginObject();
     try json.objectField("spelling");
     var buffer: [256]u8 = undefined;
@@ -4526,11 +4526,11 @@ fn matchRankName(rank: ?completion_model.MatchRank) []const u8 {
     return if (rank) |value| @tagName(value) else "";
 }
 
-fn completionValueSegmentSeparatorText(segment: ?exec.CompletionValueSegment) []const u8 {
+fn completionValueSegmentSeparatorText(segment: ?completion_model.ValueSegment) []const u8 {
     return completionSeparatorText(if (segment) |value| value.activeSeparator() else null);
 }
 
-fn completionValueSegmentSeparatorSlice(segment: ?exec.CompletionValueSegment, buffer: *[1]u8) []const u8 {
+fn completionValueSegmentSeparatorSlice(segment: ?completion_model.ValueSegment, buffer: *[1]u8) []const u8 {
     return completionSeparatorSlice(if (segment) |value| value.activeSeparator() else null, buffer);
 }
 
@@ -4659,7 +4659,7 @@ const ManifestCompletionTrace = struct {
     }
 };
 
-fn writeCompletionManifestTraceText(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext, candidates: []const completion_model.Candidate) !void {
+fn writeCompletionManifestTraceText(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, executor: exec.Executor, source: []const u8, semantic: completion_model.SemanticContext, candidates: []const completion_model.Candidate) !void {
     const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
     const manifest_state = executor.completionManifestCommandState(semantic.root);
     const variant_state = executor.completionVariantProbeState(semantic.root);
@@ -4808,7 +4808,7 @@ fn writeManifestArgumentStateText(writer: *std.Io.Writer, state: std.json.Object
     });
 }
 
-fn writeManifestProvidersText(writer: *std.Io.Writer, semantic: exec.CompletionSemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace, candidates: []const completion_model.Candidate, indent: []const u8) !usize {
+fn writeManifestProvidersText(writer: *std.Io.Writer, semantic: completion_model.SemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace, candidates: []const completion_model.Candidate, indent: []const u8) !usize {
     var count: usize = 0;
     if (trace.active_argument_state) |state| {
         if (state.get("provider")) |provider| {
@@ -5013,7 +5013,7 @@ fn manifestFallbackReason(loaded: bool, provider_count: usize, candidates: []con
     return "manifest provider or static manifest candidates matched";
 }
 
-fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: exec.CompletionSemanticContext, trace_path: ?[]const []const u8, precommand_depth_limited: bool, candidates: []const completion_model.Candidate) !void {
+fn writeCompletionManifestTraceJson(allocator: std.mem.Allocator, io: std.Io, json: *std.json.Stringify, executor: exec.Executor, source: []const u8, semantic: completion_model.SemanticContext, trace_path: ?[]const []const u8, precommand_depth_limited: bool, candidates: []const completion_model.Candidate) !void {
     const manifest_source = primaryManifestRuleSource(executor.completionRules(), semantic);
     const manifest_state = executor.completionManifestCommandState(semantic.root);
     const variant_state = executor.completionVariantProbeState(semantic.root);
@@ -5191,7 +5191,7 @@ fn writeManifestFallbackJson(json: *std.json.Stringify, kind: []const u8, reason
     try json.endObject();
 }
 
-fn primaryManifestRuleSource(rules: []const completion_model.Rule, semantic: exec.CompletionSemanticContext) ?completion_model.RuleSource {
+fn primaryManifestRuleSource(rules: []const completion_model.Rule, semantic: completion_model.SemanticContext) ?completion_model.RuleSource {
     for (rules) |rule| {
         if (rule.disabled) continue;
         if (rule.source.kind == .manifest and debugCompletionRuleMatches(rule, semantic)) return rule.source;
@@ -5203,7 +5203,7 @@ fn primaryManifestRuleSource(rules: []const completion_model.Rule, semantic: exe
     return null;
 }
 
-fn writeSemanticCommandPathArrayJson(json: *std.json.Stringify, semantic: exec.CompletionSemanticContext) !void {
+fn writeSemanticCommandPathArrayJson(json: *std.json.Stringify, semantic: completion_model.SemanticContext) !void {
     try json.beginArray();
     if (semantic.root.len != 0) try json.write(semantic.root);
     for (semantic.path) |segment| try json.write(segment);
@@ -5255,7 +5255,7 @@ fn manifestNameValueMatches(value: ?std.json.Value, name: []const u8) bool {
     };
 }
 
-fn analyzeManifestCompletionTrace(allocator: std.mem.Allocator, source: []const u8, semantic: exec.CompletionSemanticContext, root_command: std.json.ObjectMap, active_command: std.json.ObjectMap) !ManifestCompletionTrace {
+fn analyzeManifestCompletionTrace(allocator: std.mem.Allocator, source: []const u8, semantic: completion_model.SemanticContext, root_command: std.json.ObjectMap, active_command: std.json.ObjectMap) !ManifestCompletionTrace {
     var trace: ManifestCompletionTrace = .{};
     errdefer trace.deinit(allocator);
     if (active_command.get("arguments")) |arguments_value| {
@@ -5842,7 +5842,7 @@ fn writeManifestConditionValueLiteralsJson(json: *std.json.Stringify, value: std
     try json.endArray();
 }
 
-fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: exec.CompletionSemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace, candidates: []const completion_model.Candidate) !usize {
+fn writeManifestProvidersJson(json: *std.json.Stringify, semantic: completion_model.SemanticContext, active_command: std.json.ObjectMap, active_options: []const std.json.ObjectMap, trace: ManifestCompletionTrace, candidates: []const completion_model.Candidate) !usize {
     var count: usize = 0;
     try json.beginArray();
     if (trace.active_argument_state) |state| {

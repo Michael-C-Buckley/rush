@@ -1,6 +1,7 @@
 //! Structured completion model and pure application logic.
 
 const std = @import("std");
+const parser = @import("parser.zig");
 
 pub const ScriptLoaderOptions = struct {
     io: ?std.Io = null,
@@ -414,6 +415,607 @@ pub const Rule = struct {
     source: RuleSource = .{},
     variant: ?[]const u8 = null,
     disabled: bool = false,
+};
+
+pub const EvalContext = struct {
+    prefix: []const u8 = "",
+    command: []const u8 = "",
+    command_path: []const u8 = "",
+    argument_index: usize = 0,
+    argument_state: ?[]const u8 = null,
+    parsed_options: []const ParsedOption = &.{},
+    operands: []const ParsedOperand = &.{},
+    options_terminated: bool = false,
+    previous: []const u8 = "",
+    position: parser.CompletionKind = .command,
+    option_value: ?OptionValue = null,
+    value_segment: ?ValueSegment = null,
+    replace_start: usize = 0,
+    replace_end: usize = 0,
+};
+
+pub const OptionValue = struct {
+    name: []const u8,
+    spelling: []const u8,
+    value_index: usize = 0,
+    from: ?[]const u8 = null,
+    from_offset: ?usize = null,
+
+    pub fn displaySpelling(self: OptionValue, buffer: *[2]u8) []const u8 {
+        if (self.from_offset) |offset| {
+            if (self.from) |from| {
+                if (offset < from.len) {
+                    buffer[0] = '-';
+                    buffer[1] = from[offset];
+                    return buffer[0..2];
+                }
+            }
+        }
+        return self.spelling;
+    }
+};
+
+pub const ParsedOption = struct {
+    spelling: []const u8,
+    name: []const u8,
+    key: []const u8,
+    value: ?[]const u8 = null,
+    from: ?[]const u8 = null,
+    from_offset: ?usize = null,
+    exclusive_group: ?[]const u8 = null,
+    excludes: []const OptionExclusion = &.{},
+    repeatable: bool = false,
+    terminates_options: bool = false,
+
+    pub fn displaySpelling(self: ParsedOption, buffer: *[2]u8) []const u8 {
+        if (self.from_offset) |offset| {
+            if (self.from) |from| {
+                if (offset < from.len) {
+                    buffer[0] = '-';
+                    buffer[1] = from[offset];
+                    return buffer[0..2];
+                }
+            }
+        }
+        return self.spelling;
+    }
+};
+
+pub const ParsedOperand = struct {
+    value: []const u8,
+    index: usize,
+    state: ?[]const u8 = null,
+    after_terminator: bool = false,
+    rest_command_line: bool = false,
+};
+
+pub const OptionSuppressionReason = enum {
+    already_present,
+    exclusive_group,
+    excluded,
+};
+
+pub const OptionSuppression = struct {
+    reason: OptionSuppressionReason,
+    by: []const u8,
+    group: ?[]const u8 = null,
+    exclusion: ?[]const u8 = null,
+};
+
+pub const ValuePosition = enum {
+    item,
+    key,
+    value,
+};
+
+pub const ValueSegment = struct {
+    segment: []const u8,
+    list_separator: ?u8 = null,
+    key_value_separator: ?u8 = null,
+    position: ValuePosition = .item,
+    key: []const u8 = "",
+
+    pub fn activeSeparator(self: ValueSegment) ?u8 {
+        return switch (self.position) {
+            .value => self.key_value_separator orelse self.list_separator,
+            .item, .key => self.list_separator,
+        };
+    }
+};
+
+pub const SemanticPosition = enum {
+    command,
+    subcommand,
+    option,
+    option_value,
+    redirect_target,
+    argument,
+};
+
+pub const SemanticContext = struct {
+    allocator: std.mem.Allocator,
+    root: []const u8 = "",
+    path: []const []const u8 = &.{},
+    prefix: []const u8 = "",
+    argument_index: usize = 0,
+    argument_state: ?[]const u8 = null,
+    parsed_options: []const ParsedOption = &.{},
+    operands: []const ParsedOperand = &.{},
+    options_terminated: bool = false,
+    previous: []const u8 = "",
+    position: SemanticPosition = .command,
+    option_value: ?OptionValue = null,
+    value_segment: ?ValueSegment = null,
+    replace_start: usize = 0,
+    replace_end: usize = 0,
+    suspicious_start: ?usize = null,
+    suspicious_end: ?usize = null,
+    parser_position: parser.CompletionKind = .command,
+    parser_source_offset: usize = 0,
+    precommand_start: ?usize = null,
+
+    pub fn deinit(self: *SemanticContext) void {
+        self.allocator.free(self.path);
+        self.allocator.free(self.parsed_options);
+        self.allocator.free(self.operands);
+        self.* = undefined;
+    }
+};
+
+pub const DiagnosticSeverity = enum {
+    warning,
+    err,
+};
+
+pub const DiagnosticKind = enum {
+    unknown_command,
+    unknown_subcommand,
+    unknown_option,
+    missing_option_value,
+    repeated_option,
+    conflicting_option,
+};
+
+pub const Diagnostic = struct {
+    kind: DiagnosticKind,
+    severity: DiagnosticSeverity,
+    start: usize,
+    end: usize,
+    message: []const u8,
+};
+
+pub const ProviderDiagnostic = struct {
+    function: []const u8,
+    command: []const u8,
+    status: ?u8 = null,
+    err: ?[]const u8 = null,
+    stderr: []const u8 = "",
+};
+
+pub const VariantPattern = struct {
+    name: []const u8,
+    pattern: []const u8,
+};
+
+pub const ManifestCommandState = struct {
+    command: []const u8,
+    manifest_path: ?[]const u8 = null,
+    manifest_version: ?i64 = null,
+    platform: []const u8,
+    platform_allowed: bool,
+};
+
+pub const VariantProbeState = struct {
+    command: []const u8,
+    args: []const []const u8,
+    patterns: []const VariantPattern,
+    selected: ?[]const u8 = null,
+    probed: bool = false,
+    last_probed: bool = false,
+    last_cached: bool = false,
+    skipped_shadow: bool = false,
+};
+
+pub const State = struct {
+    allocator: std.mem.Allocator,
+    rules: std.ArrayList(Rule) = .empty,
+    generation: u64 = 0,
+    provider_diagnostics: std.ArrayList(ProviderDiagnostic) = .empty,
+    manifest_commands: std.ArrayList(ManifestCommandState) = .empty,
+    variant_probes: std.ArrayList(VariantProbeState) = .empty,
+    variant_probe_mocks: std.StringHashMapUnmanaged([]const u8) = .empty,
+    variant_probe_counts: std.StringHashMapUnmanaged(usize) = .empty,
+    loaded_scripts: std.StringHashMapUnmanaged(void) = .empty,
+    loaded_companions: std.StringHashMapUnmanaged(void) = .empty,
+    last_trace_path: ?[]const []const u8 = null,
+    last_semantic: ?SemanticContext = null,
+    last_precommand_depth_limited: bool = false,
+    last_context: ?EvalContext = null,
+
+    pub fn init(allocator: std.mem.Allocator) State {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *State) void {
+        for (self.rules.items) |rule| freeRule(self.allocator, rule);
+        self.rules.deinit(self.allocator);
+        self.clearProviderDiagnostics();
+        self.provider_diagnostics.deinit(self.allocator);
+        for (self.manifest_commands.items) |state| freeManifestCommandState(self.allocator, state);
+        self.manifest_commands.deinit(self.allocator);
+        for (self.variant_probes.items) |state| freeVariantProbeState(self.allocator, state);
+        self.variant_probes.deinit(self.allocator);
+        var probe_mock_iter = self.variant_probe_mocks.iterator();
+        while (probe_mock_iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.variant_probe_mocks.deinit(self.allocator);
+        var probe_count_iter = self.variant_probe_counts.iterator();
+        while (probe_count_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.variant_probe_counts.deinit(self.allocator);
+        var loaded_script_iter = self.loaded_scripts.iterator();
+        while (loaded_script_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.loaded_scripts.deinit(self.allocator);
+        var loaded_companion_iter = self.loaded_companions.iterator();
+        while (loaded_companion_iter.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.loaded_companions.deinit(self.allocator);
+        self.clearLastTrace();
+        self.* = undefined;
+    }
+
+    pub fn copyFrom(self: *State, other: *const State) !void {
+        for (other.rules.items) |rule| try self.registerRule(rule);
+        for (other.manifest_commands.items) |state| try self.registerManifestCommandState(state);
+        for (other.variant_probes.items) |probe| {
+            try self.registerVariantProbe(probe.command, probe.args, probe.patterns);
+            if (self.variant_probes.items.len != 0) {
+                var copied = &self.variant_probes.items[self.variant_probes.items.len - 1];
+                copied.probed = probe.probed;
+                copied.last_probed = probe.last_probed;
+                copied.last_cached = probe.last_cached;
+                copied.skipped_shadow = probe.skipped_shadow;
+                if (probe.selected) |selected| copied.selected = try self.allocator.dupe(u8, selected);
+            }
+        }
+        var mock_iter = other.variant_probe_mocks.iterator();
+        while (mock_iter.next()) |entry| try self.setVariantProbeMock(entry.key_ptr.*, entry.value_ptr.*);
+        var count_iter = other.variant_probe_counts.iterator();
+        while (count_iter.next()) |entry| {
+            const owned_command = try self.allocator.dupe(u8, entry.key_ptr.*);
+            errdefer self.allocator.free(owned_command);
+            try self.variant_probe_counts.put(self.allocator, owned_command, entry.value_ptr.*);
+        }
+        var loaded_script_iter = other.loaded_scripts.iterator();
+        while (loaded_script_iter.next()) |entry| try self.markLoadedScript(entry.key_ptr.*);
+        var loaded_companion_iter = other.loaded_companions.iterator();
+        while (loaded_companion_iter.next()) |entry| try self.markLoadedCompanion(entry.key_ptr.*);
+        self.last_context = other.last_context;
+        self.generation = other.generation;
+    }
+
+    pub fn registerRule(self: *State, rule: Rule) !void {
+        var owned_rule: Rule = .{
+            .root = try self.allocator.dupe(u8, rule.root),
+            .kind = rule.kind,
+            .value = if (rule.value) |value| try self.allocator.dupe(u8, value) else null,
+            .provider_kind = rule.provider_kind,
+            .option = .{
+                .long = if (rule.option.long) |long| try self.allocator.dupe(u8, long) else null,
+                .short = if (rule.option.short) |short| try self.allocator.dupe(u8, short) else null,
+                .spellings = try cloneStringSlice(self.allocator, rule.option.spellings),
+                .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
+                .value_count = rule.option.value_count,
+                .exclusive_group = if (rule.option.exclusive_group) |group| try self.allocator.dupe(u8, group) else null,
+                .excludes = try cloneOptionExclusions(self.allocator, rule.option.excludes),
+                .repeatable = rule.option.repeatable,
+                .terminates_options = rule.option.terminates_options,
+                .no_space = rule.option.no_space,
+                .inherit = rule.option.inherit,
+            },
+            .argument = .{
+                .state = if (rule.argument.state) |state| try self.allocator.dupe(u8, state) else null,
+                .index = rule.argument.index,
+                .after_state = if (rule.argument.after_state) |state| try self.allocator.dupe(u8, state) else null,
+                .after_value = if (rule.argument.after_value) |value| try self.allocator.dupe(u8, value) else null,
+                .repeatable = rule.argument.repeatable,
+                .rest_command_line = rule.argument.rest_command_line,
+                .when_condition = try cloneArgumentCondition(self.allocator, rule.argument.when_condition),
+                .after_condition = try cloneArgumentCondition(self.allocator, rule.argument.after_condition),
+                .until_condition = try cloneArgumentCondition(self.allocator, rule.argument.until_condition),
+                .require_option_values = try cloneOptionValueConditions(self.allocator, rule.argument.require_option_values),
+                .reject_option_values = try cloneOptionValueConditions(self.allocator, rule.argument.reject_option_values),
+            },
+            .value_index = rule.value_index,
+            .value_grammar = rule.value_grammar,
+            .description = if (rule.description) |description| try self.allocator.dupe(u8, description) else null,
+            .tag = if (rule.tag) |tag| try self.allocator.dupe(u8, tag) else null,
+            .provider_order = rule.provider_order,
+            .source = .{
+                .kind = rule.source.kind,
+                .manifest_path = if (rule.source.manifest_path) |path| try self.allocator.dupe(u8, path) else null,
+                .manifest_version = rule.source.manifest_version,
+                .companion_path = if (rule.source.companion_path) |path| try self.allocator.dupe(u8, path) else null,
+            },
+            .variant = if (rule.variant) |variant| try self.allocator.dupe(u8, variant) else null,
+            .disabled = rule.disabled,
+        };
+        errdefer freeRule(self.allocator, owned_rule);
+        owned_rule.static_values = try cloneStaticProviderValues(self.allocator, rule.static_values);
+        var path: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (path.items) |segment| self.allocator.free(segment);
+            path.deinit(self.allocator);
+        }
+        for (rule.path) |segment| try path.append(self.allocator, try self.allocator.dupe(u8, segment));
+        owned_rule.path = try path.toOwnedSlice(self.allocator);
+        try self.rules.append(self.allocator, owned_rule);
+        self.generation +%= 1;
+    }
+
+    pub fn rulesSlice(self: State) []const Rule {
+        return self.rules.items;
+    }
+
+    pub fn generationValue(self: State) u64 {
+        return self.generation;
+    }
+
+    pub fn providerDiagnostics(self: State) []const ProviderDiagnostic {
+        return self.provider_diagnostics.items;
+    }
+
+    pub fn registerManifestCommandState(self: *State, state: ManifestCommandState) !void {
+        const owned: ManifestCommandState = .{
+            .command = try self.allocator.dupe(u8, state.command),
+            .manifest_path = if (state.manifest_path) |path| try self.allocator.dupe(u8, path) else null,
+            .manifest_version = state.manifest_version,
+            .platform = try self.allocator.dupe(u8, state.platform),
+            .platform_allowed = state.platform_allowed,
+        };
+        errdefer freeManifestCommandState(self.allocator, owned);
+        for (self.manifest_commands.items) |*existing| {
+            if (!std.mem.eql(u8, existing.command, state.command)) continue;
+            freeManifestCommandState(self.allocator, existing.*);
+            existing.* = owned;
+            return;
+        }
+        try self.manifest_commands.append(self.allocator, owned);
+    }
+
+    pub fn manifestCommandState(self: State, command: []const u8) ?ManifestCommandState {
+        for (self.manifest_commands.items) |state| {
+            if (std.mem.eql(u8, state.command, command)) return state;
+        }
+        return null;
+    }
+
+    pub fn registerVariantProbe(self: *State, command: []const u8, args: []const []const u8, patterns: []const VariantPattern) !void {
+        var owned_args = try self.allocator.alloc([]const u8, args.len);
+        var owned_arg_count: usize = 0;
+        var owned_args_transferred = false;
+        errdefer {
+            if (!owned_args_transferred) {
+                for (owned_args[0..owned_arg_count]) |arg| self.allocator.free(arg);
+                self.allocator.free(owned_args);
+            }
+        }
+        for (args, 0..) |arg, index| {
+            owned_args[index] = try self.allocator.dupe(u8, arg);
+            owned_arg_count += 1;
+        }
+        var owned_patterns = try self.allocator.alloc(VariantPattern, patterns.len);
+        var owned_pattern_count: usize = 0;
+        var owned_patterns_transferred = false;
+        errdefer {
+            if (!owned_patterns_transferred) {
+                for (owned_patterns[0..owned_pattern_count]) |pattern| {
+                    self.allocator.free(pattern.name);
+                    self.allocator.free(pattern.pattern);
+                }
+                self.allocator.free(owned_patterns);
+            }
+        }
+        for (patterns, 0..) |pattern, index| {
+            owned_patterns[index] = .{
+                .name = try self.allocator.dupe(u8, pattern.name),
+                .pattern = try self.allocator.dupe(u8, pattern.pattern),
+            };
+            owned_pattern_count += 1;
+        }
+        const state: VariantProbeState = .{
+            .command = try self.allocator.dupe(u8, command),
+            .args = owned_args,
+            .patterns = owned_patterns,
+        };
+        owned_args_transferred = true;
+        owned_patterns_transferred = true;
+        errdefer freeVariantProbeState(self.allocator, state);
+        for (self.variant_probes.items) |*existing| {
+            if (!std.mem.eql(u8, existing.command, command)) continue;
+            freeVariantProbeState(self.allocator, existing.*);
+            existing.* = state;
+            return;
+        }
+        try self.variant_probes.append(self.allocator, state);
+    }
+
+    pub fn variantProbeState(self: State, command: []const u8) ?VariantProbeState {
+        for (self.variant_probes.items) |state| {
+            if (std.mem.eql(u8, state.command, command)) return state;
+        }
+        return null;
+    }
+
+    pub fn setVariantProbeMock(self: *State, command: []const u8, output: []const u8) !void {
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const owned_output = try self.allocator.dupe(u8, output);
+        errdefer self.allocator.free(owned_output);
+        const result = try self.variant_probe_mocks.getOrPut(self.allocator, owned_command);
+        if (result.found_existing) {
+            self.allocator.free(owned_command);
+            self.allocator.free(result.value_ptr.*);
+        }
+        result.value_ptr.* = owned_output;
+    }
+
+    pub fn variantProbeCount(self: State, command: []const u8) usize {
+        return self.variant_probe_counts.get(command) orelse 0;
+    }
+
+    pub fn incrementVariantProbeCount(self: *State, command: []const u8) !void {
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const result = try self.variant_probe_counts.getOrPut(self.allocator, owned_command);
+        if (result.found_existing) {
+            self.allocator.free(owned_command);
+            result.value_ptr.* += 1;
+        } else {
+            result.value_ptr.* = 1;
+        }
+    }
+
+    pub fn applyVariantSelection(self: *State, root: []const u8, selected: ?[]const u8) void {
+        for (self.rules.items) |*rule| {
+            if (!std.mem.eql(u8, rule.root, root)) continue;
+            const variant = rule.variant orelse continue;
+            rule.disabled = if (selected) |name| !std.mem.eql(u8, variant, name) else true;
+        }
+        self.generation +%= 1;
+    }
+
+    pub fn loadedScript(self: State, root: []const u8) bool {
+        return self.loaded_scripts.contains(root);
+    }
+
+    pub fn markLoadedScript(self: *State, root: []const u8) !void {
+        const owned_root = try self.allocator.dupe(u8, root);
+        errdefer self.allocator.free(owned_root);
+        const result = try self.loaded_scripts.getOrPut(self.allocator, owned_root);
+        if (result.found_existing) self.allocator.free(owned_root);
+    }
+
+    pub fn loadedCompanion(self: State, path: []const u8) bool {
+        return self.loaded_companions.contains(path);
+    }
+
+    pub fn markLoadedCompanion(self: *State, path: []const u8) !void {
+        const owned_path = try self.allocator.dupe(u8, path);
+        errdefer self.allocator.free(owned_path);
+        const result = try self.loaded_companions.getOrPut(self.allocator, owned_path);
+        if (result.found_existing) self.allocator.free(owned_path);
+    }
+
+    pub fn clearProviderDiagnostics(self: *State) void {
+        for (self.provider_diagnostics.items) |diagnostic| {
+            self.allocator.free(diagnostic.function);
+            self.allocator.free(diagnostic.command);
+            if (diagnostic.err) |err| self.allocator.free(err);
+            self.allocator.free(diagnostic.stderr);
+        }
+        self.provider_diagnostics.clearRetainingCapacity();
+    }
+
+    pub fn appendProviderDiagnostic(self: *State, function: []const u8, command: []const u8, status: ?u8, err: ?anyerror, stderr: []const u8) !void {
+        const owned_function = try self.allocator.dupe(u8, function);
+        errdefer self.allocator.free(owned_function);
+        const owned_command = try self.allocator.dupe(u8, command);
+        errdefer self.allocator.free(owned_command);
+        const owned_err = if (err) |provider_err| try self.allocator.dupe(u8, @errorName(provider_err)) else null;
+        errdefer if (owned_err) |err_name| self.allocator.free(err_name);
+        const owned_stderr = try self.allocator.dupe(u8, stderr);
+        errdefer self.allocator.free(owned_stderr);
+        try self.provider_diagnostics.append(self.allocator, .{
+            .function = owned_function,
+            .command = owned_command,
+            .status = status,
+            .err = owned_err,
+            .stderr = owned_stderr,
+        });
+    }
+
+    pub fn lastTracePath(self: State) ?[]const []const u8 {
+        return self.last_trace_path;
+    }
+
+    pub fn lastSemantic(self: State) ?SemanticContext {
+        return self.last_semantic;
+    }
+
+    pub fn lastPrecommandDepthLimited(self: State) bool {
+        return self.last_precommand_depth_limited;
+    }
+
+    pub fn clearLastTrace(self: *State) void {
+        if (self.last_trace_path) |path| self.allocator.free(path);
+        self.last_trace_path = null;
+        if (self.last_semantic) |*semantic| semantic.deinit();
+        self.last_semantic = null;
+        self.last_precommand_depth_limited = false;
+    }
+
+    pub fn storeLastSemantic(self: *State, semantic: SemanticContext) !void {
+        if (self.last_semantic) |*stored| stored.deinit();
+        self.last_semantic = null;
+        const owned_path = try self.allocator.dupe([]const u8, semantic.path);
+        errdefer self.allocator.free(owned_path);
+        const owned_parsed_options = try self.allocator.dupe(ParsedOption, semantic.parsed_options);
+        errdefer self.allocator.free(owned_parsed_options);
+        const owned_operands = try self.allocator.dupe(ParsedOperand, semantic.operands);
+        errdefer self.allocator.free(owned_operands);
+        self.last_semantic = .{
+            .allocator = self.allocator,
+            .root = semantic.root,
+            .path = owned_path,
+            .parsed_options = owned_parsed_options,
+            .operands = owned_operands,
+            .options_terminated = semantic.options_terminated,
+            .prefix = semantic.prefix,
+            .argument_index = semantic.argument_index,
+            .argument_state = semantic.argument_state,
+            .previous = semantic.previous,
+            .position = semantic.position,
+            .option_value = semantic.option_value,
+            .value_segment = semantic.value_segment,
+            .replace_start = semantic.replace_start,
+            .replace_end = semantic.replace_end,
+            .suspicious_start = semantic.suspicious_start,
+            .suspicious_end = semantic.suspicious_end,
+            .parser_position = semantic.parser_position,
+            .parser_source_offset = semantic.parser_source_offset,
+            .precommand_start = semantic.precommand_start,
+        };
+    }
+
+    pub fn offsetLastSemantic(self: *State, offset: usize) void {
+        const semantic = if (self.last_semantic) |*stored| stored else return;
+        semantic.replace_start += offset;
+        semantic.replace_end += offset;
+        if (semantic.suspicious_start) |start| semantic.suspicious_start = start + offset;
+        if (semantic.suspicious_end) |end| semantic.suspicious_end = end + offset;
+        semantic.parser_source_offset += offset;
+        if (semantic.precommand_start) |start| semantic.precommand_start = start + offset;
+    }
+
+    pub fn storeLastTracePath(self: *State, root: []const u8, path: []const []const u8) !void {
+        if (self.last_trace_path) |existing| self.allocator.free(existing);
+        self.last_trace_path = null;
+        const owned = try self.allocator.alloc([]const u8, 1 + path.len);
+        owned[0] = root;
+        @memcpy(owned[1..], path);
+        self.last_trace_path = owned;
+    }
+
+    pub fn storeCombinedLastTracePath(self: *State, outer: SemanticContext, inner: []const []const u8) !void {
+        const owned = try self.allocator.alloc([]const u8, 1 + outer.path.len + inner.len);
+        errdefer self.allocator.free(owned);
+        owned[0] = outer.root;
+        @memcpy(owned[1 .. 1 + outer.path.len], outer.path);
+        @memcpy(owned[1 + outer.path.len ..], inner);
+        if (self.last_trace_path) |existing| self.allocator.free(existing);
+        self.last_trace_path = owned;
+    }
 };
 
 pub const Edit = struct {
@@ -1021,6 +1623,115 @@ fn cloneStringSlice(allocator: std.mem.Allocator, values: []const []const u8) ![
         initialized += 1;
     }
     return cloned;
+}
+
+fn cloneStaticProviderValues(allocator: std.mem.Allocator, values: []const StaticProviderValue) ![]const StaticProviderValue {
+    if (values.len == 0) return &.{};
+    const owned = try allocator.alloc(StaticProviderValue, values.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned[0..initialized]) |value| freeStaticProviderValue(allocator, value);
+        allocator.free(owned);
+    }
+    for (values, 0..) |value, index| {
+        owned[index] = .{
+            .value = try allocator.dupe(u8, value.value),
+            .display = if (value.display) |display| try allocator.dupe(u8, display) else null,
+            .description = if (value.description) |description| try allocator.dupe(u8, description) else null,
+            .tag = if (value.tag) |tag| try allocator.dupe(u8, tag) else null,
+            .suffix = if (value.suffix) |suffix| try allocator.dupe(u8, suffix) else null,
+            .removable_suffix = value.removable_suffix,
+            .append_space = value.append_space,
+        };
+        initialized += 1;
+    }
+    return owned;
+}
+
+fn cloneOptionValueConditions(allocator: std.mem.Allocator, conditions: []const OptionValueCondition) ![]const OptionValueCondition {
+    if (conditions.len == 0) return &.{};
+    const owned = try allocator.alloc(OptionValueCondition, conditions.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned[0..initialized]) |condition| freeOptionValueCondition(allocator, condition);
+        allocator.free(owned);
+    }
+    for (conditions, 0..) |condition, index| {
+        owned[index] = try cloneOptionValueCondition(allocator, condition);
+        initialized += 1;
+    }
+    return owned;
+}
+
+pub fn freeRule(allocator: std.mem.Allocator, rule: Rule) void {
+    allocator.free(rule.root);
+    for (rule.path) |segment| allocator.free(segment);
+    allocator.free(rule.path);
+    if (rule.value) |value| allocator.free(value);
+    if (rule.static_values.len != 0) {
+        for (rule.static_values) |value| freeStaticProviderValue(allocator, value);
+        allocator.free(rule.static_values);
+    }
+    if (rule.option.long) |long| allocator.free(long);
+    if (rule.option.short) |short| allocator.free(short);
+    if (rule.option.spellings.len != 0) {
+        for (rule.option.spellings) |spelling| allocator.free(spelling);
+        allocator.free(rule.option.spellings);
+    }
+    if (rule.option.argument) |argument| allocator.free(argument);
+    if (rule.option.exclusive_group) |group| allocator.free(group);
+    freeOptionExclusions(allocator, rule.option.excludes);
+    if (rule.argument.state) |state| allocator.free(state);
+    if (rule.argument.after_state) |state| allocator.free(state);
+    if (rule.argument.after_value) |value| allocator.free(value);
+    freeArgumentCondition(allocator, rule.argument.when_condition);
+    freeArgumentCondition(allocator, rule.argument.after_condition);
+    freeArgumentCondition(allocator, rule.argument.until_condition);
+    freeOptionValueConditions(allocator, rule.argument.require_option_values);
+    freeOptionValueConditions(allocator, rule.argument.reject_option_values);
+    if (rule.description) |description| allocator.free(description);
+    if (rule.tag) |tag| allocator.free(tag);
+    if (rule.source.manifest_path) |path| allocator.free(path);
+    if (rule.source.companion_path) |path| allocator.free(path);
+    if (rule.variant) |variant| allocator.free(variant);
+}
+
+fn freeStaticProviderValue(allocator: std.mem.Allocator, value: StaticProviderValue) void {
+    allocator.free(value.value);
+    if (value.display) |display| allocator.free(display);
+    if (value.description) |description| allocator.free(description);
+    if (value.tag) |tag| allocator.free(tag);
+    if (value.suffix) |suffix| allocator.free(suffix);
+}
+
+fn freeOptionValueConditions(allocator: std.mem.Allocator, conditions: []const OptionValueCondition) void {
+    if (conditions.len == 0) return;
+    for (conditions) |condition| freeOptionValueCondition(allocator, condition);
+    allocator.free(conditions);
+}
+
+fn freeOptionValueCondition(allocator: std.mem.Allocator, condition: OptionValueCondition) void {
+    allocator.free(condition.key);
+    for (condition.values) |value| allocator.free(value);
+    allocator.free(condition.values);
+}
+
+fn freeManifestCommandState(allocator: std.mem.Allocator, state: ManifestCommandState) void {
+    allocator.free(state.command);
+    if (state.manifest_path) |path| allocator.free(path);
+    allocator.free(state.platform);
+}
+
+fn freeVariantProbeState(allocator: std.mem.Allocator, state: VariantProbeState) void {
+    allocator.free(state.command);
+    for (state.args) |arg| allocator.free(arg);
+    allocator.free(state.args);
+    for (state.patterns) |pattern| {
+        allocator.free(pattern.name);
+        allocator.free(pattern.pattern);
+    }
+    allocator.free(state.patterns);
+    if (state.selected) |selected| allocator.free(selected);
 }
 
 test "application handles no candidates" {
