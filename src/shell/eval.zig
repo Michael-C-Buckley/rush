@@ -318,7 +318,8 @@ const TrapActionLowerer = struct {
         const stages = try self.allocator.alloc(pipeline_plan.PipelineStagePlan, pipeline.stage_spans.len);
         for (pipeline.stage_spans, 0..) |stage_span, index| {
             const source = program.source[stage_span.start..stage_span.end];
-            const lowered = try self.lowerPipelineStageSource(source, target);
+            const stage_target: context.ExecutionTarget = if (pipeline.stage_spans.len == 1) target else .subshell;
+            const lowered = try self.lowerPipelineStageSource(source, stage_target);
             stages[index] = switch (lowered) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .stage => |stage| stage,

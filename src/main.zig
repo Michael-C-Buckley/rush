@@ -7109,8 +7109,12 @@ fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir
 
 fn semanticPipelinePreflightUnsupported(program: ir.Program, pipeline: ir.Pipeline) ?[]const u8 {
     std.debug.assert(program.commands.len != 0 or pipeline.command_indexes.len == 0);
-    if (pipeline.command_indexes.len == 0 or pipeline.command_indexes.len != pipeline.stage_spans.len) {
-        return "semantic executor production preflight keeps compound pipeline stages on the old executor";
+    if (pipeline.stage_spans.len == 0) {
+        return "semantic executor production preflight keeps empty pipelines on the old executor";
+    }
+    if (pipeline.command_indexes.len > pipeline.stage_spans.len) return "semantic executor production preflight keeps malformed pipelines on the old executor";
+    for (pipeline.stage_spans) |stage_span| {
+        if (wordUsesUnsupportedProductionExpansion(stage_span.slice(program.source))) return "semantic executor production preflight found an expansion shape outside the switched slice";
     }
     for (pipeline.command_indexes) |command_index| std.debug.assert(command_index < program.commands.len);
     return null;
@@ -7171,6 +7175,7 @@ fn semanticPipelineUnsupportedMessage(plan: shell.PipelinePlan) ?[]const u8 {
 
 fn semanticCompoundUnsupportedMessage(plan: shell.CompoundCommandPlan) ?[]const u8 {
     plan.validate();
+    if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) return "semantic executor production preflight keeps compound redirections on the old executor";
     switch (plan.body) {
         .sequence, .brace_group, .subshell => |list| return semanticCommandListUnsupportedMessage(list),
         .and_or_list => |and_or| for (and_or.commands) |entry| {
@@ -7213,15 +7218,16 @@ fn semanticCommandListUnsupportedMessage(list: shell.StatementList) ?[]const u8 
 
 fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan) ?[]const u8 {
     plan.validate();
+    if (plan.assignments.len != 0) return "semantic executor production preflight keeps assignment-bearing commands on the old executor";
+    if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) return "semantic executor production preflight keeps redirections on the old executor";
     return switch (plan.classification) {
         .regular_builtin, .special_builtin => |definition| blk: {
             if (definition.semantic_class == .unsupported) break :blk "semantic evaluator does not yet implement this builtin";
             if (std.mem.eql(u8, definition.name, "read")) break :blk "semantic evaluator does not yet connect read to non-interactive stdin";
             if (std.mem.eql(u8, definition.name, "alias") or std.mem.eql(u8, definition.name, "unalias")) break :blk "semantic evaluator does not yet integrate alias expansion with production parsing";
-            if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) break :blk "semantic evaluator does not yet apply simple builtin redirections";
             break :blk null;
         },
-        .empty, .assignment_only => if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) "semantic evaluator does not yet apply redirection-only commands" else null,
+        .empty, .assignment_only => null,
         .function_definition => "semantic evaluator does not yet receive owned production function definitions",
         .function, .external, .not_found => null,
     };
@@ -11003,6 +11009,71 @@ test "semantic non-interactive invocation executes foreground simple pipelines" 
     }
 }
 
+test "semantic parser lowering plans compound pipeline stages" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = shell.eval.Evaluator.init(std.testing.allocator);
+    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    const resolver = parser_resolver.resolver();
+
+    var body = (try resolver.resolve(
+        std.testing.allocator,
+        "{ printf 'left\n'; } | printf 'right\n'",
+        .TERM,
+        shell.EvalContext.forTarget(.current_shell),
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const plan = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .pipeline => |plan| plan,
+            else => return error.ExpectedPipelinePlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+
+    try std.testing.expectEqual(@as(usize, 2), plan.stages.len);
+    switch (plan.stages[0]) {
+        .compound => |compound| try std.testing.expectEqualStrings("brace group", compound.kindName()),
+        .simple => return error.ExpectedCompoundPipelineStage,
+    }
+    switch (plan.stages[1]) {
+        .simple => {},
+        .compound => return error.ExpectedSimplePipelineStage,
+    }
+}
+
+test "semantic non-interactive invocation executes compound pipeline stages" {
+    var execution = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        \\{ printf 'brace\n'; } | /bin/cat
+        \\( printf 'subshell\n' ) | /bin/cat
+        \\if true; then printf 'if\n'; fi | /bin/cat
+        \\while true; do printf 'while\n'; break; done | /bin/cat
+        \\for item in loop; do printf 'for\n'; break; done | /bin/cat
+        \\case x in x) printf 'case\n' ;; esac | /bin/cat
+        \\! { false; }
+        \\printf 'negated-compound:%s\n' "$?"
+    ,
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("brace\nsubshell\nif\nwhile\nfor\ncase\nnegated-compound:0\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
 fn expectBackgroundStatusAndPidLine(prefix: []const u8, line: []const u8) !void {
     var fields = std.mem.splitScalar(u8, line, ':');
     try std.testing.expectEqualStrings(prefix, fields.next() orelse return error.ExpectedBackgroundLinePrefix);
@@ -11078,19 +11149,34 @@ test "semantic non-interactive invocation still rejects unsupported production p
         .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "asynchronous and-or") != null),
     }
 
-    var compound_stage = try runSemanticCommandString(
+    var redirected_compound_stage = try runSemanticCommandString(
         std.testing.allocator,
         std.testing.io,
-        "{ printf 'compound\n'; } | /bin/cat",
+        "{ printf 'compound\n'; } > rush-semantic-compound-stage.tmp | /bin/cat",
         .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
         null,
         &.{},
         .{},
     );
-    defer compound_stage.deinit(std.testing.allocator);
-    switch (compound_stage) {
+    defer redirected_compound_stage.deinit(std.testing.allocator);
+    switch (redirected_compound_stage) {
         .output => return error.ExpectedSemanticUnsupported,
-        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "compound") != null),
+        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "redirections") != null),
+    }
+
+    var dynamic_compound_stage = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        "{ printf \"$(printf dynamic)\\n\"; } | /bin/cat",
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer dynamic_compound_stage.deinit(std.testing.allocator);
+    switch (dynamic_compound_stage) {
+        .output => return error.ExpectedSemanticUnsupported,
+        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "expansion") != null),
     }
 }
 
@@ -11313,6 +11399,13 @@ test "old new executor compare harness matches deterministic builtin pipeline" {
     try expectOldNewExecutorComparison(.{
         .source_name = "compare/builtin-pipeline",
         .script = "printf 'pipe-value\n' | read PIPE_VALUE",
+    });
+}
+
+test "old new executor compare harness matches compound pipeline stage" {
+    try expectOldNewExecutorComparison(.{
+        .source_name = "compare/compound-pipeline-stage",
+        .script = "{ printf 'compound-value\n'; } | read VALUE\nprintf 'status:%s\n' \"$?\"",
     });
 }
 
