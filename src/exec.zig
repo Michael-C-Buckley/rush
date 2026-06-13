@@ -391,6 +391,9 @@ pub const CompletionBuilder = struct {
     pub fn deinit(self: *CompletionBuilder, allocator: std.mem.Allocator) void {
         for (self.owned_option_exclusions.items) |excludes| allocator.free(excludes);
         self.owned_option_exclusions.deinit(allocator);
+        for (self.candidates.items) |candidate| {
+            if (candidate.option) |option| if (option.spellings.len != 0) allocator.free(option.spellings);
+        }
         for (self.owned.items) |value| allocator.free(value);
         self.owned.deinit(allocator);
         self.candidates.deinit(allocator);
@@ -406,9 +409,15 @@ pub const CompletionBuilder = struct {
         if (candidate.tag) |tag| owned_candidate.tag = try self.dupeField(allocator, tag);
         if (candidate.suffix) |suffix| owned_candidate.suffix = try self.dupeField(allocator, suffix);
         if (candidate.option) |option| {
+            const spellings = try allocator.alloc([]const u8, option.spellings.len);
+            errdefer allocator.free(spellings);
+            for (option.spellings, 0..) |spelling, spelling_index| {
+                spellings[spelling_index] = try self.dupeField(allocator, spelling);
+            }
             owned_candidate.option = .{
                 .long = if (option.long) |long| try self.dupeField(allocator, long) else null,
                 .short = if (option.short) |short| try self.dupeField(allocator, short) else null,
+                .spellings = spellings,
                 .argument = if (option.argument) |argument| try self.dupeField(allocator, argument) else null,
                 .exclusive_group = if (option.exclusive_group) |group| try self.dupeField(allocator, group) else null,
                 .excludes = try self.dupeOptionExclusions(allocator, option.excludes),
@@ -765,6 +774,10 @@ fn freeCompletionRule(allocator: std.mem.Allocator, rule: completion.Rule) void 
     }
     if (rule.option.long) |long| allocator.free(long);
     if (rule.option.short) |short| allocator.free(short);
+    if (rule.option.spellings.len != 0) {
+        for (rule.option.spellings) |spelling| allocator.free(spelling);
+        allocator.free(rule.option.spellings);
+    }
     if (rule.option.argument) |argument| allocator.free(argument);
     if (rule.option.exclusive_group) |group| allocator.free(group);
     freeOptionExclusions(allocator, rule.option.excludes);
@@ -815,6 +828,21 @@ fn freeCompletionVariantProbeState(allocator: std.mem.Allocator, state: Completi
     }
     allocator.free(state.patterns);
     if (state.selected) |selected| allocator.free(selected);
+}
+
+fn dupeStringSlice(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {
+    if (values.len == 0) return &.{};
+    const owned = try allocator.alloc([]const u8, values.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned[0..initialized]) |value| allocator.free(value);
+        allocator.free(owned);
+    }
+    for (values, 0..) |value, index| {
+        owned[index] = try allocator.dupe(u8, value);
+        initialized += 1;
+    }
+    return owned;
 }
 
 fn dupeStaticProviderValues(allocator: std.mem.Allocator, values: []const completion.StaticProviderValue) ![]const completion.StaticProviderValue {
@@ -948,6 +976,16 @@ const AttachedCompletionOptionValue = struct {
 };
 
 fn attachedCompletionOptionValue(rules: []const completion.Rule, root: []const u8, path: []const []const u8, word: []const u8) ?AttachedCompletionOptionValue {
+    if (findCompletionOption(rules, root, path, word)) |matched| {
+        if (matched.attached_value) {
+            const value = matched.value orelse return null;
+            return .{
+                .name = matched.name,
+                .spelling = matched.spelling,
+                .value_offset = word.len - value.len,
+            };
+        }
+    }
     if (attachedLongCompletionOptionValue(rules, root, path, word)) |attached| return attached;
     if (attachedShortCompletionOptionValue(rules, root, path, word)) |attached| return attached;
     return null;
@@ -991,6 +1029,14 @@ fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: 
         const value_count = completionRuleValueCount(rule);
         const takes_value = value_count != 0;
         const key = completionOptionKey(rule.option) orelse continue;
+        for (rule.option.spellings) |literal| {
+            if (std.mem.eql(u8, word, literal)) return .{ .takes_value = takes_value and !completionLiteralOptionIsFlagLike(literal), .attached_value = false, .value_count = value_count, .name = literal, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+            if (takes_value) {
+                if (completionLiteralOptionAttachedValue(literal, word)) |value| {
+                    return .{ .takes_value = true, .attached_value = true, .value_count = value_count, .name = literal, .key = key, .spelling = literal, .value = value, .exclusive_group = rule.option.exclusive_group, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
+                }
+            }
+        }
         if (rule.option.long) |long| {
             var spelling_buffer: [256]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return null;
@@ -1005,6 +1051,21 @@ fn findCompletionOption(rules: []const completion.Rule, root: []const u8, path: 
             if (std.mem.eql(u8, word, spelling)) return .{ .takes_value = takes_value, .attached_value = false, .value_count = value_count, .name = short, .key = key, .spelling = word, .exclusive_group = rule.option.exclusive_group, .excludes = rule.option.excludes, .repeatable = rule.option.repeatable, .terminates_options = rule.option.terminates_options };
         }
     }
+    return null;
+}
+
+fn completionLiteralOptionIsFlagLike(spelling: []const u8) bool {
+    return std.mem.startsWith(u8, spelling, "+");
+}
+
+fn completionLiteralOptionAttachedValue(spelling: []const u8, word: []const u8) ?[]const u8 {
+    if (completionLiteralOptionIsFlagLike(spelling)) return null;
+    if (!std.mem.startsWith(u8, word, spelling) or word.len <= spelling.len) return null;
+    if (std.mem.startsWith(u8, spelling, "--")) {
+        if (word[spelling.len] != '=') return null;
+        return word[spelling.len + 1 ..];
+    }
+    if (std.mem.startsWith(u8, spelling, "-")) return word[spelling.len..];
     return null;
 }
 
@@ -1084,6 +1145,9 @@ fn completionSubcommandPrefixMatches(rules: []const completion.Rule, root: []con
 fn completionOptionPrefixMatches(rules: []const completion.Rule, root: []const u8, path: []const []const u8, prefix: []const u8) bool {
     for (rules) |rule| {
         if (rule.kind != .option or !completionOptionRuleContextAppliesToPath(rule, root, path)) continue;
+        for (rule.option.spellings) |spelling| {
+            if (std.mem.startsWith(u8, spelling, prefix)) return true;
+        }
         if (rule.option.long) |long| {
             var spelling_buffer: [256]u8 = undefined;
             const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
@@ -1190,6 +1254,7 @@ fn completionRuleOptionMetadataForCandidate(rules: []const completion.Rule, root
 fn completionOptionKey(option: completion.Option) ?[]const u8 {
     if (option.long) |long| return long;
     if (option.short) |short| return short;
+    if (option.spellings.len != 0) return option.spellings[0];
     return null;
 }
 
@@ -1208,6 +1273,9 @@ fn completionOptionMatchesSelector(option: completion.Option, selector: []const 
 }
 
 fn completionOptionSpellingMatches(option: completion.Option, value: []const u8) bool {
+    for (option.spellings) |spelling| {
+        if (std.mem.eql(u8, spelling, value)) return true;
+    }
     if (option.long) |long| {
         var spelling_buffer: [256]u8 = undefined;
         const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return false;
@@ -1609,9 +1677,10 @@ fn completionArgumentStateIsRestCommandLine(rules: []const completion.Rule, root
 fn completionOptionValueMatches(rule: completion.Rule, option_value: ?CompletionOptionValue) bool {
     const active = option_value orelse return false;
     if (rule.value_index != active.value_index) return false;
+    for (rule.option.spellings) |spelling| if (std.mem.eql(u8, active.spelling, spelling)) return true;
     if (rule.option.long) |long| if (std.mem.eql(u8, active.name, long)) return true;
     if (rule.option.short) |short| if (std.mem.eql(u8, active.name, short)) return true;
-    return rule.option.long == null and rule.option.short == null;
+    return rule.option.long == null and rule.option.short == null and rule.option.spellings.len == 0;
 }
 
 fn completionValueGrammarForOption(rules: []const completion.Rule, root: []const u8, path: []const []const u8, option_value: CompletionOptionValue) completion.ValueGrammar {
@@ -2569,6 +2638,7 @@ pub const Executor = struct {
             .option = .{
                 .long = if (rule.option.long) |long| try self.allocator.dupe(u8, long) else null,
                 .short = if (rule.option.short) |short| try self.allocator.dupe(u8, short) else null,
+                .spellings = try dupeStringSlice(self.allocator, rule.option.spellings),
                 .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
                 .value_count = rule.option.value_count,
                 .exclusive_group = if (rule.option.exclusive_group) |group| try self.allocator.dupe(u8, group) else null,
@@ -3287,7 +3357,7 @@ pub const Executor = struct {
             .command
         else if (options_terminated)
             .argument
-        else if (std.mem.startsWith(u8, semantic_prefix, "-"))
+        else if (std.mem.startsWith(u8, semantic_prefix, "-") or (semantic_prefix.len != 0 and completionOptionPrefixMatches(self.completion_rules.items, root, path.items, semantic_prefix)))
             .option
         else if (argument_state == null and (semantic_prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completion_rules.items, root, path.items)))
             .subcommand
@@ -3645,22 +3715,30 @@ pub const Executor = struct {
                     if (context.position == .subcommand and context.prefix.len == 0) {
                         if (!completionRuleContextMatches(rule, context.root, context.path)) continue;
                     } else if (!completionOptionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
+                    if (completionOptionSuppressionForOption(context, rule.option) != null) continue;
                     if (rule.option.long) |long| {
-                        if (completionOptionSuppressionForOption(context, rule.option) != null) continue;
                         var spelling_buffer: [256]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch continue;
                         try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, completionRuleValueCount(rule) == 0 and !rule.option.no_space);
                     }
                     if (rule.option.short) |short| {
                         if (rule.option.long != null and context.prefix.len == 0) continue;
-                        if (completionOptionSuppressionForOption(context, rule.option) != null) continue;
                         var spelling_buffer: [32]u8 = undefined;
                         const value = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch continue;
                         try self.appendStructuredCompletionCandidate(builder, value, rule.description, .option, rule.option, context, completionRuleValueCount(rule) == 0 and !rule.option.no_space);
                     }
+                    for (rule.option.spellings) |spelling| {
+                        try self.appendStructuredCompletionCandidate(builder, spelling, rule.description, .option, rule.option, context, completionOptionSpellingAppendsSpace(rule, spelling));
+                    }
                 },
             }
         }
+    }
+
+    fn completionOptionSpellingAppendsSpace(rule: completion.Rule, spelling: []const u8) bool {
+        if (rule.option.no_space) return false;
+        if (completionLiteralOptionIsFlagLike(spelling)) return true;
+        return completionRuleValueCount(rule) == 0;
     }
 
     fn appendActiveShortOptionClusterCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !bool {
@@ -4030,6 +4108,10 @@ pub const Executor = struct {
             if (candidate.option) |option| {
                 if (option.long) |long| self.allocator.free(long);
                 if (option.short) |short| self.allocator.free(short);
+                if (option.spellings.len != 0) {
+                    for (option.spellings) |spelling| self.allocator.free(spelling);
+                    self.allocator.free(option.spellings);
+                }
                 if (option.argument) |argument| self.allocator.free(argument);
                 if (option.exclusive_group) |group| self.allocator.free(group);
                 freeOptionExclusions(self.allocator, option.excludes);

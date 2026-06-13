@@ -198,7 +198,7 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
 
   <h2 id="options-and-values"><a href="#options-and-values">Options and values</a></h2>
 
-  <p>Options use unprefixed spellings: <code>"long": "color"</code> means <code>--color</code>, and <code>"short": "C"</code> means <code>-C</code>. Long aliases register additional long spellings for the same option metadata and value provider.</p>
+  <p>Options use <code>short</code> and <code>long</code> as sugar: <code>"long": "color"</code> means <code>--color</code>, and <code>"short": "C"</code> means <code>-C</code>. Use <code>spellings</code> for literal option tokens that cannot be represented by that sugar, such as single-dash long options (<code>-iname</code>, <code>-cp</code>), plus-prefixed toggles (<code>+o</code>), or command-specific spellings that should be matched literally. An option must define at least one of <code>short</code>, <code>long</code>, or <code>spellings</code>. Long aliases register additional long spellings for the same option metadata and value provider.</p>
 
   <pre>{
   <span class="str">"short"</span>: <span class="str">"C"</span>,
@@ -209,7 +209,14 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   <span class="str">"description"</span>: <span class="str">"run from path"</span>
 }</pre>
 
-  <p>A value object gives the option a value name and, optionally, a provider and grammar. The current engine detects detached values, attached long values with <code>=</code>, and attached short values when a value-taking short option is followed by text in the same word.</p>
+  <pre>{
+  <span class="str">"spellings"</span>: [<span class="str">"-iname"</span>],
+  <span class="str">"value"</span>: { <span class="str">"name"</span>: <span class="str">"pattern"</span> }
+}</pre>
+
+  <p>Literal spellings are full tokens, including their leading <code>-</code> or <code>+</code>. Duplicate detection operates on effective literal tokens, so <code>short: "p"</code> conflicts with <code>spellings: ["-p"]</code>, and <code>long: "color"</code> conflicts with <code>spellings: ["--color"]</code>. POSIX short-option clustering still applies only to declared one-byte <code>short</code> options; a literal whole-token spelling such as <code>-iname</code> wins before cluster decomposition. Single-dash literal options that take values support detached and attached values (<code>-iname pattern</code> and <code>-inamepattern</code>). Plus-prefixed spellings are treated as flag-like toggles.</p>
+
+  <p>A value object gives the option a value name and, optionally, a provider and grammar. The current engine detects detached values, attached long values with <code>=</code>, attached short values when a value-taking short option is followed by text in the same word, and attached values for value-taking single-dash literal spellings.</p>
 
   <p><code>value</code> may also be an ordered array of value objects for options that consume multiple words:</p>
 
@@ -254,7 +261,7 @@ share/rush/completions/git.rush  <span class="comment"># dynamic provider functi
   }
 }</pre>
 
-  <p>The schema also supports <code>terminator</code> on <code>arguments</code> and structured conditions such as <code>terminatorSeen</code> and <code>optionValue</code>. <code>optionValue</code> maps exactly one option selector to a string or array of strings and is true when any parsed occurrence of that value-taking option exactly equals one listed literal. Missing options and valueless occurrences are false; repeatable options use any-match semantics. When the option value is constrained by enum grammar or a static enum provider, compared literals must be enum members. Equality is the only comparison form; use a provider for glob, pattern, or expression logic.</p>
+  <p>The schema also supports <code>terminator</code> on <code>arguments</code> and structured conditions such as <code>terminatorSeen</code> and <code>optionValue</code>. <code>optionValue</code> maps exactly one literal option selector to a string or array of strings and is true when any parsed occurrence of that value-taking option exactly equals one listed literal. Selectors are the effective tokens users type: <code>--format</code> for <code>long: "format"</code>, <code>-f</code> for <code>short: "f"</code>, and exact entries such as <code>-iname</code> or <code>+o</code> from <code>spellings</code>. Missing options and valueless occurrences are false; repeatable options use any-match semantics. When the option value is constrained by enum grammar or a static enum provider, compared literals must be enum members. Equality is the only comparison form; use a provider for glob, pattern, or expression logic.</p>
 
   <pre>{
   <span class="str">"options"</span>: [

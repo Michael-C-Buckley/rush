@@ -1711,6 +1711,37 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
         rule.disabled = disabled;
         if (manifestString(option.get("long"))) |long| rule.option.long = long;
         if (manifestString(option.get("short"))) |short| rule.option.short = short;
+        var spellings: std.ArrayList([]const u8) = .empty;
+        var owned_alias_spellings: std.ArrayList([]const u8) = .empty;
+        defer {
+            for (owned_alias_spellings.items) |spelling| executor.allocator.free(spelling);
+            owned_alias_spellings.deinit(executor.allocator);
+            spellings.deinit(executor.allocator);
+        }
+        if (option.get("spellings")) |spellings_value| {
+            if (spellings_value == .array) {
+                for (spellings_value.array.items) |spelling_value| {
+                    const spelling = manifestString(spelling_value) orelse continue;
+                    try spellings.append(executor.allocator, spelling);
+                }
+            }
+        }
+        if (option.get("aliases")) |aliases_value| {
+            if (aliases_value == .array) {
+                for (aliases_value.array.items) |alias_value| {
+                    const alias = manifestString(alias_value) orelse continue;
+                    const alias_spelling = try std.fmt.allocPrint(executor.allocator, "--{s}", .{alias});
+                    owned_alias_spellings.append(executor.allocator, alias_spelling) catch |err| {
+                        executor.allocator.free(alias_spelling);
+                        return err;
+                    };
+                    spellings.append(executor.allocator, alias_spelling) catch |err| {
+                        return err;
+                    };
+                }
+            }
+        }
+        rule.option.spellings = spellings.items;
         if (manifestString(option.get("exclusiveGroup"))) |group| rule.option.exclusive_group = group;
         const excludes = try completionManifestOptionExclusions(executor.allocator, option.get("excludes"));
         defer if (excludes.len != 0) executor.allocator.free(excludes);
@@ -1724,26 +1755,9 @@ fn loadCompletionManifestOptions(executor: *exec.Executor, root: []const u8, pat
                 if (manifestValueName(first)) |name| rule.option.argument = name;
             }
         }
-        if (rule.option.long == null and rule.option.short == null) return error.CompletionManifestOptionMissingSpelling;
+        if (rule.option.long == null and rule.option.short == null and rule.option.spellings.len == 0) return error.CompletionManifestOptionMissingSpelling;
         try executor.registerCompletionRule(rule);
         if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, rule, value, providers, source, variant, disabled);
-        if (option.get("aliases")) |aliases_value| {
-            const aliases = switch (aliases_value) {
-                .array => |array| array,
-                else => continue,
-            };
-            for (aliases.items) |alias_value| {
-                const alias = switch (alias_value) {
-                    .string => |value| value,
-                    else => continue,
-                };
-                var alias_rule = rule;
-                alias_rule.option.long = alias;
-                alias_rule.option.short = null;
-                try executor.registerCompletionRule(alias_rule);
-                if (option.get("value")) |value| try loadCompletionManifestOptionValueProvider(executor, root, path, alias_rule, value, providers, source, variant, disabled);
-            }
-        }
     }
 }
 
@@ -1896,7 +1910,7 @@ fn compileCompletionManifestOptionSelectorKeys(allocator: std.mem.Allocator, sel
 }
 
 fn appendCompletionManifestOptionSelectorKey(allocator: std.mem.Allocator, keys: *std.ArrayList([]const u8), selector: []const u8, root: []const u8, path: []const []const u8, rules: []const completion_model.Rule) !void {
-    const key = manifestCompletionOptionSelectorKey(rules, root, path, selector) orelse manifestOptionSelectorName(selector) orelse selector;
+    const key = manifestCompletionOptionSelectorKey(rules, root, path, selector) orelse selector;
     const owned_key = try allocator.dupe(u8, key);
     errdefer allocator.free(owned_key);
     try keys.append(allocator, owned_key);
@@ -1927,7 +1941,7 @@ fn compileCompletionManifestSingleOptionValueCondition(allocator: std.mem.Alloca
         .array => |array| for (array.items) |item| if (manifestString(item)) |literal| try appendCompletionManifestOwnedString(allocator, &values, literal),
         else => {},
     }
-    const key = manifestCompletionOptionSelectorKey(rules, root, path, selector) orelse manifestOptionSelectorName(selector) orelse selector;
+    const key = manifestCompletionOptionSelectorKey(rules, root, path, selector) orelse selector;
     const owned_key = try allocator.dupe(u8, key);
     errdefer allocator.free(owned_key);
     const owned_values = try values.toOwnedSlice(allocator);
@@ -1948,17 +1962,25 @@ fn appendCompletionManifestOwnedString(allocator: std.mem.Allocator, values: *st
 }
 
 fn manifestCompletionOptionSelectorKey(rules: []const completion_model.Rule, root: []const u8, path: []const []const u8, selector: []const u8) ?[]const u8 {
-    const name = manifestOptionSelectorName(selector) orelse return null;
-    const kind: CompletionManifestOptionSpellingKind = if (std.mem.startsWith(u8, selector, "--")) .long else .short;
     for (rules) |rule| {
         if (rule.kind != .option and rule.kind != .dynamic_option_value) continue;
         if (!completionManifestRuleOptionAppliesToPath(rule, root, path)) continue;
-        switch (kind) {
-            .long => if (rule.option.long) |long| if (std.mem.eql(u8, long, name)) return manifestCompletionOptionKey(rule.option),
-            .short => if (rule.option.short) |short| if (std.mem.eql(u8, short, name)) return manifestCompletionOptionKey(rule.option),
-        }
+        if (manifestCompletionOptionMatchesSelector(rule.option, selector)) return manifestCompletionOptionKey(rule.option);
     }
     return null;
+}
+
+fn manifestCompletionOptionMatchesSelector(option: completion_model.Option, selector: []const u8) bool {
+    for (option.spellings) |spelling| if (std.mem.eql(u8, spelling, selector)) return true;
+    if (std.mem.startsWith(u8, selector, "--")) {
+        const name = selector[2..];
+        if (option.long) |long| if (std.mem.eql(u8, long, name)) return true;
+    }
+    if (std.mem.startsWith(u8, selector, "-") and selector.len == 2) {
+        const name = selector[1..];
+        if (option.short) |short| if (std.mem.eql(u8, short, name)) return true;
+    }
+    return false;
 }
 
 fn completionManifestRuleOptionAppliesToPath(rule: completion_model.Rule, root: []const u8, path: []const []const u8) bool {
@@ -1981,13 +2003,8 @@ fn completionManifestRuleOptionAppliesToPath(rule: completion_model.Rule, root: 
 fn manifestCompletionOptionKey(option: completion_model.Option) []const u8 {
     if (option.long) |long| return long;
     if (option.short) |short| return short;
+    if (option.spellings.len != 0) return option.spellings[0];
     return "";
-}
-
-fn manifestOptionSelectorName(selector: []const u8) ?[]const u8 {
-    if (std.mem.startsWith(u8, selector, "--") and selector.len > 2) return selector[2..];
-    if (std.mem.startsWith(u8, selector, "-") and selector.len == 2) return selector[1..];
-    return null;
 }
 
 fn manifestRestCommandLine(value: ?std.json.Value) bool {
@@ -2267,7 +2284,7 @@ const CompletionManifestDiagnostics = struct {
     }
 };
 
-const CompletionManifestOptionSpellingKind = enum { short, long };
+const CompletionManifestOptionSpellingKind = enum { short, long, literal };
 
 const CompletionManifestOptionSpelling = struct {
     kind: CompletionManifestOptionSpellingKind,
@@ -2625,7 +2642,7 @@ fn validateManifestOption(
 
     var has_spelling = false;
     const takes_value = option.get("value") != null;
-    const option_key = manifestString(option.get("long")) orelse manifestString(option.get("short")) orelse manifestFirstString(option.get("aliases")) orelse "";
+    const option_key = manifestString(option.get("long")) orelse manifestString(option.get("short")) orelse manifestFirstString(option.get("spellings")) orelse "";
     const enum_values = manifestOptionEnumValues(option, providers);
     const inherit = manifestBoolDefault(option.get("inherit"), true);
     if (manifestString(option.get("short"))) |short| {
@@ -2637,6 +2654,24 @@ fn validateManifestOption(
         has_spelling = true;
         const spelling: CompletionManifestOptionSpelling = .{ .kind = .long, .value = long, .key = option_key, .takes_value = takes_value, .enum_values = enum_values };
         if (try appendManifestOptionSpelling(diagnostics, options, spelling, path) and inherit) try child_options.append(diagnostics.allocator, spelling);
+    }
+    if (option.get("spellings")) |spellings_value| {
+        const spellings = switch (spellings_value) {
+            .array => |array| array,
+            else => null,
+        };
+        if (spellings) |array| {
+            const spellings_path = try manifestFieldPath(allocator, path, "spellings");
+            defer allocator.free(spellings_path);
+            for (array.items, 0..) |spelling_value, index| {
+                const literal = manifestString(spelling_value) orelse continue;
+                const spelling_path = try manifestIndexPath(allocator, spellings_path, index);
+                defer allocator.free(spelling_path);
+                has_spelling = true;
+                const spelling: CompletionManifestOptionSpelling = .{ .kind = .literal, .value = literal, .key = option_key, .takes_value = takes_value and !std.mem.startsWith(u8, literal, "+"), .enum_values = enum_values };
+                if (try appendManifestOptionSpelling(diagnostics, options, spelling, spelling_path) and inherit) try child_options.append(diagnostics.allocator, spelling);
+            }
+        }
     }
     if (option.get("aliases")) |aliases_value| {
         const aliases = switch (aliases_value) {
@@ -2650,13 +2685,12 @@ fn validateManifestOption(
                 const alias = manifestString(alias_value) orelse continue;
                 const alias_path = try manifestIndexPath(allocator, aliases_path, index);
                 defer allocator.free(alias_path);
-                has_spelling = true;
                 const spelling: CompletionManifestOptionSpelling = .{ .kind = .long, .value = alias, .key = option_key, .takes_value = takes_value, .enum_values = enum_values };
                 if (try appendManifestOptionSpelling(diagnostics, options, spelling, alias_path) and inherit) try child_options.append(diagnostics.allocator, spelling);
             }
         }
     }
-    if (!has_spelling) try diagnostics.add(.err, "{s}: option must define short, long, or alias spelling", .{path});
+    if (!has_spelling) try diagnostics.add(.err, "{s}: option must define short, long, or spellings", .{path});
 
     if (manifestString(option.get("exclusiveGroup"))) |group| {
         if (!manifestStringListContains(groups, group)) {
@@ -2721,6 +2755,7 @@ fn manifestOptionObjectHasSelector(option: std.json.ObjectMap, kind: CompletionM
                 if (manifestString(alias_value)) |alias| if (std.mem.eql(u8, alias, value)) return true;
             }
         },
+        .literal => return manifestOptionHasLiteralSpelling(option, value),
     }
     return false;
 }
@@ -3253,8 +3288,9 @@ fn validateManifestNameValue(allocator: std.mem.Allocator, diagnostics: *Complet
 
 fn appendManifestOptionSpelling(diagnostics: *CompletionManifestDiagnostics, options: *std.ArrayList(CompletionManifestOptionSpelling), spelling: CompletionManifestOptionSpelling, path: []const u8) !bool {
     for (options.items) |existing| {
-        if (existing.kind == spelling.kind and std.mem.eql(u8, existing.value, spelling.value)) {
-            try diagnostics.add(.err, "{s}: duplicate option spelling '{s}{s}'", .{ path, manifestOptionPrefix(spelling.kind), spelling.value });
+        if (manifestOptionSpellingEquals(existing, spelling)) {
+            var spelling_buffer: [256]u8 = undefined;
+            try diagnostics.add(.err, "{s}: duplicate option spelling '{s}'", .{ path, manifestOptionSpellingLiteralBuf(spelling, &spelling_buffer) orelse spelling.value });
             return false;
         }
     }
@@ -3262,10 +3298,20 @@ fn appendManifestOptionSpelling(diagnostics: *CompletionManifestDiagnostics, opt
     return true;
 }
 
-fn manifestOptionPrefix(kind: CompletionManifestOptionSpellingKind) []const u8 {
-    return switch (kind) {
-        .short => "-",
-        .long => "--",
+fn manifestOptionSpellingEquals(a: CompletionManifestOptionSpelling, b: CompletionManifestOptionSpelling) bool {
+    if (a.kind == b.kind and std.mem.eql(u8, a.value, b.value)) return true;
+    var a_buffer: [256]u8 = undefined;
+    var b_buffer: [256]u8 = undefined;
+    const a_literal = manifestOptionSpellingLiteralBuf(a, &a_buffer) orelse return false;
+    const b_literal = manifestOptionSpellingLiteralBuf(b, &b_buffer) orelse return false;
+    return std.mem.eql(u8, a_literal, b_literal);
+}
+
+fn manifestOptionSpellingLiteralBuf(spelling: CompletionManifestOptionSpelling, buffer: *[256]u8) ?[]const u8 {
+    return switch (spelling.kind) {
+        .literal => spelling.value,
+        .short => std.fmt.bufPrint(buffer, "-{s}", .{spelling.value}) catch null,
+        .long => std.fmt.bufPrint(buffer, "--{s}", .{spelling.value}) catch null,
     };
 }
 
@@ -3288,14 +3334,10 @@ fn validateManifestOptionSelector(diagnostics: *CompletionManifestDiagnostics, s
 }
 
 fn findManifestOptionSelector(options: []const CompletionManifestOptionSpelling, selector: []const u8) ?CompletionManifestOptionSpelling {
-    const spelling: CompletionManifestOptionSpelling = if (std.mem.startsWith(u8, selector, "--"))
-        .{ .kind = .long, .value = selector[2..], .key = selector[2..] }
-    else if (std.mem.startsWith(u8, selector, "-") and selector.len == 2)
-        .{ .kind = .short, .value = selector[1..], .key = selector[1..] }
-    else
-        return null;
     for (options) |option| {
-        if (option.kind == spelling.kind and std.mem.eql(u8, option.value, spelling.value)) return option;
+        var buffer: [256]u8 = undefined;
+        const spelling = manifestOptionSpellingLiteralBuf(option, &buffer) orelse continue;
+        if (std.mem.eql(u8, spelling, selector)) return option;
     }
     return null;
 }
@@ -3567,6 +3609,7 @@ fn completionSortLabel(candidate: completion_model.Candidate) []const u8 {
         if (candidate.option) |option| {
             if (option.long) |long| return long;
             if (option.short) |short| return short;
+            if (option.spellings.len != 0) return option.spellings[0];
         }
     }
     return candidate.display orelse candidate.value;
@@ -3915,6 +3958,7 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
         if (!debugCompletionRuleMatches(rule, semantic)) continue;
         if (rule.kind != .option) continue;
         const suppression = exec.completionOptionSuppressionForOption(semantic, rule.option) orelse continue;
+        for (rule.option.spellings) |spelling| try out.writer.print("  - spelling: {s}\n    reason: {s}\n    by: {s}\n    group: {s}\n", .{ spelling, @tagName(suppression.reason), suppression.by, suppression.group orelse "" });
         if (rule.option.long) |long| try out.writer.print("  - spelling: --{s}\n    reason: {s}\n    by: {s}\n    group: {s}\n", .{ long, @tagName(suppression.reason), suppression.by, suppression.group orelse "" });
         if (rule.option.short) |short| try out.writer.print("  - spelling: -{s}\n    reason: {s}\n    by: {s}\n    group: {s}\n", .{ short, @tagName(suppression.reason), suppression.by, suppression.group orelse "" });
     }
@@ -3953,6 +3997,9 @@ fn completionDebugOutput(allocator: std.mem.Allocator, io: std.Io, environ_map: 
                 option.repeatable,
                 option.terminates_options,
             });
+            try out.writer.print("      spellings:", .{});
+            for (option.spellings) |spelling| try out.writer.print(" {s}", .{spelling});
+            try out.writer.print("\n", .{});
         }
     }
     try out.writer.print("provider-diagnostics:\n", .{});
@@ -4811,7 +4858,8 @@ fn writeManifestProviderEntryText(writer: *std.Io.Writer, provider: std.json.Val
 
 fn writeManifestSuppressedOptionsText(writer: *std.Io.Writer, options: []const std.json.ObjectMap, parsed_options: []const ManifestParsedOption, indent: []const u8) !void {
     for (options) |option| {
-        const spelling = manifestOptionPrimarySpelling(option) orelse continue;
+        var spelling_buffer: [256]u8 = undefined;
+        const spelling = manifestOptionPrimarySpelling(option, &spelling_buffer) orelse continue;
         if (manifestParsedOptionForOption(parsed_options, option)) |parsed| {
             var parsed_spelling_buffer: [2]u8 = undefined;
             if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionText(writer, spelling, "alreadyPresent", parsed.displaySpelling(&parsed_spelling_buffer), null, null, indent);
@@ -4856,11 +4904,7 @@ fn writeManifestSuppressedOperandsText(writer: *std.Io.Writer, parsed_options: [
 }
 
 fn writeManifestSuppressedOptionText(writer: *std.Io.Writer, spelling_name: []const u8, reason: []const u8, by: []const u8, group: ?[]const u8, exclusion: ?[]const u8, indent: []const u8) !void {
-    if (spelling_name.len == 1) {
-        try writer.print("{s}- spelling: -{s}\n", .{ indent, spelling_name });
-    } else {
-        try writer.print("{s}- spelling: --{s}\n", .{ indent, spelling_name });
-    }
+    try writer.print("{s}- spelling: {s}\n", .{ indent, spelling_name });
     try writer.print("{s}  reason: {s}\n{s}  by: {s}\n{s}  group: {s}\n{s}  exclusion: {s}\n", .{ indent, reason, indent, by, indent, group orelse "", indent, exclusion orelse "" });
 }
 
@@ -4893,6 +4937,7 @@ fn manifestParsedOptionExcludesOption(parsed: ManifestParsedOption, option: std.
 fn manifestExcludeMatchesOption(exclusion: []const u8, option: std.json.ObjectMap) bool {
     if (std.mem.eql(u8, exclusion, "everything")) return true;
     if (std.mem.eql(u8, exclusion, "operands")) return false;
+    if (manifestOptionHasLiteralSpelling(option, exclusion)) return true;
     if (std.mem.startsWith(u8, exclusion, "--")) return manifestOptionNameMatches(option, exclusion[2..]);
     if (std.mem.startsWith(u8, exclusion, "-") and exclusion.len == 2) {
         const short = manifestString(option.get("short")) orelse return false;
@@ -5241,7 +5286,7 @@ fn analyzeManifestCompletionTrace(allocator: std.mem.Allocator, source: []const 
                     .repeatable = manifestBool(matched.option.get("repeatable")),
                 };
                 if (manifestBool(matched.option.get("terminatesOptions"))) trace.terminator_seen = true;
-                if (manifestOptionTakesValue(matched.option) and !matched.attached_value) {
+                if (manifestOptionTakesValue(matched.option) and !matched.attached_value and !std.mem.startsWith(u8, matched.spelling, "+")) {
                     if (nextCompleteWord(parsed, source, parser_context, token_index)) |next| {
                         parsed_option.value = next.word;
                         token_index = next.token_index;
@@ -5401,6 +5446,15 @@ fn appendManifestCommandOptionsBounded(buffer: []std.json.ObjectMap, len: *usize
 }
 
 fn manifestOptionMatchesWord(option: std.json.ObjectMap, word: []const u8) ?ManifestOptionMatch {
+    if (option.get("spellings")) |spellings_value| {
+        if (spellings_value == .array) {
+            for (spellings_value.array.items) |spelling_value| {
+                const literal = manifestString(spelling_value) orelse continue;
+                if (std.mem.eql(u8, word, literal)) return .{ .option = option, .spelling = word, .name = literal };
+                if (manifestLiteralOptionAttachedValue(literal, word)) |value| return .{ .option = option, .spelling = literal, .name = literal, .value = value, .attached_value = true };
+            }
+        }
+    }
     if (std.mem.startsWith(u8, word, "--")) {
         const body = word[2..];
         const equals_index = std.mem.indexOfScalar(u8, body, '=');
@@ -5414,6 +5468,17 @@ fn manifestOptionMatchesWord(option: std.json.ObjectMap, word: []const u8) ?Mani
         const short = manifestString(option.get("short")) orelse return null;
         if (word.len == short.len + 1 and std.mem.eql(u8, word[1..], short)) return .{ .option = option, .spelling = word, .name = short };
     }
+    return null;
+}
+
+fn manifestLiteralOptionAttachedValue(spelling: []const u8, word: []const u8) ?[]const u8 {
+    if (std.mem.startsWith(u8, spelling, "+")) return null;
+    if (!std.mem.startsWith(u8, word, spelling) or word.len <= spelling.len) return null;
+    if (std.mem.startsWith(u8, spelling, "--")) {
+        if (word[spelling.len] != '=') return null;
+        return word[spelling.len + 1 ..];
+    }
+    if (std.mem.startsWith(u8, spelling, "-")) return word[spelling.len..];
     return null;
 }
 
@@ -5621,6 +5686,8 @@ fn manifestParsedOptionsContainSelector(parsed_options: []const ManifestParsedOp
 }
 
 fn manifestParsedOptionMatchesSelector(parsed: ManifestParsedOption, selector: []const u8) bool {
+    var spelling_buffer: [2]u8 = undefined;
+    if (std.mem.eql(u8, parsed.spelling, selector) or std.mem.eql(u8, parsed.displaySpelling(&spelling_buffer), selector)) return true;
     if (std.mem.startsWith(u8, selector, "--") and selector.len > 2) return std.mem.eql(u8, parsed.key, selector[2..]);
     if (std.mem.startsWith(u8, selector, "-") and selector.len == 2) {
         if (parsed.short) |short| return std.mem.eql(u8, short, selector[1..]);
@@ -5840,6 +5907,7 @@ fn writeManifestProviderRefValue(json: *std.json.Stringify, provider: std.json.V
 
 fn findManifestOptionByName(options: []const std.json.ObjectMap, name: []const u8) ?std.json.ObjectMap {
     for (options) |option| {
+        if (manifestOptionHasLiteralSpelling(option, name)) return option;
         if (manifestString(option.get("long"))) |long| if (std.mem.eql(u8, long, name)) return option;
         if (manifestString(option.get("short"))) |short| if (std.mem.eql(u8, short, name)) return option;
         const aliases_value = option.get("aliases") orelse continue;
@@ -5854,7 +5922,8 @@ fn findManifestOptionByName(options: []const std.json.ObjectMap, name: []const u
 fn writeManifestSuppressedOptionsJson(json: *std.json.Stringify, options: []const std.json.ObjectMap, parsed_options: []const ManifestParsedOption) !void {
     try json.beginArray();
     for (options) |option| {
-        const spelling = manifestOptionPrimarySpelling(option) orelse continue;
+        var spelling_buffer: [256]u8 = undefined;
+        const spelling = manifestOptionPrimarySpelling(option, &spelling_buffer) orelse continue;
         if (manifestParsedOptionForOption(parsed_options, option)) |parsed| {
             var parsed_spelling_buffer: [2]u8 = undefined;
             if (!manifestBool(option.get("repeatable"))) try writeManifestSuppressedOptionJson(json, spelling, "alreadyPresent", parsed.displaySpelling(&parsed_spelling_buffer), null, null);
@@ -5902,22 +5971,25 @@ fn writeManifestSuppressedOperandsJson(json: *std.json.Stringify, parsed_options
     try json.endArray();
 }
 
-fn manifestOptionPrimarySpelling(option: std.json.ObjectMap) ?[]const u8 {
-    if (manifestString(option.get("long"))) |long| return long;
-    if (manifestString(option.get("short"))) |short| return short;
+fn manifestOptionPrimarySpelling(option: std.json.ObjectMap, buffer: *[256]u8) ?[]const u8 {
+    if (manifestString(option.get("long"))) |long| return std.fmt.bufPrint(buffer, "--{s}", .{long}) catch null;
+    if (manifestString(option.get("short"))) |short| return std.fmt.bufPrint(buffer, "-{s}", .{short}) catch null;
+    if (manifestFirstString(option.get("spellings"))) |spelling| return spelling;
     const aliases_value = option.get("aliases") orelse return null;
     if (aliases_value != .array or aliases_value.array.items.len == 0) return null;
-    return manifestString(aliases_value.array.items[0]);
+    const alias = manifestString(aliases_value.array.items[0]) orelse return null;
+    return std.fmt.bufPrint(buffer, "--{s}", .{alias}) catch null;
 }
 
 fn manifestParsedOptionForOption(parsed_options: []const ManifestParsedOption, option: std.json.ObjectMap) ?ManifestParsedOption {
     for (parsed_options) |parsed| {
-        if (manifestOptionNameMatches(option, parsed.name)) return parsed;
+        if (manifestOptionNameMatches(option, parsed.name) or manifestOptionHasLiteralSpelling(option, parsed.spelling)) return parsed;
     }
     return null;
 }
 
 fn manifestOptionNameMatches(option: std.json.ObjectMap, name: []const u8) bool {
+    if (manifestOptionHasLiteralSpelling(option, name)) return true;
     if (manifestString(option.get("long"))) |long| if (std.mem.eql(u8, long, name)) return true;
     if (manifestString(option.get("short"))) |short| if (std.mem.eql(u8, short, name)) return true;
     const aliases_value = option.get("aliases") orelse return false;
@@ -5928,16 +6000,29 @@ fn manifestOptionNameMatches(option: std.json.ObjectMap, name: []const u8) bool 
     return false;
 }
 
+fn manifestOptionHasLiteralSpelling(option: std.json.ObjectMap, spelling: []const u8) bool {
+    if (option.get("spellings")) |spellings_value| {
+        if (spellings_value == .array) {
+            for (spellings_value.array.items) |spelling_value| {
+                if (manifestString(spelling_value)) |literal| if (std.mem.eql(u8, literal, spelling)) return true;
+            }
+        }
+    }
+    if (option.get("aliases")) |aliases_value| {
+        if (aliases_value == .array) {
+            for (aliases_value.array.items) |alias_value| {
+                const alias = manifestString(alias_value) orelse continue;
+                if (spelling.len == alias.len + 2 and std.mem.startsWith(u8, spelling, "--") and std.mem.eql(u8, spelling[2..], alias)) return true;
+            }
+        }
+    }
+    return false;
+}
+
 fn writeManifestSuppressedOptionJson(json: *std.json.Stringify, spelling_name: []const u8, reason: []const u8, by: []const u8, group: ?[]const u8, exclusion: ?[]const u8) !void {
     try json.beginObject();
     try json.objectField("spelling");
-    if (spelling_name.len == 1) {
-        var buffer: [4]u8 = undefined;
-        try json.write(std.fmt.bufPrint(&buffer, "-{s}", .{spelling_name}) catch spelling_name);
-    } else {
-        var buffer: [256]u8 = undefined;
-        try json.write(std.fmt.bufPrint(&buffer, "--{s}", .{spelling_name}) catch spelling_name);
-    }
+    try json.write(spelling_name);
     try json.objectField("reason");
     try json.write(reason);
     try json.objectField("by");
@@ -7674,6 +7759,78 @@ test "completion manifest argument states evaluate nested conditions" {
     var negated = try executor.analyzeCompletionsForInput("tool --format json --dry-run --skip first ", "tool --format json --dry-run --skip first ".len);
     defer negated.deinit();
     try std.testing.expectEqualStrings("default-next", negated.argument_state.?);
+}
+
+test "completion manifest literal spellings recognize values selectors and suppression" {
+    const manifest = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "test/fixtures/completion-data/rush/completions/literalopts.json", std.testing.allocator, .limited(1024 * 1024));
+    defer std.testing.allocator.free(manifest);
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try loadCompletionManifest(std.testing.allocator, &executor, manifest);
+
+    const option_candidates = try executor.collectCompletionsForInput("literalopts -i", "literalopts -i".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(option_candidates);
+    try expectCompletionCandidate(option_candidates, "-iname");
+    try expectNoCompletionCandidate(option_candidates, "-i");
+
+    var detached = try executor.analyzeCompletionsForInput("literalopts -iname needle path ", "literalopts -iname needle path ".len);
+    defer detached.deinit();
+    try std.testing.expectEqual(@as(usize, 1), detached.parsed_options.len);
+    try std.testing.expectEqualStrings("-iname", detached.parsed_options[0].spelling);
+    try std.testing.expectEqualStrings("-iname", detached.parsed_options[0].name);
+    try std.testing.expectEqualStrings("-iname", detached.parsed_options[0].key);
+    try std.testing.expectEqualStrings("needle", detached.parsed_options[0].value.?);
+    try std.testing.expectEqual(@as(usize, 1), detached.argument_index);
+
+    var attached = try executor.analyzeCompletionsForInput("literalopts -inameneedle path ", "literalopts -inameneedle path ".len);
+    defer attached.deinit();
+    try std.testing.expectEqual(@as(usize, 1), attached.parsed_options.len);
+    try std.testing.expectEqualStrings("-iname", attached.parsed_options[0].spelling);
+    try std.testing.expectEqualStrings("needle", attached.parsed_options[0].value.?);
+    try std.testing.expectEqual(@as(usize, 1), attached.argument_index);
+
+    const selector_candidates = try executor.collectCompletionsForInput("literalopts -iname needle ", "literalopts -iname needle ".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(selector_candidates);
+    try expectCompletionCandidate(selector_candidates, "matched-iname");
+    try expectNoCompletionCandidate(selector_candidates, "default-arg");
+
+    const plus_candidates = try executor.collectCompletionsForInput("literalopts +", "literalopts +".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(plus_candidates);
+    try expectCompletionCandidate(plus_candidates, "+o");
+
+    var plus = try executor.analyzeCompletionsForInput("literalopts +o path ", "literalopts +o path ".len);
+    defer plus.deinit();
+    try std.testing.expectEqual(@as(usize, 1), plus.parsed_options.len);
+    try std.testing.expectEqualStrings("+o", plus.parsed_options[0].spelling);
+    try std.testing.expect(plus.parsed_options[0].value == null);
+    try std.testing.expectEqual(@as(usize, 1), plus.argument_index);
+
+    const suppressed = try executor.collectCompletionsForInput("literalopts -iname needle -", "literalopts -iname needle -".len, .{ .io = std.testing.io });
+    defer executor.freeCompletions(suppressed);
+    try expectNoCompletionCandidate(suppressed, "-name");
+    try expectCompletionCandidate(suppressed, "-iname");
+}
+
+test "completion manifest semantic validation dedupes effective literal spellings" {
+    var diagnostics = try validateCompletionManifestContents(std.testing.allocator,
+        \\{
+        \\  "manifestVersion": 1,
+        \\  "command": {
+        \\    "name": "tool",
+        \\    "options": [
+        \\      { "short": "p" },
+        \\      { "spellings": ["-p"] },
+        \\      { "long": "color" },
+        \\      { "spellings": ["--color"] }
+        \\    ]
+        \\  }
+        \\}
+    );
+    defer diagnostics.deinit();
+
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[1].spellings[0]: duplicate option spelling '-p'");
+    try expectCompletionManifestDiagnostic(diagnostics, .err, "command.options[3].spellings[0]: duplicate option spelling '--color'");
 }
 
 test "completion manifest variants select lazily and cache probe result" {

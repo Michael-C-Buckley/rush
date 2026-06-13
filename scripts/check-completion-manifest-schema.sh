@@ -29,6 +29,7 @@ if "version" in schema.get("properties", {}):
 
 name_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 long_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+spelling_re = re.compile(r"^\S+$")
 function_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 provider_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 allowed_builtin = {"files", "directories", "executables", "variables"}
@@ -169,12 +170,19 @@ def check_option(option, providers, path):
     if not isinstance(option, dict):
         errors.append(f"{path}: option must be an object")
         return
-    if "short" not in option and "long" not in option:
-        errors.append(f"{path}: option needs short or long")
     if "short" in option and (not isinstance(option["short"], str) or len(option["short"]) != 1 or option["short"].isspace() or option["short"] == "-"):
         errors.append(f"{path}.short: short option must be one non-space non-dash character")
     if "long" in option and (not isinstance(option["long"], str) or not long_re.match(option["long"])):
         errors.append(f"{path}.long: invalid long option")
+    spellings_value = option.get("spellings", [])
+    if "spellings" in option and not isinstance(spellings_value, list):
+        errors.append(f"{path}.spellings: spellings must be an array")
+        spellings_value = []
+    if "short" not in option and "long" not in option and not spellings_value:
+        errors.append(f"{path}: option needs short, long, or spellings")
+    for i, spelling in enumerate(spellings_value):
+        if not isinstance(spelling, str) or not spelling_re.match(spelling):
+            errors.append(f"{path}.spellings[{i}]: invalid literal option spelling")
     for i, alias in enumerate(option.get("aliases", [])):
         if not isinstance(alias, str) or not long_re.match(alias):
             errors.append(f"{path}.aliases[{i}]: invalid long option alias")
@@ -237,12 +245,18 @@ def check_command(command, inherited_providers, path):
         option_path = path_join(path_join(path, "options"), i)
         check_option(option, providers, option_path)
         if isinstance(option, dict):
-            for spelling in (option.get("short"), option.get("long")):
-                if spelling:
-                    key = ("short" if len(spelling) == 1 and spelling == option.get("short") else "long", spelling)
-                    if key in seen_options:
-                        errors.append(f"{option_path}: duplicate option spelling {spelling!r}")
-                    seen_options.add(key)
+            spellings = []
+            if option.get("short"):
+                spellings.append("-" + option["short"])
+            if option.get("long"):
+                spellings.append("--" + option["long"])
+            if isinstance(option.get("spellings", []), list):
+                spellings.extend(option.get("spellings", []))
+            spellings.extend("--" + alias for alias in option.get("aliases", []))
+            for spelling in spellings:
+                if spelling in seen_options:
+                    errors.append(f"{option_path}: duplicate option spelling {spelling!r}")
+                seen_options.add(spelling)
 
     if "arguments" in command:
         check_arguments(command["arguments"], providers, path_join(path, "arguments"))

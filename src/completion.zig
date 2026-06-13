@@ -184,6 +184,7 @@ pub const CandidateMatchTrace = struct {
 pub const Option = struct {
     long: ?[]const u8 = null,
     short: ?[]const u8 = null,
+    spellings: []const []const u8 = &.{},
     argument: ?[]const u8 = null,
     value_count: usize = 0,
     exclusive_group: ?[]const u8 = null,
@@ -448,6 +449,10 @@ fn freeCandidateFields(allocator: std.mem.Allocator, candidate: Candidate) void 
     if (candidate.option) |option| {
         if (option.long) |long| allocator.free(long);
         if (option.short) |short| allocator.free(short);
+        if (option.spellings.len != 0) {
+            for (option.spellings) |spelling| allocator.free(spelling);
+            allocator.free(option.spellings);
+        }
         if (option.argument) |argument| allocator.free(argument);
         if (option.exclusive_group) |group| allocator.free(group);
         freeOptionExclusions(allocator, option.excludes);
@@ -518,6 +523,7 @@ fn candidateSortKey(candidate: Candidate) []const u8 {
         if (candidate.option) |option| {
             if (option.long) |long| return long;
             if (option.short) |short| return short;
+            if (option.spellings.len != 0) return option.spellings[0];
         }
     }
     return candidate.display orelse candidate.value;
@@ -952,6 +958,7 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
         cloned.option = .{
             .long = if (option.long) |long| try allocator.dupe(u8, long) else null,
             .short = if (option.short) |short| try allocator.dupe(u8, short) else null,
+            .spellings = try cloneStringSlice(allocator, option.spellings),
             .argument = if (option.argument) |argument| try allocator.dupe(u8, argument) else null,
             .exclusive_group = if (option.exclusive_group) |group| try allocator.dupe(u8, group) else null,
             .excludes = try cloneOptionExclusions(allocator, option.excludes),
@@ -964,6 +971,10 @@ fn cloneCandidate(allocator: std.mem.Allocator, candidate: Candidate) !Candidate
     errdefer if (cloned.option) |option| {
         if (option.long) |long| allocator.free(long);
         if (option.short) |short| allocator.free(short);
+        if (option.spellings.len != 0) {
+            for (option.spellings) |spelling| allocator.free(spelling);
+            allocator.free(option.spellings);
+        }
         if (option.argument) |argument| allocator.free(argument);
         if (option.exclusive_group) |group| allocator.free(group);
         freeOptionExclusions(allocator, option.excludes);
@@ -984,6 +995,19 @@ fn cloneOptionExclusions(allocator: std.mem.Allocator, excludes: []const OptionE
             .kind = exclusion.kind,
             .selector = if (exclusion.selector) |selector| try allocator.dupe(u8, selector) else null,
         };
+        initialized += 1;
+    }
+    return cloned;
+}
+
+fn cloneStringSlice(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {
+    if (values.len == 0) return &.{};
+    const cloned = try allocator.alloc([]const u8, values.len);
+    errdefer allocator.free(cloned);
+    var initialized: usize = 0;
+    errdefer for (cloned[0..initialized]) |value| allocator.free(value);
+    for (values, 0..) |value, index| {
+        cloned[index] = try allocator.dupe(u8, value);
         initialized += 1;
     }
     return cloned;

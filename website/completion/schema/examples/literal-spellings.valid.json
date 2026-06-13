@@ -1,0 +1,33 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "findlike",
+    "providers": {
+      "find.patterns": {
+        "values": ["needle", "haystack"]
+      }
+    },
+    "options": [
+      {
+        "spellings": ["-iname"],
+        "value": { "name": "pattern", "provider": "find.patterns" }
+      },
+      {
+        "spellings": ["+o"]
+      },
+      {
+        "long": "color",
+        "spellings": ["-color"]
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "when": { "optionValue": { "-iname": "needle" } }
+        }
+      ]
+    }
+  }
+}

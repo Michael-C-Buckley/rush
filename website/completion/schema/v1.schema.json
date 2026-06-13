@@ -100,7 +100,8 @@
       "additionalProperties": false,
       "anyOf": [
         { "required": ["short"] },
-        { "required": ["long"] }
+        { "required": ["long"] },
+        { "required": ["spellings"] }
       ],
       "properties": {
         "short": {
@@ -111,6 +112,14 @@
         },
         "long": {
           "$ref": "#/$defs/longOptionName"
+        },
+        "spellings": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/optionSpelling"
+          },
+          "uniqueItems": true
         },
         "aliases": {
           "type": "array",
@@ -579,8 +588,7 @@
       "enum": ["operands", "everything"]
     },
     "optionSelector": {
-      "type": "string",
-      "pattern": "^(--[A-Za-z0-9][A-Za-z0-9_-]*|-[^-\\s])$"
+      "$ref": "#/$defs/optionSpelling"
     },
     "optionValueCondition": {
       "type": "object",
@@ -621,6 +629,11 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    },
+    "optionSpelling": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S+$"
     },
     "providerId": {
       "type": "string",

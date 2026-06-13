@@ -234,6 +234,7 @@ type Command = {
 type Option = {
   short?: string
   long?: string
+  spellings?: string[]
   aliases?: string[]
   description?: string
   platforms?: Platform[]
@@ -313,18 +314,40 @@ intended IR direction.
 the canonical display name and later names are aliases. `aliases` is available
 when separating canonical name from aliases is clearer.
 
-Options have `short` and/or `long`. Long names are stored without `--`; short
-names are stored without `-`.
+Options have `short`, `long`, and/or literal `spellings`. Long names are stored
+without `--`; short names are stored without `-`. They are sugar for their
+literal tokens: `{ "long": "color" }` means `--color`, and `{ "short": "C" }`
+means `-C`. Use `spellings` for option tokens that are not representable by
+that sugar, such as single-dash long options (`-iname`, `-cp`), plus-prefixed
+toggles (`+o`), or command-specific spellings that should be matched literally.
+An option must define at least one of `short`, `long`, or `spellings`; `aliases`
+adds extra long spellings for an option that already has one of those base
+spellings.
+
+```json
+{
+  "spellings": ["-iname"],
+  "value": { "name": "pattern" }
+}
+```
+
+Literal spellings are full tokens, including any leading `-` or `+`. Duplicate
+detection normalizes every effective spelling to its literal token, so
+`short: "p"` conflicts with `spellings: ["-p"]`, and `long: "color"` conflicts
+with `spellings: ["--color"]`.
 
 Completion parsing recognizes POSIX-style clustered short options by default for
 declared one-byte short spellings. A completed token such as `-abc` is treated
 as `-a -b -c` only when every character resolves in the effective command scope;
-otherwise the whole token remains unrecognized. A declared whole-token spelling
-always wins, so an option declared as `{ "short": "iname" }` is parsed as
-`-iname` rather than as `-i -n -a -m -e`. Short options that take values end a
-cluster and consume the rest of the token, or the next word when no rest is
-attached. This behavior is engine-owned and has no manifest v1 knob; add an
-opt-out only if real command data shows default clustering is harmful.
+otherwise the whole token remains unrecognized. A declared literal whole-token
+spelling always wins, so an option declared as `{ "spellings": ["-iname"] }` is
+parsed as `-iname` rather than as `-i -n -a -m -e`. Short options that take
+values end a cluster and consume the rest of the token, or the next word when no
+rest is attached. Single-dash literal options that take values support a
+detached value and an attached value (`-iname pattern` and `-inamepattern`);
+plus-prefixed spellings are treated as flag-like toggles. This behavior is
+engine-owned and has no manifest v1 knob; add an opt-out only if real command
+data shows default clustering is harmful.
 
 Parent options are inherited into subcommand contexts by default. Set
 `"inherit": false` for options that are only valid before selecting a
@@ -516,8 +539,11 @@ a provider when a branch needs glob, pattern, or expression logic.
 ```
 
 `optionValue` selectors must resolve to value-taking options in the effective
-scope. If the selected option value is constrained by enum grammar or by a
-static enum provider, every compared literal must be a member of that enum.
+scope. Selectors use literal spellings: `--format` for `long: "format"`, `-f`
+for `short: "f"`, and the exact token from `spellings` for literal options such
+as `-iname` or `+o`. If the selected option value is constrained by enum grammar
+or by a static enum provider, every compared literal must be a member of that
+enum.
 
 If the state logic becomes too complex, the manifest should select a provider
 and the provider should branch using parsed completion context queries.
