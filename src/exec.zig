@@ -3243,7 +3243,9 @@ pub const Executor = struct {
         try provider.copyStateFromWithOptions(self, .{ .completion_rules = false });
         defer provider.cleanupCompletionProviderBackgroundJobs(options.io);
 
-        const function_value = provider.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
+        const stored_function_value = provider.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
+        var function_value = try provider.cloneFunctionValue(stored_function_value);
+        defer function_value.deinit(provider.allocator);
         provider.completion_builder = .{};
         provider.completion_context = context;
         try setCompletionContextVariables(&provider, context);
@@ -3262,7 +3264,7 @@ pub const Executor = struct {
         const call: ir.SimpleCommand = .{ .span = .{ .start = 0, .end = 0 }, .assignments = &.{}, .argv = &argv, .redirections = &.{} };
         var completion_options = options;
         completion_options.external_stdio = .capture;
-        var result = provider.executeFunctionBody(call, function_value, completion_options) catch |err| {
+        var result = provider.executeFunctionBody(call, &function_value, completion_options) catch |err| {
             provider.completion_builder.?.deinit(self.allocator);
             provider.completion_builder = null;
             provider.completion_context = null;
@@ -4927,6 +4929,21 @@ pub const Executor = struct {
     fn setFunction(self: *Executor, name: []const u8, body: []const u8, redirections: []const ir.Redirection) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
+        var function_value = try self.functionValueFromParts(body, redirections);
+        errdefer function_value.deinit(self.allocator);
+        const result = try self.functions.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            result.value_ptr.deinit(self.allocator);
+        }
+        result.value_ptr.* = function_value;
+    }
+
+    fn cloneFunctionValue(self: *Executor, function_value: *const FunctionValue) !FunctionValue {
+        return self.functionValueFromParts(function_value.body, function_value.redirections);
+    }
+
+    fn functionValueFromParts(self: *Executor, body: []const u8, redirections: []const ir.Redirection) !FunctionValue {
         const owned_body = try self.allocator.dupe(u8, body);
         errdefer self.allocator.free(owned_body);
         const owned_redirections = try self.cloneRedirections(redirections);
@@ -4935,12 +4952,7 @@ pub const Executor = struct {
         defer parsed.deinit();
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         errdefer program.deinit();
-        const result = try self.functions.getOrPut(self.allocator, owned_name);
-        if (result.found_existing) {
-            self.allocator.free(owned_name);
-            result.value_ptr.deinit(self.allocator);
-        }
-        result.value_ptr.* = .{ .body = owned_body, .program = program, .redirections = owned_redirections };
+        return .{ .body = owned_body, .program = program, .redirections = owned_redirections };
     }
 
     fn cloneRedirections(self: *Executor, redirections: []const ir.Redirection) ![]ir.Redirection {
@@ -7554,12 +7566,16 @@ pub const Executor = struct {
             return try self.applyOutputRedirections(expanded, try emptyResult(self.allocator, assignment_status), options, false);
         }
 
-        if (!options.suppress_functions and self.functions.getPtr(expanded.argv[0].text) != null) {
-            const function_value = self.functions.getPtr(expanded.argv[0].text).?;
-            var result = try self.executeFunctionBody(expanded, function_value, options);
-            errdefer result.deinit();
-            if (options.external_stdio == .inherit and expanded.redirections.len != 0) return result;
-            return try self.applyOutputRedirections(expanded, result, options, false);
+        if (!options.suppress_functions) {
+            const stored_function_value = self.functions.getPtr(expanded.argv[0].text);
+            if (stored_function_value) |stored| {
+                var function_value = try self.cloneFunctionValue(stored);
+                defer function_value.deinit(self.allocator);
+                var result = try self.executeFunctionBody(expanded, &function_value, options);
+                errdefer result.deinit();
+                if (options.external_stdio == .inherit and expanded.redirections.len != 0) return result;
+                return try self.applyOutputRedirections(expanded, result, options, false);
+            }
         }
 
         if (builtinForName(self.*, expanded.argv[0].text)) |builtin| {
