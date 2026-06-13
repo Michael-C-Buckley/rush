@@ -931,7 +931,7 @@ fn exitSignalFromStatus(status: shell.ExitStatus) ?u8 {
 
 const InteractiveCompletionContext = struct {
     executor: *exec.Executor,
-    semantic_state: ?*const shell.ShellState = null,
+    semantic_state: ?*shell.ShellState = null,
     history: *const History,
     cache: *CompletionCache,
     loader: *CompletionScriptLoader,
@@ -1224,25 +1224,64 @@ fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator
     }
 
     if (completion_context.executor.shell_options.notify) {
-        const notifications = try completion_context.executor.drainJobNotifications();
-        defer completion_context.executor.allocator.free(notifications);
-        try output.appendSlice(allocator, notifications);
+        if (completion_context.semantic_state) |semantic_state| {
+            const notifications = try drainInteractiveSemanticJobNotifications(allocator, io, semantic_state);
+            defer allocator.free(notifications);
+            try output.appendSlice(allocator, notifications);
+        } else {
+            const notifications = try completion_context.executor.drainJobNotifications();
+            defer completion_context.executor.allocator.free(notifications);
+            try output.appendSlice(allocator, notifications);
+        }
     }
 
     return .{
         .output = try output.toOwnedSlice(allocator),
         .refresh_prompt = should_refresh_prompt,
-        .stop = completion_context.executor.pending_exit != null,
+        .stop = if (completion_context.semantic_state) |semantic_state| semantic_state.pending_exit != null else completion_context.executor.pending_exit != null,
     };
 }
 
 fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
     var wait_ms = completion_context.promptService().intervalWaitMs(io);
-    if (completion_context.executor.wantsImmediateJobNotificationPoll()) {
+    const wants_job_poll = if (completion_context.semantic_state) |semantic_state|
+        shellStateWantsImmediateJobNotificationPoll(semantic_state)
+    else
+        completion_context.executor.wantsImmediateJobNotificationPoll();
+    if (wants_job_poll) {
         wait_ms = if (wait_ms) |current| @min(current, immediate_notify_poll_ms) else immediate_notify_poll_ms;
     }
     return wait_ms;
+}
+
+fn drainInteractiveSemanticJobNotifications(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState) ![]const u8 {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+
+    var adapter = runtime.PosixAdapter.init(io);
+    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.io = io;
+    const eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true });
+    var outcome = try shell.eval.drainJobNotifications(&evaluator, shell_state, eval_context);
+    defer outcome.deinit();
+    try outcome.commitDelta(shell_state, .current_shell);
+    const output = try outcome.stdout.toOwnedSlice(allocator);
+    outcome.stdout = .empty;
+    shell_state.validate();
+    return output;
+}
+
+fn shellStateWantsImmediateJobNotificationPoll(shell_state: *const shell.ShellState) bool {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    if (!shell_state.options.notify) return false;
+    if (shell_state.pending_job_notifications.items.len != 0) return true;
+    for (shell_state.background_jobs.items) |job| {
+        job.validate();
+        if (job.state != .done or job.notified_state != job.state) return true;
+    }
+    return false;
 }
 
 const CompletionScriptLoader = struct {
@@ -6380,9 +6419,12 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         try syncInteractiveTerminalSize(executor, terminal);
         if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
         prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
-        const notifications = try executor.drainJobNotifications();
+        const notifications = if (interactive_shell.semantic_enabled)
+            try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
+        else
+            try executor.drainJobNotifications();
+        defer allocator.free(notifications);
         try writeAll(io, .stderr, notifications);
-        allocator.free(notifications);
         try prompt_service.runPendingVariableHooks(io);
         try interactive_shell.syncSemanticFromExecutor(io);
         prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
@@ -6712,7 +6754,10 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
             last_status = status;
             break;
         }
-        const notifications = try executor.drainJobNotifications();
+        const notifications = if (interactive_shell.semantic_enabled)
+            try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
+        else
+            try executor.drainJobNotifications();
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
         const prompt = try prompt_service.render(allocator, io);
@@ -7476,6 +7521,7 @@ fn wordMayUseShellExpansion(raw: []const u8) bool {
 
 fn initializeSemanticInteractiveStateFromExecutor(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, executor: exec.Executor) !?[]const u8 {
     shell_state.validate();
+    if (executorHasLegacyInteractiveServices(executor)) return "semantic ShellState cannot yet preserve legacy executor interactive services";
     shell_state.options = semanticShellOptions(executor.shell_options);
     const status_text = executor.last_status_text[0..executor.last_status_text_len];
     shell_state.last_status = std.fmt.parseInt(shell.ExitStatus, status_text, 10) catch 0;
@@ -7506,6 +7552,17 @@ fn initializeSemanticInteractiveStateFromExecutor(allocator: std.mem.Allocator, 
     try shell_state.replacePositionals(executor.global_positionals.params);
     shell_state.validate();
     return null;
+}
+
+fn executorHasLegacyInteractiveServices(executor: exec.Executor) bool {
+    if (executor.background_jobs.items.len != 0) return true;
+    if (executor.pending_job_notifications.items.len != 0) return true;
+    if (executor.traps.count() != 0) return true;
+    if (executor.trap_signal_actions.items.len != 0) return true;
+    if (executor.event_hooks.count() != 0) return true;
+    if (executor.interval_hooks.items.len != 0) return true;
+    if (executor.pending_variable_hooks.items.len != 0) return true;
+    return false;
 }
 
 fn syncExecutorFromSemanticInteractiveState(executor: *exec.Executor, shell_state: shell.ShellState) !void {
@@ -10876,6 +10933,63 @@ test "interactive notify schedules editor job notification polling" {
     executor.background_jobs.items[0].state = .done;
     executor.background_jobs.items[0].notified_state = .done;
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+}
+
+test "interactive semantic job notifications drain from ShellState" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    executor.shell_options.notify = true;
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.notify = true;
+    try shell_state.appendJobNotification(.{ .job_id = 1, .state = .done, .command = "sleep 1" });
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    var cache = CompletionCache.init(std.testing.allocator);
+    defer cache.deinit();
+    var loader = CompletionScriptLoader.init(std.testing.allocator);
+    defer loader.deinit();
+    var context: InteractiveCompletionContext = .{
+        .executor = &executor,
+        .semantic_state = &shell_state,
+        .history = &history,
+        .cache = &cache,
+        .loader = &loader,
+        .io = std.testing.io,
+    };
+
+    try std.testing.expectEqual(@as(?u64, immediate_notify_poll_ms), try nextInteractiveIntervalMs(&context, std.testing.io));
+    const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(hook_result.output);
+
+    try std.testing.expectEqualStrings("[1] Done sleep 1\n", hook_result.output);
+    try std.testing.expectEqual(@as(usize, 0), shell_state.pending_job_notifications.items.len);
+    try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
+}
+
+test "semantic interactive sync refuses legacy executor interactive services" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.background_jobs.append(std.testing.allocator, .{
+        .id = 1,
+        .pid = 999_999,
+        .command = try std.testing.allocator.dupe(u8, "sleep 1"),
+        .child = undefined,
+    });
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const unsupported = try initializeSemanticInteractiveStateFromExecutor(std.testing.allocator, std.testing.io, &shell_state, executor);
+
+    try std.testing.expectEqualStrings("semantic ShellState cannot yet preserve legacy executor interactive services", unsupported.?);
+
+    std.testing.allocator.free(executor.background_jobs.items[0].command);
+    executor.background_jobs.clearRetainingCapacity();
+    try executor.traps.put(std.testing.allocator, try std.testing.allocator.dupe(u8, "EXIT"), try std.testing.allocator.dupe(u8, "echo bye"));
+    const trap_unsupported = try initializeSemanticInteractiveStateFromExecutor(std.testing.allocator, std.testing.io, &shell_state, executor);
+    try std.testing.expectEqualStrings("semantic ShellState cannot yet preserve legacy executor interactive services", trap_unsupported.?);
 }
 
 test "interactive hooks dispatch pending real signal trap" {
