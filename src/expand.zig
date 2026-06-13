@@ -4027,7 +4027,8 @@ fn hasGlobSyntaxWithOptions(text: []const u8, options: GlobSyntaxOptions) bool {
     while (index < text.len) : (index += 1) {
         if (options.extglob and startsExtglobOperator(text, null, index)) return true;
         switch (text[index]) {
-            '*', '?', '[' => return true,
+            '*', '?' => return true,
+            '[' => if (bracketExpressionEnd(text, null, index) != null) return true,
             else => {},
         }
     }
@@ -4043,7 +4044,8 @@ fn patternHasGlobSyntaxWithOptions(pattern: ExpansionPattern, options: GlobSynta
     for (pattern.text, 0..) |c, index| {
         if (options.extglob and startsExtglobOperator(pattern.text, pattern.special, index)) return true;
         switch (c) {
-            '*', '?', '[' => if (pattern.special[index]) return true,
+            '*', '?' => if (pattern.special[index]) return true,
+            '[' => if (pattern.special[index] and bracketExpressionEnd(pattern.text, pattern.special, index) != null) return true,
             else => {},
         }
     }
@@ -5723,6 +5725,24 @@ test "glob matcher supports extglob operators when enabled" {
     try std.testing.expect(globPatternMatchesWithOptions(nested, "abc", .{ .extglob = true }));
 }
 
+test "glob syntax detection requires complete bracket expressions" {
+    try std.testing.expect(!hasGlobSyntax("["));
+    try std.testing.expect(!hasGlobSyntax("rush-["));
+    try std.testing.expect(!hasGlobSyntax("rush-]"));
+    try std.testing.expect(!hasGlobSyntax("[!]"));
+    try std.testing.expect(hasGlobSyntax("[a]"));
+    try std.testing.expect(hasGlobSyntax("[]]"));
+    try std.testing.expect(hasGlobSyntax("[!]]"));
+    try std.testing.expect(hasGlobSyntax("*"));
+    try std.testing.expect(hasGlobSyntax("?"));
+
+    const all_special = [_]bool{ true, true, true };
+    try std.testing.expect(patternHasGlobSyntax(.{ .text = "[a]", .special = &all_special }));
+
+    const quoted_close = [_]bool{ true, true, false };
+    try std.testing.expect(!patternHasGlobSyntax(.{ .text = "[a]", .special = &quoted_close }));
+}
+
 test "parameter operator word spans skip nested substitutions and quoted braces" {
     const nested = try expandWordScalar(std.testing.allocator, "${MISSING:-$(printf 'a}b')}:${MISSING:-${USER}}:${MISSING:-$((1 + 2))}", .{ .env = test_env, .command_substitution = test_command_substitution });
     defer std.testing.allocator.free(nested);
@@ -6374,6 +6394,23 @@ test "pathname expansion bracket expressions treat leading right bracket as lite
     defer negated.deinit();
     try std.testing.expectEqual(@as(usize, 1), negated.fields.len);
     try std.testing.expectEqualStrings(open, negated.fields[0]);
+}
+
+test "pathname expansion treats incomplete bracket expressions as literals" {
+    var command_word = try expandWord(std.testing.allocator, "[", .{ .io = std.testing.io, .pathname_nullglob = true });
+    defer command_word.deinit();
+    try std.testing.expectEqual(@as(usize, 1), command_word.fields.len);
+    try std.testing.expectEqualStrings("[", command_word.fields[0]);
+
+    var argument_word = try expandWord(std.testing.allocator, "]", .{ .io = std.testing.io, .pathname_nullglob = true });
+    defer argument_word.deinit();
+    try std.testing.expectEqual(@as(usize, 1), argument_word.fields.len);
+    try std.testing.expectEqualStrings("]", argument_word.fields[0]);
+
+    var embedded = try expandWord(std.testing.allocator, "rush-unclosed-[.tmp", .{ .io = std.testing.io, .pathname_nullglob = true });
+    defer embedded.deinit();
+    try std.testing.expectEqual(@as(usize, 1), embedded.fields.len);
+    try std.testing.expectEqualStrings("rush-unclosed-[.tmp", embedded.fields[0]);
 }
 
 test "pathname expansion bracket expressions support POSIX character classes" {
