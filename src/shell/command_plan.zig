@@ -260,13 +260,7 @@ fn assertResolvedCommand(argv: []const []const u8, name: []const u8) void {
 }
 
 fn validateRedirections(redirections: redirection_plan.RedirectionPlan) void {
-    for (redirections.steps) |step| validateRedirectionStep(step);
-    for (redirections.rollback_steps) |step| validateRedirectionStep(step);
-}
-
-fn validateRedirectionStep(step: redirection_plan.RedirectionStep) void {
-    _ = step.kind;
-    std.debug.assert(step.descriptor >= 0);
+    redirections.validate();
 }
 
 fn assertUniqueFunctionNames(functions: []const FunctionDefinition) void {
@@ -291,8 +285,9 @@ fn assertUniqueExternalNames(externals: []const ExternalResolution) void {
 
 test "CommandPlan classifies expanded simple command shapes" {
     const assignments = [_]Assignment{.{ .name = "FOO", .value = "bar" }};
-    const redirection_steps = [_]redirection_plan.RedirectionStep{.{ .descriptor = 1, .kind = .close }};
-    const redirections: redirection_plan.RedirectionPlan = .{ .steps = &redirection_steps };
+    const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.close(0, 1)};
+    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const redirections: redirection_plan.RedirectionPlan = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps };
     const echo_argv = [_][]const u8{ "echo", "hello" };
     const function_argv = [_][]const u8{"say_hi"};
     const external_argv = [_][]const u8{ "cat", "file" };
