@@ -175,6 +175,9 @@ not POSIX compliance claims, and remain excluded from POSIX scoring:
   `%+u` and `% u`.
 - `printf` preserves zero padding on string conversions such as `%05s`. POSIX
   leaves the `0` flag with string conversions undefined.
+- `printf` decodes `\xH[H]` hexadecimal byte escapes in format strings and
+  `%b` operands. One or two hexadecimal digits are consumed; when no
+  hexadecimal digit follows, Rush preserves `\x` as an unknown escape.
 - `local` is available as a function-scoped variable declaration builtin in
   default mode. Although it is not POSIX, dash, BusyBox ash, zsh sh emulation,
   and Bash POSIX mode accept it, and Rush has no user-facing Bash-mode switch

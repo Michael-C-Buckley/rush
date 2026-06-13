@@ -90,6 +90,7 @@ builtin-printf-dynamic-combined-width-precision	builtin	behavior	printf accepts 
 builtin-printf-negative-dynamic-width-precision	builtin	behavior	printf treats negative dynamic asterisk field widths as left adjustment and negative dynamic asterisk precisions as omitted for representative string and signed integer conversions
 builtin-printf-dynamic-width-precision	builtin	behavior	printf accepts dynamic asterisk width and precision arguments for representative string and integer conversions
 builtin-printf-escapes	builtin	builtin	-
+builtin-printf-hex-escapes	builtin	behavior	printf decodes one- and two-digit hexadecimal escapes in format strings and %b operands while preserving unknown and octal escape behavior
 builtin-printf-floating-conversions	builtin	behavior	printf formats representative POSIX floating-point conversions
 builtin-printf-floating-dynamic-width-precision	builtin	behavior	printf applies dynamic asterisk width and precision to representative floating conversions under the C locale
 builtin-printf-floating-format-flags	builtin	behavior	printf applies representative sign, space, and alternate-form flags to floating conversions with C-locale radix output

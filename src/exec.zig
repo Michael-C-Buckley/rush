@@ -14013,6 +14013,10 @@ fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8
         't' => try stdout.append(allocator, '\t'),
         'v' => try stdout.append(allocator, 0x0b),
         '\\' => try stdout.append(allocator, '\\'),
+        'x' => {
+            try appendHexEscape(allocator, stdout, text, index);
+            return true;
+        },
         '0'...'7' => {
             try appendOctalEscape(allocator, stdout, text, index, mode);
             return true;
@@ -14024,6 +14028,25 @@ fn appendEscapedSequence(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8
     }
     index.* += 1;
     return true;
+}
+
+fn appendHexEscape(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize) !void {
+    var value: u8 = 0;
+    var count: usize = 0;
+    var cursor = index.* + 1;
+    while (cursor < text.len and count < 2) : (count += 1) {
+        const digit = std.fmt.charToDigit(text[cursor], 16) catch break;
+        value = value * 16 + digit;
+        cursor += 1;
+    }
+    if (count == 0) {
+        try stdout.append(allocator, '\\');
+        try stdout.append(allocator, 'x');
+        index.* += 1;
+    } else {
+        try stdout.append(allocator, value);
+        index.* = cursor;
+    }
 }
 
 fn appendOctalEscape(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), text: []const u8, index: *usize, mode: PrintfEscapeMode) !void {
@@ -19882,6 +19905,13 @@ test "executor implements read and printf builtins" {
     var format_octal_escape_result = try executor.executeProgram(format_octal_escape.program, .{});
     defer format_octal_escape_result.deinit();
     try std.testing.expectEqualStrings("\x1b\x37\x1b\x38", format_octal_escape_result.stdout);
+
+    var hex_escape = try parseAndLower(std.testing.allocator, "printf 'fmt:\\x5a:\\x9q:\\xq:\\101\\n'; printf '%b\\n' 'arg:\\x5a:\\x9q:\\xq:\\0101'");
+    defer hex_escape.parsed.deinit();
+    defer hex_escape.program.deinit();
+    var hex_escape_result = try executor.executeProgram(hex_escape.program, .{});
+    defer hex_escape_result.deinit();
+    try std.testing.expectEqualStrings("fmt:Z:\x09q:\\xq:A\narg:Z:\x09q:\\xq:A\n", hex_escape_result.stdout);
 
     var unknown_escape = try parseAndLower(std.testing.allocator, "printf 'a\\ b'");
     defer unknown_escape.parsed.deinit();
