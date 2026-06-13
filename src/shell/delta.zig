@@ -54,6 +54,7 @@ pub const StateDelta = struct {
     variable_assignments: std.ArrayList(VariableAssignment) = .empty,
     variable_flags: std.ArrayList(VariableFlagMutation) = .empty,
     variable_unsets: std.ArrayList([]const u8) = .empty,
+    function_sets: std.ArrayList(command_plan.FunctionDefinition) = .empty,
     function_unsets: std.ArrayList([]const u8) = .empty,
     option_changes: std.ArrayList(OptionChange) = .empty,
     alias_sets: std.ArrayList(NameValueMutation) = .empty,
@@ -82,6 +83,8 @@ pub const StateDelta = struct {
 
         for (self.variable_unsets.items) |name| self.allocator.free(name);
         self.variable_unsets.deinit(self.allocator);
+        for (self.function_sets.items) |definition| freeFunctionDefinition(self.allocator, definition);
+        self.function_sets.deinit(self.allocator);
         for (self.function_unsets.items) |name| self.allocator.free(name);
         self.function_unsets.deinit(self.allocator);
         self.option_changes.deinit(self.allocator);
@@ -124,6 +127,7 @@ pub const StateDelta = struct {
             try cloned.appendVariableFlag(mutation.name, mutation.flag, mutation.enabled);
         }
         for (self.variable_unsets.items) |name| try cloned.unsetVariable(name);
+        for (self.function_sets.items) |definition| try cloned.setFunction(definition);
         for (self.function_unsets.items) |name| try cloned.unsetFunction(name);
         for (self.option_changes.items) |change| {
             try cloned.setOption(change.option, change.enabled);
@@ -143,6 +147,7 @@ pub const StateDelta = struct {
         return self.variable_assignments.items.len == 0 and
             self.variable_flags.items.len == 0 and
             self.variable_unsets.items.len == 0 and
+            self.function_sets.items.len == 0 and
             self.function_unsets.items.len == 0 and
             self.option_changes.items.len == 0 and
             self.alias_sets.items.len == 0 and
@@ -241,6 +246,23 @@ pub const StateDelta = struct {
         try self.function_unsets.append(self.allocator, owned_name);
     }
 
+    pub fn setFunction(self: *StateDelta, definition: command_plan.FunctionDefinition) !void {
+        self.assertPending();
+        definition.validate();
+
+        for (self.function_sets.items) |*existing| {
+            if (!std.mem.eql(u8, existing.name, definition.name)) continue;
+            const replacement = try cloneFunctionDefinition(self.allocator, definition);
+            freeFunctionDefinition(self.allocator, existing.*);
+            existing.* = replacement;
+            return;
+        }
+
+        const owned_definition = try cloneFunctionDefinition(self.allocator, definition);
+        errdefer freeFunctionDefinition(self.allocator, owned_definition);
+        try self.function_sets.append(self.allocator, owned_definition);
+    }
+
     pub fn setOption(self: *StateDelta, option: state.ShellOption, enabled: bool) !void {
         self.assertPending();
         for (self.option_changes.items) |*change| {
@@ -293,8 +315,9 @@ pub const StateDelta = struct {
         state.assertValidTrapName(name);
 
         if (findTrapMutation(self, name)) |mutation| {
+            const owned_action = if (action) |action_value| try self.allocator.dupe(u8, action_value) else null;
             if (mutation.action) |old_action| self.allocator.free(old_action);
-            mutation.action = if (action) |action_value| try self.allocator.dupe(u8, action_value) else null;
+            mutation.action = owned_action;
             return;
         }
 
@@ -381,6 +404,7 @@ pub const StateDelta = struct {
             }
         }
         for (self.variable_unsets.items) |name| try shell_state.unsetVariable(name);
+        for (self.function_sets.items) |definition| try shell_state.putFunction(definition);
         for (self.function_unsets.items) |name| shell_state.unsetFunction(name);
         for (self.option_changes.items) |change| {
             shell_state.options.set(change.option, change.enabled);
@@ -450,6 +474,17 @@ fn findTrapMutation(delta: *StateDelta, name: []const u8) ?*TrapMutation {
         if (std.mem.eql(u8, mutation.name, name)) return mutation;
     }
     return null;
+}
+
+fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) !command_plan.FunctionDefinition {
+    definition.validate();
+    const owned_name = try allocator.dupe(u8, definition.name);
+    errdefer allocator.free(owned_name);
+    return .{ .name = owned_name, .body = definition.body, .redirections = definition.redirections };
+}
+
+fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) void {
+    allocator.free(definition.name);
 }
 
 pub fn firstReadonlyAssignment(shell_state: state.ShellState, assignments: []const command_plan.Assignment) ?[]const u8 {

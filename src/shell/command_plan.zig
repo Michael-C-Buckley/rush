@@ -22,9 +22,29 @@ pub const Assignment = struct {
 
 pub const FunctionDefinition = struct {
     name: []const u8,
+    /// Borrowed semantic body for this redesign slice. Parser/IR integration
+    /// will replace this with an owned lowered representation later.
+    body: FunctionBody = .{},
+    redirections: redirection_plan.RedirectionPlan = .{},
 
     pub fn validate(self: FunctionDefinition) void {
         state.assertValidVariableName(self.name);
+        self.body.validate();
+        validateRedirections(self.redirections);
+        std.debug.assert(self.redirections.allocator == null);
+    }
+
+    pub fn hasExecutableBody(self: FunctionDefinition) bool {
+        self.validate();
+        return self.body.commands.len != 0;
+    }
+};
+
+pub const FunctionBody = struct {
+    commands: []const CommandPlan = &.{},
+
+    pub fn validate(self: FunctionBody) void {
+        for (self.commands) |command| command.validate();
     }
 };
 
@@ -47,6 +67,7 @@ pub const CommandClass = enum {
     assignment_only,
     special_builtin,
     regular_builtin,
+    function_definition,
     function,
     external,
     not_found,
@@ -65,6 +86,7 @@ pub const Classification = union(CommandClass) {
     assignment_only: void,
     special_builtin: builtin.Builtin,
     regular_builtin: builtin.Builtin,
+    function_definition: FunctionDefinition,
     function: FunctionDefinition,
     external: ExternalResolution,
     not_found: NotFound,
@@ -182,6 +204,7 @@ pub const CommandPlan = struct {
             .assignment_only => .assignment_only,
             .special_builtin => .special_builtin,
             .regular_builtin => .regular_builtin,
+            .function_definition => .function_definition,
             .function => .function,
             .external => .external,
             .not_found => .not_found,
@@ -195,6 +218,7 @@ pub const CommandPlan = struct {
         return switch (self.classification) {
             .empty => .none,
             .assignment_only, .special_builtin => .persistent,
+            .function_definition => .none,
             .regular_builtin, .function, .external, .not_found => .temporary,
         };
     }
@@ -221,6 +245,13 @@ pub const CommandPlan = struct {
                 definition.validate();
                 assertResolvedCommand(self.argv, definition.name);
                 std.debug.assert(definition.kind == .regular);
+            },
+            .function_definition => |definition| {
+                definition.validate();
+                std.debug.assert(self.argv.len == 0);
+                std.debug.assert(self.assignments.len == 0);
+                std.debug.assert(self.redirections.steps.len == 0);
+                std.debug.assert(self.redirections.rollback_steps.len == 0);
             },
             .function => |definition| {
                 definition.validate();

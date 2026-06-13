@@ -26,6 +26,7 @@ pub const Evaluator = struct {
     fd_port: ?runtime.fd.Port = null,
     fs_port: ?runtime.fs.Port = null,
     process_port: ?runtime.process.Port = null,
+    function_frame: ?*FunctionFrame = null,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
         return .{ .allocator = allocator };
@@ -45,6 +46,49 @@ pub const Evaluator = struct {
 
     pub fn initWithRuntimePorts(allocator: std.mem.Allocator, ports: runtime.Ports) Evaluator {
         return .{ .allocator = allocator, .fd_port = ports.fd, .fs_port = ports.fs, .process_port = ports.process };
+    }
+};
+
+const SimpleEvalResult = struct {
+    status: outcome.ExitStatus,
+    control_flow: outcome.ControlFlow = .normal,
+};
+
+const FunctionFrame = struct {
+    allocator: std.mem.Allocator,
+    depth: u32,
+    assignment_prefixes: []const command_plan.Assignment,
+    local_names: std.ArrayList([]const u8) = .empty,
+
+    fn init(allocator: std.mem.Allocator, depth: u32, assignment_prefixes: []const command_plan.Assignment) FunctionFrame {
+        std.debug.assert(depth != 0);
+        for (assignment_prefixes) |assignment| assignment.validate();
+        return .{ .allocator = allocator, .depth = depth, .assignment_prefixes = assignment_prefixes };
+    }
+
+    fn deinit(self: *FunctionFrame) void {
+        for (self.local_names.items) |name| self.allocator.free(name);
+        self.local_names.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn addLocal(self: *FunctionFrame, name: []const u8) !void {
+        state.assertValidVariableName(name);
+        if (self.excludesVariable(name)) return;
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.local_names.append(self.allocator, owned_name);
+    }
+
+    fn excludesVariable(self: FunctionFrame, name: []const u8) bool {
+        state.assertValidVariableName(name);
+        for (self.assignment_prefixes) |assignment| {
+            if (std.mem.eql(u8, assignment.name, name)) return true;
+        }
+        for (self.local_names.items) |local_name| {
+            if (std.mem.eql(u8, local_name, name)) return true;
+        }
+        return false;
     }
 };
 
@@ -83,7 +127,7 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
     plan.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target.allowsShellStateCommit()) std.debug.assert(shell_state.acceptsExecutionTarget(plan.target));
-    if (hasRedirections(plan) and plan.class() != .external) return error.Unimplemented;
+    if (hasRedirections(plan) and plan.class() != .external and plan.class() != .function) return error.Unimplemented;
 
     if (delta.firstReadonlyAssignment(shell_state.*, plan.assignments)) |name| {
         var failure = try outcome.readonlyVariableFailure(evaluator.allocator, plan.target, name);
@@ -104,30 +148,272 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
     var buffers = EvaluationBuffers.init(evaluator.allocator);
     defer buffers.deinit();
 
-    const status = try evaluateSimpleCommand(evaluator, shell_state.*, eval_context, plan, &state_delta, &buffers);
-    state_delta.setLastStatus(status);
+    const result = try evaluateSimpleCommand(evaluator, shell_state, eval_context, plan, &state_delta, &buffers);
+    state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(plan, state_delta);
 
-    var command_outcome = outcome.CommandOutcome.init(evaluator.allocator, status, state_delta);
+    var command_outcome = outcome.CommandOutcome.withControlFlow(evaluator.allocator, result.status, state_delta, result.control_flow);
     errdefer command_outcome.deinit();
     try command_outcome.appendStdout(buffers.stdout.items);
     try command_outcome.appendStderr(buffers.stderr.items);
     for (buffers.diagnostics.items) |message| try command_outcome.addDiagnostic(message);
-    try appendBuiltinDiagnostic(&command_outcome, plan, status);
+    try appendBuiltinDiagnostic(&command_outcome, plan, result.status);
     command_outcome.validateForContext(eval_context);
     return command_outcome;
 }
 
-fn evaluateSimpleCommand(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
+fn evaluateSimpleCommand(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
     return switch (plan.classification) {
-        .empty => 0,
-        .assignment_only => 0,
-        .special_builtin => |definition| evaluateBuiltin(evaluator, shell_state, eval_context, plan, definition, state_delta, buffers),
-        .regular_builtin => |definition| evaluateBuiltin(evaluator, shell_state, eval_context, plan, definition, state_delta, buffers),
-        .external => |resolution| evaluateExternal(evaluator, shell_state, plan, resolution, buffers),
-        .not_found => |not_found| evaluateNotFound(not_found, buffers),
-        .function => error.Unimplemented,
+        .empty => normalEvaluation(0),
+        .assignment_only => normalEvaluation(0),
+        .function_definition => |definition| evaluateFunctionDefinition(definition, state_delta),
+        .special_builtin => |definition| evaluateBuiltin(evaluator, shell_state.*, eval_context, plan, definition, state_delta, buffers),
+        .regular_builtin => |definition| evaluateBuiltin(evaluator, shell_state.*, eval_context, plan, definition, state_delta, buffers),
+        .external => |resolution| normalEvaluation(try evaluateExternal(evaluator, shell_state.*, plan, resolution, buffers)),
+        .not_found => |not_found| normalEvaluation(try evaluateNotFound(not_found, buffers)),
+        .function => |definition| evaluateFunction(evaluator, shell_state, eval_context, plan, definition, state_delta, buffers),
     };
+}
+
+fn normalEvaluation(status: outcome.ExitStatus) SimpleEvalResult {
+    return .{ .status = status };
+}
+
+fn evaluateFunctionDefinition(definition: command_plan.FunctionDefinition, state_delta: *delta.StateDelta) EvalError!SimpleEvalResult {
+    definition.validate();
+    try state_delta.setFunction(definition);
+    return normalEvaluation(0);
+}
+
+fn evaluateFunction(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, definition: command_plan.FunctionDefinition, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    definition.validate();
+    std.debug.assert(definition.hasExecutableBody());
+    std.debug.assert(plan.target.allowsShellStateCommit());
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, plan.argv[0], definition.name));
+    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
+    const shell_state_before = shellStateMutationFingerprint(shell_state.*);
+    defer std.debug.assert(shellStateMutationFingerprint(shell_state.*) == shell_state_before);
+
+    var call_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (call_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    if (hasRedirections(plan)) {
+        const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        switch (apply_result) {
+            .applied => |applied| call_redirections = applied,
+            .failure => |failure| {
+                try buffers.addBuiltinDiagnostic(definition.name, redirectionFailureMessage(failure));
+                return normalEvaluation(1);
+            },
+        }
+    }
+
+    var definition_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (definition_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    if (definition.redirections.steps.len != 0 or definition.redirections.rollback_steps.len != 0) {
+        const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+        const apply_result = try definition.redirections.apply(evaluator.allocator, fd_port);
+        switch (apply_result) {
+            .applied => |applied| definition_redirections = applied,
+            .failure => |failure| {
+                try buffers.addBuiltinDiagnostic(definition.name, redirectionFailureMessage(failure));
+                return normalEvaluation(1);
+            },
+        }
+    }
+
+    var frame_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    defer frame_state.deinit();
+    try applyFunctionAssignmentPrefixes(&frame_state, shell_state.*, plan);
+    try frame_state.replacePositionals(plan.argv[1..]);
+
+    const function_context = eval_context.enterFunction();
+    var function_frame = FunctionFrame.init(evaluator.allocator, function_context.function_depth, plan.assignments);
+    defer function_frame.deinit();
+    const previous_frame = evaluator.function_frame;
+    evaluator.function_frame = &function_frame;
+    defer {
+        std.debug.assert(evaluator.function_frame == &function_frame);
+        evaluator.function_frame = previous_frame;
+    }
+
+    var result: SimpleEvalResult = normalEvaluation(shell_state.last_status);
+    for (definition.body.commands) |body_plan| {
+        body_plan.validate();
+        var body_outcome = try evaluatePlan(evaluator, &frame_state, function_context.withTarget(body_plan.target), body_plan);
+        defer body_outcome.deinit();
+
+        try buffers.stdout.appendSlice(buffers.allocator, body_outcome.stdout.items);
+        try buffers.stderr.appendSlice(buffers.allocator, body_outcome.stderr.items);
+        for (body_outcome.diagnostics.items) |diagnostic| {
+            const owned_message = try buffers.allocator.dupe(u8, diagnostic.message);
+            errdefer buffers.allocator.free(owned_message);
+            try buffers.diagnostics.append(buffers.allocator, owned_message);
+        }
+
+        if (body_plan.target.allowsShellStateCommit()) {
+            body_outcome.commitDelta(&frame_state, body_plan.target) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                error.ReadonlyVariable => unreachable,
+            };
+        } else {
+            body_outcome.discardDelta(body_plan.target);
+            frame_state.last_status = body_outcome.status;
+        }
+
+        result.status = body_outcome.status;
+        switch (body_outcome.control_flow) {
+            .normal => {},
+            .return_from_scope => |request| switch (request.scope) {
+                .function => {
+                    std.debug.assert(function_context.canReturnFromFunction());
+                    result = normalEvaluation(request.status);
+                    break;
+                },
+                .sourced_script => {
+                    result = .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
+                    break;
+                },
+            },
+            .exit, .fatal, .break_loop, .continue_loop => {
+                result = .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
+                break;
+            },
+        }
+    }
+
+    try appendFunctionFrameDelta(shell_state.*, frame_state, function_frame, state_delta);
+    return result;
+}
+
+fn applyFunctionAssignmentPrefixes(frame_state: *state.ShellState, shell_state: state.ShellState, plan: command_plan.CommandPlan) EvalError!void {
+    plan.validate();
+    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
+    if (plan.assignments.len == 0) return;
+
+    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(frame_state.allocator);
+    defer temporary_environment.deinit();
+    temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
+        error.ReadonlyVariable => unreachable,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+    for (temporary_environment.variables.items) |variable| {
+        frame_state.putVariable(variable.name, variable.value, .{ .exported = variable.exported }) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
+    }
+}
+
+fn appendFunctionFrameDelta(before: state.ShellState, after: state.ShellState, frame: FunctionFrame, state_delta: *delta.StateDelta) EvalError!void {
+    std.debug.assert(before.scope == after.scope);
+    std.debug.assert(state_delta.target.allowsShellStateCommit());
+    std.debug.assert(state_delta.positionals == null);
+
+    var after_variables = after.variables.iterator();
+    while (after_variables.next()) |entry| {
+        const name = entry.key_ptr.*;
+        if (frame.excludesVariable(name)) continue;
+        const next = entry.value_ptr.*;
+        if (before.getVariable(name)) |previous| {
+            std.debug.assert(!previous.readonly or next.readonly);
+            if (!std.mem.eql(u8, previous.value, next.value)) {
+                try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
+                continue;
+            }
+            if (previous.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
+            if (!previous.readonly and next.readonly) try state_delta.setVariableReadonly(name);
+        } else {
+            try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
+        }
+    }
+
+    var before_variables = before.variables.iterator();
+    while (before_variables.next()) |entry| {
+        const name = entry.key_ptr.*;
+        if (frame.excludesVariable(name)) continue;
+        if (!after.variables.contains(name)) try state_delta.unsetVariable(name);
+    }
+
+    var after_functions = after.functions.iterator();
+    while (after_functions.next()) |entry| try state_delta.setFunction(entry.value_ptr.*);
+
+    var before_functions = before.functions.iterator();
+    while (before_functions.next()) |entry| {
+        if (!after.functions.contains(entry.key_ptr.*)) try state_delta.unsetFunction(entry.key_ptr.*);
+    }
+
+    try appendOptionDiff(before.options, after.options, state_delta);
+    try appendAliasDiff(before, after, state_delta);
+    try appendTrapDiff(before, after, state_delta);
+    if (!std.mem.eql(u8, before.logical_cwd, after.logical_cwd) and after.logical_cwd.len != 0) try state_delta.setLogicalCwd(after.logical_cwd);
+}
+
+fn appendOptionDiff(before: state.ShellOptions, after: state.ShellOptions, state_delta: *delta.StateDelta) !void {
+    const options = [_]state.ShellOption{
+        .allexport,
+        .emacs,
+        .errexit,
+        .ignoreeof,
+        .monitor,
+        .noclobber,
+        .noexec,
+        .noglob,
+        .notify,
+        .nounset,
+        .pipefail,
+        .verbose,
+        .vi,
+        .xtrace,
+    };
+    for (options) |option| {
+        const enabled = after.enabled(option);
+        if (before.enabled(option) != enabled) try state_delta.setOption(option, enabled);
+    }
+}
+
+fn appendAliasDiff(before: state.ShellState, after: state.ShellState, state_delta: *delta.StateDelta) !void {
+    var after_aliases = after.aliases.iterator();
+    while (after_aliases.next()) |entry| {
+        const name = entry.key_ptr.*;
+        const value = entry.value_ptr.value;
+        if (before.getAlias(name)) |previous| {
+            if (std.mem.eql(u8, previous.value, value)) continue;
+        }
+        try state_delta.setAlias(name, value);
+    }
+
+    var before_aliases = before.aliases.iterator();
+    while (before_aliases.next()) |entry| {
+        if (!after.aliases.contains(entry.key_ptr.*)) try state_delta.unsetAlias(entry.key_ptr.*);
+    }
+}
+
+fn appendTrapDiff(before: state.ShellState, after: state.ShellState, state_delta: *delta.StateDelta) !void {
+    var after_traps = after.traps.iterator();
+    while (after_traps.next()) |entry| {
+        const name = entry.key_ptr.*;
+        const action = entry.value_ptr.action;
+        if (before.getTrap(name)) |previous| {
+            if (std.mem.eql(u8, previous.action, action)) continue;
+        }
+        try state_delta.setTrap(name, action);
+    }
+
+    var before_traps = before.traps.iterator();
+    while (before_traps.next()) |entry| {
+        if (!after.traps.contains(entry.key_ptr.*)) try state_delta.setTrap(entry.key_ptr.*, null);
+    }
 }
 
 fn evaluateExternal(evaluator: *Evaluator, shell_state: state.ShellState, plan: command_plan.CommandPlan, resolution: command_plan.ExternalResolution, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
@@ -327,6 +613,21 @@ fn shellStateMutationFingerprint(shell_state: state.ShellState) u64 {
         const flags = [_]u8{ @intFromBool(entry.value_ptr.exported), @intFromBool(entry.value_ptr.readonly) };
         hasher.update(&flags);
     }
+    var functions = shell_state.functions.iterator();
+    while (functions.next()) |entry| {
+        hasher.update(entry.key_ptr.*);
+        hasher.update(entry.value_ptr.name);
+    }
+    var aliases = shell_state.aliases.iterator();
+    while (aliases.next()) |entry| {
+        hasher.update(entry.key_ptr.*);
+        hasher.update(entry.value_ptr.value);
+    }
+    var traps = shell_state.traps.iterator();
+    while (traps.next()) |entry| {
+        hasher.update(entry.key_ptr.*);
+        hasher.update(entry.value_ptr.action);
+    }
     hasher.update(std.mem.asBytes(&shell_state.options));
     hasher.update(shell_state.logical_cwd);
     hasher.update(std.mem.asBytes(&shell_state.last_status));
@@ -334,7 +635,7 @@ fn shellStateMutationFingerprint(shell_state: state.ShellState) u64 {
     return hasher.final();
 }
 
-fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, definition: builtin.Builtin, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
+fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, definition: builtin.Builtin, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
     definition.validate();
     std.debug.assert(plan.argv.len != 0);
     std.debug.assert(std.mem.eql(u8, plan.argv[0], definition.name));
@@ -344,21 +645,68 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
         else => unreachable,
     }
 
-    if (std.mem.eql(u8, definition.name, ":")) return 0;
-    if (std.mem.eql(u8, definition.name, "true")) return 0;
-    if (std.mem.eql(u8, definition.name, "false")) return 1;
-    if (std.mem.eql(u8, definition.name, "echo")) return evaluateEcho(evaluator.allocator, plan.argv, &buffers.stdout);
-    if (std.mem.eql(u8, definition.name, "printf")) return evaluatePrintf(evaluator.allocator, plan.argv, &buffers.stdout, &buffers.stderr);
-    if (std.mem.eql(u8, definition.name, "test") or std.mem.eql(u8, definition.name, "[")) return evaluateTestBuiltin(evaluator.fs_port, evaluator.fd_port, plan.argv);
-    if (std.mem.eql(u8, definition.name, "export")) return evaluateExport(shell_state, plan.argv, state_delta, buffers);
-    if (std.mem.eql(u8, definition.name, "readonly")) return evaluateReadonly(shell_state, plan.argv, state_delta, buffers);
-    if (std.mem.eql(u8, definition.name, "unset")) return evaluateUnset(shell_state, plan.argv, state_delta, buffers);
-    if (std.mem.eql(u8, definition.name, "set")) return evaluateSet(shell_state, eval_context, plan.argv, state_delta, buffers);
-    if (std.mem.eql(u8, definition.name, "shift")) return evaluateShift(shell_state, plan.argv, state_delta, buffers);
-    if (std.mem.eql(u8, definition.name, "alias")) return evaluateAlias(shell_state, plan.argv, state_delta, buffers);
-    if (std.mem.eql(u8, definition.name, "unalias")) return evaluateUnalias(shell_state, plan.argv, state_delta, buffers);
-    if (std.mem.eql(u8, definition.name, "trap")) return evaluateTrap(evaluator.allocator, shell_state, plan.argv, state_delta, buffers);
+    if (std.mem.eql(u8, definition.name, ":")) return normalEvaluation(0);
+    if (std.mem.eql(u8, definition.name, "true")) return normalEvaluation(0);
+    if (std.mem.eql(u8, definition.name, "false")) return normalEvaluation(1);
+    if (std.mem.eql(u8, definition.name, "return")) return evaluateReturn(shell_state, eval_context, plan.argv, buffers);
+    if (std.mem.eql(u8, definition.name, "echo")) return normalEvaluation(try evaluateEcho(evaluator.allocator, plan.argv, &buffers.stdout));
+    if (std.mem.eql(u8, definition.name, "printf")) return normalEvaluation(try evaluatePrintf(evaluator.allocator, plan.argv, &buffers.stdout, &buffers.stderr));
+    if (std.mem.eql(u8, definition.name, "test") or std.mem.eql(u8, definition.name, "[")) return normalEvaluation(evaluateTestBuiltin(evaluator.fs_port, evaluator.fd_port, plan.argv));
+    if (std.mem.eql(u8, definition.name, "export")) return normalEvaluation(try evaluateExport(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "readonly")) return normalEvaluation(try evaluateReadonly(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "unset")) return normalEvaluation(try evaluateUnset(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "set")) return normalEvaluation(try evaluateSet(shell_state, eval_context, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "shift")) return normalEvaluation(try evaluateShift(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "alias")) return normalEvaluation(try evaluateAlias(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "unalias")) return normalEvaluation(try evaluateUnalias(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "trap")) return normalEvaluation(try evaluateTrap(evaluator.allocator, shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "local")) return normalEvaluation(try evaluateLocal(evaluator, shell_state, eval_context, plan, state_delta, buffers));
     return error.Unimplemented;
+}
+
+fn evaluateReturn(shell_state: state.ShellState, eval_context: context.EvalContext, argv: []const []const u8, buffers: *EvaluationBuffers) !SimpleEvalResult {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "return"));
+
+    if (!eval_context.canReturnFromFunction() and !eval_context.canReturnFromSource()) return normalEvaluation(try builtinUsageError(buffers, "return", "not in a function or dot script"));
+    if (argv.len > 2) return normalEvaluation(try builtinUsageError(buffers, "return", "too many arguments"));
+    const status: outcome.ExitStatus = if (argv.len == 2) blk: {
+        const operand = std.mem.trim(u8, argv[1], &std.ascii.whitespace);
+        break :blk std.fmt.parseInt(outcome.ExitStatus, operand, 10) catch return normalEvaluation(try builtinUsageError(buffers, "return", "numeric argument required"));
+    } else shell_state.last_status;
+    const scope: outcome.ReturnScope = if (eval_context.canReturnFromFunction()) .function else .sourced_script;
+    return .{ .status = status, .control_flow = .{ .return_from_scope = .{ .scope = scope, .status = status } } };
+}
+
+fn evaluateLocal(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    plan.validate();
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, plan.argv[0], "local"));
+    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
+
+    const frame = evaluator.function_frame orelse return builtinStatusError(buffers, 1, "local", "can only be used in a function");
+    std.debug.assert(eval_context.canReturnFromFunction());
+    std.debug.assert(frame.depth == eval_context.function_depth);
+    if (plan.argv.len == 1) return 0;
+
+    for (plan.argv[1..]) |arg| {
+        const assignment = splitAssignment(arg);
+        if (!isShellName(assignment.name)) return builtinUsageError(buffers, "local", "invalid variable name");
+        if (shell_state.isVariableReadonly(assignment.name)) return builtinUsageError(buffers, "local", "readonly variable");
+    }
+
+    for (plan.argv[1..]) |arg| {
+        const assignment = splitAssignment(arg);
+        try frame.addLocal(assignment.name);
+        if (assignment.value) |value| {
+            try state_delta.assignVariable(assignment.name, value, .{});
+        } else if (findAssignmentPrefixValue(plan.assignments, assignment.name)) |value| {
+            try state_delta.assignVariable(assignment.name, value, .{});
+        } else {
+            try state_delta.unsetVariable(assignment.name);
+        }
+    }
+    return 0;
 }
 
 fn appendBuiltinDiagnostic(command_outcome: *outcome.CommandOutcome, plan: command_plan.CommandPlan, status: outcome.ExitStatus) !void {
@@ -673,6 +1021,16 @@ const AssignmentSlice = struct {
 fn splitAssignment(arg: []const u8) AssignmentSlice {
     if (std.mem.indexOfScalar(u8, arg, '=')) |equals| return .{ .name = arg[0..equals], .value = arg[equals + 1 ..] };
     return .{ .name = arg, .value = null };
+}
+
+fn findAssignmentPrefixValue(assignments: []const command_plan.Assignment, name: []const u8) ?[]const u8 {
+    state.assertValidVariableName(name);
+    var value: ?[]const u8 = null;
+    for (assignments) |assignment| {
+        assignment.validate();
+        if (std.mem.eql(u8, assignment.name, name)) value = assignment.value;
+    }
+    return value;
 }
 
 fn isShellName(name: []const u8) bool {
@@ -2007,11 +2365,20 @@ fn parseTestInteger(text: []const u8) ?i64 {
 fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: delta.StateDelta) void {
     switch (plan.classification) {
         .empty, .assignment_only => return,
+        .function_definition => |definition| {
+            definition.validate();
+            std.debug.assert(state_delta.target == plan.target);
+            std.debug.assert(state_delta.function_sets.items.len == 1);
+            std.debug.assert(std.mem.eql(u8, state_delta.function_sets.items[0].name, definition.name));
+            std.debug.assert(state_delta.last_status != null);
+            return;
+        },
         .external, .not_found => {
             std.debug.assert(state_delta.target == plan.target);
             std.debug.assert(state_delta.variable_assignments.items.len == 0);
             std.debug.assert(state_delta.variable_flags.items.len == 0);
             std.debug.assert(state_delta.variable_unsets.items.len == 0);
+            std.debug.assert(state_delta.function_sets.items.len == 0);
             std.debug.assert(state_delta.function_unsets.items.len == 0);
             std.debug.assert(state_delta.option_changes.items.len == 0);
             std.debug.assert(state_delta.alias_sets.items.len == 0);
@@ -2023,7 +2390,12 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
             std.debug.assert(state_delta.last_status != null);
             return;
         },
-        .function => unreachable,
+        .function => {
+            std.debug.assert(state_delta.target == plan.target);
+            std.debug.assert(state_delta.positionals == null);
+            std.debug.assert(state_delta.last_status != null);
+            return;
+        },
         .special_builtin, .regular_builtin => {},
     }
 
@@ -2040,6 +2412,7 @@ fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: del
 
     std.debug.assert(state_delta.variable_flags.items.len == 0);
     std.debug.assert(state_delta.variable_unsets.items.len == 0);
+    std.debug.assert(state_delta.function_sets.items.len == 0);
     std.debug.assert(state_delta.function_unsets.items.len == 0);
     std.debug.assert(state_delta.option_changes.items.len == 0);
     std.debug.assert(state_delta.alias_sets.items.len == 0);
@@ -2641,6 +3014,208 @@ fn fakeChild(id: runtime.process.ProcessId) runtime.process.ChildProcess {
         .request_resource_usage_statistics = false,
     };
     return runtime.process.ChildProcess.init(child);
+}
+
+test "semantic evaluator stores and invokes function definitions through explicit frames" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const body_assignments = [_]command_plan.Assignment{.{ .name = "BODY", .value = "changed" }};
+    const body_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &body_assignments } }),
+    };
+    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const definition_plan: command_plan.CommandPlan = .{ .target = .current_shell, .classification = .{ .function_definition = definition } };
+
+    var defined = try evaluatePlan(&evaluator, &shell_state, eval_context, definition_plan);
+    defer defined.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), defined.status);
+    try std.testing.expectEqual(@as(usize, 1), defined.state_delta.function_sets.items.len);
+    try defined.commitDelta(&shell_state, .current_shell);
+    try std.testing.expect(shell_state.getFunction("fn") != null);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.getFunction("fn").?.body.commands.len);
+
+    const stored = shell_state.getFunction("fn").?;
+    const lookup_functions = [_]command_plan.FunctionDefinition{stored};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"} },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+
+    var call = try evaluatePlan(&evaluator, &shell_state, eval_context, call_plan);
+    defer call.deinit();
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("BODY"));
+    try call.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("changed", shell_state.getVariable("BODY").?.value);
+}
+
+test "semantic evaluator keeps function assignment prefixes locals and positionals scoped" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("A", "outer", .{});
+    try shell_state.replacePositionals(&.{});
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const assign_a = [_]command_plan.Assignment{.{ .name = "A", .value = "inner" }};
+    const assign_b = [_]command_plan.Assignment{.{ .name = "B", .value = "body" }};
+    const body_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "local", "LOCAL=hidden" } } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assign_a } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assign_b } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "shift", "1" } } }),
+    };
+    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const lookup_functions = [_]command_plan.FunctionDefinition{definition};
+    const prefixes = [_]command_plan.Assignment{.{ .name = "A", .value = "temporary" }};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .assignments = &prefixes, .argv = &[_][]const u8{ "fn", "arg" } },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+
+    var call = try evaluatePlan(&evaluator, &shell_state, eval_context, call_plan);
+    defer call.deinit();
+    try call.commitDelta(&shell_state, .current_shell);
+
+    try std.testing.expectEqualStrings("outer", shell_state.getVariable("A").?.value);
+    try std.testing.expectEqualStrings("body", shell_state.getVariable("B").?.value);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("LOCAL"));
+    try std.testing.expectEqual(@as(usize, 0), shell_state.positionals.items.len);
+}
+
+test "semantic evaluator consumes return control flow at function boundary" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const body_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "echo", "before" } } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "return", "7" } } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "echo", "after" } } }),
+    };
+    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const lookup_functions = [_]command_plan.FunctionDefinition{definition};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"} },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+
+    var call = try evaluatePlan(&evaluator, &shell_state, eval_context, call_plan);
+    defer call.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 7), call.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, call.control_flow);
+    try std.testing.expectEqualStrings("before\n", call.stdout.items);
+    try call.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(state.ExitStatus, 7), shell_state.last_status);
+
+    const outside_return = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"return"} } });
+    var outside = try evaluatePlan(&evaluator, &shell_state, eval_context, outside_return);
+    defer outside.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), outside.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, outside.control_flow);
+    try std.testing.expectEqualStrings("return: not in a function or dot script", outside.diagnostics.items[0].message);
+    outside.discardDelta(.current_shell);
+}
+
+test "semantic evaluator uses child command status for bare function return" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.wait_status = .{ .exited = 9 };
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/bin/tool" }};
+    const body_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{
+            .command = .{ .argv = &[_][]const u8{"tool"} },
+            .lookup = .{ .externals = &externals },
+        }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"return"} } }),
+    };
+    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const lookup_functions = [_]command_plan.FunctionDefinition{definition};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"} },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+
+    var call = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), call_plan);
+    defer call.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 9), call.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, call.control_flow);
+    try call.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(state.ExitStatus, 9), shell_state.last_status);
+}
+
+test "semantic evaluator reports readonly local declarations as shell errors" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("LOCKED", "outer", .{ .readonly = true });
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const body_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "local", "LOCKED=inner" } } }),
+    };
+    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands } };
+    const lookup_functions = [_]command_plan.FunctionDefinition{definition};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"} },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+
+    var call = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), call_plan);
+    defer call.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 2), call.status);
+    try std.testing.expectEqualStrings("local: readonly variable", call.diagnostics.items[0].message);
+    try call.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("outer", shell_state.getVariable("LOCKED").?.value);
+    try std.testing.expect(shell_state.getVariable("LOCKED").?.readonly);
+}
+
+test "semantic evaluator applies and restores function call and definition redirections" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithFdPort(std.testing.allocator, fake.fdPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const body_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "echo", "redirected" } } }),
+    };
+    const definition_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 1, "definition-out", .{ .access = .write_only, .create = true, .truncate = true })};
+    const definition_rollback = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const definition_redirections: redirection_plan.RedirectionPlan = .{ .steps = &definition_steps, .rollback_steps = &definition_rollback };
+    const definition: command_plan.FunctionDefinition = .{ .name = "fn", .body = .{ .commands = &body_commands }, .redirections = definition_redirections };
+    const lookup_functions = [_]command_plan.FunctionDefinition{definition};
+    const call_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 1, "call-out", .{ .access = .write_only, .create = true, .truncate = true })};
+    const call_rollback = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const call_redirections: redirection_plan.RedirectionPlan = .{ .steps = &call_steps, .rollback_steps = &call_rollback };
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"}, .redirections = call_redirections },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+
+    var call = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), call_plan);
+    defer call.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call.status);
+    try std.testing.expectEqualStrings("redirected\n", call.stdout.items);
+    try std.testing.expectEqual(@as(usize, 12), fake.fd_operation_count);
+    switch (fake.fd_operations[1]) {
+        .open => |path| try std.testing.expectEqualStrings("call-out", path),
+        else => return error.TestUnexpectedResult,
+    }
+    switch (fake.fd_operations[5]) {
+        .open => |path| try std.testing.expectEqualStrings("definition-out", path),
+        else => return error.TestUnexpectedResult,
+    }
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 12, .target = 1 } }, fake.fd_operations[8]);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 10, .target = 1 } }, fake.fd_operations[10]);
+    call.discardDelta(.current_shell);
 }
 
 test "semantic evaluator executes external commands through runtime process and fd ports" {

@@ -5,6 +5,7 @@
 //! explicit `StateDelta` commit points.
 
 const std = @import("std");
+const command_plan = @import("command_plan.zig");
 const context = @import("context.zig");
 
 pub const ExitStatus = u8;
@@ -119,7 +120,7 @@ pub const ShellState = struct {
     allocator: std.mem.Allocator,
     scope: Scope = .current_shell,
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
-    functions: std.StringHashMapUnmanaged(void) = .empty,
+    functions: std.StringHashMapUnmanaged(command_plan.FunctionDefinition) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     traps: std.StringHashMapUnmanaged(Trap) = .empty,
     positionals: std.ArrayList([]const u8) = .empty,
@@ -141,7 +142,10 @@ pub const ShellState = struct {
         self.variables.deinit(self.allocator);
 
         var functions = self.functions.iterator();
-        while (functions.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        while (functions.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            freeFunctionDefinition(self.allocator, entry.value_ptr.*);
+        }
         self.functions.deinit(self.allocator);
 
         var aliases = self.aliases.iterator();
@@ -183,7 +187,7 @@ pub const ShellState = struct {
         }
 
         var functions = self.functions.iterator();
-        while (functions.next()) |entry| try cloned.putFunctionName(entry.key_ptr.*);
+        while (functions.next()) |entry| try cloned.putFunction(entry.value_ptr.*);
 
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
@@ -292,19 +296,39 @@ pub const ShellState = struct {
         self.validate();
     }
 
-    pub fn putFunctionName(self: *ShellState, name: []const u8) !void {
+    pub fn getFunction(self: ShellState, name: []const u8) ?command_plan.FunctionDefinition {
         assertValidVariableName(name);
-        if (self.functions.contains(name)) return;
+        return self.functions.get(name);
+    }
 
-        const owned_name = try self.allocator.dupe(u8, name);
-        errdefer self.allocator.free(owned_name);
-        try self.functions.put(self.allocator, owned_name, {});
+    pub fn putFunctionName(self: *ShellState, name: []const u8) !void {
+        try self.putFunction(.{ .name = name });
+    }
+
+    pub fn putFunction(self: *ShellState, definition: command_plan.FunctionDefinition) !void {
+        definition.validate();
+
+        const owned_key = try self.allocator.dupe(u8, definition.name);
+        errdefer self.allocator.free(owned_key);
+        const owned_definition = try cloneFunctionDefinition(self.allocator, definition);
+        errdefer freeFunctionDefinition(self.allocator, owned_definition);
+
+        const result = try self.functions.getOrPut(self.allocator, owned_key);
+        if (result.found_existing) {
+            self.allocator.free(owned_key);
+            freeFunctionDefinition(self.allocator, result.value_ptr.*);
+        }
+
+        result.value_ptr.* = owned_definition;
         self.validate();
     }
 
     pub fn unsetFunction(self: *ShellState, name: []const u8) void {
         assertValidVariableName(name);
-        if (self.functions.fetchRemove(name)) |entry| self.allocator.free(entry.key);
+        if (self.functions.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            freeFunctionDefinition(self.allocator, entry.value);
+        }
         self.validate();
     }
 
@@ -429,7 +453,11 @@ pub const ShellState = struct {
             assertValidVariableName(entry.key_ptr.*);
         }
         var functions = self.functions.iterator();
-        while (functions.next()) |entry| assertValidVariableName(entry.key_ptr.*);
+        while (functions.next()) |entry| {
+            assertValidVariableName(entry.key_ptr.*);
+            entry.value_ptr.validate();
+            std.debug.assert(std.mem.eql(u8, entry.key_ptr.*, entry.value_ptr.name));
+        }
         var aliases = self.aliases.iterator();
         while (aliases.next()) |entry| assertValidAliasName(entry.key_ptr.*);
         var traps = self.traps.iterator();
@@ -474,6 +502,26 @@ pub fn isValidTrapName(name: []const u8) bool {
 
 fn freePositionals(allocator: std.mem.Allocator, args: []const []const u8) void {
     for (args) |arg| allocator.free(arg);
+}
+
+fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) !command_plan.FunctionDefinition {
+    definition.validate();
+
+    const owned_name = try allocator.dupe(u8, definition.name);
+    errdefer allocator.free(owned_name);
+
+    // Function bodies and redirection operands are borrowed semantic data in
+    // this non-parser-integrated slice. The owning representation will be
+    // introduced with parser/IR integration.
+    return .{
+        .name = owned_name,
+        .body = definition.body,
+        .redirections = definition.redirections,
+    };
+}
+
+fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) void {
+    allocator.free(definition.name);
 }
 
 test "ShellState owns variables positionals cwd and clones for subshell isolation" {
