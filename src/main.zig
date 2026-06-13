@@ -6897,8 +6897,18 @@ fn semanticPreflightUnsupported(program: ir.Program) ?[]const u8 {
     if (program.function_definitions.len != 0) return "semantic executor does not yet lower function definitions from production scripts";
     if (program.bash_test_commands.len != 0) return "semantic executor does not yet lower bash [[ ]] commands";
     for (program.pipelines) |pipeline| {
-        if (pipeline.command_indexes.len != 1 or pipeline.stage_spans.len != 1 or pipeline.negated or pipeline.async_after) return "semantic executor production preflight keeps pipelines/background jobs on the old executor";
+        if (semanticPipelinePreflightUnsupported(program, pipeline)) |message| return message;
     }
+    return null;
+}
+
+fn semanticPipelinePreflightUnsupported(program: ir.Program, pipeline: ir.Pipeline) ?[]const u8 {
+    std.debug.assert(program.commands.len != 0 or pipeline.command_indexes.len == 0);
+    if (pipeline.async_after) return "semantic executor production preflight keeps background pipelines on the old executor";
+    if (pipeline.command_indexes.len == 0 or pipeline.command_indexes.len != pipeline.stage_spans.len) {
+        return "semantic executor production preflight keeps compound pipeline stages on the old executor";
+    }
+    for (pipeline.command_indexes) |command_index| std.debug.assert(command_index < program.commands.len);
     return null;
 }
 
@@ -10977,6 +10987,33 @@ test "semantic non-interactive invocation initializes environment arg zero and p
     }
 }
 
+test "semantic non-interactive invocation executes foreground simple pipelines" {
+    var execution = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        \\printf 'pipe:%s\n' value | /bin/cat
+        \\false | true
+        \\printf 'status:%s\n' "$?"
+        \\! false
+        \\printf 'negated:%s\n' "$?"
+    ,
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("pipe:value\nstatus:0\nnegated:0\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
 test "semantic non-interactive invocation reports unsupported shapes before fallback" {
     var execution = try runSemanticCommandString(
         std.testing.allocator,
@@ -10992,6 +11029,38 @@ test "semantic non-interactive invocation reports unsupported shapes before fall
     switch (execution) {
         .output => return error.ExpectedSemanticUnsupported,
         .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "redirections") != null),
+    }
+}
+
+test "semantic non-interactive invocation still rejects unsupported production pipeline shapes" {
+    var background = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        "printf 'background\n' | /bin/cat &",
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer background.deinit(std.testing.allocator);
+    switch (background) {
+        .output => return error.ExpectedSemanticUnsupported,
+        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "background") != null),
+    }
+
+    var compound_stage = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        "{ printf 'compound\n'; } | /bin/cat",
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer compound_stage.deinit(std.testing.allocator);
+    switch (compound_stage) {
+        .output => return error.ExpectedSemanticUnsupported,
+        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "compound") != null),
     }
 }
 
