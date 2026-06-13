@@ -5729,6 +5729,9 @@ pub const Executor = struct {
         defer parsed.deinit();
         if (parsed.diagnostics.len != 0) {
             if (options.top_level_parse_diagnostics and self.execution_depth == 0) {
+                if (hasMisplacedReservedWordDiagnostic(parsed.diagnostics)) {
+                    return parseDiagnosticsResult(self.allocator, source, parsed.diagnostics);
+                }
                 if (!self.shouldSkipForNoexec(options)) {
                     if (try self.diagnosticChunkProgram(source, options.features)) |chunk_program| {
                         var program = chunk_program;
@@ -5871,6 +5874,13 @@ pub const Executor = struct {
         defer parsed.deinit();
         if (parsed.diagnostics.len == 0) return error.ParseError;
         return parseDiagnosticsResult(self.allocator, script, parsed.diagnostics);
+    }
+
+    fn hasMisplacedReservedWordDiagnostic(diagnostics: []const parser.Diagnostic) bool {
+        for (diagnostics) |diagnostic| {
+            if (diagnostic.kind == .parse_error and std.mem.eql(u8, diagnostic.message, "misplaced reserved word")) return true;
+        }
+        return false;
     }
 
     fn executeStatementSync(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
@@ -18596,6 +18606,25 @@ test "executor executes POSIX for loops" {
     defer reserved_list_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), reserved_list_result.status);
     try std.testing.expectEqualStrings("<if>\n<then>\n<do>\n<done>\n", reserved_list_result.stdout);
+}
+
+test "top-level misplaced reserved words report full diagnostics before execution" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\printf 'before\n'
+        \\x=for; $x i in 1; do echo $i; done
+        \\! then
+        \\echo ok | then
+    , .{ .top_level_parse_diagnostics = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "x=for; $x i in 1; do echo $i; done") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "! then") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "echo ok | then") != null);
 }
 
 test "executor executes POSIX while and until loops" {

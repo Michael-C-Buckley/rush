@@ -9289,7 +9289,7 @@ test "runScript executes newline-continued pipeline" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
-test "runScript executes complete lines before late parse diagnostics" {
+test "runScript reports misplaced reserved words before execution" {
     var result = try runScript(std.testing.allocator, std.testing.io,
         \\echo before
         \\then
@@ -9298,7 +9298,7 @@ test "runScript executes complete lines before late parse diagnostics" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 2), result.status);
-    try std.testing.expectEqualStrings("before\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "misplaced reserved word") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "echo after") == null);
 }
