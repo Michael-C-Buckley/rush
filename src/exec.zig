@@ -9200,6 +9200,7 @@ pub const Executor = struct {
         stdout,
         stderr,
         file: FileOutputSink,
+        fd: std.posix.fd_t,
     };
 
     const FileOutputSink = struct {
@@ -9251,6 +9252,9 @@ pub const Executor = struct {
                 if ((from_fd == 1 or from_fd == 2) and (to_fd == 1 or to_fd == 2)) {
                     const copied = if (to_fd == 1) stdout_sink else stderr_sink;
                     if (from_fd == 1) stdout_sink = copied else stderr_sink = copied;
+                } else if ((from_fd == 1 or from_fd == 2) and self.open_fds.contains(to_fd)) {
+                    const copied: OutputSink = .{ .fd = to_fd };
+                    if (from_fd == 1) stdout_sink = copied else stderr_sink = copied;
                 }
             }
         }
@@ -9275,6 +9279,18 @@ pub const Executor = struct {
                 try std.mem.concat(self.allocator, u8, &.{ original_stdout, original_stderr });
             defer self.allocator.free(combined);
             self.writeRedirectedBytes(combined, file_sink.redirection, options) catch |err| {
+                if (!isOutputWriteFailure(err)) return err;
+                redirected.deinit();
+                return self.writeFailureResult(err, special_exit);
+            };
+        } else if (sameFdSink(stdout_sink, stderr_sink)) {
+            const fd = stdout_sink.fd;
+            const combined = if (redirected.stderr_before_stdout)
+                try std.mem.concat(self.allocator, u8, &.{ original_stderr, original_stdout })
+            else
+                try std.mem.concat(self.allocator, u8, &.{ original_stdout, original_stderr });
+            defer self.allocator.free(combined);
+            rawWriteAll(fd, combined) catch |err| {
                 if (!isOutputWriteFailure(err)) return err;
                 redirected.deinit();
                 return self.writeFailureResult(err, special_exit);
@@ -9314,6 +9330,11 @@ pub const Executor = struct {
     fn sameFileSink(left: OutputSink, right: OutputSink) bool {
         if (left != .file or right != .file) return false;
         return left.file.id == right.file.id;
+    }
+
+    fn sameFdSink(left: OutputSink, right: OutputSink) bool {
+        if (left != .fd or right != .fd) return false;
+        return left.fd == right.fd;
     }
 
     fn sameCapturedSink(left: OutputSink, right: OutputSink) bool {
@@ -21802,6 +21823,86 @@ test "external command duplicates same-command arbitrary output fd to stdio" {
     const ordered_fd_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, ordered_fd_path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(ordered_fd_output);
     try std.testing.expectEqualStrings("fd3", ordered_fd_output);
+}
+
+test "command substitution redirects captured builtin output to shell-managed fd" {
+    const fd_path = "rush-test-command-substitution-shell-fd.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, fd_path) catch {};
+
+    const saved_fd3: ?std.posix.fd_t = rawDup(3) catch |err| switch (err) {
+        error.BadFileDescriptor => null,
+        else => return err,
+    };
+    defer if (saved_fd3) |saved_fd| {
+        rawDup2(saved_fd, 3) catch {};
+        closeRawFd(std.testing.io, saved_fd);
+    } else closeRawFd(std.testing.io, 3);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var open_fd = try executor.executeScriptSlice(
+        \\exec 3>rush-test-command-substitution-shell-fd.tmp
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer open_fd.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\out=$(printf tofd3 >&3; printf direct)
+        \\printf 'out=[%s] file=[%s]' "$out" "$(/bin/cat rush-test-command-substitution-shell-fd.tmp)"
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    var close_fd = try executor.executeScriptSlice(
+        \\exec 3>&-
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer close_fd.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), open_fd.status);
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(ExitStatus, 0), close_fd.status);
+    try std.testing.expectEqualStrings("out=[direct] file=[tofd3]", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(!executor.isShellFdOpen(3));
+}
+
+test "compound pipeline stage redirects captured builtin output to shell-managed fd" {
+    const fd_path = "rush-test-compound-pipeline-shell-fd.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, fd_path) catch {};
+
+    const saved_fd3: ?std.posix.fd_t = rawDup(3) catch |err| switch (err) {
+        error.BadFileDescriptor => null,
+        else => return err,
+    };
+    defer if (saved_fd3) |saved_fd| {
+        rawDup2(saved_fd, 3) catch {};
+        closeRawFd(std.testing.io, saved_fd);
+    } else closeRawFd(std.testing.io, 3);
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var open_fd = try executor.executeScriptSlice(
+        \\exec 3>rush-test-compound-pipeline-shell-fd.tmp
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer open_fd.deinit();
+
+    var result = try executor.executeScriptSlice(
+        \\{ printf tofile >&3; } | /usr/bin/tr a-z A-Z
+        \\printf 'file=[%s]' "$(/bin/cat rush-test-compound-pipeline-shell-fd.tmp)"
+    , .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    var close_fd = try executor.executeScriptSlice(
+        \\exec 3>&-
+    , .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit });
+    defer close_fd.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), open_fd.status);
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(ExitStatus, 0), close_fd.status);
+    try std.testing.expectEqualStrings("file=[tofile]", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expect(!executor.isShellFdOpen(3));
 }
 
 test "captured external command close redirections close child stdio" {
