@@ -489,52 +489,113 @@ pub const History = struct {
     }
 };
 
+const InteractiveHistoryService = struct {
+    history: *History,
+
+    fn init(history: *History) InteractiveHistoryService {
+        return .{ .history = history };
+    }
+
+    fn attachFc(self: *InteractiveHistoryService, executor: *exec.Executor) void {
+        executor.setCommandHistory(.{
+            .context = self,
+            .list = fcHistoryEntries,
+            .append = appendFcHistoryCommand,
+        });
+    }
+
+    fn lineEditorView(self: *InteractiveHistoryService, io: std.Io) line_editor.HistoryView {
+        return .{
+            .now = unixTimestamp(io),
+            .context = self,
+            .previous = previousHistoryEntry,
+            .next = nextHistoryEntry,
+            .by_number = numberedHistoryEntry,
+            .search = searchHistoryEntry,
+            .search_next = searchNextHistoryEntry,
+            .suggest = suggestHistoryEntry,
+        };
+    }
+
+    fn addCommand(self: *InteractiveHistoryService, io: std.Io, line: []const u8, status: shell.ExitStatus, started_at: i64, duration_ms: i64) !void {
+        try self.history.addCommand(io, line, status, started_at, duration_ms);
+    }
+
+    fn consumeSuppressNextAppend(_: *InteractiveHistoryService, executor: *exec.Executor) bool {
+        return executor.consumeSuppressNextInteractiveHistoryAppend();
+    }
+
+    fn previousEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, prefix: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
+        return self.history.previousEntry(allocator, prefix, self.history.current_cwd, self.history.session_id, before);
+    }
+
+    fn nextEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, prefix: []const u8, after: i64) !?line_editor.HistoryView.HistoryEntry {
+        return self.history.nextEntry(allocator, prefix, self.history.current_cwd, self.history.session_id, after);
+    }
+
+    fn numberedEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, number: usize) !?line_editor.HistoryView.HistoryEntry {
+        return self.history.numberedEntry(allocator, number);
+    }
+
+    fn fcEntries(self: *InteractiveHistoryService, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
+        return self.history.fcEntries(allocator);
+    }
+
+    fn appendFcCommand(self: *InteractiveHistoryService, io: std.Io, line: []const u8, status: shell.ExitStatus, started_at: i64, duration_ms: i64) !void {
+        try self.history.appendCommand(io, line, status, started_at, duration_ms);
+    }
+
+    fn searchEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
+        return self.history.searchEntry(allocator, query, self.history.current_cwd, before);
+    }
+
+    fn searchNextEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, query: []const u8, after: ?i64) !?line_editor.HistoryView.HistoryEntry {
+        return self.history.searchNextEntry(allocator, query, self.history.current_cwd, after);
+    }
+
+    fn suggestEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, prefix: []const u8) !?line_editor.HistoryView.HistoryEntry {
+        return self.history.suggestEntry(allocator, prefix, self.history.current_cwd);
+    }
+};
+
 fn previousHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
-    const history: *History = @ptrCast(@alignCast(context));
-    return history.previousEntry(allocator, prefix, history.current_cwd, history.session_id, before);
+    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+    return history_service.previousEntry(allocator, prefix, before);
 }
 
 fn nextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8, after: i64) !?line_editor.HistoryView.HistoryEntry {
-    const history: *History = @ptrCast(@alignCast(context));
-    return history.nextEntry(allocator, prefix, history.current_cwd, history.session_id, after);
+    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+    return history_service.nextEntry(allocator, prefix, after);
 }
 
 fn numberedHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, number: usize) !?line_editor.HistoryView.HistoryEntry {
-    const history: *History = @ptrCast(@alignCast(context));
-    return history.numberedEntry(allocator, number);
+    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+    return history_service.numberedEntry(allocator, number);
 }
 
 fn fcHistoryEntries(context: *anyopaque, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
-    const history: *History = @ptrCast(@alignCast(context));
-    return history.fcEntries(allocator);
+    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+    return history_service.fcEntries(allocator);
 }
 
 fn appendFcHistoryCommand(context: *anyopaque, io: std.Io, line: []const u8, status: shell.ExitStatus, started_at: i64, duration_ms: i64) !void {
-    const history: *History = @ptrCast(@alignCast(context));
-    try history.appendCommand(io, line, status, started_at, duration_ms);
-}
-
-fn attachFcHistory(executor: *exec.Executor, history: *History) void {
-    executor.setCommandHistory(.{
-        .context = history,
-        .list = fcHistoryEntries,
-        .append = appendFcHistoryCommand,
-    });
+    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+    try history_service.appendFcCommand(io, line, status, started_at, duration_ms);
 }
 
 fn searchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
-    const history: *History = @ptrCast(@alignCast(context));
-    return history.searchEntry(allocator, query, history.current_cwd, before);
+    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+    return history_service.searchEntry(allocator, query, before);
 }
 
 fn searchNextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, after: ?i64) !?line_editor.HistoryView.HistoryEntry {
-    const history: *History = @ptrCast(@alignCast(context));
-    return history.searchNextEntry(allocator, query, history.current_cwd, after);
+    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+    return history_service.searchNextEntry(allocator, query, after);
 }
 
 fn suggestHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: []const u8) !?line_editor.HistoryView.HistoryEntry {
-    const history: *History = @ptrCast(@alignCast(context));
-    return history.suggestEntry(allocator, prefix, history.current_cwd);
+    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+    return history_service.suggestEntry(allocator, prefix);
 }
 
 const HistoryDirection = enum { previous, next };
@@ -883,6 +944,95 @@ const InteractiveCompletionContext = struct {
     owned_loader: ?*CompletionScriptLoader = null,
     owned_cwd: ?[]u8 = null,
     cancel: ?*completion_model.CancellationToken = null,
+
+    fn promptService(self: InteractiveCompletionContext) InteractivePromptService {
+        return .{ .executor = self.executor, .arg_zero = self.arg_zero, .features = self.features };
+    }
+};
+
+const InteractivePromptService = struct {
+    executor: *exec.Executor,
+    arg_zero: []const u8 = "rush",
+    features: compat.Features = .{},
+
+    fn render(self: InteractivePromptService, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+        const fallback_prompt = self.executor.getEnv("PS1") orelse "$ ";
+        return self.renderWithFallback(allocator, io, fallback_prompt);
+    }
+
+    fn renderWithFallback(self: InteractivePromptService, allocator: std.mem.Allocator, io: std.Io, fallback_prompt: []const u8) ![]const u8 {
+        return self.executor.renderPrompt(.{
+            .io = io,
+            .allow_external = true,
+            .features = self.features,
+            .external_stdio = .inherit,
+            .arg_zero = self.arg_zero,
+        }, fallback_prompt) catch |err| switch (err) {
+            error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
+            else => |e| return e,
+        };
+    }
+
+    fn refreshIntervalMs(self: InteractivePromptService) ?u64 {
+        return self.executor.promptRefreshIntervalMs();
+    }
+
+    fn runEventHooks(self: InteractivePromptService, io: std.Io, event: []const u8, args: []const []const u8) !void {
+        try self.executor.runPromptEventHooks(io, event, args);
+    }
+
+    fn runPendingVariableHooks(self: InteractivePromptService, io: std.Io) !void {
+        try self.executor.runPendingVariableHooks(io);
+    }
+
+    fn intervalWaitMs(self: InteractivePromptService, io: std.Io) ?u64 {
+        return self.executor.promptIntervalWaitMs(io);
+    }
+
+    fn runDueIntervals(self: InteractivePromptService, io: std.Io) !void {
+        try self.executor.runDuePromptIntervals(io);
+    }
+
+    fn applyColorScheme(self: InteractivePromptService, io: std.Io, scheme: editor_driver.ColorScheme) !void {
+        try self.executor.setRushStateVariable("rush_color_scheme", colorSchemeName(scheme));
+        try self.runStyleHook(io);
+    }
+
+    fn applyColorReport(self: InteractivePromptService, io: std.Io, report: editor_driver.ColorReport) !void {
+        const variable = colorReportVariable(report) orelse return;
+        var value_buffer: [8]u8 = undefined;
+        const value = try std.fmt.bufPrint(&value_buffer, "#{x:0>2}{x:0>2}{x:0>2}", .{ report.value[0], report.value[1], report.value[2] });
+        try self.executor.setRushStateVariable(variable, value);
+        try self.runStyleHook(io);
+    }
+
+    fn theme(self: InteractivePromptService) line_editor.UiTheme {
+        var ui_theme: line_editor.UiTheme = .{};
+        self.applyUiStyleVariable(&ui_theme.completion_selected, "rush_style_completion_selected");
+        self.applyUiStyleVariable(&ui_theme.completion_directory, "rush_style_completion_directory");
+        self.applyUiStyleVariable(&ui_theme.completion_option, "rush_style_completion_option");
+        self.applyUiStyleVariable(&ui_theme.completion_variable, "rush_style_completion_variable");
+        self.applyUiStyleVariable(&ui_theme.completion_function, "rush_style_completion_function");
+        self.applyUiStyleVariable(&ui_theme.completion_file, "rush_style_completion_file");
+        self.applyUiStyleVariable(&ui_theme.completion_description, "rush_style_completion_description");
+        self.applyUiStyleVariable(&ui_theme.completion_flash, "rush_style_completion_flash");
+        self.applyUiStyleVariable(&ui_theme.history_match, "rush_style_history_match");
+        self.applyUiStyleVariable(&ui_theme.autosuggestion, "rush_style_autosuggestion");
+        self.applyUiStyleVariable(&ui_theme.diagnostic_error, "rush_style_diagnostic_error");
+        return ui_theme;
+    }
+
+    fn runStyleHook(self: InteractivePromptService, io: std.Io) !void {
+        if (!self.executor.hasFunction("rush_style")) return;
+        const style_options: exec.ExecuteOptions = .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = self.arg_zero };
+        var result = try self.executor.executeScriptSlice("rush_style", style_options);
+        defer result.deinit();
+    }
+
+    fn applyUiStyleVariable(self: InteractivePromptService, style: *line_editor.UiStyle, name: []const u8) void {
+        const value = self.executor.getEnv(name) orelse return;
+        style.* = line_editor.parseUiStyle(value) orelse style.*;
+    }
 };
 
 fn cloneInteractiveCompletionContext(context: *anyopaque, allocator: std.mem.Allocator, cancel: *completion_model.CancellationToken) !*anyopaque {
@@ -957,17 +1107,7 @@ fn freeInteractiveCompletionContext(context: *anyopaque, allocator: std.mem.Allo
 
 fn renderInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    const fallback_prompt = completion_context.executor.getEnv("PS1") orelse "$ ";
-    return completion_context.executor.renderPrompt(.{
-        .io = io,
-        .allow_external = true,
-        .features = completion_context.features,
-        .external_stdio = .inherit,
-        .arg_zero = completion_context.arg_zero,
-    }, fallback_prompt) catch |err| switch (err) {
-        error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
-        else => |e| return e,
-    };
+    return completion_context.promptService().render(allocator, io);
 }
 
 fn requestInteractivePromptRepaint(context: *anyopaque) void {
@@ -978,34 +1118,27 @@ fn requestInteractivePromptRepaint(context: *anyopaque) void {
 fn refreshInteractiveStyle(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, scheme: editor_driver.ColorScheme) !line_editor.UiTheme {
     _ = allocator;
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    try applyInteractiveColorScheme(completion_context.executor, io, scheme);
-    return interactiveUiTheme(completion_context.executor.*);
+    const prompt_service = completion_context.promptService();
+    try prompt_service.applyColorScheme(io, scheme);
+    return prompt_service.theme();
 }
 
 fn refreshInteractiveColorReport(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, report: editor_driver.ColorReport) !line_editor.UiTheme {
     _ = allocator;
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    try applyInteractiveColorReport(completion_context.executor, io, report);
-    return interactiveUiTheme(completion_context.executor.*);
+    const prompt_service = completion_context.promptService();
+    try prompt_service.applyColorReport(io, report);
+    return prompt_service.theme();
 }
 
 fn applyInteractiveColorScheme(executor: *exec.Executor, io: std.Io, scheme: editor_driver.ColorScheme) !void {
-    try executor.setRushStateVariable("rush_color_scheme", colorSchemeName(scheme));
-    if (!executor.hasFunction("rush_style")) return;
-    const style_options: exec.ExecuteOptions = .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = executor.arg_zero };
-    var result = try executor.executeScriptSlice("rush_style", style_options);
-    defer result.deinit();
+    const prompt_service: InteractivePromptService = .{ .executor = executor, .arg_zero = executor.arg_zero };
+    try prompt_service.applyColorScheme(io, scheme);
 }
 
 fn applyInteractiveColorReport(executor: *exec.Executor, io: std.Io, report: editor_driver.ColorReport) !void {
-    const variable = colorReportVariable(report) orelse return;
-    var value_buffer: [8]u8 = undefined;
-    const value = try std.fmt.bufPrint(&value_buffer, "#{x:0>2}{x:0>2}{x:0>2}", .{ report.value[0], report.value[1], report.value[2] });
-    try executor.setRushStateVariable(variable, value);
-    if (!executor.hasFunction("rush_style")) return;
-    const style_options: exec.ExecuteOptions = .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = executor.arg_zero };
-    var result = try executor.executeScriptSlice("rush_style", style_options);
-    defer result.deinit();
+    const prompt_service: InteractivePromptService = .{ .executor = executor, .arg_zero = executor.arg_zero };
+    try prompt_service.applyColorReport(io, report);
 }
 
 fn colorReportVariable(report: editor_driver.ColorReport) ?[]const u8 {
@@ -1036,30 +1169,16 @@ fn colorSchemeName(scheme: editor_driver.ColorScheme) []const u8 {
 }
 
 fn interactiveUiTheme(executor: exec.Executor) line_editor.UiTheme {
-    var theme: line_editor.UiTheme = .{};
-    applyUiStyleVariable(executor, &theme.completion_selected, "rush_style_completion_selected");
-    applyUiStyleVariable(executor, &theme.completion_directory, "rush_style_completion_directory");
-    applyUiStyleVariable(executor, &theme.completion_option, "rush_style_completion_option");
-    applyUiStyleVariable(executor, &theme.completion_variable, "rush_style_completion_variable");
-    applyUiStyleVariable(executor, &theme.completion_function, "rush_style_completion_function");
-    applyUiStyleVariable(executor, &theme.completion_file, "rush_style_completion_file");
-    applyUiStyleVariable(executor, &theme.completion_description, "rush_style_completion_description");
-    applyUiStyleVariable(executor, &theme.completion_flash, "rush_style_completion_flash");
-    applyUiStyleVariable(executor, &theme.history_match, "rush_style_history_match");
-    applyUiStyleVariable(executor, &theme.autosuggestion, "rush_style_autosuggestion");
-    applyUiStyleVariable(executor, &theme.diagnostic_error, "rush_style_diagnostic_error");
-    return theme;
-}
-
-fn applyUiStyleVariable(executor: exec.Executor, style: *line_editor.UiStyle, name: []const u8) void {
-    const value = executor.getEnv(name) orelse return;
-    style.* = line_editor.parseUiStyle(value) orelse style.*;
+    var executor_copy = executor;
+    const prompt_service: InteractivePromptService = .{ .executor = &executor_copy, .arg_zero = executor.arg_zero };
+    return prompt_service.theme();
 }
 
 fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor_driver.HookResult {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    const refresh_prompt = if (completion_context.executor.promptIntervalWaitMs(io)) |wait_ms| wait_ms == 0 else false;
-    try completion_context.executor.runDuePromptIntervals(io);
+    const prompt_service = completion_context.promptService();
+    const refresh_prompt = if (prompt_service.intervalWaitMs(io)) |wait_ms| wait_ms == 0 else false;
+    try prompt_service.runDueIntervals(io);
 
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
@@ -1088,7 +1207,7 @@ fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator
 
 fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    var wait_ms = completion_context.executor.promptIntervalWaitMs(io);
+    var wait_ms = completion_context.promptService().intervalWaitMs(io);
     if (completion_context.executor.wantsImmediateJobNotificationPoll()) {
         wait_ms = if (wait_ms) |current| @min(current, immediate_notify_poll_ms) else immediate_notify_poll_ms;
     }
@@ -6140,6 +6259,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
     var history = History.init(allocator);
     defer history.deinit();
+    var history_service = InteractiveHistoryService.init(&history);
     const active_session_id = try historySessionId(allocator, io);
     defer allocator.free(active_session_id);
     history.session_id = active_session_id;
@@ -6154,22 +6274,23 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var interactive_shell = InteractiveShell.init(allocator);
     defer interactive_shell.deinit();
     const executor = &interactive_shell.executor;
-    attachFcHistory(executor, &history);
+    history_service.attachFc(executor);
     try executor.importEnvironment(environ_map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
+    const prompt_service: InteractivePromptService = .{ .executor = executor, .arg_zero = options.arg_zero, .features = options.features };
     var startup_shell_options = options.shell_options;
     setInteractiveStartupShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
     executor.shell_options = legacyShellOptions(startup_shell_options, .{});
     if (options.positionals.len != 0) try executor.global_positionals.set(allocator, options.positionals);
-    try loadInteractiveConfig(allocator, io, executor, options);
+    try InteractiveConfigService.init(allocator, io, executor, options.arg_zero).load(options);
     if (executor.pending_exit) |status| return status;
     try interactive_shell.syncSemanticFromExecutor(io);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
     exec.setTrapSignalWakeFd(terminal.trapSignalWakeFd());
     defer exec.clearTrapSignalWakeFd(terminal.trapSignalWakeFd());
-    try applyInteractiveColorScheme(executor, io, .unknown);
+    try prompt_service.applyColorScheme(io, .unknown);
     try syncInteractiveTerminalSize(executor, terminal);
     if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
     executor.setPromptRepaintHandler(&terminal, requestInteractivePromptRepaint);
@@ -6190,19 +6311,15 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const notifications = try executor.drainJobNotifications();
         try writeAll(io, .stderr, notifications);
         allocator.free(notifications);
-        try executor.runPendingVariableHooks(io);
+        try prompt_service.runPendingVariableHooks(io);
         try interactive_shell.syncSemanticFromExecutor(io);
-        try executor.runPromptEventHooks(io, "prompt", &.{});
+        try prompt_service.runEventHooks(io, "prompt", &.{});
         try interactive_shell.syncSemanticFromExecutor(io);
         if (executor.pending_exit) |status| {
             last_status = status;
             break;
         }
-        const fallback_prompt = executor.getEnv("PS1") orelse "$ ";
-        const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .arg_zero = options.arg_zero }, fallback_prompt) catch |err| switch (err) {
-            error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
-            else => |e| return e,
-        };
+        const prompt = try prompt_service.render(allocator, io);
         defer allocator.free(prompt);
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
@@ -6214,26 +6331,17 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer if (title.owned) allocator.free(title.text);
         try terminal.reportWindowTitle(title.text);
         var completion_context: InteractiveCompletionContext = .{ .executor = executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
-        const ui_theme = interactiveUiTheme(executor.*);
+        const ui_theme = prompt_service.theme();
         const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt,
             .editing_mode = interactiveEditingMode(semanticShellOptions(executor.shell_options)),
-            .prompt_refresh_interval_ms = executor.promptRefreshIntervalMs(),
+            .prompt_refresh_interval_ms = prompt_service.refreshIntervalMs(),
             .hook_context = &completion_context,
             .run_hooks = runInteractiveIntervalHooks,
             .next_hook_interval_ms = nextInteractiveIntervalMs,
             .prompt_context = &completion_context,
             .refresh_prompt = renderInteractivePrompt,
-            .history = .{
-                .now = unixTimestamp(io),
-                .context = &history,
-                .previous = previousHistoryEntry,
-                .next = nextHistoryEntry,
-                .by_number = numberedHistoryEntry,
-                .search = searchHistoryEntry,
-                .search_next = searchNextHistoryEntry,
-                .suggest = suggestHistoryEntry,
-            },
+            .history = history_service.lineEditorView(io),
             .completion_context = &completion_context,
             .complete = completeInteractiveLine,
             .clone_completion_context = cloneInteractiveCompletionContext,
@@ -6377,7 +6485,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
-            try executor.runPromptEventHooks(io, "preexec", &.{input});
+            try prompt_service.runEventHooks(io, "preexec", &.{input});
             try interactive_shell.syncSemanticFromExecutor(io);
             var result = try runInteractiveScript(allocator, io, &interactive_shell, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
@@ -6387,10 +6495,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             if (outputNeedsNewlineMarker(result.stdout, result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
             last_status = result.status;
             executor.setLastCommandDuration(command_duration_ms);
-            if (!executor.consumeSuppressNextInteractiveHistoryAppend()) try history.addCommand(io, input, result.status, command_started_at, command_duration_ms);
+            if (!history_service.consumeSuppressNextAppend(executor)) try history_service.addCommand(io, input, result.status, command_started_at, command_duration_ms);
             var status_buffer: [3]u8 = undefined;
             const status_text = try std.fmt.bufPrint(&status_buffer, "{d}", .{result.status});
-            try executor.runPromptEventHooks(io, "postexec", &.{ input, status_text });
+            try prompt_service.runEventHooks(io, "postexec", &.{ input, status_text });
             try interactive_shell.syncSemanticFromExecutor(io);
             try terminal.finishSemanticCommand(result.status);
             completion_cache.clear();
@@ -6499,11 +6607,13 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     errdefer stderr.deinit(allocator);
     var history = History.init(allocator);
     defer history.deinit();
+    var history_service = InteractiveHistoryService.init(&history);
     var last_status: shell.ExitStatus = 0;
     var interactive_shell = InteractiveShell.init(allocator);
     defer interactive_shell.deinit();
     const executor = &interactive_shell.executor;
-    attachFcHistory(executor, &history);
+    history_service.attachFc(executor);
+    const prompt_service: InteractivePromptService = .{ .executor = executor };
     {
         var result = try runScriptWithExecutor(allocator, executor, embedded_config, .{ .io = io, .allow_external = true, .arg_zero = "rush", .source_path = embedded_config_path });
         defer result.deinit();
@@ -6528,7 +6638,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         const notifications = try executor.drainJobNotifications();
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
-        const prompt = try executor.renderPrompt(.{ .io = io, .allow_external = true, .arg_zero = "rush" }, executor.getEnv("PS1") orelse "$ ");
+        const prompt = try prompt_service.render(allocator, io);
         try stdout.appendSlice(allocator, prompt);
         allocator.free(prompt);
         if (std.mem.eql(u8, line, "exit")) break;
@@ -6540,7 +6650,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
         last_status = result.status;
-        if (!executor.consumeSuppressNextInteractiveHistoryAppend()) try history.addCommand(io, line, result.status, command_started_at, 0);
+        if (!history_service.consumeSuppressNextAppend(executor)) try history_service.addCommand(io, line, result.status, command_started_at, 0);
         if (executor.pending_exit) |status| {
             last_status = status;
             break;
@@ -7831,53 +7941,101 @@ fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executo
     return error.ParseError;
 }
 
-fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, options: InteractiveOptions) !void {
-    try sourceConfigScript(allocator, io, executor, embedded_config, embedded_config_path, options.arg_zero);
-    if (executor.pending_exit != null) return;
+const InteractiveConfigService = struct {
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    executor: *exec.Executor,
+    arg_zero: []const u8 = "rush",
 
-    if (executor.getEnv("ENV")) |env_path| {
-        if (env_path.len != 0) {
-            const expanded_env_path = try executor.expandParametersScalar(allocator, env_path, .{ .io = io, .allow_external = true, .arg_zero = options.arg_zero });
-            defer allocator.free(expanded_env_path);
-            if (expanded_env_path.len != 0) {
-                try sourceOptionalConfig(allocator, io, executor, expanded_env_path, options.arg_zero);
-                if (executor.pending_exit != null) return;
+    fn init(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, arg_zero: []const u8) InteractiveConfigService {
+        return .{ .allocator = allocator, .io = io, .executor = executor, .arg_zero = arg_zero };
+    }
+
+    fn load(self: InteractiveConfigService, options: InteractiveOptions) !void {
+        try self.sourceScript(embedded_config, embedded_config_path);
+        if (self.executor.pending_exit != null) return;
+
+        if (self.executor.getEnv("ENV")) |env_path| {
+            if (env_path.len != 0) {
+                const expanded_env_path = try self.executor.expandParametersScalar(self.allocator, env_path, .{ .io = self.io, .allow_external = true, .arg_zero = self.arg_zero });
+                defer self.allocator.free(expanded_env_path);
+                if (expanded_env_path.len != 0) {
+                    try self.sourceOptional(expanded_env_path);
+                    if (self.executor.pending_exit != null) return;
+                }
             }
         }
-    }
 
-    if (options.login) {
-        try sourceOptionalConfig(allocator, io, executor, system_profile_path, options.arg_zero);
-        if (executor.pending_exit != null) return;
-        const user_profile_path = try userStartupPath(allocator, executor.*, "profile.rush");
-        defer if (user_profile_path) |path| allocator.free(path);
-        if (user_profile_path) |path| {
-            try sourceOptionalConfig(allocator, io, executor, path, options.arg_zero);
-            if (executor.pending_exit != null) return;
+        if (options.login) {
+            try self.sourceOptional(system_profile_path);
+            if (self.executor.pending_exit != null) return;
+            const user_profile_path = try self.userStartupPath("profile.rush");
+            defer if (user_profile_path) |path| self.allocator.free(path);
+            if (user_profile_path) |path| {
+                try self.sourceOptional(path);
+                if (self.executor.pending_exit != null) return;
+            }
+        }
+
+        try self.sourceOptional(system_config_path);
+        if (self.executor.pending_exit != null) return;
+        const user_path = try self.userStartupPath("config.rush");
+        defer if (user_path) |path| self.allocator.free(path);
+        if (user_path) |path| {
+            try self.sourceOptional(path);
+            if (self.executor.pending_exit != null) return;
         }
     }
 
-    try sourceOptionalConfig(allocator, io, executor, system_config_path, options.arg_zero);
-    if (executor.pending_exit != null) return;
-    const user_path = try userStartupPath(allocator, executor.*, "config.rush");
-    defer if (user_path) |path| allocator.free(path);
-    if (user_path) |path| {
-        try sourceOptionalConfig(allocator, io, executor, path, options.arg_zero);
-        if (executor.pending_exit != null) return;
+    fn sourceOptional(self: InteractiveConfigService, path: []const u8) !void {
+        const contents = std.Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+            error.FileNotFound => return,
+            else => {
+                try writeOptionalConfigReadWarning(self.io, path, err);
+                return;
+            },
+        };
+        defer self.allocator.free(contents);
+
+        try self.sourceScript(contents, path);
     }
+
+    fn sourceScript(self: InteractiveConfigService, contents: []const u8, source_path: []const u8) !void {
+        var result = try runScriptWithExecutor(self.allocator, self.executor, contents, .{ .io = self.io, .allow_external = true, .arg_zero = self.arg_zero, .source_path = source_path });
+        defer result.deinit();
+        if (result.stdout.len != 0) try writeAll(self.io, .stdout, result.stdout);
+        if (result.stderr.len != 0) try writeAll(self.io, .stderr, result.stderr);
+    }
+
+    fn userConfigPath(self: InteractiveConfigService) !?[]const u8 {
+        return self.userStartupPath("config.rush");
+    }
+
+    fn userProfilePath(self: InteractiveConfigService) !?[]const u8 {
+        return self.userStartupPath("profile.rush");
+    }
+
+    fn userStartupPath(self: InteractiveConfigService, file_name: []const u8) !?[]const u8 {
+        return userStartupPathForExecutor(self.allocator, self.executor.*, file_name);
+    }
+
+    fn userStartupPathForExecutor(allocator: std.mem.Allocator, executor: exec.Executor, file_name: []const u8) !?[]const u8 {
+        if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
+            if (xdg_config_home.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home, "rush", file_name });
+        }
+        if (executor.getEnv("HOME")) |home| {
+            if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".config", "rush", file_name });
+        }
+        return null;
+    }
+};
+
+fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, options: InteractiveOptions) !void {
+    try InteractiveConfigService.init(allocator, io, executor, options.arg_zero).load(options);
 }
 
 fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8, arg_zero: []const u8) !void {
-    const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
-        error.FileNotFound => return,
-        else => {
-            try writeOptionalConfigReadWarning(io, path, err);
-            return;
-        },
-    };
-    defer allocator.free(contents);
-
-    try sourceConfigScript(allocator, io, executor, contents, path, arg_zero);
+    try InteractiveConfigService.init(allocator, io, executor, arg_zero).sourceOptional(path);
 }
 
 fn writeOptionalConfigReadWarning(io: std.Io, path: []const u8, err: anyerror) !void {
@@ -7897,28 +8055,19 @@ fn configReadErrorMessage(err: anyerror) []const u8 {
 }
 
 fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
-    var result = try runScriptWithExecutor(allocator, executor, contents, .{ .io = io, .allow_external = true, .arg_zero = arg_zero, .source_path = source_path });
-    defer result.deinit();
-    if (result.stdout.len != 0) try writeAll(io, .stdout, result.stdout);
-    if (result.stderr.len != 0) try writeAll(io, .stderr, result.stderr);
+    try InteractiveConfigService.init(allocator, io, executor, arg_zero).sourceScript(contents, source_path);
 }
 
 fn userConfigPath(allocator: std.mem.Allocator, executor: exec.Executor) !?[]const u8 {
-    return userStartupPath(allocator, executor, "config.rush");
+    return InteractiveConfigService.userStartupPathForExecutor(allocator, executor, "config.rush");
 }
 
 fn userProfilePath(allocator: std.mem.Allocator, executor: exec.Executor) !?[]const u8 {
-    return userStartupPath(allocator, executor, "profile.rush");
+    return InteractiveConfigService.userStartupPathForExecutor(allocator, executor, "profile.rush");
 }
 
 fn userStartupPath(allocator: std.mem.Allocator, executor: exec.Executor, file_name: []const u8) !?[]const u8 {
-    if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
-        if (xdg_config_home.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home, "rush", file_name });
-    }
-    if (executor.getEnv("HOME")) |home| {
-        if (home.len != 0) return try std.fs.path.join(allocator, &.{ home, ".config", "rush", file_name });
-    }
-    return null;
+    return InteractiveConfigService.userStartupPathForExecutor(allocator, executor, file_name);
 }
 
 fn isLoginArgZero(arg_zero: []const u8) bool {
@@ -8196,6 +8345,7 @@ test "line history navigation is scoped to session and cwd" {
     try history_a.load(std.testing.io, path);
     history_a.current_cwd = "/repo";
     history_a.session_id = "session-a";
+    var history_service_a = InteractiveHistoryService.init(&history_a);
     try insertHistoryRecord(history_a.db.?, .{ .cmd = "echo a-one", .cwd = "/repo", .when = 10, .session_id = "session-a" });
     try insertHistoryRecord(history_a.db.?, .{ .cmd = "echo b-one", .cwd = "/repo", .when = 20, .session_id = "session-b" });
     try insertHistoryRecord(history_a.db.?, .{ .cmd = "git status", .cwd = "/repo", .when = 30, .session_id = "session-a" });
@@ -8207,8 +8357,9 @@ test "line history navigation is scoped to session and cwd" {
     try history_b.load(std.testing.io, path);
     history_b.current_cwd = "/repo";
     history_b.session_id = "session-b";
+    var history_service_b = InteractiveHistoryService.init(&history_b);
 
-    var session_a = try line_editor.LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history_a, .previous = previousHistoryEntry, .next = nextHistoryEntry });
+    var session_a = try line_editor.LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history_service_a, .previous = previousHistoryEntry, .next = nextHistoryEntry });
     defer session_a.deinit();
     try session_a.handleKey(.{ .key = .up });
     try std.testing.expectEqualStrings("git status", session_a.editor.buffer.text());
@@ -8219,7 +8370,7 @@ test "line history navigation is scoped to session and cwd" {
     try session_a.handleKey(.{ .key = .down });
     try std.testing.expectEqualStrings("", session_a.editor.buffer.text());
 
-    var session_b = try line_editor.LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history_b, .previous = previousHistoryEntry, .next = nextHistoryEntry });
+    var session_b = try line_editor.LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history_service_b, .previous = previousHistoryEntry, .next = nextHistoryEntry });
     defer session_b.deinit();
     try session_b.handleKey(.{ .key = .up });
     try std.testing.expectEqualStrings("git diff", session_b.editor.buffer.text());
