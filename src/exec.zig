@@ -23822,12 +23822,13 @@ test "executor supports here-doc stdin redirections" {
         \\LEFT
         \\right body
         \\RIGHT
+        \\echo "pipeline:$?"
     );
     defer pipeline_multiple.parsed.deinit();
     defer pipeline_multiple.program.deinit();
     var pipeline_multiple_result = try executor.executeProgram(pipeline_multiple.program, .{ .io = std.testing.io, .allow_external = true });
     defer pipeline_multiple_result.deinit();
-    try std.testing.expectEqualStrings("right body\n", pipeline_multiple_result.stdout);
+    try std.testing.expectEqualStrings("right body\npipeline:0\n", pipeline_multiple_result.stdout);
 
     try executor.setEnv("HD_VALUE", "expanded");
     var expanded = try parseAndLower(std.testing.allocator,
