@@ -5,6 +5,7 @@
 //! child and subshell deltas cannot silently leak into the current shell.
 
 const std = @import("std");
+const command_plan = @import("command_plan.zig");
 const context = @import("context.zig");
 const state = @import("state.zig");
 
@@ -110,7 +111,27 @@ pub const StateDelta = struct {
     pub fn assignVariable(self: *StateDelta, name: []const u8, value: []const u8, attributes: state.VariableAttributes) !void {
         self.assertPending();
         state.assertValidVariableName(name);
-        std.debug.assert(findVariableAssignment(self, name) == null);
+
+        if (findVariableAssignment(self, name)) |assignment| {
+            const owned_value = try self.allocator.dupe(u8, value);
+            self.allocator.free(assignment.value);
+            assignment.value = owned_value;
+            if (attributes.exported) |exported| {
+                if (assignment.exported) |existing| std.debug.assert(existing == exported);
+                assignment.exported = exported;
+            }
+            assignment.readonly = assignment.readonly or attributes.readonly;
+            return;
+        }
+
+        for (self.variable_flags.items) |mutation| {
+            if (!std.mem.eql(u8, mutation.name, name)) continue;
+            if (mutation.flag == .exported) {
+                if (attributes.exported) |exported| {
+                    std.debug.assert(mutation.enabled == exported);
+                }
+            }
+        }
 
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
@@ -187,11 +208,31 @@ pub const StateDelta = struct {
         self.last_status = status;
     }
 
+    pub fn firstReadonlyVariableAssignment(self: StateDelta, shell_state: state.ShellState) ?[]const u8 {
+        self.assertPending();
+        for (self.variable_assignments.items) |assignment| {
+            if (shell_state.isVariableReadonly(assignment.name)) return assignment.name;
+        }
+        return null;
+    }
+
+    pub fn appendPersistentCommandAssignments(self: *StateDelta, shell_state: state.ShellState, assignments: []const command_plan.Assignment) !void {
+        self.assertPending();
+        if (firstReadonlyAssignment(shell_state, assignments) != null) return error.ReadonlyVariable;
+
+        const exported: ?bool = if (shell_state.options.enabled(.allexport)) true else null;
+        for (assignments) |assignment| {
+            try self.assignVariable(assignment.name, assignment.value, .{ .exported = exported });
+        }
+    }
+
     pub fn commit(self: *StateDelta, shell_state: *state.ShellState, target: context.ExecutionTarget) !void {
         std.debug.assert(self.state == .pending);
         std.debug.assert(self.target == target);
         std.debug.assert(target.allowsShellStateCommit());
         std.debug.assert(shell_state.acceptsExecutionTarget(target));
+
+        if (self.firstReadonlyVariableAssignment(shell_state.*) != null) return error.ReadonlyVariable;
 
         for (self.variable_assignments.items) |assignment| {
             try shell_state.putVariable(assignment.name, assignment.value, .{
@@ -247,6 +288,14 @@ pub const StateDelta = struct {
 fn findVariableAssignment(delta: *StateDelta, name: []const u8) ?*VariableAssignment {
     for (delta.variable_assignments.items) |*assignment| {
         if (std.mem.eql(u8, assignment.name, name)) return assignment;
+    }
+    return null;
+}
+
+pub fn firstReadonlyAssignment(shell_state: state.ShellState, assignments: []const command_plan.Assignment) ?[]const u8 {
+    for (assignments) |assignment| {
+        assignment.validate();
+        if (shell_state.isVariableReadonly(assignment.name)) return assignment.name;
     }
     return null;
 }
@@ -344,4 +393,43 @@ test "StateDelta deterministic target matrix documents commit versus discard" {
         }
         try std.testing.expectEqual(DeltaState.consumed, state_delta.state);
     }
+}
+
+test "StateDelta rejects readonly commits without partial mutation" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("LOCKED", "old", .{});
+    try shell_state.setVariableReadonly("LOCKED");
+
+    var state_delta = StateDelta.init(std.testing.allocator, .current_shell);
+    defer state_delta.deinit();
+    try state_delta.assignVariable("A", "new", .{});
+    try state_delta.assignVariable("LOCKED", "new", .{});
+
+    try std.testing.expectEqualStrings("LOCKED", state_delta.firstReadonlyVariableAssignment(shell_state).?);
+    try std.testing.expectError(error.ReadonlyVariable, state_delta.commit(&shell_state, .current_shell));
+    try std.testing.expectEqual(DeltaState.pending, state_delta.state);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("A"));
+    try std.testing.expectEqualStrings("old", shell_state.getVariable("LOCKED").?.value);
+
+    state_delta.discard(.current_shell);
+}
+
+test "StateDelta command assignments use allexport and last assignment wins" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.allexport, true);
+
+    const assignments = [_]command_plan.Assignment{
+        .{ .name = "A", .value = "one" },
+        .{ .name = "A", .value = "two" },
+    };
+
+    var state_delta = StateDelta.init(std.testing.allocator, .current_shell);
+    defer state_delta.deinit();
+    try state_delta.appendPersistentCommandAssignments(shell_state, &assignments);
+    try state_delta.commit(&shell_state, .current_shell);
+
+    try std.testing.expectEqualStrings("two", shell_state.getVariable("A").?.value);
+    try std.testing.expect(shell_state.getVariable("A").?.exported);
 }

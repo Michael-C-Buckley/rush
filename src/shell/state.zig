@@ -83,6 +83,10 @@ pub const VariableAttributes = struct {
     readonly: bool = false,
 };
 
+pub const VariableMutationError = error{
+    ReadonlyVariable,
+};
+
 pub const Variable = struct {
     value: []const u8,
     exported: bool = false,
@@ -163,12 +167,18 @@ pub const ShellState = struct {
         return self.variables.get(name);
     }
 
+    pub fn isVariableReadonly(self: ShellState, name: []const u8) bool {
+        assertValidVariableName(name);
+        const variable = self.variables.get(name) orelse return false;
+        return variable.readonly;
+    }
+
     pub fn putVariable(self: *ShellState, name: []const u8, value: []const u8, attributes: VariableAttributes) !void {
         assertValidVariableName(name);
 
         if (self.variables.getEntry(name)) |entry| {
             const previous = entry.value_ptr.*;
-            std.debug.assert(!previous.readonly);
+            if (previous.readonly) return error.ReadonlyVariable;
 
             const owned_value = try self.allocator.dupe(u8, value);
             self.allocator.free(previous.value);
@@ -336,4 +346,16 @@ test "ShellOptions toggles every modeled option deterministically" {
         shell_options.set(option, false);
         try std.testing.expect(!shell_options.enabled(option));
     }
+}
+
+test "ShellState reports readonly assignment as semantic error" {
+    var shell_state = ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    try shell_state.putVariable("LOCKED", "first", .{});
+    try shell_state.setVariableReadonly("LOCKED");
+
+    try std.testing.expect(shell_state.isVariableReadonly("LOCKED"));
+    try std.testing.expectError(error.ReadonlyVariable, shell_state.putVariable("LOCKED", "second", .{}));
+    try std.testing.expectEqualStrings("first", shell_state.getVariable("LOCKED").?.value);
 }

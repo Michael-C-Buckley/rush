@@ -4,6 +4,7 @@
 //! existing executor. The core owns shell semantics, plans, state deltas, and
 //! commit/discard decisions; imperative host effects stay behind `runtime.zig`.
 
+pub const assignment = @import("shell/assignment.zig");
 pub const builtin = @import("shell/builtin.zig");
 pub const command_plan = @import("shell/command_plan.zig");
 pub const context = @import("shell/context.zig");
@@ -35,9 +36,14 @@ pub const Variable = state.Variable;
 pub const VariableAttributes = state.VariableAttributes;
 
 pub const Assignment = command_plan.Assignment;
+pub const AssignmentEffect = command_plan.AssignmentEffect;
+pub const AssignmentEffects = assignment.AssignmentEffects;
+pub const AssignmentResult = assignment.AssignmentResult;
 pub const CommandClass = command_plan.CommandClass;
 pub const CommandLookupSnapshot = command_plan.LookupSnapshot;
 pub const ExpandedSimpleCommand = command_plan.ExpandedSimpleCommand;
 pub const ExternalResolution = command_plan.ExternalResolution;
 pub const FunctionDefinition = command_plan.FunctionDefinition;
 pub const PlanRequest = command_plan.PlanRequest;
+pub const TemporaryEnvironment = assignment.TemporaryEnvironment;
+pub const TemporaryVariable = assignment.TemporaryVariable;

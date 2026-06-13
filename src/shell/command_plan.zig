@@ -52,6 +52,12 @@ pub const CommandClass = enum {
     not_found,
 };
 
+pub const AssignmentEffect = enum {
+    none,
+    persistent,
+    temporary,
+};
+
 pub const Classification = union(CommandClass) {
     /// No command name and no assignments. Redirections, if present, are kept
     /// as data for later redirection planning/evaluation tasks.
@@ -182,6 +188,17 @@ pub const CommandPlan = struct {
         };
     }
 
+    pub fn assignmentEffect(self: CommandPlan) AssignmentEffect {
+        self.validate();
+        if (self.assignments.len == 0) return .none;
+
+        return switch (self.classification) {
+            .empty => .none,
+            .assignment_only, .special_builtin => .persistent,
+            .regular_builtin, .function, .external, .not_found => .temporary,
+        };
+    }
+
     pub fn validate(self: CommandPlan) void {
         for (self.assignments) |assignment| assignment.validate();
         validateRedirections(self.redirections);
@@ -294,19 +311,24 @@ test "CommandPlan classifies expanded simple command shapes" {
 
     const assignment_only = classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments } });
     try std.testing.expectEqual(CommandClass.assignment_only, assignment_only.class());
+    try std.testing.expectEqual(AssignmentEffect.persistent, assignment_only.assignmentEffect());
     try std.testing.expectEqual(@as(usize, 0), assignment_only.argv.len);
 
-    const special = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"export"} } });
+    const special = classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &[_][]const u8{"export"} } });
     try std.testing.expectEqual(CommandClass.special_builtin, special.class());
+    try std.testing.expectEqual(AssignmentEffect.persistent, special.assignmentEffect());
 
-    const regular = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &echo_argv } });
+    const regular = classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &echo_argv } });
     try std.testing.expectEqual(CommandClass.regular_builtin, regular.class());
+    try std.testing.expectEqual(AssignmentEffect.temporary, regular.assignmentEffect());
 
-    const function_plan = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &function_argv }, .lookup = lookup });
+    const function_plan = classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &function_argv }, .lookup = lookup });
     try std.testing.expectEqual(CommandClass.function, function_plan.class());
+    try std.testing.expectEqual(AssignmentEffect.temporary, function_plan.assignmentEffect());
 
-    const external = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &external_argv }, .lookup = lookup });
+    const external = classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &external_argv }, .lookup = lookup });
     try std.testing.expectEqual(CommandClass.external, external.class());
+    try std.testing.expectEqual(AssignmentEffect.temporary, external.assignmentEffect());
     try std.testing.expectEqual(context.ExecutionTarget.child_process, external.target);
 
     const not_found = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &missing_argv }, .lookup = lookup });

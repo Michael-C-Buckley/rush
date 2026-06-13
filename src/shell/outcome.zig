@@ -141,6 +141,20 @@ pub const CommandOutcome = struct {
     }
 };
 
+pub fn readonlyVariableFailure(allocator: std.mem.Allocator, target: context.ExecutionTarget, name: []const u8) !CommandOutcome {
+    state.assertValidVariableName(name);
+
+    const state_delta = delta.StateDelta.init(allocator, target);
+    var command_outcome = CommandOutcome.init(allocator, 1, state_delta);
+    errdefer command_outcome.deinit();
+
+    const message = try std.fmt.allocPrint(allocator, "{s}: readonly variable", .{name});
+    errdefer allocator.free(message);
+    try command_outcome.diagnostics.append(allocator, .{ .message = message });
+
+    return command_outcome;
+}
+
 test "ControlFlow validates payloads against EvalContext scopes" {
     const loop_context = context.EvalContext.forTarget(.current_shell).enterLoop();
     const function_context = loop_context.enterFunction();
@@ -197,4 +211,14 @@ test "CommandOutcome control-flow statuses are internally consistent" {
         defer outcome.deinit();
         outcome.validate();
     }
+}
+
+test "CommandOutcome can carry readonly assignment diagnostics" {
+    var command_outcome = try readonlyVariableFailure(std.testing.allocator, .current_shell, "LOCKED");
+    defer command_outcome.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 1), command_outcome.status);
+    try std.testing.expectEqual(@as(usize, 1), command_outcome.diagnostics.items.len);
+    try std.testing.expectEqualStrings("LOCKED: readonly variable", command_outcome.diagnostics.items[0].message);
+    try std.testing.expect(command_outcome.state_delta.isEmpty());
 }
