@@ -150,6 +150,143 @@ The redesign should make these checks natural to express:
   parser/IR lowering and runtime ports without requiring parser, IR, expansion,
   completion, or UI movement.
 
+## `src/exec.zig` retirement map
+
+`src/exec.zig` is still imported only by `src/main.zig` (`pub const exec =
+@import("exec.zig")`), but that one import covers several different ownership
+surfaces. Do not move those surfaces into another single module. Retire them in
+the dependency order below, keeping semantic shell state in `src/shell/*`, POSIX
+effects in `src/runtime/*`, and interactive/completion glue at the application
+edge until it has a narrower home.
+
+### Current external uses and target owners
+
+- `src/main.zig:57`, `src/main.zig:176`, `src/main.zig:6118`,
+  `src/main.zig:6426`, `src/main.zig:7698`, and `src/main.zig:7717` use
+  `exec.ShellOptions`, `exec.ShoptOptions`, and
+  `exec.applyShellOptionName`/`exec.applyShellOptionShort` for CLI parsing,
+  interactive startup defaults, editing mode selection, and legacy/semantic
+  option conversion. Owner: `src/shell/state.zig` plus a small option parser in
+  the shell layer. Blocker: callers must stop depending on `exec.ShellOptions`
+  before `exec.Executor.shell_options` can be removed.
+- `src/main.zig:251`, `src/main.zig:302`, `src/main.zig:853`,
+  `src/main.zig:6139`, `src/main.zig:6486`, `src/main.zig:6792`, and the
+  `runScript*` public helpers use `exec.ExitStatus` and `exec.CommandResult` as
+  the command-result ABI. Owner: `src/shell/outcome.zig` for shell statuses and
+  command outcomes, with a narrow top-level captured-output result for CLI/test
+  entry points if needed. Blocker: `main.runScript*`, tests, and the old
+  executor bridge must agree on the replacement result type.
+- `src/main.zig:6554`, `src/main.zig:6558`, `src/main.zig:6669`,
+  `src/main.zig:6722`, `src/main.zig:6835`, and `src/main.zig:7179` use
+  `exec.ExecuteOptions` and `exec.ExternalStdio` for a mixed bag of parser
+  features, stdio policy, cancellation, script source metadata, interactive
+  mode, and completion-provider callbacks. Owner: split by field instead of
+  creating a replacement god options struct: semantic invocation/input metadata
+  in `src/shell/*`, external stdio/process policy in `src/runtime/*` or
+  `src/shell/eval.zig`, and completion callback state in top-level completion
+  glue. Blocker: `Executor.executeScriptSlice` still consumes the whole struct.
+- `src/main.zig:858` through `src/main.zig:3520`, and the completion debug and
+  trace writers around `src/main.zig:3657`, `src/main.zig:4024`,
+  `src/main.zig:4155`, `src/main.zig:5002`, `src/main.zig:5180`,
+  `src/main.zig:5244`, and `src/main.zig:5831`, use `exec.Executor` as the
+  mutable completion registry and use `exec.Completion*` types/functions such as
+  `completionEvalContextForInput` and `completionOptionSuppressionForOption`.
+  Owner: keep this top-level/completion-owned for now, but detach it from
+  `exec.Executor` into a narrow completion state/model in `src/completion.zig`
+  plus application glue in `src/main.zig`. Blocker: dynamic providers currently
+  execute Rush functions through `Executor` state.
+- `src/main.zig:447`, `src/main.zig:494`, `src/main.zig:499`, and
+  `src/main.zig:504` adapt interactive history to `exec.HistoryEntry` and
+  `exec.CommandHistory`. Owner: `src/history.zig` already owns the data model;
+  keep the adapter top-level until `fc` history access is provided to semantic
+  builtins without an `Executor` callback.
+- `src/main.zig:945`, `src/main.zig:979`, `src/main.zig:1046`,
+  `src/main.zig:1100`, `src/main.zig:6123`, `src/main.zig:6150`,
+  `src/main.zig:6175`, `src/main.zig:6180`, `src/main.zig:6365`, and
+  `src/main.zig:7766` still route prompts, color/style hooks, completion script
+  loading, ENV/profile/config sourcing, prompt event hooks, interval hooks, and
+  job notifications through `exec.Executor`. Owner: keep at the application edge
+  while extracting explicit prompt/config/history/job-control services; shell
+  mutations go through `src/shell/state.zig` and POSIX waiting/signals through
+  `src/runtime/*`. Blocker: interactive startup and hooks can still run
+  arbitrary legacy Rush scripts.
+- `src/main.zig:6155`, `src/main.zig:6156`, `src/main.zig:6347`, and
+  `src/main.zig:6475` depend on `exec.setTrapSignalWakeFd`,
+  `exec.clearTrapSignalWakeFd`, `exec.stopped_jobs_exit_warning`, and signal
+  trap execution. Owner: `src/runtime/signal.zig` for wake-fd/signal adapter
+  state; shell trap state remains in `src/shell/state.zig`. Blocker: job control
+  and pending traps are still stored and executed by `exec.Executor`.
+- `src/main.zig:6688`, `src/main.zig:6835`, `src/main.zig:7689`,
+  `src/main.zig:7754`, `src/main.zig:7831`, and the many inline tests below
+  `src/main.zig:7960` keep `exec.Executor` live as the old execution engine.
+  Owner: delete after semantic parity. Blocker: every fallback gate listed below
+  must either move into semantic execution or become an explicit unsupported
+  diagnostic without needing the legacy bridge.
+
+### Current semantic/legacy fallback gates
+
+- Non-interactive entry (`src/main.zig:6669` and `src/main.zig:6705`) selects
+  the semantic path when the invocation is not interactive and external commands
+  are allowed. `runSemanticCommandString` (`src/main.zig:6722`) gates
+  noexec/verbose/xtrace startup modes, non-shell environment names/NULs,
+  parser diagnostics, async non-pipeline statements, unsupported function
+  bodies, bash `[[ ]]`, semantic builtins that are still marked unsupported,
+  and evaluator `error.Unimplemented`. Unsupported non-interactive execution is
+  reported as a command result, not retried through `exec.Executor`.
+- Interactive execution (`src/main.zig:6835`) first tries
+  `runSemanticInteractiveCommandString` and falls back to
+  `runScriptWithExecutor` when that path returns `semanticUnsupported`.
+  Interactive-only gates include inherited/captured stdio requirements,
+  `stdin_script_file == null`, no pending exit, no verbose/xtrace/errexit
+  state, no parser diagnostics, and `semanticPreflightUnsupported(..., true)`.
+- `legacy_fallback_gates == true` in `semanticPreflightUnsupported`
+  (`src/main.zig:7463`) keeps these shapes on the legacy bridge: compound
+  command statements, assignment-bearing commands, unsupported builtins,
+  production expansion forms containing command/parameter/arithmetic/special
+  parameter expansion, redirection-only commands, simple or compound
+  redirections, parser-rejected or dynamically guarded function definitions,
+  bash `[[ ]]`, and non-pipeline async statements.
+- `semanticBodyUnsupportedMessage` (`src/main.zig:7588`) adds post-lowering
+  interactive gates for compound redirections, assignment-bearing commands,
+  redirections, `read`, `alias`, and `unalias` when legacy gates are enabled.
+- `semanticInteractiveProgramUnsupported` (`src/main.zig:7231`) keeps
+  interactive execution on `InteractiveShell.executor` when it sees function
+  definitions, aliases, arrays used with shell expansion, nounset expansion
+  diagnostics, unsupported builtins, external commands, dynamic function lookup,
+  or shell function calls. `InteractiveShell` (`src/main.zig:6080`) mirrors
+  legacy executor state into `shell.ShellState` before semantic attempts and
+  mirrors semantic state back only after a successful semantic command.
+
+### Dependency-ordered checklist
+
+1. Replace `exec.ExitStatus`, `exec.ShellOptions`, `exec.ShoptOptions`, and the
+   shell option parsers in `src/main.zig` with `src/shell` types. This unblocks
+   the narrower task of removing status/options dependencies from shell-facing
+   call sites.
+2. Split `exec.ExecuteOptions` by responsibility. Move runtime stdio/process
+   policy toward `src/runtime/*`/`src/shell/eval.zig`, semantic source metadata
+   toward `src/shell/*`, and completion callbacks toward completion glue.
+3. Replace `exec.CommandResult` and `exec.parseDiagnosticsResult` at the public
+   `runScript*` and CLI boundaries with either `shell.CommandOutcome` or a
+   small top-level captured-output result that does not depend on `Executor`.
+4. Extract completion registry/query state from `exec.Executor` into
+   completion-owned data structures, then update `CompletionCache`, manifest
+   loaders, debug/trace output, and dynamic provider execution to accept that
+   state explicitly.
+5. Move history/`fc`, prompt rendering, style hooks, config sourcing, event
+   hooks, and interval hooks out of `Executor` into explicit interactive-session
+   services. Keep them top-level until their state contracts are narrow.
+6. Move POSIX signal wake-fd handling, job-control process state, open-fd
+   tracking, redirection application, external spawn/exec, and wait behavior
+   behind `src/runtime/*` ports used by semantic evaluation.
+7. Burn down the fallback gates in semantic order: redirections and
+   assignment-bearing commands first, then production expansion gaps, `read` and
+   alias timing, compound-command redirections, interactive external/function
+   calls, arrays/nounset expansion diagnostics, traps, and job control.
+8. Delete `runOldCommandStringWithEnvironment`, `runScriptWithExecutor`, legacy
+   executor tests, and finally `src/exec.zig` only after `src/main.zig` no longer
+   imports `exec.zig` and `std.testing.refAllDecls(exec)` is gone.
+
 ## Parser
 
 The parser should produce a lossless, concrete-ish syntax tree rather than only an execution AST.
