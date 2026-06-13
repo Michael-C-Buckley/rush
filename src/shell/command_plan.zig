@@ -139,11 +139,15 @@ pub const ForWords = union(enum) {
 pub const ForPlan = struct {
     variable_name: []const u8,
     words: ForWords = .positional_parameters,
+    /// Parser-backed loop body source. When present, the loop body is lowered
+    /// for each iteration after the loop variable has been assigned.
+    body_source: ?[]const u8 = null,
     body: StatementList,
 
     pub fn validate(self: ForPlan) void {
         state.assertValidVariableName(self.variable_name);
         self.words.validate();
+        if (self.body_source) |source| std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
         self.body.validate();
     }
 };
@@ -1003,14 +1007,17 @@ fn cloneForPlan(allocator: std.mem.Allocator, plan: ForPlan) std.mem.Allocator.E
     errdefer allocator.free(variable_name);
     const words = try cloneForWords(allocator, plan.words);
     errdefer freeForWords(allocator, words);
+    const body_source = if (plan.body_source) |source| try allocator.dupe(u8, source) else null;
+    errdefer if (body_source) |source| allocator.free(source);
     const body = try cloneStatementList(allocator, plan.body);
     errdefer freeStatementList(allocator, body);
-    return .{ .variable_name = variable_name, .words = words, .body = body };
+    return .{ .variable_name = variable_name, .words = words, .body_source = body_source, .body = body };
 }
 
 fn freeForPlan(allocator: std.mem.Allocator, plan: ForPlan) void {
     allocator.free(plan.variable_name);
     freeForWords(allocator, plan.words);
+    if (plan.body_source) |source| allocator.free(source);
     freeStatementList(allocator, plan.body);
 }
 

@@ -448,18 +448,18 @@ const TrapActionLowerer = struct {
     fn lowerForCommand(self: *TrapActionLowerer, command: ir.ForCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const body_result = try self.lowerStatementListSource(command.body, target);
-        const body = switch (body_result) {
-            .failure => |trap_failure| return .{ .failure = trap_failure },
-            .list => |list| list,
-        };
         const words = if (command.use_positionals) command_plan.ForWords.positional_parameters else blk: {
-            const explicit = try self.allocator.alloc([]const u8, command.words.len);
-            for (command.words, 0..) |word, index| explicit[index] = try self.expandScalar(word.raw, target);
-            break :blk command_plan.ForWords{ .explicit = explicit };
+            var explicit: std.ArrayList([]const u8) = .empty;
+            errdefer explicit.deinit(self.allocator);
+            for (command.words) |word| {
+                const fields = try self.expandFields(word.raw, target);
+                try explicit.appendSlice(self.allocator, fields.fields);
+            }
+            break :blk command_plan.ForWords{ .explicit = try explicit.toOwnedSlice(self.allocator) };
         };
         const name = try self.allocator.dupe(u8, command.name);
-        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .redirections = redirections.plan, .body = .{ .for_loop = .{ .variable_name = name, .words = words, .body = body } } };
+        const body_source = try self.allocator.dupe(u8, command.body);
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .redirections = redirections.plan, .body = .{ .for_loop = .{ .variable_name = name, .words = words, .body_source = body_source, .body = .{} } } };
         plan.validate();
         return .{ .compound = plan };
     }
@@ -2577,7 +2577,10 @@ fn evaluateForLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_c
     var result = normalEvaluation(0);
     for (words) |word| {
         try assignForLoopVariable(evaluator.allocator, shell_state, eval_context.target, for_plan.variable_name, word);
-        const body = try evaluateStatementList(evaluator, shell_state, loop_context, for_plan.body, buffers);
+        const body = if (for_plan.body_source) |source|
+            try evaluateStatementListSource(evaluator, shell_state, loop_context, source, buffers)
+        else
+            try evaluateStatementList(evaluator, shell_state, loop_context, for_plan.body, buffers);
         switch (consumeLoopControl(body.control_flow)) {
             .stop => return normalEvaluation(0),
             .repeat => {
@@ -2592,6 +2595,30 @@ fn evaluateForLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_c
         }
     }
     return result;
+}
+
+fn evaluateStatementListSource(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, source: []const u8, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
+
+    var parser_resolver = ParserTrapActionResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    const resolver = parser_resolver.resolver();
+    var body = (resolver.resolve(evaluator.allocator, source, .TERM, eval_context, shell_state) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    }) orelse return error.Unimplemented;
+    defer body.deinit();
+
+    var body_outcome = try evaluateTrapActionBody(evaluator, shell_state, eval_context, body);
+    defer body_outcome.deinit();
+
+    try appendOutcomeBuffers(buffers, body_outcome);
+    try applyOutcomeToWorkingState(shell_state, &body_outcome, body_outcome.state_delta.target);
+    return .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
 }
 
 fn evaluateCaseClause(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, case_plan: command_plan.CasePlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
@@ -2793,23 +2820,7 @@ fn evaluateFunctionSourceBody(evaluator: *Evaluator, frame_state: *state.ShellSt
     function_context.validate();
     std.debug.assert(function_context.canReturnFromFunction());
     std.debug.assert(std.mem.indexOfScalar(u8, source_body, 0) == null);
-
-    var parser_resolver = ParserTrapActionResolver.init(evaluator);
-    parser_resolver.features = evaluator.features;
-    parser_resolver.arg_zero = evaluator.arg_zero;
-    const resolver = parser_resolver.resolver();
-    var body = (resolver.resolve(evaluator.allocator, source_body, .TERM, function_context, frame_state) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => return error.Unimplemented,
-    }) orelse return error.Unimplemented;
-    defer body.deinit();
-
-    var body_outcome = try evaluateTrapActionBody(evaluator, frame_state, function_context, body);
-    defer body_outcome.deinit();
-
-    try appendOutcomeBuffers(buffers, body_outcome);
-    try applyOutcomeToWorkingState(frame_state, &body_outcome, body_outcome.state_delta.target);
-    return .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
+    return evaluateStatementListSource(evaluator, frame_state, function_context, source_body, buffers);
 }
 
 fn applyFunctionAssignmentPrefixes(frame_state: *state.ShellState, shell_state: state.ShellState, plan: command_plan.CommandPlan) EvalError!void {

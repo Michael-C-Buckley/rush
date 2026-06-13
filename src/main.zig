@@ -7192,9 +7192,8 @@ fn semanticProgramHasCompoundRedirections(program: ir.Program) bool {
 fn semanticProgramHasLoopDependentExpansion(program: ir.Program) bool {
     for (program.for_commands) |command| {
         if (!command.use_positionals) {
-            for (command.words) |word| if (wordUsesLoopDependentExpansion(word.raw)) return true;
+            for (command.words) |word| if (wordUsesUnsupportedForWordExpansion(word.raw)) return true;
         }
-        if (std.mem.indexOfScalar(u8, command.body, '$') != null) return true;
     }
     for (program.loop_commands) |command| {
         if (std.mem.indexOfScalar(u8, command.condition, '$') != null) return true;
@@ -7203,8 +7202,11 @@ fn semanticProgramHasLoopDependentExpansion(program: ir.Program) bool {
     return false;
 }
 
-fn wordUsesLoopDependentExpansion(raw: []const u8) bool {
-    return wordUsesUnsupportedProductionExpansion(raw) or std.mem.indexOfScalar(u8, raw, '$') != null;
+fn wordUsesUnsupportedForWordExpansion(raw: []const u8) bool {
+    return std.mem.indexOf(u8, raw, "$(") != null or
+        std.mem.indexOfScalar(u8, raw, '`') != null or
+        std.mem.indexOf(u8, raw, "${") != null or
+        std.mem.indexOf(u8, raw, "$((") != null;
 }
 
 fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir.Statement, index: usize) ?[]const u8 {
@@ -10850,6 +10852,32 @@ test "semantic non-interactive invocation lowers function bodies at call time" {
         .output => |result| {
             try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("call:first:2\nsame-list:nested\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
+test "semantic non-interactive invocation lowers function for bodies per iteration" {
+    var execution = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        \\h() for i in 1 2; do echo f$i; done
+        \\h
+        \\show() { for x in "$@"; do echo "<$x>"; done; }
+        \\show "a b" c ""
+    ,
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("f1\nf2\n<a b>\n<c>\n<>\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
     }
