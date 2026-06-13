@@ -5997,8 +5997,11 @@ pub const Executor = struct {
     }
 
     fn executeSimplePipelineStage(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions, is_last: bool, has_pipe_input: bool) !CommandResult {
-        if (is_last and !has_pipe_input) {
-            return self.executeSimpleCommandWithInput(command, stdin, options);
+        if (is_last and (!has_pipe_input or self.shouldRunLastPipelineStageInCurrentShell(command))) {
+            return if (has_pipe_input)
+                self.executeSimpleCommandWithPipelineInput(command, stdin, options)
+            else
+                self.executeSimpleCommandWithInput(command, stdin, options);
         }
 
         var child = Executor.init(self.allocator);
@@ -6014,6 +6017,12 @@ pub const Executor = struct {
             child.executeSimpleCommandWithPipelineInput(command, stdin, options)
         else
             child.executeSimpleCommandWithInput(command, stdin, options);
+    }
+
+    fn shouldRunLastPipelineStageInCurrentShell(self: Executor, command: ir.SimpleCommand) bool {
+        if (self.completion_builder == null) return false;
+        if (command.argv.len == 0) return false;
+        return std.mem.eql(u8, command.argv[0].text, "completion");
     }
 
     fn executePipelineStageSpan(self: *Executor, source: []const u8, stdin: []const u8, options: ExecuteOptions, is_last: bool, has_pipe_input: bool) !CommandResult {
@@ -21638,7 +21647,7 @@ test "executor short-circuits AND and OR lists" {
 }
 
 test "executor pipes stdout into stdin-consuming builtins" {
-    var lowered = try parseAndLower(std.testing.allocator, "echo hello | read x; echo \"got:$x\"");
+    var lowered = try parseAndLower(std.testing.allocator, "echo hello | { read x; echo \"got:$x\"; }");
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
