@@ -1993,11 +1993,12 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
             }
         }
         const target = classifyParameterTarget(expression[1..]);
-        if (target.kind == .unknown) return .invalid;
-        return .{ .expansion = .{
-            .target = target,
-            .operation = .length,
-        } };
+        if (target.kind != .unknown) {
+            return .{ .expansion = .{
+                .target = target,
+                .operation = .length,
+            } };
+        }
     }
 
     if (features.isBash() and expression.len > 1 and expression[0] == '!') {
@@ -2059,6 +2060,10 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
         else => return .invalid,
     };
     const word_start = operator_index + @as(usize, if (operator == .remove_large_suffix or operator == .remove_large_prefix) 2 else 1);
+    if (isHashSpecialParameter(target)) {
+        if (colon and isPatternParameterOperator(operator)) return .invalid;
+        if (!colon and word_start == expression.len and isAmbiguousHashSpecialOmittedWordOperator(operator)) return .invalid;
+    }
     if (operator == .remove_small_suffix or operator == .remove_large_suffix or operator == .remove_small_prefix or operator == .remove_large_prefix) {
         return .{ .expansion = .{
             .target = target,
@@ -2076,6 +2081,30 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
             .word = expression[word_start..],
         } },
     } };
+}
+
+fn isHashSpecialParameter(target: ParameterTarget) bool {
+    return target.kind == .special and std.mem.eql(u8, target.text, "#");
+}
+
+fn isPatternParameterOperator(operator: ParameterOperator) bool {
+    return switch (operator) {
+        .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => true,
+        else => false,
+    };
+}
+
+fn isAmbiguousHashSpecialOmittedWordOperator(operator: ParameterOperator) bool {
+    return switch (operator) {
+        .default_value,
+        .assign_default,
+        .alternate_value,
+        .error_if_unset,
+        .remove_small_suffix,
+        .remove_small_prefix,
+        => true,
+        else => false,
+    };
 }
 
 const BashArraySubscript = union(enum) {
@@ -4973,6 +5002,7 @@ fn testCommandSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script:
 const test_command_substitution: CommandSubstitution = .{ .runFn = testCommandSubstitution };
 
 fn testLookup(_: ?*const anyopaque, name: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, name, "#")) return "2";
     if (std.mem.eql(u8, name, "?")) return "0";
     if (std.mem.eql(u8, name, "0")) return "rush-test";
     if (std.mem.eql(u8, name, "HOME")) return "/home/rush";
@@ -5219,6 +5249,14 @@ test "parameter expansion supports POSIX operators" {
     defer std.testing.allocator.free(lengths);
     try std.testing.expectEqualStrings("9:0:0", lengths);
 
+    const hash_special = try expandWordScalar(std.testing.allocator, "${#}:${##}:${#:-fallback}:${#-fallback}:${#+alternate}:${#?required}:${#=fallback}", .{ .env = test_env });
+    defer std.testing.allocator.free(hash_special);
+    try std.testing.expectEqualStrings("2:1:2:2:alternate:2:2", hash_special);
+
+    const hash_patterns = try expandWordScalar(std.testing.allocator, "${###}:${#%%}:${#%2}", .{ .env = test_env });
+    defer std.testing.allocator.free(hash_patterns);
+    try std.testing.expectEqualStrings("2:2:", hash_patterns);
+
     try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }));
 }
 
@@ -5244,9 +5282,23 @@ test "structured parameter parser classifies POSIX forms" {
         else => try std.testing.expect(false),
     }
 
+    const hash_special = try expectParameterSyntax("#");
+    try expectParameterTarget(hash_special.target, .special, "#");
+    switch (hash_special.operation) {
+        .value => {},
+        else => try std.testing.expect(false),
+    }
+
     const length = try expectParameterSyntax("#USER");
     try expectParameterTarget(length.target, .name, "USER");
     switch (length.operation) {
+        .length => {},
+        else => try std.testing.expect(false),
+    }
+
+    const hash_length = try expectParameterSyntax("##");
+    try expectParameterTarget(hash_length.target, .special, "#");
+    switch (hash_length.operation) {
         .length => {},
         else => try std.testing.expect(false),
     }
@@ -5262,8 +5314,41 @@ test "structured parameter parser classifies POSIX forms" {
         else => try std.testing.expect(false),
     }
 
+    const hash_default = try expectParameterSyntax("#-fallback");
+    try expectParameterTarget(hash_default.target, .special, "#");
+    switch (hash_default.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.default_value, operation.kind);
+            try std.testing.expect(!operation.colon);
+            try std.testing.expectEqualStrings("fallback", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const hash_colon_default = try expectParameterSyntax("#:-fallback");
+    try expectParameterTarget(hash_colon_default.target, .special, "#");
+    switch (hash_colon_default.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.default_value, operation.kind);
+            try std.testing.expect(operation.colon);
+            try std.testing.expectEqualStrings("fallback", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
     const assign = try expectParameterSyntax("USER=value");
     switch (assign.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.assign_default, operation.kind);
+            try std.testing.expect(!operation.colon);
+            try std.testing.expectEqualStrings("value", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const hash_assign = try expectParameterSyntax("#=value");
+    try expectParameterTarget(hash_assign.target, .special, "#");
+    switch (hash_assign.operation) {
         .word => |operation| {
             try std.testing.expectEqual(ParameterOperator.assign_default, operation.kind);
             try std.testing.expect(!operation.colon);
@@ -5282,8 +5367,30 @@ test "structured parameter parser classifies POSIX forms" {
         else => try std.testing.expect(false),
     }
 
+    const hash_alternate = try expectParameterSyntax("#+yes");
+    try expectParameterTarget(hash_alternate.target, .special, "#");
+    switch (hash_alternate.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.alternate_value, operation.kind);
+            try std.testing.expect(!operation.colon);
+            try std.testing.expectEqualStrings("yes", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
     const error_if_unset = try expectParameterSyntax("USER?message");
     switch (error_if_unset.operation) {
+        .word => |operation| {
+            try std.testing.expectEqual(ParameterOperator.error_if_unset, operation.kind);
+            try std.testing.expect(!operation.colon);
+            try std.testing.expectEqualStrings("message", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const hash_error_if_unset = try expectParameterSyntax("#?message");
+    try expectParameterTarget(hash_error_if_unset.target, .special, "#");
+    switch (hash_error_if_unset.operation) {
         .word => |operation| {
             try std.testing.expectEqual(ParameterOperator.error_if_unset, operation.kind);
             try std.testing.expect(!operation.colon);
@@ -5301,11 +5408,41 @@ test "structured parameter parser classifies POSIX forms" {
         else => try std.testing.expect(false),
     }
 
+    const hash_suffix = try expectParameterSyntax("#%2");
+    try expectParameterTarget(hash_suffix.target, .special, "#");
+    switch (hash_suffix.operation) {
+        .pattern => |operation| {
+            try std.testing.expectEqual(ParameterOperator.remove_small_suffix, operation.kind);
+            try std.testing.expectEqualStrings("2", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const hash_large_suffix = try expectParameterSyntax("#%%");
+    try expectParameterTarget(hash_large_suffix.target, .special, "#");
+    switch (hash_large_suffix.operation) {
+        .pattern => |operation| {
+            try std.testing.expectEqual(ParameterOperator.remove_large_suffix, operation.kind);
+            try std.testing.expectEqualStrings("", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
     const prefix = try expectParameterSyntax("PATHLIKE##*/");
     switch (prefix.operation) {
         .pattern => |operation| {
             try std.testing.expectEqual(ParameterOperator.remove_large_prefix, operation.kind);
             try std.testing.expectEqualStrings("*/", operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const hash_large_prefix = try expectParameterSyntax("###");
+    try expectParameterTarget(hash_large_prefix.target, .special, "#");
+    switch (hash_large_prefix.operation) {
+        .pattern => |operation| {
+            try std.testing.expectEqual(ParameterOperator.remove_large_prefix, operation.kind);
+            try std.testing.expectEqualStrings("", operation.word);
         },
         else => try std.testing.expect(false),
     }
@@ -5322,6 +5459,11 @@ test "structured parameter parser rejects malformed POSIX forms" {
         "USER[0]",
         "arr[2]/two/TWO",
         "arr[@]^^",
+        "#=",
+        "#+",
+        "#%",
+        "#:#",
+        "#abc:-x",
     };
 
     for (cases) |case| try expectInvalidParameterSyntax(case);
@@ -5627,6 +5769,11 @@ test "parameter expansion rejects malformed braced forms" {
         "${!RUSH_PREFIX_*}",
         "${arr[2]/two/TWO}",
         "${arr[@]^^}",
+        "${#=}",
+        "${#+}",
+        "${#%}",
+        "${#:#}",
+        "${#abc:-x}",
     };
 
     for (cases) |case| {
