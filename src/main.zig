@@ -5977,9 +5977,11 @@ fn emptyCommandResult(allocator: std.mem.Allocator, status: exec.ExitStatus) !ex
 
 fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
     _ = options.io;
-    return executor.executeScriptSlice(script, options) catch |err| {
+    var execution_options = options;
+    execution_options.top_level_parse_diagnostics = true;
+    return executor.executeScriptSlice(script, execution_options) catch |err| {
         if (err != error.ParseError) return err;
-        return scriptDiagnosticsResult(allocator, executor, script, options);
+        return scriptDiagnosticsResult(allocator, executor, script, execution_options);
     };
 }
 
@@ -5990,7 +5992,7 @@ fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executo
     defer parsed.deinit();
 
     if (parsed.diagnostics.len != 0) {
-        return diagnosticsResult(allocator, script, parsed.diagnostics);
+        return exec.parseDiagnosticsResult(allocator, script, parsed.diagnostics);
     }
     return error.ParseError;
 }
@@ -6141,56 +6143,6 @@ fn installInteractiveSignalHandler(signal: std.posix.SIG) SignalActionGuard {
 }
 
 fn handleInteractiveSignal(_: std.posix.SIG) callconv(.c) void {}
-
-fn diagnosticsResult(allocator: std.mem.Allocator, script: []const u8, diagnostics: []const parser.Diagnostic) !exec.CommandResult {
-    var stderr: std.ArrayList(u8) = .empty;
-    errdefer stderr.deinit(allocator);
-
-    for (diagnostics) |diagnostic| {
-        const line = try std.fmt.allocPrint(allocator, "rush: {s}: {s}\n", .{
-            @tagName(diagnostic.kind),
-            diagnostic.message,
-        });
-        defer allocator.free(line);
-        try stderr.appendSlice(allocator, line);
-        try appendDiagnosticSource(allocator, &stderr, script, diagnostic.span);
-    }
-
-    return .{
-        .allocator = allocator,
-        .status = 2,
-        .stdout = try allocator.alloc(u8, 0),
-        .stderr = try stderr.toOwnedSlice(allocator),
-    };
-}
-
-fn appendDiagnosticSource(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source: []const u8, span: parser.Span) !void {
-    const line_start = findLineStart(source, span.start);
-    const line_end = findLineEnd(source, span.start);
-    const line = source[line_start..line_end];
-    const caret_start = span.start - line_start;
-    const caret_end = @max(caret_start + 1, @min(span.end, line_end) - line_start);
-
-    try out.appendSlice(allocator, "  ");
-    try out.appendSlice(allocator, line);
-    try out.append(allocator, '\n');
-    try out.appendSlice(allocator, "  ");
-    try out.appendNTimes(allocator, ' ', caret_start);
-    try out.appendNTimes(allocator, '^', caret_end - caret_start);
-    try out.append(allocator, '\n');
-}
-
-fn findLineStart(source: []const u8, offset: usize) usize {
-    var index = @min(offset, source.len);
-    while (index > 0 and source[index - 1] != '\n') index -= 1;
-    return index;
-}
-
-fn findLineEnd(source: []const u8, offset: usize) usize {
-    var index = @min(offset, source.len);
-    while (index < source.len and source[index] != '\n') index += 1;
-    return index;
-}
 
 const OutputStream = enum { stdout, stderr };
 
@@ -9310,6 +9262,20 @@ test "runScript executes newline-continued pipeline" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("before\nafter\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "runScript executes complete lines before late parse diagnostics" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\echo before
+        \\then
+        \\echo after
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("before\n", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "misplaced reserved word") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "echo after") == null);
 }
 
 test "parser smoke corpus parses representative snippets" {

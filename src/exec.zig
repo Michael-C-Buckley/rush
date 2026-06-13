@@ -55,6 +55,7 @@ pub const ExecuteOptions = struct {
     default_path_lookup: bool = false,
     verbose_input_echo: bool = true,
     alias_timing_chunks: bool = true,
+    top_level_parse_diagnostics: bool = false,
     completion_provider_only: bool = false,
     completion_loader: ?*const fn (*anyopaque, *Executor, []const u8, ExecuteOptions) anyerror!void = null,
     completion_loader_context: ?*anyopaque = null,
@@ -5660,7 +5661,19 @@ pub const Executor = struct {
         defer self.allocator.free(aliased);
         var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features.withStrictDiagnostics() });
         defer parsed.deinit();
-        if (parsed.diagnostics.len != 0) return error.ParseError;
+        if (parsed.diagnostics.len != 0) {
+            if (options.top_level_parse_diagnostics and self.execution_depth == 0) {
+                if (!self.shouldSkipForNoexec(options)) {
+                    if (try self.diagnosticChunkProgram(source, options.features)) |chunk_program| {
+                        var program = chunk_program;
+                        defer program.deinit();
+                        return self.executeScriptChunks(source, program, options);
+                    }
+                }
+                return parseDiagnosticsResult(self.allocator, source, parsed.diagnostics);
+            }
+            return error.ParseError;
+        }
         if (self.shouldSkipForNoexec(options) and !self.shell_options.verbose) return emptyResult(self.allocator, 0);
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         defer program.deinit();
@@ -5680,6 +5693,18 @@ pub const Executor = struct {
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         errdefer program.deinit();
         if (!canExecuteAsAliasTimingChunks(program)) {
+            program.deinit();
+            return null;
+        }
+        return program;
+    }
+
+    fn diagnosticChunkProgram(self: *Executor, script: []const u8, features: compat.Features) !?ir.Program {
+        var parsed = try parser.parse(self.allocator, script, .{ .features = features });
+        defer parsed.deinit();
+        var program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        errdefer program.deinit();
+        if (!canExecuteAsDiagnosticChunks(program)) {
             program.deinit();
             return null;
         }
@@ -5713,7 +5738,8 @@ pub const Executor = struct {
             var end_statement_index = lastStatementOnReadLine(script, program, statement_index);
             while (true) {
                 const end = if (end_statement_index + 1 < program.statements.len) program.statements[end_statement_index + 1].span.start else script.len;
-                if (try self.scriptSliceParsesWithCurrentAliases(script[start..end], options.features)) {
+                const parse_status = try self.scriptSliceParseStatusWithCurrentAliases(script[start..end], options.features);
+                if (parse_status == .complete) {
                     try self.appendOrWriteVerboseInput(options, &stderr, script, &verbose_read_offset, start, end);
                     if (self.shouldSkipForNoexec(options)) break :execute_chunks;
                     var statement_options = options;
@@ -5727,7 +5753,27 @@ pub const Executor = struct {
                     if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break :execute_chunks;
                     continue :execute_chunks;
                 }
-                if (end_statement_index + 1 >= program.statements.len) return error.ParseError;
+                if (parse_status == .invalid and options.top_level_parse_diagnostics and root_execution) {
+                    try self.appendOrWriteVerboseInput(options, &stderr, script, &verbose_read_offset, start, end);
+                    var result = try self.scriptSliceDiagnosticsResult(script[start..end], options.features);
+                    defer result.deinit();
+                    last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
+                    last_errexit_ignored_status = result.errexit_ignored_status;
+                    self.setLastStatus(last_status);
+                    break :execute_chunks;
+                }
+                if (end_statement_index + 1 >= program.statements.len) {
+                    if (options.top_level_parse_diagnostics and root_execution) {
+                        try self.appendOrWriteVerboseInput(options, &stderr, script, &verbose_read_offset, start, end);
+                        var result = try self.scriptSliceDiagnosticsResult(script[start..end], options.features);
+                        defer result.deinit();
+                        last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
+                        last_errexit_ignored_status = result.errexit_ignored_status;
+                        self.setLastStatus(last_status);
+                        break :execute_chunks;
+                    }
+                    return error.ParseError;
+                }
                 end_statement_index += 1;
                 end_statement_index = lastStatementOnReadLine(script, program, end_statement_index);
             }
@@ -5737,12 +5783,28 @@ pub const Executor = struct {
         return self.finishExecuteProgram(root_execution, options, result);
     }
 
-    fn scriptSliceParsesWithCurrentAliases(self: *Executor, script: []const u8, features: compat.Features) !bool {
+    const ScriptSliceParseStatus = enum {
+        complete,
+        incomplete,
+        invalid,
+    };
+
+    fn scriptSliceParseStatusWithCurrentAliases(self: *Executor, script: []const u8, features: compat.Features) !ScriptSliceParseStatus {
         const aliased = try self.expandAliasesForScriptWithFeatures(script, features);
         defer self.allocator.free(aliased);
         var parsed = try parser.parse(self.allocator, aliased, .{ .features = features.withStrictDiagnostics() });
         defer parsed.deinit();
-        return parsed.diagnostics.len == 0;
+        if (parsed.diagnostics.len == 0) return .complete;
+        return if (parsed.incomplete) .incomplete else .invalid;
+    }
+
+    fn scriptSliceDiagnosticsResult(self: *Executor, script: []const u8, features: compat.Features) !CommandResult {
+        const aliased = try self.expandAliasesForScriptWithFeatures(script, features);
+        defer self.allocator.free(aliased);
+        var parsed = try parser.parse(self.allocator, aliased, .{ .features = features.withStrictDiagnostics() });
+        defer parsed.deinit();
+        if (parsed.diagnostics.len == 0) return error.ParseError;
+        return parseDiagnosticsResult(self.allocator, script, parsed.diagnostics);
     }
 
     fn executeStatementSync(self: *Executor, program: ir.Program, statement: ir.Statement, options: ExecuteOptions) !CommandResult {
@@ -10961,6 +11023,16 @@ fn canExecuteAsAliasTimingChunks(program: ir.Program) bool {
     var previous_end: usize = 0;
     for (program.statements, 0..) |statement, index| {
         if (statement.op_before != .sequence or statement.async_after) return false;
+        if (index != 0 and statement.span.start < previous_end) return false;
+        previous_end = statement.span.end;
+    }
+    return true;
+}
+
+fn canExecuteAsDiagnosticChunks(program: ir.Program) bool {
+    if (program.statements.len < 2) return false;
+    var previous_end: usize = 0;
+    for (program.statements, 0..) |statement, index| {
         if (index != 0 and statement.span.start < previous_end) return false;
         previous_end = statement.span.end;
     }
@@ -17005,6 +17077,56 @@ fn emptyResult(allocator: std.mem.Allocator, status: ExitStatus) !CommandResult 
         .stdout = try allocator.alloc(u8, 0),
         .stderr = try allocator.alloc(u8, 0),
     };
+}
+
+pub fn parseDiagnosticsResult(allocator: std.mem.Allocator, script: []const u8, diagnostics: []const parser.Diagnostic) !CommandResult {
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(allocator);
+
+    for (diagnostics) |diagnostic| {
+        const line = try std.fmt.allocPrint(allocator, "rush: {s}: {s}\n", .{
+            @tagName(diagnostic.kind),
+            diagnostic.message,
+        });
+        defer allocator.free(line);
+        try stderr.appendSlice(allocator, line);
+        try appendDiagnosticSource(allocator, &stderr, script, diagnostic.span);
+    }
+
+    return .{
+        .allocator = allocator,
+        .status = 2,
+        .stdout = try allocator.alloc(u8, 0),
+        .stderr = try stderr.toOwnedSlice(allocator),
+    };
+}
+
+fn appendDiagnosticSource(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source: []const u8, span: parser.Span) !void {
+    const line_start = diagnosticLineStart(source, span.start);
+    const line_end = diagnosticLineEnd(source, span.start);
+    const line = source[line_start..line_end];
+    const caret_start = span.start - line_start;
+    const caret_end = @max(caret_start + 1, @min(span.end, line_end) - line_start);
+
+    try out.appendSlice(allocator, "  ");
+    try out.appendSlice(allocator, line);
+    try out.append(allocator, '\n');
+    try out.appendSlice(allocator, "  ");
+    try out.appendNTimes(allocator, ' ', caret_start);
+    try out.appendNTimes(allocator, '^', caret_end - caret_start);
+    try out.append(allocator, '\n');
+}
+
+fn diagnosticLineStart(source: []const u8, offset: usize) usize {
+    var index = @min(offset, source.len);
+    while (index > 0 and source[index - 1] != '\n') index -= 1;
+    return index;
+}
+
+fn diagnosticLineEnd(source: []const u8, offset: usize) usize {
+    var index = @min(offset, source.len);
+    while (index < source.len and source[index] != '\n') index += 1;
+    return index;
 }
 
 fn appendDiagnosticLine(allocator: std.mem.Allocator, stderr: *std.ArrayList(u8), command: []const u8, message: []const u8) !void {
