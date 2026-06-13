@@ -4170,6 +4170,7 @@ pub const Executor = struct {
     fn finishExpansionErrorProgram(self: *Executor, root_execution: bool, options: ExecuteOptions, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), err: anyerror) !CommandResult {
         var failure = switch (err) {
             error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => try self.expansionErrorResult(err, options),
+            error.ParseError => try errorResult(self.allocator, 2, "rush", "syntax error"),
             else => return err,
         };
         defer failure.deinit();
@@ -18033,6 +18034,24 @@ test "executor executes POSIX while and until loops" {
     defer break_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), break_result.status);
     try std.testing.expectEqualStrings("once\n", break_result.stdout);
+
+    var nested_for_lowered = try parseAndLower(std.testing.allocator, "while true; do true; for i in a; do echo x; done; break; done; echo ok");
+    defer nested_for_lowered.parsed.deinit();
+    defer nested_for_lowered.program.deinit();
+
+    var nested_for_result = try executor.executeProgram(nested_for_lowered.program, .{});
+    defer nested_for_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), nested_for_result.status);
+    try std.testing.expectEqualStrings("x\nok\n", nested_for_result.stdout);
+
+    var until_nested_for_lowered = try parseAndLower(std.testing.allocator, "until false; do true; for i in a; do echo x; done; break; done; echo ok");
+    defer until_nested_for_lowered.parsed.deinit();
+    defer until_nested_for_lowered.program.deinit();
+
+    var until_nested_for_result = try executor.executeProgram(until_nested_for_lowered.program, .{});
+    defer until_nested_for_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), until_nested_for_result.status);
+    try std.testing.expectEqualStrings("x\nok\n", until_nested_for_result.stdout);
 }
 
 test "executor feeds loop input redirection through read conditions" {
@@ -18081,6 +18100,15 @@ test "executor executes POSIX if compound commands" {
     defer elif_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), elif_result.status);
     try std.testing.expectEqualStrings("elif\n", elif_result.stdout);
+
+    var nested_if_in_case_lowered = try parseAndLower(std.testing.allocator, "if true; then true; case x in *) if false; then echo bad; fi ;; esac; fi; echo ok");
+    defer nested_if_in_case_lowered.parsed.deinit();
+    defer nested_if_in_case_lowered.program.deinit();
+
+    var nested_if_in_case_result = try executor.executeProgram(nested_if_in_case_lowered.program, .{});
+    defer nested_if_in_case_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), nested_if_in_case_result.status);
+    try std.testing.expectEqualStrings("ok\n", nested_if_in_case_result.stdout);
 }
 
 test "command and exec builtins do not re-expand expanded arguments" {

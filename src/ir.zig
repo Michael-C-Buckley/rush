@@ -991,23 +991,34 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
 fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !LoopCommand {
     std.debug.assert(node.kind == .loop_command);
     const opener = parsed.tokens[node.token_start].lexeme(parsed.source);
+    var condition_node: ?parser.Node = null;
+    var body_node: ?parser.Node = null;
     var do_token: ?usize = null;
     var done_token: ?usize = null;
-    var depth: usize = 0;
 
-    for (node.token_start..node.token_end) |token_index| {
-        const token = parsed.tokens[token_index];
-        if (token.kind != .word or !isReservedPosition(parsed, node.token_start, token_index)) continue;
-        const lexeme = token.lexeme(parsed.source);
-        if (std.mem.eql(u8, lexeme, "while") or std.mem.eql(u8, lexeme, "until")) {
-            depth += 1;
-        } else if (depth == 1 and do_token == null and std.mem.eql(u8, lexeme, "do")) {
-            do_token = token_index;
-        } else if (std.mem.eql(u8, lexeme, "done")) {
-            if (depth == 1 and done_token == null) done_token = token_index;
-            if (depth > 0) depth -= 1;
-        }
-    }
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .node => |node_id| {
+            const child_node = parsed.nodes[node_id.index()];
+            if (child_node.kind == .list) {
+                if (condition_node == null) {
+                    condition_node = child_node;
+                } else if (body_node == null) {
+                    body_node = child_node;
+                }
+            }
+        },
+        .token => |token_id| {
+            const token_index = token_id.index();
+            const token = parsed.tokens[token_index];
+            if (token.kind != .word) continue;
+            const lexeme = token.lexeme(parsed.source);
+            if (do_token == null and std.mem.eql(u8, lexeme, "do")) {
+                do_token = token_index;
+            } else if (done_token == null and std.mem.eql(u8, lexeme, "done")) {
+                done_token = token_index;
+            }
+        },
+    };
 
     const do_index = do_token orelse node.token_end;
     const done_index = done_token orelse node.token_end;
@@ -1019,41 +1030,45 @@ fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     return .{
         .span = node.span,
         .kind = if (std.mem.eql(u8, opener, "while")) .while_loop else .until_loop,
-        .condition = spanSlice(parsed, node.token_start + 1, do_index),
-        .body = spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
+        .condition = if (condition_node) |condition| spanSlice(parsed, condition.token_start, condition.token_end) else spanSlice(parsed, node.token_start + 1, do_index),
+        .body = if (body_node) |body| spanSlice(parsed, body.token_start, body.token_end) else spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
 
 fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !IfCommand {
     std.debug.assert(node.kind == .if_command);
-    var then_token: ?usize = null;
+    var condition_node: ?parser.Node = null;
+    var then_node: ?parser.Node = null;
     var else_token: ?usize = null;
     var fi_token: ?usize = null;
-    var depth: usize = 0;
+    var list_index: usize = 0;
 
-    for (node.token_start..node.token_end) |token_index| {
-        const token = parsed.tokens[token_index];
-        if (token.kind != .word or !isReservedPosition(parsed, node.token_start, token_index)) continue;
-        const lexeme = token.lexeme(parsed.source);
-        if (std.mem.eql(u8, lexeme, "if")) {
-            depth += 1;
-        } else if (std.mem.eql(u8, lexeme, "fi")) {
-            if (depth == 1 and fi_token == null) fi_token = token_index;
-            if (depth > 0) depth -= 1;
-        } else if (depth == 1 and then_token == null and std.mem.eql(u8, lexeme, "then")) {
-            then_token = token_index;
-        } else if (depth == 1 and else_token == null and (std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif"))) {
-            else_token = token_index;
-        }
-    }
+    for (parsed.nodeChildren(node)) |child| switch (child) {
+        .node => |node_id| {
+            const child_node = parsed.nodes[node_id.index()];
+            if (child_node.kind != .list) continue;
+            if (list_index == 0) {
+                condition_node = child_node;
+            } else if (list_index == 1) {
+                then_node = child_node;
+            }
+            list_index += 1;
+        },
+        .token => |token_id| {
+            const token_index = token_id.index();
+            const token = parsed.tokens[token_index];
+            if (token.kind != .word) continue;
+            const lexeme = token.lexeme(parsed.source);
+            if (fi_token == null and std.mem.eql(u8, lexeme, "fi")) {
+                fi_token = token_index;
+            } else if (else_token == null and (std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif"))) {
+                else_token = token_index;
+            }
+        },
+    };
 
-    const then_index = then_token orelse node.token_end;
     const fi_index = fi_token orelse node.token_end;
-    const condition_start = node.token_start + 1;
-    const condition_end = then_index;
-    const body_start = @min(then_index + 1, node.token_end);
-    const body_end = else_token orelse fi_index;
     const else_body = if (else_token) |else_index| blk: {
         if (std.mem.eql(u8, parsed.tokens[else_index].lexeme(parsed.source), "elif")) {
             break :blk spanSlice(parsed, else_index, fi_index);
@@ -1069,8 +1084,8 @@ fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node
 
     return .{
         .span = node.span,
-        .condition = spanSlice(parsed, condition_start, condition_end),
-        .then_body = spanSlice(parsed, body_start, body_end),
+        .condition = if (condition_node) |condition| spanSlice(parsed, condition.token_start, condition.token_end) else "",
+        .then_body = if (then_node) |then_body| spanSlice(parsed, then_body.token_start, then_body.token_end) else "",
         .else_body = else_body,
         .redirections = try redirections.toOwnedSlice(allocator),
     };
