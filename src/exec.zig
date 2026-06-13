@@ -17275,6 +17275,25 @@ test "executor rejects over-depth compound command nesting" {
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "nesting level too deep") != null);
 }
 
+test "executor rejects reported-depth nested for loops without overflowing stack" {
+    var script: std.ArrayList(u8) = .empty;
+    defer script.deinit(std.testing.allocator);
+    const nested_loop_count = 1200;
+
+    for (0..nested_loop_count) |index| try script.print(std.testing.allocator, "for v{d} in 1; do ", .{index});
+    try script.appendSlice(std.testing.allocator, "echo too-deep");
+    for (0..nested_loop_count) |_| try script.appendSlice(std.testing.allocator, "; done");
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var result = try executor.executeScriptSlice(script.items, .{});
+    defer result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "nesting level too deep") != null);
+}
+
 test "executor rejects over-depth shell function recursion" {
     var executor = Executor.init(std.testing.allocator);
     defer executor.deinit();
