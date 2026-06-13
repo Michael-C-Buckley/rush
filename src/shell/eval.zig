@@ -6256,6 +6256,47 @@ test "semantic parser trap resolver lowers heterogeneous statement lists and fun
     try std.testing.expectEqualStrings("function\n", call_outcome.stdout.items);
 }
 
+test "semantic parser trap resolver classifies same-list function calls" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    var body = (try parser_resolver.resolver().resolve(
+        std.testing.allocator,
+        "fn() { echo hi; }; fn",
+        .TERM,
+        eval_context,
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const list = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .compound => |compound| switch (compound.body) {
+                .sequence => |list| list,
+                else => return error.ExpectedStatementList,
+            },
+            else => return error.ExpectedCompoundPlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+    try std.testing.expectEqual(@as(usize, 2), list.statements.len);
+    switch (list.statements[1].plan) {
+        .simple => |plan| switch (plan.classification) {
+            .function => |definition| try std.testing.expectEqualStrings("fn", definition.name),
+            else => return error.ExpectedFunctionCall,
+        },
+        else => return error.ExpectedFunctionCall,
+    }
+
+    var call_outcome = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body);
+    defer call_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call_outcome.status);
+    try std.testing.expectEqualStrings("hi\n", call_outcome.stdout.items);
+}
+
 test "semantic parser trap resolver models parse failures as trap diagnostics" {
     var shell_state = state.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
