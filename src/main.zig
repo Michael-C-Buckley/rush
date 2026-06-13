@@ -5871,6 +5871,7 @@ fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, i
         },
         .standard_input => script: {
             owned_script = try readStandardInputScript(allocator, io);
+            options.stdin_script_file = std.Io.File.stdin();
             break :script owned_script.?;
         },
     };
@@ -9079,6 +9080,46 @@ test "standard input script source still leaves read at EOF" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("x=[] status=1\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "standard input file script seeks stdin before external commands" {
+    const path = "rush-stdin-script-seek-external.tmp";
+    const output_path = "rush-stdin-script-seek-external.out";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, output_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "echo start > rush-stdin-script-seek-external.out\n/usr/bin/head -1 >> rush-stdin-script-seek-external.out\necho end >> rush-stdin-script-seek-external.out\n" });
+
+    const invocation = parseShellInvocation(&.{"rush"}) orelse return error.ExpectedInvocation;
+    var file = try std.Io.Dir.cwd().openFile(std.testing.io, path, .{});
+    defer file.close(std.testing.io);
+    var guard = try StdinGuard.replaceWith(file);
+    defer guard.restore();
+    var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .inherit, false);
+    defer result.deinit();
+    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, output_path, std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(output);
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqualStrings("start\necho end >> rush-stdin-script-seek-external.out\n", output);
+}
+
+test "standard input file script skips lines consumed by read" {
+    const path = "rush-stdin-script-seek-read.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "read x\nprintf 'x=[%s]\\n' \"$x\"\nprintf 'after\\n'\n" });
+
+    const invocation = parseShellInvocation(&.{"rush"}) orelse return error.ExpectedInvocation;
+    var result = try runInvocationWithFileStdin(invocation, path);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("after\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

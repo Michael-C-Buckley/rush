@@ -57,6 +57,8 @@ pub const ExecuteOptions = struct {
     alias_timing_chunks: bool = true,
     top_level_parse_diagnostics: bool = false,
     completion_provider_only: bool = false,
+    stdin_script_file: ?std.Io.File = null,
+    stdin_script_source_offset: usize = 0,
     completion_loader: ?*const fn (*anyopaque, *Executor, []const u8, ExecuteOptions) anyerror!void = null,
     completion_loader_context: ?*anyopaque = null,
     abort_on_output_write_failure: bool = false,
@@ -4092,6 +4094,8 @@ pub const Executor = struct {
         defer {
             if (root_execution) self.pending_command_abort = false;
         }
+        const stdin_script_guard = if (root_execution) self.pushScriptStdin("", options.stdin_script_file, options.stdin_script_file != null) else null;
+        defer if (stdin_script_guard) |guard| guard.restore();
         self.execution_depth += 1;
         defer self.execution_depth -= 1;
 
@@ -4102,16 +4106,21 @@ pub const Executor = struct {
         var last_status: ExitStatus = 0;
         var last_errexit_ignored_status = false;
         var verbose_read_offset: usize = 0;
+        var stdin_script_consumed_until: usize = 0;
 
         if (program.statements.len > 0) {
             for (program.statements, 0..) |statement, statement_index| {
                 try checkCanceled(options);
-                const next_start = if (statement_index + 1 < program.statements.len) program.statements[statement_index + 1].span.start else program.source.len;
-                try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, statement.span.start, next_start);
+                const statement_start = statementSourceStart(program, statement);
+                const next_start = if (statement_index + 1 < program.statements.len) statementSourceStart(program, program.statements[statement_index + 1]) else program.source.len;
+                if (root_execution and stdinScriptSourceConsumed(options, stdin_script_consumed_until, statement_start)) continue;
+                try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, statement_start, next_start);
                 if (self.shouldSkipForNoexec(options)) break;
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
                 self.refreshBackgroundJobs();
-                self.setCurrentLineNumber(program.source, statement.span.start);
+                const stdin_read_end = if (statement.kind == .pipeline) sourceLineReadEnd(program.source, statement_start) else @max(sourceLineReadEnd(program.source, statement_start), @min(next_start, program.source.len));
+                const stdin_script_read_end = if (root_execution) syncStdinScriptFileBeforeCommand(options, stdin_read_end) else null;
+                self.setCurrentLineNumber(program.source, statement_start);
                 const and_or_guard_context = isFollowedByAndOrListOp(program.statements, statement_index);
                 var statement_options = options;
                 statement_options.verbose_input_echo = false;
@@ -4125,6 +4134,7 @@ pub const Executor = struct {
                 const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
                 const result_errexit_ignored_status = result.errexit_ignored_status;
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
+                if (stdin_script_read_end) |read_end| stdin_script_consumed_until = @max(stdin_script_consumed_until, stdinScriptConsumedOffsetAfterCommand(options, read_end));
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
                 const negated_pipeline = statement.kind == .pipeline and program.pipelines[statement.index].negated;
@@ -4139,12 +4149,15 @@ pub const Executor = struct {
         if (program.pipelines.len > 0) {
             for (program.pipelines, 0..) |pipeline, pipeline_index| {
                 try checkCanceled(options);
-                const next_start = if (pipeline_index + 1 < program.pipelines.len) program.pipelines[pipeline_index + 1].span.start else program.source.len;
-                try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, pipeline.span.start, next_start);
+                const pipeline_start = pipelineSourceStart(program, pipeline);
+                const next_start = if (pipeline_index + 1 < program.pipelines.len) pipelineSourceStart(program, program.pipelines[pipeline_index + 1]) else program.source.len;
+                if (root_execution and stdinScriptSourceConsumed(options, stdin_script_consumed_until, pipeline_start)) continue;
+                try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, pipeline_start, next_start);
                 if (self.shouldSkipForNoexec(options)) break;
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
                 self.refreshBackgroundJobs();
-                self.setCurrentLineNumber(program.source, pipeline.span.start);
+                const stdin_script_read_end = if (root_execution) syncStdinScriptFileBeforeCommand(options, sourceLineReadEnd(program.source, pipeline_start)) else null;
+                self.setCurrentLineNumber(program.source, pipeline_start);
                 const and_or_guard_context = isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index);
                 var pipeline_options = options;
                 pipeline_options.verbose_input_echo = false;
@@ -4158,6 +4171,7 @@ pub const Executor = struct {
                 const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
                 const result_errexit_ignored_status = result.errexit_ignored_status;
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
+                if (stdin_script_read_end) |read_end| stdin_script_consumed_until = @max(stdin_script_consumed_until, stdinScriptConsumedOffsetAfterCommand(options, read_end));
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
                 const ignored_status = self.applyErrexit(last_status, options, pipeline.negated or and_or_guard_context, result_errexit_ignored_status);
@@ -4170,11 +4184,14 @@ pub const Executor = struct {
 
         for (program.commands, 0..) |command, command_index| {
             try checkCanceled(options);
-            const next_start = if (command_index + 1 < program.commands.len) program.commands[command_index + 1].span.start else program.source.len;
-            try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, command.span.start, next_start);
+            const command_start = commandSourceStart(command);
+            const next_start = if (command_index + 1 < program.commands.len) commandSourceStart(program.commands[command_index + 1]) else program.source.len;
+            if (root_execution and stdinScriptSourceConsumed(options, stdin_script_consumed_until, command_start)) continue;
+            try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, command_start, next_start);
             if (self.shouldSkipForNoexec(options)) break;
             self.refreshBackgroundJobs();
-            self.setCurrentLineNumber(program.source, command.span.start);
+            const stdin_script_read_end = if (root_execution) syncStdinScriptFileBeforeCommand(options, sourceLineReadEnd(program.source, command_start)) else null;
+            self.setCurrentLineNumber(program.source, command_start);
             var command_options = options;
             command_options.verbose_input_echo = false;
             var result = self.executeSimpleCommand(command, command_options) catch |err| return self.finishExpansionErrorProgram(root_execution, options, &stdout, &stderr, err);
@@ -4183,6 +4200,7 @@ pub const Executor = struct {
             const result_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
             const result_errexit_ignored_status = result.errexit_ignored_status;
             try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
+            if (stdin_script_read_end) |read_end| stdin_script_consumed_until = @max(stdin_script_consumed_until, stdinScriptConsumedOffsetAfterCommand(options, read_end));
             last_status = self.pending_exit orelse result_status;
             self.setLastStatus(last_status);
             const ignored_status = self.applyErrexit(last_status, options, false, result_errexit_ignored_status);
@@ -4354,6 +4372,27 @@ pub const Executor = struct {
         while (end < source.len and source[end] != '\n') : (end += 1) {}
         if (end < source.len) end += 1;
         return end;
+    }
+
+    fn syncStdinScriptFileBeforeCommand(options: ExecuteOptions, read_end: usize) ?usize {
+        const file = options.stdin_script_file orelse return null;
+        const absolute_read_end = options.stdin_script_source_offset + read_end;
+        const offset = std.math.cast(std.c.off_t, absolute_read_end) orelse return null;
+        if (std.c.lseek(file.handle, offset, std.c.SEEK.SET) < 0) return null;
+        return absolute_read_end;
+    }
+
+    fn stdinScriptConsumedOffsetAfterCommand(options: ExecuteOptions, read_end: usize) usize {
+        const file = options.stdin_script_file orelse return read_end;
+        const current = std.c.lseek(file.handle, 0, std.c.SEEK.CUR);
+        if (current < 0) return read_end;
+        const current_offset: usize = @intCast(current);
+        return if (current_offset > read_end) current_offset else read_end;
+    }
+
+    fn stdinScriptSourceConsumed(options: ExecuteOptions, consumed_until: usize, source_offset: usize) bool {
+        if (options.stdin_script_file == null) return false;
+        return options.stdin_script_source_offset + source_offset < consumed_until;
     }
 
     fn appendOrWriteCommandSubstitutionStderr(self: *Executor, options: ExecuteOptions, stderr: *std.ArrayList(u8)) !void {
@@ -5716,41 +5755,43 @@ pub const Executor = struct {
         if (trimmed.len == 0) return emptyResult(self.allocator, 0);
         if (self.cachedParsedBodyProgram(script)) |program| return self.executeProgram(program, options);
         const source = std.mem.trimStart(u8, script, " \t\r\n;");
+        var execution_options = options;
+        execution_options.stdin_script_source_offset += source.ptr - script.ptr;
         if (options.alias_timing_chunks and containsAliasTimingCommandToken(source)) {
-            if (try self.aliasTimingChunkProgram(source, options)) |chunk_program| {
+            if (try self.aliasTimingChunkProgram(source, execution_options)) |chunk_program| {
                 var program = chunk_program;
                 defer program.deinit();
-                return self.executeScriptChunks(source, program, options);
+                return self.executeScriptChunks(source, program, execution_options);
             }
         }
-        const aliased = try self.expandAliasesForScriptWithFeatures(source, options.features);
+        const aliased = try self.expandAliasesForScriptWithFeatures(source, execution_options.features);
         defer self.allocator.free(aliased);
-        var parsed = try parser.parse(self.allocator, aliased, .{ .features = options.features.withStrictDiagnostics() });
+        var parsed = try parser.parse(self.allocator, aliased, .{ .features = execution_options.features.withStrictDiagnostics() });
         defer parsed.deinit();
         if (parsed.diagnostics.len != 0) {
-            if (options.top_level_parse_diagnostics and self.execution_depth == 0) {
+            if (execution_options.top_level_parse_diagnostics and self.execution_depth == 0) {
                 if (hasMisplacedReservedWordDiagnostic(parsed.diagnostics)) {
                     return parseDiagnosticsResult(self.allocator, source, parsed.diagnostics);
                 }
-                if (!self.shouldSkipForNoexec(options)) {
-                    if (try self.diagnosticChunkProgram(source, options.features)) |chunk_program| {
+                if (!self.shouldSkipForNoexec(execution_options)) {
+                    if (try self.diagnosticChunkProgram(source, execution_options.features)) |chunk_program| {
                         var program = chunk_program;
                         defer program.deinit();
-                        return self.executeScriptChunks(source, program, options);
+                        return self.executeScriptChunks(source, program, execution_options);
                     }
                 }
                 return parseDiagnosticsResult(self.allocator, source, parsed.diagnostics);
             }
             return error.ParseError;
         }
-        if (self.shouldSkipForNoexec(options) and !self.shell_options.verbose) return emptyResult(self.allocator, 0);
+        if (self.shouldSkipForNoexec(execution_options) and !self.shell_options.verbose) return emptyResult(self.allocator, 0);
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         defer program.deinit();
         const cache_start = self.parsed_body_programs.items.len;
         defer self.clearParsedBodyProgramsFrom(cache_start);
         try self.populateParsedBodyProgramCache(parsed);
-        if (self.shouldSkipForNoexec(options)) return emptyResult(self.allocator, 0);
-        var result = try self.executeProgram(program, options);
+        if (self.shouldSkipForNoexec(execution_options)) return emptyResult(self.allocator, 0);
+        var result = try self.executeProgram(program, execution_options);
         errdefer result.deinit();
         return result;
     }
@@ -5789,6 +5830,8 @@ pub const Executor = struct {
         defer {
             if (root_execution) self.pending_command_abort = false;
         }
+        const stdin_script_guard = if (root_execution) self.pushScriptStdin("", options.stdin_script_file, options.stdin_script_file != null) else null;
+        defer if (stdin_script_guard) |guard| guard.restore();
         self.execution_depth += 1;
         defer self.execution_depth -= 1;
 
@@ -5799,18 +5842,24 @@ pub const Executor = struct {
         var last_status: ExitStatus = 0;
         var last_errexit_ignored_status = false;
         var verbose_read_offset: usize = 0;
+        var stdin_script_consumed_until: usize = 0;
         var statement_index: usize = 0;
         execute_chunks: while (statement_index < program.statements.len) {
-            const start = program.statements[statement_index].span.start;
+            const start = statementSourceStart(program, program.statements[statement_index]);
+            if (root_execution and stdinScriptSourceConsumed(options, stdin_script_consumed_until, start)) {
+                statement_index += 1;
+                continue :execute_chunks;
+            }
             // Alias definitions become visible only after the next input line is
             // read; keep same-line statements in one parse with the prior alias table.
             var end_statement_index = lastStatementOnReadLine(script, program, statement_index);
             while (true) {
-                const end = if (end_statement_index + 1 < program.statements.len) program.statements[end_statement_index + 1].span.start else script.len;
+                const end = if (end_statement_index + 1 < program.statements.len) statementSourceStart(program, program.statements[end_statement_index + 1]) else script.len;
                 const parse_status = try self.scriptSliceParseStatusWithCurrentAliases(script[start..end], options.features);
                 if (parse_status == .complete) {
                     try self.appendOrWriteVerboseInput(options, &stderr, script, &verbose_read_offset, start, end);
                     if (self.shouldSkipForNoexec(options)) break :execute_chunks;
+                    const stdin_script_read_end = if (root_execution) syncStdinScriptFileBeforeCommand(options, end) else null;
                     var statement_options = options;
                     statement_options.verbose_input_echo = false;
                     statement_options.alias_timing_chunks = false;
@@ -5818,6 +5867,7 @@ pub const Executor = struct {
                     defer result.deinit();
                     last_status = try self.appendOrWriteResultStatus(options, &stdout, &stderr, result);
                     last_errexit_ignored_status = result.errexit_ignored_status;
+                    if (stdin_script_read_end) |read_end| stdin_script_consumed_until = @max(stdin_script_consumed_until, stdinScriptConsumedOffsetAfterCommand(options, read_end));
                     statement_index = end_statement_index + 1;
                     if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break :execute_chunks;
                     continue :execute_chunks;
@@ -9350,6 +9400,7 @@ pub const Executor = struct {
             .stdout => try appendOwnedBytes(self.allocator, stdout, bytes),
             .stderr => try appendOwnedBytes(self.allocator, stderr, bytes),
             .file => |file_sink| try self.writeRedirectedBytes(bytes, file_sink.redirection, options),
+            .fd => |fd| try rawWriteAll(fd, bytes),
         }
     }
 
@@ -10642,6 +10693,34 @@ fn statementText(program: ir.Program, statement: ir.Statement) []const u8 {
     };
 }
 
+fn statementSourceStart(program: ir.Program, statement: ir.Statement) usize {
+    const span = switch (statement.kind) {
+        .pipeline => return pipelineSourceStart(program, program.pipelines[statement.index]),
+        .if_command => program.if_commands[statement.index].span,
+        .loop_command => program.loop_commands[statement.index].span,
+        .for_command => program.for_commands[statement.index].span,
+        .case_command => program.case_commands[statement.index].span,
+        .function_definition => program.function_definitions[statement.index].span,
+        .bash_test_command => program.bash_test_commands[statement.index].span,
+        .brace_group => program.brace_groups[statement.index].span,
+        .subshell => program.subshells[statement.index].span,
+    };
+    return span.start;
+}
+
+fn pipelineSourceStart(program: ir.Program, pipeline: ir.Pipeline) usize {
+    if (pipeline.command_indexes.len == 0) return pipeline.span.start;
+    return commandSourceStart(program.commands[pipeline.command_indexes[0]]);
+}
+
+fn commandSourceStart(command: ir.SimpleCommand) usize {
+    var start: ?usize = null;
+    for (command.assignments) |word| start = @min(start orelse word.span.start, word.span.start);
+    for (command.argv) |word| start = @min(start orelse word.span.start, word.span.start);
+    for (command.redirections) |redirection| start = @min(start orelse redirection.span.start, redirection.span.start);
+    return start orelse command.span.start;
+}
+
 fn pipelineText(program: ir.Program, pipeline: ir.Pipeline) []const u8 {
     return spanText(program.source, pipeline.span);
 }
@@ -11287,10 +11366,10 @@ fn canExecuteAsDiagnosticChunks(program: ir.Program) bool {
 
 fn lastStatementOnReadLine(script: []const u8, program: ir.Program, first_statement_index: usize) usize {
     std.debug.assert(first_statement_index < program.statements.len);
-    const start = program.statements[first_statement_index].span.start;
+    const start = statementSourceStart(program, program.statements[first_statement_index]);
     const line_end = if (std.mem.findScalar(u8, script[start..], '\n')) |offset| start + offset else script.len;
     var index = first_statement_index;
-    while (index + 1 < program.statements.len and program.statements[index + 1].span.start < line_end) : (index += 1) {}
+    while (index + 1 < program.statements.len and statementSourceStart(program, program.statements[index + 1]) < line_end) : (index += 1) {}
     return index;
 }
 
