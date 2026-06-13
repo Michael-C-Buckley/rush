@@ -6316,7 +6316,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
             try executor.runPromptEventHooks(io, "preexec", &.{input});
-            var result = try runScriptWithExecutor(allocator, &executor, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
+            var result = try runInteractiveScriptWithSemanticFallback(allocator, io, &executor, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
             defer result.deinit();
             try writeAll(io, .stdout, result.stdout);
@@ -6456,7 +6456,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         if (line.len == 0) continue;
 
         const command_started_at = unixTimestamp(io);
-        var result = try runScriptWithExecutor(allocator, &executor, line, .{ .io = io, .allow_external = true, .arg_zero = "rush" });
+        var result = try runInteractiveScriptWithSemanticFallback(allocator, io, &executor, line, .{ .io = io, .allow_external = true, .interactive = true, .arg_zero = "rush" });
         defer result.deinit();
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
@@ -6687,12 +6687,73 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = options.features;
     parser_resolver.arg_zero = options.arg_zero;
-    var resolver = parser_resolver.resolver();
+    const resolver = parser_resolver.resolver();
     const eval_context = shell.EvalContext.init(.{
         .target = .current_shell,
         .source = semanticInputSource(options),
         .interactive = false,
     });
+
+    return runSemanticLoweredProgram(allocator, script, program, &evaluator, &shell_state, eval_context, resolver);
+}
+
+fn runInteractiveScriptWithSemanticFallback(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
+    std.debug.assert(options.interactive);
+    var semantic_execution = try runSemanticInteractiveCommandString(allocator, io, executor, script, options);
+    switch (semantic_execution) {
+        .output => |output| {
+            semantic_execution = undefined;
+            std.debug.assert(executor.pending_exit == null);
+            executor.setLastStatus(output.status);
+            return output;
+        },
+        .unsupported => |message| {
+            semantic_execution = undefined;
+            allocator.free(message);
+            return runScriptWithExecutor(allocator, executor, script, options);
+        },
+    }
+}
+
+fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !SemanticInvocationExecution {
+    assertSemanticInteractiveOptions(script, options);
+
+    if (options.external_stdio != .inherit and options.external_stdio != .capture) return semanticUnsupported(allocator, "semantic interactive executor requires inherited or captured stdio");
+    if (options.stdin_script_file != null) return semanticUnsupported(allocator, "semantic interactive executor does not consume script stdin files");
+    if (executor.pending_exit != null) return semanticUnsupported(allocator, "semantic interactive executor does not run while an exit is pending");
+    if (executor.shell_options.verbose or executor.shell_options.xtrace or executor.shell_options.errexit) return semanticUnsupported(allocator, "semantic interactive executor keeps verbose/xtrace/errexit on the old executor");
+
+    var parsed = try parser.parse(allocator, script, .{ .mode = .interactive, .features = options.features.withStrictDiagnostics() });
+    defer parsed.deinit();
+    if (parsed.diagnostics.len != 0) return semanticUnsupported(allocator, "semantic interactive parser diagnostics are delegated to the old executor");
+
+    var program = try ir.lowerSimpleCommands(allocator, parsed);
+    defer program.deinit();
+    if (semanticPreflightUnsupported(program)) |message| return semanticUnsupported(allocator, message);
+    if (semanticInteractiveProgramUnsupported(executor.*, program)) |message| return semanticUnsupported(allocator, message);
+
+    var shell_state = shell.ShellState.init(allocator);
+    defer shell_state.deinit();
+    if (try initializeSemanticInteractiveStateFromExecutor(allocator, io, &shell_state, executor.*)) |message| return semanticUnsupported(allocator, message);
+
+    var adapter = runtime.PosixAdapter.init(io);
+    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    parser_resolver.features = options.features;
+    parser_resolver.arg_zero = options.arg_zero;
+    const resolver = parser_resolver.resolver();
+    const eval_context = shell.EvalContext.init(.{
+        .target = .current_shell,
+        .source = .command_string,
+        .interactive = true,
+    });
+
+    return runSemanticLoweredProgram(allocator, script, program, &evaluator, &shell_state, eval_context, resolver);
+}
+
+fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, program: ir.Program, evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, resolver: shell.TrapActionResolver) !SemanticInvocationExecution {
+    eval_context.validate();
+    shell_state.validate();
 
     var accumulated_stdout: std.ArrayList(u8) = .empty;
     errdefer accumulated_stdout.deinit(allocator);
@@ -6723,7 +6784,7 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
 
         const statement_script = std.mem.trim(u8, statement.span.slice(script), " \t\r\n;");
         std.debug.assert(statement_script.len != 0);
-        var body = (try resolver.resolve(allocator, statement_script, .TERM, eval_context, &shell_state)) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
+        var body = (try resolver.resolve(allocator, statement_script, .TERM, eval_context, shell_state)) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
         defer body.deinit();
 
         if (semanticComparisonFailureMessage(body)) |message| {
@@ -6732,7 +6793,7 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
         }
         if (semanticBodyUnsupportedMessage(body)) |message| return semanticUnsupported(allocator, message);
 
-        var command_outcome = evaluateSemanticComparisonBody(&evaluator, &shell_state, eval_context, body) catch |err| switch (err) {
+        var command_outcome = evaluateSemanticComparisonBody(evaluator, shell_state, eval_context, body) catch |err| switch (err) {
             error.Unimplemented => return semanticUnsupported(allocator, "semantic evaluator reported an unimplemented command shape"),
             else => |e| return e,
         };
@@ -6746,7 +6807,7 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
 
         const outcome_target = command_outcome.state_delta.target;
         if (outcome_target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(outcome_target)) {
-            try command_outcome.commitDelta(&shell_state, outcome_target);
+            try command_outcome.commitDelta(shell_state, outcome_target);
         } else {
             std.debug.assert(outcome_target.isIsolatedFromParent());
             command_outcome.discardDelta(outcome_target);
@@ -6768,6 +6829,13 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
         .stdout = stdout,
         .stderr = stderr,
     } };
+}
+
+fn assertSemanticInteractiveOptions(script: []const u8, options: exec.ExecuteOptions) void {
+    std.debug.assert(options.interactive);
+    std.debug.assert(options.allow_external);
+    std.debug.assert(options.arg_zero.len != 0);
+    std.debug.assert(script.len == 0 or std.mem.indexOfScalar(u8, script, 0) == null);
 }
 
 fn assertSemanticStartupOptions(script: []const u8, options: exec.ExecuteOptions, positionals: []const []const u8) void {
@@ -6796,6 +6864,81 @@ fn semanticEnvironmentSupported(environ_map: *const std.process.Environ.Map) boo
         if (std.mem.indexOfScalar(u8, entry.value_ptr.*, 0) != null) return false;
     }
     return true;
+}
+
+fn semanticInteractiveProgramUnsupported(executor: exec.Executor, program: ir.Program) ?[]const u8 {
+    if (executor.aliases.count() != 0) return "semantic interactive executor keeps alias-aware parsing on the old executor";
+    if (executor.arrays.count() != 0 and semanticProgramUsesShellExpansion(program)) return "semantic interactive executor keeps array expansion on the old executor";
+    if (executor.shell_options.nounset and semanticProgramUsesShellExpansion(program)) return "semantic interactive executor keeps nounset expansion diagnostics on the old executor";
+
+    for (program.commands) |command| {
+        if (command.argv.len == 0) continue;
+        const root = command.argv[0];
+        if (!semanticInteractiveBuiltinRootAllowed(root.text)) return "semantic interactive executor initially handles only non-mutating builtins";
+        if (executor.functions.count() != 0) {
+            if (wordMayUseShellExpansion(root.raw)) return "semantic interactive executor keeps dynamic function lookup on the old executor";
+            if (executor.functions.contains(root.text)) return "semantic interactive executor keeps shell function calls on the old executor";
+        }
+    }
+    return null;
+}
+
+fn semanticInteractiveBuiltinRootAllowed(name: []const u8) bool {
+    return std.mem.eql(u8, name, ":") or
+        std.mem.eql(u8, name, "true") or
+        std.mem.eql(u8, name, "false") or
+        std.mem.eql(u8, name, "echo") or
+        std.mem.eql(u8, name, "printf");
+}
+
+fn semanticProgramUsesShellExpansion(program: ir.Program) bool {
+    for (program.commands) |command| {
+        for (command.argv) |word| if (wordMayUseShellExpansion(word.raw)) return true;
+        for (command.assignments) |word| if (wordMayUseShellExpansion(word.raw)) return true;
+        for (command.redirections) |redirection| {
+            if (redirection.io_number) |word| if (wordMayUseShellExpansion(word.raw)) return true;
+            if (redirection.target) |word| if (wordMayUseShellExpansion(word.raw)) return true;
+            if (redirection.here_doc) |body| if (wordMayUseShellExpansion(body)) return true;
+        }
+    }
+    return false;
+}
+
+fn wordMayUseShellExpansion(raw: []const u8) bool {
+    return std.mem.indexOfScalar(u8, raw, '$') != null or std.mem.indexOfScalar(u8, raw, '`') != null;
+}
+
+fn initializeSemanticInteractiveStateFromExecutor(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, executor: exec.Executor) !?[]const u8 {
+    shell_state.validate();
+    shell_state.options = semanticShellOptions(executor.shell_options);
+    const status_text = executor.last_status_text[0..executor.last_status_text_len];
+    shell_state.last_status = std.fmt.parseInt(shell.ExitStatus, status_text, 10) catch 0;
+
+    var variables = executor.env.iterator();
+    while (variables.next()) |entry| {
+        const name = entry.key_ptr.*;
+        const value = entry.value_ptr.*;
+        if (!isValidShellVariableName(name)) continue;
+        if (std.mem.indexOfScalar(u8, value, 0) != null) return "semantic ShellState cannot preserve variables containing NUL bytes";
+        try shell_state.putVariable(name, value, .{
+            .exported = executor.exported.contains(name),
+            .readonly = executor.readonly.contains(name),
+        });
+    }
+
+    if (shell_state.getVariable("PWD")) |pwd| {
+        if (isValidLogicalPwd(pwd.value)) {
+            try shell_state.setLogicalCwd(pwd.value);
+        } else {
+            try setSemanticPhysicalPwd(allocator, io, shell_state);
+        }
+    } else {
+        try setSemanticPhysicalPwd(allocator, io, shell_state);
+    }
+
+    try shell_state.replacePositionals(executor.global_positionals.params);
+    shell_state.validate();
+    return null;
 }
 
 fn initializeSemanticInvocationState(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: exec.ShellOptions) !void {
@@ -10671,6 +10814,78 @@ test "runScriptWithEnvironment imports initial shell variables" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ppid-ok\n<present>\n< \t\n>\n<1>\npwd-ok\n", result.stdout);
+}
+
+test "semantic interactive command updates executor status for later commands" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.initializeShellVariables(std.testing.io);
+    executor.arg_zero = "rush";
+
+    var false_result = try runInteractiveScriptWithSemanticFallback(std.testing.allocator, std.testing.io, &executor, "false", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    defer false_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 1), false_result.status);
+    try std.testing.expectEqualStrings("", false_result.stdout);
+    try std.testing.expectEqualStrings("", false_result.stderr);
+    try std.testing.expectEqualStrings("1", executor.last_status_text[0..executor.last_status_text_len]);
+
+    var status_result = try runInteractiveScriptWithSemanticFallback(std.testing.allocator, std.testing.io, &executor, "echo $?", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    defer status_result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), status_result.status);
+    try std.testing.expectEqualStrings("1\n", status_result.stdout);
+    try std.testing.expectEqualStrings("", status_result.stderr);
+}
+
+test "semantic interactive command falls back for function-shadowed builtins" {
+    const path = "rush-semantic-interactive-function-fallback.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.initializeShellVariables(std.testing.io);
+    executor.arg_zero = "rush";
+
+    var define = try runScriptWithExecutor(std.testing.allocator, &executor, "echo() { printf 'function\\n' > " ++ path ++ "; }", .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
+    defer define.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), define.status);
+
+    var result = try runInteractiveScriptWithSemanticFallback(std.testing.allocator, std.testing.io, &executor, "echo semantic", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stderr);
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(output);
+    try std.testing.expectEqualStrings("function\n", output);
+}
+
+test "semantic interactive fallback happens before any partial execution" {
+    const path = "rush-semantic-interactive-fallback.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.initializeShellVariables(std.testing.io);
+    executor.arg_zero = "rush";
+
+    var semantic = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &executor, "echo before > " ++ path ++ "; echo redirected >> " ++ path, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    defer semantic.deinit(std.testing.allocator);
+    switch (semantic) {
+        .unsupported => {},
+        .output => return error.ExpectedSemanticUnsupported,
+    }
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, path, .{}));
+
+    var result = try runInteractiveScriptWithSemanticFallback(std.testing.allocator, std.testing.io, &executor, "echo before > " ++ path ++ "; echo redirected >> " ++ path, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    defer result.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stderr);
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(output);
+    try std.testing.expectEqualStrings("before\nredirected\n", output);
 }
 
 test "semantic non-interactive invocation initializes environment arg zero and positionals" {
