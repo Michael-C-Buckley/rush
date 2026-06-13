@@ -5960,9 +5960,19 @@ fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, scr
     executor.shell_options = shell_options;
     if (interactive_options != null) executor.shell_options.noexec = false;
     if (positionals.len != 0) try executor.global_positionals.set(allocator, positionals);
-    if (interactive_options) |startup_options| try loadInteractiveConfig(allocator, io, &executor, startup_options);
+    if (interactive_options) |startup_options| {
+        try loadInteractiveConfig(allocator, io, &executor, startup_options);
+        if (executor.pending_exit) |status| return emptyCommandResult(allocator, status);
+    }
 
     return runScriptWithExecutor(allocator, &executor, script, options);
+}
+
+fn emptyCommandResult(allocator: std.mem.Allocator, status: exec.ExitStatus) !exec.CommandResult {
+    const stdout = try allocator.alloc(u8, 0);
+    errdefer allocator.free(stdout);
+    const stderr = try allocator.alloc(u8, 0);
+    return .{ .allocator = allocator, .status = status, .stdout = stdout, .stderr = stderr };
 }
 
 fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
@@ -5987,26 +5997,38 @@ fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executo
 
 fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, options: InteractiveOptions) !void {
     try sourceConfigScript(allocator, io, executor, embedded_config, embedded_config_path, options.arg_zero);
+    if (executor.pending_exit != null) return;
 
     if (executor.getEnv("ENV")) |env_path| {
         if (env_path.len != 0) {
             const expanded_env_path = try executor.expandParametersScalar(allocator, env_path, .{ .io = io, .allow_external = true, .arg_zero = options.arg_zero });
             defer allocator.free(expanded_env_path);
-            if (expanded_env_path.len != 0) try sourceOptionalConfig(allocator, io, executor, expanded_env_path, options.arg_zero);
+            if (expanded_env_path.len != 0) {
+                try sourceOptionalConfig(allocator, io, executor, expanded_env_path, options.arg_zero);
+                if (executor.pending_exit != null) return;
+            }
         }
     }
 
     if (options.login) {
         try sourceOptionalConfig(allocator, io, executor, system_profile_path, options.arg_zero);
+        if (executor.pending_exit != null) return;
         const user_profile_path = try userStartupPath(allocator, executor.*, "profile.rush");
         defer if (user_profile_path) |path| allocator.free(path);
-        if (user_profile_path) |path| try sourceOptionalConfig(allocator, io, executor, path, options.arg_zero);
+        if (user_profile_path) |path| {
+            try sourceOptionalConfig(allocator, io, executor, path, options.arg_zero);
+            if (executor.pending_exit != null) return;
+        }
     }
 
     try sourceOptionalConfig(allocator, io, executor, system_config_path, options.arg_zero);
+    if (executor.pending_exit != null) return;
     const user_path = try userStartupPath(allocator, executor.*, "config.rush");
     defer if (user_path) |path| allocator.free(path);
-    if (user_path) |path| try sourceOptionalConfig(allocator, io, executor, path, options.arg_zero);
+    if (user_path) |path| {
+        try sourceOptionalConfig(allocator, io, executor, path, options.arg_zero);
+        if (executor.pending_exit != null) return;
+    }
 }
 
 fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8, arg_zero: []const u8) !void {
@@ -9729,6 +9751,60 @@ test "interactive command string invocation sources ENV before script" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("loaded\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "interactive command string invocation exits immediately when user config exits" {
+    const root = "rush-test-config-exit-startup";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data = "exit 7\n" });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "echo should-not-run",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 7), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "interactive command string invocation exits immediately when user config exec fails" {
+    const root = "rush-test-config-exec-failure-startup";
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data = "exec /nonexistent/rush-task-702 2>/dev/null\n" });
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", root);
+
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "echo should-not-run",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        &env,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
+    try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
