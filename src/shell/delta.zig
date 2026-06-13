@@ -69,6 +69,7 @@ pub const StateDelta = struct {
     logical_cwd: ?[]const u8 = null,
     last_status: ?state.ExitStatus = null,
     last_pipeline_statuses: ?[]state.ExitStatus = null,
+    background_jobs: std.ArrayList(state.BackgroundJob) = .empty,
 
     pub fn init(allocator: std.mem.Allocator, target: context.ExecutionTarget) StateDelta {
         return .{ .allocator = allocator, .target = target };
@@ -114,6 +115,8 @@ pub const StateDelta = struct {
         }
         if (self.logical_cwd) |cwd| self.allocator.free(cwd);
         if (self.last_pipeline_statuses) |statuses| self.allocator.free(statuses);
+        for (self.background_jobs.items) |*job| job.deinit(self.allocator);
+        self.background_jobs.deinit(self.allocator);
 
         self.* = undefined;
     }
@@ -151,6 +154,7 @@ pub const StateDelta = struct {
         if (self.logical_cwd) |cwd| try cloned.setLogicalCwd(cwd);
         if (self.last_status) |status| cloned.setLastStatus(status);
         if (self.last_pipeline_statuses) |statuses| try cloned.setLastPipelineStatuses(statuses);
+        for (self.background_jobs.items) |job| try cloned.appendBackgroundJob(job);
 
         return cloned;
     }
@@ -173,7 +177,8 @@ pub const StateDelta = struct {
             self.positionals == null and
             self.logical_cwd == null and
             self.last_status == null and
-            self.last_pipeline_statuses == null;
+            self.last_pipeline_statuses == null and
+            self.background_jobs.items.len == 0;
     }
 
     pub fn assignVariable(self: *StateDelta, name: []const u8, value: []const u8, attributes: state.VariableAttributes) !void {
@@ -427,6 +432,17 @@ pub const StateDelta = struct {
         self.last_pipeline_statuses = owned_statuses;
     }
 
+    pub fn appendBackgroundJob(self: *StateDelta, job: state.BackgroundJob) !void {
+        self.assertPending();
+        job.validate();
+        for (self.background_jobs.items) |existing| {
+            std.debug.assert(existing.id != job.id);
+        }
+        var owned_job = try job.clone(self.allocator);
+        errdefer owned_job.deinit(self.allocator);
+        try self.background_jobs.append(self.allocator, owned_job);
+    }
+
     pub fn firstReadonlyVariableAssignment(self: StateDelta, shell_state: state.ShellState) ?[]const u8 {
         self.assertPending();
         for (self.variable_assignments.items) |assignment| {
@@ -495,6 +511,7 @@ pub const StateDelta = struct {
         if (self.logical_cwd) |cwd| try shell_state.setLogicalCwd(cwd);
         if (self.last_status) |status| shell_state.last_status = status;
         if (self.last_pipeline_statuses) |statuses| try shell_state.setLastPipelineStatuses(statuses);
+        for (self.background_jobs.items) |job| try shell_state.appendBackgroundJob(job);
 
         shell_state.validate();
         self.state = .consumed;

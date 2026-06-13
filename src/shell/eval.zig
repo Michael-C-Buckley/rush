@@ -858,7 +858,7 @@ pub fn evaluatePipelinePlan(evaluator: *Evaluator, shell_state: *state.ShellStat
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
-    if (plan.strategy == .background_deferred) return error.Unimplemented;
+    if (plan.strategy == .background_deferred) return evaluateBackgroundPipelinePlan(evaluator, shell_state, eval_context, plan);
 
     var buffers = EvaluationBuffers.init(evaluator.allocator);
     defer buffers.deinit();
@@ -1189,6 +1189,215 @@ fn evaluateSingleStagePipeline(evaluator: *Evaluator, shell_state: *state.ShellS
     return state_delta;
 }
 
+const BackgroundStartResult = union(enum) {
+    started: state.BackgroundJob,
+    failure: outcome.ExitStatus,
+};
+
+fn evaluateBackgroundPipelinePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: pipeline_plan.PipelinePlan) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+    std.debug.assert(eval_context.target.allowsShellStateCommit());
+    std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
+
+    var buffers = EvaluationBuffers.init(evaluator.allocator);
+    defer buffers.deinit();
+
+    var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
+    errdefer state_delta.deinit();
+
+    var start_result = try startBackgroundPipeline(evaluator, shell_state.*, plan, &buffers);
+    switch (start_result) {
+        .started => |*job| {
+            defer job.deinit(evaluator.allocator);
+            try state_delta.appendBackgroundJob(job.*);
+            state_delta.setLastStatus(0);
+            const statuses = try evaluator.allocator.alloc(outcome.ExitStatus, plan.stages.len);
+            defer evaluator.allocator.free(statuses);
+            @memset(statuses, 0);
+            try state_delta.setLastPipelineStatuses(statuses);
+            return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, 0, state_delta, .normal, &buffers);
+        },
+        .failure => |status| {
+            state_delta.setLastStatus(status);
+            const decision = consequence.decideForStatus(shell_state.options, eval_context, status);
+            return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, decision.control_flow, &buffers);
+        },
+    }
+}
+
+fn startBackgroundPipeline(evaluator: *Evaluator, shell_state: state.ShellState, plan: pipeline_plan.PipelinePlan, buffers: *EvaluationBuffers) EvalError!BackgroundStartResult {
+    shell_state.validate();
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+
+    if (plan.stages.len == 1) {
+        return switch (plan.stages[0]) {
+            .simple => |simple| if (simple.class() == .external)
+                startBackgroundSingleExternal(evaluator, shell_state, simple, buffers)
+            else
+                error.Unimplemented,
+            .compound => error.Unimplemented,
+        };
+    }
+
+    for (plan.stages) |stage| {
+        if (!stage.isExternalOnlyRealEligible()) return error.Unimplemented;
+    }
+    return startBackgroundExternalOnlyPipeline(evaluator, shell_state, plan, buffers);
+}
+
+fn startBackgroundSingleExternal(evaluator: *Evaluator, shell_state: state.ShellState, plan: command_plan.CommandPlan, buffers: *EvaluationBuffers) EvalError!BackgroundStartResult {
+    shell_state.validate();
+    plan.validate();
+    std.debug.assert(plan.class() == .external);
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+    const resolution = switch (plan.classification) {
+        .external => |external| external,
+        else => unreachable,
+    };
+
+    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(evaluator.allocator);
+    defer temporary_environment.deinit();
+    if (plan.assignmentEffect() == .temporary) {
+        temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
+            error.ReadonlyVariable => unreachable,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    }
+
+    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
+    defer environment.deinit();
+
+    const argv = try externalArgv(evaluator.allocator, plan, resolution);
+    defer evaluator.allocator.free(argv);
+
+    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (applied_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    if (hasRedirections(plan)) {
+        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        switch (apply_result) {
+            .applied => |applied| applied_redirections = applied,
+            .failure => |failure| {
+                try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                return .{ .failure = 1 };
+            },
+        }
+    }
+
+    const use_process_group = shell_state.options.enabled(.monitor);
+    const child = (process_port.spawn(.{
+        .argv = argv,
+        .environment = &environment,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+        .process_group = if (use_process_group) 0 else null,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => |spawn_err| {
+            const failure = spawnFailure(spawn_err);
+            try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+            return .{ .failure = failure.status };
+        },
+    }).child;
+
+    if (applied_redirections) |*applied| applied.restore();
+
+    const command_text = try commandTextFromArgv(evaluator.allocator, plan.argv);
+    errdefer evaluator.allocator.free(command_text);
+    const pid = child.id();
+    var job: state.BackgroundJob = .{
+        .id = shell_state.next_job_id,
+        .pid = pid,
+        .process_group = if (use_process_group) pid else null,
+        .command = command_text,
+    };
+    errdefer job.deinit(evaluator.allocator);
+    try job.appendProcess(evaluator.allocator, .{ .stage_index = 0, .child = child });
+    return .{ .started = job };
+}
+
+fn startBackgroundExternalOnlyPipeline(evaluator: *Evaluator, shell_state: state.ShellState, plan: pipeline_plan.PipelinePlan, buffers: *EvaluationBuffers) EvalError!BackgroundStartResult {
+    shell_state.validate();
+    plan.validate();
+    std.debug.assert(plan.strategy == .background_deferred);
+    std.debug.assert(plan.stages.len > 1);
+
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+
+    const pipe_count = plan.pipeCount();
+    std.debug.assert(pipe_count != 0);
+    const pipes = try evaluator.allocator.alloc(PipelinePipe, pipe_count);
+    defer evaluator.allocator.free(pipes);
+    var initialized_pipes: usize = 0;
+    errdefer closeOpenPipelinePipes(fd_port, pipes[0..initialized_pipes], buffers);
+
+    for (pipes) |*pipe_slot| {
+        const pipe_result = fd_port.pipe(.{}) catch |err| {
+            try buffers.addBuiltinDiagnostic("pipeline", pipeFailureMessage(err));
+            closeOpenPipelinePipes(fd_port, pipes[0..initialized_pipes], buffers);
+            return .{ .failure = 1 };
+        };
+        pipe_slot.* = PipelinePipe.init(pipe_result);
+        initialized_pipes += 1;
+    }
+
+    var children: std.ArrayList(runtime.process.ChildProcess) = .empty;
+    defer children.deinit(evaluator.allocator);
+    var child_stage_indexes: std.ArrayList(usize) = .empty;
+    defer child_stage_indexes.deinit(evaluator.allocator);
+
+    const use_process_group = shell_state.options.enabled(.monitor);
+    var process_group: ?runtime.process.ProcessId = null;
+
+    for (plan.stages, 0..) |stage, index| {
+        const stdin: runtime.process.StandardIo = if (index == 0) .inherit else .{ .fd = pipes[index - 1].read };
+        const stdout: runtime.process.StandardIo = if (index + 1 == plan.stages.len) .inherit else .{ .fd = pipes[index].write };
+        const requested_group: ?runtime.process.ProcessId = if (use_process_group) process_group orelse 0 else null;
+
+        const spawn_result = try spawnExternalPipelineStage(evaluator, shell_state, stage, stdin, stdout, requested_group, buffers);
+        switch (spawn_result) {
+            .spawned => |child| {
+                if (use_process_group and process_group == null) process_group = child.id();
+                try children.append(evaluator.allocator, child);
+                try child_stage_indexes.append(evaluator.allocator, index);
+                if (index != 0) closePipelinePipeRead(fd_port, &pipes[index - 1], buffers);
+                if (index + 1 != plan.stages.len) closePipelinePipeWrite(fd_port, &pipes[index], buffers);
+            },
+            .failure => |failure| {
+                closeOpenPipelinePipes(fd_port, pipes, buffers);
+                const statuses = try evaluator.allocator.alloc(outcome.ExitStatus, plan.stages.len);
+                defer evaluator.allocator.free(statuses);
+                @memset(statuses, failure.status);
+                try waitSpawnedPipelineChildren(process_port, children.items, child_stage_indexes.items, statuses, buffers);
+                return .{ .failure = failure.status };
+            },
+        }
+    }
+
+    closeOpenPipelinePipes(fd_port, pipes, buffers);
+    const command_text = try pipelineCommandText(evaluator.allocator, plan);
+    errdefer evaluator.allocator.free(command_text);
+    const pid = children.items[children.items.len - 1].id();
+    var job: state.BackgroundJob = .{
+        .id = shell_state.next_job_id,
+        .pid = pid,
+        .process_group = process_group,
+        .command = command_text,
+    };
+    errdefer job.deinit(evaluator.allocator);
+    for (children.items, child_stage_indexes.items) |child, stage_index| try job.appendProcess(evaluator.allocator, .{ .stage_index = stage_index, .child = child });
+    return .{ .started = job };
+}
+
 fn evaluateFallbackPipeline(evaluator: *Evaluator, parent_state: state.ShellState, eval_context: context.EvalContext, plan: pipeline_plan.PipelinePlan, statuses: []outcome.ExitStatus, buffers: *EvaluationBuffers) EvalError!void {
     parent_state.validate();
     eval_context.validate();
@@ -1276,7 +1485,7 @@ fn evaluateExternalOnlyRealPipeline(evaluator: *Evaluator, shell_state: state.Sh
         const stdin: runtime.process.StandardIo = if (index == 0) .inherit else .{ .fd = pipes[index - 1].read };
         const stdout: runtime.process.StandardIo = if (index + 1 == plan.stages.len) .inherit else .{ .fd = pipes[index].write };
 
-        const spawn_result = try spawnExternalPipelineStage(evaluator, shell_state, stage, stdin, stdout, buffers);
+        const spawn_result = try spawnExternalPipelineStage(evaluator, shell_state, stage, stdin, stdout, null, buffers);
         switch (spawn_result) {
             .spawned => |child| {
                 try children.append(evaluator.allocator, child);
@@ -1303,7 +1512,7 @@ const PipelineSpawnResult = union(enum) {
     failure: CommandFailure,
 };
 
-fn spawnExternalPipelineStage(evaluator: *Evaluator, shell_state: state.ShellState, stage: pipeline_plan.PipelineStagePlan, stdin: runtime.process.StandardIo, stdout: runtime.process.StandardIo, buffers: *EvaluationBuffers) EvalError!PipelineSpawnResult {
+fn spawnExternalPipelineStage(evaluator: *Evaluator, shell_state: state.ShellState, stage: pipeline_plan.PipelineStagePlan, stdin: runtime.process.StandardIo, stdout: runtime.process.StandardIo, process_group: ?runtime.process.ProcessId, buffers: *EvaluationBuffers) EvalError!PipelineSpawnResult {
     shell_state.validate();
     stage.validate();
     stdin.validate();
@@ -1342,6 +1551,7 @@ fn spawnExternalPipelineStage(evaluator: *Evaluator, shell_state: state.ShellSta
         .stdin = stdin,
         .stdout = stdout,
         .stderr = .inherit,
+        .process_group = process_group,
     }) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => |spawn_err| {
@@ -1517,6 +1727,36 @@ fn pipelineStageContext(eval_context: context.EvalContext, target: context.Execu
     const pipeline_context = eval_context.enterPipeline();
     const targeted = pipeline_context.withTarget(target);
     return if (ignore_errexit) targeted.ignoreErrexit() else targeted;
+}
+
+fn pipelineCommandText(allocator: std.mem.Allocator, plan: pipeline_plan.PipelinePlan) ![]const u8 {
+    plan.validate();
+    var text: std.ArrayList(u8) = .empty;
+    errdefer text.deinit(allocator);
+
+    for (plan.stages, 0..) |stage, index| {
+        if (index != 0) try text.appendSlice(allocator, " | ");
+        switch (stage) {
+            .simple => |simple| try appendCommandTextFromArgv(allocator, &text, simple.argv),
+            .compound => unreachable,
+        }
+    }
+    return text.toOwnedSlice(allocator);
+}
+
+fn commandTextFromArgv(allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
+    var text: std.ArrayList(u8) = .empty;
+    errdefer text.deinit(allocator);
+    try appendCommandTextFromArgv(allocator, &text, argv);
+    return text.toOwnedSlice(allocator);
+}
+
+fn appendCommandTextFromArgv(allocator: std.mem.Allocator, text: *std.ArrayList(u8), argv: []const []const u8) !void {
+    std.debug.assert(argv.len != 0);
+    for (argv, 0..) |arg, index| {
+        if (index != 0) try text.append(allocator, ' ');
+        try appendShellSingleQuoted(allocator, text, arg);
+    }
 }
 
 fn pipeFailureMessage(err: runtime.fd.PipeError) []const u8 {
@@ -2019,6 +2259,9 @@ fn appendFunctionFrameDelta(before: state.ShellState, after: state.ShellState, f
     try appendAliasDiff(before, after, state_delta);
     try appendTrapDiff(before, after, state_delta);
     if (!std.mem.eql(u8, before.logical_cwd, after.logical_cwd) and after.logical_cwd.len != 0) try state_delta.setLogicalCwd(after.logical_cwd);
+    for (after.background_jobs.items) |job| {
+        if (before.findBackgroundJobById(job.id) == null) try state_delta.appendBackgroundJob(job);
+    }
 }
 
 fn appendShellStateDiff(before: state.ShellState, after: state.ShellState, state_delta: *delta.StateDelta) EvalError!void {
@@ -2064,6 +2307,9 @@ fn appendShellStateDiff(before: state.ShellState, after: state.ShellState, state
     try appendTrapDiff(before, after, state_delta);
     if (!positionalsEqual(before.positionals.items, after.positionals.items)) try state_delta.replacePositionals(after.positionals.items);
     if (!std.mem.eql(u8, before.logical_cwd, after.logical_cwd) and after.logical_cwd.len != 0) try state_delta.setLogicalCwd(after.logical_cwd);
+    for (after.background_jobs.items) |job| {
+        if (before.findBackgroundJobById(job.id) == null) try state_delta.appendBackgroundJob(job);
+    }
 }
 
 fn positionalsEqual(left: []const []const u8, right: []const []const u8) bool {
@@ -2420,6 +2666,13 @@ fn shellStateMutationFingerprint(shell_state: state.ShellState) u64 {
     for (shell_state.pending_traps.items) |signal| {
         const signal_byte: u8 = @intFromEnum(signal);
         hasher.update(&.{signal_byte});
+    }
+    for (shell_state.background_jobs.items) |job| {
+        hasher.update(std.mem.asBytes(&job.id));
+        hasher.update(std.mem.asBytes(&job.pid));
+        if (job.process_group) |process_group| hasher.update(std.mem.asBytes(&process_group));
+        hasher.update(job.command);
+        for (job.processes.items) |process| hasher.update(std.mem.asBytes(&process.stage_index));
     }
     for (shell_state.positionals.items) |arg| hasher.update(arg);
     return hasher.final();
@@ -5128,6 +5381,8 @@ const FakeExternalRuntime = struct {
     observed_spawn_stdin: [8]runtime.process.StandardIo = undefined,
     observed_spawn_stdout: [8]runtime.process.StandardIo = undefined,
     observed_spawn_stderr: [8]runtime.process.StandardIo = undefined,
+    observed_spawn_process_group: [8]?runtime.process.ProcessId = undefined,
+    observed_process_group: ?runtime.process.ProcessId = null,
     spawn_count: usize = 0,
     wait_count: usize = 0,
     wait_status: runtime.process.WaitStatus = .{ .exited = 7 },
@@ -5276,16 +5531,19 @@ const FakeExternalRuntime = struct {
         request.validate();
         std.debug.assert(request.environment != null);
         std.debug.assert(self.spawn_count < self.observed_spawn_stdin.len);
+        const spawn_index = self.spawn_count;
         try self.copyObservedArgv(request.argv);
         try self.copyObservedEnvironment(request.environment.?);
         self.observed_stdin = request.stdin;
         self.observed_stdout = request.stdout;
         self.observed_stderr = request.stderr;
-        self.observed_spawn_stdin[self.spawn_count] = request.stdin;
-        self.observed_spawn_stdout[self.spawn_count] = request.stdout;
-        self.observed_spawn_stderr[self.spawn_count] = request.stderr;
+        self.observed_process_group = request.process_group;
+        self.observed_spawn_stdin[spawn_index] = request.stdin;
+        self.observed_spawn_stdout[spawn_index] = request.stdout;
+        self.observed_spawn_stderr[spawn_index] = request.stderr;
+        self.observed_spawn_process_group[spawn_index] = request.process_group;
         self.spawn_count += 1;
-        return .{ .child = fakeChild(9001) };
+        return .{ .child = fakeChild(9001 + @as(runtime.process.ProcessId, @intCast(spawn_index))) };
     }
 
     fn wait(opaque_context: *anyopaque, request: runtime.process.WaitRequest) runtime.process.WaitError!runtime.process.WaitResult {
@@ -5417,6 +5675,87 @@ test "semantic pipeline evaluation wires external-only real pipelines through ru
     try result.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(state.ExitStatus, 4), shell_state.last_status);
     try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 3, 0, 4 }, shell_state.last_pipeline_statuses.items);
+}
+
+test "semantic background external pipeline starts a tracked job without waiting" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.monitor, true);
+
+    const externals = [_]command_plan.ExternalResolution{
+        .{ .name = "cat", .path = "/bin/cat" },
+        .{ .name = "wc", .path = "/usr/bin/wc" },
+    };
+    const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
+    const cat = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"cat"} }, .lookup = lookup });
+    const wc = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "wc", "-l" } }, .lookup = lookup });
+    const plan = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{ .{ .simple = cat }, .{ .simple = wc } }, .{ .background = .background });
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), plan);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 2), fake.spawn_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.wait_count);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 0), fake.observed_spawn_process_group[0]);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9001), fake.observed_spawn_process_group[1]);
+    try std.testing.expectEqual(runtime.process.StandardIo{ .fd = 11 }, fake.observed_spawn_stdout[0]);
+    try std.testing.expectEqual(runtime.process.StandardIo{ .fd = 10 }, fake.observed_spawn_stdin[1]);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
+    try std.testing.expectEqual(@as(usize, 1), result.state_delta.background_jobs.items.len);
+
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+    try std.testing.expectEqual(@as(usize, 1), shell_state.background_jobs.items.len);
+    const job = shell_state.background_jobs.items[0];
+    try std.testing.expectEqual(@as(usize, 1), job.id);
+    try std.testing.expectEqual(@as(runtime.process.ProcessId, 9002), job.pid);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9001), job.process_group);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9002), shell_state.last_background_pid);
+    try std.testing.expectEqual(@as(?usize, 1), shell_state.current_job_id);
+    try std.testing.expectEqual(@as(usize, 2), job.processes.items.len);
+    try std.testing.expectEqual(@as(usize, 0), job.processes.items[0].stage_index);
+    try std.testing.expectEqual(@as(usize, 1), job.processes.items[1].stage_index);
+    try std.testing.expectEqualStrings("'cat' | 'wc' '-l'", job.command);
+}
+
+test "semantic background single external applies redirections and records process group" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.monitor, true);
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/bin/tool" }};
+    const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 1, "out", .{ .access = .write_only, .create = true, .truncate = true })};
+    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{
+            .argv = &[_][]const u8{ "tool", "arg" },
+            .redirections = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps },
+        },
+        .lookup = .{ .externals = &externals },
+    });
+    const pipeline = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{.{ .simple = plan }}, .{ .background = .background });
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), pipeline);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), fake.spawn_count);
+    try std.testing.expectEqual(@as(usize, 0), fake.wait_count);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 0), fake.observed_process_group);
+    try std.testing.expectEqual(@as(usize, 6), fake.fd_operation_count);
+    try result.commitDelta(&shell_state, .current_shell);
+
+    const job = shell_state.background_jobs.items[0];
+    try std.testing.expectEqual(@as(runtime.process.ProcessId, 9001), job.pid);
+    try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9001), job.process_group);
+    try std.testing.expectEqualStrings("'tool' 'arg'", job.command);
 }
 
 test "semantic evaluator centralizes simple-command errexit and readonly consequences" {

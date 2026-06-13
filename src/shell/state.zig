@@ -7,6 +7,7 @@
 const std = @import("std");
 const command_plan = @import("command_plan.zig");
 const context = @import("context.zig");
+const runtime_process = @import("../runtime/process.zig");
 const trap_semantics = @import("trap.zig");
 
 pub const ExitStatus = u8;
@@ -136,6 +137,73 @@ pub const Trap = struct {
     }
 };
 
+pub const JobState = enum {
+    running,
+    done,
+};
+
+pub const BackgroundJobProcess = struct {
+    stage_index: usize,
+    child: runtime_process.ChildProcess,
+
+    pub fn validate(self: BackgroundJobProcess) void {
+        self.child.validateRunning();
+    }
+};
+
+pub const BackgroundJob = struct {
+    id: usize,
+    pid: runtime_process.ProcessId,
+    process_group: ?runtime_process.ProcessId = null,
+    command: []const u8,
+    processes: std.ArrayList(BackgroundJobProcess) = .empty,
+    state: JobState = .running,
+    status: ExitStatus = 0,
+
+    pub fn deinit(self: *BackgroundJob, allocator: std.mem.Allocator) void {
+        allocator.free(self.command);
+        self.processes.deinit(allocator);
+        self.* = undefined;
+    }
+
+    pub fn clone(self: BackgroundJob, allocator: std.mem.Allocator) !BackgroundJob {
+        self.validate();
+        const owned_command = try allocator.dupe(u8, self.command);
+        errdefer allocator.free(owned_command);
+
+        var processes: std.ArrayList(BackgroundJobProcess) = .empty;
+        errdefer processes.deinit(allocator);
+        try processes.appendSlice(allocator, self.processes.items);
+
+        const cloned: BackgroundJob = .{
+            .id = self.id,
+            .pid = self.pid,
+            .process_group = self.process_group,
+            .command = owned_command,
+            .processes = processes,
+            .state = self.state,
+            .status = self.status,
+        };
+        cloned.validate();
+        return cloned;
+    }
+
+    pub fn appendProcess(self: *BackgroundJob, allocator: std.mem.Allocator, process: BackgroundJobProcess) !void {
+        process.validate();
+        try self.processes.append(allocator, process);
+        self.validate();
+    }
+
+    pub fn validate(self: BackgroundJob) void {
+        std.debug.assert(self.id != 0);
+        std.debug.assert(self.pid > 0);
+        if (self.process_group) |process_group| std.debug.assert(process_group > 0);
+        std.debug.assert(self.command.len != 0);
+        std.debug.assert(self.processes.items.len != 0);
+        for (self.processes.items) |process| process.validate();
+    }
+};
+
 pub const ShellState = struct {
     allocator: std.mem.Allocator,
     scope: Scope = .current_shell,
@@ -151,6 +219,11 @@ pub const ShellState = struct {
     pending_traps: std.ArrayList(TrapSignal) = .empty,
     trap_execution: TrapExecution = .idle,
     pending_exit: ?ExitStatus = null,
+    background_jobs: std.ArrayList(BackgroundJob) = .empty,
+    next_job_id: usize = 1,
+    current_job_id: ?usize = null,
+    previous_job_id: ?usize = null,
+    last_background_pid: ?runtime_process.ProcessId = null,
 
     pub const TrapExecution = enum {
         idle,
@@ -195,6 +268,8 @@ pub const ShellState = struct {
         if (self.logical_cwd.len != 0) self.allocator.free(self.logical_cwd);
         self.last_pipeline_statuses.deinit(self.allocator);
         self.pending_traps.deinit(self.allocator);
+        self.clearBackgroundJobs();
+        self.background_jobs.deinit(self.allocator);
 
         self.* = undefined;
     }
@@ -208,6 +283,10 @@ pub const ShellState = struct {
         cloned.last_status = self.last_status;
         cloned.pending_exit = self.pending_exit;
         cloned.trap_execution = self.trap_execution;
+        cloned.next_job_id = self.next_job_id;
+        cloned.current_job_id = self.current_job_id;
+        cloned.previous_job_id = self.previous_job_id;
+        cloned.last_background_pid = self.last_background_pid;
 
         var variables = self.variables.iterator();
         while (variables.next()) |entry| {
@@ -230,6 +309,7 @@ pub const ShellState = struct {
         if (self.logical_cwd.len != 0) try cloned.setLogicalCwd(self.logical_cwd);
         try cloned.last_pipeline_statuses.appendSlice(allocator, self.last_pipeline_statuses.items);
         try cloned.pending_traps.appendSlice(allocator, self.pending_traps.items);
+        for (self.background_jobs.items) |job| try cloned.appendBackgroundJobCopy(job);
 
         cloned.validate();
         return cloned;
@@ -237,6 +317,11 @@ pub const ShellState = struct {
 
     pub fn snapshotForSubshell(self: *const ShellState, allocator: std.mem.Allocator) !ShellState {
         var snapshot = try self.clone(allocator);
+        snapshot.clearBackgroundJobs();
+        snapshot.next_job_id = 1;
+        snapshot.current_job_id = null;
+        snapshot.previous_job_id = null;
+        snapshot.last_background_pid = null;
         snapshot.scope = .subshell;
         snapshot.validate();
         return snapshot;
@@ -545,6 +630,44 @@ pub const ShellState = struct {
         self.validate();
     }
 
+    pub fn appendBackgroundJob(self: *ShellState, job: BackgroundJob) !void {
+        job.validate();
+        try self.appendBackgroundJobCopy(job);
+        self.selectCurrentJob(job.id);
+        self.next_job_id = @max(self.next_job_id, job.id + 1);
+        self.last_background_pid = job.pid;
+        self.validate();
+    }
+
+    pub fn findBackgroundJobById(self: ShellState, id: usize) ?BackgroundJob {
+        std.debug.assert(id != 0);
+        for (self.background_jobs.items) |job| {
+            if (job.id == id) return job;
+        }
+        return null;
+    }
+
+    fn appendBackgroundJobCopy(self: *ShellState, job: BackgroundJob) !void {
+        std.debug.assert(self.findBackgroundJobById(job.id) == null);
+        var owned_job = try job.clone(self.allocator);
+        errdefer owned_job.deinit(self.allocator);
+        try self.background_jobs.append(self.allocator, owned_job);
+    }
+
+    fn clearBackgroundJobs(self: *ShellState) void {
+        for (self.background_jobs.items) |*job| job.deinit(self.allocator);
+        self.background_jobs.clearRetainingCapacity();
+        self.current_job_id = null;
+        self.previous_job_id = null;
+        self.last_background_pid = null;
+    }
+
+    fn selectCurrentJob(self: *ShellState, id: usize) void {
+        std.debug.assert(id != 0);
+        if (self.current_job_id != null and self.current_job_id.? != id) self.previous_job_id = self.current_job_id;
+        self.current_job_id = id;
+    }
+
     pub fn validate(self: ShellState) void {
         var variables = self.variables.iterator();
         while (variables.next()) |entry| {
@@ -564,6 +687,14 @@ pub const ShellState = struct {
             entry.value_ptr.validate();
         }
         for (self.pending_traps.items) |signal| signal.validate();
+        for (self.background_jobs.items) |job| {
+            job.validate();
+            std.debug.assert(job.id < self.next_job_id);
+        }
+        if (self.current_job_id) |id| std.debug.assert(self.findBackgroundJobById(id) != null);
+        if (self.previous_job_id) |id| std.debug.assert(self.findBackgroundJobById(id) != null);
+        if (self.current_job_id != null and self.previous_job_id != null) std.debug.assert(self.current_job_id.? != self.previous_job_id.?);
+        if (self.last_background_pid) |pid| std.debug.assert(pid > 0);
         if (self.logical_cwd.len != 0) assertValidLogicalCwd(self.logical_cwd);
     }
 };
