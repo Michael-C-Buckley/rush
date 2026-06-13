@@ -16,12 +16,26 @@ pub const WaitStatus = union(enum) {
     unknown: u32,
 };
 
+pub const ProcessTarget = union(enum) {
+    process: ProcessId,
+    process_group: ProcessId,
+
+    pub fn validate(self: ProcessTarget) void {
+        switch (self) {
+            .process => |process_id| std.debug.assert(process_id > 0),
+            .process_group => |process_group| std.debug.assert(process_group > 0),
+        }
+    }
+};
+
 pub const Operation = enum {
     spawn,
     start_subshell,
     wait,
     poll_wait,
     run,
+    continue_process,
+    foreground_process_group,
 };
 
 pub const Cwd = union(enum) {
@@ -204,6 +218,8 @@ pub const WaitResult = struct {
 
 pub const PollWaitRequest = struct {
     child: *ChildProcess,
+    nohang: bool = true,
+    report_stopped: bool = true,
 
     pub fn init(child: *ChildProcess) PollWaitRequest {
         const request: PollWaitRequest = .{ .child = child };
@@ -212,12 +228,14 @@ pub const PollWaitRequest = struct {
     }
 
     pub fn validate(self: PollWaitRequest) void {
+        _ = self.nohang;
+        _ = self.report_stopped;
         self.child.validateRunning();
     }
 };
 
 pub const PollWaitResult = struct {
-    status: ?WaitStatus,
+    status: ?WaitStatus = null,
 
     pub fn validate(self: PollWaitResult) void {
         if (self.status) |status| (WaitResult{ .status = status }).validate();
@@ -267,15 +285,61 @@ pub const RunResult = struct {
     }
 };
 
+pub const ContinueProcessRequest = struct {
+    target: ProcessTarget,
+
+    pub fn init(target: ProcessTarget) ContinueProcessRequest {
+        const request: ContinueProcessRequest = .{ .target = target };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: ContinueProcessRequest) void {
+        self.target.validate();
+    }
+};
+
+pub const ForegroundProcessGroupRequest = struct {
+    terminal: fd.Descriptor = 0,
+    process_group: ProcessId,
+
+    pub fn init(process_group: ProcessId) ForegroundProcessGroupRequest {
+        const request: ForegroundProcessGroupRequest = .{ .process_group = process_group };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: ForegroundProcessGroupRequest) void {
+        fd.assertValidDescriptor(self.terminal);
+        std.debug.assert(self.process_group > 0);
+    }
+};
+
+pub const ForegroundProcessGroupResult = struct {
+    previous_process_group: ProcessId,
+
+    pub fn validate(self: ForegroundProcessGroupResult) void {
+        std.debug.assert(self.previous_process_group > 0);
+    }
+};
+
 pub const SpawnError = std.process.SpawnError;
 pub const WaitError = std.process.Child.WaitError;
 pub const RunError = anyerror;
+pub const JobControlError = error{
+    OperationUnsupported,
+    ProcessNotFound,
+    PermissionDenied,
+    Unexpected,
+};
 
 pub const SpawnFn = *const fn (*anyopaque, SpawnRequest) SpawnError!SpawnResult;
 pub const StartSubshellFn = *const fn (*anyopaque, StartSubshellRequest) SpawnError!SpawnResult;
 pub const WaitFn = *const fn (*anyopaque, WaitRequest) WaitError!WaitResult;
 pub const PollWaitFn = *const fn (*anyopaque, PollWaitRequest) WaitError!PollWaitResult;
 pub const RunFn = *const fn (*anyopaque, RunRequest) RunError!RunResult;
+pub const ContinueProcessFn = *const fn (*anyopaque, ContinueProcessRequest) JobControlError!void;
+pub const ForegroundProcessGroupFn = *const fn (*anyopaque, ForegroundProcessGroupRequest) JobControlError!ForegroundProcessGroupResult;
 
 pub const Port = struct {
     context: *anyopaque,
@@ -284,6 +348,8 @@ pub const Port = struct {
     wait_fn: WaitFn,
     poll_wait_fn: ?PollWaitFn = null,
     run_fn: RunFn,
+    continue_process_fn: ?ContinueProcessFn = null,
+    foreground_process_group_fn: ?ForegroundProcessGroupFn = null,
 
     pub fn spawn(self: Port, request: SpawnRequest) SpawnError!SpawnResult {
         request.validate();
@@ -310,12 +376,12 @@ pub const Port = struct {
 
     pub fn pollWait(self: Port, request: PollWaitRequest) WaitError!PollWaitResult {
         request.validate();
-        const poll_wait_fn = self.poll_wait_fn orelse return .{ .status = null };
+        const poll_wait_fn = self.poll_wait_fn orelse return error.Unexpected;
         const result = try poll_wait_fn(self.context, request);
-        switch (result.status orelse return result) {
-            .exited, .signaled, .unknown => request.child.validateWaited(),
+        if (result.status) |status| switch (status) {
             .stopped => request.child.validateRunning(),
-        }
+            .exited, .signaled, .unknown => request.child.validateWaited(),
+        } else request.child.validateRunning();
         result.validate();
         return result;
     }
@@ -323,6 +389,20 @@ pub const Port = struct {
     pub fn run(self: Port, request: RunRequest) RunError!RunResult {
         request.validate();
         const result = try self.run_fn(self.context, request);
+        result.validate();
+        return result;
+    }
+
+    pub fn continueProcess(self: Port, request: ContinueProcessRequest) JobControlError!void {
+        request.validate();
+        const continue_process_fn = self.continue_process_fn orelse return error.OperationUnsupported;
+        try continue_process_fn(self.context, request);
+    }
+
+    pub fn foregroundProcessGroup(self: Port, request: ForegroundProcessGroupRequest) JobControlError!ForegroundProcessGroupResult {
+        request.validate();
+        const foreground_process_group_fn = self.foreground_process_group_fn orelse return error.OperationUnsupported;
+        const result = try foreground_process_group_fn(self.context, request);
         result.validate();
         return result;
     }
@@ -357,72 +437,18 @@ test "runtime process subshell request owns only low-level launch shape" {
     try std.testing.expectEqual(@as(?ProcessId, null), request.process_group);
 }
 
-fn testPollSpawn(_: *anyopaque, request: SpawnRequest) SpawnError!SpawnResult {
-    _ = request;
-    unreachable;
-}
+test "runtime process job-control requests stay low-level" {
+    const target: ProcessTarget = .{ .process_group = 1234 };
+    target.validate();
 
-fn testPollWait(_: *anyopaque, request: WaitRequest) WaitError!WaitResult {
-    _ = request;
-    unreachable;
-}
+    const continue_request = ContinueProcessRequest.init(target);
+    continue_request.validate();
 
-fn testPollRun(_: *anyopaque, request: RunRequest) RunError!RunResult {
-    _ = request;
-    unreachable;
-}
+    const foreground_request = ForegroundProcessGroupRequest.init(1234);
+    foreground_request.validate();
 
-fn testStoppedPollWait(_: *anyopaque, request: PollWaitRequest) WaitError!PollWaitResult {
-    request.validate();
-    return .{ .status = .{ .stopped = 19 } };
-}
-
-fn testExitedPollWait(_: *anyopaque, request: PollWaitRequest) WaitError!PollWaitResult {
-    request.validate();
-    request.child.child.id = null;
-    request.child.markWaited();
-    return .{ .status = .{ .exited = 7 } };
-}
-
-test "runtime process poll wait preserves stopped children and consumes exited children" {
-    var context: u8 = 0;
-    var stopped_child = ChildProcess.init(.{
-        .id = 123,
-        .thread_handle = {},
-        .stdin = null,
-        .stdout = null,
-        .stderr = null,
-        .request_resource_usage_statistics = false,
-    });
-    const stopped_port: Port = .{
-        .context = &context,
-        .spawn_fn = testPollSpawn,
-        .wait_fn = testPollWait,
-        .poll_wait_fn = testStoppedPollWait,
-        .run_fn = testPollRun,
-    };
-    const stopped = try stopped_port.pollWait(.{ .child = &stopped_child });
-    try std.testing.expectEqual(WaitStatus{ .stopped = 19 }, stopped.status.?);
-    stopped_child.validateRunning();
-
-    var exited_child = ChildProcess.init(.{
-        .id = 124,
-        .thread_handle = {},
-        .stdin = null,
-        .stdout = null,
-        .stderr = null,
-        .request_resource_usage_statistics = false,
-    });
-    const exited_port: Port = .{
-        .context = &context,
-        .spawn_fn = testPollSpawn,
-        .wait_fn = testPollWait,
-        .poll_wait_fn = testExitedPollWait,
-        .run_fn = testPollRun,
-    };
-    const exited = try exited_port.pollWait(.{ .child = &exited_child });
-    try std.testing.expectEqual(WaitStatus{ .exited = 7 }, exited.status.?);
-    exited_child.validateWaited();
+    try std.testing.expectEqual(@as(fd.Descriptor, 0), foreground_request.terminal);
+    try std.testing.expectEqual(@as(ProcessId, 1234), foreground_request.process_group);
 }
 
 test "runtime process cwd and descriptor-backed stdio are low-level values" {

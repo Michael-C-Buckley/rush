@@ -11,6 +11,9 @@ const fd = @import("fd.zig");
 const fs = @import("fs.zig");
 const process = @import("process.zig");
 
+extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
+extern "c" fn tcsetpgrp(fd: std.c.fd_t, pgrp: std.c.pid_t) c_int;
+
 pub const Adapter = struct {
     io: std.Io,
 
@@ -49,6 +52,8 @@ pub const Adapter = struct {
             .wait_fn = wait,
             .poll_wait_fn = pollWait,
             .run_fn = run,
+            .continue_process_fn = continueProcess,
+            .foreground_process_group_fn = foregroundProcessGroup,
         };
     }
 };
@@ -242,6 +247,111 @@ fn wait(context: *anyopaque, request: process.WaitRequest) process.WaitError!pro
     return .{ .status = waitStatusFromTerm(term) };
 }
 
+fn pollWait(context: *anyopaque, request: process.PollWaitRequest) process.WaitError!process.PollWaitResult {
+    const adapter = adapterFromContext(context);
+    request.validate();
+
+    var flags: c_int = 0;
+    if (request.nohang) flags |= @intCast(std.posix.W.NOHANG);
+    if (request.report_stopped) flags |= @intCast(std.posix.W.UNTRACED);
+
+    const pid = request.child.id();
+    var status: c_int = 0;
+    while (true) {
+        const result = waitPid(pid, &status, flags) catch |err| switch (err) {
+            error.ChildNotFound => return error.Unexpected,
+            error.Interrupted => continue,
+            error.Unexpected => return error.Unexpected,
+        };
+        if (result == 0) return .{};
+        if (result != pid) return error.Unexpected;
+
+        const wait_status = waitStatusFromRaw(@bitCast(status));
+        switch (wait_status) {
+            .stopped => {},
+            .exited, .signaled, .unknown => cleanupWaitedChild(adapter.io, request.child),
+        }
+        return .{ .status = wait_status };
+    }
+}
+
+const WaitPidError = error{
+    Interrupted,
+    ChildNotFound,
+    Unexpected,
+};
+
+fn waitPid(pid: std.posix.pid_t, status: *c_int, flags: c_int) WaitPidError!std.posix.pid_t {
+    if (builtin.os.tag == .linux and !builtin.link_libc) {
+        const linux_flags: u32 = @bitCast(flags);
+        var linux_status: u32 = 0;
+        const rc = std.os.linux.waitpid(pid, &linux_status, linux_flags);
+        switch (std.os.linux.errno(rc)) {
+            .SUCCESS => {
+                status.* = @bitCast(linux_status);
+                return @intCast(rc);
+            },
+            .INTR => return error.Interrupted,
+            .CHILD => return error.ChildNotFound,
+            else => return error.Unexpected,
+        }
+    }
+
+    const rc = std.c.waitpid(pid, status, flags);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return @intCast(rc),
+        .INTR => return error.Interrupted,
+        .CHILD => return error.ChildNotFound,
+        else => return error.Unexpected,
+    }
+}
+
+fn continueProcess(context: *anyopaque, request: process.ContinueProcessRequest) process.JobControlError!void {
+    _ = adapterFromContext(context);
+    request.validate();
+    const pid: std.posix.pid_t = switch (request.target) {
+        .process => |process_id| process_id,
+        .process_group => |process_group| -process_group,
+    };
+    std.posix.kill(pid, .CONT) catch |err| switch (err) {
+        error.ProcessNotFound => return error.ProcessNotFound,
+        error.PermissionDenied => return error.PermissionDenied,
+        error.Unexpected => return error.Unexpected,
+    };
+}
+
+fn foregroundProcessGroup(context: *anyopaque, request: process.ForegroundProcessGroupRequest) process.JobControlError!process.ForegroundProcessGroupResult {
+    _ = adapterFromContext(context);
+    request.validate();
+    const previous = try terminalGetProcessGroup(request.terminal);
+    try terminalSetProcessGroup(request.terminal, request.process_group);
+    return .{ .previous_process_group = previous };
+}
+
+fn terminalGetProcessGroup(terminal: fd.Descriptor) process.JobControlError!std.posix.pid_t {
+    fd.assertValidDescriptor(terminal);
+    const rc = tcgetpgrp(terminal);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return @intCast(rc),
+        .INTR => return terminalGetProcessGroup(terminal),
+        .NOTTY => return error.OperationUnsupported,
+        else => return error.Unexpected,
+    }
+}
+
+fn terminalSetProcessGroup(terminal: fd.Descriptor, process_group: std.posix.pid_t) process.JobControlError!void {
+    fd.assertValidDescriptor(terminal);
+    std.debug.assert(process_group > 0);
+    const rc = tcsetpgrp(terminal, process_group);
+    switch (std.c.errno(rc)) {
+        .SUCCESS => return,
+        .INTR => return terminalSetProcessGroup(terminal, process_group),
+        .NOTTY => return error.OperationUnsupported,
+        .PERM => return error.PermissionDenied,
+        else => return error.Unexpected,
+    }
+}
+
 const StdinWriter = struct {
     io: std.Io,
     file: std.Io.File,
@@ -264,49 +374,6 @@ const StdinWriter = struct {
         };
     }
 };
-
-fn pollWait(context: *anyopaque, request: process.PollWaitRequest) process.WaitError!process.PollWaitResult {
-    _ = adapterFromContext(context);
-    request.validate();
-    const pid = request.child.id();
-    const flags: c_int = @intCast(std.posix.W.NOHANG | std.posix.W.UNTRACED);
-
-    if (builtin.link_libc) {
-        var status: c_int = 0;
-        const rc = std.c.waitpid(pid, &status, flags);
-        switch (std.c.errno(rc)) {
-            .SUCCESS => {
-                if (rc == 0) return .{ .status = null };
-                std.debug.assert(rc == pid);
-                const wait_status = waitStatusFromRaw(@bitCast(status));
-                markPollWaitStatus(request.child, wait_status);
-                return .{ .status = wait_status };
-            },
-            .INTR => return .{ .status = null },
-            .CHILD => return error.Unexpected,
-            else => return error.Unexpected,
-        }
-    }
-
-    if (builtin.os.tag == .linux) {
-        var status: u32 = 0;
-        const rc = std.os.linux.waitpid(pid, &status, @intCast(flags));
-        switch (std.os.linux.errno(rc)) {
-            .SUCCESS => {
-                if (rc == 0) return .{ .status = null };
-                std.debug.assert(rc == pid);
-                const wait_status = waitStatusFromRaw(status);
-                markPollWaitStatus(request.child, wait_status);
-                return .{ .status = wait_status };
-            },
-            .INTR => return .{ .status = null },
-            .CHILD => return error.Unexpected,
-            else => return error.Unexpected,
-        }
-    }
-
-    return error.Unsupported;
-}
 
 fn run(context: *anyopaque, request: process.RunRequest) process.RunError!process.RunResult {
     const adapter = adapterFromContext(context);
@@ -380,21 +447,30 @@ fn waitStatusFromTerm(term: std.process.Child.Term) process.WaitStatus {
 }
 
 fn waitStatusFromRaw(status: u32) process.WaitStatus {
-    if (std.posix.W.IFEXITED(status)) return .{ .exited = std.posix.W.EXITSTATUS(status) };
+    if (std.posix.W.IFEXITED(status)) return .{ .exited = @intCast(std.posix.W.EXITSTATUS(status)) };
     if (std.posix.W.IFSIGNALED(status)) return .{ .signaled = @intCast(@intFromEnum(std.posix.W.TERMSIG(status))) };
     if (std.posix.W.IFSTOPPED(status)) return .{ .stopped = @intCast(@intFromEnum(std.posix.W.STOPSIG(status))) };
     return .{ .unknown = status };
 }
 
-fn markPollWaitStatus(child: *process.ChildProcess, wait_status: process.WaitStatus) void {
-    (process.WaitResult{ .status = wait_status }).validate();
-    switch (wait_status) {
-        .stopped => child.validateRunning(),
-        .exited, .signaled, .unknown => {
-            child.child.id = null;
-            child.markWaited();
-        },
+fn cleanupWaitedChild(io: std.Io, child: *process.ChildProcess) void {
+    if (child.child.stdin) |file| {
+        var owned = file;
+        owned.close(io);
+        child.child.stdin = null;
     }
+    if (child.child.stdout) |file| {
+        var owned = file;
+        owned.close(io);
+        child.child.stdout = null;
+    }
+    if (child.child.stderr) |file| {
+        var owned = file;
+        owned.close(io);
+        child.child.stderr = null;
+    }
+    child.child.id = null;
+    child.markWaited();
 }
 
 fn configureForkedChild(request: process.StartSubshellRequest) void {

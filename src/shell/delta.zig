@@ -47,6 +47,17 @@ pub const OptionChange = struct {
     enabled: bool,
 };
 
+pub const JobMarkerMutation = struct {
+    current_job_id: ?usize = null,
+    previous_job_id: ?usize = null,
+
+    pub fn validate(self: JobMarkerMutation) void {
+        if (self.current_job_id) |id| std.debug.assert(id != 0);
+        if (self.previous_job_id) |id| std.debug.assert(id != 0);
+        std.debug.assert(self.current_job_id == null or self.previous_job_id == null or self.current_job_id.? != self.previous_job_id.?);
+    }
+};
+
 pub const StateDelta = struct {
     allocator: std.mem.Allocator,
     target: context.ExecutionTarget,
@@ -74,6 +85,7 @@ pub const StateDelta = struct {
     background_job_removals: std.ArrayList(usize) = .empty,
     job_notifications: std.ArrayList(state.BackgroundJobNotification) = .empty,
     job_notification_consume_count: usize = 0,
+    job_markers: ?JobMarkerMutation = null,
 
     pub fn init(allocator: std.mem.Allocator, target: context.ExecutionTarget) StateDelta {
         return .{ .allocator = allocator, .target = target };
@@ -168,6 +180,7 @@ pub const StateDelta = struct {
         for (self.background_job_removals.items) |id| try cloned.removeBackgroundJob(id);
         for (self.job_notifications.items) |notification| try cloned.appendJobNotification(notification);
         if (self.job_notification_consume_count != 0) cloned.consumeJobNotifications(self.job_notification_consume_count);
+        if (self.job_markers) |markers| cloned.setJobMarkers(markers);
 
         return cloned;
     }
@@ -195,7 +208,8 @@ pub const StateDelta = struct {
             self.background_job_updates.items.len == 0 and
             self.background_job_removals.items.len == 0 and
             self.job_notifications.items.len == 0 and
-            self.job_notification_consume_count == 0;
+            self.job_notification_consume_count == 0 and
+            self.job_markers == null;
     }
 
     pub fn assignVariable(self: *StateDelta, name: []const u8, value: []const u8, attributes: state.VariableAttributes) !void {
@@ -501,6 +515,12 @@ pub const StateDelta = struct {
         self.job_notification_consume_count = count;
     }
 
+    pub fn setJobMarkers(self: *StateDelta, markers: JobMarkerMutation) void {
+        self.assertPending();
+        markers.validate();
+        self.job_markers = markers;
+    }
+
     pub fn firstReadonlyVariableAssignment(self: StateDelta, shell_state: state.ShellState) ?[]const u8 {
         self.assertPending();
         for (self.variable_assignments.items) |assignment| {
@@ -574,6 +594,7 @@ pub const StateDelta = struct {
         for (self.background_job_removals.items) |id| shell_state.removeBackgroundJobById(id);
         if (self.job_notification_consume_count != 0) shell_state.consumeJobNotifications(self.job_notification_consume_count);
         for (self.job_notifications.items) |notification| try shell_state.appendJobNotification(notification);
+        if (self.job_markers) |markers| shell_state.setJobMarkers(markers.current_job_id, markers.previous_job_id);
 
         shell_state.validate();
         self.state = .consumed;

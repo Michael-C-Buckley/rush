@@ -763,6 +763,14 @@ pub const ShellState = struct {
         return null;
     }
 
+    pub fn findBackgroundJobPtrById(self: *ShellState, id: usize) ?*BackgroundJob {
+        std.debug.assert(id != 0);
+        for (self.background_jobs.items) |*job| {
+            if (job.id == id) return job;
+        }
+        return null;
+    }
+
     pub fn findBackgroundJobIndexById(self: ShellState, id: usize) ?usize {
         std.debug.assert(id != 0);
         for (self.background_jobs.items, 0..) |job, index| {
@@ -875,6 +883,15 @@ pub const ShellState = struct {
         if (self.current_job_id == job.id) return '+';
         if (self.previous_job_id == job.id) return '-';
         return ' ';
+    }
+
+    pub fn setJobMarkers(self: *ShellState, current_job_id: ?usize, previous_job_id: ?usize) void {
+        if (current_job_id) |id| std.debug.assert(self.findBackgroundJobById(id) != null);
+        if (previous_job_id) |id| std.debug.assert(self.findBackgroundJobById(id) != null);
+        std.debug.assert(current_job_id == null or previous_job_id == null or current_job_id.? != previous_job_id.?);
+        self.current_job_id = current_job_id;
+        self.previous_job_id = previous_job_id;
+        self.validate();
     }
 
     fn appendBackgroundJobCopy(self: *ShellState, job: BackgroundJob) !void {
