@@ -650,14 +650,11 @@ fn findTrapMutation(delta: *StateDelta, name: []const u8) ?*TrapMutation {
 }
 
 fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) !command_plan.FunctionDefinition {
-    definition.validate();
-    const owned_name = try allocator.dupe(u8, definition.name);
-    errdefer allocator.free(owned_name);
-    return .{ .name = owned_name, .body = definition.body, .redirections = definition.redirections };
+    return command_plan.cloneFunctionDefinition(allocator, definition);
 }
 
 fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) void {
-    allocator.free(definition.name);
+    command_plan.freeFunctionDefinition(allocator, definition);
 }
 
 pub fn firstReadonlyAssignment(shell_state: state.ShellState, assignments: []const command_plan.Assignment) ?[]const u8 {

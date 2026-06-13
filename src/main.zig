@@ -6982,10 +6982,17 @@ fn semanticCompoundUnsupportedMessage(plan: shell.CompoundCommandPlan) ?[]const 
     return null;
 }
 
-fn semanticCommandListUnsupportedMessage(list: shell.CommandList) ?[]const u8 {
+fn semanticCommandListUnsupportedMessage(list: shell.StatementList) ?[]const u8 {
     list.validate();
     for (list.commands) |command| {
         if (semanticCommandUnsupportedMessage(command)) |message| return message;
+    }
+    for (list.statements) |entry| {
+        switch (entry.plan) {
+            .simple => |plan| if (semanticCommandUnsupportedMessage(plan)) |message| return message,
+            .compound => |plan| if (semanticCompoundUnsupportedMessage(plan)) |message| return message,
+            .pipeline => |plan| if (semanticPipelineUnsupportedMessage(plan)) |message| return message,
+        }
     }
     return null;
 }

@@ -36,17 +36,11 @@ pub const FunctionDefinition = struct {
 
     pub fn hasExecutableBody(self: FunctionDefinition) bool {
         self.validate();
-        return self.body.commands.len != 0;
+        return self.body.statements.len != 0 or self.body.commands.len != 0;
     }
 };
 
-pub const FunctionBody = struct {
-    commands: []const CommandPlan = &.{},
-
-    pub fn validate(self: FunctionBody) void {
-        for (self.commands) |command| command.validate();
-    }
-};
+pub const FunctionBody = StatementList;
 
 pub const CommandList = struct {
     commands: []const CommandPlan = &.{},
@@ -57,8 +51,8 @@ pub const CommandList = struct {
 };
 
 pub const IfBranch = struct {
-    condition: CommandList,
-    body: CommandList,
+    condition: StatementList,
+    body: StatementList,
 
     pub fn validate(self: IfBranch) void {
         self.condition.validate();
@@ -68,7 +62,7 @@ pub const IfBranch = struct {
 
 pub const IfPlan = struct {
     branches: []const IfBranch,
-    else_body: CommandList = .{},
+    else_body: StatementList = .{},
 
     pub fn validate(self: IfPlan) void {
         std.debug.assert(self.branches.len != 0);
@@ -78,8 +72,8 @@ pub const IfPlan = struct {
 };
 
 pub const LoopPlan = struct {
-    condition: CommandList,
-    body: CommandList,
+    condition: StatementList,
+    body: StatementList,
 
     pub fn validate(self: LoopPlan) void {
         self.condition.validate();
@@ -116,7 +110,7 @@ pub const AndOrPlan = struct {
 };
 
 pub const NegationPlan = struct {
-    body: CommandList,
+    body: StatementList,
 
     pub fn validate(self: NegationPlan) void {
         self.body.validate();
@@ -138,7 +132,7 @@ pub const ForWords = union(enum) {
 pub const ForPlan = struct {
     variable_name: []const u8,
     words: ForWords = .positional_parameters,
-    body: CommandList,
+    body: StatementList,
 
     pub fn validate(self: ForPlan) void {
         state.assertValidVariableName(self.variable_name);
@@ -149,7 +143,7 @@ pub const ForPlan = struct {
 
 pub const CaseArm = struct {
     patterns: []const []const u8,
-    body: CommandList,
+    body: StatementList,
 
     pub fn validate(self: CaseArm) void {
         std.debug.assert(self.patterns.len != 0);
@@ -169,11 +163,11 @@ pub const CasePlan = struct {
 };
 
 pub const CompoundBody = union(enum) {
-    sequence: CommandList,
+    sequence: StatementList,
     and_or_list: AndOrPlan,
     negation: NegationPlan,
-    brace_group: CommandList,
-    subshell: CommandList,
+    brace_group: StatementList,
+    subshell: StatementList,
     if_clause: IfPlan,
     while_loop: LoopPlan,
     until_loop: LoopPlan,
@@ -223,6 +217,231 @@ pub const CompoundCommandPlan = struct {
         };
     }
 };
+
+pub const StatementListOperator = enum {
+    sequence,
+    and_if,
+    or_if,
+};
+
+pub const StatementPlan = union(enum) {
+    simple: CommandPlan,
+    compound: CompoundCommandPlan,
+    pipeline: PipelinePlan,
+
+    pub fn validate(self: StatementPlan) void {
+        switch (self) {
+            .simple => |plan| plan.validate(),
+            .compound => |plan| plan.validate(),
+            .pipeline => |plan| plan.validate(),
+        }
+    }
+};
+
+pub const StatementListEntry = struct {
+    op_before: StatementListOperator = .sequence,
+    plan: StatementPlan,
+
+    pub fn validate(self: StatementListEntry, index: usize) void {
+        if (index == 0) std.debug.assert(self.op_before == .sequence);
+        self.plan.validate();
+    }
+};
+
+pub const StatementList = struct {
+    statements: []const StatementListEntry = &.{},
+    /// Compatibility for simple-only semantic lists constructed by older unit
+    /// tests and callers. Parser-backed lowering writes `statements` so
+    /// heterogeneous lists can carry simple, compound, and pipeline plans.
+    commands: []const CommandPlan = &.{},
+
+    pub fn validate(self: StatementList) void {
+        std.debug.assert(self.statements.len == 0 or self.commands.len == 0);
+        for (self.statements, 0..) |statement, index| statement.validate(index);
+        for (self.commands) |command| command.validate();
+    }
+};
+
+pub const PipelineStatusRule = enum {
+    last_command,
+    pipefail,
+};
+
+pub const PipelineBackgroundMode = enum {
+    foreground,
+    background,
+};
+
+pub const PipelineExecutionStrategy = enum {
+    /// A syntactic pipeline with one stage. The stage keeps its own target, so
+    /// current-shell builtins/functions still mutate the current shell.
+    single_stage,
+    /// Every stage is an external command without shell-managed redirections,
+    /// so the runtime can wire real host pipes before spawning children.
+    external_only_real,
+    /// Shell-implemented stages only. Stages are evaluated in isolated
+    /// subshell snapshots and only statuses/output diagnostics cross back.
+    semantic_in_memory,
+    /// Mixed shell/external stages or stage redirections streamed through the
+    /// semantic/runtime boundary with bounded in-memory byte buffers.
+    mixed_in_memory,
+    /// Async/background pipelines require job ownership in a later slice. This
+    /// strategy reserves the semantic decision without implementing job control.
+    background_deferred,
+};
+
+pub const PipelineOptions = struct {
+    negated: bool = false,
+    status_rule: PipelineStatusRule = .last_command,
+    background: PipelineBackgroundMode = .foreground,
+};
+
+pub const PipelineStagePlan = union(enum) {
+    simple: CommandPlan,
+    compound: CompoundCommandPlan,
+
+    pub fn validate(self: PipelineStagePlan) void {
+        switch (self) {
+            .simple => |plan| plan.validate(),
+            .compound => |plan| plan.validate(),
+        }
+    }
+
+    pub fn target(self: PipelineStagePlan) context.ExecutionTarget {
+        self.validate();
+        return switch (self) {
+            .simple => |plan| plan.target,
+            .compound => |plan| plan.target,
+        };
+    }
+
+    pub fn isExternalOnlyRealEligible(self: PipelineStagePlan) bool {
+        self.validate();
+        return switch (self) {
+            .simple => |plan| plan.class() == .external and !hasSimpleRedirections(plan),
+            .compound => false,
+        };
+    }
+
+    pub fn isExternal(self: PipelineStagePlan) bool {
+        self.validate();
+        return switch (self) {
+            .simple => |plan| plan.class() == .external,
+            .compound => false,
+        };
+    }
+};
+
+pub const PipelinePlan = struct {
+    stages: []const PipelineStagePlan,
+    negated: bool = false,
+    status_rule: PipelineStatusRule = .last_command,
+    background: PipelineBackgroundMode = .foreground,
+    strategy: PipelineExecutionStrategy,
+
+    pub fn init(stages: []const PipelineStagePlan, options: PipelineOptions) PipelinePlan {
+        std.debug.assert(stages.len != 0);
+        for (stages) |stage| stage.validate();
+        const plan: PipelinePlan = .{
+            .stages = stages,
+            .negated = options.negated,
+            .status_rule = options.status_rule,
+            .background = options.background,
+            .strategy = choosePipelineStrategy(stages, options.background),
+        };
+        plan.validate();
+        return plan;
+    }
+
+    pub fn validate(self: PipelinePlan) void {
+        std.debug.assert(self.stages.len != 0);
+        for (self.stages, 0..) |stage, index| {
+            stage.validate();
+            const target = self.stageTarget(index);
+            if (self.stages.len > 1) std.debug.assert(target != .current_shell);
+            if (stage.isExternal()) std.debug.assert(target == .child_process);
+        }
+        std.debug.assert(self.pipeCount() == self.stages.len - 1);
+        std.debug.assert(self.strategy == choosePipelineStrategy(self.stages, self.background));
+        switch (self.strategy) {
+            .single_stage => std.debug.assert(self.stages.len == 1 and self.background == .foreground),
+            .external_only_real => {
+                std.debug.assert(self.stages.len > 1);
+                std.debug.assert(self.background == .foreground);
+                for (self.stages) |stage| std.debug.assert(stage.isExternalOnlyRealEligible());
+            },
+            .semantic_in_memory => {
+                std.debug.assert(self.stages.len > 1);
+                std.debug.assert(self.background == .foreground);
+                for (self.stages) |stage| std.debug.assert(!stage.isExternal());
+            },
+            .mixed_in_memory => {
+                std.debug.assert(self.stages.len > 1);
+                std.debug.assert(self.background == .foreground);
+            },
+            .background_deferred => std.debug.assert(self.background == .background),
+        }
+    }
+
+    pub fn pipeCount(self: PipelinePlan) usize {
+        self.validateStagesOnly();
+        return self.stages.len - 1;
+    }
+
+    pub fn stageTarget(self: PipelinePlan, index: usize) context.ExecutionTarget {
+        self.validateStagesOnly();
+        std.debug.assert(index < self.stages.len);
+        const stage = self.stages[index];
+        if (self.stages.len == 1) return stage.target();
+        if (stage.isExternal()) return .child_process;
+        return .subshell;
+    }
+
+    pub fn validateStatusCount(self: PipelinePlan, statuses: []const state.ExitStatus) void {
+        self.validate();
+        std.debug.assert(statuses.len == self.stages.len);
+    }
+
+    fn validateStagesOnly(self: PipelinePlan) void {
+        std.debug.assert(self.stages.len != 0);
+        for (self.stages) |stage| stage.validate();
+    }
+};
+
+pub const StatusAggregationInput = struct {
+    stage_count: usize,
+    statuses: []const state.ExitStatus,
+    status_rule: PipelineStatusRule = .last_command,
+    negated: bool = false,
+
+    pub fn validate(self: StatusAggregationInput) void {
+        std.debug.assert(self.stage_count != 0);
+        std.debug.assert(self.statuses.len == self.stage_count);
+    }
+};
+
+pub const StatusAggregation = struct {
+    selected_status: state.ExitStatus,
+    final_status: state.ExitStatus,
+
+    pub fn validate(self: StatusAggregation) void {
+        if (self.selected_status == 0) {
+            std.debug.assert(self.final_status == 0 or self.final_status == 1);
+        }
+    }
+};
+
+pub fn aggregateStatus(input: StatusAggregationInput) StatusAggregation {
+    input.validate();
+    const selected = switch (input.status_rule) {
+        .last_command => input.statuses[input.statuses.len - 1],
+        .pipefail => pipefailStatus(input.statuses),
+    };
+    const final = if (input.negated) negateStatus(selected) else selected;
+    const aggregation: StatusAggregation = .{ .selected_status = selected, .final_status = final };
+    aggregation.validate();
+    return aggregation;
+}
 
 pub const ExternalResolution = struct {
     name: []const u8,
@@ -450,6 +669,24 @@ pub fn classifyExpandedSimpleCommand(request: PlanRequest) CommandPlan {
     return CommandPlan.classify(request);
 }
 
+pub fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: FunctionDefinition) std.mem.Allocator.Error!FunctionDefinition {
+    definition.validate();
+    const owned_name = try allocator.dupe(u8, definition.name);
+    errdefer allocator.free(owned_name);
+    const owned_body = try cloneStatementList(allocator, definition.body);
+    errdefer freeStatementList(allocator, owned_body);
+    return .{
+        .name = owned_name,
+        .body = owned_body,
+        .redirections = definition.redirections,
+    };
+}
+
+pub fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: FunctionDefinition) void {
+    allocator.free(definition.name);
+    freeStatementList(allocator, definition.body);
+}
+
 fn targetForClassification(default_target: context.ExecutionTarget, classification: Classification) context.ExecutionTarget {
     return switch (classification) {
         .external => .child_process,
@@ -488,6 +725,426 @@ fn assertUniqueExternalNames(externals: []const ExternalResolution) void {
             std.debug.assert(!std.mem.eql(u8, left.name, right.name));
         }
     }
+}
+
+fn cloneStatementList(allocator: std.mem.Allocator, list: StatementList) std.mem.Allocator.Error!StatementList {
+    list.validate();
+    if (list.commands.len != 0) {
+        const commands = try allocator.alloc(CommandPlan, list.commands.len);
+        errdefer allocator.free(commands);
+        var initialized: usize = 0;
+        errdefer for (commands[0..initialized]) |command| freeCommandPlan(allocator, command);
+        for (list.commands, 0..) |command, index| {
+            commands[index] = try cloneCommandPlan(allocator, command);
+            initialized += 1;
+        }
+        return .{ .commands = commands };
+    }
+
+    const statements = try allocator.alloc(StatementListEntry, list.statements.len);
+    errdefer allocator.free(statements);
+    var initialized: usize = 0;
+    errdefer for (statements[0..initialized]) |entry| freeStatementPlan(allocator, entry.plan);
+    for (list.statements, 0..) |entry, index| {
+        statements[index] = .{ .op_before = entry.op_before, .plan = try cloneStatementPlan(allocator, entry.plan) };
+        initialized += 1;
+    }
+    return .{ .statements = statements };
+}
+
+fn freeStatementList(allocator: std.mem.Allocator, list: StatementList) void {
+    for (list.commands) |command| freeCommandPlan(allocator, command);
+    allocator.free(list.commands);
+    for (list.statements) |entry| freeStatementPlan(allocator, entry.plan);
+    allocator.free(list.statements);
+}
+
+fn cloneStatementPlan(allocator: std.mem.Allocator, plan: StatementPlan) std.mem.Allocator.Error!StatementPlan {
+    plan.validate();
+    return switch (plan) {
+        .simple => |simple| .{ .simple = try cloneCommandPlan(allocator, simple) },
+        .compound => |compound| .{ .compound = try cloneCompoundCommandPlan(allocator, compound) },
+        .pipeline => |pipeline| .{ .pipeline = try clonePipelinePlan(allocator, pipeline) },
+    };
+}
+
+fn freeStatementPlan(allocator: std.mem.Allocator, plan: StatementPlan) void {
+    switch (plan) {
+        .simple => |simple| freeCommandPlan(allocator, simple),
+        .compound => |compound| freeCompoundCommandPlan(allocator, compound),
+        .pipeline => |pipeline| freePipelinePlan(allocator, pipeline),
+    }
+}
+
+fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.Allocator.Error!CommandPlan {
+    plan.validate();
+    const assignments = try cloneAssignments(allocator, plan.assignments);
+    errdefer freeAssignments(allocator, assignments);
+    const argv = try cloneArgv(allocator, plan.argv);
+    errdefer freeArgv(allocator, argv);
+    const classification = try cloneClassification(allocator, plan.classification, argv);
+    errdefer freeClassification(allocator, classification);
+    const owned: CommandPlan = .{
+        .target = plan.target,
+        .assignments = assignments,
+        .argv = argv,
+        .redirections = plan.redirections,
+        .classification = classification,
+    };
+    owned.validate();
+    return owned;
+}
+
+fn freeCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) void {
+    freeAssignments(allocator, plan.assignments);
+    freeArgv(allocator, plan.argv);
+    freeClassification(allocator, plan.classification);
+}
+
+fn cloneAssignments(allocator: std.mem.Allocator, assignments: []const Assignment) std.mem.Allocator.Error![]const Assignment {
+    const owned = try allocator.alloc(Assignment, assignments.len);
+    errdefer allocator.free(owned);
+    var initialized: usize = 0;
+    errdefer for (owned[0..initialized]) |assignment| freeAssignment(allocator, assignment);
+    for (assignments, 0..) |assignment, index| {
+        owned[index] = try cloneAssignment(allocator, assignment);
+        initialized += 1;
+    }
+    return owned;
+}
+
+fn cloneAssignment(allocator: std.mem.Allocator, assignment: Assignment) std.mem.Allocator.Error!Assignment {
+    const name = try allocator.dupe(u8, assignment.name);
+    errdefer allocator.free(name);
+    const value = try allocator.dupe(u8, assignment.value);
+    return .{ .name = name, .value = value };
+}
+
+fn freeAssignments(allocator: std.mem.Allocator, assignments: []const Assignment) void {
+    for (assignments) |assignment| freeAssignment(allocator, assignment);
+    allocator.free(assignments);
+}
+
+fn freeAssignment(allocator: std.mem.Allocator, assignment: Assignment) void {
+    allocator.free(assignment.name);
+    allocator.free(assignment.value);
+}
+
+fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) std.mem.Allocator.Error![]const []const u8 {
+    const owned = try allocator.alloc([]const u8, argv.len);
+    errdefer allocator.free(owned);
+    var initialized: usize = 0;
+    errdefer for (owned[0..initialized]) |arg| allocator.free(arg);
+    for (argv, 0..) |arg, index| {
+        owned[index] = try allocator.dupe(u8, arg);
+        initialized += 1;
+    }
+    return owned;
+}
+
+fn freeArgv(allocator: std.mem.Allocator, argv: []const []const u8) void {
+    for (argv) |arg| allocator.free(arg);
+    allocator.free(argv);
+}
+
+fn cloneClassification(allocator: std.mem.Allocator, classification: Classification, cloned_argv: []const []const u8) std.mem.Allocator.Error!Classification {
+    return switch (classification) {
+        .empty => .{ .empty = {} },
+        .assignment_only => .{ .assignment_only = {} },
+        .special_builtin => |definition| .{ .special_builtin = definition },
+        .regular_builtin => |definition| .{ .regular_builtin = definition },
+        .function_definition => |definition| .{ .function_definition = try cloneFunctionDefinition(allocator, definition) },
+        .function => |definition| .{ .function = try cloneFunctionDefinition(allocator, definition) },
+        .external => |resolution| .{ .external = try cloneExternalResolution(allocator, resolution) },
+        .not_found => .{ .not_found = .{ .name = cloned_argv[0] } },
+    };
+}
+
+fn cloneExternalResolution(allocator: std.mem.Allocator, resolution: ExternalResolution) std.mem.Allocator.Error!ExternalResolution {
+    const name = try allocator.dupe(u8, resolution.name);
+    errdefer allocator.free(name);
+    const path = try allocator.dupe(u8, resolution.path);
+    return .{ .name = name, .path = path };
+}
+
+fn freeClassification(allocator: std.mem.Allocator, classification: Classification) void {
+    switch (classification) {
+        .empty, .assignment_only, .special_builtin, .regular_builtin, .not_found => {},
+        .function_definition => |definition| freeFunctionDefinition(allocator, definition),
+        .function => |definition| freeFunctionDefinition(allocator, definition),
+        .external => |resolution| {
+            allocator.free(resolution.name);
+            allocator.free(resolution.path);
+        },
+    }
+}
+
+fn cloneCompoundCommandPlan(allocator: std.mem.Allocator, plan: CompoundCommandPlan) std.mem.Allocator.Error!CompoundCommandPlan {
+    plan.validate();
+    const body = try cloneCompoundBody(allocator, plan.body);
+    errdefer freeCompoundBody(allocator, body);
+    return .{ .target = plan.target, .redirections = plan.redirections, .body = body };
+}
+
+fn freeCompoundCommandPlan(allocator: std.mem.Allocator, plan: CompoundCommandPlan) void {
+    freeCompoundBody(allocator, plan.body);
+}
+
+fn cloneCompoundBody(allocator: std.mem.Allocator, body: CompoundBody) std.mem.Allocator.Error!CompoundBody {
+    body.validate();
+    return switch (body) {
+        .sequence => |list| .{ .sequence = try cloneStatementList(allocator, list) },
+        .and_or_list => |and_or| .{ .and_or_list = try cloneAndOrPlan(allocator, and_or) },
+        .negation => |negation| .{ .negation = .{ .body = try cloneStatementList(allocator, negation.body) } },
+        .brace_group => |list| .{ .brace_group = try cloneStatementList(allocator, list) },
+        .subshell => |list| .{ .subshell = try cloneStatementList(allocator, list) },
+        .if_clause => |if_plan| .{ .if_clause = try cloneIfPlan(allocator, if_plan) },
+        .while_loop => |loop| .{ .while_loop = try cloneLoopPlan(allocator, loop) },
+        .until_loop => |loop| .{ .until_loop = try cloneLoopPlan(allocator, loop) },
+        .for_loop => |for_plan| .{ .for_loop = try cloneForPlan(allocator, for_plan) },
+        .case_clause => |case_plan| .{ .case_clause = try cloneCasePlan(allocator, case_plan) },
+    };
+}
+
+fn freeCompoundBody(allocator: std.mem.Allocator, body: CompoundBody) void {
+    switch (body) {
+        .sequence => |list| freeStatementList(allocator, list),
+        .and_or_list => |and_or| freeAndOrPlan(allocator, and_or),
+        .negation => |negation| freeStatementList(allocator, negation.body),
+        .brace_group => |list| freeStatementList(allocator, list),
+        .subshell => |list| freeStatementList(allocator, list),
+        .if_clause => |if_plan| freeIfPlan(allocator, if_plan),
+        .while_loop => |loop| freeLoopPlan(allocator, loop),
+        .until_loop => |loop| freeLoopPlan(allocator, loop),
+        .for_loop => |for_plan| freeForPlan(allocator, for_plan),
+        .case_clause => |case_plan| freeCasePlan(allocator, case_plan),
+    }
+}
+
+fn cloneAndOrPlan(allocator: std.mem.Allocator, plan: AndOrPlan) std.mem.Allocator.Error!AndOrPlan {
+    plan.validate();
+    const commands = try allocator.alloc(AndOrCommand, plan.commands.len);
+    errdefer allocator.free(commands);
+    var initialized: usize = 0;
+    errdefer for (commands[0..initialized]) |command| freeCommandPlan(allocator, command.command);
+    for (plan.commands, 0..) |command, index| {
+        commands[index] = .{ .operator = command.operator, .command = try cloneCommandPlan(allocator, command.command) };
+        initialized += 1;
+    }
+    return .{ .commands = commands };
+}
+
+fn freeAndOrPlan(allocator: std.mem.Allocator, plan: AndOrPlan) void {
+    for (plan.commands) |command| freeCommandPlan(allocator, command.command);
+    allocator.free(plan.commands);
+}
+
+fn cloneIfPlan(allocator: std.mem.Allocator, plan: IfPlan) std.mem.Allocator.Error!IfPlan {
+    plan.validate();
+    const branches = try allocator.alloc(IfBranch, plan.branches.len);
+    errdefer allocator.free(branches);
+    var initialized: usize = 0;
+    errdefer for (branches[0..initialized]) |branch| freeIfBranch(allocator, branch);
+    for (plan.branches, 0..) |branch, index| {
+        branches[index] = try cloneIfBranch(allocator, branch);
+        initialized += 1;
+    }
+    const else_body = try cloneStatementList(allocator, plan.else_body);
+    errdefer freeStatementList(allocator, else_body);
+    return .{ .branches = branches, .else_body = else_body };
+}
+
+fn cloneIfBranch(allocator: std.mem.Allocator, branch: IfBranch) std.mem.Allocator.Error!IfBranch {
+    branch.validate();
+    const condition = try cloneStatementList(allocator, branch.condition);
+    errdefer freeStatementList(allocator, condition);
+    const body = try cloneStatementList(allocator, branch.body);
+    return .{ .condition = condition, .body = body };
+}
+
+fn freeIfPlan(allocator: std.mem.Allocator, plan: IfPlan) void {
+    for (plan.branches) |branch| freeIfBranch(allocator, branch);
+    allocator.free(plan.branches);
+    freeStatementList(allocator, plan.else_body);
+}
+
+fn freeIfBranch(allocator: std.mem.Allocator, branch: IfBranch) void {
+    freeStatementList(allocator, branch.condition);
+    freeStatementList(allocator, branch.body);
+}
+
+fn cloneLoopPlan(allocator: std.mem.Allocator, plan: LoopPlan) std.mem.Allocator.Error!LoopPlan {
+    plan.validate();
+    const condition = try cloneStatementList(allocator, plan.condition);
+    errdefer freeStatementList(allocator, condition);
+    const body = try cloneStatementList(allocator, plan.body);
+    return .{ .condition = condition, .body = body };
+}
+
+fn freeLoopPlan(allocator: std.mem.Allocator, plan: LoopPlan) void {
+    freeStatementList(allocator, plan.condition);
+    freeStatementList(allocator, plan.body);
+}
+
+fn cloneForPlan(allocator: std.mem.Allocator, plan: ForPlan) std.mem.Allocator.Error!ForPlan {
+    plan.validate();
+    const variable_name = try allocator.dupe(u8, plan.variable_name);
+    errdefer allocator.free(variable_name);
+    const words = try cloneForWords(allocator, plan.words);
+    errdefer freeForWords(allocator, words);
+    const body = try cloneStatementList(allocator, plan.body);
+    errdefer freeStatementList(allocator, body);
+    return .{ .variable_name = variable_name, .words = words, .body = body };
+}
+
+fn freeForPlan(allocator: std.mem.Allocator, plan: ForPlan) void {
+    allocator.free(plan.variable_name);
+    freeForWords(allocator, plan.words);
+    freeStatementList(allocator, plan.body);
+}
+
+fn cloneForWords(allocator: std.mem.Allocator, words: ForWords) std.mem.Allocator.Error!ForWords {
+    words.validate();
+    return switch (words) {
+        .positional_parameters => .positional_parameters,
+        .explicit => |explicit| blk: {
+            const owned = try allocator.alloc([]const u8, explicit.len);
+            errdefer allocator.free(owned);
+            var initialized: usize = 0;
+            errdefer for (owned[0..initialized]) |word| allocator.free(word);
+            for (explicit, 0..) |word, index| {
+                owned[index] = try allocator.dupe(u8, word);
+                initialized += 1;
+            }
+            break :blk .{ .explicit = owned };
+        },
+    };
+}
+
+fn freeForWords(allocator: std.mem.Allocator, words: ForWords) void {
+    switch (words) {
+        .positional_parameters => {},
+        .explicit => |explicit| {
+            for (explicit) |word| allocator.free(word);
+            allocator.free(explicit);
+        },
+    }
+}
+
+fn cloneCasePlan(allocator: std.mem.Allocator, plan: CasePlan) std.mem.Allocator.Error!CasePlan {
+    plan.validate();
+    const word = try allocator.dupe(u8, plan.word);
+    errdefer allocator.free(word);
+    const arms = try allocator.alloc(CaseArm, plan.arms.len);
+    errdefer allocator.free(arms);
+    var initialized: usize = 0;
+    errdefer for (arms[0..initialized]) |arm| freeCaseArm(allocator, arm);
+    for (plan.arms, 0..) |arm, index| {
+        arms[index] = try cloneCaseArm(allocator, arm);
+        initialized += 1;
+    }
+    return .{ .word = word, .arms = arms };
+}
+
+fn freeCasePlan(allocator: std.mem.Allocator, plan: CasePlan) void {
+    allocator.free(plan.word);
+    for (plan.arms) |arm| freeCaseArm(allocator, arm);
+    allocator.free(plan.arms);
+}
+
+fn cloneCaseArm(allocator: std.mem.Allocator, arm: CaseArm) std.mem.Allocator.Error!CaseArm {
+    arm.validate();
+    const patterns = try allocator.alloc([]const u8, arm.patterns.len);
+    errdefer allocator.free(patterns);
+    var initialized: usize = 0;
+    errdefer for (patterns[0..initialized]) |pattern| allocator.free(pattern);
+    for (arm.patterns, 0..) |pattern, index| {
+        patterns[index] = try allocator.dupe(u8, pattern);
+        initialized += 1;
+    }
+    const body = try cloneStatementList(allocator, arm.body);
+    errdefer freeStatementList(allocator, body);
+    return .{ .patterns = patterns, .body = body };
+}
+
+fn freeCaseArm(allocator: std.mem.Allocator, arm: CaseArm) void {
+    for (arm.patterns) |pattern| allocator.free(pattern);
+    allocator.free(arm.patterns);
+    freeStatementList(allocator, arm.body);
+}
+
+fn clonePipelinePlan(allocator: std.mem.Allocator, plan: PipelinePlan) std.mem.Allocator.Error!PipelinePlan {
+    plan.validate();
+    const stages = try allocator.alloc(PipelineStagePlan, plan.stages.len);
+    errdefer allocator.free(stages);
+    var initialized: usize = 0;
+    errdefer for (stages[0..initialized]) |stage| freePipelineStagePlan(allocator, stage);
+    for (plan.stages, 0..) |stage, index| {
+        stages[index] = try clonePipelineStagePlan(allocator, stage);
+        initialized += 1;
+    }
+    return PipelinePlan.init(stages, .{ .negated = plan.negated, .status_rule = plan.status_rule, .background = plan.background });
+}
+
+fn freePipelinePlan(allocator: std.mem.Allocator, plan: PipelinePlan) void {
+    for (plan.stages) |stage| freePipelineStagePlan(allocator, stage);
+    allocator.free(plan.stages);
+}
+
+fn clonePipelineStagePlan(allocator: std.mem.Allocator, stage: PipelineStagePlan) std.mem.Allocator.Error!PipelineStagePlan {
+    stage.validate();
+    return switch (stage) {
+        .simple => |simple| .{ .simple = try cloneCommandPlan(allocator, simple) },
+        .compound => |compound| .{ .compound = try cloneCompoundCommandPlan(allocator, compound) },
+    };
+}
+
+fn freePipelineStagePlan(allocator: std.mem.Allocator, stage: PipelineStagePlan) void {
+    switch (stage) {
+        .simple => |simple| freeCommandPlan(allocator, simple),
+        .compound => |compound| freeCompoundCommandPlan(allocator, compound),
+    }
+}
+
+fn choosePipelineStrategy(stages: []const PipelineStagePlan, background: PipelineBackgroundMode) PipelineExecutionStrategy {
+    std.debug.assert(stages.len != 0);
+    for (stages) |stage| stage.validate();
+    if (background == .background) return .background_deferred;
+    if (stages.len == 1) return .single_stage;
+    if (allStagesExternalOnlyRealEligible(stages)) return .external_only_real;
+    if (allStagesSemantic(stages)) return .semantic_in_memory;
+    return .mixed_in_memory;
+}
+
+fn allStagesExternalOnlyRealEligible(stages: []const PipelineStagePlan) bool {
+    std.debug.assert(stages.len != 0);
+    for (stages) |stage| if (!stage.isExternalOnlyRealEligible()) return false;
+    return true;
+}
+
+fn allStagesSemantic(stages: []const PipelineStagePlan) bool {
+    std.debug.assert(stages.len != 0);
+    for (stages) |stage| if (stage.isExternal()) return false;
+    return true;
+}
+
+fn hasSimpleRedirections(plan: CommandPlan) bool {
+    plan.redirections.validate();
+    return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
+}
+
+fn pipefailStatus(statuses: []const state.ExitStatus) state.ExitStatus {
+    std.debug.assert(statuses.len != 0);
+    var index = statuses.len;
+    while (index != 0) {
+        index -= 1;
+        if (statuses[index] != 0) return statuses[index];
+    }
+    return 0;
+}
+
+fn negateStatus(status: state.ExitStatus) state.ExitStatus {
+    return if (status == 0) 1 else 0;
 }
 
 test "CommandPlan classifies expanded simple command shapes" {

@@ -1003,23 +1003,11 @@ fn freePositionals(allocator: std.mem.Allocator, args: []const []const u8) void 
 }
 
 fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) !command_plan.FunctionDefinition {
-    definition.validate();
-
-    const owned_name = try allocator.dupe(u8, definition.name);
-    errdefer allocator.free(owned_name);
-
-    // Function bodies and redirection operands are borrowed semantic data in
-    // this non-parser-integrated slice. The owning representation will be
-    // introduced with parser/IR integration.
-    return .{
-        .name = owned_name,
-        .body = definition.body,
-        .redirections = definition.redirections,
-    };
+    return command_plan.cloneFunctionDefinition(allocator, definition);
 }
 
 fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) void {
-    allocator.free(definition.name);
+    command_plan.freeFunctionDefinition(allocator, definition);
 }
 
 test "ShellState owns variables positionals cwd and clones for subshell isolation" {

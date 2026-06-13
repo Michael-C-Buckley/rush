@@ -232,15 +232,10 @@ const TrapActionLowerer = struct {
 
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         defer program.deinit();
-        return self.lowerProgram(program, self.eval_context.target, .trap_body);
+        return self.lowerProgram(program, self.eval_context.target, true);
     }
 
-    const ProgramRole = enum {
-        trap_body,
-        command_list,
-    };
-
-    fn lowerProgram(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget, role: ProgramRole) !TrapActionBodyPayload {
+    fn lowerProgram(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget, trap_body: bool) !TrapActionBodyPayload {
         std.debug.assert(target.allowsShellStateCommit());
         self.shell_state.validate();
         if (program.statements.len == 0) {
@@ -248,8 +243,16 @@ const TrapActionLowerer = struct {
             return .{ .simple = plan };
         }
 
-        if (program.statements.len == 1 and role == .trap_body) return self.lowerSingleTrapStatement(program, program.statements[0], target);
-        return self.lowerSimpleStatementList(program, target);
+        if (program.statements.len == 1 and trap_body) return self.lowerSingleTrapStatement(program, program.statements[0], target);
+        const lowered = try self.lowerStatementList(program, target);
+        return switch (lowered) {
+            .failure => |trap_failure| .{ .failure = trap_failure },
+            .list => |list| blk: {
+                const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .sequence = list } };
+                plan.validate();
+                break :blk .{ .compound = plan };
+            },
+        };
     }
 
     fn lowerSingleTrapStatement(self: *TrapActionLowerer, program: ir.Program, statement: ir.Statement, target: context.ExecutionTarget) !TrapActionBodyPayload {
@@ -262,82 +265,98 @@ const TrapActionLowerer = struct {
             .loop_command => self.lowerLoopCommand(program.loop_commands[statement.index], target),
             .for_command => self.lowerForCommand(program.for_commands[statement.index], target),
             .case_command => self.lowerCaseCommand(program.case_commands[statement.index], target),
-            .function_definition => self.failure(.unsupported_shape, "trap {s}: unsupported trap action: function definitions need owned function-body lowering", .{self.signal.name()}),
+            .function_definition => self.lowerFunctionDefinition(program.function_definitions[statement.index], target),
             .bash_test_command => self.failure(.unsupported_shape, "trap {s}: unsupported trap action: bash [[ ]] lowering is not implemented in the semantic trap resolver", .{self.signal.name()}),
         };
     }
 
-    fn lowerSimpleStatementList(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget) !TrapActionBodyPayload {
-        std.debug.assert(program.statements.len != 0);
-        var saw_and_or = false;
-        var saw_sequence = false;
+    const StatementListLowering = union(enum) {
+        list: command_plan.StatementList,
+        failure: TrapActionFailure,
+    };
+
+    fn lowerStatementList(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget) !StatementListLowering {
         for (program.statements, 0..) |statement, index| {
-            if (statement.kind != .pipeline) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: mixed compound command lists need semantic statement-list lowering", .{self.signal.name()});
-            if (statement.async_after) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background commands are not supported by the semantic trap resolver", .{self.signal.name()});
+            if (statement.async_after) return .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background commands are not supported by the semantic trap resolver", .{self.signal.name()})).failure };
             if (index == 0) {
                 std.debug.assert(statement.op_before == .sequence);
                 continue;
             }
-            switch (statement.op_before) {
-                .sequence => saw_sequence = true,
-                .and_if, .or_if => saw_and_or = true,
-            }
-        }
-        if (saw_and_or and saw_sequence) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: mixed ';' and &&/|| lists need semantic statement-list lowering", .{self.signal.name()});
-
-        if (saw_and_or) {
-            const commands = try self.allocator.alloc(command_plan.AndOrCommand, program.statements.len);
-            for (program.statements, 0..) |statement, index| {
-                const command = (try self.lowerSingleSimplePipeline(program, program.pipelines[statement.index], target)) orelse return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: &&/|| lists currently require simple commands", .{self.signal.name()});
-                const operator: ?command_plan.AndOrOperator = if (index == 0) null else switch (statement.op_before) {
-                    .and_if => .and_if,
-                    .or_if => .or_if,
-                    .sequence => unreachable,
-                };
-                commands[index] = .{ .operator = operator, .command = command };
-            }
-            const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .and_or_list = .{ .commands = commands } } };
-            plan.validate();
-            return .{ .compound = plan };
         }
 
-        const commands = try self.allocator.alloc(command_plan.CommandPlan, program.statements.len);
+        const statements = try self.allocator.alloc(command_plan.StatementListEntry, program.statements.len);
         for (program.statements, 0..) |statement, index| {
-            commands[index] = (try self.lowerSingleSimplePipeline(program, program.pipelines[statement.index], target)) orelse return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: command lists currently require simple commands", .{self.signal.name()});
+            const payload = try self.lowerSingleTrapStatement(program, statement, target);
+            const plan = switch (payload) {
+                .simple => |simple| command_plan.StatementPlan{ .simple = simple },
+                .compound => |compound| command_plan.StatementPlan{ .compound = compound },
+                .pipeline => |pipeline| command_plan.StatementPlan{ .pipeline = pipeline },
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+            };
+            const op_before: command_plan.StatementListOperator = switch (statement.op_before) {
+                .sequence => .sequence,
+                .and_if => .and_if,
+                .or_if => .or_if,
+            };
+            statements[index] = .{ .op_before = op_before, .plan = plan };
         }
-        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .sequence = .{ .commands = commands } } };
-        plan.validate();
-        return .{ .compound = plan };
+        const list: command_plan.StatementList = .{ .statements = statements };
+        list.validate();
+        return .{ .list = list };
     }
 
     fn lowerPipeline(self: *TrapActionLowerer, program: ir.Program, pipeline: ir.Pipeline, target: context.ExecutionTarget) !TrapActionBodyPayload {
         if (pipeline.async_after) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background pipelines are not supported by the semantic trap resolver", .{self.signal.name()});
-        if (pipeline.command_indexes.len == 1 and !pipeline.negated) {
+        if (pipeline.command_indexes.len == 1 and pipeline.stage_spans.len == 1 and !pipeline.negated) {
             const plan = try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
             return .{ .simple = plan };
         }
-        if (pipeline.command_indexes.len == 0 or pipeline.command_indexes.len != pipeline.stage_spans.len) {
-            return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound pipeline stages need semantic pipeline-stage lowering", .{self.signal.name()});
+        if (pipeline.stage_spans.len == 0) {
+            return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: empty pipelines are not supported by the semantic trap resolver", .{self.signal.name()});
         }
 
-        const stages = try self.allocator.alloc(pipeline_plan.PipelineStagePlan, pipeline.command_indexes.len);
-        for (pipeline.command_indexes, 0..) |command_index, index| {
-            stages[index] = .{ .simple = try self.lowerIrSimpleCommand(program.commands[command_index], target) };
+        const stages = try self.allocator.alloc(pipeline_plan.PipelineStagePlan, pipeline.stage_spans.len);
+        for (pipeline.stage_spans, 0..) |stage_span, index| {
+            const source = program.source[stage_span.start..stage_span.end];
+            const lowered = try self.lowerPipelineStageSource(source, target);
+            stages[index] = switch (lowered) {
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+                .stage => |stage| stage,
+            };
         }
         const status_rule: pipeline_plan.PipelineStatusRule = if (self.shell_state.options.pipefail) .pipefail else .last_command;
         const plan = pipeline_plan.PipelinePlan.init(stages, .{ .negated = pipeline.negated, .status_rule = status_rule });
         return .{ .pipeline = plan };
     }
 
-    fn lowerSingleSimplePipeline(self: *TrapActionLowerer, program: ir.Program, pipeline: ir.Pipeline, target: context.ExecutionTarget) !?command_plan.CommandPlan {
-        if (pipeline.async_after or pipeline.negated or pipeline.command_indexes.len != 1 or pipeline.stage_spans.len != 1) return null;
-        return try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
+    const PipelineStageLowering = union(enum) {
+        stage: pipeline_plan.PipelineStagePlan,
+        failure: TrapActionFailure,
+    };
+
+    fn lowerPipelineStageSource(self: *TrapActionLowerer, source: []const u8, target: context.ExecutionTarget) anyerror!PipelineStageLowering {
+        var parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
+        defer parsed.deinit();
+        if (parsed.diagnostics.len != 0) return .{ .failure = (try self.parserDiagnosticFailure(parsed.diagnostics[0])).failure };
+        if (parsed.incomplete) return .{ .failure = (try self.failure(.parse_error, "trap {s}: parse error: incomplete pipeline stage", .{self.signal.name()})).failure };
+
+        var stage_program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        defer stage_program.deinit();
+        if (stage_program.statements.len != 1) return .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: pipeline stages must contain a single command", .{self.signal.name()})).failure };
+
+        const payload = try self.lowerSingleTrapStatement(stage_program, stage_program.statements[0], target);
+        return switch (payload) {
+            .simple => |simple| .{ .stage = .{ .simple = simple } },
+            .compound => |compound| .{ .stage = .{ .compound = compound } },
+            .pipeline => .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: nested pipelines are not valid pipeline stages", .{self.signal.name()})).failure },
+            .failure => |trap_failure| .{ .failure = trap_failure },
+        };
     }
 
     fn lowerBraceGroup(self: *TrapActionLowerer, group: ir.BraceGroup, target: context.ExecutionTarget) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(group.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const list = try self.lowerSimpleCommandListSource(group.body, target);
+        const list = try self.lowerStatementListSource(group.body, target);
         switch (list) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |command_list| {
@@ -351,7 +370,7 @@ const TrapActionLowerer = struct {
     fn lowerSubshell(self: *TrapActionLowerer, subshell: ir.Subshell) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(subshell.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const list = try self.lowerSimpleCommandListSource(subshell.body, .subshell);
+        const list = try self.lowerStatementListSource(subshell.body, .subshell);
         switch (list) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |command_list| {
@@ -365,19 +384,19 @@ const TrapActionLowerer = struct {
     fn lowerIfCommand(self: *TrapActionLowerer, command: ir.IfCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const condition_result = try self.lowerSimpleCommandListSource(command.condition, target);
+        const condition_result = try self.lowerStatementListSource(command.condition, target);
         const condition = switch (condition_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
         };
-        const then_result = try self.lowerSimpleCommandListSource(command.then_body, target);
+        const then_result = try self.lowerStatementListSource(command.then_body, target);
         const then_body = switch (then_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
         };
-        var else_body: command_plan.CommandList = .{};
+        var else_body: command_plan.StatementList = .{};
         if (command.else_body) |source| {
-            const lowered_else = try self.lowerSimpleCommandListSource(source, target);
+            const lowered_else = try self.lowerStatementListSource(source, target);
             else_body = switch (lowered_else) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
@@ -393,12 +412,12 @@ const TrapActionLowerer = struct {
     fn lowerLoopCommand(self: *TrapActionLowerer, command: ir.LoopCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const condition_result = try self.lowerSimpleCommandListSource(command.condition, target);
+        const condition_result = try self.lowerStatementListSource(command.condition, target);
         const condition = switch (condition_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
         };
-        const body_result = try self.lowerSimpleCommandListSource(command.body, target);
+        const body_result = try self.lowerStatementListSource(command.body, target);
         const body = switch (body_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
@@ -416,7 +435,7 @@ const TrapActionLowerer = struct {
     fn lowerForCommand(self: *TrapActionLowerer, command: ir.ForCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
         const redirections = try self.lowerRedirections(command.redirections, .regular_command);
         if (redirections == .failure) return .{ .failure = redirections.failure };
-        const body_result = try self.lowerSimpleCommandListSource(command.body, target);
+        const body_result = try self.lowerStatementListSource(command.body, target);
         const body = switch (body_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
@@ -439,7 +458,7 @@ const TrapActionLowerer = struct {
         for (command.arms, 0..) |arm, arm_index| {
             const patterns = try self.allocator.alloc([]const u8, arm.patterns.len);
             for (arm.patterns, 0..) |pattern, pattern_index| patterns[pattern_index] = try self.expandScalar(pattern.raw, target);
-            const body_result = try self.lowerSimpleCommandListSource(arm.body, target);
+            const body_result = try self.lowerStatementListSource(arm.body, target);
             const body = switch (body_result) {
                 .failure => |trap_failure| return .{ .failure = trap_failure },
                 .list => |list| list,
@@ -452,32 +471,28 @@ const TrapActionLowerer = struct {
         return .{ .compound = plan };
     }
 
-    const CommandListLowering = union(enum) {
-        list: command_plan.CommandList,
-        failure: TrapActionFailure,
-    };
+    fn lowerFunctionDefinition(self: *TrapActionLowerer, definition: ir.FunctionDefinition, target: context.ExecutionTarget) !TrapActionBodyPayload {
+        if (definition.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: function-definition redirections need redirection lowering", .{self.signal.name()});
+        const body_result = try self.lowerStatementListSource(definition.body, target);
+        const body = switch (body_result) {
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+            .list => |list| list,
+        };
+        const name = try self.allocator.dupe(u8, definition.name);
+        const function_definition: command_plan.FunctionDefinition = .{ .name = name, .body = body };
+        const plan: command_plan.CommandPlan = .{ .target = target, .classification = .{ .function_definition = function_definition } };
+        plan.validate();
+        return .{ .simple = plan };
+    }
 
-    fn lowerSimpleCommandListSource(self: *TrapActionLowerer, source: []const u8, target: context.ExecutionTarget) !CommandListLowering {
+    fn lowerStatementListSource(self: *TrapActionLowerer, source: []const u8, target: context.ExecutionTarget) !StatementListLowering {
         var parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
         defer parsed.deinit();
         if (parsed.diagnostics.len != 0) return .{ .failure = (try self.parserDiagnosticFailure(parsed.diagnostics[0])).failure };
 
         var program = try ir.lowerSimpleCommands(self.allocator, parsed);
         defer program.deinit();
-        const payload = try self.lowerProgram(program, target, .command_list);
-        return switch (payload) {
-            .compound => |compound| switch (compound.body) {
-                .sequence => |list| .{ .list = list },
-                else => .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound bodies currently require simple command lists", .{self.signal.name()})).failure },
-            },
-            .simple => |simple| blk: {
-                const commands = try self.allocator.alloc(command_plan.CommandPlan, 1);
-                commands[0] = simple;
-                break :blk .{ .list = .{ .commands = commands } };
-            },
-            .failure => |trap_failure| .{ .failure = trap_failure },
-            .pipeline => .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: pipelines inside compound bodies need semantic statement-list lowering", .{self.signal.name()})).failure },
-        };
+        return self.lowerStatementList(program, target);
     }
 
     fn lowerIrSimpleCommand(self: *TrapActionLowerer, command: ir.SimpleCommand, target: context.ExecutionTarget) !command_plan.CommandPlan {
@@ -2348,11 +2363,11 @@ fn evaluateCompoundBody(evaluator: *Evaluator, shell_state: *state.ShellState, e
     body.validate();
 
     return switch (body) {
-        .sequence => |list| evaluateCommandList(evaluator, shell_state, eval_context, list, buffers),
+        .sequence => |list| evaluateStatementList(evaluator, shell_state, eval_context, list, buffers),
         .and_or_list => |and_or| evaluateAndOrList(evaluator, shell_state, eval_context, and_or, buffers),
         .negation => |negation| evaluateNegation(evaluator, shell_state, eval_context, negation, buffers),
-        .brace_group => |list| evaluateCommandList(evaluator, shell_state, eval_context, list, buffers),
-        .subshell => |list| evaluateCommandList(evaluator, shell_state, eval_context, list, buffers),
+        .brace_group => |list| evaluateStatementList(evaluator, shell_state, eval_context, list, buffers),
+        .subshell => |list| evaluateStatementList(evaluator, shell_state, eval_context, list, buffers),
         .if_clause => |if_plan| evaluateIfClause(evaluator, shell_state, eval_context, if_plan, buffers),
         .while_loop => |loop| evaluateLoop(evaluator, shell_state, eval_context, loop, .while_loop, buffers),
         .until_loop => |loop| evaluateLoop(evaluator, shell_state, eval_context, loop, .until_loop, buffers),
@@ -2361,24 +2376,66 @@ fn evaluateCompoundBody(evaluator: *Evaluator, shell_state: *state.ShellState, e
     };
 }
 
-fn evaluateCommandList(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, list: command_plan.CommandList, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+fn evaluateStatementList(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, list: command_plan.StatementList, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
     shell_state.validate();
     eval_context.validate();
     list.validate();
 
     var result = normalEvaluation(0);
-    for (list.commands) |child_plan| {
-        child_plan.validate();
-        var child_outcome = try evaluatePlanWithInput(evaluator, shell_state, eval_context.withTarget(child_plan.target), child_plan, buffers.stdin);
+    if (list.commands.len != 0) {
+        for (list.commands) |child_plan| {
+            child_plan.validate();
+            var child_outcome = try evaluatePlanWithInput(evaluator, shell_state, eval_context.withTarget(child_plan.target), child_plan, buffers.stdin);
+            defer child_outcome.deinit();
+
+            try appendOutcomeBuffers(buffers, child_outcome);
+            try applyOutcomeToWorkingState(shell_state, &child_outcome, child_plan.target);
+
+            result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
+            if (child_outcome.control_flow != .normal) break;
+        }
+        return result;
+    }
+
+    for (list.statements, 0..) |entry, index| {
+        entry.validate(index);
+        const should_run = switch (entry.op_before) {
+            .sequence => true,
+            .and_if => result.status == 0,
+            .or_if => result.status != 0,
+        };
+        if (!should_run) continue;
+
+        var child_context = eval_context;
+        if (index + 1 < list.statements.len) {
+            switch (list.statements[index + 1].op_before) {
+                .sequence => {},
+                .and_if, .or_if => child_context = child_context.ignoreErrexit(),
+            }
+        }
+
+        var child_outcome = try evaluateStatementPlan(evaluator, shell_state, child_context, entry.plan, buffers.stdin);
         defer child_outcome.deinit();
 
         try appendOutcomeBuffers(buffers, child_outcome);
-        try applyOutcomeToWorkingState(shell_state, &child_outcome, child_plan.target);
+        try applyOutcomeToWorkingState(shell_state, &child_outcome, child_outcome.state_delta.target);
 
         result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
         if (child_outcome.control_flow != .normal) break;
     }
     return result;
+}
+
+fn evaluateStatementPlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.StatementPlan, input: *EvaluationInput) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    input.validate();
+    return switch (plan) {
+        .simple => |simple| evaluatePlanWithInput(evaluator, shell_state, eval_context.withTarget(simple.target), simple, input),
+        .compound => |compound| evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context.withTarget(compound.target), compound, input),
+        .pipeline => |pipeline| evaluatePipelinePlan(evaluator, shell_state, eval_context, pipeline),
+    };
 }
 
 fn evaluateAndOrList(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, and_or: command_plan.AndOrPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
@@ -2410,7 +2467,7 @@ fn evaluateAndOrList(evaluator: *Evaluator, shell_state: *state.ShellState, eval
 
 fn evaluateNegation(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, negation: command_plan.NegationPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
     negation.validate();
-    var result = try evaluateCommandList(evaluator, shell_state, eval_context.ignoreErrexit(), negation.body, buffers);
+    var result = try evaluateStatementList(evaluator, shell_state, eval_context.ignoreErrexit(), negation.body, buffers);
     if (result.control_flow == .normal) result.status = if (result.status == 0) 1 else 0;
     return result;
 }
@@ -2418,11 +2475,11 @@ fn evaluateNegation(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
 fn evaluateIfClause(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, if_plan: command_plan.IfPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
     if_plan.validate();
     for (if_plan.branches) |branch| {
-        const condition = try evaluateCommandList(evaluator, shell_state, eval_context.ignoreErrexit(), branch.condition, buffers);
+        const condition = try evaluateStatementList(evaluator, shell_state, eval_context.ignoreErrexit(), branch.condition, buffers);
         if (condition.control_flow != .normal) return condition;
-        if (condition.status == 0) return evaluateCommandList(evaluator, shell_state, eval_context, branch.body, buffers);
+        if (condition.status == 0) return evaluateStatementList(evaluator, shell_state, eval_context, branch.body, buffers);
     }
-    return evaluateCommandList(evaluator, shell_state, eval_context, if_plan.else_body, buffers);
+    return evaluateStatementList(evaluator, shell_state, eval_context, if_plan.else_body, buffers);
 }
 
 const LoopKind = enum { while_loop, until_loop };
@@ -2433,7 +2490,7 @@ fn evaluateLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_cont
     var result = normalEvaluation(0);
 
     while (true) {
-        const condition = try evaluateCommandList(evaluator, shell_state, loop_context.ignoreErrexit(), loop.condition, buffers);
+        const condition = try evaluateStatementList(evaluator, shell_state, loop_context.ignoreErrexit(), loop.condition, buffers);
         if (condition.control_flow != .normal) {
             switch (consumeLoopControl(condition.control_flow)) {
                 .stop => return normalEvaluation(0),
@@ -2449,7 +2506,7 @@ fn evaluateLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_cont
         };
         if (!should_run) return result;
 
-        const body = try evaluateCommandList(evaluator, shell_state, loop_context, loop.body, buffers);
+        const body = try evaluateStatementList(evaluator, shell_state, loop_context, loop.body, buffers);
         switch (consumeLoopControl(body.control_flow)) {
             .stop => return normalEvaluation(0),
             .repeat => {
@@ -2476,7 +2533,7 @@ fn evaluateForLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_c
     var result = normalEvaluation(0);
     for (words) |word| {
         try assignForLoopVariable(evaluator.allocator, shell_state, eval_context.target, for_plan.variable_name, word);
-        const body = try evaluateCommandList(evaluator, shell_state, loop_context, for_plan.body, buffers);
+        const body = try evaluateStatementList(evaluator, shell_state, loop_context, for_plan.body, buffers);
         switch (consumeLoopControl(body.control_flow)) {
             .stop => return normalEvaluation(0),
             .repeat => {
@@ -2497,7 +2554,7 @@ fn evaluateCaseClause(evaluator: *Evaluator, shell_state: *state.ShellState, eva
     case_plan.validate();
     for (case_plan.arms) |arm| {
         for (arm.patterns) |pattern| {
-            if (casePatternMatches(pattern, case_plan.word)) return evaluateCommandList(evaluator, shell_state, eval_context, arm.body, buffers);
+            if (casePatternMatches(pattern, case_plan.word)) return evaluateStatementList(evaluator, shell_state, eval_context, arm.body, buffers);
         }
     }
     return normalEvaluation(0);
@@ -2667,48 +2724,15 @@ fn evaluateFunction(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
         evaluator.function_frame = previous_frame;
     }
 
-    var result: SimpleEvalResult = normalEvaluation(shell_state.last_status);
-    for (definition.body.commands) |body_plan| {
-        body_plan.validate();
-        var body_outcome = try evaluatePlanWithInput(evaluator, &frame_state, function_context.withTarget(body_plan.target), body_plan, buffers.stdin);
-        defer body_outcome.deinit();
-
-        try buffers.stdout.appendSlice(buffers.allocator, body_outcome.stdout.items);
-        try buffers.stderr.appendSlice(buffers.allocator, body_outcome.stderr.items);
-        for (body_outcome.diagnostics.items) |diagnostic| {
-            const owned_message = try buffers.allocator.dupe(u8, diagnostic.message);
-            errdefer buffers.allocator.free(owned_message);
-            try buffers.diagnostics.append(buffers.allocator, owned_message);
-        }
-
-        if (body_plan.target.allowsShellStateCommit()) {
-            body_outcome.commitDelta(&frame_state, body_plan.target) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
-                error.ReadonlyVariable => unreachable,
-            };
-        } else {
-            body_outcome.discardDelta(body_plan.target);
-            frame_state.last_status = body_outcome.status;
-        }
-
-        result.status = body_outcome.status;
-        switch (body_outcome.control_flow) {
-            .normal => {},
-            .return_from_scope => |request| switch (request.scope) {
-                .function => {
-                    std.debug.assert(function_context.canReturnFromFunction());
-                    result = normalEvaluation(request.status);
-                    break;
-                },
-                .sourced_script => {
-                    result = .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
-                    break;
-                },
+    var result = try evaluateStatementList(evaluator, &frame_state, function_context, definition.body, buffers);
+    if (result.control_flow == .return_from_scope) {
+        const request = result.control_flow.return_from_scope;
+        switch (request.scope) {
+            .function => {
+                std.debug.assert(function_context.canReturnFromFunction());
+                result = normalEvaluation(request.status);
             },
-            .exit, .fatal, .break_loop, .continue_loop => {
-                result = .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
-                break;
-            },
+            .sourced_script => {},
         }
     }
 
@@ -6108,6 +6132,44 @@ test "semantic parser trap resolver lowers compound pipeline and and-or actions"
     try std.testing.expectEqual(@as(outcome.ExitStatus, 7), pipeline_outcome.status);
     try std.testing.expectEqual(outcome.ControlFlow.normal, pipeline_outcome.control_flow);
     try pipeline_outcome.commitDelta(&shell_state, .current_shell);
+}
+
+test "semantic parser trap resolver lowers heterogeneous statement lists and function bodies" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    shell_state.last_status = 31;
+    try shell_state.setTrapForSignal(.TERM, "echo first; if true; then false | true; echo nested; fi; false && echo bad; echo after || echo bad");
+    try shell_state.appendPendingTrap(.TERM);
+    var list_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, parser_resolver.resolver())).?;
+    defer list_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 31), list_outcome.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, list_outcome.control_flow);
+    try std.testing.expectEqualStrings("first\nnested\nafter\n", list_outcome.stdout.items);
+    try list_outcome.commitDelta(&shell_state, .current_shell);
+
+    shell_state.last_status = 32;
+    try shell_state.setTrapForSignal(.TERM, "fn() { false | true; if true; then echo function; fi; }");
+    try shell_state.appendPendingTrap(.TERM);
+    var definition_outcome = (try executePendingTraps(&evaluator, &shell_state, eval_context, parser_resolver.resolver())).?;
+    defer definition_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 32), definition_outcome.status);
+    try definition_outcome.commitDelta(&shell_state, .current_shell);
+
+    const stored = shell_state.getFunction("fn").?;
+    try std.testing.expectEqual(@as(usize, 2), stored.body.statements.len);
+    const lookup_functions = [_]command_plan.FunctionDefinition{stored};
+    const call_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"fn"} },
+        .lookup = .{ .functions = &lookup_functions },
+    });
+    var call_outcome = try evaluatePlan(&evaluator, &shell_state, eval_context, call_plan);
+    defer call_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call_outcome.status);
+    try std.testing.expectEqualStrings("function\n", call_outcome.stdout.items);
 }
 
 test "semantic parser trap resolver models parse failures as trap diagnostics" {
