@@ -6072,14 +6072,18 @@ pub const Executor = struct {
         try child.resetCaughtTrapsForInProcessSubshell(self);
         child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
+        if (is_last and self.completion_builder != null) child.completion_builder = .{};
 
         var guard = try self.savePipelineSubshellProcessState(options);
         defer guard.restore();
 
-        return if (has_pipe_input)
-            child.executeSimpleCommandWithPipelineInput(command, stdin, options)
+        var result = if (has_pipe_input)
+            try child.executeSimpleCommandWithPipelineInput(command, stdin, options)
         else
-            child.executeSimpleCommandWithInput(command, stdin, options);
+            try child.executeSimpleCommandWithInput(command, stdin, options);
+        errdefer result.deinit();
+        if (is_last) try self.mergeCompletionBuilderFrom(&child);
+        return result;
     }
 
     fn shouldRunLastPipelineStageInCurrentShell(self: Executor, command: ir.SimpleCommand) bool {
@@ -6097,11 +6101,25 @@ pub const Executor = struct {
         try child.resetCaughtTrapsForInProcessSubshell(self);
         child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
+        if (is_last and self.completion_builder != null) child.completion_builder = .{};
 
         var guard = try self.savePipelineSubshellProcessState(options);
         defer guard.restore();
 
-        return child.executePipelineStageSpanInCurrentShell(source, stdin, options);
+        var result = try child.executePipelineStageSpanInCurrentShell(source, stdin, options);
+        errdefer result.deinit();
+        if (is_last) try self.mergeCompletionBuilderFrom(&child);
+        return result;
+    }
+
+    fn mergeCompletionBuilderFrom(self: *Executor, child: *Executor) !void {
+        var child_builder = child.completion_builder orelse return;
+        child.completion_builder = null;
+        defer child_builder.deinit(self.allocator);
+
+        if (self.completion_builder) |*parent_builder| {
+            for (child_builder.candidates.items) |candidate| try parent_builder.appendCandidate(self.allocator, candidate);
+        }
     }
 
     const PipelineSubshellProcessState = struct {
@@ -23786,7 +23804,8 @@ test "executor supports here-doc stdin redirections" {
     try std.testing.expectEqualStrings("second body\n", multiple_result.stdout);
 
     var pipeline_multiple = try parseAndLower(std.testing.allocator,
-        \\read x <<LEFT | /bin/cat <<RIGHT
+        \\f() { read y; echo "$y"; }
+        \\read x <<LEFT | f <<RIGHT
         \\left body
         \\LEFT
         \\right body
