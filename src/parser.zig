@@ -2862,9 +2862,7 @@ const SyntaxParser = struct {
             const pipe_span = self.current().span;
             try self.appendCurrentTokenChildTo(&pipeline_children);
 
-            while (self.current().kind == .whitespace) {
-                try self.appendCurrentTokenChildTo(&pipeline_children);
-            }
+            try self.appendPipelineContinuationTrivia(&pipeline_children);
 
             if (self.features.strict_diagnostics and self.atMisplacedReservedWord()) {
                 try self.appendMisplacedReservedWordDiagnostic();
@@ -2908,9 +2906,7 @@ const SyntaxParser = struct {
             const pipe_span = self.current().span;
             try self.appendCurrentTokenChildTo(&pipeline_children);
 
-            while (self.current().kind == .whitespace) {
-                try self.appendCurrentTokenChildTo(&pipeline_children);
-            }
+            try self.appendPipelineContinuationTrivia(&pipeline_children);
 
             if (self.features.strict_diagnostics and self.atMisplacedReservedWord()) {
                 try self.appendMisplacedReservedWordDiagnostic();
@@ -2937,6 +2933,18 @@ const SyntaxParser = struct {
         try self.children.appendSlice(self.allocator, pipeline_children.items);
         const span = spanForTokenRange(self.tokens, token_start, token_end);
         return self.addNode(.pipeline, span, token_start, token_end, child_start, self.children.items.len);
+    }
+
+    fn appendPipelineContinuationTrivia(self: *SyntaxParser, pipeline_children: *std.ArrayList(SyntaxChild)) !void {
+        while (self.current().kind == .whitespace or self.current().kind == .comment or self.current().kind == .newline) {
+            const was_newline = self.at(.newline);
+            try self.appendCurrentTokenChildTo(pipeline_children);
+            if (was_newline) {
+                var here_doc_bodies: std.ArrayList(SyntaxChild) = .empty;
+                defer here_doc_bodies.deinit(self.allocator);
+                try self.drainHereDocBodies(&here_doc_bodies);
+            }
+        }
     }
 
     fn parseCommand(self: *SyntaxParser) anyerror!NodeId {
@@ -4827,6 +4835,23 @@ test "parser recovers from missing pipeline rhs" {
         }},
         .incomplete = true,
     });
+}
+
+test "parser continues pipeline rhs after newline" {
+    var parsed = try parse(std.testing.allocator, "echo |\ncat", .{});
+    defer parsed.deinit();
+
+    try std.testing.expect(!parsed.incomplete);
+    try std.testing.expectEqual(@as(usize, 0), parsed.diagnostics.len);
+
+    var pipeline_count: usize = 0;
+    for (parsed.nodes) |node| {
+        if (node.kind != .pipeline) continue;
+        pipeline_count += 1;
+        try expectSpan(.init(0, 10), node.span);
+        try std.testing.expectEqual(@as(usize, 2), countChildNodesOfKind(parsed, node, .simple_command));
+    }
+    try std.testing.expectEqual(@as(usize, 1), pipeline_count);
 }
 
 test "parser recovers from missing redirection target with trailing whitespace" {

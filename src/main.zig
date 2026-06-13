@@ -9299,6 +9299,19 @@ test "runScript returns parse diagnostics" {
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "     ^") != null);
 }
 
+test "runScript executes newline-continued pipeline" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\echo before
+        \\echo |
+        \\echo after
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("before\nafter\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "parser smoke corpus parses representative snippets" {
     const snippets = [_][]const u8{
         "",
