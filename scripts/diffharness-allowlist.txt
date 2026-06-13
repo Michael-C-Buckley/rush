@@ -33,9 +33,6 @@ fa3e6348b2af70ed
 match:fn1() { fn1()
 match:fn2() { fn2()
 
-# #703 set -e exemption for && inside eval leaks to eval's status
-match:eval "test
-
 # #699 whole-script parse aborts before executing earlier complete commands
 # (no stable substring; late-parse-error cases are seed-specific. Most were
 # generator-induced before heredoc nesting was fixed; revisit if they recur.)

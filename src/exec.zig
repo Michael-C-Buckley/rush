@@ -11116,6 +11116,7 @@ fn builtinSource(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, 
         else => return err,
     };
     errdefer result.deinit();
+    result.errexit_ignored_status = false;
     // return inside a dot script stops the script and supplies the dot
     // utility's exit status (POSIX XCU return).
     if (self.pending_return) |status| {
@@ -12572,15 +12573,18 @@ fn builtinEval(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         if (index > 0) try script.append(self.allocator, ' ');
         try script.appendSlice(self.allocator, arg.text);
     }
-    return self.executeScriptSlice(script.items, options) catch |err| switch (err) {
+    var result = self.executeScriptSlice(script.items, options) catch |err| switch (err) {
         error.ParseError => blk: {
             // eval is a special builtin: a syntax error in the constructed
             // command stops the non-interactive shell (POSIX XCU 2.8.1).
             setSpecialBuiltinErrorConsequence(self, 2);
             break :blk try errorResult(self.allocator, 2, "eval", "syntax error");
         },
-        else => err,
+        else => return err,
     };
+    errdefer result.deinit();
+    result.errexit_ignored_status = false;
+    return result;
 }
 
 fn builtinExec(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -21846,6 +21850,33 @@ test "executor implements set shell option baseline" {
     defer verbose_source.deinit();
     try std.testing.expectEqualStrings("sourced\nquiet\n", verbose_source.stdout);
     try std.testing.expectEqualStrings(". ./rush-verbose-source-test.rush\necho sourced\nset +v\n", verbose_source.stderr);
+}
+
+test "eval and dot command status triggers outer errexit" {
+    var eval_executor = Executor.init(std.testing.allocator);
+    defer eval_executor.deinit();
+    var eval_result = try eval_executor.executeScriptSlice("set -e; eval \"test a = b && true\"; echo survived", .{});
+    defer eval_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), eval_result.status);
+    try std.testing.expectEqualStrings("", eval_result.stdout);
+
+    var eval_suppressed_executor = Executor.init(std.testing.allocator);
+    defer eval_suppressed_executor.deinit();
+    var eval_suppressed = try eval_suppressed_executor.executeScriptSlice("set -e; eval \"test a = b && true\" || echo caught; echo after", .{});
+    defer eval_suppressed.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), eval_suppressed.status);
+    try std.testing.expectEqualStrings("caught\nafter\n", eval_suppressed.stdout);
+
+    const source_path = "rush-errexit-dot-status.rush";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, source_path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = source_path, .data = "test a = b && true\n" });
+
+    var dot_executor = Executor.init(std.testing.allocator);
+    defer dot_executor.deinit();
+    var dot_result = try dot_executor.executeScriptSlice("set -e; . ./rush-errexit-dot-status.rush; echo survived", .{ .io = std.testing.io });
+    defer dot_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 1), dot_result.status);
+    try std.testing.expectEqualStrings("", dot_result.stdout);
 }
 
 test "executor accepts obsolescent no-effect set options" {
