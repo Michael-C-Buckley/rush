@@ -5252,10 +5252,6 @@ pub const Executor = struct {
         return self.shell_options.monitor;
     }
 
-    pub fn expandAliasesForScript(self: *Executor, script: []const u8) ![]const u8 {
-        return self.expandAliasesForScriptWithFeatures(script, .{});
-    }
-
     pub fn expandAliasesForScriptWithFeatures(self: *Executor, script: []const u8, features: compat.Features) ![]const u8 {
         if (self.aliases.count() == 0) return self.allocator.dupe(u8, script);
         return parser.expandAliases(self.allocator, script, .{
@@ -11580,15 +11576,6 @@ fn traceLineForCommand(self: *Executor, command: ir.SimpleCommand, options: Exec
     return line.toOwnedSlice(allocator);
 }
 
-fn simpleCommandFromArgs(command: ir.SimpleCommand, start: usize) ir.SimpleCommand {
-    return .{
-        .span = command.span,
-        .assignments = command.assignments,
-        .argv = command.argv[start..],
-        .redirections = &.{},
-    };
-}
-
 /// A nested command built from already-expanded words. Builtins like
 /// command and exec receive expanded argv but re-execute it through the
 /// normal path, which expands again from each word's raw text; that
@@ -17125,30 +17112,6 @@ fn builtinEnv(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, opt
     return child.executeSimpleCommandWithInput(nested, stdin, options);
 }
 
-fn printEnvironment(allocator: std.mem.Allocator, env: std.StringHashMapUnmanaged([]const u8)) !CommandResult {
-    var names: std.ArrayList([]const u8) = .empty;
-    defer names.deinit(allocator);
-    var iter = env.iterator();
-    while (iter.next()) |entry| try names.append(allocator, entry.key_ptr.*);
-    std.mem.sort([]const u8, names.items, {}, lessThanString);
-
-    var stdout: std.ArrayList(u8) = .empty;
-    errdefer stdout.deinit(allocator);
-    for (names.items) |name| {
-        try stdout.appendSlice(allocator, name);
-        try stdout.append(allocator, '=');
-        try stdout.appendSlice(allocator, env.get(name).?);
-        try stdout.append(allocator, '\n');
-    }
-
-    return .{
-        .allocator = allocator,
-        .status = 0,
-        .stdout = try stdout.toOwnedSlice(allocator),
-        .stderr = try allocator.alloc(u8, 0),
-    };
-}
-
 fn printProcessEnvironment(allocator: std.mem.Allocator, env: *const std.process.Environ.Map) !CommandResult {
     var names: std.ArrayList([]const u8) = .empty;
     defer names.deinit(allocator);
@@ -17707,13 +17670,6 @@ fn badFdTargetName(command: ir.SimpleCommand) []const u8 {
 fn redirectionTargetName(command: ir.SimpleCommand) []const u8 {
     for (command.redirections) |redirection| {
         if (redirection.target != null) return targetName(redirection);
-    }
-    return "redirection";
-}
-
-fn inputTargetName(command: ir.SimpleCommand) []const u8 {
-    for (command.redirections) |redirection| {
-        if (isStdinFileRedirection(redirection)) return targetName(redirection);
     }
     return "redirection";
 }
