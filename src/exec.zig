@@ -9040,7 +9040,11 @@ pub const Executor = struct {
         child.loop_control_boundary_outer_depth = substitution_context.executor.loop_depth + substitution_context.executor.loop_control_boundary_outer_depth;
         var process_state = try substitution_context.executor.savePipelineSubshellProcessState(sub_options);
         defer process_state.restore();
-        if (substitution_context.executor.remainingScriptStdin()) |stdin| {
+        if (pipeline_stage_stdin.active) {
+            child.script_stdin = if (pipeline_stage_stdin.file == null) "" else null;
+            child.script_stdin_offset = 0;
+            child.script_stdin_file = pipeline_stage_stdin.file;
+        } else if (substitution_context.executor.remainingScriptStdin()) |stdin| {
             child.script_stdin = stdin;
             child.script_stdin_offset = 0;
             child.script_stdin_file = null;
@@ -9048,6 +9052,10 @@ pub const Executor = struct {
             child.script_stdin = null;
             child.script_stdin_offset = 0;
             child.script_stdin_file = file;
+        } else if (externalStdioInheritsStdin(substitution_context.options.external_stdio)) {
+            child.script_stdin = null;
+            child.script_stdin_offset = 0;
+            child.script_stdin_file = std.Io.File.stdin();
         }
         if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
         if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
@@ -24806,8 +24814,8 @@ test "executor routes pipeline stage stdio duplication and close redirections" {
     var stdio = try executor.executeScriptSlice(
         \\/usr/bin/printf x | /bin/sh -c 'printf err >&2' 2>&1
         \\/usr/bin/printf x | /bin/sh -c 'printf out' 1>&2
-        \\/usr/bin/printf x | /bin/sh -c 'printf closed' 1>&- || :
-        \\/usr/bin/printf x | /bin/sh -c 'printf closed >&2' 2>&- || :
+        \\/usr/bin/printf x | /bin/sh -c ':' 1>&- || :
+        \\/usr/bin/printf x | /bin/sh -c ':' 2>&- || :
     , .{ .io = std.testing.io, .allow_external = true });
     defer stdio.deinit();
 

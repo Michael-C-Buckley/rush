@@ -2,6 +2,7 @@
 set -eu
 
 ZIG=${ZIG:-zig}
+export ZIG
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 

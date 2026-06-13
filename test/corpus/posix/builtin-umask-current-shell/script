@@ -8,5 +8,5 @@ echo pipeline:$(umask)
 umask 077
 : >umask_file
 mkdir umask_dir
-ls -ld umask_file umask_dir | sed 's/ .*//'
+ls -ld umask_file umask_dir | sed 's/ .*//; s/^\(..........\).*/\1/'
 umask "$old"

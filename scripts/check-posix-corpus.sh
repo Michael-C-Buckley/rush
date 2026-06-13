@@ -98,6 +98,7 @@ if [ -n "${RUSH_CORPUS_WORKER:-}" ]; then
 fi
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ZIG=${ZIG:-zig}
 RUSH=${RUSH:-$ROOT/zig-out/bin/rush}
 case $RUSH in
   /*|*/*)
@@ -108,7 +109,7 @@ CORPUS_DIR=${1:-$ROOT/test/corpus/posix}
 CORPUS_LABEL=${CORPUS_LABEL:-POSIX corpus}
 
 if [ -z "${RUSH_SKIP_BUILD:-}" ]; then
-  zig build --summary none >/dev/null
+  "$ZIG" build --summary none >/dev/null
 fi
 
 if [ ! -d "$CORPUS_DIR" ]; then

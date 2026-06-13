@@ -43,11 +43,12 @@ if [ -n "${RUSH_CORPUS_WORKER:-}" ]; then
 fi
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ZIG=${ZIG:-zig}
 RUSH="$ROOT/zig-out/bin/rush"
 CORPUS=${1:-$ROOT/test/corpus/system-shell-supported.txt}
 
 if [ -z "${RUSH_SKIP_BUILD:-}" ]; then
-  zig build --summary none >/dev/null
+  "$ZIG" build --summary none >/dev/null
 fi
 
 SHELLS=""
