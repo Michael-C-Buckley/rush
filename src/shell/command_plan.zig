@@ -78,11 +78,15 @@ pub const IfPlan = struct {
 };
 
 pub const LoopPlan = struct {
+    condition_source: ?[]const u8 = null,
     condition: StatementList,
+    body_source: ?[]const u8 = null,
     body: StatementList,
 
     pub fn validate(self: LoopPlan) void {
+        if (self.condition_source) |source| std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
         self.condition.validate();
+        if (self.body_source) |source| std.debug.assert(std.mem.indexOfScalar(u8, source, 0) == null);
         self.body.validate();
     }
 };
@@ -1001,14 +1005,20 @@ fn freeIfBranch(allocator: std.mem.Allocator, branch: IfBranch) void {
 
 fn cloneLoopPlan(allocator: std.mem.Allocator, plan: LoopPlan) std.mem.Allocator.Error!LoopPlan {
     plan.validate();
+    const condition_source = if (plan.condition_source) |source| try allocator.dupe(u8, source) else null;
+    errdefer if (condition_source) |source| allocator.free(source);
     const condition = try cloneStatementList(allocator, plan.condition);
     errdefer freeStatementList(allocator, condition);
+    const body_source = if (plan.body_source) |source| try allocator.dupe(u8, source) else null;
+    errdefer if (body_source) |source| allocator.free(source);
     const body = try cloneStatementList(allocator, plan.body);
-    return .{ .condition = condition, .body = body };
+    return .{ .condition_source = condition_source, .condition = condition, .body_source = body_source, .body = body };
 }
 
 fn freeLoopPlan(allocator: std.mem.Allocator, plan: LoopPlan) void {
+    if (plan.condition_source) |source| allocator.free(source);
     freeStatementList(allocator, plan.condition);
+    if (plan.body_source) |source| allocator.free(source);
     freeStatementList(allocator, plan.body);
 }
 

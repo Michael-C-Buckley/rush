@@ -6668,7 +6668,18 @@ fn stderrIsTty(io: std.Io) bool {
 
 fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: exec.ShellOptions) !exec.CommandResult {
     if (shouldUseSemanticNonInteractiveExecutor(options, interactive_options)) {
-        return runSemanticCommandStringWithLegacyFallback(allocator, io, script, options, environ_map, positionals, shell_options);
+        var semantic_execution = try runSemanticCommandString(allocator, io, script, options, environ_map, positionals, shell_options);
+        switch (semantic_execution) {
+            .output => |output| {
+                semantic_execution = undefined;
+                return output;
+            },
+            .unsupported => |message| {
+                semantic_execution = undefined;
+                defer allocator.free(message);
+                return unsupportedSemanticCommandResult(allocator, message);
+            },
+        }
     }
 
     return runOldCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, interactive_options, shell_options);
@@ -6708,29 +6719,15 @@ const SemanticInvocationExecution = union(enum) {
     }
 };
 
-fn runSemanticCommandStringWithLegacyFallback(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: exec.ShellOptions) !exec.CommandResult {
-    var semantic_execution = try runSemanticCommandString(allocator, io, script, options, environ_map, positionals, shell_options);
-    switch (semantic_execution) {
-        .output => |output| {
-            semantic_execution = undefined;
-            return output;
-        },
-        .unsupported => |message| {
-            semantic_execution = undefined;
-            allocator.free(message);
-            return runOldCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, null, shell_options);
-        },
-    }
-}
-
 fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: exec.ShellOptions) !SemanticInvocationExecution {
     assertSemanticStartupOptions(script, options, positionals);
 
     if (shell_options.noexec or shell_options.verbose or shell_options.xtrace) return semanticUnsupported(allocator, "semantic executor does not yet implement non-interactive noexec/verbose/xtrace startup modes");
-    if (options.external_stdio != .inherit) return semanticUnsupported(allocator, "semantic executor production path currently requires inherited external stdio");
-    if (scriptUsesProductionCommandSubstitution(script)) return semanticUnsupported(allocator, "semantic executor does not yet preserve all production command substitution behavior");
-    if (options.stdin_script_file != null) return semanticUnsupported(allocator, "semantic executor does not yet preserve stdin script file consumption semantics");
     if (environ_map) |map| if (!semanticEnvironmentSupported(map)) return semanticUnsupported(allocator, "semantic ShellState cannot yet preserve non-shell environment names");
+
+    if (semanticScriptNeedsAliasTiming(script)) {
+        return runSemanticAliasTimingCommandString(allocator, io, script, options, environ_map, positionals, shell_options);
+    }
 
     var parsed = try parser.parse(allocator, script, .{ .features = options.features.withStrictDiagnostics() });
     defer parsed.deinit();
@@ -6750,6 +6747,9 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
     evaluator.features = options.features;
     evaluator.arg_zero = options.arg_zero;
+    evaluator.io = io;
+    evaluator.read_stdin_from_fd = true;
+    evaluator.external_stdio = semanticExternalStdio(options.external_stdio);
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = options.features;
     parser_resolver.arg_zero = options.arg_zero;
@@ -6760,7 +6760,76 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
         .interactive = false,
     });
 
-    return runSemanticLoweredProgram(allocator, script, program, &evaluator, &shell_state, eval_context, resolver, false);
+    return runSemanticLoweredProgram(allocator, script, program, &evaluator, &shell_state, eval_context, resolver, options.stdin_script_file, true);
+}
+
+fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: exec.ShellOptions) !SemanticInvocationExecution {
+    var shell_state = shell.ShellState.init(allocator);
+    defer shell_state.deinit();
+    try initializeSemanticInvocationState(allocator, io, &shell_state, environ_map, positionals, shell_options);
+
+    var adapter = runtime.PosixAdapter.init(io);
+    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.features = options.features;
+    evaluator.arg_zero = options.arg_zero;
+    evaluator.io = io;
+    evaluator.read_stdin_from_fd = true;
+    evaluator.external_stdio = semanticExternalStdio(options.external_stdio);
+    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    parser_resolver.features = options.features;
+    parser_resolver.arg_zero = options.arg_zero;
+    const resolver = parser_resolver.resolver();
+    const eval_context = shell.EvalContext.init(.{
+        .target = .current_shell,
+        .source = if (options.stdin_script_file != null) .standard_input else if (options.source_path != null) .script_file else .command_string,
+        .interactive = false,
+    });
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(allocator);
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(allocator);
+    var status: exec.ExitStatus = 0;
+    var start = skipSemanticChunkSeparators(script, 0);
+    while (start < script.len) {
+        var end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, start));
+        while (true) {
+            const source = std.mem.trim(u8, script[start..end], " \t\r\n;");
+            if (source.len == 0) break;
+            const aliased = try semanticExpandAliases(allocator, source, options.features, &shell_state);
+            defer allocator.free(aliased);
+            var parsed = try parser.parse(allocator, aliased, .{ .features = options.features.withStrictDiagnostics() });
+            defer parsed.deinit();
+            if (parsed.diagnostics.len == 0) {
+                var program = try ir.lowerSimpleCommands(allocator, parsed);
+                defer program.deinit();
+                var alias_snapshot = shell_state.clone(allocator) catch |err| switch (err) {
+                    error.OutOfMemory => return error.OutOfMemory,
+                    error.ReadonlyVariable => unreachable,
+                };
+                defer alias_snapshot.deinit();
+                parser_resolver.alias_state = &alias_snapshot;
+                var execution = try runSemanticLoweredProgram(allocator, aliased, program, &evaluator, &shell_state, eval_context, resolver, options.stdin_script_file, false);
+                defer execution.deinit(allocator);
+                switch (execution) {
+                    .unsupported => |message| return semanticUnsupported(allocator, message),
+                    .output => |output| {
+                        try stdout.appendSlice(allocator, output.stdout);
+                        try stderr.appendSlice(allocator, output.stderr);
+                        status = output.status;
+                    },
+                }
+                parser_resolver.alias_state = null;
+                break;
+            }
+            if (!parsed.incomplete or end >= script.len) return .{ .output = try exec.parseDiagnosticsResult(allocator, source, parsed.diagnostics) };
+            end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
+        }
+        start = skipSemanticChunkSeparators(script, end);
+    }
+
+    try appendSemanticExitTrap(allocator, &stdout, &stderr, &status, &evaluator, &shell_state, eval_context, resolver);
+    return .{ .output = .{ .allocator = allocator, .status = status, .stdout = try stdout.toOwnedSlice(allocator), .stderr = try stderr.toOwnedSlice(allocator) } };
 }
 
 fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
@@ -6823,10 +6892,10 @@ fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io,
         .interactive = true,
     });
 
-    return runSemanticLoweredProgram(allocator, script, program, &evaluator, shell_state, eval_context, resolver, true);
+    return runSemanticLoweredProgram(allocator, script, program, &evaluator, shell_state, eval_context, resolver, null, false);
 }
 
-fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, program: ir.Program, evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, resolver: shell.TrapActionResolver, allow_assignments: bool) !SemanticInvocationExecution {
+fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, program: ir.Program, evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, resolver: shell.TrapActionResolver, stdin_script_file: ?std.Io.File, run_exit_trap: bool) !SemanticInvocationExecution {
     eval_context.validate();
     shell_state.validate();
 
@@ -6845,6 +6914,7 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
     for (program.statements, 0..) |statement, statement_index| {
         std.debug.assert(statement.span.start <= statement.span.end);
         std.debug.assert(statement.span.end <= script.len);
+        if (semanticStdinScriptConsumedStatement(stdin_script_file, statement.span.start)) continue;
 
         const should_run = if (statement_index == 0) blk: {
             std.debug.assert(statement.op_before == .sequence);
@@ -6856,16 +6926,15 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
         };
         if (!should_run) continue;
 
-        const statement_script = std.mem.trim(u8, statement.span.slice(script), " \t\r\n;");
+        const statement_end = semanticStatementSourceEnd(program, statement_index, script.len);
+        const statement_script = std.mem.trim(u8, script[statement.span.start..statement_end], " \t\r\n;");
         std.debug.assert(statement_script.len != 0);
+        syncSemanticStdinScriptOffset(stdin_script_file, script, statement_end);
         var body = (try resolver.resolve(allocator, statement_script, .TERM, eval_context, shell_state)) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
         defer body.deinit();
 
-        if (semanticComparisonFailureMessage(body)) |message| {
-            const unsupported = try std.fmt.allocPrint(allocator, "semantic parser lowering rejected statement #{d}: {s}", .{ statement_index + 1, message });
-            return .{ .unsupported = unsupported };
-        }
-        if (semanticBodyUnsupportedMessage(body, allow_assignments)) |message| return semanticUnsupported(allocator, message);
+        if (semanticBodyUnsupportedMessage(body, eval_context.interactive)) |message| return semanticUnsupported(allocator, message);
+        const body_failed = semanticBodyIsFailure(body);
 
         var command_outcome = if (statement.async_after) blk: {
             var background_plan = (try semanticBackgroundPipelinePlan(allocator, body)) orelse return semanticUnsupported(allocator, "semantic executor production preflight keeps unsupported background statements outside the switched slice");
@@ -6895,11 +6964,12 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
             shell_state.last_status = status;
         }
         shell_state.validate();
-        if (control_flow != .normal) break;
+        if (control_flow != .normal or body_failed) break;
     }
 
     control_flow.validate();
-    const final_status = control_flow.status(status);
+    var final_status = control_flow.status(status);
+    if (run_exit_trap) try appendSemanticExitTrap(allocator, &accumulated_stdout, &accumulated_stderr, &final_status, evaluator, shell_state, eval_context, resolver);
     const stdout = try accumulated_stdout.toOwnedSlice(allocator);
     errdefer allocator.free(stdout);
     const stderr = try accumulated_stderr.toOwnedSlice(allocator);
@@ -6956,6 +7026,156 @@ fn semanticBackgroundPipelineFromPipeline(plan: shell.PipelinePlan) SemanticBack
     }) };
 }
 
+fn appendSemanticExitTrap(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *exec.ExitStatus, evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, resolver: shell.TrapActionResolver) !void {
+    if (shell_state.getTrapForSignal(.EXIT) == null) return;
+    shell_state.last_status = status.*;
+    try shell_state.appendPendingTrap(.EXIT);
+    var trap_outcome = (try shell.eval.executePendingTraps(evaluator, shell_state, eval_context, resolver)) orelse return;
+    defer trap_outcome.deinit();
+    try stdout.appendSlice(allocator, trap_outcome.stdout.items);
+    try stderr.appendSlice(allocator, trap_outcome.stderr.items);
+    status.* = trap_outcome.status;
+    try trap_outcome.commitDelta(shell_state, trap_outcome.state_delta.target);
+}
+
+fn semanticScriptNeedsAliasTiming(script: []const u8) bool {
+    var index: usize = 0;
+    while (index < script.len) {
+        while (index < script.len and !isSemanticAliasTokenByte(script[index])) index += 1;
+        const start = index;
+        while (index < script.len and isSemanticAliasTokenByte(script[index])) index += 1;
+        const word = script[start..index];
+        if (std.mem.eql(u8, word, "alias") or std.mem.eql(u8, word, "unalias") or std.mem.eql(u8, word, "eval") or std.mem.eql(u8, word, ".")) return true;
+    }
+    return false;
+}
+
+fn isSemanticAliasTokenByte(byte: u8) bool {
+    return std.ascii.isAlphabetic(byte) or std.ascii.isDigit(byte) or byte == '_';
+}
+
+fn skipSemanticChunkSeparators(script: []const u8, start: usize) usize {
+    var index = start;
+    while (index < script.len and (script[index] == ' ' or script[index] == '\t' or script[index] == '\r' or script[index] == '\n' or script[index] == ';')) index += 1;
+    return index;
+}
+
+fn semanticLineEnd(script: []const u8, start: usize) usize {
+    var index = start;
+    while (index < script.len and script[index] != '\n') index += 1;
+    if (index < script.len) index += 1;
+    return index;
+}
+
+fn extendSemanticHereDocChunk(script: []const u8, start: usize, initial_end: usize) usize {
+    var end = initial_end;
+    var scan = start;
+    while (scan + 1 < end) : (scan += 1) {
+        if (script[scan] != '<' or script[scan + 1] != '<') continue;
+        var delimiter_start = scan + 2;
+        if (delimiter_start < end and script[delimiter_start] == '-') delimiter_start += 1;
+        while (delimiter_start < end and (script[delimiter_start] == ' ' or script[delimiter_start] == '\t')) delimiter_start += 1;
+        var delimiter_end = delimiter_start;
+        while (delimiter_end < end and !isSemanticHereDocDelimiterTerminator(script[delimiter_end])) delimiter_end += 1;
+        const raw_delimiter = std.mem.trim(u8, script[delimiter_start..delimiter_end], "'\"");
+        if (raw_delimiter.len == 0) continue;
+        end = semanticHereDocBodyEnd(script, end, raw_delimiter);
+    }
+    return end;
+}
+
+fn isSemanticHereDocDelimiterTerminator(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\r' or byte == '\n' or byte == ';' or byte == '|' or byte == '&' or byte == '<' or byte == '>';
+}
+
+fn semanticHereDocBodyEnd(script: []const u8, body_start: usize, delimiter: []const u8) usize {
+    var line_start = body_start;
+    while (line_start < script.len) {
+        var line_end = line_start;
+        while (line_end < script.len and script[line_end] != '\n') line_end += 1;
+        const raw_line = script[line_start..line_end];
+        const line = if (raw_line.len != 0 and raw_line[raw_line.len - 1] == '\r') raw_line[0 .. raw_line.len - 1] else raw_line;
+        if (std.mem.eql(u8, line, delimiter)) return if (line_end < script.len) line_end + 1 else line_end;
+        line_start = if (line_end < script.len) line_end + 1 else line_end;
+    }
+    return script.len;
+}
+
+fn semanticExpandAliases(allocator: std.mem.Allocator, source: []const u8, features: compat.Features, shell_state: *shell.ShellState) ![]const u8 {
+    return parser.expandAliases(allocator, source, .{
+        .features = features.withStrictDiagnostics(),
+        .context = shell_state,
+        .lookup = lookupSemanticAlias,
+    });
+}
+
+fn lookupSemanticAlias(opaque_context: *anyopaque, name: []const u8) ?[]const u8 {
+    if (!isSemanticAliasName(name)) return null;
+    const shell_state: *shell.ShellState = @ptrCast(@alignCast(opaque_context));
+    const alias = shell_state.getAlias(name) orelse return null;
+    return alias.value;
+}
+
+fn isSemanticAliasName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    for (name) |byte| {
+        if (!(std.ascii.isAlphabetic(byte) or std.ascii.isDigit(byte) or byte == '!' or byte == '%' or byte == ',' or byte == '-' or byte == '@' or byte == '_')) return false;
+    }
+    return true;
+}
+
+fn syncSemanticStdinScriptOffset(file: ?std.Io.File, script: []const u8, offset: usize) void {
+    const stdin_file = file orelse return;
+    var adjusted_offset = offset;
+    if (adjusted_offset < script.len and script[adjusted_offset] == '\n') adjusted_offset += 1;
+    const seek_offset: std.c.off_t = @intCast(adjusted_offset);
+    _ = std.c.lseek(stdin_file.handle, seek_offset, std.c.SEEK.SET);
+}
+
+fn semanticStdinScriptConsumedStatement(file: ?std.Io.File, statement_start: usize) bool {
+    const stdin_file = file orelse return false;
+    const current = std.c.lseek(stdin_file.handle, 0, std.c.SEEK.CUR);
+    if (current < 0) return false;
+    return @as(u64, @intCast(current)) > statement_start;
+}
+
+fn semanticStatementSourceEnd(program: ir.Program, statement_index: usize, script_len: usize) usize {
+    std.debug.assert(statement_index < program.statements.len);
+    const statement = program.statements[statement_index];
+    if (!semanticStatementHasHereDoc(program, statement)) return statement.span.end;
+    if (statement_index + 1 < program.statements.len) return program.statements[statement_index + 1].span.start;
+    return script_len;
+}
+
+fn semanticStatementHasHereDoc(program: ir.Program, statement: ir.Statement) bool {
+    switch (statement.kind) {
+        .pipeline => {
+            const pipeline = program.pipelines[statement.index];
+            for (pipeline.command_indexes) |command_index| {
+                if (semanticCommandHasHereDoc(program.commands[command_index])) return true;
+            }
+            return false;
+        },
+        .if_command => return semanticRedirectionsHaveHereDoc(program.if_commands[statement.index].redirections),
+        .loop_command => return semanticRedirectionsHaveHereDoc(program.loop_commands[statement.index].redirections),
+        .for_command => return semanticRedirectionsHaveHereDoc(program.for_commands[statement.index].redirections),
+        .case_command => return semanticRedirectionsHaveHereDoc(program.case_commands[statement.index].redirections),
+        .function_definition => return semanticRedirectionsHaveHereDoc(program.function_definitions[statement.index].redirections),
+        .brace_group => return semanticRedirectionsHaveHereDoc(program.brace_groups[statement.index].redirections),
+        .subshell => return semanticRedirectionsHaveHereDoc(program.subshells[statement.index].redirections),
+        .bash_test_command => return false,
+    }
+}
+
+fn semanticCommandHasHereDoc(command: ir.SimpleCommand) bool {
+    return semanticRedirectionsHaveHereDoc(command.redirections);
+}
+
+fn semanticRedirectionsHaveHereDoc(redirections: []const ir.Redirection) bool {
+    for (redirections) |redirection| if (redirection.here_doc != null) return true;
+    return false;
+}
+
 fn assertSemanticInteractiveOptions(script: []const u8, options: exec.ExecuteOptions) void {
     std.debug.assert(options.interactive);
     std.debug.assert(options.allow_external);
@@ -6980,6 +7200,23 @@ fn semanticInputSource(options: exec.ExecuteOptions) shell.InputSource {
 fn semanticUnsupported(allocator: std.mem.Allocator, message: []const u8) !SemanticInvocationExecution {
     std.debug.assert(message.len != 0);
     return .{ .unsupported = try allocator.dupe(u8, message) };
+}
+
+fn semanticExternalStdio(stdio: exec.ExternalStdio) shell.eval.ExternalStdio {
+    return switch (stdio) {
+        .capture => .capture,
+        .capture_stdout => .capture_stdout,
+        .inherit_output => .inherit_output,
+        .inherit => .inherit,
+    };
+}
+
+fn unsupportedSemanticCommandResult(allocator: std.mem.Allocator, message: []const u8) !exec.CommandResult {
+    std.debug.assert(message.len != 0);
+    const stdout = try allocator.alloc(u8, 0);
+    errdefer allocator.free(stdout);
+    const stderr = try std.fmt.allocPrint(allocator, "{s}\n", .{message});
+    return .{ .allocator = allocator, .status = 2, .stdout = stdout, .stderr = stderr };
 }
 
 fn semanticEnvironmentSupported(environ_map: *const std.process.Environ.Map) bool {
@@ -7035,10 +7272,6 @@ fn semanticProgramUsesShellExpansion(program: ir.Program) bool {
 
 fn wordMayUseShellExpansion(raw: []const u8) bool {
     return std.mem.indexOfScalar(u8, raw, '$') != null or std.mem.indexOfScalar(u8, raw, '`') != null;
-}
-
-fn scriptUsesProductionCommandSubstitution(script: []const u8) bool {
-    return std.mem.indexOf(u8, script, "$(") != null or std.mem.indexOfScalar(u8, script, '`') != null;
 }
 
 fn initializeSemanticInteractiveStateFromExecutor(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, executor: exec.Executor) !?[]const u8 {
@@ -7227,33 +7460,30 @@ fn isValidShellVariableName(name: []const u8) bool {
     return true;
 }
 
-fn semanticPreflightUnsupported(allocator: std.mem.Allocator, program: ir.Program, features: compat.Features, allow_assignments: bool) !?[]const u8 {
-    if (program.if_commands.len != 0 or program.loop_commands.len != 0 or program.for_commands.len != 0 or program.case_commands.len != 0 or program.brace_groups.len != 0 or program.subshells.len != 0) {
+fn semanticPreflightUnsupported(allocator: std.mem.Allocator, program: ir.Program, features: compat.Features, legacy_fallback_gates: bool) !?[]const u8 {
+    if (legacy_fallback_gates and (program.if_commands.len != 0 or program.loop_commands.len != 0 or program.for_commands.len != 0 or program.case_commands.len != 0 or program.brace_groups.len != 0 or program.subshells.len != 0)) {
         return "semantic executor production preflight keeps compound commands unsupported outside the switched slice";
     }
     for (program.statements, 0..) |statement, index| {
         if (semanticAsyncStatementPreflightUnsupported(program, statement, index)) |message| return message;
     }
-    for (program.commands) |command| {
-        if (!allow_assignments and command.assignments.len != 0) return "semantic executor production preflight keeps assignment-bearing commands unsupported outside the switched slice";
-        if (commandUsesUnsupportedSemanticBuiltin(command, allow_assignments)) return "semantic executor preflight found an unsupported builtin";
-        if (commandUsesUnsupportedProductionExpansion(command)) return "semantic executor production preflight found an expansion shape outside the switched slice";
-        if (command.argv.len == 0 and command.redirections.len != 0) return "semantic executor does not yet support redirection-only commands";
-        if (command.redirections.len != 0) return "semantic executor production preflight keeps redirections unsupported outside the switched slice";
+    if (legacy_fallback_gates) {
+        for (program.commands) |command| {
+            if (command.assignments.len != 0 and command.argv.len != 0) return "semantic executor production preflight keeps assignment-bearing commands unsupported outside the switched slice";
+            if (commandUsesUnsupportedSemanticBuiltin(command, false)) return "semantic executor preflight found an unsupported builtin";
+            if (commandUsesUnsupportedProductionExpansion(command)) return "semantic executor production preflight found an expansion shape outside the switched slice";
+            if (command.argv.len == 0 and command.redirections.len != 0) return "semantic executor does not yet support redirection-only commands";
+            if (command.redirections.len != 0) return "semantic executor production preflight keeps redirections unsupported outside the switched slice";
+        }
     }
     for (program.function_definitions) |definition| {
         if (try semanticFunctionDefinitionPreflightUnsupported(allocator, definition, features)) |message| return message;
     }
     if (program.bash_test_commands.len != 0) return "semantic executor does not yet lower bash [[ ]] commands";
-    for (program.pipelines) |pipeline| {
-        if (semanticPipelinePreflightUnsupported(program, pipeline)) |message| return message;
-    }
     return null;
 }
 
 fn semanticFunctionDefinitionPreflightUnsupported(allocator: std.mem.Allocator, definition: ir.FunctionDefinition, features: compat.Features) !?[]const u8 {
-    if (definition.redirections.len != 0) return "semantic executor production preflight keeps function-definition redirections on the old executor";
-
     var parsed = try parser.parse(allocator, definition.body, .{ .features = features.withStrictDiagnostics() });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) return "semantic executor production preflight keeps parser-rejected function bodies on the old executor";
@@ -7264,26 +7494,14 @@ fn semanticFunctionDefinitionPreflightUnsupported(allocator: std.mem.Allocator, 
 }
 
 fn semanticFunctionBodyProgramUnsupported(allocator: std.mem.Allocator, program: ir.Program, features: compat.Features) !?[]const u8 {
-    if (semanticProgramHasCompoundRedirections(program)) return "semantic executor production preflight keeps compound redirections on the old executor";
-    if (semanticProgramHasLoopDependentExpansion(program)) return "semantic executor production preflight keeps loop-dependent function body expansion on the old executor";
     for (program.statements, 0..) |statement, index| {
         if (semanticAsyncStatementPreflightUnsupported(program, statement, index)) |message| return message;
         if (statement.kind == .function_definition and statement.op_before != .sequence) return "semantic executor production preflight keeps dynamically guarded function definitions on the old executor";
-    }
-    for (program.commands) |command| {
-        if (command.assignments.len != 0) return "semantic executor production preflight keeps assignment-bearing commands on the old executor";
-        if (commandUsesUnsupportedSemanticBuiltin(command, false)) return "semantic executor preflight found an unsupported builtin";
-        if (commandUsesUnsupportedProductionExpansion(command)) return "semantic executor production preflight found an expansion shape outside the switched slice";
-        if (command.argv.len == 0 and command.redirections.len != 0) return "semantic executor does not yet support redirection-only commands";
-        if (command.redirections.len != 0) return "semantic executor production preflight keeps redirections on the old executor";
     }
     for (program.function_definitions) |definition| {
         if (try semanticFunctionDefinitionPreflightUnsupported(allocator, definition, features)) |message| return message;
     }
     if (program.bash_test_commands.len != 0) return "semantic executor does not yet lower bash [[ ]] commands";
-    for (program.pipelines) |pipeline| {
-        if (semanticPipelinePreflightUnsupported(program, pipeline)) |message| return message;
-    }
     return null;
 }
 
@@ -7321,8 +7539,6 @@ fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir
     std.debug.assert(index < program.statements.len);
     if (!statement.async_after) return null;
     if (statement.kind != .pipeline) return "semantic executor production preflight keeps non-pipeline background statements unsupported outside the switched slice";
-    if (statement.op_before != .sequence) return "semantic executor production preflight keeps asynchronous and-or lists unsupported outside the switched slice";
-    if (index + 1 < program.statements.len and program.statements[index + 1].op_before != .sequence) return "semantic executor production preflight keeps asynchronous and-or lists unsupported outside the switched slice";
     return null;
 }
 
@@ -7369,84 +7585,92 @@ fn wordUsesUnsupportedProductionExpansion(raw: []const u8) bool {
         std.mem.indexOf(u8, raw, "$*") != null;
 }
 
-fn semanticBodyUnsupportedMessage(body: shell.TrapActionBody, allow_assignments: bool) ?[]const u8 {
+fn semanticBodyUnsupportedMessage(body: shell.TrapActionBody, legacy_fallback_gates: bool) ?[]const u8 {
     body.validate();
     return switch (body) {
-        .simple => |plan| semanticCommandUnsupportedMessage(plan, allow_assignments),
-        .compound => |plan| semanticCompoundUnsupportedMessage(plan, allow_assignments),
-        .pipeline => |plan| semanticPipelineUnsupportedMessage(plan, allow_assignments),
+        .simple => |plan| semanticCommandUnsupportedMessage(plan, legacy_fallback_gates),
+        .compound => |plan| semanticCompoundUnsupportedMessage(plan, legacy_fallback_gates),
+        .pipeline => |plan| semanticPipelineUnsupportedMessage(plan, legacy_fallback_gates),
         .owned => |owned| switch (owned.body) {
-            .simple => |plan| semanticCommandUnsupportedMessage(plan, allow_assignments),
-            .compound => |plan| semanticCompoundUnsupportedMessage(plan, allow_assignments),
-            .pipeline => |plan| semanticPipelineUnsupportedMessage(plan, allow_assignments),
-            .failure => |failure| failure.message,
+            .simple => |plan| semanticCommandUnsupportedMessage(plan, legacy_fallback_gates),
+            .compound => |plan| semanticCompoundUnsupportedMessage(plan, legacy_fallback_gates),
+            .pipeline => |plan| semanticPipelineUnsupportedMessage(plan, legacy_fallback_gates),
+            .failure => null,
         },
-        .failure => |failure| failure.message,
+        .failure => null,
     };
 }
 
-fn semanticPipelineUnsupportedMessage(plan: shell.PipelinePlan, allow_assignments: bool) ?[]const u8 {
+fn semanticBodyIsFailure(body: shell.TrapActionBody) bool {
+    body.validate();
+    return switch (body) {
+        .failure => true,
+        .owned => |owned| owned.body == .failure,
+        .simple, .compound, .pipeline => false,
+    };
+}
+
+fn semanticPipelineUnsupportedMessage(plan: shell.PipelinePlan, legacy_fallback_gates: bool) ?[]const u8 {
     plan.validate();
     for (plan.stages) |stage| switch (stage) {
-        .simple => |simple| if (semanticCommandUnsupportedMessage(simple, allow_assignments)) |message| return message,
-        .compound => |compound| if (semanticCompoundUnsupportedMessage(compound, allow_assignments)) |message| return message,
+        .simple => |simple| if (semanticCommandUnsupportedMessage(simple, legacy_fallback_gates)) |message| return message,
+        .compound => |compound| if (semanticCompoundUnsupportedMessage(compound, legacy_fallback_gates)) |message| return message,
     };
     return null;
 }
 
-fn semanticCompoundUnsupportedMessage(plan: shell.CompoundCommandPlan, allow_assignments: bool) ?[]const u8 {
+fn semanticCompoundUnsupportedMessage(plan: shell.CompoundCommandPlan, legacy_fallback_gates: bool) ?[]const u8 {
     plan.validate();
-    if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) return "semantic executor production preflight keeps compound redirections unsupported outside the switched slice";
+    if (legacy_fallback_gates and (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0)) return "semantic executor production preflight keeps compound redirections unsupported outside the switched slice";
     switch (plan.body) {
-        .sequence, .brace_group, .subshell => |list| return semanticCommandListUnsupportedMessage(list, allow_assignments),
+        .sequence, .brace_group, .subshell => |list| return semanticCommandListUnsupportedMessage(list, legacy_fallback_gates),
         .and_or_list => |and_or| for (and_or.commands) |entry| {
-            if (semanticCommandUnsupportedMessage(entry.command, allow_assignments)) |message| return message;
+            if (semanticCommandUnsupportedMessage(entry.command, legacy_fallback_gates)) |message| return message;
         },
-        .negation => |negation| return semanticCommandListUnsupportedMessage(negation.body, allow_assignments),
+        .negation => |negation| return semanticCommandListUnsupportedMessage(negation.body, legacy_fallback_gates),
         .if_clause => |if_plan| {
             for (if_plan.branches) |branch| {
-                if (semanticCommandListUnsupportedMessage(branch.condition, allow_assignments)) |message| return message;
-                if (semanticCommandListUnsupportedMessage(branch.body, allow_assignments)) |message| return message;
+                if (semanticCommandListUnsupportedMessage(branch.condition, legacy_fallback_gates)) |message| return message;
+                if (semanticCommandListUnsupportedMessage(branch.body, legacy_fallback_gates)) |message| return message;
             }
-            return semanticCommandListUnsupportedMessage(if_plan.else_body, allow_assignments);
+            return semanticCommandListUnsupportedMessage(if_plan.else_body, legacy_fallback_gates);
         },
         .while_loop, .until_loop => |loop| {
-            if (semanticCommandListUnsupportedMessage(loop.condition, allow_assignments)) |message| return message;
-            return semanticCommandListUnsupportedMessage(loop.body, allow_assignments);
+            if (semanticCommandListUnsupportedMessage(loop.condition, legacy_fallback_gates)) |message| return message;
+            return semanticCommandListUnsupportedMessage(loop.body, legacy_fallback_gates);
         },
-        .for_loop => |for_plan| return semanticCommandListUnsupportedMessage(for_plan.body, allow_assignments),
+        .for_loop => |for_plan| return semanticCommandListUnsupportedMessage(for_plan.body, legacy_fallback_gates),
         .case_clause => |case_plan| for (case_plan.arms) |arm| {
-            if (semanticCommandListUnsupportedMessage(arm.body, allow_assignments)) |message| return message;
+            if (semanticCommandListUnsupportedMessage(arm.body, legacy_fallback_gates)) |message| return message;
         },
     }
     return null;
 }
 
-fn semanticCommandListUnsupportedMessage(list: shell.StatementList, allow_assignments: bool) ?[]const u8 {
+fn semanticCommandListUnsupportedMessage(list: shell.StatementList, legacy_fallback_gates: bool) ?[]const u8 {
     list.validate();
     for (list.commands) |command| {
-        if (semanticCommandUnsupportedMessage(command, allow_assignments)) |message| return message;
+        if (semanticCommandUnsupportedMessage(command, legacy_fallback_gates)) |message| return message;
     }
     for (list.statements) |entry| {
         switch (entry.plan) {
-            .simple => |plan| if (semanticCommandUnsupportedMessage(plan, allow_assignments)) |message| return message,
-            .compound => |plan| if (semanticCompoundUnsupportedMessage(plan, allow_assignments)) |message| return message,
-            .pipeline => |plan| if (semanticPipelineUnsupportedMessage(plan, allow_assignments)) |message| return message,
+            .simple => |plan| if (semanticCommandUnsupportedMessage(plan, legacy_fallback_gates)) |message| return message,
+            .compound => |plan| if (semanticCompoundUnsupportedMessage(plan, legacy_fallback_gates)) |message| return message,
+            .pipeline => |plan| if (semanticPipelineUnsupportedMessage(plan, legacy_fallback_gates)) |message| return message,
         }
     }
     return null;
 }
 
-fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan, allow_assignments: bool) ?[]const u8 {
+fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan, legacy_fallback_gates: bool) ?[]const u8 {
     plan.validate();
-    if (!allow_assignments and plan.assignments.len != 0) return "semantic executor production preflight keeps assignment-bearing commands unsupported outside the switched slice";
-    if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) return "semantic executor production preflight keeps redirections unsupported outside the switched slice";
+    if (legacy_fallback_gates and plan.assignments.len != 0 and plan.class() != .assignment_only) return "semantic executor production preflight keeps assignment-bearing commands unsupported outside the switched slice";
+    if (legacy_fallback_gates and (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0)) return "semantic executor production preflight keeps redirections unsupported outside the switched slice";
     return switch (plan.classification) {
         .regular_builtin, .special_builtin => |definition| blk: {
             if (definition.semantic_class == .unsupported) break :blk "semantic evaluator does not yet implement this builtin";
-            if (!allow_assignments and definition.semantic_class == .declaration) break :blk "semantic executor production preflight keeps declaration builtins on the old executor";
-            if (std.mem.eql(u8, definition.name, "read")) break :blk "semantic evaluator does not yet connect read to non-interactive stdin";
-            if (std.mem.eql(u8, definition.name, "alias") or std.mem.eql(u8, definition.name, "unalias")) break :blk "semantic evaluator does not yet integrate alias expansion with production parsing";
+            if (legacy_fallback_gates and std.mem.eql(u8, definition.name, "read")) break :blk "semantic evaluator does not yet connect read to non-interactive stdin";
+            if (legacy_fallback_gates and (std.mem.eql(u8, definition.name, "alias") or std.mem.eql(u8, definition.name, "unalias"))) break :blk "semantic evaluator does not yet integrate alias expansion with production parsing";
             break :blk null;
         },
         .empty, .assignment_only => null,
@@ -7510,18 +7734,6 @@ fn legacyShellOptions(options: shell.ShellOptions, shopt: exec.ShoptOptions) exe
     };
 }
 
-fn semanticComparisonFailureMessage(body: shell.TrapActionBody) ?[]const u8 {
-    body.validate();
-    return switch (body) {
-        .failure => |failure| failure.message,
-        .owned => |owned| switch (owned.body) {
-            .failure => |failure| failure.message,
-            .simple, .compound, .pipeline => null,
-        },
-        .simple, .compound, .pipeline => null,
-    };
-}
-
 fn evaluateSemanticComparisonBody(evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, body: shell.TrapActionBody) shell.eval.EvalError!shell.CommandOutcome {
     body.validate();
     eval_context.validate();
@@ -7533,9 +7745,9 @@ fn evaluateSemanticComparisonBody(evaluator: *shell.eval.Evaluator, shell_state:
             .simple => |plan| shell.eval.evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
             .compound => |plan| shell.eval.evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
             .pipeline => |plan| shell.eval.evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
-            .failure => error.Unimplemented,
+            .failure => |failure| shell.eval.trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
         },
-        .failure => error.Unimplemented,
+        .failure => |failure| shell.eval.trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
     };
 }
 
@@ -11198,11 +11410,15 @@ test "semantic non-interactive invocation starts top-level background pipelines"
     }
 }
 
-test "semantic non-interactive invocation reports unsupported shapes before fallback" {
+test "semantic non-interactive invocation executes simple command redirections" {
+    const path = "rush-semantic-simple-redirection.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
     var execution = try runSemanticCommandString(
         std.testing.allocator,
         std.testing.io,
-        "echo redirected > out",
+        "echo redirected > " ++ path,
         .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
         null,
         &.{},
@@ -11211,12 +11427,20 @@ test "semantic non-interactive invocation reports unsupported shapes before fall
     defer execution.deinit(std.testing.allocator);
 
     switch (execution) {
-        .output => return error.ExpectedSemanticUnsupported,
-        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "redirections") != null),
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
     }
+
+    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(output);
+    try std.testing.expectEqualStrings("redirected\n", output);
 }
 
-test "semantic non-interactive invocation still rejects unsupported production pipeline shapes" {
+test "semantic non-interactive invocation executes formerly gated production pipeline shapes" {
     var async_and_or = try runSemanticCommandString(
         std.testing.allocator,
         std.testing.io,
@@ -11228,14 +11452,22 @@ test "semantic non-interactive invocation still rejects unsupported production p
     );
     defer async_and_or.deinit(std.testing.allocator);
     switch (async_and_or) {
-        .output => return error.ExpectedSemanticUnsupported,
-        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "asynchronous and-or") != null),
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
     }
+
+    const path = "rush-semantic-compound-stage.tmp";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     var redirected_compound_stage = try runSemanticCommandString(
         std.testing.allocator,
         std.testing.io,
-        "{ printf 'compound\n'; } > rush-semantic-compound-stage.tmp | /bin/cat",
+        "{ printf 'compound\n'; } > " ++ path ++ " | /bin/cat",
         .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
         null,
         &.{},
@@ -11243,9 +11475,17 @@ test "semantic non-interactive invocation still rejects unsupported production p
     );
     defer redirected_compound_stage.deinit(std.testing.allocator);
     switch (redirected_compound_stage) {
-        .output => return error.ExpectedSemanticUnsupported,
-        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "redirections") != null),
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
     }
+
+    const file_output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(file_output);
+    try std.testing.expectEqualStrings("compound\n", file_output);
 
     var dynamic_compound_stage = try runSemanticCommandString(
         std.testing.allocator,
@@ -11258,8 +11498,12 @@ test "semantic non-interactive invocation still rejects unsupported production p
     );
     defer dynamic_compound_stage.deinit(std.testing.allocator);
     switch (dynamic_compound_stage) {
-        .output => return error.ExpectedSemanticUnsupported,
-        .unsupported => |message| try std.testing.expect(std.mem.indexOf(u8, message, "command substitution") != null),
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("dynamic\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
     }
 }
 
@@ -11368,6 +11612,30 @@ test "runScriptWithOptions accepts inherit mode for external commands" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "runScriptWithOptions captures simple external command output semantically" {
+    var captured = try runScriptWithOptions(std.testing.allocator, std.testing.io, "/bin/sh -c 'printf out; printf err >&2'", .{
+        .io = std.testing.io,
+        .allow_external = true,
+        .external_stdio = .capture,
+    });
+    defer captured.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), captured.status);
+    try std.testing.expectEqualStrings("out", captured.stdout);
+    try std.testing.expectEqualStrings("err", captured.stderr);
+
+    var stdout_only = try runScriptWithOptions(std.testing.allocator, std.testing.io, "/bin/sh -c 'printf out; printf err >&2'", .{
+        .io = std.testing.io,
+        .allow_external = true,
+        .external_stdio = .capture_stdout,
+    });
+    defer stdout_only.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), stdout_only.status);
+    try std.testing.expectEqualStrings("out", stdout_only.stdout);
+    try std.testing.expectEqualStrings("", stdout_only.stderr);
 }
 
 test "runScript executes builtins" {

@@ -28,6 +28,13 @@ pub const EvalError = std.mem.Allocator.Error || error{
     Unimplemented,
 };
 
+pub const ExternalStdio = enum {
+    capture,
+    capture_stdout,
+    inherit_output,
+    inherit,
+};
+
 pub const Evaluator = struct {
     allocator: std.mem.Allocator,
     fd_port: ?runtime.fd.Port = null,
@@ -37,6 +44,9 @@ pub const Evaluator = struct {
     features: compat.Features = .{},
     arg_zero: []const u8 = "rush",
     function_frame: ?*FunctionFrame = null,
+    io: ?std.Io = null,
+    read_stdin_from_fd: bool = false,
+    external_stdio: ExternalStdio = .inherit,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
         return .{ .allocator = allocator };
@@ -172,6 +182,8 @@ pub const ParserTrapActionResolver = struct {
     features: compat.Features = .{},
     externals: []const command_plan.ExternalResolution = &.{},
     arg_zero: []const u8 = "rush",
+    expand_aliases: bool = true,
+    alias_state: ?*state.ShellState = null,
 
     pub fn init(evaluator: *Evaluator) ParserTrapActionResolver {
         return .{ .evaluator = evaluator };
@@ -263,6 +275,21 @@ const ParserCommandSubstitutionResolver = struct {
     }
 };
 
+fn lookupSemanticAliasForParser(opaque_context: *anyopaque, name: []const u8) ?[]const u8 {
+    if (!isSemanticAliasName(name)) return null;
+    const shell_state: *state.ShellState = @ptrCast(@alignCast(opaque_context));
+    const alias = shell_state.getAlias(name) orelse return null;
+    return alias.value;
+}
+
+fn isSemanticAliasName(name: []const u8) bool {
+    if (name.len == 0) return false;
+    for (name) |byte| {
+        if (!(std.ascii.isAlphabetic(byte) or std.ascii.isDigit(byte) or byte == '!' or byte == '%' or byte == ',' or byte == '-' or byte == '@' or byte == '_')) return false;
+    }
+    return true;
+}
+
 const TrapActionExpansionCommandSubstitutions = struct {
     resolver: ParserCommandSubstitutionResolver = undefined,
     context: CommandSubstitutionExpansionContext = undefined,
@@ -300,7 +327,7 @@ const TrapActionLowerer = struct {
 
     fn lower(self: *TrapActionLowerer, action: []const u8) !TrapActionBodyPayload {
         trap_semanticActionAssert(action, self.signal, self.eval_context);
-        const parsed = try parser.parse(self.allocator, action, .{ .features = self.owner.features.withStrictDiagnostics() });
+        const parsed = try self.parseWithAliases(action);
 
         if (parsed.diagnostics.len != 0) return self.parserDiagnosticFailure(parsed.diagnostics[0]);
         if (parsed.incomplete) return self.failure(.parse_error, "trap {s}: parse error: incomplete trap action", .{self.signal.name()});
@@ -310,7 +337,7 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerCommandSubstitution(self: *TrapActionLowerer, script: []const u8) !CommandSubstitutionBodyPayload {
-        const parsed = try parser.parse(self.allocator, script, .{ .features = self.owner.features.withStrictDiagnostics() });
+        const parsed = try self.parseWithAliases(script);
         if (parsed.diagnostics.len != 0) return self.commandSubstitutionDiagnosticFailure(parsed.diagnostics[0]);
         if (parsed.incomplete) return error.Unimplemented;
 
@@ -322,6 +349,16 @@ const TrapActionLowerer = struct {
             .pipeline => |plan| .{ .pipeline = plan },
             .failure => error.Unimplemented,
         };
+    }
+
+    fn parseWithAliases(self: *TrapActionLowerer, source: []const u8) !parser.ParseResult {
+        if (!self.owner.expand_aliases) return parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
+        const aliased = try parser.expandAliases(self.allocator, source, .{
+            .features = self.owner.features.withStrictDiagnostics(),
+            .context = self.owner.alias_state orelse self.shell_state,
+            .lookup = lookupSemanticAliasForParser,
+        });
+        return parser.parse(self.allocator, aliased, .{ .features = self.owner.features.withStrictDiagnostics() });
     }
 
     fn lowerProgram(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget, trap_body: bool) !TrapActionBodyPayload {
@@ -441,7 +478,7 @@ const TrapActionLowerer = struct {
         const local_function_count = self.local_functions.items.len;
         defer self.local_functions.shrinkRetainingCapacity(local_function_count);
 
-        const parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
+        const parsed = try self.parseWithAliases(source);
         if (parsed.diagnostics.len != 0) return .{ .failure = (try self.parserDiagnosticFailure(parsed.diagnostics[0])).failure };
         if (parsed.incomplete) return .{ .failure = (try self.failure(.parse_error, "trap {s}: parse error: incomplete pipeline stage", .{self.signal.name()})).failure };
 
@@ -526,7 +563,9 @@ const TrapActionLowerer = struct {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |list| list,
         };
-        const loop: command_plan.LoopPlan = .{ .condition = condition, .body = body };
+        const condition_source = try self.allocator.dupe(u8, command.condition);
+        const body_source = try self.allocator.dupe(u8, command.body);
+        const loop: command_plan.LoopPlan = .{ .condition_source = condition_source, .condition = condition, .body_source = body_source, .body = body };
         const compound_body: command_plan.CompoundBody = switch (command.kind) {
             .while_loop => .{ .while_loop = loop },
             .until_loop => .{ .until_loop = loop },
@@ -590,7 +629,7 @@ const TrapActionLowerer = struct {
         const local_function_count = self.local_functions.items.len;
         defer self.local_functions.shrinkRetainingCapacity(local_function_count);
 
-        const parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
+        const parsed = try self.parseWithAliases(source);
         if (parsed.diagnostics.len != 0) return .{ .failure = (try self.parserDiagnosticFailure(parsed.diagnostics[0])).failure };
 
         const program = try ir.lowerSimpleCommands(self.allocator, parsed);
@@ -628,7 +667,9 @@ const TrapActionLowerer = struct {
         var expanded = expansion.expandSimpleCommand(assignment_words, argv_words) catch |err| {
             if (expansion.classifyError(err)) |expansion_failure| {
                 const message = try std.fmt.allocPrint(self.allocator, "trap {s}: expansion error: {s}: {s}", .{ self.signal.name(), expansion_failure.name, expansion_failure.message });
-                return .{ .plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{message} }, .target = target }) };
+                const trap_failure: TrapActionFailure = .{ .kind = .expansion_error, .status = 1, .message = message };
+                trap_failure.validate();
+                return .{ .failure = trap_failure };
             }
             return err;
         };
@@ -909,7 +950,10 @@ const TrapActionLowerer = struct {
     }
 
     fn parserDiagnosticFailure(self: *TrapActionLowerer, diagnostic: parser.Diagnostic) !TrapActionBodyPayload {
-        return self.failure(.parse_error, "trap {s}: parse error: {s}", .{ self.signal.name(), diagnostic.message });
+        const message = try std.fmt.allocPrint(self.allocator, "trap {s}: parse error: {s}", .{ self.signal.name(), diagnostic.message });
+        const trap_failure: TrapActionFailure = .{ .kind = .parse_error, .status = self.shell_state.last_status, .message = message };
+        trap_failure.validate();
+        return .{ .failure = trap_failure };
     }
 
     fn commandSubstitutionDiagnosticFailure(self: *TrapActionLowerer, diagnostic: parser.Diagnostic) !CommandSubstitutionBodyPayload {
@@ -1279,7 +1323,6 @@ fn evaluatePlanWithInput(evaluator: *Evaluator, shell_state: *state.ShellState, 
     input.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target.allowsShellStateCommit()) std.debug.assert(shell_state.acceptsExecutionTarget(plan.target));
-    if (hasRedirections(plan) and plan.class() != .external and plan.class() != .function) return error.Unimplemented;
 
     if (delta.firstReadonlyAssignment(shell_state.*, plan.assignments)) |name| {
         var failure = try outcome.readonlyVariableFailure(evaluator.allocator, plan.target, name);
@@ -1298,10 +1341,41 @@ fn evaluatePlanWithInput(evaluator: *Evaluator, shell_state: *state.ShellState, 
         };
     }
 
-    var buffers = EvaluationBuffers.init(evaluator.allocator, input);
+    var here_doc_input = if (semanticHereDocInput(plan.redirections)) |bytes| EvaluationInput.init(bytes) else null;
+    var buffers = EvaluationBuffers.init(evaluator.allocator, if (here_doc_input) |*here_doc| here_doc else input);
     defer buffers.deinit();
 
+    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (applied_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    if (hasRedirections(plan) and here_doc_input == null and plan.class() != .external and plan.class() != .function) {
+        const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        switch (apply_result) {
+            .applied => |applied| applied_redirections = applied,
+            .failure => |failure| {
+                const command_name = if (plan.argv.len == 0) "redirection" else plan.argv[0];
+                try buffers.addBuiltinDiagnostic(command_name, redirectionFailureMessage(failure));
+                const redirection_result = evaluationFromRedirectionFailure(shell_state.options, eval_context, failure);
+                state_delta.setLastStatus(redirection_result.status);
+                return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, redirection_result.status, state_delta, redirection_result.control_flow, &buffers);
+            },
+        }
+    }
+
     const result = try evaluateSimpleCommand(evaluator, shell_state, eval_context, plan, &state_delta, &buffers);
+    if (applied_redirections != null and plan.class() != .external and plan.class() != .function) {
+        if (redirectionTargetsDescriptor(plan.redirections, 1)) {
+            if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+            buffers.stdout.items.len = 0;
+        }
+        if (redirectionTargetsDescriptor(plan.redirections, 2)) {
+            if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+            buffers.stderr.items.len = 0;
+        }
+    }
     state_delta.setLastStatus(result.status);
     assertCommandDeltaCompatible(plan, state_delta);
     const decision = consequence.decideForSimpleCommand(shell_state.options, eval_context, plan, result.status, result.control_flow);
@@ -1370,6 +1444,17 @@ fn evaluateCompoundPlanWithInput(evaluator: *Evaluator, shell_state: *state.Shel
     if (!compoundBodySuppressesFinalErrexit(plan.body)) {
         const decision = consequence.decideForCompoundCommand(working_state.options, eval_context, result.status, result.control_flow);
         result.control_flow = decision.control_flow;
+    }
+
+    if (applied_redirections != null) {
+        if (redirectionTargetsDescriptor(plan.redirections, 1)) {
+            if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+            buffers.stdout.items.len = 0;
+        }
+        if (redirectionTargetsDescriptor(plan.redirections, 2)) {
+            if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+            buffers.stderr.items.len = 0;
+        }
     }
 
     return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, result.status, state_delta, result.control_flow, &buffers);
@@ -2488,13 +2573,16 @@ fn evaluateTrapActionBodyPayload(evaluator: *Evaluator, shell_state: *state.Shel
     };
 }
 
-fn trapActionFailureOutcome(allocator: std.mem.Allocator, eval_context: context.EvalContext, failure: TrapActionFailure) EvalError!outcome.CommandOutcome {
+pub fn trapActionFailureOutcome(allocator: std.mem.Allocator, eval_context: context.EvalContext, failure: TrapActionFailure) EvalError!outcome.CommandOutcome {
     eval_context.validate();
     failure.validate();
     var state_delta = delta.StateDelta.init(allocator, eval_context.target);
     errdefer state_delta.deinit();
     state_delta.setLastStatus(failure.status);
-    var command_outcome = outcome.CommandOutcome.init(allocator, failure.status, state_delta);
+    const control_flow: outcome.ControlFlow = switch (failure.kind) {
+        .parse_error, .lowering_error, .expansion_error, .unsupported_shape => .normal,
+    };
+    var command_outcome = outcome.CommandOutcome.withControlFlow(allocator, failure.status, state_delta, control_flow);
     errdefer command_outcome.deinit();
     try command_outcome.addDiagnostic(failure.message);
     try command_outcome.appendStderr(failure.message);
@@ -2795,7 +2883,10 @@ fn evaluateLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_cont
     var result = normalEvaluation(0);
 
     while (true) {
-        const condition = try evaluateStatementList(evaluator, shell_state, loop_context.ignoreErrexit(), loop.condition, buffers);
+        const condition = if (loop.condition_source) |source|
+            try evaluateStatementListSource(evaluator, shell_state, loop_context.ignoreErrexit(), source, buffers)
+        else
+            try evaluateStatementList(evaluator, shell_state, loop_context.ignoreErrexit(), loop.condition, buffers);
         if (condition.control_flow != .normal) {
             switch (consumeLoopControl(condition.control_flow)) {
                 .stop => return normalEvaluation(0),
@@ -2811,7 +2902,10 @@ fn evaluateLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_cont
         };
         if (!should_run) return result;
 
-        const body = try evaluateStatementList(evaluator, shell_state, loop_context, loop.body, buffers);
+        const body = if (loop.body_source) |source|
+            try evaluateStatementListSource(evaluator, shell_state, loop_context, source, buffers)
+        else
+            try evaluateStatementList(evaluator, shell_state, loop_context, loop.body, buffers);
         switch (consumeLoopControl(body.control_flow)) {
             .stop => return normalEvaluation(0),
             .repeat => {
@@ -2874,12 +2968,44 @@ fn evaluateStatementListSource(evaluator: *Evaluator, shell_state: *state.ShellS
     }) orelse return error.Unimplemented;
     defer body.deinit();
 
-    var body_outcome = try evaluateTrapActionBody(evaluator, shell_state, eval_context, body);
+    switch (body) {
+        .compound => |plan| switch (plan.body) {
+            .sequence => |list| return evaluateStatementList(evaluator, shell_state, eval_context, list, buffers),
+            else => {},
+        },
+        .owned => |owned| switch (owned.body) {
+            .compound => |plan| switch (plan.body) {
+                .sequence => |list| return evaluateStatementList(evaluator, shell_state, eval_context, list, buffers),
+                else => {},
+            },
+            .simple, .pipeline, .failure => {},
+        },
+        .simple, .pipeline, .failure => {},
+    }
+
+    var body_outcome = try evaluateTrapActionBodyWithInput(evaluator, shell_state, eval_context, body, buffers.stdin);
     defer body_outcome.deinit();
 
     try appendOutcomeBuffers(buffers, body_outcome);
     try applyOutcomeToWorkingState(shell_state, &body_outcome, body_outcome.state_delta.target);
     return .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
+}
+
+fn evaluateTrapActionBodyWithInput(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, body: TrapActionBody, input: *EvaluationInput) EvalError!outcome.CommandOutcome {
+    body.validate();
+    input.validate();
+    return switch (body) {
+        .simple => |plan| evaluatePlanWithInput(evaluator, shell_state, eval_context.withTarget(plan.target), plan, input),
+        .compound => |plan| evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context.withTarget(plan.target), plan, input),
+        .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+        .owned => |owned| switch (owned.body) {
+            .simple => |plan| evaluatePlanWithInput(evaluator, shell_state, eval_context.withTarget(plan.target), plan, input),
+            .compound => |plan| evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context.withTarget(plan.target), plan, input),
+            .pipeline => |plan| evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+            .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+        },
+        .failure => |failure| trapActionFailureOutcome(evaluator.allocator, eval_context, failure),
+    };
 }
 
 fn evaluateCaseClause(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, case_plan: command_plan.CasePlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
@@ -3290,6 +3416,26 @@ fn evaluateExternal(evaluator: *Evaluator, shell_state: state.ShellState, plan: 
     const argv = try externalArgv(evaluator.allocator, plan, resolution);
     defer evaluator.allocator.free(argv);
 
+    if (!hasRedirections(plan) and (evaluator.external_stdio == .capture or evaluator.external_stdio == .capture_stdout)) {
+        var run_result = process_port.run(.{
+            .allocator = evaluator.allocator,
+            .argv = argv,
+            .environment = &environment,
+        }) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => |run_err| {
+                const failure = runFailure(run_err);
+                try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+                return failure.status;
+            },
+        };
+        defer run_result.deinit();
+
+        try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
+        if (evaluator.external_stdio == .capture) try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
+        return normalizeWaitStatus(run_result.status);
+    }
+
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
     defer if (applied_redirections) |*applied| {
         applied.restore();
@@ -3403,6 +3549,34 @@ fn evaluateNotFound(not_found: command_plan.NotFound, buffers: *EvaluationBuffer
 fn hasRedirections(plan: command_plan.CommandPlan) bool {
     plan.redirections.validate();
     return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
+}
+
+fn semanticHereDocInput(plan: redirection_plan.RedirectionPlan) ?[]const u8 {
+    plan.validate();
+    if (plan.steps.len != 1) return null;
+    const step = plan.steps[0];
+    return switch (step.effect) {
+        .here_doc => |here_doc| if (here_doc.target == 0) here_doc.data.bytes else null,
+        .open_path, .duplicate, .close => null,
+    };
+}
+
+fn redirectionTargetsDescriptor(plan: redirection_plan.RedirectionPlan, descriptor: runtime.fd.Descriptor) bool {
+    plan.validate();
+    runtime.fd.assertValidDescriptor(descriptor);
+    for (plan.steps) |step| if (step.target() == descriptor) return true;
+    return false;
+}
+
+fn writeAllDescriptor(descriptor: runtime.fd.Descriptor, bytes: []const u8) bool {
+    runtime.fd.assertValidDescriptor(descriptor);
+    var index: usize = 0;
+    while (index < bytes.len) {
+        const written = std.c.write(descriptor, bytes[index..].ptr, bytes.len - index);
+        if (written <= 0) return false;
+        index += @intCast(written);
+    }
+    return true;
 }
 
 fn casePatternMatches(pattern: []const u8, text: []const u8) bool {
@@ -3656,7 +3830,13 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, "return")) return evaluateReturn(shell_state, eval_context, plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "echo")) return normalEvaluation(try evaluateEcho(evaluator.allocator, plan.argv, &buffers.stdout));
     if (std.mem.eql(u8, definition.name, "printf")) return normalEvaluation(try evaluatePrintf(evaluator.allocator, plan.argv, &buffers.stdout, &buffers.stderr));
+    if (std.mem.eql(u8, definition.name, "env")) return normalEvaluation(try evaluateEnv(evaluator.allocator, shell_state, plan, &buffers.stdout, buffers));
+    if (std.mem.eql(u8, definition.name, "pwd")) return normalEvaluation(try evaluatePwd(evaluator, shell_state, plan.argv, &buffers.stdout, buffers));
+    if (std.mem.eql(u8, definition.name, "prompt")) return normalEvaluation(try evaluatePrompt(plan.argv, buffers));
+    if (std.mem.eql(u8, definition.name, "command")) return normalEvaluation(try evaluateCommandBuiltin(plan.argv, &buffers.stdout, buffers));
     if (std.mem.eql(u8, definition.name, "test") or std.mem.eql(u8, definition.name, "[")) return normalEvaluation(evaluateTestBuiltin(evaluator.fs_port, evaluator.fd_port, plan.argv));
+    if (std.mem.eql(u8, definition.name, "eval")) return evaluateEval(evaluator, shell_state, eval_context, plan.argv, state_delta, buffers);
+    if (std.mem.eql(u8, definition.name, ".")) return evaluateDot(evaluator, shell_state, eval_context, plan.argv, state_delta, buffers);
     if (std.mem.eql(u8, definition.name, "export")) return normalEvaluation(try evaluateExport(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "readonly")) return normalEvaluation(try evaluateReadonly(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "unset")) return normalEvaluation(try evaluateUnset(shell_state, plan.argv, state_delta, buffers));
@@ -3666,7 +3846,8 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, "unalias")) return normalEvaluation(try evaluateUnalias(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "trap")) return normalEvaluation(try evaluateTrap(evaluator.allocator, shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "local")) return normalEvaluation(try evaluateLocal(evaluator, shell_state, eval_context, plan, state_delta, buffers));
-    if (std.mem.eql(u8, definition.name, "read")) return normalEvaluation(try evaluateRead(shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "read")) return normalEvaluation(try evaluateRead(evaluator, shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "cd")) return normalEvaluation(try evaluateCd(evaluator, shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "jobs")) return normalEvaluation(try evaluateJobs(evaluator, shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "bg")) return normalEvaluation(try evaluateBg(evaluator, shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "fg")) return normalEvaluation(try evaluateFg(evaluator, shell_state, plan.argv, state_delta, buffers));
@@ -3685,6 +3866,133 @@ fn evaluateReturn(shell_state: state.ShellState, eval_context: context.EvalConte
     } else shell_state.last_status;
     const scope: outcome.ReturnScope = if (eval_context.canReturnFromFunction()) .function else .sourced_script;
     return .{ .status = status, .control_flow = .{ .return_from_scope = .{ .scope = scope, .status = status } } };
+}
+
+fn evaluateEval(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !SimpleEvalResult {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "eval"));
+
+    var source: std.ArrayList(u8) = .empty;
+    defer source.deinit(evaluator.allocator);
+    for (argv[1..], 0..) |arg, index| {
+        if (index != 0) try source.append(evaluator.allocator, ' ');
+        try source.appendSlice(evaluator.allocator, arg);
+    }
+    if (source.items.len == 0) return normalEvaluation(0);
+
+    return evaluateSourcedText(evaluator, shell_state, eval_context, source.items, state_delta, buffers);
+}
+
+fn evaluateDot(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !SimpleEvalResult {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "."));
+    if (argv.len < 2) return normalEvaluation(try builtinStatusError(buffers, 2, ".", "missing file operand"));
+    if (argv.len > 2) return normalEvaluation(try builtinStatusError(buffers, 2, ".", "arguments are not implemented yet"));
+
+    const io = evaluator.io orelse return error.Unimplemented;
+    const source = std.Io.Dir.cwd().readFileAlloc(io, argv[1], evaluator.allocator, .unlimited) catch return normalEvaluation(try builtinStatusError(buffers, 1, ".", "file not found"));
+    defer evaluator.allocator.free(source);
+
+    return evaluateSourcedText(evaluator, shell_state, eval_context.enterSource(), source, state_delta, buffers);
+}
+
+fn evaluateSourcedText(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, source: []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !SimpleEvalResult {
+    var working_state = shell_state.clone(evaluator.allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    defer working_state.deinit();
+
+    const result = try evaluateStatementListSource(evaluator, &working_state, eval_context, source, buffers);
+    try appendShellStateDiff(shell_state, working_state, state_delta);
+    return result;
+}
+
+fn evaluateEnv(allocator: std.mem.Allocator, shell_state: state.ShellState, plan: command_plan.CommandPlan, stdout: *std.ArrayList(u8), buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, plan.argv[0], "env"));
+
+    if (plan.argv.len != 1) return builtinUsageError(buffers, "env", "arguments are not supported by semantic env");
+
+    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(allocator);
+    defer temporary_environment.deinit();
+    if (plan.assignmentEffect() == .temporary) {
+        temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
+            error.ReadonlyVariable => unreachable,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    }
+
+    var environment = try buildExternalEnvironment(allocator, shell_state, temporary_environment);
+    defer environment.deinit();
+    var iterator = environment.iterator();
+    while (iterator.next()) |entry| try stdout.print(allocator, "{s}={s}\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+    return 0;
+}
+
+fn evaluatePwd(evaluator: *Evaluator, shell_state: state.ShellState, argv: []const []const u8, stdout: *std.ArrayList(u8), buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "pwd"));
+
+    var physical = false;
+    if (argv.len > 2) return builtinUsageError(buffers, "pwd", "too many arguments");
+    if (argv.len == 2) {
+        if (std.mem.eql(u8, argv[1], "-L")) {
+            physical = false;
+        } else if (std.mem.eql(u8, argv[1], "-P")) {
+            physical = true;
+        } else {
+            return builtinUsageError(buffers, "pwd", "unsupported option");
+        }
+    }
+
+    if (!physical and shell_state.logical_cwd.len != 0) {
+        try stdout.print(evaluator.allocator, "{s}\n", .{shell_state.logical_cwd});
+        return 0;
+    }
+
+    const fs_port = evaluator.fs_port orelse return error.Unimplemented;
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const cwd = fs_port.getCwd(runtime.fs.GetCwdRequest.init(&buffer)) catch |err| switch (err) {
+        else => return builtinStatusError(buffers, 1, "pwd", "could not get current directory"),
+    };
+    try stdout.print(evaluator.allocator, "{s}\n", .{cwd.path});
+    return 0;
+}
+
+fn evaluateCd(evaluator: *Evaluator, shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "cd"));
+    if (argv.len != 2) return builtinUsageError(buffers, "cd", "expected one directory");
+    const fs_port = evaluator.fs_port orelse return error.Unimplemented;
+    const old_pwd = if (shell_state.logical_cwd.len != 0) shell_state.logical_cwd else if (shell_state.getVariable("PWD")) |pwd| pwd.value else "";
+    fs_port.changeCwd(runtime.fs.ChangeCwdRequest.init(argv[1])) catch return builtinStatusError(buffers, 1, "cd", "could not change directory");
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const cwd = fs_port.getCwd(runtime.fs.GetCwdRequest.init(&buffer)) catch return builtinStatusError(buffers, 1, "cd", "could not get current directory");
+    if (old_pwd.len != 0) try state_delta.assignVariable("OLDPWD", old_pwd, .{ .exported = true });
+    try state_delta.assignVariable("PWD", cwd.path, .{ .exported = true });
+    try state_delta.setLogicalCwd(cwd.path);
+    return 0;
+}
+
+fn evaluatePrompt(argv: []const []const u8, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "prompt"));
+    if (argv.len >= 2 and std.mem.eql(u8, argv[1], "repaint")) return 0;
+    return builtinStatusError(buffers, 2, "prompt", "not rendering a prompt");
+}
+
+fn evaluateCommandBuiltin(argv: []const []const u8, stdout: *std.ArrayList(u8), buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "command"));
+    if (argv.len == 3 and std.mem.eql(u8, argv[1], "-v")) {
+        if (builtin.lookup(argv[2]) != null) {
+            try stdout.print(buffers.allocator, "{s}\n", .{argv[2]});
+            return 0;
+        }
+        return 1;
+    }
+    return builtinUsageError(buffers, "command", "unsupported arguments");
 }
 
 const LoopControlKind = enum { break_loop, continue_loop };
@@ -3942,7 +4250,7 @@ fn evaluateShift(shell_state: state.ShellState, argv: []const []const u8, state_
     return 0;
 }
 
-fn evaluateRead(shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+fn evaluateRead(evaluator: *Evaluator, shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "read"));
 
@@ -3956,9 +4264,34 @@ fn evaluateRead(shell_state: state.ShellState, argv: []const []const u8, state_d
         if (shell_state.isVariableReadonly(name)) return builtinUsageError(buffers, "read", "readonly variable");
     }
 
-    const line = buffers.stdin.readLine() orelse return 1;
+    const buffered_line = buffers.stdin.readLine();
+    const fd_line = if (buffered_line == null and evaluator.read_stdin_from_fd) try readLineFromStdinFd(evaluator.allocator) else null;
+    defer if (fd_line) |line| evaluator.allocator.free(line);
+    const line = buffered_line orelse fd_line orelse return 1;
     try assignReadFields(line, argv[name_index..], state_delta);
     return 0;
+}
+
+fn readLineFromStdinFd(allocator: std.mem.Allocator) !?[]const u8 {
+    var line: std.ArrayList(u8) = .empty;
+    errdefer line.deinit(allocator);
+
+    var byte: [1]u8 = undefined;
+    while (true) {
+        const read_count = std.posix.read(std.Io.File.stdin().handle, &byte) catch |err| switch (err) {
+            error.WouldBlock => break,
+            else => break,
+        };
+        if (read_count == 0) break;
+        if (byte[0] == '\n') return try line.toOwnedSlice(allocator);
+        try line.append(allocator, byte[0]);
+    }
+
+    if (line.items.len == 0) {
+        line.deinit(allocator);
+        return null;
+    }
+    return try line.toOwnedSlice(allocator);
 }
 
 fn assignReadFields(line: []const u8, names: []const []const u8, state_delta: *delta.StateDelta) !void {
