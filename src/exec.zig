@@ -4996,7 +4996,7 @@ pub const Executor = struct {
         errdefer self.allocator.free(owned_action);
 
         const signal = signalFromTrapName(name);
-        const installed_signal = if (signal) |value| try self.ensureTrapSignalInstalled(value) else false;
+        const installed_signal = if (signal) |value| try self.ensureTrapSignalInstalled(value, action) else false;
         errdefer if (installed_signal) self.restoreTrapSignal(signal.?);
 
         const result = try self.traps.getOrPut(self.allocator, owned_name);
@@ -5022,9 +5022,12 @@ pub const Executor = struct {
         return self.ignored_trap_signals_at_entry & signalBit(signal) != 0;
     }
 
-    fn ensureTrapSignalInstalled(self: *Executor, signal: std.posix.SIG) !bool {
-        if (self.trapSignalActionIndex(signal) != null) return false;
-        const previous = installTrapSignal(signal);
+    fn ensureTrapSignalInstalled(self: *Executor, signal: std.posix.SIG, action: []const u8) !bool {
+        if (self.trapSignalActionIndex(signal) != null) {
+            _ = installTrapSignal(signal, action);
+            return false;
+        }
+        const previous = installTrapSignal(signal, action);
         errdefer std.posix.sigaction(signal, &previous, null);
         try self.trap_signal_actions.append(self.allocator, .{ .signal = signal, .previous = previous });
         return true;
@@ -10606,9 +10609,9 @@ fn expectTestTermSignalHandlerInstalled() !void {
     try std.testing.expect(current.handler.handler.? == testTermSignalHandler);
 }
 
-fn installTrapSignal(signal: std.posix.SIG) std.posix.Sigaction {
+fn installTrapSignal(signal: std.posix.SIG, trap_action: []const u8) std.posix.Sigaction {
     const action: std.posix.Sigaction = .{
-        .handler = .{ .handler = trapSignalHandler },
+        .handler = .{ .handler = if (trap_action.len == 0) std.posix.SIG.IGN else trapSignalHandler },
         .mask = std.posix.sigemptyset(),
         .flags = 0,
     };
@@ -10671,9 +10674,16 @@ fn ignoreSignal(signal: std.posix.SIG) SignalActionGuard {
 }
 
 pub fn resetInteractiveJobSignalHandlers() void {
-    defaultSignal(.INT);
-    defaultSignal(.QUIT);
-    defaultSignal(.TERM);
+    defaultSignalUnlessIgnored(.INT);
+    defaultSignalUnlessIgnored(.QUIT);
+    defaultSignalUnlessIgnored(.TERM);
+}
+
+fn defaultSignalUnlessIgnored(signal: std.posix.SIG) void {
+    var current: std.posix.Sigaction = undefined;
+    std.posix.sigaction(signal, null, &current);
+    if (current.handler.handler == std.posix.SIG.IGN) return;
+    defaultSignal(signal);
 }
 
 fn defaultSignal(signal: std.posix.SIG) void {
@@ -19218,6 +19228,43 @@ test "executor implements trap builtin baseline" {
     try std.testing.expectEqualStrings("trap -- '-p' TERM\n", print_action_result.stdout);
 }
 
+test "executor inherits ignored trap disposition in external commands" {
+    var external = try parseAndLower(std.testing.allocator, "trap \"\" TERM; /bin/sh -c 'kill -TERM $$; echo child_survived'; echo rc=$?");
+    defer external.parsed.deinit();
+    defer external.program.deinit();
+
+    var external_executor = Executor.init(std.testing.allocator);
+    defer external_executor.deinit();
+    var external_result = try external_executor.executeProgram(external.program, .{ .io = std.testing.io, .allow_external = true });
+    defer external_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), external_result.status);
+    try std.testing.expectEqualStrings("child_survived\nrc=0\n", external_result.stdout);
+
+    var pipeline = try parseAndLower(std.testing.allocator, "trap \"\" TERM; /bin/sh -c 'kill -TERM $$; echo pipeline_child_survived' | /bin/cat");
+    defer pipeline.parsed.deinit();
+    defer pipeline.program.deinit();
+
+    var pipeline_executor = Executor.init(std.testing.allocator);
+    defer pipeline_executor.deinit();
+    var pipeline_result = try pipeline_executor.executeProgram(pipeline.program, .{ .io = std.testing.io, .allow_external = true });
+    defer pipeline_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), pipeline_result.status);
+    try std.testing.expectEqualStrings("pipeline_child_survived\n", pipeline_result.stdout);
+
+    const async_path = "rush-trap-ignore-async.tmp";
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, async_path) catch {};
+    var async_external = try parseAndLower(std.testing.allocator, "trap \"\" TERM; /bin/sh -c 'kill -TERM $$; echo async_child_survived > rush-trap-ignore-async.tmp' & wait $!; echo rc=$?; /bin/cat rush-trap-ignore-async.tmp");
+    defer async_external.parsed.deinit();
+    defer async_external.program.deinit();
+
+    var async_executor = Executor.init(std.testing.allocator);
+    defer async_executor.deinit();
+    var async_result = try async_executor.executeProgram(async_external.program, .{ .io = std.testing.io, .allow_external = true });
+    defer async_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), async_result.status);
+    try std.testing.expectEqualStrings("rc=0\nasync_child_survived\n", async_result.stdout);
+}
+
 test "executor ignores non-interactive traps for signals ignored at shell entry" {
     pending_trap_signal.store(0, .seq_cst);
     defer pending_trap_signal.store(0, .seq_cst);
@@ -19384,6 +19431,12 @@ test "interactive job signal reset restores default dispositions" {
     try expectDefaultSignalHandler(current);
     std.posix.sigaction(.TERM, null, &current);
     try expectDefaultSignalHandler(current);
+
+    var ignored_term = ignoreSignal(.TERM);
+    defer ignored_term.restore();
+    resetInteractiveJobSignalHandlers();
+    std.posix.sigaction(.TERM, null, &current);
+    try std.testing.expect(current.handler.handler == std.posix.SIG.IGN);
 }
 
 fn expectDefaultSignalHandler(action: std.posix.Sigaction) !void {
