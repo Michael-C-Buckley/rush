@@ -7091,14 +7091,13 @@ fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_sh
             },
             .unsupported => |message| {
                 semantic_execution = undefined;
-                allocator.free(message);
+                defer allocator.free(message);
+                return unsupportedSemanticCommandResult(allocator, message);
             },
         }
     }
 
-    const result = try runScriptWithExecutor(allocator, &interactive_shell.executor, script, options);
-    try interactive_shell.syncSemanticFromExecutor(io);
-    return result;
+    return unsupportedSemanticCommandResult(allocator, "semantic interactive executor is disabled while legacy interactive services are active");
 }
 
 fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !SemanticInvocationExecution {
@@ -10875,16 +10874,16 @@ test "runReplInput executes lines and tracks status" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
-test "runReplInput stops when exit builtin requests shell exit" {
-    var result = try runReplInput(std.testing.allocator, std.testing.io, "echo before\nexit 7\necho after\n");
+test "runReplInput reports unsupported exit builtin without legacy fallback" {
+    var result = try runReplInput(std.testing.allocator, std.testing.io, "echo before\nexit 7\n");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(shell.ExitStatus, 7), result.status);
-    try std.testing.expectEqualStrings("$ before\n$ ", result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("$ before\n$ $ ", result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
 }
 
-test "runReplInput wires fc to interactive history without recording fc itself" {
+test "runReplInput reports unsupported fc history bridge without legacy fallback" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\printf 'one\n'
         \\printf 'two\n'
@@ -10896,9 +10895,9 @@ test "runReplInput wires fc to interactive history without recording fc itself" 
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("$ one\n$ two\n$ printf 'one\\n'\nprintf 'two\\n'\n$ again\n$ printf 'one\\n'\nprintf 'two\\n'\nprintf 'again\\n'\n$ ", result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "$ one\n$ two\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
 }
 
 test "interactive notify schedules editor job notification polling" {
@@ -11665,7 +11664,7 @@ test "interactive config service sources simple config through semantic ShellSta
     try std.testing.expectEqualStrings("loaded", interactive_shell.executor.getEnv("RUSH_SEMANTIC_CONFIG").?);
 }
 
-test "semantic interactive command falls back for function-shadowed builtins" {
+test "semantic interactive command reports function-shadowed builtin unsupported" {
     const path = "rush-semantic-interactive-function-fallback.tmp";
     std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
@@ -11683,15 +11682,12 @@ test "semantic interactive command falls back for function-shadowed builtins" {
 
     var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo semantic", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer result.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("", result.stderr);
-
-    const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
-    defer std.testing.allocator.free(output);
-    try std.testing.expectEqualStrings("function\n", output);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("semantic interactive executor does not yet preserve shell function calls\n", result.stderr);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, path, .{}));
 }
 
-test "semantic interactive unset function stays on legacy state bridge" {
+test "semantic interactive unset function reports unsupported without legacy bridge" {
     var interactive_shell = InteractiveShell.init(std.testing.allocator);
     defer interactive_shell.deinit();
     const executor = &interactive_shell.executor;
@@ -11706,9 +11702,9 @@ test "semantic interactive unset function stays on legacy state bridge" {
 
     var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "unset -f rush_semantic_unset_fn", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer result.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("", result.stderr);
-    try std.testing.expect(!executor.functions.contains("rush_semantic_unset_fn"));
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
+    try std.testing.expectEqualStrings("semantic executor preflight found an unsupported builtin\n", result.stderr);
+    try std.testing.expect(executor.functions.contains("rush_semantic_unset_fn"));
 }
 
 test "semantic interactive invocation executes simple command redirections without legacy fallback" {
@@ -12405,7 +12401,7 @@ test "executor smoke corpus returns expected statuses and output fragments" {
     }
 }
 
-test "aliases do not replace reserved words or function definition names" {
+test "interactive aliases report unsupported without legacy fallback" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\alias if='echo bad'
         \\if true; then echo ok; fi
@@ -12417,13 +12413,12 @@ test "aliases do not replace reserved words or function definition names" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "ok\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "function\n") != null);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "bad\n") == null);
 }
 
-test "repl expands aliases defined on previous input lines" {
+test "repl reports alias builtins unsupported without legacy fallback" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\alias lsx='echo alias-ok'
         \\lsx
@@ -12435,11 +12430,12 @@ test "repl expands aliases defined on previous input lines" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
-    try std.testing.expectEqualStrings("$ $ alias-ok\n$ lsx='echo alias-ok'\n$ $ $ ", result.stdout);
-    try std.testing.expectEqualStrings("lsx: command not found\n", result.stderr);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "alias-ok\n") == null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "lsx: command not found\n") != null);
 }
 
-test "aliases recursively expand and trailing blanks keep command position" {
+test "recursive interactive aliases report unsupported without legacy fallback" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\alias say='echo recursive-ok'
         \\alias run=say
@@ -12454,9 +12450,10 @@ test "aliases recursively expand and trailing blanks keep command position" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok recursive-trailing-ok\n") != null);
-    try std.testing.expectEqualStrings("self: command not found\n", result.stderr);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok\n") == null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok recursive-trailing-ok\n") == null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unsupported") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "self: command not found\n") != null);
 }
 
 test "non-interactive aliases affect later complete commands" {
@@ -12648,7 +12645,7 @@ test "interactive color reports define rgb theme variables" {
     try std.testing.expectEqualStrings("#abcdef", executor.getEnv("rush_color_foreground").?);
 }
 
-test "repl uses rush_prompt function to build prompt text" {
+test "repl reports rush_prompt function definition unsupported without legacy fallback" {
     var result = try runReplInput(std.testing.allocator, std.testing.io,
         \\rush_prompt() { prompt segment --fg blue custom; prompt text ' > '; }
         \\echo ok
@@ -12657,7 +12654,8 @@ test "repl uses rush_prompt function to build prompt text" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
-    try std.testing.expectEqualStrings("$ \x1b[38;5;4mcustom\x1b[0m > ok\n\x1b[38;5;4mcustom\x1b[0m > ", result.stdout);
+    try std.testing.expectEqualStrings("$ $ ok\n$ ", result.stdout);
+    try std.testing.expectEqualStrings("semantic interactive executor does not yet preserve function definitions\n", result.stderr);
 }
 
 test "repl uses literal PS1 fallback prompt" {
