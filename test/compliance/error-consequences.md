@@ -58,7 +58,7 @@ This submatrix tracks Rush behavior for POSIX shell errors separately from norma
 | manifest row | status | risk | coverage | notes |
 | --- | --- | --- | --- | --- |
 | `errors-command-not-found` | supported | medium | POSIX and differential corpus | simple not-found and unknown wait pid behavior are covered |
-| `errors-syntax` | supported | high | POSIX corpus and negative corpus | strict POSIX mode has compound command, grouping, quote/substitution, redirection target, here-doc, reserved-word, status-2, and non-execution consequence coverage; recovery parser remains intentionally permissive for tooling |
+| `errors-syntax` | supported | high | POSIX corpus and negative corpus | strict POSIX mode has compound command, grouping, quote/substitution, redirection target, reserved-word, status-2, and non-execution consequence coverage; recovery parser remains intentionally permissive for tooling |
 | `errors-expansion` | supported | high | nounset, `${parameter:?word}`, malformed braced parameter substitutions, arithmetic including invalid variable values, redirection-target, assignment-word, for-list, case subject/pattern, command-substitution, and interactive unit coverage | expansion failures exit non-interactive execution in current-shell contexts; failures inside command-substitution subshells exit only that subshell and propagate diagnostics/status; interactive execution aborts the current command without setting shell exit |
 | `errors-special-builtin` | supported | high | assignment persistence plus negative coverage for redirection, expansion, and utility-specific failures | all 15 POSIX special builtins have audited non-interactive shell-exit consequences for invalid options or operands where applicable and utility-semantic failures |
 | `errors-nounset` | supported | high | POSIX and negative corpus | unset parameter failures stop non-interactive execution, with default-operator and disable behavior covered separately |
@@ -73,7 +73,7 @@ The former manifest row `redirection-error-consequences` had no distinct scope a
 
 ### Syntax errors
 
-Current coverage includes a missing pipeline command, malformed case items, malformed if/for/while/until/function constructs including invalid for loop variables, missing grouping terminators, unterminated quote/substitution forms, missing redirection targets, here-doc delimiter diagnostics, and strict-mode reserved-word placement. The `strict-syntax-stops-execution` POSIX corpus case verifies that strict POSIX syntax errors return status 2 and prevent non-interactive execution of both earlier and later commands in the submitted script. Some parser diagnostics are intentionally recovery-oriented outside strict mode.
+Current coverage includes a missing pipeline command, malformed case items, malformed if/for/while/until/function constructs including invalid for loop variables, missing grouping terminators, unterminated quote/substitution forms, missing redirection targets, and strict-mode reserved-word placement. The `strict-syntax-stops-execution` POSIX corpus case verifies that strict POSIX syntax errors return status 2 and prevent non-interactive execution of both earlier and later commands in the submitted script. Some parser diagnostics are intentionally recovery-oriented outside strict mode.
 
 ### Expansion errors
 
@@ -81,7 +81,7 @@ Current coverage includes nounset and `${parameter:?word}` with diagnostic word 
 
 ### Redirection errors
 
-Current coverage includes bad input/output fd duplication, noclobber, missing input redirection targets, directory output failures, missing redirection operands, `<>` open failures, compound and function redirection consequences, pipeline status propagation, AND-OR/negation/`$?`, `errexit` interactions, here-doc delimiter diagnostics, and here-doc fd materialization failures. Redirected output write failures after successful setup/open are covered by unit tests using a shell-visible fd duplicated from a broken pipe, plus a Linux-gated `/dev/full` negative corpus case for actual file target failures. Rush status values intentionally track POSIX's non-zero requirement rather than dash's exact status 2 convention for many redirection errors.
+Current coverage includes bad input/output fd duplication, noclobber, missing input redirection targets, directory output failures, missing redirection operands, `<>` open failures, compound and function redirection consequences, pipeline status propagation, AND-OR/negation/`$?`, `errexit` interactions, and here-doc fd materialization failures. Redirected output write failures after successful setup/open are covered by unit tests using a shell-visible fd duplicated from a broken pipe, plus a Linux-gated `/dev/full` negative corpus case for actual file target failures. Rush status values intentionally track POSIX's non-zero requirement rather than dash's exact status 2 convention for many redirection errors.
 
 ### Special builtin failures
 

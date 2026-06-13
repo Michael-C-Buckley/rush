@@ -1594,7 +1594,6 @@ fn defaultHighlightKind(kind: TokenKind) HighlightKind {
 }
 
 pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOptions) !ParseResult {
-    _ = options.mode;
     _ = options.cursor;
 
     var masked_ranges: std.ArrayList(Span) = .empty;
@@ -1611,6 +1610,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, options: ParseOpt
             .allocator = allocator,
             .source = source,
             .tokens = lex_result.tokens,
+            .mode = options.mode,
             .features = options.features,
         };
         errdefer parser.deinit();
@@ -2018,6 +2018,7 @@ const SyntaxParser = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
     tokens: []const Token,
+    mode: ParseMode,
     features: compat.Features = .{},
     index: usize = 0,
     nodes: std.ArrayList(Node) = .empty,
@@ -3087,7 +3088,7 @@ const SyntaxParser = struct {
             const child_start = self.children.items.len;
             const body_node = try self.addNode(.here_doc_body, body.span, token_start, token_end, child_start, child_start);
             try children_out.append(self.allocator, .{ .node = body_node });
-            if (!body.found_delimiter) {
+            if (!body.found_delimiter and self.mode == .interactive) {
                 self.incomplete = true;
                 try self.diagnostics.append(self.allocator, .{
                     .kind = .incomplete_input,
@@ -4913,9 +4914,18 @@ test "lexer tokenizes operators and redirections with max munch" {
             .{ .kind = .eof, .span = .empty(38) },
         },
         .nodes = &.{.{ .kind = .root, .span = .init(0, 38) }},
-        .diagnostics = &.{.{ .kind = .incomplete_input, .span = .empty(38), .message = "missing here-doc delimiter" }},
-        .incomplete = true,
     });
+}
+
+test "interactive parser keeps unterminated here-docs incomplete" {
+    var result = try parse(std.testing.allocator, "cat <<EOF", .{ .mode = .interactive });
+    defer result.deinit();
+
+    try std.testing.expect(result.incomplete);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqual(DiagnosticKind.incomplete_input, result.diagnostics[0].kind);
+    try expectSpan(.empty(9), result.diagnostics[0].span);
+    try std.testing.expectEqualStrings("missing here-doc delimiter", result.diagnostics[0].message);
 }
 
 test "parser represents here-doc bodies as CST nodes" {
@@ -4935,6 +4945,27 @@ test "parser represents here-doc bodies as CST nodes" {
         if (node.kind == .simple_command) command_count += 1;
     }
     try std.testing.expectEqual(@as(usize, 2), command_count);
+}
+
+test "parser treats EOF as unterminated here-doc delimiter in complete input" {
+    const source = "cat <<EOF\nbody\nEOF \necho after";
+    var result = try parse(std.testing.allocator, source, .{});
+    defer result.deinit();
+
+    try std.testing.expect(!result.incomplete);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    var found_body = false;
+    for (result.nodes) |node| {
+        if (node.kind != .here_doc_body) continue;
+        found_body = true;
+        try expectSpan(.init(10, source.len), node.span);
+    }
+    try std.testing.expect(found_body);
+    var command_count: usize = 0;
+    for (result.nodes) |node| {
+        if (node.kind == .simple_command) command_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 1), command_count);
 }
 
 test "parser orders multiple here-doc bodies on a command line" {

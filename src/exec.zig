@@ -23374,16 +23374,15 @@ test "executor supports here-doc stdin redirections" {
     try std.testing.expectEqualStrings("second body\n", multiple_result.stdout);
 
     var pipeline_multiple = try parseAndLower(std.testing.allocator,
-        \\read x <<LEFT | read y <<RIGHT
+        \\read x <<LEFT | /bin/cat <<RIGHT
         \\left body
         \\LEFT
         \\right body
         \\RIGHT
-        \\echo "$y"
     );
     defer pipeline_multiple.parsed.deinit();
     defer pipeline_multiple.program.deinit();
-    var pipeline_multiple_result = try executor.executeProgram(pipeline_multiple.program, .{ .io = std.testing.io });
+    var pipeline_multiple_result = try executor.executeProgram(pipeline_multiple.program, .{ .io = std.testing.io, .allow_external = true });
     defer pipeline_multiple_result.deinit();
     try std.testing.expectEqualStrings("right body\n", pipeline_multiple_result.stdout);
 
@@ -23411,6 +23410,23 @@ test "executor supports here-doc stdin redirections" {
     var quoted_result = try executor.executeProgram(quoted.program, .{ .io = std.testing.io });
     defer quoted_result.deinit();
     try std.testing.expectEqualStrings("$HD_VALUE $(echo command) $((1 + 2))\n", quoted_result.stdout);
+}
+
+test "executor treats EOF as the here-doc delimiter" {
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+
+    var trailing_space = try executor.executeScriptSlice("echo before\n/bin/cat <<EOF\nbody\nEOF \necho after\n", .{ .io = std.testing.io, .allow_external = true });
+    defer trailing_space.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), trailing_space.status);
+    try std.testing.expectEqualStrings("before\nbody\nEOF \necho after\n", trailing_space.stdout);
+    try std.testing.expectEqualStrings("", trailing_space.stderr);
+
+    var backslash_before_delimiter = try executor.executeScriptSlice("/bin/cat <<EOF\nline " ++ "\\" ++ "\nEOF\necho after\n", .{ .io = std.testing.io, .allow_external = true });
+    defer backslash_before_delimiter.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), backslash_before_delimiter.status);
+    try std.testing.expectEqualStrings("line EOF\necho after\n", backslash_before_delimiter.stdout);
+    try std.testing.expectEqualStrings("", backslash_before_delimiter.stderr);
 }
 
 test "executor cleans up pipelines when a stage command is missing" {

@@ -208,6 +208,8 @@ function-return-status	grammar	behavior	-
 here-doc-expanded	redirection	here-doc	-
 here-doc-quoted	redirection	here-doc	-
 heredoc-body-literal-quoting	redirection	here-doc	here-doc bodies keep quotes and non-special backslashes literal while expanding parameters and substitutions
+heredoc-eof-backslash-before-delimiter	redirection	here-doc	end of input terminates a here-doc when backslash-newline continuation absorbs the apparent delimiter
+heredoc-eof-terminator	redirection	here-doc	end of input terminates an otherwise unterminated here-doc body
 heredoc-positional-star-ifs	redirection	here-doc	$* in a here-doc body joins positional parameters with the first IFS character
 heredoc-delimiter-line-continuation	redirection	here-doc	a body line ending in backslash-newline joins the next line so it cannot be the delimiter
 heredoc-body-not-syntax	redirection	here-doc	-
