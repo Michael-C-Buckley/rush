@@ -5,11 +5,13 @@
 //! the behavioral reference while this path grows slice by slice.
 
 const std = @import("std");
+const assignment_runtime = @import("assignment.zig");
 const builtin = @import("builtin.zig");
 const command_plan = @import("command_plan.zig");
 const context = @import("context.zig");
 const delta = @import("delta.zig");
 const outcome = @import("outcome.zig");
+const redirection_plan = @import("redirection_plan.zig");
 const runtime = @import("../runtime.zig");
 const state = @import("state.zig");
 
@@ -23,6 +25,7 @@ pub const Evaluator = struct {
     allocator: std.mem.Allocator,
     fd_port: ?runtime.fd.Port = null,
     fs_port: ?runtime.fs.Port = null,
+    process_port: ?runtime.process.Port = null,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
         return .{ .allocator = allocator };
@@ -32,8 +35,16 @@ pub const Evaluator = struct {
         return .{ .allocator = allocator, .fd_port = fd_port };
     }
 
+    pub fn initWithExternalPorts(allocator: std.mem.Allocator, fd_port: runtime.fd.Port, process_port: runtime.process.Port) Evaluator {
+        return .{ .allocator = allocator, .fd_port = fd_port, .process_port = process_port };
+    }
+
     pub fn initWithFsPort(allocator: std.mem.Allocator, fs_port: runtime.fs.Port) Evaluator {
         return .{ .allocator = allocator, .fs_port = fs_port };
+    }
+
+    pub fn initWithRuntimePorts(allocator: std.mem.Allocator, ports: runtime.Ports) Evaluator {
+        return .{ .allocator = allocator, .fd_port = ports.fd, .fs_port = ports.fs, .process_port = ports.process };
     }
 };
 
@@ -72,7 +83,7 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
     plan.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target.allowsShellStateCommit()) std.debug.assert(shell_state.acceptsExecutionTarget(plan.target));
-    if (plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0) return error.Unimplemented;
+    if (hasRedirections(plan) and plan.class() != .external) return error.Unimplemented;
 
     if (delta.firstReadonlyAssignment(shell_state.*, plan.assignments)) |name| {
         var failure = try outcome.readonlyVariableFailure(evaluator.allocator, plan.target, name);
@@ -95,7 +106,7 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
 
     const status = try evaluateSimpleCommand(evaluator, shell_state.*, eval_context, plan, &state_delta, &buffers);
     state_delta.setLastStatus(status);
-    assertBuiltinDeltaCompatible(plan, state_delta);
+    assertCommandDeltaCompatible(plan, state_delta);
 
     var command_outcome = outcome.CommandOutcome.init(evaluator.allocator, status, state_delta);
     errdefer command_outcome.deinit();
@@ -113,8 +124,214 @@ fn evaluateSimpleCommand(evaluator: *Evaluator, shell_state: state.ShellState, e
         .assignment_only => 0,
         .special_builtin => |definition| evaluateBuiltin(evaluator, shell_state, eval_context, plan, definition, state_delta, buffers),
         .regular_builtin => |definition| evaluateBuiltin(evaluator, shell_state, eval_context, plan, definition, state_delta, buffers),
-        .function, .external, .not_found => error.Unimplemented,
+        .external => |resolution| evaluateExternal(evaluator, shell_state, plan, resolution, buffers),
+        .not_found => |not_found| evaluateNotFound(not_found, buffers),
+        .function => error.Unimplemented,
     };
+}
+
+fn evaluateExternal(evaluator: *Evaluator, shell_state: state.ShellState, plan: command_plan.CommandPlan, resolution: command_plan.ExternalResolution, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
+    resolution.validate();
+    std.debug.assert(plan.target == .child_process);
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, plan.argv[0], resolution.name));
+    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
+    const shell_state_before = shellStateMutationFingerprint(shell_state);
+    defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
+
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+
+    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(evaluator.allocator);
+    defer temporary_environment.deinit();
+    if (plan.assignmentEffect() == .temporary) {
+        temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
+            error.ReadonlyVariable => unreachable,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    }
+
+    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
+    defer environment.deinit();
+
+    const argv = try externalArgv(evaluator.allocator, plan, resolution);
+    defer evaluator.allocator.free(argv);
+
+    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (applied_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    if (hasRedirections(plan)) {
+        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        switch (apply_result) {
+            .applied => |applied| applied_redirections = applied,
+            .failure => |failure| {
+                try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                return 1;
+            },
+        }
+    }
+
+    var child = (process_port.spawn(.{
+        .argv = argv,
+        .environment = &environment,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => |spawn_err| {
+            const failure = spawnFailure(spawn_err);
+            try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+            return failure.status;
+        },
+    }).child;
+
+    if (applied_redirections) |*applied| applied.restore();
+
+    const wait_result = process_port.wait(.{ .child = &child }) catch |err| {
+        const failure = waitFailure(err);
+        try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+        return failure.status;
+    };
+    return normalizeWaitStatus(wait_result.status);
+}
+
+fn evaluateNotFound(not_found: command_plan.NotFound, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
+    std.debug.assert(not_found.name.len != 0);
+    try buffers.addBuiltinDiagnostic(not_found.name, "command not found");
+    return 127;
+}
+
+fn hasRedirections(plan: command_plan.CommandPlan) bool {
+    plan.redirections.validate();
+    return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
+}
+
+fn externalArgv(allocator: std.mem.Allocator, plan: command_plan.CommandPlan, resolution: command_plan.ExternalResolution) ![][]const u8 {
+    std.debug.assert(plan.argv.len != 0);
+    resolution.validate();
+
+    const argv = try allocator.alloc([]const u8, plan.argv.len);
+    errdefer allocator.free(argv);
+    argv[0] = resolution.path;
+    @memcpy(argv[1..], plan.argv[1..]);
+    assertExternalArgv(argv);
+    return argv;
+}
+
+fn buildExternalEnvironment(allocator: std.mem.Allocator, shell_state: state.ShellState, temporary_environment: assignment_runtime.TemporaryEnvironment) !std.process.Environ.Map {
+    var environment = std.process.Environ.Map.init(allocator);
+    errdefer environment.deinit();
+
+    var variables = shell_state.variables.iterator();
+    while (variables.next()) |entry| {
+        const name = entry.key_ptr.*;
+        const variable = entry.value_ptr.*;
+        if (!variable.exported) continue;
+        assertValidEnvironmentEntry(name, variable.value);
+        try environment.put(name, variable.value);
+    }
+
+    for (temporary_environment.variables.items) |variable| {
+        std.debug.assert(variable.exported);
+        assertValidEnvironmentEntry(variable.name, variable.value);
+        try environment.put(variable.name, variable.value);
+    }
+
+    assertValidEnvironmentMap(environment);
+    return environment;
+}
+
+fn assertExternalArgv(argv: []const []const u8) void {
+    std.debug.assert(argv.len != 0);
+    for (argv) |arg| std.debug.assert(arg.len != 0);
+}
+
+fn assertValidEnvironmentEntry(name: []const u8, value: []const u8) void {
+    state.assertValidVariableName(name);
+    std.debug.assert(std.mem.indexOfScalar(u8, name, '=') == null);
+    std.debug.assert(std.mem.indexOfScalar(u8, name, 0) == null);
+    std.debug.assert(std.mem.indexOfScalar(u8, value, 0) == null);
+}
+
+fn assertValidEnvironmentMap(environment: std.process.Environ.Map) void {
+    const keys = environment.keys();
+    const values = environment.values();
+    std.debug.assert(keys.len == values.len);
+    for (keys, values) |key, value| assertValidEnvironmentEntry(key, value);
+}
+
+const CommandFailure = struct {
+    status: outcome.ExitStatus,
+    message: []const u8,
+};
+
+fn spawnFailure(err: runtime.process.SpawnError) CommandFailure {
+    return switch (err) {
+        error.FileNotFound, error.NotDir => .{ .status = 127, .message = "command not found" },
+        error.AccessDenied, error.PermissionDenied => .{ .status = 126, .message = "permission denied" },
+        error.IsDir => .{ .status = 126, .message = "is a directory" },
+        else => .{ .status = 126, .message = "cannot spawn" },
+    };
+}
+
+fn waitFailure(err: runtime.process.WaitError) CommandFailure {
+    return switch (err) {
+        error.AccessDenied => .{ .status = 126, .message = "wait permission denied" },
+        else => .{ .status = 126, .message = "wait failed" },
+    };
+}
+
+fn redirectionFailureMessage(failure: redirection_plan.ApplyFailure) []const u8 {
+    runtime.fd.assertValidDescriptor(failure.target);
+    return switch (failure.detail) {
+        .open => |err| switch (err) {
+            error.FileNotFound => "no such file or directory",
+            error.AccessDenied, error.PermissionDenied => "permission denied",
+            error.IsDir => "is a directory",
+            else => "redirection open failed",
+        },
+        .close => "redirection close failed",
+        .duplicate => |err| switch (err) {
+            error.BadFileDescriptor => "bad file descriptor",
+            else => "redirection duplicate failed",
+        },
+        .unsupported_here_doc => "unsupported here-document redirection",
+    };
+}
+
+fn normalizeWaitStatus(status: runtime.process.WaitStatus) outcome.ExitStatus {
+    const normalized: outcome.ExitStatus = switch (status) {
+        .exited => |code| code,
+        .signaled => |signal| signalStatus(signal),
+        .stopped => |signal| signalStatus(signal),
+        .unknown => |raw| @intCast(raw & 0xff),
+    };
+    return normalized;
+}
+
+fn signalStatus(signal: u8) outcome.ExitStatus {
+    std.debug.assert(signal != 0);
+    const value: u16 = 128 + @as(u16, signal);
+    return if (value <= std.math.maxInt(outcome.ExitStatus)) @intCast(value) else std.math.maxInt(outcome.ExitStatus);
+}
+
+fn shellStateMutationFingerprint(shell_state: state.ShellState) u64 {
+    var hasher = std.hash.Wyhash.init(0);
+    var variables = shell_state.variables.iterator();
+    while (variables.next()) |entry| {
+        hasher.update(entry.key_ptr.*);
+        hasher.update(entry.value_ptr.value);
+        const flags = [_]u8{ @intFromBool(entry.value_ptr.exported), @intFromBool(entry.value_ptr.readonly) };
+        hasher.update(&flags);
+    }
+    hasher.update(std.mem.asBytes(&shell_state.options));
+    hasher.update(shell_state.logical_cwd);
+    hasher.update(std.mem.asBytes(&shell_state.last_status));
+    for (shell_state.positionals.items) |arg| hasher.update(arg);
+    return hasher.final();
 }
 
 fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, definition: builtin.Builtin, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
@@ -1787,11 +2004,32 @@ fn parseTestInteger(text: []const u8) ?i64 {
     return std.fmt.parseInt(i64, trimmed, 10) catch null;
 }
 
-fn assertBuiltinDeltaCompatible(plan: command_plan.CommandPlan, state_delta: delta.StateDelta) void {
+fn assertCommandDeltaCompatible(plan: command_plan.CommandPlan, state_delta: delta.StateDelta) void {
+    switch (plan.classification) {
+        .empty, .assignment_only => return,
+        .external, .not_found => {
+            std.debug.assert(state_delta.target == plan.target);
+            std.debug.assert(state_delta.variable_assignments.items.len == 0);
+            std.debug.assert(state_delta.variable_flags.items.len == 0);
+            std.debug.assert(state_delta.variable_unsets.items.len == 0);
+            std.debug.assert(state_delta.function_unsets.items.len == 0);
+            std.debug.assert(state_delta.option_changes.items.len == 0);
+            std.debug.assert(state_delta.alias_sets.items.len == 0);
+            std.debug.assert(state_delta.alias_unsets.items.len == 0);
+            std.debug.assert(!state_delta.clear_aliases);
+            std.debug.assert(state_delta.trap_mutations.items.len == 0);
+            std.debug.assert(state_delta.positionals == null);
+            std.debug.assert(state_delta.logical_cwd == null);
+            std.debug.assert(state_delta.last_status != null);
+            return;
+        },
+        .function => unreachable,
+        .special_builtin, .regular_builtin => {},
+    }
+
     const definition = switch (plan.classification) {
         .special_builtin, .regular_builtin => |definition| definition,
-        .empty, .assignment_only => return,
-        .function, .external, .not_found => unreachable,
+        else => unreachable,
     };
     definition.validate();
     if (!definition.isSemanticallyNonMutating()) {
@@ -2208,6 +2446,302 @@ test "semantic evaluator models alias unalias and trap registration deltas" {
     defer list_trap.deinit();
     try std.testing.expectEqualStrings("trap -- 'echo bye' INT\n", list_trap.stdout.items);
     list_trap.discardDelta(.current_shell);
+}
+
+const FakeFdOperation = union(enum) {
+    open: []const u8,
+    close: runtime.fd.Descriptor,
+    duplicate: runtime.fd.Descriptor,
+    duplicate_to: struct {
+        source: runtime.fd.Descriptor,
+        target: runtime.fd.Descriptor,
+    },
+};
+
+const FakeExternalRuntime = struct {
+    allocator: std.mem.Allocator,
+    open_descriptors: [64]bool = initFakeOpenDescriptors(),
+    next_descriptor: runtime.fd.Descriptor = 10,
+    fd_operations: [64]FakeFdOperation = undefined,
+    fd_operation_count: usize = 0,
+    observed_argv: std.ArrayList([]const u8) = .empty,
+    observed_environment: std.process.Environ.Map,
+    observed_stdin: runtime.process.StandardIo = .inherit,
+    observed_stdout: runtime.process.StandardIo = .inherit,
+    observed_stderr: runtime.process.StandardIo = .inherit,
+    spawn_count: usize = 0,
+    wait_count: usize = 0,
+    wait_status: runtime.process.WaitStatus = .{ .exited = 7 },
+
+    fn init(allocator: std.mem.Allocator) FakeExternalRuntime {
+        return .{
+            .allocator = allocator,
+            .observed_environment = std.process.Environ.Map.init(allocator),
+        };
+    }
+
+    fn deinit(self: *FakeExternalRuntime) void {
+        self.clearObservedArgv();
+        self.observed_argv.deinit(self.allocator);
+        self.observed_environment.deinit();
+        self.* = undefined;
+    }
+
+    fn fdPort(self: *FakeExternalRuntime) runtime.fd.Port {
+        return .{
+            .context = self,
+            .open_fn = open,
+            .close_fn = close,
+            .duplicate_fn = duplicate,
+            .duplicate_to_fn = duplicateTo,
+            .pipe_fn = pipe,
+            .is_tty_fn = isTty,
+        };
+    }
+
+    fn processPort(self: *FakeExternalRuntime) runtime.process.Port {
+        return .{
+            .context = self,
+            .spawn_fn = spawn,
+            .wait_fn = wait,
+        };
+    }
+
+    fn clearObservedArgv(self: *FakeExternalRuntime) void {
+        for (self.observed_argv.items) |arg| self.allocator.free(arg);
+        self.observed_argv.clearRetainingCapacity();
+    }
+
+    fn copyObservedArgv(self: *FakeExternalRuntime, argv: []const []const u8) !void {
+        self.clearObservedArgv();
+        for (argv) |arg| {
+            const owned_arg = try self.allocator.dupe(u8, arg);
+            errdefer self.allocator.free(owned_arg);
+            try self.observed_argv.append(self.allocator, owned_arg);
+        }
+    }
+
+    fn copyObservedEnvironment(self: *FakeExternalRuntime, environment: *const std.process.Environ.Map) !void {
+        self.observed_environment.deinit();
+        self.observed_environment = std.process.Environ.Map.init(self.allocator);
+        const keys = environment.keys();
+        const values = environment.values();
+        for (keys, values) |key, value| try self.observed_environment.put(key, value);
+    }
+
+    fn recordFdOperation(self: *FakeExternalRuntime, operation: FakeFdOperation) void {
+        std.debug.assert(self.fd_operation_count < self.fd_operations.len);
+        self.fd_operations[self.fd_operation_count] = operation;
+        self.fd_operation_count += 1;
+    }
+
+    fn isOpen(self: FakeExternalRuntime, descriptor: runtime.fd.Descriptor) bool {
+        if (descriptor < 0 or descriptor >= self.open_descriptors.len) return false;
+        return self.open_descriptors[@intCast(descriptor)];
+    }
+
+    fn setOpen(self: *FakeExternalRuntime, descriptor: runtime.fd.Descriptor, open_value: bool) void {
+        std.debug.assert(descriptor >= 0 and descriptor < self.open_descriptors.len);
+        self.open_descriptors[@intCast(descriptor)] = open_value;
+    }
+
+    fn allocateDescriptor(self: *FakeExternalRuntime) runtime.fd.Descriptor {
+        const descriptor = self.next_descriptor;
+        self.next_descriptor += 1;
+        self.setOpen(descriptor, true);
+        return descriptor;
+    }
+
+    fn fromContext(opaque_context: *anyopaque) *FakeExternalRuntime {
+        return @ptrCast(@alignCast(opaque_context));
+    }
+
+    fn open(opaque_context: *anyopaque, request: runtime.fd.OpenRequest) runtime.fd.OpenError!runtime.fd.OpenResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        self.recordFdOperation(.{ .open = request.path });
+        if (std.mem.eql(u8, request.path, "missing")) return error.FileNotFound;
+        return .{ .descriptor = self.allocateDescriptor() };
+    }
+
+    fn close(opaque_context: *anyopaque, request: runtime.fd.CloseRequest) runtime.fd.CloseError!void {
+        const self = fromContext(opaque_context);
+        request.validate();
+        self.recordFdOperation(.{ .close = request.descriptor });
+        if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
+        self.setOpen(request.descriptor, false);
+    }
+
+    fn duplicate(opaque_context: *anyopaque, request: runtime.fd.DuplicateRequest) runtime.fd.DuplicateError!runtime.fd.DuplicateResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        self.recordFdOperation(.{ .duplicate = request.descriptor });
+        if (!self.isOpen(request.descriptor)) return error.BadFileDescriptor;
+        return .{ .descriptor = self.allocateDescriptor() };
+    }
+
+    fn duplicateTo(opaque_context: *anyopaque, request: runtime.fd.DuplicateToRequest) runtime.fd.DuplicateError!void {
+        const self = fromContext(opaque_context);
+        request.validate();
+        self.recordFdOperation(.{ .duplicate_to = .{ .source = request.source, .target = request.target } });
+        if (!self.isOpen(request.source)) return error.BadFileDescriptor;
+        self.setOpen(request.target, true);
+    }
+
+    fn pipe(opaque_context: *anyopaque, request: runtime.fd.PipeRequest) runtime.fd.PipeError!runtime.fd.PipeResult {
+        _ = opaque_context;
+        request.validate();
+        return error.Unsupported;
+    }
+
+    fn isTty(opaque_context: *anyopaque, request: runtime.fd.IsTtyRequest) runtime.fd.IsTtyError!runtime.fd.IsTtyResult {
+        _ = opaque_context;
+        request.validate();
+        return .{ .is_tty = false };
+    }
+
+    fn spawn(opaque_context: *anyopaque, request: runtime.process.SpawnRequest) runtime.process.SpawnError!runtime.process.SpawnResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        std.debug.assert(request.environment != null);
+        self.spawn_count += 1;
+        try self.copyObservedArgv(request.argv);
+        try self.copyObservedEnvironment(request.environment.?);
+        self.observed_stdin = request.stdin;
+        self.observed_stdout = request.stdout;
+        self.observed_stderr = request.stderr;
+        return .{ .child = fakeChild(9001) };
+    }
+
+    fn wait(opaque_context: *anyopaque, request: runtime.process.WaitRequest) runtime.process.WaitError!runtime.process.WaitResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        self.wait_count += 1;
+        request.child.child.id = null;
+        request.child.markWaited();
+        return .{ .status = self.wait_status };
+    }
+};
+
+fn initFakeOpenDescriptors() [64]bool {
+    var descriptors = [_]bool{false} ** 64;
+    descriptors[0] = true;
+    descriptors[1] = true;
+    descriptors[2] = true;
+    return descriptors;
+}
+
+fn fakeChild(id: runtime.process.ProcessId) runtime.process.ChildProcess {
+    const child: std.process.Child = .{
+        .id = id,
+        .thread_handle = {},
+        .stdin = null,
+        .stdout = null,
+        .stderr = null,
+        .request_resource_usage_statistics = false,
+    };
+    return runtime.process.ChildProcess.init(child);
+}
+
+test "semantic evaluator executes external commands through runtime process and fd ports" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("FOO", "parent", .{ .exported = true });
+    try shell_state.putVariable("PATH", "/mock/bin", .{ .exported = true });
+    try shell_state.putVariable("HIDDEN", "secret", .{});
+
+    const assignments = [_]command_plan.Assignment{
+        .{ .name = "FOO", .value = "child" },
+        .{ .name = "TEMP", .value = "value" },
+    };
+    const argv = [_][]const u8{ "tool", "arg" };
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/mock/bin/tool" }};
+    const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 1, "out", .{ .access = .write_only, .create = true, .truncate = true })};
+    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const redirections: redirection_plan.RedirectionPlan = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps };
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .assignments = &assignments, .argv = &argv, .redirections = redirections },
+        .lookup = .{ .externals = &externals },
+    });
+    const eval_context = context.EvalContext.forTarget(.child_process);
+
+    var result = try evaluatePlan(&evaluator, &shell_state, eval_context, plan);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 7), result.status);
+    try std.testing.expectEqual(@as(state.ExitStatus, 7), result.state_delta.last_status.?);
+    try std.testing.expectEqual(context.ExecutionTarget.child_process, result.state_delta.target);
+    try std.testing.expectEqual(@as(usize, 1), fake.spawn_count);
+    try std.testing.expectEqual(@as(usize, 1), fake.wait_count);
+    try std.testing.expectEqualStrings("/mock/bin/tool", fake.observed_argv.items[0]);
+    try std.testing.expectEqualStrings("arg", fake.observed_argv.items[1]);
+    try std.testing.expectEqualStrings("child", fake.observed_environment.get("FOO").?);
+    try std.testing.expectEqualStrings("value", fake.observed_environment.get("TEMP").?);
+    try std.testing.expectEqualStrings("/mock/bin", fake.observed_environment.get("PATH").?);
+    try std.testing.expect(!fake.observed_environment.contains("HIDDEN"));
+    try std.testing.expectEqual(runtime.process.StandardIo.inherit, fake.observed_stdin);
+    try std.testing.expectEqual(runtime.process.StandardIo.inherit, fake.observed_stdout);
+    try std.testing.expectEqual(runtime.process.StandardIo.inherit, fake.observed_stderr);
+
+    try std.testing.expectEqual(@as(usize, 6), fake.fd_operation_count);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate = 1 }, fake.fd_operations[0]);
+    switch (fake.fd_operations[1]) {
+        .open => |path| try std.testing.expectEqualStrings("out", path),
+        else => return error.TestUnexpectedResult,
+    }
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 11, .target = 1 } }, fake.fd_operations[2]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 11 }, fake.fd_operations[3]);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 10, .target = 1 } }, fake.fd_operations[4]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 10 }, fake.fd_operations[5]);
+
+    result.discardDelta(.child_process);
+    try std.testing.expectEqualStrings("parent", shell_state.getVariable("FOO").?.value);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("TEMP"));
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+}
+
+test "semantic evaluator executes external commands through POSIX runtime ports" {
+    var adapter = runtime.posix.Adapter.init(std.testing.io);
+    var evaluator = Evaluator.initWithRuntimePorts(std.testing.allocator, runtime.posixPorts(&adapter));
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const argv = [_][]const u8{ "/bin/sh", "-c", "exit 5" };
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "/bin/sh", .path = "/bin/sh" }};
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &argv },
+        .lookup = .{ .externals = &externals },
+    });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.child_process), plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 5), result.status);
+    result.discardDelta(.child_process);
+}
+
+test "semantic evaluator normalizes external signal wait status" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.wait_status = .{ .signaled = 15 };
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    const argv = [_][]const u8{"sigtool"};
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "sigtool", .path = "/mock/bin/sigtool" }};
+    const plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &argv },
+        .lookup = .{ .externals = &externals },
+    });
+
+    var result = try evaluatePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.child_process), plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 143), result.status);
+    result.discardDelta(.child_process);
 }
 
 test "semantic evaluator reports unsupported simple builtin execution explicitly" {
