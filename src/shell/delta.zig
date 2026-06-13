@@ -64,6 +64,7 @@ pub const StateDelta = struct {
     positionals: ?[][]const u8 = null,
     logical_cwd: ?[]const u8 = null,
     last_status: ?state.ExitStatus = null,
+    last_pipeline_statuses: ?[]state.ExitStatus = null,
 
     pub fn init(allocator: std.mem.Allocator, target: context.ExecutionTarget) StateDelta {
         return .{ .allocator = allocator, .target = target };
@@ -107,6 +108,7 @@ pub const StateDelta = struct {
             self.allocator.free(args);
         }
         if (self.logical_cwd) |cwd| self.allocator.free(cwd);
+        if (self.last_pipeline_statuses) |statuses| self.allocator.free(statuses);
 
         self.* = undefined;
     }
@@ -139,6 +141,7 @@ pub const StateDelta = struct {
         if (self.positionals) |args| try cloned.replacePositionals(args);
         if (self.logical_cwd) |cwd| try cloned.setLogicalCwd(cwd);
         if (self.last_status) |status| cloned.setLastStatus(status);
+        if (self.last_pipeline_statuses) |statuses| try cloned.setLastPipelineStatuses(statuses);
 
         return cloned;
     }
@@ -156,7 +159,8 @@ pub const StateDelta = struct {
             self.trap_mutations.items.len == 0 and
             self.positionals == null and
             self.logical_cwd == null and
-            self.last_status == null;
+            self.last_status == null and
+            self.last_pipeline_statuses == null;
     }
 
     pub fn assignVariable(self: *StateDelta, name: []const u8, value: []const u8, attributes: state.VariableAttributes) !void {
@@ -359,6 +363,15 @@ pub const StateDelta = struct {
         self.last_status = status;
     }
 
+    pub fn setLastPipelineStatuses(self: *StateDelta, statuses: []const state.ExitStatus) !void {
+        self.assertPending();
+        std.debug.assert(statuses.len != 0);
+        std.debug.assert(self.last_pipeline_statuses == null);
+        const owned_statuses = try self.allocator.alloc(state.ExitStatus, statuses.len);
+        @memcpy(owned_statuses, statuses);
+        self.last_pipeline_statuses = owned_statuses;
+    }
+
     pub fn firstReadonlyVariableAssignment(self: StateDelta, shell_state: state.ShellState) ?[]const u8 {
         self.assertPending();
         for (self.variable_assignments.items) |assignment| {
@@ -422,6 +435,7 @@ pub const StateDelta = struct {
         if (self.positionals) |args| try shell_state.replacePositionals(args);
         if (self.logical_cwd) |cwd| try shell_state.setLogicalCwd(cwd);
         if (self.last_status) |status| shell_state.last_status = status;
+        if (self.last_pipeline_statuses) |statuses| try shell_state.setLastPipelineStatuses(statuses);
 
         shell_state.validate();
         self.state = .consumed;
