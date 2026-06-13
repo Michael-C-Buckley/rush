@@ -23530,6 +23530,38 @@ test "executor isolates shell pipeline stage side effects" {
     defer compound_result.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), compound_result.status);
     try std.testing.expectEqualStrings("got:empty\n", compound_result.stdout);
+
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    const path = "rush-last-pipeline-cwd.tmp";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, path, .default_dir);
+    defer {
+        std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+        std.Io.Dir.cwd().deleteTree(std.testing.io, path) catch {};
+    }
+    try std.process.setCurrentPath(std.testing.io, path);
+    const isolated_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(isolated_cwd);
+    const expected_last_stage = try std.fmt.allocPrint(std.testing.allocator,
+        \\after:7
+        \\var:unset
+        \\{s}
+        \\
+    , .{isolated_cwd});
+    defer std.testing.allocator.free(expected_last_stage);
+    var last_stage = try parseAndLower(std.testing.allocator,
+        \\true | exit 7; echo after:$?
+        \\true | PIPE_TAIL=leak; echo "var:${PIPE_TAIL-unset}"
+        \\true | cd /; pwd
+    );
+    defer last_stage.parsed.deinit();
+    defer last_stage.program.deinit();
+
+    var last_stage_result = try executor.executeProgram(last_stage.program, .{ .io = std.testing.io, .allow_external = true });
+    defer last_stage_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), last_stage_result.status);
+    try std.testing.expectEqualStrings(expected_last_stage, last_stage_result.stdout);
 }
 
 test "mixed pipeline without foreground terminal isolates last builtin side effects" {
