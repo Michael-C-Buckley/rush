@@ -14451,15 +14451,30 @@ fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
     _ = stdin;
     if (command.argv.len == 1) return listTraps(self);
 
-    var action_index: usize = 1;
-    if (std.mem.eql(u8, command.argv[action_index].text, "--")) {
-        action_index += 1;
-        if (action_index >= command.argv.len) return listTraps(self);
+    var arg_index: usize = 1;
+    var print = false;
+    while (arg_index < command.argv.len) {
+        const option = command.argv[arg_index].text;
+        if (std.mem.eql(u8, option, "--")) {
+            arg_index += 1;
+            break;
+        } else if (std.mem.eql(u8, option, "-p")) {
+            print = true;
+            arg_index += 1;
+        } else {
+            break;
+        }
     }
-    const action = command.argv[action_index].text;
-    if (action_index + 1 >= command.argv.len) return trapError(self, 2, "missing signal");
+    if (print) {
+        if (arg_index >= command.argv.len) return listTraps(self);
+        return listTrapOperands(self, command.argv[arg_index..]);
+    }
+    if (arg_index >= command.argv.len) return listTraps(self);
 
-    for (command.argv[action_index + 1 ..]) |signal_word| {
+    const action = command.argv[arg_index].text;
+    if (arg_index + 1 >= command.argv.len) return trapError(self, 2, "missing signal");
+
+    for (command.argv[arg_index + 1 ..]) |signal_word| {
         const name = try normalizeTrapName(self.allocator, signal_word.text);
         defer self.allocator.free(name);
         if (!validTrapName(name)) {
@@ -14475,6 +14490,30 @@ fn builtinTrap(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, op
         }
     }
     return emptyResult(self.allocator, 0);
+}
+
+fn listTrapOperands(self: *Executor, signal_words: []const ir.WordRef) !CommandResult {
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(self.allocator);
+
+    for (signal_words) |signal_word| {
+        const name = try normalizeTrapName(self.allocator, signal_word.text);
+        defer self.allocator.free(name);
+        if (!validTrapName(name)) {
+            const message = try std.fmt.allocPrint(self.allocator, "{s}: invalid signal specification", .{signal_word.text});
+            defer self.allocator.free(message);
+            return trapError(self, 1, message);
+        }
+
+        if (self.traps.get(name)) |action| {
+            const quoted = try singleQuote(self.allocator, action);
+            defer self.allocator.free(quoted);
+            try stdout.print(self.allocator, "trap -- {s} {s}\n", .{ quoted, name });
+        } else {
+            try stdout.print(self.allocator, "trap -- - {s}\n", .{name});
+        }
+    }
+    return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
 }
 
 fn trapError(self: *Executor, status: ExitStatus, message: []const u8) !CommandResult {
@@ -19157,6 +19196,26 @@ test "executor implements trap builtin baseline" {
     var quoted_result = try quoted_executor.executeProgram(quoted.program, .{});
     defer quoted_result.deinit();
     try std.testing.expectEqualStrings("trap -- 'echo '\\''a b'\\''' TERM\n", quoted_result.stdout);
+
+    var print = try parseAndLower(std.testing.allocator, "trap 'echo x' TERM; trap -p TERM; trap -p; trap -p INT; echo rc=$?");
+    defer print.parsed.deinit();
+    defer print.program.deinit();
+    var print_executor = Executor.init(std.testing.allocator);
+    defer print_executor.deinit();
+    var print_result = try print_executor.executeProgram(print.program, .{});
+    defer print_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), print_result.status);
+    try std.testing.expectEqualStrings("trap -- 'echo x' TERM\ntrap -- 'echo x' TERM\ntrap -- - INT\nrc=0\n", print_result.stdout);
+
+    var print_action = try parseAndLower(std.testing.allocator, "trap -- -p TERM; trap -p TERM");
+    defer print_action.parsed.deinit();
+    defer print_action.program.deinit();
+    var print_action_executor = Executor.init(std.testing.allocator);
+    defer print_action_executor.deinit();
+    var print_action_result = try print_action_executor.executeProgram(print_action.program, .{});
+    defer print_action_result.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), print_action_result.status);
+    try std.testing.expectEqualStrings("trap -- '-p' TERM\n", print_action_result.stdout);
 }
 
 test "executor ignores non-interactive traps for signals ignored at shell entry" {
