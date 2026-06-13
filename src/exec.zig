@@ -1819,6 +1819,8 @@ pub const Executor = struct {
     suppress_special_builtin_properties: bool = false,
     command_substitution_stderr: std.ArrayList(u8) = .empty,
     command_substitution_status: ?ExitStatus = null,
+    process_state_isolated: bool = false,
+    rlimit_overrides: SavedRlimits = emptySavedRlimits(),
     script_stdin: ?[]const u8 = null,
     script_stdin_offset: usize = 0,
     script_stdin_file: ?std.Io.File = null,
@@ -4312,6 +4314,7 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(self);
         try child.resetCaughtTrapsForSubshell();
+        child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
         var process_state = try self.savePipelineSubshellProcessState(options);
         defer process_state.restore();
@@ -4459,6 +4462,8 @@ pub const Executor = struct {
         self.completion_context = other.completion_context;
         self.last_completion_context = other.last_completion_context;
         self.command_history = other.command_history;
+        self.process_state_isolated = other.process_state_isolated;
+        self.rlimit_overrides = other.rlimit_overrides;
         self.script_stdin = other.script_stdin;
         self.script_stdin_offset = other.script_stdin_offset;
         self.script_stdin_file = other.script_stdin_file;
@@ -6008,6 +6013,7 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(self);
         try child.resetCaughtTrapsForSubshell();
+        child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
 
         var guard = try self.savePipelineSubshellProcessState(options);
@@ -6032,6 +6038,7 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(self);
         try child.resetCaughtTrapsForSubshell();
+        child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
 
         var guard = try self.savePipelineSubshellProcessState(options);
@@ -6045,6 +6052,7 @@ pub const Executor = struct {
         io: ?std.Io,
         cwd: ?[:0]u8,
         umask: u16,
+        rlimits: SavedRlimits,
 
         fn restore(self: *PipelineSubshellProcessState) void {
             if (self.cwd) |cwd| {
@@ -6053,6 +6061,7 @@ pub const Executor = struct {
                 self.cwd = null;
             }
             restoreShellUmask(self.umask);
+            restoreSavedRlimits(self.rlimits);
         }
     };
 
@@ -6064,7 +6073,34 @@ pub const Executor = struct {
             .io = options.io,
             .cwd = cwd,
             .umask = readShellUmask(),
+            .rlimits = saveUlimitRlimits(),
         };
+    }
+
+    fn saveUlimitRlimits() SavedRlimits {
+        var saved = emptySavedRlimits();
+        for (ulimit_resources, 0..) |spec, index| {
+            const resource = spec.resource orelse continue;
+            const limits = std.posix.getrlimit(resource) catch continue;
+            saved[index] = .{ .resource = resource, .limits = limits };
+        }
+        return saved;
+    }
+
+    fn restoreSavedRlimits(saved: SavedRlimits) void {
+        for (saved) |snapshot| {
+            const rlimit = snapshot orelse continue;
+            std.posix.setrlimit(rlimit.resource, rlimit.limits) catch {
+                restoreSavedSoftRlimit(rlimit.resource, rlimit.limits.cur);
+            };
+        }
+    }
+
+    fn restoreSavedSoftRlimit(resource: std.posix.rlimit_resource, soft_limit: RlimitValue) void {
+        var current = std.posix.getrlimit(resource) catch return;
+        if (current.cur == soft_limit or soft_limit > current.max) return;
+        current.cur = soft_limit;
+        std.posix.setrlimit(resource, current) catch {};
     }
 
     fn executePipelineStageSpanInCurrentShell(self: *Executor, source: []const u8, stdin: []const u8, options: ExecuteOptions) !CommandResult {
@@ -8470,9 +8506,10 @@ pub const Executor = struct {
         defer child.deinit();
         try child.copyStateFrom(substitution_context.executor);
         try child.resetCaughtTrapsForSubshell();
+        child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = substitution_context.executor.loop_depth + substitution_context.executor.loop_control_boundary_outer_depth;
-        const saved_umask = readShellUmask();
-        defer restoreShellUmask(saved_umask);
+        var process_state = try substitution_context.executor.savePipelineSubshellProcessState(sub_options);
+        defer process_state.restore();
         if (substitution_context.executor.remainingScriptStdin()) |stdin| {
             child.script_stdin = stdin;
             child.script_stdin_offset = 0;
@@ -15158,6 +15195,11 @@ fn shiftUsageError(self: *Executor, message: []const u8) !CommandResult {
 
 const RlimitValue = @TypeOf(@as(std.posix.rlimit, undefined).cur);
 
+const SavedRlimit = struct {
+    resource: std.posix.rlimit_resource,
+    limits: std.posix.rlimit,
+};
+
 const UlimitResource = struct {
     option: u8,
     name: []const u8,
@@ -15186,6 +15228,12 @@ const ulimit_resources = [_]UlimitResource{
     .{ .option = 'v', .name = "virtual memory", .unit = "kbytes", .scale = 1024, .resource = rlimitResource("AS") },
     .{ .option = 't', .name = "cpu time", .unit = "seconds", .scale = 1, .resource = rlimitResource("CPU") },
 };
+
+const SavedRlimits = [ulimit_resources.len]?SavedRlimit;
+
+fn emptySavedRlimits() SavedRlimits {
+    return [_]?SavedRlimit{null} ** ulimit_resources.len;
+}
 
 const UlimitOptions = struct {
     hard: bool = false,
@@ -15258,7 +15306,7 @@ fn reportUlimit(self: *Executor, options: UlimitOptions) !CommandResult {
         for (ulimit_resources, 0..) |spec, index| {
             if (!options.all and !options.selected[index]) continue;
             if (spec.resource == null) continue;
-            try appendUlimitReportLine(self.allocator, &stdout, spec, options);
+            try appendUlimitReportLine(self, &stdout, spec, options);
         }
         return .{ .allocator = self.allocator, .status = 0, .stdout = try stdout.toOwnedSlice(self.allocator), .stderr = try self.allocator.alloc(u8, 0) };
     }
@@ -15280,6 +15328,23 @@ fn setUlimit(self: *Executor, operand: []const u8, options: UlimitOptions) !Comm
     const set_hard = options.hard or !options.soft;
     if (set_soft) limits.cur = value;
     if (set_hard) limits.max = value;
+    if (limits.cur > limits.max) return errorResult(self.allocator, 1, "ulimit", "limit too large");
+    if (self.process_state_isolated) {
+        if (set_hard and value > (readUlimitLimits(self, spec) orelse return errorResult(self.allocator, 1, "ulimit", "getrlimit failed")).max) {
+            return errorResult(self.allocator, 1, "ulimit", "limit too large");
+        }
+        if (set_soft) {
+            var real_limits = std.posix.getrlimit(resource) catch return errorResult(self.allocator, 1, "ulimit", "getrlimit failed");
+            real_limits.cur = value;
+            std.posix.setrlimit(resource, real_limits) catch |err| switch (err) {
+                error.PermissionDenied => return errorResult(self.allocator, 1, "ulimit", "permission denied"),
+                error.LimitTooBig => return errorResult(self.allocator, 1, "ulimit", "limit too large"),
+                error.Unexpected => return errorResult(self.allocator, 1, "ulimit", "setrlimit failed"),
+            };
+        }
+        setUlimitOverride(self, resource, limits);
+        return emptyResult(self.allocator, 0);
+    }
     std.posix.setrlimit(resource, limits) catch |err| switch (err) {
         error.PermissionDenied => return errorResult(self.allocator, 1, "ulimit", "permission denied"),
         error.LimitTooBig => return errorResult(self.allocator, 1, "ulimit", "limit too large"),
@@ -15296,8 +15361,25 @@ fn selectedUlimitSpec(options: UlimitOptions) ?UlimitResource {
 }
 
 fn readUlimitLimits(self: *Executor, spec: UlimitResource) ?std.posix.rlimit {
-    _ = self;
-    return std.posix.getrlimit(spec.resource.?) catch null;
+    const resource = spec.resource.?;
+    if (rlimitOverride(self.*, resource)) |limits| return limits;
+    return std.posix.getrlimit(resource) catch null;
+}
+
+fn rlimitOverride(self: Executor, resource: std.posix.rlimit_resource) ?std.posix.rlimit {
+    for (self.rlimit_overrides) |snapshot| {
+        const saved = snapshot orelse continue;
+        if (saved.resource == resource) return saved.limits;
+    }
+    return null;
+}
+
+fn setUlimitOverride(self: *Executor, resource: std.posix.rlimit_resource, limits: std.posix.rlimit) void {
+    for (ulimit_resources, 0..) |spec, index| {
+        if (spec.resource == null or spec.resource.? != resource) continue;
+        self.rlimit_overrides[index] = .{ .resource = resource, .limits = limits };
+        return;
+    }
 }
 
 fn selectedRlimitValue(limits: std.posix.rlimit, options: UlimitOptions) RlimitValue {
@@ -15321,8 +15403,9 @@ fn formatUlimitValue(allocator: std.mem.Allocator, value: RlimitValue, scale: Rl
     return std.fmt.allocPrint(allocator, "{d}", .{@divTrunc(value, scale)});
 }
 
-fn appendUlimitReportLine(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), spec: UlimitResource, options: UlimitOptions) !void {
-    const limits = std.posix.getrlimit(spec.resource.?) catch return;
+fn appendUlimitReportLine(self: *Executor, stdout: *std.ArrayList(u8), spec: UlimitResource, options: UlimitOptions) !void {
+    const limits = readUlimitLimits(self, spec) orelse return;
+    const allocator = self.allocator;
     const value = try formatUlimitValue(allocator, selectedRlimitValue(limits, options), spec.scale);
     defer allocator.free(value);
     const line = try std.fmt.allocPrint(allocator, "{s} ({s}) {s}\n", .{ spec.name, spec.unit, value });

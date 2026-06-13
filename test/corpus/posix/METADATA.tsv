@@ -472,4 +472,5 @@ external-path-directory-lookup	portability	behavior	PATH search skips directorie
 external-enoexec-shell-fallback	portability	behavior	executable text files without a recognized format are rerun through sh with resolved PATH or slash operands, original arguments, assignment environment, redirections, and fallback status preserved
 builtin-ulimit-reporting	builtin	behavior	ulimit is a regular builtin that reports default soft file-size, explicit hard/soft resource limits, and all available resources
 builtin-ulimit-set-restore	builtin	behavior	ulimit -S changes a resource limit in the current shell process and can restore the previous soft limit
+builtin-ulimit-subshell-isolation	builtin	behavior	ulimit changes in subshell command substitution and pipeline-stage contexts do not leak to the parent shell
 function-self-mutation	grammar	behavior	function calls keep executing their original body when the function unsets redefines or re-sources its own definition
