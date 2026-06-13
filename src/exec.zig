@@ -10674,6 +10674,9 @@ fn defaultSignal(signal: std.posix.SIG) void {
 }
 
 fn fileFromBytes(io: std.Io, bytes: []const u8) !std.Io.File {
+    var temp_dir = try openHeredocTempDir(io);
+    defer temp_dir.close(io);
+
     var name_buffer: [128]u8 = undefined;
     var attempts: usize = 0;
     const Counter = struct {
@@ -10682,18 +10685,39 @@ fn fileFromBytes(io: std.Io, bytes: []const u8) !std.Io.File {
     while (attempts < 32) : (attempts += 1) {
         const suffix = Counter.value.fetchAdd(1, .monotonic);
         const name = try std.fmt.bufPrint(&name_buffer, ".rush-heredoc-{d}-{d}.tmp", .{ shellPid(), suffix });
-        var write_file = std.Io.Dir.cwd().createFile(io, name, .{ .truncate = false, .exclusive = true }) catch |err| switch (err) {
+        const file = temp_dir.createFile(io, name, .{
+            .read = true,
+            .truncate = false,
+            .exclusive = true,
+            .permissions = @enumFromInt(0o600),
+        }) catch |err| switch (err) {
             error.PathAlreadyExists => continue,
             else => return err,
         };
-        defer write_file.close(io);
-        errdefer std.Io.Dir.cwd().deleteFile(io, name) catch {};
-        try writeBytesToFile(io, write_file, bytes);
-        const read_file = try std.Io.Dir.cwd().openFile(io, name, .{});
-        std.Io.Dir.cwd().deleteFile(io, name) catch {};
-        return read_file;
+        errdefer file.close(io);
+        try temp_dir.deleteFile(io, name);
+        try file.writePositionalAll(io, bytes, 0);
+        return file;
     }
     return error.PathAlreadyExists;
+}
+
+fn openHeredocTempDir(io: std.Io) !std.Io.Dir {
+    const tmpdir = heredocTempDirPath();
+    return if (std.fs.path.isAbsolute(tmpdir))
+        try std.Io.Dir.openDirAbsolute(io, tmpdir, .{})
+    else
+        try std.Io.Dir.cwd().openDir(io, tmpdir, .{});
+}
+
+fn heredocTempDirPath() []const u8 {
+    if (comptime zig_builtin.link_libc) {
+        if (std.c.getenv("TMPDIR")) |tmpdir_z| {
+            const tmpdir = std.mem.span(tmpdir_z);
+            if (tmpdir.len != 0) return tmpdir;
+        }
+    }
+    return "/tmp";
 }
 
 fn writeBytesToFile(io: std.Io, file: std.Io.File, bytes: []const u8) !void {
@@ -23082,6 +23106,41 @@ test "executor materializes here-docs without fixed temp filename" {
     const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, old_path, std.testing.allocator, .limited(1024));
     defer std.testing.allocator.free(contents);
     try std.testing.expectEqualStrings("sentinel", contents);
+}
+
+test "executor reads here-docs from read-only current directory" {
+    const original_cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(original_cwd);
+    defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+
+    const path = "rush-heredoc-readonly-cwd.tmp";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, path, .default_dir);
+    var readonly_dir = try std.Io.Dir.cwd().openDir(std.testing.io, path, .{ .iterate = true });
+    defer readonly_dir.close(std.testing.io);
+    defer {
+        std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
+        readonly_dir.setPermissions(std.testing.io, @enumFromInt(0o700)) catch {};
+        std.Io.Dir.cwd().deleteTree(std.testing.io, path) catch {};
+    }
+    try readonly_dir.setPermissions(std.testing.io, @enumFromInt(0o555));
+    try std.process.setCurrentPath(std.testing.io, path);
+
+    var lowered = try parseAndLower(std.testing.allocator,
+        \\/bin/cat <<EOF
+        \\body
+        \\EOF
+    );
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("body\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }
 
 test "executor supports here-doc stdin redirections" {
