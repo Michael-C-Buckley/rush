@@ -5870,6 +5870,24 @@ const StdinGuard = struct {
     }
 };
 
+const StderrGuard = struct {
+    saved_fd: c_int,
+
+    fn replaceWith(file: std.Io.File) !StderrGuard {
+        const saved_fd = dup(std.Io.File.stderr().handle);
+        if (saved_fd < 0) return error.SkipZigTest;
+        errdefer _ = close(saved_fd);
+        if (dup2(file.handle, std.Io.File.stderr().handle) < 0) return error.SkipZigTest;
+        return .{ .saved_fd = saved_fd };
+    }
+
+    fn restore(self: *StderrGuard) void {
+        _ = dup2(self.saved_fd, std.Io.File.stderr().handle);
+        _ = close(self.saved_fd);
+        self.* = undefined;
+    }
+};
+
 fn runInvocationWithPipeStdin(invocation: ShellInvocation, stdin: []const u8) !exec.CommandResult {
     var pipe = try editor_driver.makePipe(std.testing.io);
     defer pipe.read.close(std.testing.io);
@@ -5981,11 +5999,30 @@ fn loadInteractiveConfig(allocator: std.mem.Allocator, io: std.Io, executor: *ex
 fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, path: []const u8, arg_zero: []const u8) !void {
     const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
         error.FileNotFound => return,
-        else => return err,
+        else => {
+            try writeOptionalConfigReadWarning(io, path, err);
+            return;
+        },
     };
     defer allocator.free(contents);
 
     try sourceConfigScript(allocator, io, executor, contents, path, arg_zero);
+}
+
+fn writeOptionalConfigReadWarning(io: std.Io, path: []const u8, err: anyerror) !void {
+    var buffer: [4096]u8 = undefined;
+    var writer = std.Io.File.stderr().writer(io, &buffer);
+    defer writer.interface.flush() catch {};
+    try writer.interface.print("rush: warning: cannot read {s}: {s}; skipping\n", .{ path, configReadErrorMessage(err) });
+}
+
+fn configReadErrorMessage(err: anyerror) []const u8 {
+    return switch (err) {
+        error.AccessDenied, error.PermissionDenied => "permission denied",
+        error.IsDir => "is a directory",
+        error.NotDir => "not a directory",
+        else => @errorName(err),
+    };
 }
 
 fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, executor: *exec.Executor, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
@@ -9550,6 +9587,77 @@ test "interactive startup parameter-expands ENV pathname from HOME" {
 
     try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
     try std.testing.expectEqualStrings("ok", executor.getEnv("HOME_ENV_LOADED").?);
+}
+
+fn loadInteractiveConfigCapturingStderr(allocator: std.mem.Allocator, executor: *exec.Executor, stderr_path: []const u8) ![]u8 {
+    var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{ .truncate = true });
+    var stderr_file_open = true;
+    defer if (stderr_file_open) stderr_file.close(std.testing.io);
+
+    var stderr_guard = try StderrGuard.replaceWith(stderr_file);
+    var stderr_guard_active = true;
+    defer if (stderr_guard_active) stderr_guard.restore();
+
+    try loadInteractiveConfig(allocator, std.testing.io, executor, .{ .arg_zero = "rush" });
+
+    stderr_guard.restore();
+    stderr_guard_active = false;
+    stderr_file.close(std.testing.io);
+    stderr_file_open = false;
+
+    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, allocator, .limited(4096));
+}
+
+test "interactive startup warns and skips user config path directory" {
+    const root = "rush-test-config-directory-startup";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/config.rush");
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_CONFIG_HOME", root);
+
+    const stderr = try loadInteractiveConfigCapturingStderr(std.testing.allocator, &executor, root ++ "/stderr");
+    defer std.testing.allocator.free(stderr);
+
+    try std.testing.expectEqualStrings("rush: warning: cannot read " ++ root ++ "/rush/config.rush: is a directory; skipping\n", stderr);
+    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
+}
+
+test "interactive startup warns and skips unreadable user config" {
+    const root = "rush-test-unreadable-config-startup";
+    const config_path = root ++ "/rush/config.rush";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = config_path, .data = "CONFIG_LOADED=bad\n" });
+
+    var config_file = try std.Io.Dir.cwd().openFile(std.testing.io, config_path, .{});
+    defer config_file.close(std.testing.io);
+    try config_file.setPermissions(std.testing.io, @enumFromInt(0o000));
+    defer config_file.setPermissions(std.testing.io, @enumFromInt(0o644)) catch {};
+
+    const denied = denied: {
+        const contents = std.Io.Dir.cwd().readFileAlloc(std.testing.io, config_path, std.testing.allocator, .limited(1024)) catch |err| switch (err) {
+            error.AccessDenied, error.PermissionDenied => break :denied true,
+            else => return err,
+        };
+        std.testing.allocator.free(contents);
+        break :denied false;
+    };
+    if (!denied) return error.SkipZigTest;
+
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("XDG_CONFIG_HOME", root);
+
+    const stderr = try loadInteractiveConfigCapturingStderr(std.testing.allocator, &executor, root ++ "/stderr");
+    defer std.testing.allocator.free(stderr);
+
+    try std.testing.expectEqualStrings("rush: warning: cannot read " ++ config_path ++ ": permission denied; skipping\n", stderr);
+    try std.testing.expect(executor.getEnv("CONFIG_LOADED") == null);
+    try std.testing.expectEqualStrings("> ", executor.getEnv("PS2").?);
 }
 
 test "interactive command string invocation sources ENV before script" {
