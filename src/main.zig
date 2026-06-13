@@ -931,6 +931,7 @@ fn exitSignalFromStatus(status: shell.ExitStatus) ?u8 {
 
 const InteractiveCompletionContext = struct {
     executor: *exec.Executor,
+    semantic_state: ?*const shell.ShellState = null,
     history: *const History,
     cache: *CompletionCache,
     loader: *CompletionScriptLoader,
@@ -946,18 +947,48 @@ const InteractiveCompletionContext = struct {
     cancel: ?*completion_model.CancellationToken = null,
 
     fn promptService(self: InteractiveCompletionContext) InteractivePromptService {
-        return .{ .executor = self.executor, .arg_zero = self.arg_zero, .features = self.features };
+        return .{ .executor = self.executor, .semantic_state = self.semantic_state, .arg_zero = self.arg_zero, .features = self.features };
     }
 };
 
 const InteractivePromptService = struct {
     executor: *exec.Executor,
+    semantic_state: ?*const shell.ShellState = null,
     arg_zero: []const u8 = "rush",
     features: compat.Features = .{},
 
     fn render(self: InteractivePromptService, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
-        const fallback_prompt = self.executor.getEnv("PS1") orelse "$ ";
+        const fallback_prompt = self.promptText("PS1", "$ ");
         return self.renderWithFallback(allocator, io, fallback_prompt);
+    }
+
+    fn continuationPrompt(self: InteractivePromptService) []const u8 {
+        return self.promptText("PS2", "> ");
+    }
+
+    fn editingMode(self: InteractivePromptService) line_editor.EditingMode {
+        return interactiveEditingMode(self.shellOptions());
+    }
+
+    fn shellOptions(self: InteractivePromptService) shell.ShellOptions {
+        if (self.semantic_state) |semantic_state| {
+            semantic_state.validate();
+            return semantic_state.options;
+        }
+        return semanticShellOptions(self.executor.shell_options);
+    }
+
+    fn promptText(self: InteractivePromptService, name: []const u8, fallback: []const u8) []const u8 {
+        return self.getEnv(name) orelse fallback;
+    }
+
+    fn getEnv(self: InteractivePromptService, name: []const u8) ?[]const u8 {
+        std.debug.assert(isValidShellVariableName(name));
+        if (self.semantic_state) |semantic_state| {
+            semantic_state.validate();
+            if (semantic_state.getVariable(name)) |variable| return variable.value;
+        }
+        return self.executor.getEnv(name);
     }
 
     fn renderWithFallback(self: InteractivePromptService, allocator: std.mem.Allocator, io: std.Io, fallback_prompt: []const u8) ![]const u8 {
@@ -6322,10 +6353,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer interactive_shell.deinit();
     const executor = &interactive_shell.executor;
     history_service.attachFc(executor);
-    const prompt_service: InteractivePromptService = .{ .executor = executor, .arg_zero = options.arg_zero, .features = options.features };
     try interactive_shell.initializeSemanticStartup(io, environ_map, options);
     try InteractiveConfigService.initInteractive(allocator, io, &interactive_shell, options.arg_zero).load(options);
     if (executor.pending_exit) |status| return status;
+    var prompt_service: InteractivePromptService = .{ .executor = executor, .semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null, .arg_zero = options.arg_zero, .features = options.features };
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
     runtime.signal.setWakeFd(terminal.trapSignalWakeFd());
@@ -6348,13 +6379,16 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         terminal.refreshWinsize();
         try syncInteractiveTerminalSize(executor, terminal);
         if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+        prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         const notifications = try executor.drainJobNotifications();
         try writeAll(io, .stderr, notifications);
         allocator.free(notifications);
         try prompt_service.runPendingVariableHooks(io);
         try interactive_shell.syncSemanticFromExecutor(io);
+        prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         try prompt_service.runEventHooks(io, "prompt", &.{});
         try interactive_shell.syncSemanticFromExecutor(io);
+        prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         if (executor.pending_exit) |status| {
             last_status = status;
             break;
@@ -6364,18 +6398,18 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
         const physical_cwd = cwd_buffer[0..cwd_len];
-        const cwd = if (executor.getEnv("PWD")) |pwd| if (pwd.len != 0) pwd else physical_cwd else physical_cwd;
+        const cwd = if (prompt_service.getEnv("PWD")) |pwd| if (pwd.len != 0) pwd else physical_cwd else physical_cwd;
         history.current_cwd = physical_cwd;
         try terminal.reportCurrentDirectory(cwd, terminal_hostname);
-        const title = try terminalTitlePath(allocator, cwd, executor.getEnv("HOME"));
+        const title = try terminalTitlePath(allocator, cwd, prompt_service.getEnv("HOME"));
         defer if (title.owned) allocator.free(title.text);
         try terminal.reportWindowTitle(title.text);
         completion_loader.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
-        var completion_context: InteractiveCompletionContext = .{ .executor = executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
+        var completion_context: InteractiveCompletionContext = .{ .executor = executor, .semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
         const ui_theme = prompt_service.theme();
         const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt,
-            .editing_mode = interactiveEditingMode(semanticShellOptions(executor.shell_options)),
+            .editing_mode = prompt_service.editingMode(),
             .prompt_refresh_interval_ms = prompt_service.refreshIntervalMs(),
             .hook_context = &completion_context,
             .run_hooks = runInteractiveIntervalHooks,
@@ -6451,7 +6485,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
         while (try interactiveInputNeedsContinuation(allocator, command.items, options.features)) {
             var continuation_options = read_options;
-            continuation_options.prompt = executor.getEnv("PS2") orelse "> ";
+            prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
+            continuation_options.prompt = prompt_service.continuationPrompt();
             continuation_options.prompt_refresh_interval_ms = null;
             continuation_options.prompt_context = null;
             continuation_options.refresh_prompt = null;
@@ -6654,7 +6689,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     defer interactive_shell.deinit();
     const executor = &interactive_shell.executor;
     history_service.attachFc(executor);
-    const prompt_service: InteractivePromptService = .{ .executor = executor };
+    var prompt_service: InteractivePromptService = .{ .executor = executor };
     {
         var result = try runScriptWithExecutor(allocator, executor, embedded_config, .{ .io = io, .allow_external = true, .arg_zero = "rush", .source_path = embedded_config_path });
         defer result.deinit();
@@ -6669,6 +6704,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         defer result.deinit();
     }
     try interactive_shell.syncSemanticFromExecutor(io);
+    prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
@@ -6692,6 +6728,8 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         try stderr.appendSlice(allocator, result.stderr);
         last_status = result.status;
         if (!history_service.consumeSuppressNextAppend(executor)) try history_service.addCommand(io, line, result.status, command_started_at, 0);
+        try interactive_shell.syncSemanticFromExecutor(io);
+        prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         if (executor.pending_exit) |status| {
             last_status = status;
             break;
@@ -12518,6 +12556,29 @@ test "repl uses literal PS1 fallback prompt" {
 
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("$ custom> ok\ncustom> ", result.stdout);
+}
+
+test "interactive prompt service prefers ShellState prompts and editing mode" {
+    var executor = exec.Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    try executor.setEnv("PS1", "legacy> ");
+    try executor.setEnv("PS2", "legacy2> ");
+    executor.shell_options.vi = false;
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("PS1", "semantic> ", .{});
+    try shell_state.putVariable("PS2", "semantic2> ", .{});
+    shell_state.options.vi = true;
+    shell_state.validate();
+
+    const prompt_service: InteractivePromptService = .{ .executor = &executor, .semantic_state = &shell_state };
+    const prompt = try prompt_service.render(std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(prompt);
+
+    try std.testing.expectEqualStrings("semantic> ", prompt);
+    try std.testing.expectEqualStrings("semantic2> ", prompt_service.continuationPrompt());
+    try std.testing.expectEqual(line_editor.EditingMode.vi, prompt_service.editingMode());
 }
 
 test "interactive startup initializes prompt variables and sources ENV" {
