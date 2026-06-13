@@ -46,6 +46,7 @@ pub const Adapter = struct {
             .context = self,
             .spawn_fn = spawn,
             .wait_fn = wait,
+            .run_fn = run,
         };
     }
 };
@@ -208,6 +209,62 @@ fn wait(context: *anyopaque, request: process.WaitRequest) process.WaitError!pro
     const term = try request.child.child.wait(adapter.io);
     request.child.markWaited();
     return .{ .status = waitStatusFromTerm(term) };
+}
+
+fn run(context: *anyopaque, request: process.RunRequest) process.RunError!process.RunResult {
+    const adapter = adapterFromContext(context);
+    request.validate();
+
+    var child = try std.process.spawn(adapter.io, .{
+        .argv = request.argv,
+        .cwd = request.cwd.toStdCwd(),
+        .environ_map = request.environment,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
+    defer child.kill(adapter.io);
+
+    std.debug.assert(child.stdin != null);
+    std.debug.assert(child.stdout != null);
+    std.debug.assert(child.stderr != null);
+
+    if (request.stdin.len != 0) {
+        var stdin_buffer: [4096]u8 = undefined;
+        var stdin_writer = child.stdin.?.writerStreaming(adapter.io, &stdin_buffer);
+        stdin_writer.interface.writeAll(request.stdin) catch |err| switch (err) {
+            error.WriteFailed => return stdin_writer.err orelse err,
+        };
+        stdin_writer.interface.flush() catch |err| switch (err) {
+            error.WriteFailed => return stdin_writer.err orelse err,
+        };
+    }
+    child.stdin.?.close(adapter.io);
+    child.stdin = null;
+
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(request.allocator, adapter.io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multi_reader.deinit();
+
+    while (multi_reader.fill(4096, .none)) |_| {} else |err| switch (err) {
+        error.EndOfStream => {},
+        else => |read_err| return read_err,
+    }
+    try multi_reader.checkAnyError();
+
+    const term = try child.wait(adapter.io);
+    const stdout_slice = try multi_reader.toOwnedSlice(0);
+    errdefer request.allocator.free(stdout_slice);
+    const stderr_slice = try multi_reader.toOwnedSlice(1);
+    errdefer request.allocator.free(stderr_slice);
+
+    return .{
+        .allocator = request.allocator,
+        .status = waitStatusFromTerm(term),
+        .stdout = stdout_slice,
+        .stderr = stderr_slice,
+    };
 }
 
 fn waitStatusFromTerm(term: std.process.Child.Term) process.WaitStatus {
@@ -437,4 +494,21 @@ test "runtime posix adapter spawns and waits for a simple process" {
     })).child;
     const result = try process_port.wait(.{ .child = &child });
     try std.testing.expectEqual(process.WaitStatus{ .exited = 7 }, result.status);
+}
+
+test "runtime posix adapter runs a process with byte stdin and captured output" {
+    var adapter = Adapter.init(std.testing.io);
+    const process_port = adapter.processPort();
+
+    const argv = [_][]const u8{"/bin/cat"};
+    var result = try process_port.run(.{
+        .allocator = std.testing.allocator,
+        .argv = &argv,
+        .stdin = "captured stdin",
+    });
+    defer result.deinit();
+
+    try std.testing.expectEqual(process.WaitStatus{ .exited = 0 }, result.status);
+    try std.testing.expectEqualStrings("captured stdin", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }

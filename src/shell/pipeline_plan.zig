@@ -29,9 +29,8 @@ pub const PipelineExecutionStrategy = enum {
     /// Shell-implemented stages only. Stages are evaluated in isolated
     /// subshell snapshots and only statuses/output diagnostics cross back.
     semantic_in_memory,
-    /// Mixed shell/external stages or stage redirections that this redesign
-    /// slice does not stream yet. The plan makes the fallback explicit instead
-    /// of letting the runtime choose policy.
+    /// Mixed shell/external stages or stage redirections streamed through the
+    /// semantic/runtime boundary with bounded in-memory byte buffers.
     mixed_in_memory,
     /// Async/background pipelines require job ownership in a later slice. This
     /// strategy reserves the semantic decision without implementing job control.

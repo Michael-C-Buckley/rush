@@ -19,6 +19,7 @@ pub const WaitStatus = union(enum) {
 pub const Operation = enum {
     spawn,
     wait,
+    run,
 };
 
 pub const Cwd = union(enum) {
@@ -170,16 +171,59 @@ pub const WaitResult = struct {
     }
 };
 
+pub const RunRequest = struct {
+    allocator: std.mem.Allocator,
+    argv: []const []const u8,
+    cwd: Cwd = .inherit,
+    environment: ?*const std.process.Environ.Map = null,
+    stdin: []const u8 = &.{},
+
+    pub fn init(allocator: std.mem.Allocator, argv: []const []const u8) RunRequest {
+        const request: RunRequest = .{ .allocator = allocator, .argv = argv };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: RunRequest) void {
+        _ = self.allocator;
+        std.debug.assert(self.argv.len != 0);
+        std.debug.assert(self.argv[0].len != 0);
+        self.cwd.validate();
+    }
+};
+
+pub const RunResult = struct {
+    allocator: std.mem.Allocator,
+    status: WaitStatus,
+    stdout: []u8,
+    stderr: []u8,
+
+    pub fn validate(self: RunResult) void {
+        _ = self.allocator;
+        (WaitResult{ .status = self.status }).validate();
+    }
+
+    pub fn deinit(self: *RunResult) void {
+        self.validate();
+        self.allocator.free(self.stdout);
+        self.allocator.free(self.stderr);
+        self.* = undefined;
+    }
+};
+
 pub const SpawnError = std.process.SpawnError;
 pub const WaitError = std.process.Child.WaitError;
+pub const RunError = anyerror;
 
 pub const SpawnFn = *const fn (*anyopaque, SpawnRequest) SpawnError!SpawnResult;
 pub const WaitFn = *const fn (*anyopaque, WaitRequest) WaitError!WaitResult;
+pub const RunFn = *const fn (*anyopaque, RunRequest) RunError!RunResult;
 
 pub const Port = struct {
     context: *anyopaque,
     spawn_fn: SpawnFn,
     wait_fn: WaitFn,
+    run_fn: RunFn,
 
     pub fn spawn(self: Port, request: SpawnRequest) SpawnError!SpawnResult {
         request.validate();
@@ -192,6 +236,13 @@ pub const Port = struct {
         request.validate();
         const result = try self.wait_fn(self.context, request);
         request.child.validateWaited();
+        result.validate();
+        return result;
+    }
+
+    pub fn run(self: Port, request: RunRequest) RunError!RunResult {
+        request.validate();
+        const result = try self.run_fn(self.context, request);
         result.validate();
         return result;
     }
@@ -222,4 +273,19 @@ test "runtime process cwd and descriptor-backed stdio are low-level values" {
     stdio.validate();
     const std_stdio = stdio.toStdIo();
     try std.testing.expectEqual(@as(fd.Descriptor, 1), std_stdio.file.handle);
+}
+
+test "runtime process captured run request owns byte streams" {
+    const argv = [_][]const u8{"/bin/cat"};
+    const request = RunRequest.init(std.testing.allocator, &argv);
+    request.validate();
+
+    var result: RunResult = .{
+        .allocator = std.testing.allocator,
+        .status = .{ .exited = 0 },
+        .stdout = try std.testing.allocator.dupe(u8, "out"),
+        .stderr = try std.testing.allocator.dupe(u8, "err"),
+    };
+    result.validate();
+    result.deinit();
 }

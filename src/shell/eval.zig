@@ -728,12 +728,14 @@ const FunctionFrame = struct {
 
 const EvaluationBuffers = struct {
     allocator: std.mem.Allocator,
+    stdin: *EvaluationInput,
     stdout: std.ArrayList(u8) = .empty,
     stderr: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList([]const u8) = .empty,
 
-    fn init(allocator: std.mem.Allocator) EvaluationBuffers {
-        return .{ .allocator = allocator };
+    fn init(allocator: std.mem.Allocator, stdin: *EvaluationInput) EvaluationBuffers {
+        stdin.validate();
+        return .{ .allocator = allocator, .stdin = stdin };
     }
 
     fn deinit(self: *EvaluationBuffers) void {
@@ -755,10 +757,59 @@ const EvaluationBuffers = struct {
     }
 };
 
+const EvaluationInput = struct {
+    bytes: []const u8 = &.{},
+    cursor: usize = 0,
+
+    fn empty() EvaluationInput {
+        return .{};
+    }
+
+    fn init(bytes: []const u8) EvaluationInput {
+        const input: EvaluationInput = .{ .bytes = bytes };
+        input.validate();
+        return input;
+    }
+
+    fn validate(self: EvaluationInput) void {
+        std.debug.assert(self.cursor <= self.bytes.len);
+    }
+
+    fn remaining(self: EvaluationInput) []const u8 {
+        self.validate();
+        return self.bytes[self.cursor..];
+    }
+
+    fn takeRemaining(self: *EvaluationInput) []const u8 {
+        self.validate();
+        const bytes = self.remaining();
+        self.cursor = self.bytes.len;
+        self.validate();
+        return bytes;
+    }
+
+    fn readLine(self: *EvaluationInput) ?[]const u8 {
+        self.validate();
+        if (self.cursor == self.bytes.len) return null;
+        const start = self.cursor;
+        while (self.cursor < self.bytes.len and self.bytes[self.cursor] != '\n') self.cursor += 1;
+        const end = self.cursor;
+        if (self.cursor < self.bytes.len and self.bytes[self.cursor] == '\n') self.cursor += 1;
+        self.validate();
+        return self.bytes[start..end];
+    }
+};
+
 pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan) EvalError!outcome.CommandOutcome {
+    var input = EvaluationInput.empty();
+    return evaluatePlanWithInput(evaluator, shell_state, eval_context, plan, &input);
+}
+
+fn evaluatePlanWithInput(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, input: *EvaluationInput) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     plan.validate();
+    input.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target.allowsShellStateCommit()) std.debug.assert(shell_state.acceptsExecutionTarget(plan.target));
     if (hasRedirections(plan) and plan.class() != .external and plan.class() != .function) return error.Unimplemented;
@@ -780,7 +831,7 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
         };
     }
 
-    var buffers = EvaluationBuffers.init(evaluator.allocator);
+    var buffers = EvaluationBuffers.init(evaluator.allocator, input);
     defer buffers.deinit();
 
     const result = try evaluateSimpleCommand(evaluator, shell_state, eval_context, plan, &state_delta, &buffers);
@@ -799,16 +850,22 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
 }
 
 pub fn evaluateCompoundPlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.CompoundCommandPlan) EvalError!outcome.CommandOutcome {
+    var input = EvaluationInput.empty();
+    return evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context, plan, &input);
+}
+
+fn evaluateCompoundPlanWithInput(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.CompoundCommandPlan, input: *EvaluationInput) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     plan.validate();
+    input.validate();
     std.debug.assert(plan.target == eval_context.target);
     if (plan.target == .current_shell) std.debug.assert(shell_state.acceptsExecutionTarget(.current_shell));
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
     errdefer state_delta.deinit();
 
-    var buffers = EvaluationBuffers.init(evaluator.allocator);
+    var buffers = EvaluationBuffers.init(evaluator.allocator, input);
     defer buffers.deinit();
 
     var applied_redirections: ?redirection_plan.AppliedRedirections = null;
@@ -860,7 +917,8 @@ pub fn evaluatePipelinePlan(evaluator: *Evaluator, shell_state: *state.ShellStat
 
     if (plan.strategy == .background_deferred) return evaluateBackgroundPipelinePlan(evaluator, shell_state, eval_context, plan);
 
-    var buffers = EvaluationBuffers.init(evaluator.allocator);
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(evaluator.allocator, &input);
     defer buffers.deinit();
 
     const statuses = try evaluator.allocator.alloc(outcome.ExitStatus, plan.stages.len);
@@ -951,7 +1009,8 @@ pub fn executePendingTraps(evaluator: *Evaluator, shell_state: *state.ShellState
     };
     defer working_state.deinit();
 
-    var buffers = EvaluationBuffers.init(evaluator.allocator);
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(evaluator.allocator, &input);
     defer buffers.deinit();
 
     const pending_count = shell_state.pending_traps.items.len;
@@ -1202,7 +1261,8 @@ fn evaluateBackgroundPipelinePlan(evaluator: *Evaluator, shell_state: *state.She
     std.debug.assert(eval_context.target.allowsShellStateCommit());
     std.debug.assert(shell_state.acceptsExecutionTarget(eval_context.target));
 
-    var buffers = EvaluationBuffers.init(evaluator.allocator);
+    var input = EvaluationInput.empty();
+    var buffers = EvaluationBuffers.init(evaluator.allocator, &input);
     defer buffers.deinit();
 
     var state_delta = delta.StateDelta.init(evaluator.allocator, eval_context.target);
@@ -1404,18 +1464,27 @@ fn evaluateFallbackPipeline(evaluator: *Evaluator, parent_state: state.ShellStat
     plan.validate();
     plan.validateStatusCount(statuses);
     std.debug.assert(plan.strategy == .semantic_in_memory or plan.strategy == .mixed_in_memory);
+    std.debug.assert(plan.stages.len > 1);
+
+    var next_stdin: std.ArrayList(u8) = .empty;
+    defer next_stdin.deinit(evaluator.allocator);
 
     for (plan.stages, 0..) |stage, index| {
+        const is_last_stage = index + 1 == plan.stages.len;
         const stage_target = plan.stageTarget(index);
         std.debug.assert(stage_target != .current_shell);
         var stage_state = try workingStateForPipelineStage(evaluator.allocator, parent_state, stage_target);
         defer stage_state.deinit();
 
         const stage_context = pipelineStageContext(eval_context, stage_target, true);
-        var stage_outcome = try evaluatePipelineStage(evaluator, &stage_state, stage_context, stageWithTarget(stage, stage_target));
+        var stage_input = EvaluationInput.init(next_stdin.items);
+        var stage_outcome = if (stage.isExternal())
+            try evaluateExternalPipelineStage(evaluator, &stage_state, stage_context, stageWithTarget(stage, stage_target), &stage_input)
+        else
+            try evaluatePipelineStageWithInput(evaluator, &stage_state, stage_context, stageWithTarget(stage, stage_target), &stage_input);
         defer stage_outcome.deinit();
 
-        try appendOutcomeBuffers(buffers, stage_outcome);
+        try appendPipelineStageBuffers(buffers, stage_outcome, is_last_stage);
         statuses[index] = stage_outcome.control_flow.status(stage_outcome.status);
         if (stage_target.allowsShellStateCommit() and stage_state.acceptsExecutionTarget(stage_target)) {
             stage_outcome.commitDelta(&stage_state, stage_target) catch |err| switch (err) {
@@ -1427,6 +1496,11 @@ fn evaluateFallbackPipeline(evaluator: *Evaluator, parent_state: state.ShellStat
             stage_state.last_status = statuses[index];
         }
         stage_state.validate();
+
+        if (!is_last_stage) {
+            next_stdin.clearRetainingCapacity();
+            try next_stdin.appendSlice(evaluator.allocator, stage_outcome.stdout.items);
+        }
     }
 }
 
@@ -1638,13 +1712,57 @@ fn workingStateForPipelineStage(allocator: std.mem.Allocator, shell_state: state
 }
 
 fn evaluatePipelineStage(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, stage: pipeline_plan.PipelineStagePlan) EvalError!outcome.CommandOutcome {
+    var input = EvaluationInput.empty();
+    return evaluatePipelineStageWithInput(evaluator, shell_state, eval_context, stage, &input);
+}
+
+fn evaluatePipelineStageWithInput(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, stage: pipeline_plan.PipelineStagePlan, input: *EvaluationInput) EvalError!outcome.CommandOutcome {
     shell_state.validate();
     eval_context.validate();
     stage.validate();
+    input.validate();
     return switch (stage) {
-        .simple => |simple| evaluatePlan(evaluator, shell_state, eval_context, simple),
-        .compound => |compound| evaluateCompoundPlan(evaluator, shell_state, eval_context, compound),
+        .simple => |simple| evaluatePlanWithInput(evaluator, shell_state, eval_context, simple, input),
+        .compound => |compound| evaluateCompoundPlanWithInput(evaluator, shell_state, eval_context, compound, input),
     };
+}
+
+fn evaluateExternalPipelineStage(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, stage: pipeline_plan.PipelineStagePlan, input: *EvaluationInput) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    stage.validate();
+    input.validate();
+    std.debug.assert(eval_context.target == .child_process);
+    const plan = switch (stage) {
+        .simple => |simple| simple,
+        .compound => unreachable,
+    };
+    std.debug.assert(plan.target == .child_process);
+    const resolution = switch (plan.classification) {
+        .external => |external| external,
+        else => unreachable,
+    };
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, plan.argv[0], resolution.name));
+    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
+
+    if (delta.firstReadonlyAssignment(shell_state.*, plan.assignments)) |name| {
+        var failure = try outcome.readonlyVariableFailure(evaluator.allocator, plan.target, name);
+        failure.state_delta.setLastStatus(failure.status);
+        consequence.applyToOutcome(&failure, eval_context, consequence.decideForShellError(shell_state.options, eval_context, .readonly_assignment, failure.status));
+        failure.validateForContext(eval_context);
+        return failure;
+    }
+
+    var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
+    errdefer state_delta.deinit();
+    var buffers = EvaluationBuffers.init(evaluator.allocator, input);
+    defer buffers.deinit();
+
+    const status = try runExternalWithPipelineInput(evaluator, shell_state.*, plan, resolution, &buffers);
+    state_delta.setLastStatus(status);
+    assertCommandDeltaCompatible(plan, state_delta);
+    return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, .normal, &buffers);
 }
 
 fn evaluateTrapActionBody(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, body: TrapActionBody) EvalError!outcome.CommandOutcome {
@@ -1862,7 +1980,7 @@ fn evaluateCommandList(evaluator: *Evaluator, shell_state: *state.ShellState, ev
     var result = normalEvaluation(0);
     for (list.commands) |child_plan| {
         child_plan.validate();
-        var child_outcome = try evaluatePlan(evaluator, shell_state, eval_context.withTarget(child_plan.target), child_plan);
+        var child_outcome = try evaluatePlanWithInput(evaluator, shell_state, eval_context.withTarget(child_plan.target), child_plan, buffers.stdin);
         defer child_outcome.deinit();
 
         try appendOutcomeBuffers(buffers, child_outcome);
@@ -1889,7 +2007,7 @@ fn evaluateAndOrList(evaluator: *Evaluator, shell_state: *state.ShellState, eval
             eval_context.ignoreErrexit().withTarget(entry.command.target)
         else
             eval_context.withTarget(entry.command.target);
-        var child_outcome = try evaluatePlan(evaluator, shell_state, child_context, entry.command);
+        var child_outcome = try evaluatePlanWithInput(evaluator, shell_state, child_context, entry.command, buffers.stdin);
         defer child_outcome.deinit();
 
         try appendOutcomeBuffers(buffers, child_outcome);
@@ -2058,6 +2176,17 @@ fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.Co
     }
 }
 
+fn appendPipelineStageBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome, include_stdout: bool) !void {
+    command_outcome.validate();
+    if (include_stdout) try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
+    try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
+    for (command_outcome.diagnostics.items) |diagnostic| {
+        const owned_message = try buffers.allocator.dupe(u8, diagnostic.message);
+        errdefer buffers.allocator.free(owned_message);
+        try buffers.diagnostics.append(buffers.allocator, owned_message);
+    }
+}
+
 fn hasCompoundRedirections(plan: command_plan.CompoundCommandPlan) bool {
     plan.redirections.validate();
     return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
@@ -2152,7 +2281,7 @@ fn evaluateFunction(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
     var result: SimpleEvalResult = normalEvaluation(shell_state.last_status);
     for (definition.body.commands) |body_plan| {
         body_plan.validate();
-        var body_outcome = try evaluatePlan(evaluator, &frame_state, function_context.withTarget(body_plan.target), body_plan);
+        var body_outcome = try evaluatePlanWithInput(evaluator, &frame_state, function_context.withTarget(body_plan.target), body_plan, buffers.stdin);
         defer body_outcome.deinit();
 
         try buffers.stdout.appendSlice(buffers.allocator, body_outcome.stdout.items);
@@ -2445,6 +2574,69 @@ fn evaluateExternal(evaluator: *Evaluator, shell_state: state.ShellState, plan: 
     return normalizeWaitStatus(wait_result.status);
 }
 
+fn runExternalWithPipelineInput(evaluator: *Evaluator, shell_state: state.ShellState, plan: command_plan.CommandPlan, resolution: command_plan.ExternalResolution, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
+    resolution.validate();
+    std.debug.assert(plan.target == .child_process);
+    std.debug.assert(plan.argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, plan.argv[0], resolution.name));
+    std.debug.assert(plan.assignmentEffect() == .temporary or plan.assignmentEffect() == .none);
+    const shell_state_before = shellStateMutationFingerprint(shell_state);
+    defer std.debug.assert(shellStateMutationFingerprint(shell_state) == shell_state_before);
+
+    const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+    const process_port = evaluator.process_port orelse return error.Unimplemented;
+
+    var temporary_environment = assignment_runtime.TemporaryEnvironment.init(evaluator.allocator);
+    defer temporary_environment.deinit();
+    if (plan.assignmentEffect() == .temporary) {
+        temporary_environment.appendCommandAssignments(shell_state, plan) catch |err| switch (err) {
+            error.ReadonlyVariable => unreachable,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    }
+
+    var environment = try buildExternalEnvironment(evaluator.allocator, shell_state, temporary_environment);
+    defer environment.deinit();
+
+    const argv = try externalArgv(evaluator.allocator, plan, resolution);
+    defer evaluator.allocator.free(argv);
+
+    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (applied_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    if (hasRedirections(plan)) {
+        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        switch (apply_result) {
+            .applied => |applied| applied_redirections = applied,
+            .failure => |failure| {
+                try buffers.addBuiltinDiagnostic(plan.argv[0], redirectionFailureMessage(failure));
+                return 1;
+            },
+        }
+    }
+
+    var run_result = process_port.run(.{
+        .allocator = evaluator.allocator,
+        .argv = argv,
+        .environment = &environment,
+        .stdin = buffers.stdin.takeRemaining(),
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => |run_err| {
+            const failure = runFailure(run_err);
+            try buffers.addBuiltinDiagnostic(plan.argv[0], failure.message);
+            return failure.status;
+        },
+    };
+    defer run_result.deinit();
+
+    try buffers.stdout.appendSlice(buffers.allocator, run_result.stdout);
+    try buffers.stderr.appendSlice(buffers.allocator, run_result.stderr);
+    return normalizeWaitStatus(run_result.status);
+}
+
 fn evaluateNotFound(not_found: command_plan.NotFound, buffers: *EvaluationBuffers) EvalError!outcome.ExitStatus {
     std.debug.assert(not_found.name.len != 0);
     try buffers.addBuiltinDiagnostic(not_found.name, "command not found");
@@ -2601,6 +2793,16 @@ fn waitFailure(err: runtime.process.WaitError) CommandFailure {
     };
 }
 
+fn runFailure(err: anyerror) CommandFailure {
+    return switch (err) {
+        error.OutOfMemory => unreachable,
+        error.FileNotFound, error.NotDir => .{ .status = 127, .message = "command not found" },
+        error.AccessDenied, error.PermissionDenied => .{ .status = 126, .message = "permission denied" },
+        error.IsDir => .{ .status = 126, .message = "is a directory" },
+        else => .{ .status = 126, .message = "cannot run" },
+    };
+}
+
 fn redirectionFailureMessage(failure: redirection_plan.ApplyFailure) []const u8 {
     runtime.fd.assertValidDescriptor(failure.target);
     return switch (failure.detail) {
@@ -2707,6 +2909,7 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, "unalias")) return normalEvaluation(try evaluateUnalias(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "trap")) return normalEvaluation(try evaluateTrap(evaluator.allocator, shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "local")) return normalEvaluation(try evaluateLocal(evaluator, shell_state, eval_context, plan, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "read")) return normalEvaluation(try evaluateRead(shell_state, plan.argv, state_delta, buffers));
     return error.Unimplemented;
 }
 
@@ -2977,6 +3180,49 @@ fn evaluateShift(shell_state: state.ShellState, argv: []const []const u8, state_
     if (amount > shell_state.positionals.items.len) return builtinStatusError(buffers, 1, "shift", "shift count out of range");
     try state_delta.replacePositionals(shell_state.positionals.items[amount..]);
     return 0;
+}
+
+fn evaluateRead(shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "read"));
+
+    var name_index: usize = 1;
+    if (name_index < argv.len and std.mem.eql(u8, argv[name_index], "-r")) name_index += 1;
+    if (name_index < argv.len and std.mem.startsWith(u8, argv[name_index], "-") and !std.mem.eql(u8, argv[name_index], "-")) return builtinUsageError(buffers, "read", "unsupported option");
+    if (name_index >= argv.len) return builtinUsageError(buffers, "read", "missing variable name");
+
+    for (argv[name_index..]) |name| {
+        if (!isShellName(name)) return builtinUsageError(buffers, "read", "invalid variable name");
+        if (shell_state.isVariableReadonly(name)) return builtinUsageError(buffers, "read", "readonly variable");
+    }
+
+    const line = buffers.stdin.readLine() orelse return 1;
+    try assignReadFields(line, argv[name_index..], state_delta);
+    return 0;
+}
+
+fn assignReadFields(line: []const u8, names: []const []const u8, state_delta: *delta.StateDelta) !void {
+    std.debug.assert(names.len != 0);
+    if (names.len == 1) {
+        try state_delta.assignVariable(names[0], line, .{});
+        return;
+    }
+
+    var cursor: usize = 0;
+    for (names, 0..) |name, index| {
+        while (cursor < line.len and isReadFieldSeparator(line[cursor])) cursor += 1;
+        const start = cursor;
+        if (index + 1 == names.len) {
+            try state_delta.assignVariable(name, line[start..], .{});
+            return;
+        }
+        while (cursor < line.len and !isReadFieldSeparator(line[cursor])) cursor += 1;
+        try state_delta.assignVariable(name, line[start..cursor], .{});
+    }
+}
+
+fn isReadFieldSeparator(byte: u8) bool {
+    return byte == ' ' or byte == '\t';
 }
 
 fn evaluateAlias(shell_state: state.ShellState, argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
@@ -5383,11 +5629,16 @@ const FakeExternalRuntime = struct {
     observed_spawn_stderr: [8]runtime.process.StandardIo = undefined,
     observed_spawn_process_group: [8]?runtime.process.ProcessId = undefined,
     observed_process_group: ?runtime.process.ProcessId = null,
+    observed_run_stdin: std.ArrayList(u8) = .empty,
     spawn_count: usize = 0,
+    run_count: usize = 0,
     wait_count: usize = 0,
     wait_status: runtime.process.WaitStatus = .{ .exited = 7 },
     wait_statuses: [8]runtime.process.WaitStatus = undefined,
     wait_status_count: usize = 0,
+    run_status: runtime.process.WaitStatus = .{ .exited = 0 },
+    run_stdout: []const u8 = "",
+    run_stderr: []const u8 = "",
 
     fn init(allocator: std.mem.Allocator) FakeExternalRuntime {
         return .{
@@ -5399,6 +5650,7 @@ const FakeExternalRuntime = struct {
     fn deinit(self: *FakeExternalRuntime) void {
         self.clearObservedArgv();
         self.observed_argv.deinit(self.allocator);
+        self.observed_run_stdin.deinit(self.allocator);
         self.observed_environment.deinit();
         self.* = undefined;
     }
@@ -5420,6 +5672,7 @@ const FakeExternalRuntime = struct {
             .context = self,
             .spawn_fn = spawn,
             .wait_fn = wait,
+            .run_fn = run,
         };
     }
 
@@ -5427,6 +5680,12 @@ const FakeExternalRuntime = struct {
         std.debug.assert(statuses.len <= self.wait_statuses.len);
         for (statuses, 0..) |status_value, index| self.wait_statuses[index] = status_value;
         self.wait_status_count = statuses.len;
+    }
+
+    fn setRunResult(self: *FakeExternalRuntime, stdout_bytes: []const u8, stderr_bytes: []const u8, status_value: runtime.process.WaitStatus) void {
+        self.run_stdout = stdout_bytes;
+        self.run_stderr = stderr_bytes;
+        self.run_status = status_value;
     }
 
     fn clearObservedArgv(self: *FakeExternalRuntime) void {
@@ -5555,6 +5814,23 @@ const FakeExternalRuntime = struct {
         request.child.markWaited();
         const status_value = if (wait_index < self.wait_status_count) self.wait_statuses[wait_index] else self.wait_status;
         return .{ .status = status_value };
+    }
+
+    fn run(opaque_context: *anyopaque, request: runtime.process.RunRequest) runtime.process.RunError!runtime.process.RunResult {
+        const self = fromContext(opaque_context);
+        request.validate();
+        std.debug.assert(request.environment != null);
+        try self.copyObservedArgv(request.argv);
+        try self.copyObservedEnvironment(request.environment.?);
+        self.observed_run_stdin.clearRetainingCapacity();
+        try self.observed_run_stdin.appendSlice(self.allocator, request.stdin);
+        self.run_count += 1;
+        return .{
+            .allocator = request.allocator,
+            .status = self.run_status,
+            .stdout = try request.allocator.dupe(u8, self.run_stdout),
+            .stderr = try request.allocator.dupe(u8, self.run_stderr),
+        };
     }
 };
 
@@ -5756,6 +6032,107 @@ test "semantic background single external applies redirections and records proce
     try std.testing.expectEqual(@as(runtime.process.ProcessId, 9001), job.pid);
     try std.testing.expectEqual(@as(?runtime.process.ProcessId, 9001), job.process_group);
     try std.testing.expectEqualStrings("'tool' 'arg'", job.command);
+}
+
+test "semantic pipeline evaluation streams builtin output into read builtin stdin" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const producer = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "printf", "payload\n" } } });
+    const consumer = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "read", "PIPE_VALUE" } } });
+    const plan = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{ .{ .simple = producer }, .{ .simple = consumer } }, .{});
+    try std.testing.expectEqual(pipeline_plan.PipelineExecutionStrategy.semantic_in_memory, plan.strategy);
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("", result.stdout.items);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("PIPE_VALUE"));
+}
+
+test "semantic pipeline evaluation streams semantic output into external stdin" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setRunResult("external-out\n", "", .{ .exited = 0 });
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "sink", .path = "/bin/sink" }};
+    const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
+    const producer = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "printf", "to-external" } } });
+    const sink = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"sink"} }, .lookup = lookup });
+    const plan = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{ .{ .simple = producer }, .{ .simple = sink } }, .{});
+    try std.testing.expectEqual(pipeline_plan.PipelineExecutionStrategy.mixed_in_memory, plan.strategy);
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), fake.run_count);
+    try std.testing.expectEqualStrings("to-external", fake.observed_run_stdin.items);
+    try std.testing.expectEqualStrings("external-out\n", result.stdout.items);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
+}
+
+test "semantic pipeline evaluation streams external output into semantic stdin" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setRunResult("from-external\n", "", .{ .exited = 0 });
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "extsource", .path = "/bin/extsource" }};
+    const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
+    const source = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"extsource"} }, .lookup = lookup });
+    const consumer = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "read", "PIPE_VALUE" } } });
+    const plan = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{ .{ .simple = source }, .{ .simple = consumer } }, .{});
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), fake.run_count);
+    try std.testing.expectEqualStrings("", fake.observed_run_stdin.items);
+    try std.testing.expectEqualStrings("", result.stdout.items);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 0, 0 }, result.state_delta.last_pipeline_statuses.?);
+    try result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("PIPE_VALUE"));
+}
+
+test "semantic pipeline evaluation keeps mixed status policy and redirection guards" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    fake.setRunResult("", "", .{ .exited = 3 });
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 1, "mixed-out", .{ .access = .write_only, .create = true, .truncate = true })};
+    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const redirections: redirection_plan.RedirectionPlan = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps };
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "failer", .path = "/bin/failer" }};
+    const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
+    const failer = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"failer"}, .redirections = redirections }, .lookup = lookup });
+    const ok = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } });
+    const plan = pipeline_plan.PipelinePlan.init(&[_]pipeline_plan.PipelineStagePlan{ .{ .simple = failer }, .{ .simple = ok } }, .{ .status_rule = .pipefail, .negated = true });
+
+    var result = try evaluatePipelinePlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), plan);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualSlices(outcome.ExitStatus, &.{ 3, 0 }, result.state_delta.last_pipeline_statuses.?);
+    try std.testing.expectEqual(@as(usize, 1), fake.run_count);
+    try std.testing.expectEqual(@as(usize, 6), fake.fd_operation_count);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate = 1 }, fake.fd_operations[0]);
+    switch (fake.fd_operations[1]) {
+        .open => |path| try std.testing.expectEqualStrings("mixed-out", path),
+        else => return error.TestUnexpectedResult,
+    }
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 11, .target = 1 } }, fake.fd_operations[2]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 11 }, fake.fd_operations[3]);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 10, .target = 1 } }, fake.fd_operations[4]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 10 }, fake.fd_operations[5]);
 }
 
 test "semantic evaluator centralizes simple-command errexit and readonly consequences" {

@@ -74,7 +74,7 @@ pub const Builtin = struct {
             .output => std.debug.assert(std.mem.eql(u8, self.name, "echo") or std.mem.eql(u8, self.name, "printf")),
             .predicate => std.debug.assert(std.mem.eql(u8, self.name, "test") or std.mem.eql(u8, self.name, "[")),
             .declaration => std.debug.assert(std.mem.eql(u8, self.name, "export") or std.mem.eql(u8, self.name, "readonly") or std.mem.eql(u8, self.name, "unset")),
-            .shell_state => std.debug.assert(std.mem.eql(u8, self.name, "set") or std.mem.eql(u8, self.name, "shift") or std.mem.eql(u8, self.name, "alias") or std.mem.eql(u8, self.name, "unalias") or std.mem.eql(u8, self.name, "trap") or std.mem.eql(u8, self.name, "local")),
+            .shell_state => std.debug.assert(std.mem.eql(u8, self.name, "set") or std.mem.eql(u8, self.name, "shift") or std.mem.eql(u8, self.name, "alias") or std.mem.eql(u8, self.name, "unalias") or std.mem.eql(u8, self.name, "trap") or std.mem.eql(u8, self.name, "local") or std.mem.eql(u8, self.name, "read")),
             .control_flow => std.debug.assert(std.mem.eql(u8, self.name, "break") or std.mem.eql(u8, self.name, "continue") or std.mem.eql(u8, self.name, "exit") or std.mem.eql(u8, self.name, "return")),
         }
     }
@@ -119,7 +119,7 @@ pub const default_builtins = [_]Builtin{
     Builtin.initWithSemantics("local", .regular, .shell_state),
     Builtin.initWithSemantics("printf", .regular, .output),
     Builtin.init("pwd", .regular),
-    Builtin.init("read", .regular),
+    Builtin.initWithSemantics("read", .regular, .shell_state),
     Builtin.init("shopt", .regular),
     Builtin.init("source", .regular),
     Builtin.initWithSemantics("test", .regular, .predicate),
