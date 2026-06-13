@@ -407,8 +407,11 @@ const TrapActionLowerer = struct {
     fn lowerPipeline(self: *TrapActionLowerer, program: ir.Program, pipeline: ir.Pipeline, target: context.ExecutionTarget) !TrapActionBodyPayload {
         if (pipeline.async_after) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background pipelines are not supported by the semantic trap resolver", .{self.signal.name()});
         if (pipeline.command_indexes.len == 1 and pipeline.stage_spans.len == 1 and !pipeline.negated) {
-            const plan = try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
-            return .{ .simple = plan };
+            const lowered = try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
+            return switch (lowered) {
+                .plan => |plan| .{ .simple = plan },
+                .failure => |trap_failure| .{ .failure = trap_failure },
+            };
         }
         if (pipeline.stage_spans.len == 0) {
             return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: empty pipelines are not supported by the semantic trap resolver", .{self.signal.name()});
@@ -594,7 +597,12 @@ const TrapActionLowerer = struct {
         return self.lowerStatementList(program, target);
     }
 
-    fn lowerIrSimpleCommand(self: *TrapActionLowerer, command: ir.SimpleCommand, target: context.ExecutionTarget) !command_plan.CommandPlan {
+    const SimpleCommandLowering = union(enum) {
+        plan: command_plan.CommandPlan,
+        failure: TrapActionFailure,
+    };
+
+    fn lowerIrSimpleCommand(self: *TrapActionLowerer, command: ir.SimpleCommand, target: context.ExecutionTarget) !SimpleCommandLowering {
         const assignment_words = try self.allocator.alloc([]const u8, command.assignments.len);
         for (command.assignments, 0..) |word, index| assignment_words[index] = word.raw;
         const argv_words = try self.allocator.alloc([]const u8, command.argv.len);
@@ -620,7 +628,7 @@ const TrapActionLowerer = struct {
         var expanded = expansion.expandSimpleCommand(assignment_words, argv_words) catch |err| {
             if (expansion.classifyError(err)) |expansion_failure| {
                 const message = try std.fmt.allocPrint(self.allocator, "trap {s}: expansion error: {s}: {s}", .{ self.signal.name(), expansion_failure.name, expansion_failure.message });
-                return command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{message} }, .target = target });
+                return .{ .plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{message} }, .target = target }) };
             }
             return err;
         };
@@ -629,12 +637,12 @@ const TrapActionLowerer = struct {
         const plan_without_redirections = command_plan.classifyExpandedSimpleCommand(.{ .command = expanded.command, .lookup = lookup, .target = target });
         const redirections = try self.lowerRedirections(command.redirections, redirectionFailurePolicy(plan_without_redirections.class(), self.eval_context));
         if (redirections == .failure) {
-            return command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{redirections.failure.message} }, .target = target });
+            return .{ .failure = redirections.failure };
         }
         expanded.command.redirections = redirections.plan;
         const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = expanded.command, .lookup = lookup, .target = target });
         plan.validate();
-        return plan;
+        return .{ .plan = plan };
     }
 
     fn lookupSnapshot(self: *TrapActionLowerer, command: command_plan.ExpandedSimpleCommand) !command_plan.LookupSnapshot {
@@ -680,6 +688,21 @@ const TrapActionLowerer = struct {
         failure: TrapActionFailure,
     };
 
+    const LoweredRedirection = union(enum) {
+        spec: redirection_plan.RedirectionSpec,
+        failure: TrapActionFailure,
+    };
+
+    const ExpandedFieldsLowering = union(enum) {
+        fields: expand.ExpansionResult,
+        failure: TrapActionFailure,
+    };
+
+    const HereDocLowering = union(enum) {
+        data: []const u8,
+        failure: TrapActionFailure,
+    };
+
     fn lowerRedirections(self: *TrapActionLowerer, redirections: []const ir.Redirection, failure_policy: redirection_plan.FailurePolicy) !LoweredRedirections {
         if (redirections.len == 0) return .{ .plan = .{} };
 
@@ -687,8 +710,9 @@ const TrapActionLowerer = struct {
         defer specs.deinit(self.allocator);
 
         for (redirections) |redirection| {
-            const spec = (try self.lowerRedirection(redirection)) orelse {
-                return .{ .failure = .{ .kind = .unsupported_shape, .message = try std.fmt.allocPrint(self.allocator, "trap {s}: unsupported trap action: malformed redirection", .{self.signal.name()}) } };
+            const spec = switch (try self.lowerRedirection(redirection)) {
+                .spec => |spec| spec,
+                .failure => |trap_failure| return .{ .failure = trap_failure },
             };
             try specs.append(self.allocator, spec);
         }
@@ -700,27 +724,86 @@ const TrapActionLowerer = struct {
         return switch (plan_result) {
             .plan => |plan| .{ .plan = plan },
             .failure => |planning_failure| .{ .failure = .{
-                .kind = .unsupported_shape,
+                .kind = .lowering_error,
                 .status = consequence.statusForRedirectionFailure(planning_failure.consequence),
                 .message = try std.fmt.allocPrint(self.allocator, "trap {s}: redirection planning error: {s}", .{ self.signal.name(), planning_failure.diagnosticText() }),
             } },
         };
     }
 
-    fn lowerRedirection(self: *TrapActionLowerer, redirection: ir.Redirection) !?redirection_plan.RedirectionSpec {
-        const operator = redirectionOperator(redirection.operator) orelse return null;
-        const descriptor = if (redirection.io_number) |io_number| std.fmt.parseInt(runtime.fd.Descriptor, io_number.text, 10) catch return null else null;
-        if (descriptor) |fd| if (!runtime.fd.isValidDescriptor(fd)) return null;
+    fn lowerRedirection(self: *TrapActionLowerer, redirection: ir.Redirection) !LoweredRedirection {
+        const operator = redirectionOperator(redirection.operator) orelse return .{ .failure = try self.malformedRedirectionFailure() };
+        const descriptor = if (redirection.io_number) |io_number| std.fmt.parseInt(runtime.fd.Descriptor, io_number.text, 10) catch return .{ .failure = try self.malformedRedirectionFailure() } else null;
+        if (descriptor) |fd| if (!runtime.fd.isValidDescriptor(fd)) return .{ .failure = try self.malformedRedirectionFailure() };
 
         if (operator == .here_doc) {
             const body = redirection.here_doc orelse "";
-            const data = if (redirection.here_doc_quoted) try self.allocator.dupe(u8, body) else try self.expandHereDoc(body, self.eval_context.target);
-            return .{ .descriptor = descriptor, .operator = operator, .operand = .{ .here_doc = .{ .bytes = data } } };
+            const data = if (redirection.here_doc_quoted) try self.allocator.dupe(u8, body) else switch (try self.expandHereDocForRedirection(body, self.eval_context.target)) {
+                .data => |data| data,
+                .failure => |trap_failure| return .{ .failure = trap_failure },
+            };
+            return .{ .spec = .{ .descriptor = descriptor, .operator = operator, .operand = .{ .here_doc = .{ .bytes = data } } } };
         }
 
-        const target_word = redirection.target orelse return null;
-        const fields = try self.expandFields(target_word.raw, self.eval_context.target);
-        return .{ .descriptor = descriptor, .operator = operator, .operand = .{ .fields = .{ .fields = fields.fields } } };
+        const target_word = redirection.target orelse return .{ .failure = try self.malformedRedirectionFailure() };
+        const fields = switch (try self.expandFieldsForRedirection(target_word.raw, self.eval_context.target)) {
+            .fields => |fields| fields,
+            .failure => |trap_failure| return .{ .failure = trap_failure },
+        };
+        return .{ .spec = .{ .descriptor = descriptor, .operator = operator, .operand = .{ .fields = .{ .fields = fields.fields } } } };
+    }
+
+    fn malformedRedirectionFailure(self: *TrapActionLowerer) !TrapActionFailure {
+        const trap_failure: TrapActionFailure = .{ .kind = .lowering_error, .message = try std.fmt.allocPrint(self.allocator, "trap {s}: malformed redirection", .{self.signal.name()}) };
+        trap_failure.validate();
+        return trap_failure;
+    }
+
+    fn expandFieldsForRedirection(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) !ExpandedFieldsLowering {
+        const expansion_target = self.expansionTarget(target);
+        var last_background_pid_buffer: [32]u8 = undefined;
+        var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
+            .shell_state = self.shell_state,
+            .eval_context = self.eval_context.withTarget(expansion_target),
+            .fs_port = self.owner.evaluator.fs_port,
+            .features = self.owner.features,
+            .arg_zero = self.owner.arg_zero,
+            .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+        });
+        defer expansion.deinit();
+        const fields = expansion.expandWordFields(raw) catch |err| {
+            if (expansion.classifyError(err)) |expansion_failure| return .{ .failure = try self.expansionFailure(expansion_failure) };
+            return err;
+        };
+        return .{ .fields = fields };
+    }
+
+    fn expandHereDocForRedirection(self: *TrapActionLowerer, text: []const u8, target: context.ExecutionTarget) !HereDocLowering {
+        const expansion_target = self.expansionTarget(target);
+        var last_background_pid_buffer: [32]u8 = undefined;
+        var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
+            .shell_state = self.shell_state,
+            .eval_context = self.eval_context.withTarget(expansion_target),
+            .fs_port = self.owner.evaluator.fs_port,
+            .features = self.owner.features,
+            .arg_zero = self.owner.arg_zero,
+            .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
+        });
+        defer expansion.deinit();
+        const data = expansion.expandHereDocBody(text) catch |err| {
+            if (expansion.classifyError(err)) |expansion_failure| return .{ .failure = try self.expansionFailure(expansion_failure) };
+            return err;
+        };
+        return .{ .data = data };
+    }
+
+    fn expansionFailure(self: *TrapActionLowerer, expansion_failure: shell_expand.ExpansionFailure) !TrapActionFailure {
+        const trap_failure: TrapActionFailure = .{
+            .kind = .expansion_error,
+            .message = try std.fmt.allocPrint(self.allocator, "trap {s}: expansion error: {s}: {s}", .{ self.signal.name(), expansion_failure.name, expansion_failure.message }),
+        };
+        trap_failure.validate();
+        return trap_failure;
     }
 
     fn resolveExternal(self: *TrapActionLowerer, command: command_plan.ExpandedSimpleCommand) !?command_plan.ExternalResolution {
@@ -6513,6 +6596,179 @@ test "semantic parser trap resolver classifies same-list function calls" {
     defer call_outcome.deinit();
     try std.testing.expectEqual(@as(outcome.ExitStatus, 0), call_outcome.status);
     try std.testing.expectEqualStrings("hi\n", call_outcome.stdout.items);
+}
+
+test "semantic parser trap resolver lowers redirection operators for trap actions" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("TRAP_MESSAGE", "semantic", .{});
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const externals = [_]command_plan.ExternalResolution{.{ .name = "tool", .path = "/bin/tool" }};
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    parser_resolver.externals = &externals;
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    var body = (try parser_resolver.resolver().resolve(
+        std.testing.allocator,
+        \\tool 3>out 4>>append 5>|clobber 6<input 7<>rw 8>&1 9<&0 <<EOF
+        \\$TRAP_MESSAGE
+        \\EOF
+    ,
+        .TERM,
+        eval_context,
+        &shell_state,
+    )) orelse return error.ExpectedSemanticBody;
+    defer body.deinit();
+
+    const plan = switch (body) {
+        .owned => |owned| switch (owned.body) {
+            .simple => |simple| simple,
+            else => return error.ExpectedSimplePlan,
+        },
+        else => return error.ExpectedOwnedSemanticBody,
+    };
+    try std.testing.expectEqual(command_plan.CommandClass.external, plan.class());
+    try std.testing.expectEqual(@as(usize, 8), plan.redirections.steps.len);
+    try std.testing.expectEqual(@as(usize, 8), plan.redirections.rollback_steps.len);
+
+    switch (plan.redirections.steps[0].effect) {
+        .open_path => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 3), step.target);
+            try std.testing.expectEqualStrings("out", step.path.bytes);
+            try std.testing.expectEqual(runtime.fd.OpenAccess.write_only, step.options.access);
+            try std.testing.expect(step.options.create);
+            try std.testing.expect(step.options.truncate);
+        },
+        else => return error.ExpectedOpenRedirection,
+    }
+    switch (plan.redirections.steps[1].effect) {
+        .open_path => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 4), step.target);
+            try std.testing.expectEqualStrings("append", step.path.bytes);
+            try std.testing.expect(step.options.append);
+        },
+        else => return error.ExpectedAppendRedirection,
+    }
+    switch (plan.redirections.steps[2].effect) {
+        .open_path => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 5), step.target);
+            try std.testing.expectEqualStrings("clobber", step.path.bytes);
+            try std.testing.expect(step.options.truncate);
+            try std.testing.expect(!step.options.exclusive);
+        },
+        else => return error.ExpectedClobberRedirection,
+    }
+    switch (plan.redirections.steps[3].effect) {
+        .open_path => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 6), step.target);
+            try std.testing.expectEqualStrings("input", step.path.bytes);
+            try std.testing.expectEqual(runtime.fd.OpenAccess.read_only, step.options.access);
+        },
+        else => return error.ExpectedInputRedirection,
+    }
+    switch (plan.redirections.steps[4].effect) {
+        .open_path => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 7), step.target);
+            try std.testing.expectEqualStrings("rw", step.path.bytes);
+            try std.testing.expectEqual(runtime.fd.OpenAccess.read_write, step.options.access);
+            try std.testing.expect(step.options.create);
+        },
+        else => return error.ExpectedReadWriteRedirection,
+    }
+    switch (plan.redirections.steps[5].effect) {
+        .duplicate => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 8), step.target);
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 1), step.source);
+        },
+        else => return error.ExpectedDuplicateOutput,
+    }
+    switch (plan.redirections.steps[6].effect) {
+        .duplicate => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 9), step.target);
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 0), step.source);
+        },
+        else => return error.ExpectedDuplicateInput,
+    }
+    switch (plan.redirections.steps[7].effect) {
+        .here_doc => |step| {
+            try std.testing.expectEqual(@as(runtime.fd.Descriptor, 0), step.target);
+            try std.testing.expectEqualStrings("semantic\n", step.data.bytes);
+        },
+        else => return error.ExpectedHereDocRedirection,
+    }
+}
+
+test "semantic parser trap resolver reports redirection expansion failures as trap diagnostics" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.options.set(.nounset, true);
+    shell_state.last_status = 41;
+    try shell_state.setTrapForSignal(.TERM, ": > \"$MISSING\"");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), parser_resolver.resolver())).?;
+    defer trap_outcome.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 41), trap_outcome.status);
+    try std.testing.expect(trap_outcome.diagnostics.items.len != 0);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.diagnostics.items[0].message, "trap TERM: expansion error") != null);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.stderr.items, "parameter not set") != null);
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(state.ExitStatus, 41), shell_state.last_status);
+}
+
+test "semantic parser trap resolver reports ambiguous redirects as trap diagnostics" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("REDIRECT_TARGET", "one two", .{});
+    shell_state.last_status = 42;
+    try shell_state.setTrapForSignal(.TERM, ": > $REDIRECT_TARGET");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), parser_resolver.resolver())).?;
+    defer trap_outcome.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 42), trap_outcome.status);
+    try std.testing.expect(trap_outcome.diagnostics.items.len != 0);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.diagnostics.items[0].message, "ambiguous redirect") != null);
+    try std.testing.expect(std.mem.indexOf(u8, trap_outcome.stderr.items, "ambiguous redirect") != null);
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(state.ExitStatus, 42), shell_state.last_status);
+}
+
+test "semantic parser trap resolver preserves current-shell fds around compound redirections" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithExternalPorts(std.testing.allocator, fake.fdPort(), fake.processPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.last_status = 43;
+    try shell_state.setTrapForSignal(.TERM, "{ :; } > trap-out");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), parser_resolver.resolver())).?;
+    defer trap_outcome.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 43), trap_outcome.status);
+    try std.testing.expectEqual(@as(usize, 6), fake.fd_operation_count);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate = 1 }, fake.fd_operations[0]);
+    switch (fake.fd_operations[1]) {
+        .open => {},
+        else => return error.ExpectedOpenRedirection,
+    }
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 11, .target = 1 } }, fake.fd_operations[2]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 11 }, fake.fd_operations[3]);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 10, .target = 1 } }, fake.fd_operations[4]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 10 }, fake.fd_operations[5]);
+
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(state.ExitStatus, 43), shell_state.last_status);
 }
 
 test "semantic parser trap resolver stores parser-backed function definition redirections" {

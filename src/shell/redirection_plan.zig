@@ -373,10 +373,12 @@ pub const RedirectionPlan = struct {
 
 fn cloneStep(allocator: std.mem.Allocator, step: RedirectionStep) std.mem.Allocator.Error!RedirectionStep {
     step.validate();
-    return .{
+    const cloned: RedirectionStep = .{
         .ordinal = step.ordinal,
         .effect = try cloneEffect(allocator, step.effect),
     };
+    cloned.validate();
+    return cloned;
 }
 
 fn cloneEffect(allocator: std.mem.Allocator, effect: RedirectionEffect) std.mem.Allocator.Error!RedirectionEffect {
@@ -403,7 +405,9 @@ fn cloneEffect(allocator: std.mem.Allocator, effect: RedirectionEffect) std.mem.
 fn cloneDataSlice(allocator: std.mem.Allocator, data: DataSlice) std.mem.Allocator.Error!DataSlice {
     data.validateAllowingEmpty();
     const bytes = try allocator.dupe(u8, data.bytes);
-    return .{ .bytes = bytes, .ownership = .owned_by_plan };
+    const cloned: DataSlice = .{ .bytes = bytes, .ownership = .owned_by_plan };
+    cloned.validateAllowingEmpty();
+    return cloned;
 }
 
 fn freeStepData(allocator: std.mem.Allocator, step: RedirectionStep) void {
