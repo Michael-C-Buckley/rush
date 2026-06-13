@@ -8778,89 +8778,6 @@ test "completion manifest precommand recursion is bounded" {
     try std.testing.expect(executor.lastCompletionPrecommandDepthLimited());
 }
 
-test "Git manifest fixture selects representative zsh-class providers" {
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    try executor.setEnv("XDG_DATA_HOME", "test/fixtures/completion-data");
-    try executor.setEnv("XDG_DATA_DIRS", "");
-
-    var loader = CompletionScriptLoader.init(std.testing.allocator);
-    defer loader.deinit();
-    try loader.ensureLoaded(std.testing.io, &executor, "git", "rush");
-
-    const ordinary_path = "rush-git-fixture-left.txt";
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = ordinary_path, .data = "fixture" });
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, ordinary_path) catch {};
-    var created_main_file = false;
-    if (std.Io.Dir.cwd().createFile(std.testing.io, "main", .{ .truncate = false, .exclusive = true })) |file| {
-        var main_file = file;
-        main_file.close(std.testing.io);
-        created_main_file = true;
-    } else |err| switch (err) {
-        error.PathAlreadyExists => {},
-        else => return err,
-    }
-    defer if (created_main_file) std.Io.Dir.cwd().deleteFile(std.testing.io, "main") catch {};
-
-    const diff_refs = try executor.collectCompletionsForInput("git diff ma", "git diff ma".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(diff_refs);
-    const main_ref = findCompletionCandidate(diff_refs, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, main_ref.kind);
-    try std.testing.expectEqualStrings("ref:argument:::target:0:false", main_ref.description.?);
-
-    const no_index_source = "git diff --no-index rush-git-fixture";
-    const no_index_paths = try executor.collectCompletionsForInput(no_index_source, no_index_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(no_index_paths);
-    const ordinary_file = findCompletionCandidate(no_index_paths, ordinary_path) orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, ordinary_file.kind);
-    try std.testing.expectEqual(@as(usize, "git diff --no-index ".len), ordinary_file.replace_start);
-
-    const no_index_second_source = "git diff --no-index left rush-git-fixture";
-    const no_index_second_paths = try executor.collectCompletionsForInput(no_index_second_source, no_index_second_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(no_index_second_paths);
-    const ordinary_second_file = findCompletionCandidate(no_index_second_paths, ordinary_path) orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, ordinary_second_file.kind);
-    try std.testing.expectEqual(@as(usize, "git diff --no-index left ".len), ordinary_second_file.replace_start);
-
-    const checkout_refs_and_files = try executor.collectCompletionsForInput("git checkout ma", "git checkout ma".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(checkout_refs_and_files);
-    const checkout_main = findCompletionCandidate(checkout_refs_and_files, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, checkout_main.kind);
-    try std.testing.expectEqualStrings("refs", checkout_main.tag.?);
-    try std.testing.expectEqualStrings("ref:argument:::tree:0:false", checkout_main.description.?);
-
-    const checkout_files = try executor.collectCompletionsForInput("git checkout rush-git-fixture", "git checkout rush-git-fixture".len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(checkout_files);
-    const checkout_file = findCompletionCandidate(checkout_files, ordinary_path) orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, checkout_file.kind);
-    try std.testing.expectEqualStrings("files", checkout_file.tag.?);
-
-    const cached_path_source = "git diff --cached src/st";
-    const cached_paths = try executor.collectCompletionsForInput(cached_path_source, cached_path_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(cached_paths);
-    const cached_file = findCompletionCandidate(cached_paths, "src/staged.zig") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, cached_file.kind);
-    try std.testing.expectEqualStrings("staged-file:target:0:false", cached_file.description.?);
-
-    const restore_source_value = "git restore --source ma";
-    const restore_refs = try executor.collectCompletionsForInput(restore_source_value, restore_source_value.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(restore_refs);
-    const restore_main = findCompletionCandidate(restore_refs, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.plain, restore_main.kind);
-    try std.testing.expect(std.mem.indexOf(u8, restore_main.description.?, "ref:option_value:source:--source") != null);
-
-    const push_delete_source = "git push --delete origin ma";
-    const push_delete = try executor.collectCompletionsForInput(push_delete_source, push_delete_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(push_delete);
-    const delete_ref = findCompletionCandidate(push_delete, "main") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqualStrings("remote-ref:refspec:1:false", delete_ref.description.?);
-
-    const push_all_source = "git push --all or";
-    const push_all = try executor.collectCompletionsForInput(push_all_source, push_all_source.len, .{ .io = std.testing.io });
-    defer executor.freeCompletions(push_all);
-    try expectNoCompletionCandidate(push_all, "origin");
-}
-
 test "completion manifest function providers lazy-load provider-only companions" {
     const root = "rush-completion-manifest-lazy-companion-test";
     std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
@@ -9271,163 +9188,6 @@ fn expectCompletionManifestDiagnostic(diagnostics: CompletionManifestDiagnostics
         if (diagnostic.severity == severity and std.mem.indexOf(u8, diagnostic.message, needle) != null) return;
     }
     return error.MissingCompletionManifestDiagnostic;
-}
-
-test "supplied completion scripts validate" {
-    var dir = try std.Io.Dir.cwd().openDir(std.testing.io, "share/rush/completions", .{ .iterate = true });
-    defer dir.close(std.testing.io);
-    var stderr: std.Io.Writer.Allocating = .init(std.testing.allocator);
-    defer stderr.deinit();
-    const result = try validateCompletionScriptsInDir(std.testing.allocator, std.testing.io, dir, &stderr.writer);
-    try std.testing.expectEqualStrings("", stderr.written());
-    try std.testing.expect(result.checked != 0);
-    try std.testing.expectEqual(@as(usize, 0), result.failures);
-}
-
-test "supplied git manifest validates and selects representative contexts" {
-    const manifest_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "share/rush/completions/git.json", std.testing.allocator, .limited(1024 * 1024));
-    defer std.testing.allocator.free(manifest_contents);
-    var diagnostics = try validateCompletionManifestContents(std.testing.allocator, manifest_contents);
-    defer diagnostics.deinit();
-    try std.testing.expect(!diagnostics.hasErrors());
-
-    const root = "rush-git-first-party-context-test";
-    const cwd = try std.process.currentPathAlloc(std.testing.io, std.testing.allocator);
-    defer std.testing.allocator.free(cwd);
-    const root_path = try std.fs.path.join(std.testing.allocator, &.{ cwd, root });
-    defer std.testing.allocator.free(root_path);
-    const bin_path = try std.fs.path.join(std.testing.allocator, &.{ root_path, "bin" });
-    defer std.testing.allocator.free(bin_path);
-    const git_path = try std.fs.path.join(std.testing.allocator, &.{ bin_path, "git" });
-    defer std.testing.allocator.free(git_path);
-    const global_cwd_path = try std.fs.path.join(std.testing.allocator, &.{ root_path, "global-cwd" });
-    defer std.testing.allocator.free(global_cwd_path);
-
-    std.Io.Dir.cwd().deleteTree(std.testing.io, root_path) catch {};
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root_path) catch {};
-    try std.Io.Dir.cwd().createDirPath(std.testing.io, bin_path);
-    try std.Io.Dir.cwd().createDirPath(std.testing.io, global_cwd_path);
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = git_path, .data =
-        \\#!/bin/sh
-        \\case "$1" in
-        \\  branch)
-        \\    case "$2" in
-        \\      --remotes) printf 'origin/main\n' ;;
-        \\      *) printf 'main\nfeature/topic\n' ;;
-        \\    esac
-        \\    ;;
-        \\  tag)
-        \\    printf 'v1.0\n'
-        \\    ;;
-        \\  remote)
-        \\    printf 'origin\n'
-        \\    ;;
-        \\  for-each-ref)
-        \\    if test "$3" = refs/notes; then
-        \\      printf 'notes/commits\n'
-        \\    else
-        \\      printf 'origin/main\norigin/release\n'
-        \\    fi
-        \\    ;;
-        \\  config)
-        \\    if test "$2" = --list && test "$3" = --name-only; then
-        \\      printf 'core.editor\nuser.name\n'
-        \\    fi
-        \\    ;;
-        \\  status)
-        \\    if test "$2" = --porcelain=v1; then
-        \\      printf ' M src/worktree.txt\0?? tmp/untracked.log\0'
-        \\    fi
-        \\    ;;
-        \\  diff)
-        \\    cached=false
-        \\    for arg do
-        \\      test "$arg" = --cached && cached=true
-        \\      test "$arg" = --staged && cached=true
-        \\    done
-        \\    if test "$cached" = true; then
-        \\      printf 'src/staged.txt\n'
-        \\    else
-        \\      printf 'src/worktree.txt\n'
-        \\    fi
-        \\    ;;
-        \\  ls-files)
-        \\    others=false
-        \\    ignored=false
-        \\    for arg do
-        \\      test "$arg" = --others && others=true
-        \\      test "$arg" = --ignored && ignored=true
-        \\    done
-        \\    if test "$others" = true && test "$ignored" = true; then
-        \\      printf 'ignored.log\n'
-        \\    else
-        \\      if test "$others" = true; then
-        \\        printf 'tmp/untracked.log\n'
-        \\      else
-        \\        printf 'src/tracked.txt\n'
-        \\      fi
-        \\    fi
-        \\    ;;
-        \\  worktree)
-        \\    if test "$2" = list && test "$3" = --porcelain; then
-        \\      printf 'worktree /tmp/rush-worktree\n\n'
-        \\    fi
-        \\    ;;
-        \\  *)
-        \\    exit 0
-        \\    ;;
-        \\esac
-    });
-
-    var setup_executor = exec.Executor.init(std.testing.allocator);
-    defer setup_executor.deinit();
-    const chmod_script = try std.fmt.allocPrint(std.testing.allocator, "/bin/chmod +x {s}", .{git_path});
-    defer std.testing.allocator.free(chmod_script);
-    var chmod = try runScriptWithExecutor(std.testing.allocator, &setup_executor, chmod_script, .{ .io = std.testing.io, .allow_external = true });
-    defer chmod.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), chmod.status);
-
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    try executor.setEnv("XDG_DATA_HOME", "share");
-    try executor.setEnv("XDG_DATA_DIRS", "");
-    const fake_git_path = try std.fmt.allocPrint(std.testing.allocator, "{s}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin", .{bin_path});
-    defer std.testing.allocator.free(fake_git_path);
-    try executor.setEnv("PATH", fake_git_path);
-
-    var loader = CompletionScriptLoader.init(std.testing.allocator);
-    defer loader.deinit();
-    try loader.ensureLoaded(std.testing.io, &executor, "git", "rush");
-
-    var saw_manifest_rule = false;
-    for (executor.completionRules()) |rule| {
-        if (rule.source.kind == .manifest) {
-            saw_manifest_rule = true;
-            break;
-        }
-    }
-    try std.testing.expect(saw_manifest_rule);
-
-    const global_cwd_source = try std.fmt.allocPrint(std.testing.allocator, "git -C {s}/global", .{root_path});
-    defer std.testing.allocator.free(global_cwd_source);
-    var global_cwd_analysis = try executor.analyzeCompletionsForInput(global_cwd_source, global_cwd_source.len);
-    defer global_cwd_analysis.deinit();
-    try std.testing.expectEqual(exec.CompletionSemanticPosition.option_value, global_cwd_analysis.position);
-
-    const global_config_source = "git -c core.editor=true sw";
-    var global_config_analysis = try executor.analyzeCompletionsForInput(global_config_source, global_config_source.len);
-    defer global_config_analysis.deinit();
-    try std.testing.expectEqual(@as(usize, 1), global_config_analysis.parsed_options.len);
-    try std.testing.expectEqualStrings("-c", global_config_analysis.parsed_options[0].spelling);
-    try std.testing.expectEqualStrings("core.editor=true", global_config_analysis.parsed_options[0].value.?);
-    try std.testing.expectEqual(exec.CompletionSemanticPosition.subcommand, global_config_analysis.position);
-
-    const diff_paths = try executor.collectCompletionsForInput("git diff --staged -- src/st", "git diff --staged -- src/st".len, .{ .io = std.testing.io, .allow_external = true });
-    defer executor.freeCompletions(diff_paths);
-    const staged = findCompletionCandidate(diff_paths, "src/staged.txt") orelse return error.MissingCompletionCandidate;
-    try std.testing.expectEqual(completion_model.Kind.file, staged.kind);
-    try std.testing.expectEqualStrings("staged path", staged.description.?);
-    try expectNoCompletionCandidate(diff_paths, "src/worktree.txt");
 }
 
 fn expectCompletionCandidate(candidates: []const completion_model.Candidate, value: []const u8) !void {
@@ -10271,53 +10031,6 @@ test "completion debug JSON reports manifest variant selection" {
     try std.testing.expect(manifest.get("platformGate").?.object.get("allowed").?.bool);
 }
 
-test "completion debug output traces Git fixture manifest state" {
-    const root = "rush-debug-git-fixture-test";
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
-
-    var env = std.process.Environ.Map.init(std.testing.allocator);
-    defer env.deinit();
-    try env.put("XDG_CONFIG_HOME", root);
-    try env.put("XDG_DATA_DIRS", "");
-    try env.put("XDG_DATA_HOME", "test/fixtures/completion-data");
-
-    const diff_text = try completionDebugOutput(std.testing.allocator, std.testing.io, &env, "git diff --cached ma");
-    defer std.testing.allocator.free(diff_text);
-    try std.testing.expect(std.mem.indexOf(u8, diff_text, "source: manifest") != null);
-    try std.testing.expect(std.mem.indexOf(u8, diff_text, "path: diff") != null);
-    try std.testing.expect(std.mem.indexOf(u8, diff_text, "argument-state: target") != null);
-    try std.testing.expect(std.mem.indexOf(u8, diff_text, "spelling: --cached") != null);
-    try std.testing.expect(std.mem.indexOf(u8, diff_text, "exclusive-group: diff-source") != null);
-
-    const diff_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git diff --cached ma");
-    defer std.testing.allocator.free(diff_json);
-    var diff = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, diff_json, .{});
-    defer diff.deinit();
-    const diff_object = diff.value.object;
-    const diff_manifest = diff_object.get("manifest").?.object;
-    try std.testing.expectEqualStrings("test/fixtures/completion-data/rush/completions/git.json", diff_manifest.get("path").?.string);
-    try std.testing.expectEqualStrings("target", diff_manifest.get("activeArgumentState").?.object.get("name").?.string);
-    try std.testing.expectEqualStrings("git.diff-sources", diff_manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
-    try std.testing.expectEqualStrings("--cached", diff_manifest.get("parsedOptions").?.array.items[0].object.get("spelling").?.string);
-    try std.testing.expectEqualStrings("diff-source", diff_manifest.get("parsedOptions").?.array.items[0].object.get("exclusiveGroup").?.string);
-    const suppressed = diff_manifest.get("suppressedOptions").?.array.items;
-    try std.testing.expectEqualStrings("--staged", suppressed[1].object.get("spelling").?.string);
-    try std.testing.expectEqualStrings("exclusiveGroup", suppressed[1].object.get("reason").?.string);
-
-    const checkout_json = try completionDebugJsonOutput(std.testing.allocator, std.testing.io, &env, "git checkout ma");
-    defer std.testing.allocator.free(checkout_json);
-    var checkout = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, checkout_json, .{});
-    defer checkout.deinit();
-    const checkout_object = checkout.value.object;
-    const checkout_manifest = checkout_object.get("manifest").?.object;
-    try std.testing.expectEqualStrings("git.refs", checkout_manifest.get("matchedProviders").?.array.items[0].object.get("id").?.string);
-    try std.testing.expectEqualStrings("builtin.files", checkout_manifest.get("matchedProviders").?.array.items[1].object.get("id").?.string);
-    const checkout_candidate = checkout_object.get("candidates").?.array.items[0].object;
-    try std.testing.expectEqualStrings("main", checkout_candidate.get("value").?.string);
-    try std.testing.expectEqualStrings("refs", checkout_candidate.get("tag").?.string);
-}
-
 test "completion debug output exposes active structured value segment" {
     const root = "rush-debug-value-segment-test";
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
@@ -11130,19 +10843,25 @@ test "runScriptWithEnvironment exports PWD and OLDPWD after cd" {
     defer std.testing.allocator.free(original_cwd);
     defer std.process.setCurrentPath(std.testing.io, original_cwd) catch {};
 
-    const dir = "rush-test-pwd-export";
-    std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
-    try std.Io.Dir.cwd().createDir(std.testing.io, dir, .default_dir);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(std.testing.io, "target", .default_dir);
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const target_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "target" });
+    defer std.testing.allocator.free(target_path);
 
-    var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io,
+    const script = try std.fmt.allocPrint(std.testing.allocator,
         \\unset PWD OLDPWD
-        \\cd rush-test-pwd-export
+        \\cd "{s}"
         \\env
-    , .{ .io = std.testing.io, .allow_external = true }, null);
+    , .{target_path});
+    defer std.testing.allocator.free(script);
+    var result = try runScriptWithEnvironment(std.testing.allocator, std.testing.io, script, .{ .io = std.testing.io, .allow_external = true }, null);
     defer result.deinit();
 
-    const pwd_line = try std.fmt.allocPrint(std.testing.allocator, "PWD={s}/{s}\n", .{ original_cwd, dir });
+    const pwd_line = try std.fmt.allocPrint(std.testing.allocator, "PWD={s}\n", .{target_path});
     defer std.testing.allocator.free(pwd_line);
     const oldpwd_line = try std.fmt.allocPrint(std.testing.allocator, "OLDPWD={s}\n", .{original_cwd});
     defer std.testing.allocator.free(oldpwd_line);

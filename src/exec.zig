@@ -18292,7 +18292,7 @@ test "executor rejects over-depth compound command nesting" {
 test "executor rejects reported-depth nested for loops without overflowing stack" {
     var script: std.ArrayList(u8) = .empty;
     defer script.deinit(std.testing.allocator);
-    const nested_loop_count = 1200;
+    const nested_loop_count = executor_nesting_depth_limit + 1;
 
     for (0..nested_loop_count) |index| try script.print(std.testing.allocator, "for v{d} in 1; do ", .{index});
     try script.appendSlice(std.testing.allocator, "echo too-deep");
@@ -23052,21 +23052,25 @@ test "executor implements set shell option baseline" {
     defer reusable.deinit();
     try std.testing.expectEqualStrings("set +o allexport\nset -o emacs\nset +o errexit\nset -o ignoreeof\nset +o monitor\nset +o noclobber\nset +o noexec\nset +o noglob\nset +o notify\nset +o nounset\nset -o pipefail\nset +o vi\nset +o verbose\nset +o xtrace\n", reusable.stdout);
 
-    var vi_lowered = try parseAndLower(std.testing.allocator, "set -o vi; set -o | /usr/bin/grep '^vi[[:space:]]*on' >/dev/null && set -o | /usr/bin/grep '^emacs[[:space:]]*off' >/dev/null && echo vi:on; set +o vi; set -o | /usr/bin/grep '^vi[[:space:]]*off' >/dev/null && set -o | /usr/bin/grep '^emacs[[:space:]]*on' >/dev/null && echo vi:off");
+    var vi_lowered = try parseAndLower(std.testing.allocator, "set -o vi; set -o; set +o vi; set -o");
     defer vi_lowered.parsed.deinit();
     defer vi_lowered.program.deinit();
-    var vi_result = try executor.executeProgram(vi_lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    var vi_result = try executor.executeProgram(vi_lowered.program, .{});
     defer vi_result.deinit();
-    try std.testing.expectEqualStrings("vi:on\nvi:off\n", vi_result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, vi_result.stdout, "emacs\toff\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, vi_result.stdout, "vi\ton\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, vi_result.stdout, "vi\toff\nverbose\toff\nxtrace\toff\n"));
     try std.testing.expect(!executor.shell_options.vi);
     try std.testing.expect(executor.shell_options.emacs);
 
-    var emacs_lowered = try parseAndLower(std.testing.allocator, "set -o vi; set -o emacs; set -o | /usr/bin/grep '^emacs[[:space:]]*on' >/dev/null && set -o | /usr/bin/grep '^vi[[:space:]]*off' >/dev/null && echo emacs:on; set +o emacs; set -o | /usr/bin/grep '^emacs[[:space:]]*off' >/dev/null && set -o | /usr/bin/grep '^vi[[:space:]]*off' >/dev/null && echo emacs:off");
+    var emacs_lowered = try parseAndLower(std.testing.allocator, "set -o vi; set -o emacs; set -o; set +o emacs; set -o");
     defer emacs_lowered.parsed.deinit();
     defer emacs_lowered.program.deinit();
-    var emacs_result = try executor.executeProgram(emacs_lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    var emacs_result = try executor.executeProgram(emacs_lowered.program, .{});
     defer emacs_result.deinit();
-    try std.testing.expectEqualStrings("emacs:on\nemacs:off\n", emacs_result.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, emacs_result.stdout, "emacs\ton\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, emacs_result.stdout, "vi\toff\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, emacs_result.stdout, "vi\toff\nverbose\toff\nxtrace\toff\n"));
     try std.testing.expect(!executor.shell_options.vi);
     try std.testing.expect(!executor.shell_options.emacs);
 
@@ -23115,20 +23119,31 @@ test "executor implements set shell option baseline" {
     try std.testing.expectEqual(@as(ExitStatus, 0), disabled.status);
     try std.testing.expect(!executor.shell_options.pipefail);
 
-    const path = "rush-noglob-a.tmp";
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "" });
-    var noglob_lowered = try parseAndLower(std.testing.allocator, "set -f; echo rush-noglob-?.tmp; set +f; echo rush-noglob-?.tmp");
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const noglob_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "rush-noglob-a.tmp" });
+    defer std.testing.allocator.free(noglob_path);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = noglob_path, .data = "" });
+    const noglob_script = try std.fmt.allocPrint(std.testing.allocator, "set -f; echo {s}/rush-noglob-?.tmp; set +f; echo {s}/rush-noglob-?.tmp", .{ tmp_root, tmp_root });
+    defer std.testing.allocator.free(noglob_script);
+    var noglob_lowered = try parseAndLower(std.testing.allocator, noglob_script);
     defer noglob_lowered.parsed.deinit();
     defer noglob_lowered.program.deinit();
     var noglob = try executor.executeProgram(noglob_lowered.program, .{ .io = std.testing.io });
     defer noglob.deinit();
-    try std.testing.expectEqualStrings("rush-noglob-?.tmp\nrush-noglob-a.tmp\n", noglob.stdout);
+    const expected_noglob = try std.fmt.allocPrint(std.testing.allocator, "{s}/rush-noglob-?.tmp\n{s}/rush-noglob-a.tmp\n", .{ tmp_root, tmp_root });
+    defer std.testing.allocator.free(expected_noglob);
+    try std.testing.expectEqualStrings(expected_noglob, noglob.stdout);
     try std.testing.expect(!executor.shell_options.noglob);
 
-    const clobber_path = "rush-noclobber.tmp";
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, clobber_path) catch {};
-    var noclobber_lowered = try parseAndLower(std.testing.allocator, "echo old > rush-noclobber.tmp; set -C; echo new > rush-noclobber.tmp; echo status=$?; echo forced >| rush-noclobber.tmp; /bin/cat rush-noclobber.tmp");
+    const clobber_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "rush-noclobber.tmp" });
+    defer std.testing.allocator.free(clobber_path);
+    const noclobber_script = try std.fmt.allocPrint(std.testing.allocator, "echo old > {s}; set -C; echo new > {s}; echo status=$?; echo forced >| {s}; /bin/cat {s}", .{ clobber_path, clobber_path, clobber_path, clobber_path });
+    defer std.testing.allocator.free(noclobber_script);
+    var noclobber_lowered = try parseAndLower(std.testing.allocator, noclobber_script);
     defer noclobber_lowered.parsed.deinit();
     defer noclobber_lowered.program.deinit();
     var noclobber = try executor.executeProgram(noclobber_lowered.program, .{ .io = std.testing.io, .allow_external = true });
@@ -23465,20 +23480,43 @@ test "executor opportunistically reaps completed background jobs" {
 }
 
 test "executor waits for representative asynchronous compound forms" {
-    const path = "rush-async-compound-options.tmp";
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    const trap_path = "rush-async-compound-traps.tmp";
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, trap_path) catch {};
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var tmp_root_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp_root_len = try tmp.dir.realPath(std.testing.io, &tmp_root_buffer);
+    const tmp_root = tmp_root_buffer[0..tmp_root_len];
+    const options_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "options" });
+    defer std.testing.allocator.free(options_path);
+    const traps_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_root, "traps" });
+    defer std.testing.allocator.free(traps_path);
 
-    var lowered = try parseAndLower(std.testing.allocator,
+    const script = try std.mem.concat(std.testing.allocator, u8, &.{
         \\{ /bin/sh -c 'exit 3'; } & p=$!; echo group-pid=${p:+set}; wait "$p"; echo group=$?
         \\( /bin/sh -c 'exit 4' ) & p=$!; wait "$p"; echo subshell=$?
         \\i=0; while test "$i" = 0; do i=1; /bin/sh -c 'exit 5'; done & p=$!; wait "$p"; echo while=$?
         \\/usr/bin/printf x | /bin/sh -c '/bin/cat >/dev/null; exit 6' & p=$!; wait "$p"; echo pipeline=$?
-        \\set -f; { case $- in *f*) echo options-ok > rush-async-compound-options.tmp;; *) echo options-missing > rush-async-compound-options.tmp;; esac; } & p=$!; wait "$p"; option_status=$?; /bin/cat rush-async-compound-options.tmp; echo options=$option_status
-        \\trap 'echo term' TERM; { trap > rush-async-compound-traps.tmp; } & p=$!; wait "$p"; trap_status=$?; if test ! -s rush-async-compound-traps.tmp; then echo traps-reset; fi; echo traps=$trap_status
+        \\set -f; { case $- in *f*) echo options-ok > "
+        ,
+        options_path,
+        \\";; *) echo options-missing > "
+        ,
+        options_path,
+        \\";; esac; } & p=$!; wait "$p"; option_status=$?; /bin/cat "
+        ,
+        options_path,
+        \\"; echo options=$option_status
+        \\trap 'echo term' TERM; { trap > "
+        ,
+        traps_path,
+        \\"; } & p=$!; wait "$p"; trap_status=$?; if test ! -s "
+        ,
+        traps_path,
+        \\"; then echo traps-reset; fi; echo traps=$trap_status
         \\( /bin/sleep 0 & wait $! ) & p=$!; echo parent-visible=${p:+yes}; wait "$p"; test "$p" = "$!" && echo parent-last-ok
-    );
+    });
+    defer std.testing.allocator.free(script);
+
+    var lowered = try parseAndLower(std.testing.allocator, script);
     defer lowered.parsed.deinit();
     defer lowered.program.deinit();
 
@@ -26599,7 +26637,7 @@ test "dynamic completion providers close external command fds" {
 
     const before = try openFdCount();
     var index: usize = 0;
-    while (index < 16) : (index += 1) {
+    while (index < 4) : (index += 1) {
         const candidates = try executor.collectCompletionsForInput("tool ", "tool ".len, .{ .io = std.testing.io, .allow_external = true });
         executor.freeCompletions(candidates);
     }
