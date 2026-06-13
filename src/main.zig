@@ -7012,6 +7012,7 @@ fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io,
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
     evaluator.features = invocation.features;
     evaluator.arg_zero = invocation.arg_zero;
+    evaluator.external_stdio = external_stdio;
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = invocation.features;
     parser_resolver.arg_zero = invocation.arg_zero;
@@ -7367,7 +7368,7 @@ fn semanticInteractiveProgramUnsupported(executor: exec.Executor, shell_state: s
     for (program.commands) |command| {
         if (command.argv.len == 0) continue;
         const root = command.argv[0];
-        if (!semanticInteractiveBuiltinRootAllowed(root.text)) return "semantic interactive executor keeps unsupported builtins and external commands on the legacy interactive bridge";
+        if (shell.builtin.lookup(root.text) != null and !semanticInteractiveBuiltinRootAllowed(root.text)) return "semantic interactive executor keeps unsupported builtins on the legacy interactive bridge";
         if (executor.functions.count() != 0) {
             if (wordMayUseShellExpansion(root.raw)) return "semantic interactive executor does not yet preserve dynamic function lookup";
             if (executor.functions.contains(root.text)) return "semantic interactive executor does not yet preserve shell function calls";
@@ -7604,7 +7605,6 @@ fn semanticPreflightUnsupported(allocator: std.mem.Allocator, program: ir.Progra
     }
     if (legacy_fallback_gates) {
         for (program.commands) |command| {
-            if (command.assignments.len != 0 and command.argv.len != 0) return "semantic executor production preflight keeps assignment-bearing commands unsupported outside the switched slice";
             if (commandUsesUnsupportedSemanticBuiltin(command, false)) return "semantic executor preflight found an unsupported builtin";
             if (commandUsesUnsupportedProductionExpansion(command)) return "semantic executor production preflight found an expansion shape outside the switched slice";
             if (command.argv.len == 0 and command.redirections.len != 0) return "semantic executor does not yet support redirection-only commands";
@@ -7798,7 +7798,6 @@ fn semanticCommandListUnsupportedMessage(list: shell.StatementList, legacy_fallb
 
 fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan, legacy_fallback_gates: bool) ?[]const u8 {
     plan.validate();
-    if (legacy_fallback_gates and plan.assignments.len != 0 and plan.class() != .assignment_only) return "semantic executor production preflight keeps assignment-bearing commands unsupported outside the switched slice";
     return switch (plan.classification) {
         .regular_builtin, .special_builtin => |definition| blk: {
             if (definition.semantic_class == .unsupported) break :blk "semantic evaluator does not yet implement this builtin";
@@ -11379,6 +11378,53 @@ test "semantic interactive shell state persists variable mutations without legac
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), readback.status);
     try std.testing.expectEqualStrings("state\n", readback.stdout);
     try std.testing.expectEqualStrings("", readback.stderr);
+}
+
+test "semantic interactive assignment-bearing commands preserve assignment lifetime without legacy fallback" {
+    var interactive_shell = InteractiveShell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    const executor = &interactive_shell.executor;
+    try executor.initializeShellVariables(std.testing.io);
+    executor.arg_zero = "rush";
+    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+
+    var temporary = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_TEMPORARY=discarded true", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    defer temporary.deinit(std.testing.allocator);
+    switch (temporary) {
+        .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
+        .unsupported => return error.ExpectedSemanticOutput,
+    }
+    try interactive_shell.syncExecutorFromSemantic();
+    try std.testing.expectEqual(@as(?[]const u8, null), executor.getEnv("RUSH_INTERACTIVE_TEMPORARY"));
+
+    var persistent = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SPECIAL=persistent :", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    defer persistent.deinit(std.testing.allocator);
+    switch (persistent) {
+        .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
+        .unsupported => return error.ExpectedSemanticOutput,
+    }
+    try interactive_shell.syncExecutorFromSemantic();
+    try std.testing.expectEqualStrings("persistent", executor.getEnv("RUSH_INTERACTIVE_SPECIAL").?);
+}
+
+test "semantic interactive external commands run through runtime ports without legacy fallback" {
+    var interactive_shell = InteractiveShell.init(std.testing.allocator);
+    defer interactive_shell.deinit();
+    const executor = &interactive_shell.executor;
+    try executor.initializeShellVariables(std.testing.io);
+    executor.arg_zero = "rush";
+    try interactive_shell.syncSemanticFromExecutor(std.testing.io);
+
+    var external = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "/usr/bin/printf 'semantic-external\\n'", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .capture);
+    defer external.deinit(std.testing.allocator);
+    switch (external) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |output| {
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status);
+            try std.testing.expectEqualStrings("semantic-external\n", output.stdout);
+            try std.testing.expectEqualStrings("", output.stderr);
+        },
+    }
 }
 
 test "semantic interactive startup initializes ShellState without executor shell variables as source" {
