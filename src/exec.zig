@@ -6259,18 +6259,12 @@ pub const Executor = struct {
             errdefer if (next_pipe) |*pipe| pipe.close(io);
             if (is_last and options.external_stdio != .inherit) {
                 capture_stdout = makePipelinePipe(io) catch |err| {
-                    const message = if (std.mem.eql(u8, stage_failure_name, "cannot fork"))
-                        spawnResourceMessage(err) orelse return err
-                    else
-                        spawnResourceDiagnostic(err) orelse return err;
-                    return errorResult(self.allocator, 126, stage_failure_name, message);
+                    const message = pipeFailureMessage(err) orelse return err;
+                    return errorResult(self.allocator, 1, "pipe", message);
                 };
                 capture_stderr = makePipelinePipe(io) catch |err| {
-                    const message = if (std.mem.eql(u8, stage_failure_name, "cannot fork"))
-                        spawnResourceMessage(err) orelse return err
-                    else
-                        spawnResourceDiagnostic(err) orelse return err;
-                    return errorResult(self.allocator, 126, stage_failure_name, message);
+                    const message = pipeFailureMessage(err) orelse return err;
+                    return errorResult(self.allocator, 1, "pipe", message);
                 };
             }
 
@@ -10812,7 +10806,8 @@ fn terminalSetPgrp(fd: std.posix.fd_t, pgrp: std.posix.pid_t) !void {
             const rc = tcsetpgrp(fd, pgrp);
             switch (std.c.errno(rc)) {
                 .SUCCESS => return,
-                .BADF, .INVAL => unreachable,
+                .BADF => unreachable,
+                .INVAL => return error.InvalidProcessGroupId,
                 .INTR => continue,
                 .NOTTY => return error.NotATerminal,
                 .PERM => return error.NotAPgrpMember,
@@ -10871,7 +10866,7 @@ fn giveTerminalToForegroundPgrp(pgrp: std.posix.pid_t, terminal: ?ForegroundTerm
     var sigttou = ignoreSignal(.TTOU);
     defer sigttou.restore();
     terminalSetPgrp(active.tty_fd, pgrp) catch |err| switch (err) {
-        error.NotATerminal, error.NotAPgrpMember => return,
+        error.InvalidProcessGroupId, error.NotATerminal, error.NotAPgrpMember => return,
         else => return err,
     };
 }
@@ -24530,6 +24525,7 @@ fn runStoppedForegroundMixedPipelinePtyTest(slave: c_int) anyerror!void {
     try std.testing.expectEqual(@as(ExitStatus, 0), monitor.status);
 
     try expectMonitorAsyncJobKeepsShellForeground(allocator, &executor, shell_pgrp);
+    try expectDeadForegroundPgrpIgnored(shell_pgrp);
     try expectStoppedForegroundSimpleSignal(allocator, &executor, shell_pgrp, "TSTP", .TSTP);
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TSTP", .TSTP);
     try expectStoppedForegroundMixedSignal(allocator, &executor, shell_pgrp, "TTIN", .TTIN);
@@ -24660,6 +24656,23 @@ fn waitForWaitContextDone(done: *std.atomic.Value(bool)) !void {
         sleepPtyTestPollInterval();
     }
     return error.TestTimedOut;
+}
+
+fn expectDeadForegroundPgrpIgnored(shell_pgrp: std.posix.pid_t) anyerror!void {
+    const pid = forkProcess() catch return error.SkipZigTest;
+    if (pid == 0) {
+        processSetPgrp(0, 0) catch exitForkedChild(77);
+        exitForkedChild(0);
+    }
+    var status: c_int = 0;
+    if (std.c.waitpid(pid, &status, 0) != pid) return error.SkipZigTest;
+    const wait_status: u32 = @bitCast(status);
+    if (std.posix.W.IFEXITED(wait_status) and std.posix.W.EXITSTATUS(wait_status) == 77) return error.SkipZigTest;
+    try std.testing.expect(std.posix.W.IFEXITED(wait_status));
+    try std.testing.expectEqual(@as(u8, 0), std.posix.W.EXITSTATUS(wait_status));
+
+    try giveTerminalToForegroundPgrp(pid, .{ .tty_fd = std.Io.File.stdin().handle, .previous_pgrp = shell_pgrp });
+    try std.testing.expectEqual(shell_pgrp, try terminalGetPgrp(std.Io.File.stdin().handle));
 }
 
 fn expectStoppedForegroundSimpleSignal(allocator: std.mem.Allocator, executor: *Executor, shell_pgrp: std.posix.pid_t, signal_name: []const u8, signal: std.posix.SIG) anyerror!void {

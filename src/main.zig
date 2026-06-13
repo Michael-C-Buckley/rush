@@ -10,6 +10,7 @@ const sqlite = @cImport({
 extern "c" fn close(fd: c_int) c_int;
 extern "c" fn dup(fd: c_int) c_int;
 extern "c" fn dup2(oldfd: c_int, newfd: c_int) c_int;
+extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
 
 pub const compat = @import("compat.zig");
 pub const parser = @import("parser.zig");
@@ -51,6 +52,7 @@ const ShellInvocation = struct {
     source: []const u8,
     features: compat.Features = .{},
     shell_options: exec.ShellOptions = .{},
+    monitor_option_explicit: bool = false,
     arg_zero: []const u8,
     positionals: []const []const u8 = &.{},
     interactive: bool = false,
@@ -131,6 +133,7 @@ pub fn main(init: std.process.Init) !u8 {
             .login = login_shell,
             .features = invocation.features,
             .shell_options = invocation.shell_options,
+            .monitor_option_explicit = invocation.monitor_option_explicit,
             .positionals = invocation.positionals,
         });
     }
@@ -168,6 +171,7 @@ fn parseShellInvocation(args: []const []const u8) ?ShellInvocation {
 
     var features: compat.Features = .{};
     var shell_options: exec.ShellOptions = .{};
+    var monitor_option_explicit = false;
     var interactive = false;
     var command_string = false;
     var standard_input = false;
@@ -199,10 +203,13 @@ fn parseShellInvocation(args: []const []const u8) ?ShellInvocation {
             } else if (option == 'o') {
                 if (index + 1 >= args.len) return null;
                 index += 1;
-                if (!exec.applyShellOptionName(&shell_options, args[index], enabled)) return null;
+                const option_name = args[index];
+                if (!exec.applyShellOptionName(&shell_options, option_name, enabled)) return null;
+                if (std.mem.eql(u8, option_name, "monitor")) monitor_option_explicit = true;
             } else {
                 var option_spelling = [_]u8{ arg[0], option };
                 if (!exec.applyShellOptionShort(&shell_options, option_spelling[0..])) return null;
+                if (option == 'm') monitor_option_explicit = true;
             }
         }
 
@@ -214,16 +221,16 @@ fn parseShellInvocation(args: []const []const u8) ?ShellInvocation {
         if (operands.len == 0) return null;
         const arg_zero = if (operands.len >= 2) operands[1] else args[0];
         const positionals = if (operands.len >= 3) operands[2..] else &.{};
-        return .{ .kind = .command_string, .source = operands[0], .features = features, .shell_options = shell_options, .arg_zero = arg_zero, .positionals = positionals, .interactive = interactive };
+        return .{ .kind = .command_string, .source = operands[0], .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = arg_zero, .positionals = positionals, .interactive = interactive };
     }
     if (standard_input) {
-        return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .arg_zero = args[0], .positionals = operands, .interactive = interactive };
+        return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = args[0], .positionals = operands, .interactive = interactive };
     }
     if (operands.len != 0) {
         const path = operands[0];
-        return .{ .kind = .script_file, .source = path, .features = features, .shell_options = shell_options, .arg_zero = path, .positionals = operands[1..], .interactive = interactive };
+        return .{ .kind = .script_file, .source = path, .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = path, .positionals = operands[1..], .interactive = interactive };
     }
-    return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .arg_zero = args[0], .interactive = interactive };
+    return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = args[0], .interactive = interactive };
 }
 
 pub const History = struct {
@@ -5427,8 +5434,14 @@ const InteractiveOptions = struct {
     login: bool = false,
     features: compat.Features = .{},
     shell_options: exec.ShellOptions = .{},
+    monitor_option_explicit: bool = false,
     positionals: []const []const u8 = &.{},
 };
+
+fn setInteractiveStartupShellOptions(shell_options: *exec.ShellOptions, monitor_option_explicit: bool, stdin_is_tty: bool) void {
+    if (stdin_is_tty and !monitor_option_explicit) shell_options.monitor = true;
+    shell_options.noexec = false;
+}
 
 pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !u8 {
     var signal_handlers = installInteractiveSignalHandlers();
@@ -5454,7 +5467,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
     executor.shell_options = options.shell_options;
-    executor.shell_options.noexec = false;
+    setInteractiveStartupShellOptions(&executor.shell_options, options.monitor_option_explicit, stdinIsTty(io));
     if (options.positionals.len != 0) try executor.global_positionals.set(allocator, options.positionals);
     try loadInteractiveConfig(allocator, io, &executor, options);
     if (executor.pending_exit) |status| return status;
@@ -5861,7 +5874,7 @@ fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, i
             break :script owned_script.?;
         },
     };
-    const interactive_options: ?InteractiveOptions = if (invocation.interactive) .{ .arg_zero = invocation.arg_zero, .login = login_shell } else null;
+    const interactive_options: ?InteractiveOptions = if (invocation.interactive) .{ .arg_zero = invocation.arg_zero, .login = login_shell, .monitor_option_explicit = invocation.monitor_option_explicit } else null;
     return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, invocation.positionals, interactive_options, invocation.shell_options);
 }
 
@@ -5958,7 +5971,7 @@ fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, scr
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
     executor.shell_options = shell_options;
-    if (interactive_options != null) executor.shell_options.noexec = false;
+    if (interactive_options) |startup_options| setInteractiveStartupShellOptions(&executor.shell_options, startup_options.monitor_option_explicit, stdinIsTty(io));
     if (positionals.len != 0) try executor.global_positionals.set(allocator, positionals);
     if (interactive_options) |startup_options| {
         try loadInteractiveConfig(allocator, io, &executor, startup_options);
@@ -8846,6 +8859,18 @@ test "standard input invocation is the default when only invocation options are 
     try std.testing.expect(invocation.shell_options.nounset);
 }
 
+test "interactive invocation tracks explicit monitor option" {
+    const enabled = parseShellInvocation(&.{ "rush", "-im", "-c", "jobs" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(enabled.interactive);
+    try std.testing.expect(enabled.shell_options.monitor);
+    try std.testing.expect(enabled.monitor_option_explicit);
+
+    const disabled = parseShellInvocation(&.{ "rush", "+m", "-i" }) orelse return error.ExpectedInvocation;
+    try std.testing.expect(disabled.interactive);
+    try std.testing.expect(!disabled.shell_options.monitor);
+    try std.testing.expect(disabled.monitor_option_explicit);
+}
+
 test "standard input invocation uses interactive editor when terminal rules require it" {
     const forced = parseShellInvocation(&.{ "rush", "-i" }) orelse return error.ExpectedInvocation;
     try std.testing.expect(shouldRunInteractiveStandardInput(forced, true, false));
@@ -9634,6 +9659,47 @@ test "interactive startup parameter-expands ENV pathname from HOME" {
 
     try loadInteractiveConfig(std.testing.allocator, std.testing.io, &executor, .{ .arg_zero = "rush" });
     try std.testing.expectEqualStrings("ok", executor.getEnv("HOME_ENV_LOADED").?);
+}
+
+test "interactive startup enables monitor by default for tty stdin" {
+    var master: c_int = -1;
+    var slave: c_int = -1;
+    if (openpty(&master, &slave, null, null, null) != 0) return error.SkipZigTest;
+    defer _ = close(master);
+    defer _ = close(slave);
+
+    var guard = try StdinGuard.replaceWith(.{ .handle = slave, .flags = .{ .nonblocking = false } });
+    defer guard.restore();
+
+    var default_monitor = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "case $- in *m*) echo monitor:on;; *) echo monitor:off;; esac",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{ .arg_zero = "rush" },
+        .{},
+    );
+    defer default_monitor.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), default_monitor.status);
+    try std.testing.expectEqualStrings("monitor:on\n", default_monitor.stdout);
+    try std.testing.expectEqualStrings("", default_monitor.stderr);
+
+    var explicit_disabled = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "case $- in *m*) echo monitor:on;; *) echo monitor:off;; esac",
+        .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{ .arg_zero = "rush", .monitor_option_explicit = true },
+        .{},
+    );
+    defer explicit_disabled.deinit();
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), explicit_disabled.status);
+    try std.testing.expectEqualStrings("monitor:off\n", explicit_disabled.stdout);
+    try std.testing.expectEqualStrings("", explicit_disabled.stderr);
 }
 
 fn loadInteractiveConfigCapturingStderr(allocator: std.mem.Allocator, executor: *exec.Executor, stderr_path: []const u8) ![]u8 {
