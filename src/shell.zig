@@ -33,3 +33,11 @@ pub const ShellOptions = state.ShellOptions;
 pub const StateDelta = delta.StateDelta;
 pub const Variable = state.Variable;
 pub const VariableAttributes = state.VariableAttributes;
+
+pub const Assignment = command_plan.Assignment;
+pub const CommandClass = command_plan.CommandClass;
+pub const CommandLookupSnapshot = command_plan.LookupSnapshot;
+pub const ExpandedSimpleCommand = command_plan.ExpandedSimpleCommand;
+pub const ExternalResolution = command_plan.ExternalResolution;
+pub const FunctionDefinition = command_plan.FunctionDefinition;
+pub const PlanRequest = command_plan.PlanRequest;
