@@ -5457,6 +5457,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     executor.shell_options.noexec = false;
     if (options.positionals.len != 0) try executor.global_positionals.set(allocator, options.positionals);
     try loadInteractiveConfig(allocator, io, &executor, options);
+    if (executor.pending_exit) |status| return status;
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
     exec.setTrapSignalWakeFd(terminal.trapSignalWakeFd());
@@ -5471,6 +5472,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer completion_loader.deinit();
 
     repl_loop: while (true) {
+        if (executor.pending_exit) |status| {
+            last_status = status;
+            break;
+        }
         terminal.refreshWinsize();
         try syncInteractiveTerminalSize(&executor, terminal);
         const notifications = try executor.drainJobNotifications();
@@ -5478,6 +5483,10 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         allocator.free(notifications);
         try executor.runPendingVariableHooks(io);
         try executor.runPromptEventHooks(io, "prompt", &.{});
+        if (executor.pending_exit) |status| {
+            last_status = status;
+            break;
+        }
         const fallback_prompt = executor.getEnv("PS1") orelse "$ ";
         const prompt = executor.renderPrompt(.{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .arg_zero = options.arg_zero }, fallback_prompt) catch |err| switch (err) {
             error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
@@ -5782,6 +5791,10 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
+        if (executor.pending_exit) |status| {
+            last_status = status;
+            break;
+        }
         const notifications = try executor.drainJobNotifications();
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
@@ -8700,6 +8713,24 @@ test "command string operands set the command name and positional parameters" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "command string invocation preserves trailing EOF backslash literal" {
+    var result = try runCommandStringWithEnvironment(
+        std.testing.allocator,
+        std.testing.io,
+        "echo a\\",
+        .{ .io = std.testing.io, .arg_zero = "rush" },
+        null,
+        &.{},
+        null,
+        .{},
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("a\\\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
 test "command string Bash source operands temporarily override positionals" {
     const path = "rush-command-string-source-positionals.rush";
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
@@ -8746,6 +8777,21 @@ test "script file invocation sets command name and positional parameters" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("rush-script-invocation-test.rush:2:arg one:two words\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "script file invocation preserves trailing EOF backslash without final newline" {
+    const path = "rush-script-trailing-backslash-test.rush";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = "echo a\\" });
+
+    const invocation = parseShellInvocation(&.{ "rush", path }) orelse return error.ExpectedInvocation;
+    var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("a\\\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

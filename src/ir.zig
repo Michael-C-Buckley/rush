@@ -1419,7 +1419,7 @@ fn wordRefFromToken(allocator: std.mem.Allocator, parsed: parser.ParseResult, to
 }
 
 fn wordRefFromSpan(allocator: std.mem.Allocator, parsed: parser.ParseResult, span: parser.Span) !WordRef {
-    const raw = try allocator.dupe(u8, span.slice(parsed.source));
+    const raw = try wordRawForExpansion(allocator, parsed.source, span);
     errdefer allocator.free(raw);
     const text = expand.expandWordScalar(allocator, raw, .{}) catch |err| switch (err) {
         error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => try allocator.dupe(u8, raw),
@@ -1431,6 +1431,28 @@ fn wordRefFromSpan(allocator: std.mem.Allocator, parsed: parser.ParseResult, spa
         .raw = raw,
         .text = text,
     };
+}
+
+fn wordRawForExpansion(allocator: std.mem.Allocator, source: []const u8, span: parser.Span) ![]const u8 {
+    const raw = span.slice(source);
+    if (!endsWithUnpairedBackslashAtEof(source, span)) return allocator.dupe(u8, raw);
+
+    const normalized = try allocator.alloc(u8, raw.len + 1);
+    @memcpy(normalized[0..raw.len], raw);
+    normalized[raw.len] = '\\';
+    return normalized;
+}
+
+fn endsWithUnpairedBackslashAtEof(source: []const u8, span: parser.Span) bool {
+    if (span.end != source.len or span.isEmpty() or source[span.end - 1] != '\\') return false;
+
+    var slash_count: usize = 0;
+    var index = span.end;
+    while (index > span.start and source[index - 1] == '\\') {
+        slash_count += 1;
+        index -= 1;
+    }
+    return slash_count % 2 == 1;
 }
 
 fn freeSubshell(allocator: std.mem.Allocator, subshell: Subshell) void {
@@ -1531,6 +1553,18 @@ test "lower removes quotes from execution words" {
     try std.testing.expectEqualStrings("hello world", command.argv[1].text);
     try std.testing.expectEqualStrings("again", command.argv[2].text);
     try std.testing.expectEqualStrings("a b", command.argv[3].text);
+}
+
+test "lower preserves unpaired EOF backslash literals" {
+    var parsed = try parser.parse(std.testing.allocator, "echo a\\", .{});
+    defer parsed.deinit();
+
+    var program = try lowerSimpleCommands(std.testing.allocator, parsed);
+    defer program.deinit();
+
+    const command = program.commands[0];
+    try std.testing.expectEqualStrings("echo", command.argv[0].text);
+    try std.testing.expectEqualStrings("a\\", command.argv[1].text);
 }
 
 test "lower simple command assignments argv and redirections" {
