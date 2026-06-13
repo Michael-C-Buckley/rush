@@ -22,21 +22,28 @@ pub const Assignment = struct {
 
 pub const FunctionDefinition = struct {
     name: []const u8,
-    /// Borrowed semantic body for this redesign slice. Parser/IR integration
-    /// will replace this with an owned lowered representation later.
+    /// Eagerly lowered semantic body used by older unit tests and by manually
+    /// constructed semantic plans.
     body: FunctionBody = .{},
+    /// Parser-backed function body source. When present, the body is lowered
+    /// at call time so parameter, variable, glob, and redirection expansion see
+    /// the function invocation state rather than the definition state.
+    source_body: ?[]const u8 = null,
     redirections: redirection_plan.RedirectionPlan = .{},
 
     pub fn validate(self: FunctionDefinition) void {
         state.assertValidVariableName(self.name);
         self.body.validate();
+        if (self.source_body) |source_body| {
+            std.debug.assert(std.mem.indexOfScalar(u8, source_body, 0) == null);
+        }
         validateRedirections(self.redirections);
         std.debug.assert(self.redirections.allocator == null);
     }
 
     pub fn hasExecutableBody(self: FunctionDefinition) bool {
         self.validate();
-        return self.body.statements.len != 0 or self.body.commands.len != 0;
+        return self.source_body != null or self.body.statements.len != 0 or self.body.commands.len != 0;
     }
 };
 
@@ -675,9 +682,12 @@ pub fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: Functio
     errdefer allocator.free(owned_name);
     const owned_body = try cloneStatementList(allocator, definition.body);
     errdefer freeStatementList(allocator, owned_body);
+    const owned_source_body = if (definition.source_body) |source_body| try allocator.dupe(u8, source_body) else null;
+    errdefer if (owned_source_body) |source_body| allocator.free(source_body);
     return .{
         .name = owned_name,
         .body = owned_body,
+        .source_body = owned_source_body,
         .redirections = definition.redirections,
     };
 }
@@ -685,6 +695,7 @@ pub fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: Functio
 pub fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: FunctionDefinition) void {
     allocator.free(definition.name);
     freeStatementList(allocator, definition.body);
+    if (definition.source_body) |source_body| allocator.free(source_body);
 }
 
 fn targetForClassification(default_target: context.ExecutionTarget, classification: Classification) context.ExecutionTarget {

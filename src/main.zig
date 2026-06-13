@@ -6677,7 +6677,7 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (semanticPreflightUnsupported(program)) |message| return semanticUnsupported(allocator, message);
+    if (try semanticPreflightUnsupported(allocator, program, options.features)) |message| return semanticUnsupported(allocator, message);
 
     var shell_state = shell.ShellState.init(allocator);
     defer shell_state.deinit();
@@ -6685,6 +6685,8 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.features = options.features;
+    evaluator.arg_zero = options.arg_zero;
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = options.features;
     parser_resolver.arg_zero = options.arg_zero;
@@ -6730,7 +6732,7 @@ fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io,
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (semanticPreflightUnsupported(program)) |message| return semanticUnsupported(allocator, message);
+    if (try semanticPreflightUnsupported(allocator, program, options.features)) |message| return semanticUnsupported(allocator, message);
     if (semanticInteractiveProgramUnsupported(executor.*, program)) |message| return semanticUnsupported(allocator, message);
 
     var shell_state = shell.ShellState.init(allocator);
@@ -6739,6 +6741,8 @@ fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io,
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.features = options.features;
+    evaluator.arg_zero = options.arg_zero;
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
     parser_resolver.features = options.features;
     parser_resolver.arg_zero = options.arg_zero;
@@ -6918,6 +6922,7 @@ fn semanticEnvironmentSupported(environ_map: *const std.process.Environ.Map) boo
 }
 
 fn semanticInteractiveProgramUnsupported(executor: exec.Executor, program: ir.Program) ?[]const u8 {
+    if (program.function_definitions.len != 0) return "semantic interactive executor does not yet preserve function definitions";
     if (executor.aliases.count() != 0) return "semantic interactive executor does not yet preserve alias-aware parsing";
     if (executor.arrays.count() != 0 and semanticProgramUsesShellExpansion(program)) return "semantic interactive executor does not yet preserve array expansion";
     if (executor.shell_options.nounset and semanticProgramUsesShellExpansion(program)) return "semantic interactive executor does not yet preserve nounset expansion diagnostics";
@@ -7114,7 +7119,7 @@ fn isValidShellVariableName(name: []const u8) bool {
     return true;
 }
 
-fn semanticPreflightUnsupported(program: ir.Program) ?[]const u8 {
+fn semanticPreflightUnsupported(allocator: std.mem.Allocator, program: ir.Program, features: compat.Features) !?[]const u8 {
     if (program.if_commands.len != 0 or program.loop_commands.len != 0 or program.for_commands.len != 0 or program.case_commands.len != 0 or program.brace_groups.len != 0 or program.subshells.len != 0) {
         return "semantic executor production preflight keeps compound commands unsupported outside the switched slice";
     }
@@ -7128,12 +7133,78 @@ fn semanticPreflightUnsupported(program: ir.Program) ?[]const u8 {
         if (command.argv.len == 0 and command.redirections.len != 0) return "semantic executor does not yet support redirection-only commands";
         if (command.redirections.len != 0) return "semantic executor production preflight keeps redirections unsupported outside the switched slice";
     }
-    if (program.function_definitions.len != 0) return "semantic executor does not yet lower function definitions from production scripts";
+    for (program.function_definitions) |definition| {
+        if (try semanticFunctionDefinitionPreflightUnsupported(allocator, definition, features)) |message| return message;
+    }
     if (program.bash_test_commands.len != 0) return "semantic executor does not yet lower bash [[ ]] commands";
     for (program.pipelines) |pipeline| {
         if (semanticPipelinePreflightUnsupported(program, pipeline)) |message| return message;
     }
     return null;
+}
+
+fn semanticFunctionDefinitionPreflightUnsupported(allocator: std.mem.Allocator, definition: ir.FunctionDefinition, features: compat.Features) !?[]const u8 {
+    if (definition.redirections.len != 0) return "semantic executor production preflight keeps function-definition redirections on the old executor";
+
+    var parsed = try parser.parse(allocator, definition.body, .{ .features = features.withStrictDiagnostics() });
+    defer parsed.deinit();
+    if (parsed.diagnostics.len != 0) return "semantic executor production preflight keeps parser-rejected function bodies on the old executor";
+
+    var body_program = try ir.lowerSimpleCommands(allocator, parsed);
+    defer body_program.deinit();
+    return semanticFunctionBodyProgramUnsupported(allocator, body_program, features);
+}
+
+fn semanticFunctionBodyProgramUnsupported(allocator: std.mem.Allocator, program: ir.Program, features: compat.Features) !?[]const u8 {
+    if (semanticProgramHasCompoundRedirections(program)) return "semantic executor production preflight keeps compound redirections on the old executor";
+    if (semanticProgramHasLoopDependentExpansion(program)) return "semantic executor production preflight keeps loop-dependent function body expansion on the old executor";
+    for (program.statements, 0..) |statement, index| {
+        if (semanticAsyncStatementPreflightUnsupported(program, statement, index)) |message| return message;
+        if (statement.kind == .function_definition and statement.op_before != .sequence) return "semantic executor production preflight keeps dynamically guarded function definitions on the old executor";
+    }
+    for (program.commands) |command| {
+        if (command.assignments.len != 0) return "semantic executor production preflight keeps assignment-bearing commands on the old executor";
+        if (commandUsesUnsupportedSemanticBuiltin(command)) return "semantic executor preflight found an unsupported builtin";
+        if (commandUsesUnsupportedProductionExpansion(command)) return "semantic executor production preflight found an expansion shape outside the switched slice";
+        if (command.argv.len == 0 and command.redirections.len != 0) return "semantic executor does not yet support redirection-only commands";
+        if (command.redirections.len != 0) return "semantic executor production preflight keeps redirections on the old executor";
+    }
+    for (program.function_definitions) |definition| {
+        if (try semanticFunctionDefinitionPreflightUnsupported(allocator, definition, features)) |message| return message;
+    }
+    if (program.bash_test_commands.len != 0) return "semantic executor does not yet lower bash [[ ]] commands";
+    for (program.pipelines) |pipeline| {
+        if (semanticPipelinePreflightUnsupported(program, pipeline)) |message| return message;
+    }
+    return null;
+}
+
+fn semanticProgramHasCompoundRedirections(program: ir.Program) bool {
+    for (program.if_commands) |command| if (command.redirections.len != 0) return true;
+    for (program.loop_commands) |command| if (command.redirections.len != 0) return true;
+    for (program.for_commands) |command| if (command.redirections.len != 0) return true;
+    for (program.case_commands) |command| if (command.redirections.len != 0) return true;
+    for (program.brace_groups) |group| if (group.redirections.len != 0) return true;
+    for (program.subshells) |subshell| if (subshell.redirections.len != 0) return true;
+    return false;
+}
+
+fn semanticProgramHasLoopDependentExpansion(program: ir.Program) bool {
+    for (program.for_commands) |command| {
+        if (!command.use_positionals) {
+            for (command.words) |word| if (wordUsesLoopDependentExpansion(word.raw)) return true;
+        }
+        if (std.mem.indexOfScalar(u8, command.body, '$') != null) return true;
+    }
+    for (program.loop_commands) |command| {
+        if (std.mem.indexOfScalar(u8, command.condition, '$') != null) return true;
+        if (std.mem.indexOfScalar(u8, command.body, '$') != null) return true;
+    }
+    return false;
+}
+
+fn wordUsesLoopDependentExpansion(raw: []const u8) bool {
+    return wordUsesUnsupportedProductionExpansion(raw) or std.mem.indexOfScalar(u8, raw, '$') != null;
 }
 
 fn semanticAsyncStatementPreflightUnsupported(program: ir.Program, statement: ir.Statement, index: usize) ?[]const u8 {
@@ -7266,7 +7337,7 @@ fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan) ?[]const u8 {
             break :blk null;
         },
         .empty, .assignment_only => null,
-        .function_definition => "semantic evaluator does not yet receive owned production function definitions",
+        .function_definition => |definition| if (definition.source_body == null) "semantic evaluator does not yet receive owned production function definitions" else null,
         .function, .external, .not_found => null,
     };
 }
@@ -7287,7 +7358,6 @@ fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor,
         return scriptDiagnosticsResult(allocator, executor, script, execution_options);
     };
 }
-
 fn semanticShellOptions(options: exec.ShellOptions) shell.ShellOptions {
     return .{
         .allexport = options.allexport,
@@ -10759,6 +10829,60 @@ test "semantic non-interactive invocation executes foreground simple pipelines" 
     }
 }
 
+test "semantic non-interactive invocation lowers function bodies at call time" {
+    var execution = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        \\func() { printf 'call:%s:%s\n' "$1" "$#"; }
+        \\func first second
+        \\outer() { inner() { printf 'same-list:%s\n' "$1"; }; inner nested; }
+        \\outer
+    ,
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("call:first:2\nsame-list:nested\n", result.stdout);
+            try std.testing.expectEqualStrings("", result.stderr);
+        },
+    }
+}
+
+test "semantic non-interactive invocation executes function calls in pipelines with subshell isolation" {
+    var execution = try runSemanticCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        \\pipe_fn() { printf 'pipe:%s\n' "$1"; }
+        \\pipe_fn value | /bin/cat
+        \\maker() { made() { printf 'bad\n'; }; }
+        \\maker | /bin/cat
+        \\made
+        \\printf 'missing:%s\n' "$?"
+    ,
+        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        null,
+        &.{},
+        .{},
+    );
+    defer execution.deinit(std.testing.allocator);
+
+    switch (execution) {
+        .unsupported => return error.ExpectedSemanticExecution,
+        .output => |result| {
+            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqualStrings("pipe:value\nmissing:127\n", result.stdout);
+            try std.testing.expect(std.mem.indexOf(u8, result.stderr, "made: command not found") != null);
+        },
+    }
+}
+
 test "semantic parser lowering plans compound pipeline stages" {
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
@@ -11138,6 +11262,19 @@ test "production shell execution handles compound pipeline stage" {
 
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("compound-value\n", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "production shell execution handles pipeline function call" {
+    var result = try runScript(std.testing.allocator, std.testing.io,
+        \\fn() { printf 'compare:%s\n' "$1"; }
+        \\fn value | read VALUE
+        \\printf 'status:%s value:%s\n' "$?" "$VALUE"
+    );
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("status:0 value:\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
 

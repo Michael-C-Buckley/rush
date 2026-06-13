@@ -34,6 +34,8 @@ pub const Evaluator = struct {
     fs_port: ?runtime.fs.Port = null,
     process_port: ?runtime.process.Port = null,
     signal_port: ?runtime.signal.Port = null,
+    features: compat.Features = .{},
+    arg_zero: []const u8 = "rush",
     function_frame: ?*FunctionFrame = null,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
@@ -206,6 +208,7 @@ pub const ParserTrapActionResolver = struct {
             .shell_state = shell_state,
             .eval_context = eval_context,
             .signal = signal,
+            .local_functions = .empty,
         };
 
         const payload = try lowerer.lower(action);
@@ -220,17 +223,16 @@ const TrapActionLowerer = struct {
     shell_state: *state.ShellState,
     eval_context: context.EvalContext,
     signal: state.TrapSignal,
+    local_functions: std.ArrayList(command_plan.FunctionDefinition),
 
     fn lower(self: *TrapActionLowerer, action: []const u8) !TrapActionBodyPayload {
         trap_semanticActionAssert(action, self.signal, self.eval_context);
-        var parsed = try parser.parse(self.allocator, action, .{ .features = self.owner.features.withStrictDiagnostics() });
-        defer parsed.deinit();
+        const parsed = try parser.parse(self.allocator, action, .{ .features = self.owner.features.withStrictDiagnostics() });
 
         if (parsed.diagnostics.len != 0) return self.parserDiagnosticFailure(parsed.diagnostics[0]);
         if (parsed.incomplete) return self.failure(.parse_error, "trap {s}: parse error: incomplete trap action", .{self.signal.name()});
 
-        var program = try ir.lowerSimpleCommands(self.allocator, parsed);
-        defer program.deinit();
+        const program = try ir.lowerSimpleCommands(self.allocator, parsed);
         return self.lowerProgram(program, self.eval_context.target, true);
     }
 
@@ -277,6 +279,9 @@ const TrapActionLowerer = struct {
     fn lowerStatementList(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget) !StatementListLowering {
         for (program.statements, 0..) |statement, index| {
             if (statement.async_after) return .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background commands are not supported by the semantic trap resolver", .{self.signal.name()})).failure };
+            if (statement.kind == .function_definition and statement.op_before != .sequence) {
+                return .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: dynamically guarded function definitions stay on the old executor", .{self.signal.name()})).failure };
+            }
             if (index == 0) {
                 std.debug.assert(statement.op_before == .sequence);
                 continue;
@@ -298,6 +303,13 @@ const TrapActionLowerer = struct {
                 .or_if => .or_if,
             };
             statements[index] = .{ .op_before = op_before, .plan = plan };
+            switch (payload) {
+                .simple => |simple| switch (simple.classification) {
+                    .function_definition => |definition| try self.rememberLocalFunction(definition),
+                    else => {},
+                },
+                .compound, .pipeline, .failure => {},
+            }
         }
         const list: command_plan.StatementList = .{ .statements = statements };
         list.validate();
@@ -335,13 +347,14 @@ const TrapActionLowerer = struct {
     };
 
     fn lowerPipelineStageSource(self: *TrapActionLowerer, source: []const u8, target: context.ExecutionTarget) anyerror!PipelineStageLowering {
-        var parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
-        defer parsed.deinit();
+        const local_function_count = self.local_functions.items.len;
+        defer self.local_functions.shrinkRetainingCapacity(local_function_count);
+
+        const parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
         if (parsed.diagnostics.len != 0) return .{ .failure = (try self.parserDiagnosticFailure(parsed.diagnostics[0])).failure };
         if (parsed.incomplete) return .{ .failure = (try self.failure(.parse_error, "trap {s}: parse error: incomplete pipeline stage", .{self.signal.name()})).failure };
 
-        var stage_program = try ir.lowerSimpleCommands(self.allocator, parsed);
-        defer stage_program.deinit();
+        const stage_program = try ir.lowerSimpleCommands(self.allocator, parsed);
         if (stage_program.statements.len != 1) return .{ .failure = (try self.failure(.unsupported_shape, "trap {s}: unsupported trap action: pipeline stages must contain a single command", .{self.signal.name()})).failure };
 
         const payload = try self.lowerSingleTrapStatement(stage_program, stage_program.statements[0], target);
@@ -473,25 +486,22 @@ const TrapActionLowerer = struct {
 
     fn lowerFunctionDefinition(self: *TrapActionLowerer, definition: ir.FunctionDefinition, target: context.ExecutionTarget) !TrapActionBodyPayload {
         if (definition.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: function-definition redirections need redirection lowering", .{self.signal.name()});
-        const body_result = try self.lowerStatementListSource(definition.body, target);
-        const body = switch (body_result) {
-            .failure => |trap_failure| return .{ .failure = trap_failure },
-            .list => |list| list,
-        };
         const name = try self.allocator.dupe(u8, definition.name);
-        const function_definition: command_plan.FunctionDefinition = .{ .name = name, .body = body };
+        const source_body = try self.allocator.dupe(u8, definition.body);
+        const function_definition: command_plan.FunctionDefinition = .{ .name = name, .source_body = source_body };
         const plan: command_plan.CommandPlan = .{ .target = target, .classification = .{ .function_definition = function_definition } };
         plan.validate();
         return .{ .simple = plan };
     }
 
     fn lowerStatementListSource(self: *TrapActionLowerer, source: []const u8, target: context.ExecutionTarget) !StatementListLowering {
-        var parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
-        defer parsed.deinit();
+        const local_function_count = self.local_functions.items.len;
+        defer self.local_functions.shrinkRetainingCapacity(local_function_count);
+
+        const parsed = try parser.parse(self.allocator, source, .{ .features = self.owner.features.withStrictDiagnostics() });
         if (parsed.diagnostics.len != 0) return .{ .failure = (try self.parserDiagnosticFailure(parsed.diagnostics[0])).failure };
 
-        var program = try ir.lowerSimpleCommands(self.allocator, parsed);
-        defer program.deinit();
+        const program = try ir.lowerSimpleCommands(self.allocator, parsed);
         return self.lowerStatementList(program, target);
     }
 
@@ -536,8 +546,12 @@ const TrapActionLowerer = struct {
     fn lookupSnapshot(self: *TrapActionLowerer, command: command_plan.ExpandedSimpleCommand) !command_plan.LookupSnapshot {
         var functions: std.ArrayList(command_plan.FunctionDefinition) = .empty;
         errdefer functions.deinit(self.allocator);
+        try functions.appendSlice(self.allocator, self.local_functions.items);
         var iterator = self.shell_state.functions.iterator();
-        while (iterator.next()) |entry| try functions.append(self.allocator, entry.value_ptr.*);
+        while (iterator.next()) |entry| {
+            if (self.localFunction(entry.key_ptr.*) != null) continue;
+            try functions.append(self.allocator, try command_plan.cloneFunctionDefinition(self.allocator, entry.value_ptr.*));
+        }
 
         var externals: std.ArrayList(command_plan.ExternalResolution) = .empty;
         errdefer externals.deinit(self.allocator);
@@ -548,6 +562,23 @@ const TrapActionLowerer = struct {
             .functions = try functions.toOwnedSlice(self.allocator),
             .externals = try externals.toOwnedSlice(self.allocator),
         };
+    }
+
+    fn rememberLocalFunction(self: *TrapActionLowerer, definition: command_plan.FunctionDefinition) !void {
+        definition.validate();
+        for (self.local_functions.items) |*existing| {
+            if (!std.mem.eql(u8, existing.name, definition.name)) continue;
+            existing.* = definition;
+            return;
+        }
+        try self.local_functions.append(self.allocator, definition);
+    }
+
+    fn localFunction(self: TrapActionLowerer, name: []const u8) ?command_plan.FunctionDefinition {
+        for (self.local_functions.items) |definition| {
+            if (std.mem.eql(u8, definition.name, name)) return definition;
+        }
+        return null;
     }
 
     const LoweredRedirections = union(enum) {
@@ -2737,7 +2768,11 @@ fn evaluateFunction(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
         evaluator.function_frame = previous_frame;
     }
 
-    var result = try evaluateStatementList(evaluator, &frame_state, function_context, definition.body, buffers);
+    var result = if (definition.source_body) |source_body| blk: {
+        break :blk try evaluateFunctionSourceBody(evaluator, &frame_state, function_context, source_body, buffers);
+    } else blk: {
+        break :blk try evaluateStatementList(evaluator, &frame_state, function_context, definition.body, buffers);
+    };
     if (result.control_flow == .return_from_scope) {
         const request = result.control_flow.return_from_scope;
         switch (request.scope) {
@@ -2751,6 +2786,30 @@ fn evaluateFunction(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
 
     try appendFunctionFrameDelta(shell_state.*, frame_state, function_frame, state_delta);
     return result;
+}
+
+fn evaluateFunctionSourceBody(evaluator: *Evaluator, frame_state: *state.ShellState, function_context: context.EvalContext, source_body: []const u8, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    frame_state.validate();
+    function_context.validate();
+    std.debug.assert(function_context.canReturnFromFunction());
+    std.debug.assert(std.mem.indexOfScalar(u8, source_body, 0) == null);
+
+    var parser_resolver = ParserTrapActionResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    const resolver = parser_resolver.resolver();
+    var body = (resolver.resolve(evaluator.allocator, source_body, .TERM, function_context, frame_state) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    }) orelse return error.Unimplemented;
+    defer body.deinit();
+
+    var body_outcome = try evaluateTrapActionBody(evaluator, frame_state, function_context, body);
+    defer body_outcome.deinit();
+
+    try appendOutcomeBuffers(buffers, body_outcome);
+    try applyOutcomeToWorkingState(frame_state, &body_outcome, body_outcome.state_delta.target);
+    return .{ .status = body_outcome.status, .control_flow = body_outcome.control_flow };
 }
 
 fn applyFunctionAssignmentPrefixes(frame_state: *state.ShellState, shell_state: state.ShellState, plan: command_plan.CommandPlan) EvalError!void {
@@ -6173,7 +6232,8 @@ test "semantic parser trap resolver lowers heterogeneous statement lists and fun
     try definition_outcome.commitDelta(&shell_state, .current_shell);
 
     const stored = shell_state.getFunction("fn").?;
-    try std.testing.expectEqual(@as(usize, 2), stored.body.statements.len);
+    try std.testing.expect(stored.source_body != null);
+    try std.testing.expectEqual(@as(usize, 0), stored.body.statements.len);
     const lookup_functions = [_]command_plan.FunctionDefinition{stored};
     const call_plan = command_plan.classifyExpandedSimpleCommand(.{
         .command = .{ .argv = &[_][]const u8{"fn"} },
