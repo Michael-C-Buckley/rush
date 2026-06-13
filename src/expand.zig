@@ -84,6 +84,16 @@ pub const ArrayLookup = struct {
     }
 };
 
+pub const ArraySet = struct {
+    context: ?*anyopaque = null,
+    setFn: ?*const fn (?*anyopaque, []const u8, usize, []const u8) anyerror!void = null,
+
+    pub fn set(self: ArraySet, name: []const u8, index: usize, value: []const u8) !void {
+        const set_fn = self.setFn orelse return;
+        try set_fn(self.context, name, index, value);
+    }
+};
+
 pub const DiagnosticSink = struct {
     context: ?*anyopaque = null,
     appendFn: ?*const fn (?*anyopaque, []const u8, []const u8) anyerror!void = null,
@@ -132,6 +142,7 @@ pub const Options = struct {
     variable_names: VariableNames = .{},
     env_set: EnvSet = .{},
     arrays: ArrayLookup = .{},
+    arrays_set: ArraySet = .{},
     diagnostic_sink: DiagnosticSink = .{},
     io: ?std.Io = null,
     features: compat.Features = .{},
@@ -689,6 +700,16 @@ const ParameterPatternOperation = struct {
     word: []const u8,
 };
 
+const ParameterArrayWordOperation = struct {
+    subscript: BashArraySubscript,
+    operation: ParameterWordOperation,
+};
+
+const ParameterArrayPatternOperation = struct {
+    subscript: BashArraySubscript,
+    operation: ParameterPatternOperation,
+};
+
 const ParameterSubstringOperation = struct {
     offset: []const u8,
     length: ?[]const u8 = null,
@@ -760,6 +781,8 @@ const ParameterOperation = union(enum) {
     array_index: ParameterArrayIndexOperation,
     array_element_length: ParameterArrayIndexOperation,
     array_values: ParameterArrayWholeOperation,
+    array_word: ParameterArrayWordOperation,
+    array_pattern: ParameterArrayPatternOperation,
     array_keys: ParameterArrayWholeOperation,
     array_length: ParameterArrayWholeOperation,
 };
@@ -848,20 +871,10 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
     if (parsed.indirect) return renderIndirectParameter(allocator, parsed.name, options);
     if (parsed.array_keys) |kind| return renderArrayKeysJoined(allocator, parsed.name, kind, options, in_double_quotes);
     if (parsed.array_whole) |kind| {
-        if (parsed.operator == .length) return std.fmt.allocPrint(allocator, "{d}", .{options.arrays.len(parsed.name)});
-        if (hasParameterStringOperation(parsed)) {
-            var values = try renderArrayStringOperationValues(allocator, parsed.name, kind, parsed, options, in_double_quotes);
-            defer values.deinit(allocator);
-            return joinValues(allocator, values.fields, arrayValueScalarJoinSeparator(kind, options));
-        }
-        return renderArrayValuesJoined(allocator, parsed.name, kind, options);
+        return renderArrayWholeParameter(allocator, parsed, kind, options, in_double_quotes);
     }
     if (parsed.array_index) |index_text| {
-        if (parsed.operator == .length) return renderArrayElementLength(allocator, parsed.name, index_text, options);
-        const base = try renderArrayElement(allocator, parsed.name, index_text, options);
-        defer allocator.free(base);
-        if (hasParameterStringOperation(parsed)) return renderStringOperation(allocator, base, parsed, options, in_double_quotes);
-        return allocator.dupe(u8, base);
+        return renderArrayElementParameter(allocator, parsed, index_text, options, in_double_quotes);
     }
 
     if (parsed.substring) |operation| {
@@ -1238,6 +1251,124 @@ fn renderArrayElement(allocator: std.mem.Allocator, name: []const u8, index_text
     if (options.arrays.get(name, index)) |value| return allocator.dupe(u8, value);
     if (options.nounset) return error.NounsetParameter;
     return allocator.alloc(u8, 0);
+}
+
+fn renderArrayElementParameter(allocator: std.mem.Allocator, parsed: ParameterExpression, index_text: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+    if (parsed.operator == .length) return renderArrayElementLength(allocator, parsed.name, index_text, options);
+    if (hasParameterStringOperation(parsed)) {
+        const base = try renderArrayElement(allocator, parsed.name, index_text, options);
+        defer allocator.free(base);
+        return renderStringOperation(allocator, base, parsed, options, in_double_quotes);
+    }
+
+    const value = try arrayElementValue(allocator, parsed.name, index_text, options);
+    const is_set = value != null;
+    const is_null = if (value) |text| text.len == 0 else true;
+
+    switch (parsed.operator) {
+        .none => {
+            if (value) |text| return allocator.dupe(u8, text);
+            if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
+            return allocator.alloc(u8, 0);
+        },
+        .default_value => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
+            return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
+        },
+        .assign_default => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
+            return assignArrayElementDefault(allocator, parsed.name, index_text, parsed.word, options, in_double_quotes);
+        },
+        .alternate_value => {
+            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.alloc(u8, 0);
+            return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
+        },
+        .error_if_unset => {
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
+            return parameterExpansionError(allocator, options, parsed.name, parsed.word, in_double_quotes);
+        },
+        .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
+            const base = value orelse blk: {
+                if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
+                break :blk "";
+            };
+            var pattern = try expandPatternWord(allocator, parsed.word, options);
+            defer pattern.deinit(allocator);
+            return removePattern(allocator, base, pattern, parsed.operator, options.extglob);
+        },
+        .length, .invalid => unreachable,
+    }
+}
+
+fn renderArrayWholeParameter(allocator: std.mem.Allocator, parsed: ParameterExpression, kind: ParameterArrayWholeKind, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+    if (parsed.operator == .length) return std.fmt.allocPrint(allocator, "{d}", .{options.arrays.len(parsed.name)});
+    if (hasParameterStringOperation(parsed)) {
+        var values = try renderArrayStringOperationValues(allocator, parsed.name, kind, parsed, options, in_double_quotes);
+        defer values.deinit(allocator);
+        return joinValues(allocator, values.fields, arrayValueScalarJoinSeparator(kind, options));
+    }
+
+    switch (parsed.operator) {
+        .none => return renderArrayValuesJoined(allocator, parsed.name, kind, options),
+        .default_value => {
+            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(allocator, parsed.name, kind, options);
+            return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
+        },
+        .assign_default => {
+            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(allocator, parsed.name, kind, options);
+            return parameterAssignmentInvalid(allocator, options, parsed.name);
+        },
+        .alternate_value => {
+            if (!arrayHasUsableValue(parsed.name, options, parsed.colon)) return allocator.alloc(u8, 0);
+            return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
+        },
+        .error_if_unset => {
+            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(allocator, parsed.name, kind, options);
+            return parameterExpansionError(allocator, options, parsed.name, parsed.word, in_double_quotes);
+        },
+        .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
+            var pattern = try expandPatternWord(allocator, parsed.word, options);
+            defer pattern.deinit(allocator);
+            return joinArrayValuesRemovingPattern(allocator, parsed.name, kind, pattern, parsed.operator, options);
+        },
+        .length, .invalid => unreachable,
+    }
+}
+
+fn arrayElementValue(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror!?[]const u8 {
+    const index = (try evaluateRecoverableArrayElementIndex(allocator, name, index_text, options, name)) orelse return null;
+    return options.arrays.get(name, index);
+}
+
+fn assignArrayElementDefault(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, word: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+    const index = try evaluateArrayIndex(allocator, name, index_text, options, name);
+    const expanded = try expandParameterWord(allocator, word, options, in_double_quotes);
+    errdefer allocator.free(expanded);
+    try options.arrays_set.set(name, index, expanded);
+    return expanded;
+}
+
+fn arrayHasUsableValue(name: []const u8, options: Options, colon: bool) bool {
+    return parameterHasUsableValue(options.arrays.len(name) != 0, false, colon);
+}
+
+fn parameterExpansionError(allocator: std.mem.Allocator, options: Options, name_text: []const u8, word: []const u8, in_double_quotes: bool) anyerror {
+    const message = if (word.len != 0)
+        try expandParameterWord(allocator, word, options, in_double_quotes)
+    else
+        try allocator.dupe(u8, "parameter null or not set");
+    if (options.parameter_error) |parameter_error| {
+        const name = allocator.dupe(u8, name_text) catch |err| {
+            allocator.free(message);
+            return err;
+        };
+        parameter_error.clear(allocator);
+        parameter_error.name = name;
+        parameter_error.message = message;
+    } else {
+        allocator.free(message);
+    }
+    return error.ParameterExpansionFailed;
 }
 
 fn renderArrayElementLength(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
@@ -1951,6 +2082,36 @@ fn parseParameterExpression(expression: []const u8, features: compat.Features) P
             .name = expansion.target.text,
             .array_whole = operation.kind,
         },
+        .array_word => |operation| switch (operation.subscript) {
+            .index => |index| .{
+                .name = expansion.target.text,
+                .operator = operation.operation.kind,
+                .word = operation.operation.word,
+                .colon = operation.operation.colon,
+                .array_index = index,
+            },
+            .whole => |kind| .{
+                .name = expansion.target.text,
+                .operator = operation.operation.kind,
+                .word = operation.operation.word,
+                .colon = operation.operation.colon,
+                .array_whole = kind,
+            },
+        },
+        .array_pattern => |operation| switch (operation.subscript) {
+            .index => |index| .{
+                .name = expansion.target.text,
+                .operator = operation.operation.kind,
+                .word = operation.operation.word,
+                .array_index = index,
+            },
+            .whole => |kind| .{
+                .name = expansion.target.text,
+                .operator = operation.operation.kind,
+                .word = operation.operation.word,
+                .array_whole = kind,
+            },
+        },
         .array_keys => |operation| .{
             .name = expansion.target.text,
             .array_keys = operation.kind,
@@ -2044,7 +2205,17 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
         }
     }
 
-    var operator_index = name_end;
+    const operation = parseParameterSuffixOperation(expression, name_end, target) orelse return .invalid;
+    return .{ .expansion = .{
+        .target = target,
+        .operation = operation,
+    } };
+}
+
+fn parseParameterSuffixOperation(expression: []const u8, suffix_start: usize, target: ?ParameterTarget) ?ParameterOperation {
+    if (suffix_start >= expression.len) return null;
+
+    var operator_index = suffix_start;
     var colon = false;
     if (expression[operator_index] == ':' and operator_index + 1 < expression.len) {
         colon = true;
@@ -2057,42 +2228,31 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
         '?' => .error_if_unset,
         '%' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '%') .remove_large_suffix else .remove_small_suffix,
         '#' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '#') .remove_large_prefix else .remove_small_prefix,
-        else => return .invalid,
+        else => return null,
     };
     const word_start = operator_index + @as(usize, if (operator == .remove_large_suffix or operator == .remove_large_prefix) 2 else 1);
-    if (isHashSpecialParameter(target)) {
-        if (colon and isPatternParameterOperator(operator)) return .invalid;
-        if (!colon and word_start == expression.len and isAmbiguousHashSpecialOmittedWordOperator(operator)) return .invalid;
+    if (target) |parameter_target| {
+        if (isHashSpecialParameter(parameter_target)) {
+            if (colon and isPatternRemovalOperator(operator)) return null;
+            if (!colon and word_start == expression.len and isAmbiguousHashSpecialOmittedWordOperator(operator)) return null;
+        }
     }
-    if (operator == .remove_small_suffix or operator == .remove_large_suffix or operator == .remove_small_prefix or operator == .remove_large_prefix) {
-        if (colon) return .invalid;
-        return .{ .expansion = .{
-            .target = target,
-            .operation = .{ .pattern = .{
-                .kind = operator,
-                .word = expression[word_start..],
-            } },
+    if (isPatternRemovalOperator(operator)) {
+        if (colon) return null;
+        return .{ .pattern = .{
+            .kind = operator,
+            .word = expression[word_start..],
         } };
     }
-    return .{ .expansion = .{
-        .target = target,
-        .operation = .{ .word = .{
-            .kind = operator,
-            .colon = colon,
-            .word = expression[word_start..],
-        } },
+    return .{ .word = .{
+        .kind = operator,
+        .colon = colon,
+        .word = expression[word_start..],
     } };
 }
 
 fn isHashSpecialParameter(target: ParameterTarget) bool {
     return target.kind == .special and std.mem.eql(u8, target.text, "#");
-}
-
-fn isPatternParameterOperator(operator: ParameterOperator) bool {
-    return switch (operator) {
-        .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => true,
-        else => false,
-    };
 }
 
 fn isAmbiguousHashSpecialOmittedWordOperator(operator: ParameterOperator) bool {
@@ -2106,6 +2266,10 @@ fn isAmbiguousHashSpecialOmittedWordOperator(operator: ParameterOperator) bool {
         => true,
         else => false,
     };
+}
+
+fn isPatternRemovalOperator(operator: ParameterOperator) bool {
+    return operator == .remove_small_suffix or operator == .remove_large_suffix or operator == .remove_small_prefix or operator == .remove_large_prefix;
 }
 
 const BashArraySubscript = union(enum) {
@@ -2411,11 +2575,21 @@ fn parseBashArrayExpansion(expression: []const u8, target: ParameterTarget, name
 
     const parsed_subscript = parseBashArraySubscriptSpan(expression, name_end) orelse return .invalid;
     if (parsed_subscript.end < expression.len) {
-        const operation = parseBashStringOperation(expression, target, parsed_subscript.end) orelse return .invalid;
+        if (parseBashStringOperation(expression, target, parsed_subscript.end)) |operation| {
+            return .{ .expansion = .{
+                .target = target,
+                .operation = operation,
+                .array_subscript = parsed_subscript.subscript,
+            } };
+        }
+        const suffix_operation = parseParameterSuffixOperation(expression, parsed_subscript.end, null) orelse return .invalid;
         return .{ .expansion = .{
             .target = target,
-            .operation = operation,
-            .array_subscript = parsed_subscript.subscript,
+            .operation = switch (suffix_operation) {
+                .word => |operation| .{ .array_word = .{ .subscript = parsed_subscript.subscript, .operation = operation } },
+                .pattern => |operation| .{ .array_pattern = .{ .subscript = parsed_subscript.subscript, .operation = operation } },
+                else => return .invalid,
+            },
         } };
     }
 
@@ -3237,6 +3411,10 @@ fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.A
         }
         return;
     }
+    if (bashWholeArraySuffixExpansion(parameter, options.features)) |array_expansion| {
+        try appendUnquotedWholeArraySuffixExpansion(allocator, fields, current, force_current_field, quoted_glob, array_expansion, options, ifs);
+        return;
+    }
     if (try bashIndirectWholeArrayExpansion(allocator, parameter, options)) |array_expansion| {
         switch (array_expansion.whole) {
             .at => try appendUnquotedArrayValues(allocator, fields, current, array_expansion.name, options, ifs),
@@ -3267,7 +3445,7 @@ fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.A
 }
 
 fn appendParameterWordOperatorUnquoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parsed: ParameterExpression, options: Options, ifs: []const u8) anyerror!void {
-    const value = parameterValue(parsed.name, options);
+    const value = try parameterExpressionValue(allocator, parsed, options);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
 
@@ -3285,6 +3463,12 @@ fn appendParameterWordOperatorUnquoted(allocator: std.mem.Allocator, fields: *st
         .assign_default => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) {
                 try appendSplitText(allocator, fields, current, value.?, ifs);
+                return;
+            }
+            if (parsed.array_index) |index_text| {
+                const assigned = try assignArrayElementDefault(allocator, parsed.name, index_text, parsed.word, options, false);
+                defer allocator.free(assigned);
+                try appendSplitText(allocator, fields, current, assigned, ifs);
                 return;
             }
             if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
@@ -3316,9 +3500,14 @@ fn appendExpandedFields(allocator: std.mem.Allocator, fields: *std.ArrayList([]c
 }
 
 fn isFieldAwareParameterWordOperator(parsed: ParameterExpression) bool {
-    if (parsed.name_prefix != null or parsed.indirect or parsed.array_keys != null or parsed.array_whole != null or parsed.array_index != null) return false;
+    if (parsed.name_prefix != null or parsed.indirect or parsed.array_keys != null or parsed.array_whole != null) return false;
     if (parsed.substring != null or parsed.replacement != null or parsed.case_modification != null) return false;
     return parsed.operator == .default_value or parsed.operator == .assign_default or parsed.operator == .alternate_value;
+}
+
+fn parameterExpressionValue(allocator: std.mem.Allocator, parsed: ParameterExpression, options: Options) anyerror!?[]const u8 {
+    if (parsed.array_index) |index_text| return arrayElementValue(allocator, parsed.name, index_text, options);
+    return parameterValue(parsed.name, options);
 }
 
 fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, text: []const u8, options: Options, ifs: []const u8) !void {
@@ -3422,6 +3611,17 @@ const BashWholeArrayExpansion = struct {
     whole: ParameterArrayWholeKind,
 };
 
+const BashWholeArraySuffixOperation = union(enum) {
+    word: ParameterWordOperation,
+    pattern: ParameterPatternOperation,
+};
+
+const BashWholeArraySuffixExpansion = struct {
+    name: []const u8,
+    whole: ParameterArrayWholeKind,
+    operation: BashWholeArraySuffixOperation,
+};
+
 const BashNamePrefixExpansion = struct {
     prefix: []const u8,
     kind: ParameterArrayWholeKind,
@@ -3508,6 +3708,10 @@ fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.Arr
         }
         return;
     }
+    if (bashWholeArraySuffixExpansion(parameter, options.features)) |array_expansion| {
+        try appendQuotedWholeArraySuffixExpansion(allocator, fields, current, force_current_field, quoted_glob, array_expansion, options, ifs);
+        return;
+    }
     if (try bashIndirectWholeArrayExpansion(allocator, parameter, options)) |array_expansion| {
         switch (array_expansion.whole) {
             .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, array_expansion.name, options),
@@ -3538,7 +3742,7 @@ fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.Arr
 }
 
 fn appendParameterWordOperatorQuoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parsed: ParameterExpression, options: Options, ifs: []const u8) anyerror!void {
-    const value = parameterValue(parsed.name, options);
+    const value = try parameterExpressionValue(allocator, parsed, options);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
 
@@ -3559,6 +3763,14 @@ fn appendParameterWordOperatorQuoted(allocator: std.mem.Allocator, fields: *std.
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) {
                 if (hasGlobSyntax(value.?)) quoted_glob.* = true;
                 try current.appendSlice(allocator, value.?);
+                force_current_field.* = true;
+                return;
+            }
+            if (parsed.array_index) |index_text| {
+                const assigned = try assignArrayElementDefault(allocator, parsed.name, index_text, parsed.word, options, true);
+                defer allocator.free(assigned);
+                if (hasGlobSyntax(assigned)) quoted_glob.* = true;
+                try current.appendSlice(allocator, assigned);
                 force_current_field.* = true;
                 return;
             }
@@ -3669,6 +3881,26 @@ fn bashWholeArrayStringOperation(expression: []const u8, features: compat.Featur
     const parsed = parseParameterExpression(expression, features);
     if (parsed.operator == .invalid or parsed.array_whole == null or !hasParameterStringOperation(parsed)) return null;
     return parsed;
+}
+
+fn bashWholeArraySuffixExpansion(expression: []const u8, features: compat.Features) ?BashWholeArraySuffixExpansion {
+    if (!features.isBash()) return null;
+    const syntax = parseParameterExpansionSyntax(expression, features);
+    const expansion = switch (syntax) {
+        .invalid => return null,
+        .expansion => |parsed| parsed,
+    };
+    return switch (expansion.operation) {
+        .array_word => |operation| switch (operation.subscript) {
+            .index => null,
+            .whole => |kind| .{ .name = expansion.target.text, .whole = kind, .operation = .{ .word = operation.operation } },
+        },
+        .array_pattern => |operation| switch (operation.subscript) {
+            .index => null,
+            .whole => |kind| .{ .name = expansion.target.text, .whole = kind, .operation = .{ .pattern = operation.operation } },
+        },
+        else => null,
+    };
 }
 
 fn bashNamePrefixExpansion(expression: []const u8, features: compat.Features) ?BashNamePrefixExpansion {
@@ -3867,6 +4099,77 @@ fn appendUnquotedArrayKeysStar(allocator: std.mem.Allocator, fields: *std.ArrayL
     try appendSplitText(allocator, fields, current, joined, ifs);
 }
 
+fn appendUnquotedWholeArraySuffixExpansion(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, expansion: BashWholeArraySuffixExpansion, options: Options, ifs: []const u8) anyerror!void {
+    switch (expansion.operation) {
+        .word => |operation| try appendUnquotedWholeArrayWordOperation(allocator, fields, current, force_current_field, quoted_glob, expansion.name, expansion.whole, operation, options, ifs),
+        .pattern => |operation| try appendUnquotedWholeArrayPatternOperation(allocator, fields, current, expansion.name, expansion.whole, operation, options, ifs),
+    }
+}
+
+fn appendUnquotedWholeArrayWordOperation(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, whole: ParameterArrayWholeKind, operation: ParameterWordOperation, options: Options, ifs: []const u8) anyerror!void {
+    const usable = arrayHasUsableValue(name, options, operation.colon);
+    switch (operation.kind) {
+        .default_value => {
+            if (usable) return appendUnquotedWholeArrayValues(allocator, fields, current, name, whole, options, ifs);
+            var expanded = try expandWordFieldsNoPathname(allocator, operation.word, options);
+            defer expanded.deinit(allocator);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        .assign_default => {
+            if (usable) return appendUnquotedWholeArrayValues(allocator, fields, current, name, whole, options, ifs);
+            return parameterAssignmentInvalid(allocator, options, name);
+        },
+        .alternate_value => {
+            if (!usable) return;
+            var expanded = try expandWordFieldsNoPathname(allocator, operation.word, options);
+            defer expanded.deinit(allocator);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        .error_if_unset => {
+            if (usable) return appendUnquotedWholeArrayValues(allocator, fields, current, name, whole, options, ifs);
+            return parameterExpansionError(allocator, options, name, operation.word, false);
+        },
+        else => unreachable,
+    }
+}
+
+fn appendUnquotedWholeArrayValues(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, whole: ParameterArrayWholeKind, options: Options, ifs: []const u8) !void {
+    switch (whole) {
+        .at => try appendUnquotedArrayValues(allocator, fields, current, name, options, ifs),
+        .star => try appendUnquotedArrayValuesStar(allocator, fields, current, name, options, ifs),
+    }
+}
+
+fn appendUnquotedWholeArrayPatternOperation(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, whole: ParameterArrayWholeKind, operation: ParameterPatternOperation, options: Options, ifs: []const u8) !void {
+    var pattern = try expandPatternWord(allocator, operation.word, options);
+    defer pattern.deinit(allocator);
+    switch (whole) {
+        .at => try appendUnquotedArrayValuesRemovingPattern(allocator, fields, current, name, pattern, operation.kind, options, ifs),
+        .star => try appendUnquotedArrayValuesStarRemovingPattern(allocator, fields, current, name, pattern, operation.kind, options, ifs),
+    }
+}
+
+fn appendUnquotedArrayValuesRemovingPattern(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, ifs: []const u8) !void {
+    const len = options.arrays.len(name);
+    for (0..len) |ordinal| {
+        const value = options.arrays.value(name, ordinal) orelse continue;
+        const rendered = try removePattern(allocator, value, pattern, operator, options.extglob);
+        defer allocator.free(rendered);
+        try appendSplitText(allocator, fields, current, rendered, ifs);
+        if (ordinal + 1 < len and current.items.len != 0) {
+            try fields.append(allocator, try current.toOwnedSlice(allocator));
+        }
+    }
+}
+
+fn appendUnquotedArrayValuesStarRemovingPattern(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, ifs: []const u8) !void {
+    const joined = try joinArrayValuesRemovingPatternForIfs(allocator, name, pattern, operator, options, ifs);
+    defer allocator.free(joined);
+    try appendSplitText(allocator, fields, current, joined, ifs);
+}
+
 fn appendUnquotedNamePrefixAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), prefix: []const u8, options: Options, ifs: []const u8) !void {
     const names = try matchingVariableNames(allocator, prefix, options);
     defer freeVariableNameList(allocator, names);
@@ -3988,6 +4291,85 @@ fn appendQuotedArrayKeysStar(allocator: std.mem.Allocator, current: *std.ArrayLi
     }
 }
 
+fn appendQuotedWholeArraySuffixExpansion(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, expansion: BashWholeArraySuffixExpansion, options: Options, ifs: []const u8) anyerror!void {
+    switch (expansion.operation) {
+        .word => |operation| try appendQuotedWholeArrayWordOperation(allocator, fields, current, force_current_field, quoted_glob, expansion.name, expansion.whole, operation, options, ifs),
+        .pattern => |operation| try appendQuotedWholeArrayPatternOperation(allocator, fields, current, force_current_field, quoted_glob, expansion.name, expansion.whole, operation, options, ifs),
+    }
+}
+
+fn appendQuotedWholeArrayWordOperation(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, whole: ParameterArrayWholeKind, operation: ParameterWordOperation, options: Options, ifs: []const u8) anyerror!void {
+    const usable = arrayHasUsableValue(name, options, operation.colon);
+    switch (operation.kind) {
+        .default_value => {
+            if (usable) return appendQuotedWholeArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, whole, options, ifs);
+            var expanded = try expandParameterWordQuotedFields(allocator, operation.word, options, ifs);
+            defer expanded.deinit(allocator);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        .assign_default => {
+            if (usable) return appendQuotedWholeArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, whole, options, ifs);
+            return parameterAssignmentInvalid(allocator, options, name);
+        },
+        .alternate_value => {
+            if (!usable) return;
+            var expanded = try expandParameterWordQuotedFields(allocator, operation.word, options, ifs);
+            defer expanded.deinit(allocator);
+            if (expanded.quoted_glob) quoted_glob.* = true;
+            try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
+        },
+        .error_if_unset => {
+            if (usable) return appendQuotedWholeArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, whole, options, ifs);
+            return parameterExpansionError(allocator, options, name, operation.word, true);
+        },
+        else => unreachable,
+    }
+}
+
+fn appendQuotedWholeArrayValues(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, whole: ParameterArrayWholeKind, options: Options, ifs: []const u8) !void {
+    switch (whole) {
+        .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, options),
+        .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, name, options, ifs),
+    }
+}
+
+fn appendQuotedWholeArrayPatternOperation(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, whole: ParameterArrayWholeKind, operation: ParameterPatternOperation, options: Options, ifs: []const u8) !void {
+    var pattern = try expandPatternWord(allocator, operation.word, options);
+    defer pattern.deinit(allocator);
+    switch (whole) {
+        .at => try appendQuotedArrayValuesRemovingPattern(allocator, fields, current, force_current_field, quoted_glob, name, pattern, operation.kind, options),
+        .star => try appendQuotedArrayValuesStarRemovingPattern(allocator, current, quoted_glob, name, pattern, operation.kind, options, ifs),
+    }
+}
+
+fn appendQuotedArrayValuesRemovingPattern(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options) !void {
+    const len = options.arrays.len(name);
+    if (len == 0) {
+        force_current_field.* = false;
+        return;
+    }
+    for (0..len) |ordinal| {
+        const value = options.arrays.value(name, ordinal) orelse continue;
+        const rendered = try removePattern(allocator, value, pattern, operator, options.extglob);
+        defer allocator.free(rendered);
+        if (hasGlobSyntax(rendered)) quoted_glob.* = true;
+        try current.appendSlice(allocator, rendered);
+        force_current_field.* = true;
+        if (ordinal + 1 < len) {
+            try fields.append(allocator, try current.toOwnedSlice(allocator));
+            force_current_field.* = false;
+        }
+    }
+}
+
+fn appendQuotedArrayValuesStarRemovingPattern(allocator: std.mem.Allocator, current: *std.ArrayList(u8), quoted_glob: *bool, name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, ifs: []const u8) !void {
+    const joined = try joinArrayValuesRemovingPatternForIfs(allocator, name, pattern, operator, options, ifs);
+    defer allocator.free(joined);
+    if (hasGlobSyntax(joined)) quoted_glob.* = true;
+    try current.appendSlice(allocator, joined);
+}
+
 fn appendQuotedNamePrefixAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, prefix: []const u8, options: Options) !void {
     const names = try matchingVariableNames(allocator, prefix, options);
     defer freeVariableNameList(allocator, names);
@@ -4021,6 +4403,29 @@ fn joinArrayValues(allocator: std.mem.Allocator, name: []const u8, options: Opti
         const value = options.arrays.value(name, ordinal) orelse continue;
         if (ordinal > 0) try joined.appendSlice(allocator, separator);
         try joined.appendSlice(allocator, value);
+    }
+    return joined.toOwnedSlice(allocator);
+}
+
+fn joinArrayValuesRemovingPattern(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, pattern: ExpansionPattern, operator: ParameterOperator, options: Options) ![]const u8 {
+    const separator = arrayValueScalarJoinSeparator(kind, options);
+    return joinArrayValuesRemovingPatternWithSeparator(allocator, name, pattern, operator, options, separator);
+}
+
+fn joinArrayValuesRemovingPatternForIfs(allocator: std.mem.Allocator, name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, ifs: []const u8) ![]const u8 {
+    return joinArrayValuesRemovingPatternWithSeparator(allocator, name, pattern, operator, options, arrayJoinSeparatorFromIfs(ifs));
+}
+
+fn joinArrayValuesRemovingPatternWithSeparator(allocator: std.mem.Allocator, name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, separator: []const u8) ![]const u8 {
+    var joined: std.ArrayList(u8) = .empty;
+    errdefer joined.deinit(allocator);
+    const len = options.arrays.len(name);
+    for (0..len) |ordinal| {
+        const value = options.arrays.value(name, ordinal) orelse continue;
+        if (ordinal > 0) try joined.appendSlice(allocator, separator);
+        const rendered = try removePattern(allocator, value, pattern, operator, options.extglob);
+        defer allocator.free(rendered);
+        try joined.appendSlice(allocator, rendered);
     }
     return joined.toOwnedSlice(allocator);
 }
@@ -5531,6 +5936,66 @@ test "structured parameter parser accepts Bash whole array operations" {
     try expectInvalidParameterSyntax("!arr[@]");
 }
 
+test "structured parameter parser accepts Bash array word and pattern suffix operations" {
+    const element_default = try expectParameterSyntaxWithFeatures("arr[2]:-fallback", compat.Features.bash());
+    try expectParameterTarget(element_default.target, .name, "arr");
+    switch (element_default.operation) {
+        .array_word => |operation| {
+            switch (operation.subscript) {
+                .index => |index| try std.testing.expectEqualStrings("2", index),
+                .whole => try std.testing.expect(false),
+            }
+            try std.testing.expectEqual(ParameterOperator.default_value, operation.operation.kind);
+            try std.testing.expect(operation.operation.colon);
+            try std.testing.expectEqualStrings("fallback", operation.operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const whole_alternate = try expectParameterSyntaxWithFeatures("arr[@]:+alternate", compat.Features.bash());
+    switch (whole_alternate.operation) {
+        .array_word => |operation| {
+            switch (operation.subscript) {
+                .whole => |kind| try std.testing.expectEqual(ParameterArrayWholeKind.at, kind),
+                .index => try std.testing.expect(false),
+            }
+            try std.testing.expectEqual(ParameterOperator.alternate_value, operation.operation.kind);
+            try std.testing.expect(operation.operation.colon);
+            try std.testing.expectEqualStrings("alternate", operation.operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const element_pattern = try expectParameterSyntaxWithFeatures("arr[USER_NUM]#two", compat.Features.bash());
+    switch (element_pattern.operation) {
+        .array_pattern => |operation| {
+            switch (operation.subscript) {
+                .index => |index| try std.testing.expectEqualStrings("USER_NUM", index),
+                .whole => try std.testing.expect(false),
+            }
+            try std.testing.expectEqual(ParameterOperator.remove_small_prefix, operation.operation.kind);
+            try std.testing.expectEqualStrings("two", operation.operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    const whole_pattern = try expectParameterSyntaxWithFeatures("arr[*]%%e", compat.Features.bash());
+    switch (whole_pattern.operation) {
+        .array_pattern => |operation| {
+            switch (operation.subscript) {
+                .whole => |kind| try std.testing.expectEqual(ParameterArrayWholeKind.star, kind),
+                .index => try std.testing.expect(false),
+            }
+            try std.testing.expectEqual(ParameterOperator.remove_large_suffix, operation.operation.kind);
+            try std.testing.expectEqualStrings("e", operation.operation.word);
+        },
+        else => try std.testing.expect(false),
+    }
+
+    try expectInvalidParameterSyntax("arr[2]:-fallback");
+    try expectInvalidParameterSyntax("arr[@]#t");
+}
+
 test "structured parameter parser accepts Bash indirect and name-prefix operations" {
     const indirect = try expectParameterSyntaxWithFeatures("!USER_REF", compat.Features.bash());
     try expectParameterTarget(indirect.target, .name, "USER_REF");
@@ -5773,6 +6238,8 @@ test "parameter expansion rejects malformed braced forms" {
         "${*:1:2}",
         "${MISSING:-${@:1:2}}",
         "${USER^}",
+        "${arr[2]:-fallback}",
+        "${arr[@]#t}",
         "${1abc}",
         "${!USER_REF}",
         "${!RUSH_PREFIX_*}",
@@ -5835,6 +6302,70 @@ test "parameter expansion supports Bash whole indexed array operations" {
     const scalar = try expandWordScalar(std.testing.allocator, "${#arr[@]}:${#arr[2]}:${arr[-1]}:${arr[-4]}:${!arr[*]}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("4:9:five:two words:0 2 3 5", scalar);
+}
+
+test "parameter expansion supports Bash array word and pattern suffix operations" {
+    const element = try expandWordScalar(std.testing.allocator, "${arr[2]:-fallback}:${arr[4]:-fallback}:${arr[2]#two }", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer std.testing.allocator.free(element);
+    try std.testing.expectEqualStrings("two words:fallback:words", element);
+
+    var array_assign_recorder: ArithmeticSetRecorder = .{};
+    const element_assign = try expandWordScalar(std.testing.allocator, "${arr[4]:=fallback}", .{ .arrays = test_arrays, .arrays_set = array_assign_recorder.arraySet(), .features = compat.Features.bash() });
+    defer std.testing.allocator.free(element_assign);
+    try std.testing.expectEqualStrings("fallback", element_assign);
+    try std.testing.expectEqual(@as(usize, 1), array_assign_recorder.count);
+    try std.testing.expectEqualStrings("arr", array_assign_recorder.last_name[0..array_assign_recorder.last_name_len]);
+    try std.testing.expectEqual(@as(usize, 4), array_assign_recorder.last_index);
+    try std.testing.expectEqualStrings("fallback", array_assign_recorder.lastValue());
+
+    var missing_element_default = try expandWord(std.testing.allocator, "${arr[4]:-${arr[@]}}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer missing_element_default.deinit();
+    try std.testing.expectEqual(@as(usize, 5), missing_element_default.fields.len);
+    try std.testing.expectEqualStrings("zero", missing_element_default.fields[0]);
+    try std.testing.expectEqualStrings("two", missing_element_default.fields[1]);
+    try std.testing.expectEqualStrings("words", missing_element_default.fields[2]);
+    try std.testing.expectEqualStrings("three", missing_element_default.fields[3]);
+    try std.testing.expectEqualStrings("five", missing_element_default.fields[4]);
+
+    var quoted_default_set = try expandWord(std.testing.allocator, "\"${arr[@]:-fallback}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_default_set.deinit();
+    try std.testing.expectEqual(@as(usize, 4), quoted_default_set.fields.len);
+    try std.testing.expectEqualStrings("zero", quoted_default_set.fields[0]);
+    try std.testing.expectEqualStrings("two words", quoted_default_set.fields[1]);
+    try std.testing.expectEqualStrings("three", quoted_default_set.fields[2]);
+    try std.testing.expectEqualStrings("five", quoted_default_set.fields[3]);
+
+    var quoted_default_missing = try expandWord(std.testing.allocator, "\"${missing[@]:-fallback}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_default_missing.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_default_missing.fields.len);
+    try std.testing.expectEqualStrings("fallback", quoted_default_missing.fields[0]);
+
+    var quoted_alternate = try expandWord(std.testing.allocator, "\"${arr[@]:+alt value}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_alternate.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_alternate.fields.len);
+    try std.testing.expectEqualStrings("alt value", quoted_alternate.fields[0]);
+
+    var unquoted_pattern = try expandWord(std.testing.allocator, "${arr[@]#t}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer unquoted_pattern.deinit();
+    try std.testing.expectEqual(@as(usize, 5), unquoted_pattern.fields.len);
+    try std.testing.expectEqualStrings("zero", unquoted_pattern.fields[0]);
+    try std.testing.expectEqualStrings("wo", unquoted_pattern.fields[1]);
+    try std.testing.expectEqualStrings("words", unquoted_pattern.fields[2]);
+    try std.testing.expectEqualStrings("hree", unquoted_pattern.fields[3]);
+    try std.testing.expectEqualStrings("five", unquoted_pattern.fields[4]);
+
+    var quoted_pattern = try expandWord(std.testing.allocator, "\"${arr[@]#t}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_pattern.deinit();
+    try std.testing.expectEqual(@as(usize, 4), quoted_pattern.fields.len);
+    try std.testing.expectEqualStrings("zero", quoted_pattern.fields[0]);
+    try std.testing.expectEqualStrings("wo words", quoted_pattern.fields[1]);
+    try std.testing.expectEqualStrings("hree", quoted_pattern.fields[2]);
+    try std.testing.expectEqualStrings("five", quoted_pattern.fields[3]);
+
+    var quoted_star_pattern = try expandWord(std.testing.allocator, "\"${arr[*]#t}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    defer quoted_star_pattern.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted_star_pattern.fields.len);
+    try std.testing.expectEqualStrings("zero wo words hree five", quoted_star_pattern.fields[0]);
 }
 
 test "parameter expansion supports Bash indirect and name-prefix operations" {
@@ -6769,6 +7300,7 @@ test "arithmetic expansion trims shell blanks around variable integer values" {
 
 const ArithmeticSetRecorder = struct {
     count: usize = 0,
+    last_index: usize = 0,
     last_name: [64]u8 = undefined,
     last_name_len: usize = 0,
     last_value: [64]u8 = undefined,
@@ -6776,6 +7308,10 @@ const ArithmeticSetRecorder = struct {
 
     fn envSet(self: *ArithmeticSetRecorder) EnvSet {
         return .{ .context = self, .setFn = arithmeticSetRecorderSet };
+    }
+
+    fn arraySet(self: *ArithmeticSetRecorder) ArraySet {
+        return .{ .context = self, .setFn = arithmeticSetRecorderSetArray };
     }
 
     fn lastValue(self: *const ArithmeticSetRecorder) []const u8 {
@@ -6791,6 +7327,18 @@ fn arithmeticSetRecorderSet(context: ?*anyopaque, name: []const u8, value: []con
     @memcpy(recorder.last_value[0..value.len], value);
     recorder.last_name_len = name.len;
     recorder.last_value_len = value.len;
+    recorder.count += 1;
+}
+
+fn arithmeticSetRecorderSetArray(context: ?*anyopaque, name: []const u8, index: usize, value: []const u8) anyerror!void {
+    const recorder: *ArithmeticSetRecorder = @ptrCast(@alignCast(context.?));
+    try std.testing.expect(name.len <= recorder.last_name.len);
+    try std.testing.expect(value.len <= recorder.last_value.len);
+    @memcpy(recorder.last_name[0..name.len], name);
+    @memcpy(recorder.last_value[0..value.len], value);
+    recorder.last_name_len = name.len;
+    recorder.last_value_len = value.len;
+    recorder.last_index = index;
     recorder.count += 1;
 }
 

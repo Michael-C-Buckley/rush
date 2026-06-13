@@ -5351,6 +5351,7 @@ pub const Executor = struct {
             .variable_names = self.variableNames(),
             .env_set = self.envSet(),
             .arrays = self.arrayLookup(),
+            .arrays_set = self.arraySet(),
             .diagnostic_sink = self.expansionDiagnosticSink(),
             .io = io,
             .command_substitution = commandSubstitution(&substitution_context),
@@ -5371,6 +5372,7 @@ pub const Executor = struct {
             .variable_names = self.variableNames(),
             .env_set = self.envSet(),
             .arrays = self.arrayLookup(),
+            .arrays_set = self.arraySet(),
             .diagnostic_sink = self.expansionDiagnosticSink(),
             .io = io,
             .command_substitution = commandSubstitution(&substitution_context),
@@ -8573,7 +8575,7 @@ pub const Executor = struct {
         const positionals: []const []const u8 = self.currentPositionals().params;
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .pathname_nullglob = self.shell_options.shopt.nullglob, .pathname_dotglob = self.shell_options.shopt.dotglob, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        var fields = try expand.expandWord(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .arrays_set = self.arraySet(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = positionals, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .pathname_nullglob = self.shell_options.shopt.nullglob, .pathname_dotglob = self.shell_options.shopt.dotglob, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         defer fields.deinit();
         for (fields.fields) |field| {
             const raw = try self.allocator.dupe(u8, word.raw);
@@ -8683,14 +8685,14 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
+        return expand.expandHereDocBody(self.allocator, text, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .arrays_set = self.arraySet(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error, .positionals = self.currentPositionals().params, .option_flags = option_flags });
     }
 
     pub fn expandParametersScalar(self: *Executor, allocator: std.mem.Allocator, raw: []const u8, options: ExecuteOptions) ![]const u8 {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        return expand.expandParametersScalar(allocator, raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .arrays_set = self.arraySet(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
     }
 
     fn expandWord(self: *Executor, word: ir.WordRef, options: ExecuteOptions) !ir.WordRef {
@@ -8699,7 +8701,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
+        const text = try expand.expandWordScalar(self.allocator, word.raw, .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .arrays_set = self.arraySet(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error });
         return .{ .span = word.span, .raw = raw, .text = text };
     }
 
@@ -8707,7 +8709,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .arrays_set = self.arraySet(), .diagnostic_sink = self.expansionDiagnosticSink(), .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
         return expand.expandWordPattern(self.allocator, word.raw, expansion_options);
     }
 
@@ -8717,7 +8719,7 @@ pub const Executor = struct {
         var substitution_context: CommandSubstitutionContext = .{ .executor = self, .options = options };
         var option_flags_buffer: [shell_option_flags_max]u8 = undefined;
         const option_flags = shellOptionFlags(self.shell_options, &option_flags_buffer);
-        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .pathname_nullglob = self.shell_options.shopt.nullglob, .pathname_dotglob = self.shell_options.shopt.dotglob, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
+        const expansion_options: expand.Options = .{ .env = self.envLookup(), .variable_names = self.variableNames(), .env_set = self.envSet(), .arrays = self.arrayLookup(), .arrays_set = self.arraySet(), .diagnostic_sink = self.expansionDiagnosticSink(), .io = options.io, .features = options.features, .command_substitution = commandSubstitution(&substitution_context), .positionals = self.currentPositionals().params, .option_flags = option_flags, .pathname_expansion = !self.shell_options.noglob, .pathname_nullglob = self.shell_options.shopt.nullglob, .pathname_dotglob = self.shell_options.shopt.dotglob, .extglob = options.features.isBash() and self.shell_options.shopt.extglob, .patsub_replacement = self.shell_options.shopt.patsub_replacement, .nounset = self.shell_options.nounset, .parameter_error = &self.parameter_error, .arithmetic_error = &self.arithmetic_error };
         const text = if (options.features.isBash())
             try self.expandCompoundIndexedArrayAssignmentWord(word.raw, expansion_options) orelse try expand.expandAssignmentWordScalar(self.allocator, word.raw, expansion_options)
         else
@@ -9084,6 +9086,10 @@ pub const Executor = struct {
         };
     }
 
+    fn arraySet(self: *Executor) expand.ArraySet {
+        return .{ .context = self, .setFn = setArrayCallback };
+    }
+
     fn expansionDiagnosticSink(self: *Executor) expand.DiagnosticSink {
         return .{ .context = self, .appendFn = appendExpansionDiagnostic };
     }
@@ -9091,6 +9097,11 @@ pub const Executor = struct {
     fn setEnvCallback(context: ?*anyopaque, name: []const u8, value: []const u8) !void {
         const self: *Executor = @ptrCast(@alignCast(context.?));
         try self.setEnv(name, value);
+    }
+
+    fn setArrayCallback(context: ?*anyopaque, name: []const u8, index: usize, value: []const u8) !void {
+        const self: *Executor = @ptrCast(@alignCast(context.?));
+        try self.setArrayElement(name, index, value);
     }
 
     fn lookupEnv(context: ?*const anyopaque, name: []const u8) ?[]const u8 {
@@ -11536,6 +11547,7 @@ fn traceLineForCommand(self: *Executor, command: ir.SimpleCommand, options: Exec
         .variable_names = self.variableNames(),
         .env_set = self.envSet(),
         .arrays = self.arrayLookup(),
+        .arrays_set = self.arraySet(),
         .diagnostic_sink = self.expansionDiagnosticSink(),
         .features = options.features,
         .positionals = self.currentPositionals().params,
