@@ -48,6 +48,19 @@ const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 const ignoreeof_message = "Use \"exit\" to leave the shell.\r\n";
 const immediate_notify_poll_ms = 50;
 
+pub const CommandResult = struct {
+    allocator: std.mem.Allocator,
+    status: shell.ExitStatus,
+    stdout: []u8,
+    stderr: []u8,
+
+    pub fn deinit(self: *CommandResult) void {
+        self.allocator.free(self.stdout);
+        self.allocator.free(self.stderr);
+        self.* = undefined;
+    }
+};
+
 const InvocationKind = enum { command_string, script_file, standard_input };
 
 const ShellInvocation = struct {
@@ -6474,11 +6487,12 @@ fn outputNeedsNewlineMarker(stdout: []const u8, stderr: []const u8) bool {
     return output[output.len - 1] != '\n';
 }
 
-fn runInteractiveInterruptTrap(io: std.Io, executor: *exec.Executor, arg_zero: []const u8, features: compat.Features) !?exec.CommandResult {
-    return try executor.executeSignalTrap("INT", .{ .io = io, .allow_external = true, .features = features, .interactive = true, .arg_zero = arg_zero });
+fn runInteractiveInterruptTrap(io: std.Io, executor: *exec.Executor, arg_zero: []const u8, features: compat.Features) !?CommandResult {
+    const result = (try executor.executeSignalTrap("INT", .{ .io = io, .allow_external = true, .features = features, .interactive = true, .arg_zero = arg_zero })) orelse return null;
+    return commandResultFromExecutorResult(result);
 }
 
-pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8) !exec.CommandResult {
+pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8) !CommandResult {
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(allocator);
     var stderr: std.ArrayList(u8) = .empty;
@@ -6541,19 +6555,19 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     };
 }
 
-pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !exec.CommandResult {
+pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !CommandResult {
     return runScriptWithOptions(allocator, io, script, .{ .io = io, .allow_external = true });
 }
 
-pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
+pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions) !CommandResult {
     return runScriptWithEnvironment(allocator, io, script, options, null);
 }
 
-pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map) !exec.CommandResult {
+pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map) !CommandResult {
     return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, &.{}, null, .{});
 }
 
-fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, invocation: ShellInvocation, environ_map: ?*const std.process.Environ.Map, external_stdio: runtime.ExternalStdio, login_shell: bool) !exec.CommandResult {
+fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, invocation: ShellInvocation, environ_map: ?*const std.process.Environ.Map, external_stdio: runtime.ExternalStdio, login_shell: bool) !CommandResult {
     var owned_script: ?[]const u8 = null;
     defer if (owned_script) |script| allocator.free(script);
 
@@ -6618,7 +6632,7 @@ const StderrGuard = struct {
     }
 };
 
-fn runInvocationWithPipeStdin(invocation: ShellInvocation, stdin: []const u8) !exec.CommandResult {
+fn runInvocationWithPipeStdin(invocation: ShellInvocation, stdin: []const u8) !CommandResult {
     var pipe = try editor_driver.makePipe(std.testing.io);
     defer pipe.read.close(std.testing.io);
     var write_open = true;
@@ -6633,7 +6647,7 @@ fn runInvocationWithPipeStdin(invocation: ShellInvocation, stdin: []const u8) !e
     return runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
 }
 
-fn runInvocationWithFileStdin(invocation: ShellInvocation, path: []const u8) !exec.CommandResult {
+fn runInvocationWithFileStdin(invocation: ShellInvocation, path: []const u8) !CommandResult {
     var file = try std.Io.Dir.cwd().openFile(std.testing.io, path, .{});
     defer file.close(std.testing.io);
     var guard = try StdinGuard.replaceWith(file);
@@ -6668,7 +6682,7 @@ fn stderrIsTty(io: std.Io) bool {
     return std.Io.File.stderr().isTty(io) catch false;
 }
 
-fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !exec.CommandResult {
+fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !CommandResult {
     const semantic_invocation = semanticInvocationFromExecuteOptions(options);
     if (shouldUseSemanticNonInteractiveExecutor(semantic_invocation, options.allow_external, interactive_options)) {
         var semantic_execution = try runSemanticCommandString(allocator, io, script, semantic_invocation, options.external_stdio, environ_map, positionals, shell_options);
@@ -6688,7 +6702,7 @@ fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, scr
     return runOldCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, interactive_options, shell_options);
 }
 
-fn runOldCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !exec.CommandResult {
+fn runOldCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !CommandResult {
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     if (environ_map) |map| try executor.importEnvironment(map);
@@ -6712,7 +6726,7 @@ fn shouldUseSemanticNonInteractiveExecutor(invocation: shell.InvocationContext, 
 }
 
 const SemanticInvocationExecution = union(enum) {
-    output: exec.CommandResult,
+    output: CommandResult,
     unsupported: []const u8,
 
     fn deinit(self: *SemanticInvocationExecution, allocator: std.mem.Allocator) void {
@@ -6737,7 +6751,7 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
     var parsed = try parser.parse(allocator, script, .{ .features = invocation.features.withStrictDiagnostics() });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
-        return .{ .output = try exec.parseDiagnosticsResult(allocator, script, parsed.diagnostics) };
+        return .{ .output = try parseDiagnosticsResult(allocator, script, parsed.diagnostics) };
     }
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
@@ -6819,7 +6833,7 @@ fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io,
                 parser_resolver.alias_state = null;
                 break;
             }
-            if (!parsed.incomplete or end >= script.len) return .{ .output = try exec.parseDiagnosticsResult(allocator, source, parsed.diagnostics) };
+            if (!parsed.incomplete or end >= script.len) return .{ .output = try parseDiagnosticsResult(allocator, source, parsed.diagnostics) };
             end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, end));
         }
         start = skipSemanticChunkSeparators(script, end);
@@ -6829,7 +6843,7 @@ fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io,
     return .{ .output = .{ .allocator = allocator, .status = status, .stdout = try stdout.toOwnedSlice(allocator), .stderr = try stderr.toOwnedSlice(allocator) } };
 }
 
-fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
+fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, options: exec.ExecuteOptions) !CommandResult {
     std.debug.assert(options.interactive);
     std.debug.assert(interactive_shell.executor.execution_depth == 0);
     if (interactive_shell.semantic_enabled) {
@@ -7207,7 +7221,7 @@ fn semanticUnsupported(allocator: std.mem.Allocator, message: []const u8) !Seman
     return .{ .unsupported = try allocator.dupe(u8, message) };
 }
 
-fn unsupportedSemanticCommandResult(allocator: std.mem.Allocator, message: []const u8) !exec.CommandResult {
+fn unsupportedSemanticCommandResult(allocator: std.mem.Allocator, message: []const u8) !CommandResult {
     std.debug.assert(message.len != 0);
     const stdout = try allocator.alloc(u8, 0);
     errdefer allocator.free(stdout);
@@ -7675,21 +7689,79 @@ fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan, legacy_fallback_ga
     };
 }
 
-fn emptyCommandResult(allocator: std.mem.Allocator, status: shell.ExitStatus) !exec.CommandResult {
+fn emptyCommandResult(allocator: std.mem.Allocator, status: shell.ExitStatus) !CommandResult {
     const stdout = try allocator.alloc(u8, 0);
     errdefer allocator.free(stdout);
     const stderr = try allocator.alloc(u8, 0);
     return .{ .allocator = allocator, .status = status, .stdout = stdout, .stderr = stderr };
 }
 
-fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
+fn parseDiagnosticsResult(allocator: std.mem.Allocator, script: []const u8, diagnostics: []const parser.Diagnostic) !CommandResult {
+    var stderr_buffer: std.ArrayList(u8) = .empty;
+    defer stderr_buffer.deinit(allocator);
+
+    for (diagnostics) |diagnostic| {
+        const line = try std.fmt.allocPrint(allocator, "rush: {s}: {s}\n", .{
+            @tagName(diagnostic.kind),
+            diagnostic.message,
+        });
+        defer allocator.free(line);
+        try stderr_buffer.appendSlice(allocator, line);
+        try appendDiagnosticSource(allocator, &stderr_buffer, script, diagnostic.span);
+    }
+
+    const stdout = try allocator.alloc(u8, 0);
+    errdefer allocator.free(stdout);
+    const stderr = try stderr_buffer.toOwnedSlice(allocator);
+    return .{ .allocator = allocator, .status = 2, .stdout = stdout, .stderr = stderr };
+}
+
+fn appendDiagnosticSource(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source: []const u8, span: parser.Span) !void {
+    const line_start = diagnosticLineStart(source, span.start);
+    const line_end = diagnosticLineEnd(source, span.start);
+    const line = source[line_start..line_end];
+    const caret_start = span.start - line_start;
+    const caret_end = @max(caret_start + 1, @min(span.end, line_end) - line_start);
+
+    try out.appendSlice(allocator, "  ");
+    try out.appendSlice(allocator, line);
+    try out.append(allocator, '\n');
+    try out.appendSlice(allocator, "  ");
+    try out.appendNTimes(allocator, ' ', caret_start);
+    try out.appendNTimes(allocator, '^', caret_end - caret_start);
+    try out.append(allocator, '\n');
+}
+
+fn diagnosticLineStart(source: []const u8, offset: usize) usize {
+    var index = @min(offset, source.len);
+    while (index > 0 and source[index - 1] != '\n') index -= 1;
+    return index;
+}
+
+fn diagnosticLineEnd(source: []const u8, offset: usize) usize {
+    var index = @min(offset, source.len);
+    while (index < source.len and source[index] != '\n') index += 1;
+    return index;
+}
+
+fn commandResultFromExecutorResult(result: exec.CommandResult) CommandResult {
+    return .{
+        .allocator = result.allocator,
+        .status = result.status,
+        .stdout = result.stdout,
+        .stderr = result.stderr,
+    };
+}
+
+fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !CommandResult {
     _ = options.io;
     var execution_options = options;
     execution_options.top_level_parse_diagnostics = true;
-    return executor.executeScriptSlice(script, execution_options) catch |err| {
+    const result = executor.executeScriptSlice(script, execution_options) catch |err| {
         if (err != error.ParseError) return err;
         return scriptDiagnosticsResult(allocator, executor, script, execution_options);
     };
+    return commandResultFromExecutorResult(result);
 }
 fn semanticShellOptions(options: exec.ShellOptions) shell.ShellOptions {
     return .{
@@ -7747,14 +7819,14 @@ fn evaluateSemanticComparisonBody(evaluator: *shell.eval.Evaluator, shell_state:
     };
 }
 
-fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
+fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !CommandResult {
     const aliased = try executor.expandAliasesForScriptWithFeatures(script, options.features);
     defer allocator.free(aliased);
     var parsed = try parser.parse(allocator, aliased, .{ .features = options.features.withStrictDiagnostics() });
     defer parsed.deinit();
 
     if (parsed.diagnostics.len != 0) {
-        return exec.parseDiagnosticsResult(allocator, script, parsed.diagnostics);
+        return parseDiagnosticsResult(allocator, script, parsed.diagnostics);
     }
     return error.ParseError;
 }
@@ -12873,7 +12945,7 @@ fn expectMatchesSh(script: []const u8) !void {
     try std.testing.expectEqualStrings(sh_result.stderr, rush_result.stderr);
 }
 
-fn runSh(allocator: std.mem.Allocator, script: []const u8) !exec.CommandResult {
+fn runSh(allocator: std.mem.Allocator, script: []const u8) !CommandResult {
     const result = try std.process.run(allocator, std.testing.io, .{
         .argv = &.{ "/bin/sh", "-c", script },
     });
