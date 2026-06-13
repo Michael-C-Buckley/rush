@@ -48,6 +48,182 @@ pub const FunctionBody = struct {
     }
 };
 
+pub const CommandList = struct {
+    commands: []const CommandPlan = &.{},
+
+    pub fn validate(self: CommandList) void {
+        for (self.commands) |command| command.validate();
+    }
+};
+
+pub const IfBranch = struct {
+    condition: CommandList,
+    body: CommandList,
+
+    pub fn validate(self: IfBranch) void {
+        self.condition.validate();
+        self.body.validate();
+    }
+};
+
+pub const IfPlan = struct {
+    branches: []const IfBranch,
+    else_body: CommandList = .{},
+
+    pub fn validate(self: IfPlan) void {
+        std.debug.assert(self.branches.len != 0);
+        for (self.branches) |branch| branch.validate();
+        self.else_body.validate();
+    }
+};
+
+pub const LoopPlan = struct {
+    condition: CommandList,
+    body: CommandList,
+
+    pub fn validate(self: LoopPlan) void {
+        self.condition.validate();
+        self.body.validate();
+    }
+};
+
+pub const AndOrOperator = enum {
+    and_if,
+    or_if,
+};
+
+pub const AndOrCommand = struct {
+    operator: ?AndOrOperator = null,
+    command: CommandPlan,
+
+    pub fn validate(self: AndOrCommand, index: usize) void {
+        if (index == 0) {
+            std.debug.assert(self.operator == null);
+        } else {
+            std.debug.assert(self.operator != null);
+        }
+        self.command.validate();
+    }
+};
+
+pub const AndOrPlan = struct {
+    commands: []const AndOrCommand,
+
+    pub fn validate(self: AndOrPlan) void {
+        std.debug.assert(self.commands.len != 0);
+        for (self.commands, 0..) |command, index| command.validate(index);
+    }
+};
+
+pub const NegationPlan = struct {
+    body: CommandList,
+
+    pub fn validate(self: NegationPlan) void {
+        self.body.validate();
+    }
+};
+
+pub const ForWords = union(enum) {
+    explicit: []const []const u8,
+    positional_parameters,
+
+    pub fn validate(self: ForWords) void {
+        switch (self) {
+            .explicit => |words| for (words) |word| std.debug.assert(std.mem.indexOfScalar(u8, word, 0) == null),
+            .positional_parameters => {},
+        }
+    }
+};
+
+pub const ForPlan = struct {
+    variable_name: []const u8,
+    words: ForWords = .positional_parameters,
+    body: CommandList,
+
+    pub fn validate(self: ForPlan) void {
+        state.assertValidVariableName(self.variable_name);
+        self.words.validate();
+        self.body.validate();
+    }
+};
+
+pub const CaseArm = struct {
+    patterns: []const []const u8,
+    body: CommandList,
+
+    pub fn validate(self: CaseArm) void {
+        std.debug.assert(self.patterns.len != 0);
+        for (self.patterns) |pattern| std.debug.assert(std.mem.indexOfScalar(u8, pattern, 0) == null);
+        self.body.validate();
+    }
+};
+
+pub const CasePlan = struct {
+    word: []const u8,
+    arms: []const CaseArm,
+
+    pub fn validate(self: CasePlan) void {
+        std.debug.assert(std.mem.indexOfScalar(u8, self.word, 0) == null);
+        for (self.arms) |arm| arm.validate();
+    }
+};
+
+pub const CompoundBody = union(enum) {
+    sequence: CommandList,
+    and_or_list: AndOrPlan,
+    negation: NegationPlan,
+    brace_group: CommandList,
+    subshell: CommandList,
+    if_clause: IfPlan,
+    while_loop: LoopPlan,
+    until_loop: LoopPlan,
+    for_loop: ForPlan,
+    case_clause: CasePlan,
+
+    pub fn validate(self: CompoundBody) void {
+        switch (self) {
+            .sequence => |list| list.validate(),
+            .and_or_list => |and_or| and_or.validate(),
+            .negation => |negation| negation.validate(),
+            .brace_group => |list| list.validate(),
+            .subshell => |list| list.validate(),
+            .if_clause => |if_plan| if_plan.validate(),
+            .while_loop => |loop| loop.validate(),
+            .until_loop => |loop| loop.validate(),
+            .for_loop => |for_plan| for_plan.validate(),
+            .case_clause => |case_plan| case_plan.validate(),
+        }
+    }
+};
+
+pub const CompoundCommandPlan = struct {
+    target: context.ExecutionTarget,
+    redirections: redirection_plan.RedirectionPlan = .{},
+    body: CompoundBody,
+
+    pub fn validate(self: CompoundCommandPlan) void {
+        validateRedirections(self.redirections);
+        self.body.validate();
+        if (self.body == .subshell) std.debug.assert(self.target == .subshell or self.target == .child_process);
+    }
+
+    pub fn kindName(self: CompoundCommandPlan) []const u8 {
+        self.validate();
+        return switch (self.body) {
+            .sequence => "list",
+            .and_or_list => "and-or list",
+            .negation => "negation",
+            .brace_group => "brace group",
+            .subshell => "subshell",
+            .if_clause => "if",
+            .while_loop => "while",
+            .until_loop => "until",
+            .for_loop => "for",
+            .case_clause => "case",
+        };
+    }
+};
+
 pub const ExternalResolution = struct {
     name: []const u8,
     path: []const u8,

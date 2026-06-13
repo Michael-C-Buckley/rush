@@ -162,6 +162,54 @@ pub fn evaluatePlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_
     return command_outcome;
 }
 
+pub fn evaluateCompoundPlan(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.CompoundCommandPlan) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    plan.validate();
+    std.debug.assert(plan.target == eval_context.target);
+    if (plan.target == .current_shell) std.debug.assert(shell_state.acceptsExecutionTarget(.current_shell));
+
+    var state_delta = delta.StateDelta.init(evaluator.allocator, plan.target);
+    errdefer state_delta.deinit();
+
+    var buffers = EvaluationBuffers.init(evaluator.allocator);
+    defer buffers.deinit();
+
+    var applied_redirections: ?redirection_plan.AppliedRedirections = null;
+    defer if (applied_redirections) |*applied| {
+        applied.restore();
+        applied.deinit();
+    };
+    if (hasCompoundRedirections(plan)) {
+        const fd_port = evaluator.fd_port orelse return error.Unimplemented;
+        const apply_result = try plan.redirections.apply(evaluator.allocator, fd_port);
+        switch (apply_result) {
+            .applied => |applied| applied_redirections = applied,
+            .failure => |failure| {
+                const status: outcome.ExitStatus = if (failure.consequence == .fatal_shell_error) 2 else 1;
+                try buffers.addBuiltinDiagnostic(plan.kindName(), redirectionFailureMessage(failure));
+                state_delta.setLastStatus(status);
+                const flow: outcome.ControlFlow = if (failure.consequence == .fatal_shell_error) .{ .fatal = status } else .normal;
+                return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, status, state_delta, flow, &buffers);
+            },
+        }
+    }
+
+    var working_state = try workingStateForCompound(evaluator.allocator, shell_state.*, plan.target);
+    defer working_state.deinit();
+
+    var result = try evaluateCompoundBody(evaluator, &working_state, eval_context, plan.body, &buffers);
+    if (plan.target.isIsolatedFromParent()) {
+        result.status = result.control_flow.status(result.status);
+        result.control_flow = .normal;
+    }
+
+    if (plan.target.allowsShellStateCommit()) try appendShellStateDiff(shell_state.*, working_state, &state_delta);
+    state_delta.setLastStatus(result.status);
+
+    return try commandOutcomeFromBuffers(evaluator.allocator, eval_context, result.status, state_delta, result.control_flow, &buffers);
+}
+
 fn evaluateSimpleCommand(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
     return switch (plan.classification) {
         .empty => normalEvaluation(0),
@@ -177,6 +225,273 @@ fn evaluateSimpleCommand(evaluator: *Evaluator, shell_state: *state.ShellState, 
 
 fn normalEvaluation(status: outcome.ExitStatus) SimpleEvalResult {
     return .{ .status = status };
+}
+
+fn commandOutcomeFromBuffers(allocator: std.mem.Allocator, eval_context: context.EvalContext, status: outcome.ExitStatus, state_delta: delta.StateDelta, control_flow: outcome.ControlFlow, buffers: *EvaluationBuffers) EvalError!outcome.CommandOutcome {
+    std.debug.assert(state_delta.state == .pending);
+    control_flow.validate();
+
+    var stdout: std.ArrayList(u8) = .empty;
+    errdefer stdout.deinit(allocator);
+    try stdout.appendSlice(allocator, buffers.stdout.items);
+
+    var stderr: std.ArrayList(u8) = .empty;
+    errdefer stderr.deinit(allocator);
+    try stderr.appendSlice(allocator, buffers.stderr.items);
+
+    var diagnostics: std.ArrayList(outcome.Diagnostic) = .empty;
+    errdefer {
+        for (diagnostics.items) |diagnostic| allocator.free(diagnostic.message);
+        diagnostics.deinit(allocator);
+    }
+    for (buffers.diagnostics.items) |message| {
+        const owned_message = try allocator.dupe(u8, message);
+        errdefer allocator.free(owned_message);
+        try diagnostics.append(allocator, .{ .message = owned_message });
+    }
+
+    var command_outcome = outcome.CommandOutcome.withControlFlow(allocator, status, state_delta, control_flow);
+    command_outcome.stdout = stdout;
+    command_outcome.stderr = stderr;
+    command_outcome.diagnostics = diagnostics;
+    command_outcome.validateForContext(eval_context);
+    return command_outcome;
+}
+
+fn workingStateForCompound(allocator: std.mem.Allocator, shell_state: state.ShellState, target: context.ExecutionTarget) EvalError!state.ShellState {
+    shell_state.validate();
+    return switch (target) {
+        .current_shell => shell_state.clone(allocator),
+        .subshell => shell_state.snapshotForSubshell(allocator),
+        .child_process => shell_state.clone(allocator),
+    } catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+}
+
+fn evaluateCompoundBody(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, body: command_plan.CompoundBody, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    body.validate();
+
+    return switch (body) {
+        .sequence => |list| evaluateCommandList(evaluator, shell_state, eval_context, list, buffers),
+        .and_or_list => |and_or| evaluateAndOrList(evaluator, shell_state, eval_context, and_or, buffers),
+        .negation => |negation| evaluateNegation(evaluator, shell_state, eval_context, negation, buffers),
+        .brace_group => |list| evaluateCommandList(evaluator, shell_state, eval_context, list, buffers),
+        .subshell => |list| evaluateCommandList(evaluator, shell_state, eval_context, list, buffers),
+        .if_clause => |if_plan| evaluateIfClause(evaluator, shell_state, eval_context, if_plan, buffers),
+        .while_loop => |loop| evaluateLoop(evaluator, shell_state, eval_context, loop, .while_loop, buffers),
+        .until_loop => |loop| evaluateLoop(evaluator, shell_state, eval_context, loop, .until_loop, buffers),
+        .for_loop => |for_plan| evaluateForLoop(evaluator, shell_state, eval_context, for_plan, buffers),
+        .case_clause => |case_plan| evaluateCaseClause(evaluator, shell_state, eval_context, case_plan, buffers),
+    };
+}
+
+fn evaluateCommandList(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, list: command_plan.CommandList, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    shell_state.validate();
+    eval_context.validate();
+    list.validate();
+
+    var result = normalEvaluation(0);
+    for (list.commands) |child_plan| {
+        child_plan.validate();
+        var child_outcome = try evaluatePlan(evaluator, shell_state, eval_context.withTarget(child_plan.target), child_plan);
+        defer child_outcome.deinit();
+
+        try appendOutcomeBuffers(buffers, child_outcome);
+        try applyOutcomeToWorkingState(shell_state, &child_outcome, child_plan.target);
+
+        result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
+        if (child_outcome.control_flow != .normal) break;
+    }
+    return result;
+}
+
+fn evaluateAndOrList(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, and_or: command_plan.AndOrPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    and_or.validate();
+    var result = normalEvaluation(0);
+    for (and_or.commands, 0..) |entry, index| {
+        entry.validate(index);
+        const should_run = if (index == 0) true else switch (entry.operator.?) {
+            .and_if => result.status == 0,
+            .or_if => result.status != 0,
+        };
+        if (!should_run) continue;
+
+        var child_outcome = try evaluatePlan(evaluator, shell_state, eval_context.withTarget(entry.command.target), entry.command);
+        defer child_outcome.deinit();
+
+        try appendOutcomeBuffers(buffers, child_outcome);
+        try applyOutcomeToWorkingState(shell_state, &child_outcome, entry.command.target);
+
+        result = .{ .status = child_outcome.status, .control_flow = child_outcome.control_flow };
+        if (child_outcome.control_flow != .normal) break;
+    }
+    return result;
+}
+
+fn evaluateNegation(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, negation: command_plan.NegationPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    negation.validate();
+    var result = try evaluateCommandList(evaluator, shell_state, eval_context, negation.body, buffers);
+    if (result.control_flow == .normal) result.status = if (result.status == 0) 1 else 0;
+    return result;
+}
+
+fn evaluateIfClause(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, if_plan: command_plan.IfPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    if_plan.validate();
+    for (if_plan.branches) |branch| {
+        const condition = try evaluateCommandList(evaluator, shell_state, eval_context, branch.condition, buffers);
+        if (condition.control_flow != .normal) return condition;
+        if (condition.status == 0) return evaluateCommandList(evaluator, shell_state, eval_context, branch.body, buffers);
+    }
+    return evaluateCommandList(evaluator, shell_state, eval_context, if_plan.else_body, buffers);
+}
+
+const LoopKind = enum { while_loop, until_loop };
+
+fn evaluateLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, loop: command_plan.LoopPlan, kind: LoopKind, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    loop.validate();
+    const loop_context = eval_context.enterLoop();
+    var result = normalEvaluation(0);
+
+    while (true) {
+        const condition = try evaluateCommandList(evaluator, shell_state, loop_context, loop.condition, buffers);
+        if (condition.control_flow != .normal) {
+            switch (consumeLoopControl(condition.control_flow)) {
+                .stop => return normalEvaluation(0),
+                .repeat => continue,
+                .propagate => |flow| return .{ .status = flow.status(condition.status), .control_flow = flow },
+                .other => return condition,
+            }
+        }
+
+        const should_run = switch (kind) {
+            .while_loop => condition.status == 0,
+            .until_loop => condition.status != 0,
+        };
+        if (!should_run) return result;
+
+        const body = try evaluateCommandList(evaluator, shell_state, loop_context, loop.body, buffers);
+        switch (consumeLoopControl(body.control_flow)) {
+            .stop => return normalEvaluation(0),
+            .repeat => {
+                result = normalEvaluation(body.status);
+                continue;
+            },
+            .propagate => |flow| return .{ .status = flow.status(body.status), .control_flow = flow },
+            .other => {
+                if (body.control_flow != .normal) return body;
+                result = normalEvaluation(body.status);
+            },
+        }
+    }
+}
+
+fn evaluateForLoop(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, for_plan: command_plan.ForPlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    for_plan.validate();
+    const loop_context = eval_context.enterLoop();
+    const words = switch (for_plan.words) {
+        .explicit => |explicit| explicit,
+        .positional_parameters => shell_state.positionals.items,
+    };
+
+    var result = normalEvaluation(0);
+    for (words) |word| {
+        try assignForLoopVariable(evaluator.allocator, shell_state, eval_context.target, for_plan.variable_name, word);
+        const body = try evaluateCommandList(evaluator, shell_state, loop_context, for_plan.body, buffers);
+        switch (consumeLoopControl(body.control_flow)) {
+            .stop => return normalEvaluation(0),
+            .repeat => {
+                result = normalEvaluation(body.status);
+                continue;
+            },
+            .propagate => |flow| return .{ .status = flow.status(body.status), .control_flow = flow },
+            .other => {
+                if (body.control_flow != .normal) return body;
+                result = normalEvaluation(body.status);
+            },
+        }
+    }
+    return result;
+}
+
+fn evaluateCaseClause(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, case_plan: command_plan.CasePlan, buffers: *EvaluationBuffers) EvalError!SimpleEvalResult {
+    case_plan.validate();
+    for (case_plan.arms) |arm| {
+        for (arm.patterns) |pattern| {
+            if (casePatternMatches(pattern, case_plan.word)) return evaluateCommandList(evaluator, shell_state, eval_context, arm.body, buffers);
+        }
+    }
+    return normalEvaluation(0);
+}
+
+const LoopControlAction = union(enum) {
+    stop,
+    repeat,
+    propagate: outcome.ControlFlow,
+    other,
+};
+
+fn consumeLoopControl(control_flow: outcome.ControlFlow) LoopControlAction {
+    control_flow.validate();
+    return switch (control_flow) {
+        .break_loop => |depth| if (depth == 1) .stop else .{ .propagate = .{ .break_loop = depth - 1 } },
+        .continue_loop => |depth| if (depth == 1) .repeat else .{ .propagate = .{ .continue_loop = depth - 1 } },
+        else => .other,
+    };
+}
+
+fn assignForLoopVariable(allocator: std.mem.Allocator, shell_state: *state.ShellState, target: context.ExecutionTarget, name: []const u8, value: []const u8) EvalError!void {
+    state.assertValidVariableName(name);
+    if (target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(target)) {
+        var iteration_delta = delta.StateDelta.init(allocator, target);
+        defer iteration_delta.deinit();
+        try iteration_delta.assignVariable(name, value, .{});
+        iteration_delta.commit(shell_state, target) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
+        return;
+    }
+
+    std.debug.assert(target == .child_process);
+    shell_state.putVariable(name, value, .{}) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+}
+
+fn applyOutcomeToWorkingState(shell_state: *state.ShellState, command_outcome: *outcome.CommandOutcome, target: context.ExecutionTarget) EvalError!void {
+    command_outcome.validate();
+    if (target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(target)) {
+        command_outcome.commitDelta(shell_state, target) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
+    } else {
+        std.debug.assert(target == .child_process or target == .subshell);
+        command_outcome.discardDelta(target);
+        shell_state.last_status = command_outcome.status;
+    }
+    shell_state.validate();
+}
+
+fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
+    command_outcome.validate();
+    try buffers.stdout.appendSlice(buffers.allocator, command_outcome.stdout.items);
+    try buffers.stderr.appendSlice(buffers.allocator, command_outcome.stderr.items);
+    for (command_outcome.diagnostics.items) |diagnostic| {
+        const owned_message = try buffers.allocator.dupe(u8, diagnostic.message);
+        errdefer buffers.allocator.free(owned_message);
+        try buffers.diagnostics.append(buffers.allocator, owned_message);
+    }
+}
+
+fn hasCompoundRedirections(plan: command_plan.CompoundCommandPlan) bool {
+    plan.redirections.validate();
+    return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
 }
 
 fn evaluateFunctionDefinition(definition: command_plan.FunctionDefinition, state_delta: *delta.StateDelta) EvalError!SimpleEvalResult {
@@ -359,6 +674,59 @@ fn appendFunctionFrameDelta(before: state.ShellState, after: state.ShellState, f
     if (!std.mem.eql(u8, before.logical_cwd, after.logical_cwd) and after.logical_cwd.len != 0) try state_delta.setLogicalCwd(after.logical_cwd);
 }
 
+fn appendShellStateDiff(before: state.ShellState, after: state.ShellState, state_delta: *delta.StateDelta) EvalError!void {
+    std.debug.assert(state_delta.target.allowsShellStateCommit());
+    std.debug.assert(state_delta.positionals == null);
+    std.debug.assert(state_delta.last_status == null);
+    if (state_delta.target == .current_shell) std.debug.assert(before.scope == after.scope);
+    if (state_delta.target == .subshell) std.debug.assert(after.scope == .subshell);
+
+    var after_variables = after.variables.iterator();
+    while (after_variables.next()) |entry| {
+        const name = entry.key_ptr.*;
+        const next = entry.value_ptr.*;
+        if (before.getVariable(name)) |previous| {
+            std.debug.assert(!previous.readonly or next.readonly);
+            if (!std.mem.eql(u8, previous.value, next.value)) {
+                try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
+                continue;
+            }
+            if (previous.exported != next.exported) try state_delta.setVariableExported(name, next.exported);
+            if (!previous.readonly and next.readonly) try state_delta.setVariableReadonly(name);
+        } else {
+            try state_delta.assignVariable(name, next.value, .{ .exported = next.exported, .readonly = next.readonly });
+        }
+    }
+
+    var before_variables = before.variables.iterator();
+    while (before_variables.next()) |entry| {
+        const name = entry.key_ptr.*;
+        if (!after.variables.contains(name)) try state_delta.unsetVariable(name);
+    }
+
+    var after_functions = after.functions.iterator();
+    while (after_functions.next()) |entry| try state_delta.setFunction(entry.value_ptr.*);
+
+    var before_functions = before.functions.iterator();
+    while (before_functions.next()) |entry| {
+        if (!after.functions.contains(entry.key_ptr.*)) try state_delta.unsetFunction(entry.key_ptr.*);
+    }
+
+    try appendOptionDiff(before.options, after.options, state_delta);
+    try appendAliasDiff(before, after, state_delta);
+    try appendTrapDiff(before, after, state_delta);
+    if (!positionalsEqual(before.positionals.items, after.positionals.items)) try state_delta.replacePositionals(after.positionals.items);
+    if (!std.mem.eql(u8, before.logical_cwd, after.logical_cwd) and after.logical_cwd.len != 0) try state_delta.setLogicalCwd(after.logical_cwd);
+}
+
+fn positionalsEqual(left: []const []const u8, right: []const []const u8) bool {
+    if (left.len != right.len) return false;
+    for (left, right) |left_arg, right_arg| {
+        if (!std.mem.eql(u8, left_arg, right_arg)) return false;
+    }
+    return true;
+}
+
 fn appendOptionDiff(before: state.ShellOptions, after: state.ShellOptions, state_delta: *delta.StateDelta) !void {
     const options = [_]state.ShellOption{
         .allexport,
@@ -493,6 +861,76 @@ fn evaluateNotFound(not_found: command_plan.NotFound, buffers: *EvaluationBuffer
 fn hasRedirections(plan: command_plan.CommandPlan) bool {
     plan.redirections.validate();
     return plan.redirections.steps.len != 0 or plan.redirections.rollback_steps.len != 0;
+}
+
+fn casePatternMatches(pattern: []const u8, text: []const u8) bool {
+    std.debug.assert(std.mem.indexOfScalar(u8, pattern, 0) == null);
+    std.debug.assert(std.mem.indexOfScalar(u8, text, 0) == null);
+    return casePatternMatchesAt(pattern, 0, text, 0);
+}
+
+fn casePatternMatchesAt(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) bool {
+    if (pattern_index == pattern.len) return text_index == text.len;
+    const pattern_byte = pattern[pattern_index];
+    switch (pattern_byte) {
+        '*' => {
+            var next_text = text_index;
+            while (true) : (next_text += 1) {
+                if (casePatternMatchesAt(pattern, pattern_index + 1, text, next_text)) return true;
+                if (next_text == text.len) break;
+            }
+            return false;
+        },
+        '?' => return text_index < text.len and casePatternMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
+        '[' => if (matchCaseBracket(pattern, pattern_index, text, text_index)) |matched| {
+            return matched.ok and casePatternMatchesAt(pattern, matched.next_pattern, text, text_index + 1);
+        } else return text_index < text.len and pattern_byte == text[text_index] and casePatternMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
+        '\\' => {
+            const escaped_index = pattern_index + 1;
+            if (escaped_index >= pattern.len) return false;
+            return text_index < text.len and pattern[escaped_index] == text[text_index] and casePatternMatchesAt(pattern, escaped_index + 1, text, text_index + 1);
+        },
+        else => return text_index < text.len and pattern_byte == text[text_index] and casePatternMatchesAt(pattern, pattern_index + 1, text, text_index + 1),
+    }
+}
+
+const CaseBracketMatch = struct {
+    ok: bool,
+    next_pattern: usize,
+};
+
+fn matchCaseBracket(pattern: []const u8, start: usize, text: []const u8, text_index: usize) ?CaseBracketMatch {
+    std.debug.assert(start < pattern.len);
+    std.debug.assert(pattern[start] == '[');
+    if (text_index >= text.len) return null;
+
+    var index = start + 1;
+    var negate = false;
+    if (index < pattern.len and (pattern[index] == '!' or pattern[index] == '^')) {
+        negate = true;
+        index += 1;
+    }
+    if (index >= pattern.len) return null;
+
+    var matched = false;
+    var saw_member = false;
+    while (index < pattern.len) : (index += 1) {
+        if (pattern[index] == ']' and saw_member) {
+            return .{ .ok = if (negate) !matched else matched, .next_pattern = index + 1 };
+        }
+        saw_member = true;
+
+        const first = pattern[index];
+        if (index + 2 < pattern.len and pattern[index + 1] == '-' and pattern[index + 2] != ']') {
+            const last = pattern[index + 2];
+            const value = text[text_index];
+            if (first <= value and value <= last) matched = true;
+            index += 2;
+            continue;
+        }
+        if (first == text[text_index]) matched = true;
+    }
+    return null;
 }
 
 fn externalArgv(allocator: std.mem.Allocator, plan: command_plan.CommandPlan, resolution: command_plan.ExternalResolution) ![][]const u8 {
@@ -648,6 +1086,9 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, ":")) return normalEvaluation(0);
     if (std.mem.eql(u8, definition.name, "true")) return normalEvaluation(0);
     if (std.mem.eql(u8, definition.name, "false")) return normalEvaluation(1);
+    if (std.mem.eql(u8, definition.name, "break")) return evaluateLoopControl(eval_context, plan.argv, .break_loop, buffers);
+    if (std.mem.eql(u8, definition.name, "continue")) return evaluateLoopControl(eval_context, plan.argv, .continue_loop, buffers);
+    if (std.mem.eql(u8, definition.name, "exit")) return evaluateExit(shell_state, plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "return")) return evaluateReturn(shell_state, eval_context, plan.argv, buffers);
     if (std.mem.eql(u8, definition.name, "echo")) return normalEvaluation(try evaluateEcho(evaluator.allocator, plan.argv, &buffers.stdout));
     if (std.mem.eql(u8, definition.name, "printf")) return normalEvaluation(try evaluatePrintf(evaluator.allocator, plan.argv, &buffers.stdout, &buffers.stderr));
@@ -676,6 +1117,46 @@ fn evaluateReturn(shell_state: state.ShellState, eval_context: context.EvalConte
     } else shell_state.last_status;
     const scope: outcome.ReturnScope = if (eval_context.canReturnFromFunction()) .function else .sourced_script;
     return .{ .status = status, .control_flow = .{ .return_from_scope = .{ .scope = scope, .status = status } } };
+}
+
+const LoopControlKind = enum { break_loop, continue_loop };
+
+fn evaluateLoopControl(eval_context: context.EvalContext, argv: []const []const u8, kind: LoopControlKind, buffers: *EvaluationBuffers) !SimpleEvalResult {
+    std.debug.assert(argv.len != 0);
+    const command = switch (kind) {
+        .break_loop => "break",
+        .continue_loop => "continue",
+    };
+    std.debug.assert(std.mem.eql(u8, argv[0], command));
+
+    if (!eval_context.canBreakOrContinue(1)) return normalEvaluation(try builtinUsageError(buffers, command, "not in a loop"));
+    if (argv.len > 2) return normalEvaluation(try builtinUsageError(buffers, command, "too many arguments"));
+    const requested_depth: u32 = if (argv.len == 2) blk: {
+        const operand = std.mem.trim(u8, argv[1], &std.ascii.whitespace);
+        const parsed = std.fmt.parseInt(u32, operand, 10) catch return normalEvaluation(try builtinUsageError(buffers, command, "numeric argument required"));
+        if (parsed == 0) return normalEvaluation(try builtinUsageError(buffers, command, "loop count out of range"));
+        break :blk parsed;
+    } else 1;
+    const effective_depth = if (requested_depth > eval_context.loop_depth) eval_context.loop_depth else requested_depth;
+    std.debug.assert(effective_depth != 0);
+    return switch (kind) {
+        .break_loop => .{ .status = 0, .control_flow = .{ .break_loop = effective_depth } },
+        .continue_loop => .{ .status = 0, .control_flow = .{ .continue_loop = effective_depth } },
+    };
+}
+
+fn evaluateExit(shell_state: state.ShellState, argv: []const []const u8, buffers: *EvaluationBuffers) !SimpleEvalResult {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "exit"));
+    if (argv.len > 2) return normalEvaluation(try builtinUsageError(buffers, "exit", "too many arguments"));
+    const status: outcome.ExitStatus = if (argv.len == 2) blk: {
+        const operand = std.mem.trim(u8, argv[1], &std.ascii.whitespace);
+        break :blk std.fmt.parseInt(outcome.ExitStatus, operand, 10) catch {
+            _ = try builtinUsageError(buffers, "exit", "numeric argument required");
+            return .{ .status = 2, .control_flow = .{ .exit = 2 } };
+        };
+    } else shell_state.last_status;
+    return .{ .status = status, .control_flow = .{ .exit = status } };
 }
 
 fn evaluateLocal(evaluator: *Evaluator, shell_state: state.ShellState, eval_context: context.EvalContext, plan: command_plan.CommandPlan, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
@@ -3014,6 +3495,176 @@ fn fakeChild(id: runtime.process.ProcessId) runtime.process.ChildProcess {
         .request_resource_usage_statistics = false,
     };
     return runtime.process.ChildProcess.init(child);
+}
+
+test "semantic evaluator evaluates compound if loop for and case forms" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    const eval_context = context.EvalContext.forTarget(.current_shell);
+
+    const if_assignment = [_]command_plan.Assignment{.{ .name = "IF_RESULT", .value = "elif" }};
+    const if_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &if_assignment } })};
+    const if_branches = [_]command_plan.IfBranch{
+        .{
+            .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } })} },
+            .body = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "echo", "unreached" } } })} },
+        },
+        .{
+            .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } })} },
+            .body = .{ .commands = &if_commands },
+        },
+    };
+    const if_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .if_clause = .{ .branches = &if_branches } } };
+    var if_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, if_plan);
+    defer if_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), if_result.status);
+    try if_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("elif", shell_state.getVariable("IF_RESULT").?.value);
+
+    const skipped_assignment = [_]command_plan.Assignment{.{ .name = "AND_SKIPPED", .value = "bad" }};
+    const or_assignment = [_]command_plan.Assignment{.{ .name = "OR_RESULT", .value = "ran" }};
+    const and_or_commands = [_]command_plan.AndOrCommand{
+        .{ .command = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } }) },
+        .{ .operator = .and_if, .command = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &skipped_assignment } }) },
+        .{ .operator = .or_if, .command = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &or_assignment } }) },
+    };
+    const and_or_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .and_or_list = .{ .commands = &and_or_commands } } };
+    var and_or_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, and_or_plan);
+    defer and_or_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), and_or_result.status);
+    try and_or_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("AND_SKIPPED"));
+    try std.testing.expectEqualStrings("ran", shell_state.getVariable("OR_RESULT").?.value);
+
+    const negation_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } })};
+    const negation_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .negation = .{ .body = .{ .commands = &negation_commands } } } };
+    var negation_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, negation_plan);
+    defer negation_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), negation_result.status);
+    try negation_result.commitDelta(&shell_state, .current_shell);
+
+    const loop_assignment = [_]command_plan.Assignment{.{ .name = "LOOP_RESULT", .value = "entered" }};
+    const loop_body = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &loop_assignment } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"break"} } }),
+    };
+    const loop_plan: command_plan.CompoundCommandPlan = .{
+        .target = .current_shell,
+        .body = .{ .while_loop = .{
+            .condition = .{ .commands = &[_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } })} },
+            .body = .{ .commands = &loop_body },
+        } },
+    };
+    var loop_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, loop_plan);
+    defer loop_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), loop_result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, loop_result.control_flow);
+    try loop_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("entered", shell_state.getVariable("LOOP_RESULT").?.value);
+
+    const for_words = [_][]const u8{ "one", "two" };
+    const for_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"continue"} } })};
+    const for_plan: command_plan.CompoundCommandPlan = .{
+        .target = .current_shell,
+        .body = .{ .for_loop = .{ .variable_name = "ITEM", .words = .{ .explicit = &for_words }, .body = .{ .commands = &for_body } } },
+    };
+    var for_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, for_plan);
+    defer for_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), for_result.status);
+    try for_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("two", shell_state.getVariable("ITEM").?.value);
+
+    const case_assignment = [_]command_plan.Assignment{.{ .name = "CASE_RESULT", .value = "matched" }};
+    const case_body = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &case_assignment } })};
+    const case_arms = [_]command_plan.CaseArm{
+        .{ .patterns = &[_][]const u8{"one"}, .body = .{} },
+        .{ .patterns = &[_][]const u8{ "t?o", "[ab]" }, .body = .{ .commands = &case_body } },
+    };
+    const case_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .case_clause = .{ .word = "two", .arms = &case_arms } } };
+    var case_result = try evaluateCompoundPlan(&evaluator, &shell_state, eval_context, case_plan);
+    defer case_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), case_result.status);
+    try case_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("matched", shell_state.getVariable("CASE_RESULT").?.value);
+}
+
+test "semantic evaluator applies compound command commit and discard boundaries" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const parent_assignment = [_]command_plan.Assignment{.{ .name = "PARENT", .value = "changed" }};
+    const parent_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &parent_assignment } }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"false"} } }),
+    };
+    const brace_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .brace_group = .{ .commands = &parent_commands } } };
+    var brace_result = try evaluateCompoundPlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), brace_plan);
+    defer brace_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 1), brace_result.status);
+    try brace_result.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqualStrings("changed", shell_state.getVariable("PARENT").?.value);
+    try std.testing.expectEqual(@as(state.ExitStatus, 1), shell_state.last_status);
+
+    const subshell_assignment = [_]command_plan.Assignment{.{ .name = "SUBSHELL", .value = "hidden" }};
+    const subshell_commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &subshell_assignment }, .target = .subshell }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "exit", "7" } }, .target = .subshell }),
+    };
+    const subshell_plan: command_plan.CompoundCommandPlan = .{ .target = .subshell, .body = .{ .subshell = .{ .commands = &subshell_commands } } };
+    var subshell_result = try evaluateCompoundPlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell).enterSubshell(), subshell_plan);
+    defer subshell_result.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 7), subshell_result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, subshell_result.control_flow);
+    try std.testing.expectEqual(context.ExecutionTarget.subshell, subshell_result.state_delta.target);
+    subshell_result.discardDelta(.subshell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("SUBSHELL"));
+    try std.testing.expectEqual(@as(state.ExitStatus, 1), shell_state.last_status);
+}
+
+test "semantic evaluator propagates current-shell compound control flow" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const exit_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "exit", "5" } } })};
+    const brace_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .body = .{ .brace_group = .{ .commands = &exit_commands } } };
+    var result = try evaluateCompoundPlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), brace_plan);
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 5), result.status);
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 5 }, result.control_flow);
+    result.discardDelta(.current_shell);
+}
+
+test "semantic evaluator applies and restores compound command redirections" {
+    var fake = FakeExternalRuntime.init(std.testing.allocator);
+    defer fake.deinit();
+    var evaluator = Evaluator.initWithFdPort(std.testing.allocator, fake.fdPort());
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.openPath(0, 1, "compound-out", .{ .access = .write_only, .create = true, .truncate = true })};
+    const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
+    const redirections: redirection_plan.RedirectionPlan = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps };
+    const body_commands = [_]command_plan.CommandPlan{command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "exit", "4" } } })};
+    const compound_plan: command_plan.CompoundCommandPlan = .{ .target = .current_shell, .redirections = redirections, .body = .{ .brace_group = .{ .commands = &body_commands } } };
+
+    var result = try evaluateCompoundPlan(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), compound_plan);
+    defer result.deinit();
+    try std.testing.expectEqual(outcome.ControlFlow{ .exit = 4 }, result.control_flow);
+    try std.testing.expectEqual(@as(usize, 6), fake.fd_operation_count);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate = 1 }, fake.fd_operations[0]);
+    switch (fake.fd_operations[1]) {
+        .open => |path| try std.testing.expectEqualStrings("compound-out", path),
+        else => return error.TestUnexpectedResult,
+    }
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 11, .target = 1 } }, fake.fd_operations[2]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 11 }, fake.fd_operations[3]);
+    try std.testing.expectEqual(FakeFdOperation{ .duplicate_to = .{ .source = 10, .target = 1 } }, fake.fd_operations[4]);
+    try std.testing.expectEqual(FakeFdOperation{ .close = 10 }, fake.fd_operations[5]);
+    result.discardDelta(.current_shell);
 }
 
 test "semantic evaluator stores and invokes function definitions through explicit frames" {

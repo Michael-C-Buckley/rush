@@ -75,7 +75,7 @@ pub const Builtin = struct {
             .predicate => std.debug.assert(std.mem.eql(u8, self.name, "test") or std.mem.eql(u8, self.name, "[")),
             .declaration => std.debug.assert(std.mem.eql(u8, self.name, "export") or std.mem.eql(u8, self.name, "readonly") or std.mem.eql(u8, self.name, "unset")),
             .shell_state => std.debug.assert(std.mem.eql(u8, self.name, "set") or std.mem.eql(u8, self.name, "shift") or std.mem.eql(u8, self.name, "alias") or std.mem.eql(u8, self.name, "unalias") or std.mem.eql(u8, self.name, "trap") or std.mem.eql(u8, self.name, "local")),
-            .control_flow => std.debug.assert(std.mem.eql(u8, self.name, "return")),
+            .control_flow => std.debug.assert(std.mem.eql(u8, self.name, "break") or std.mem.eql(u8, self.name, "continue") or std.mem.eql(u8, self.name, "exit") or std.mem.eql(u8, self.name, "return")),
         }
     }
 };
@@ -83,11 +83,11 @@ pub const Builtin = struct {
 pub const default_builtins = [_]Builtin{
     Builtin.initWithSemantics(":", .special, .no_op),
     Builtin.init(".", .special),
-    Builtin.init("break", .special),
-    Builtin.init("continue", .special),
+    Builtin.initWithSemantics("break", .special, .control_flow),
+    Builtin.initWithSemantics("continue", .special, .control_flow),
     Builtin.init("eval", .special),
     Builtin.init("exec", .special),
-    Builtin.init("exit", .special),
+    Builtin.initWithSemantics("exit", .special, .control_flow),
     Builtin.initWithSemantics("export", .special, .declaration),
     Builtin.initWithSemantics("readonly", .special, .declaration),
     Builtin.initWithSemantics("return", .special, .control_flow),
