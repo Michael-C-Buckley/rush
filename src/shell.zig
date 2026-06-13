@@ -49,6 +49,7 @@ pub const InputSource = context.InputSource;
 pub const IfBranch = command_plan.IfBranch;
 pub const IfPlan = command_plan.IfPlan;
 pub const LoopPlan = command_plan.LoopPlan;
+pub const InvocationContext = context.InvocationContext;
 pub const NegationPlan = command_plan.NegationPlan;
 pub const PipelineBackgroundMode = pipeline_plan.PipelineBackgroundMode;
 pub const PipelineExecutionStrategy = pipeline_plan.PipelineExecutionStrategy;

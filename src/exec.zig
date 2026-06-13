@@ -8,6 +8,7 @@ const expand = @import("expand.zig");
 const history_module = @import("history.zig");
 const ir = @import("ir.zig");
 const parser = @import("parser.zig");
+const runtime = @import("runtime.zig");
 const shell_state = @import("shell/state.zig");
 const vaxis = @import("vaxis");
 const zeit = @import("zeit");
@@ -28,16 +29,7 @@ const supported_trap_signals = [_]std.posix.SIG{ .HUP, .INT, .QUIT, .TERM, .USR1
 
 pub const ExitStatus = u8;
 pub const stopped_jobs_exit_warning = "You have stopped jobs.\n";
-
-pub const ExternalStdio = enum {
-    capture,
-    capture_stdout,
-    /// Externals write to the shell's stdout and stderr but read script
-    /// input, not the terminal. Used for the last stage of an interactive
-    /// pipeline, where stdin is the pipe but output belongs to the tty.
-    inherit_output,
-    inherit,
-};
+pub const ExternalStdio = runtime.ExternalStdio;
 
 pub const ExecuteOptions = struct {
     io: ?std.Io = null,
@@ -61,7 +53,7 @@ pub const ExecuteOptions = struct {
     completion_provider_only: bool = false,
     stdin_script_file: ?std.Io.File = null,
     stdin_script_source_offset: usize = 0,
-    completion_loader: ?*const fn (*anyopaque, *Executor, []const u8, ExecuteOptions) anyerror!void = null,
+    completion_loader: ?*const fn (*anyopaque, *Executor, []const u8, completion.ScriptLoaderOptions) anyerror!void = null,
     completion_loader_context: ?*anyopaque = null,
     abort_on_output_write_failure: bool = false,
 };
@@ -3144,7 +3136,9 @@ pub const Executor = struct {
     fn loadCompletionDataForRoot(self: *Executor, command: []const u8, options: ExecuteOptions) !void {
         if (options.completion_loader) |loader| {
             const context = options.completion_loader_context orelse return;
-            try loader(context, self, command, options);
+            const loader_options: completion.ScriptLoaderOptions = .{ .io = options.io, .arg_zero = options.arg_zero };
+            loader_options.validate();
+            try loader(context, self, command, loader_options);
             return;
         }
         try self.loadCompletionScriptForRoot(command, options);

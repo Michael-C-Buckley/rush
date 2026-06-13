@@ -2,6 +2,16 @@
 
 const std = @import("std");
 
+pub const ScriptLoaderOptions = struct {
+    io: ?std.Io = null,
+    arg_zero: []const u8 = "rush",
+
+    pub fn validate(self: ScriptLoaderOptions) void {
+        std.debug.assert(self.arg_zero.len != 0);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.arg_zero, 0) == null);
+    }
+};
+
 pub const CancellationToken = struct {
     canceled: std.atomic.Value(bool) = .init(false),
     mutex: std.atomic.Mutex = .unlocked,

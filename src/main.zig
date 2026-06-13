@@ -1153,7 +1153,8 @@ const CompletionScriptLoader = struct {
     }
 };
 
-fn loadCompletionDataForExecutor(context: *anyopaque, executor: *exec.Executor, command: []const u8, options: exec.ExecuteOptions) !void {
+fn loadCompletionDataForExecutor(context: *anyopaque, executor: *exec.Executor, command: []const u8, options: completion_model.ScriptLoaderOptions) !void {
+    options.validate();
     const loader: *CompletionScriptLoader = @ptrCast(@alignCast(context));
     const io = options.io orelse return;
     try loader.ensureLoaded(io, executor, command, options.arg_zero);
@@ -6552,7 +6553,7 @@ pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script
     return runCommandStringWithEnvironment(allocator, io, script, options, environ_map, &.{}, null, .{});
 }
 
-fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, invocation: ShellInvocation, environ_map: ?*const std.process.Environ.Map, external_stdio: exec.ExternalStdio, login_shell: bool) !exec.CommandResult {
+fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, invocation: ShellInvocation, environ_map: ?*const std.process.Environ.Map, external_stdio: runtime.ExternalStdio, login_shell: bool) !exec.CommandResult {
     var owned_script: ?[]const u8 = null;
     defer if (owned_script) |script| allocator.free(script);
 
@@ -6668,8 +6669,9 @@ fn stderrIsTty(io: std.Io) bool {
 }
 
 fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !exec.CommandResult {
-    if (shouldUseSemanticNonInteractiveExecutor(options, interactive_options)) {
-        var semantic_execution = try runSemanticCommandString(allocator, io, script, options, environ_map, positionals, shell_options);
+    const semantic_invocation = semanticInvocationFromExecuteOptions(options);
+    if (shouldUseSemanticNonInteractiveExecutor(semantic_invocation, options.allow_external, interactive_options)) {
+        var semantic_execution = try runSemanticCommandString(allocator, io, script, semantic_invocation, options.external_stdio, environ_map, positionals, shell_options);
         switch (semantic_execution) {
             .output => |output| {
                 semantic_execution = undefined;
@@ -6704,8 +6706,9 @@ fn runOldCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, 
     return runScriptWithExecutor(allocator, &executor, script, options);
 }
 
-fn shouldUseSemanticNonInteractiveExecutor(options: exec.ExecuteOptions, interactive_options: ?InteractiveOptions) bool {
-    return interactive_options == null and !options.interactive and options.allow_external;
+fn shouldUseSemanticNonInteractiveExecutor(invocation: shell.InvocationContext, allow_external: bool, interactive_options: ?InteractiveOptions) bool {
+    invocation.validate();
+    return interactive_options == null and !invocation.interactive and allow_external;
 }
 
 const SemanticInvocationExecution = union(enum) {
@@ -6721,17 +6724,17 @@ const SemanticInvocationExecution = union(enum) {
     }
 };
 
-fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !SemanticInvocationExecution {
-    assertSemanticStartupOptions(script, options, positionals);
+fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !SemanticInvocationExecution {
+    assertSemanticStartupOptions(script, invocation, positionals);
 
     if (shell_options.noexec or shell_options.verbose or shell_options.xtrace) return semanticUnsupported(allocator, "semantic executor does not yet implement non-interactive noexec/verbose/xtrace startup modes");
     if (environ_map) |map| if (!semanticEnvironmentSupported(map)) return semanticUnsupported(allocator, "semantic ShellState cannot yet preserve non-shell environment names");
 
     if (semanticScriptNeedsAliasTiming(script)) {
-        return runSemanticAliasTimingCommandString(allocator, io, script, options, environ_map, positionals, shell_options);
+        return runSemanticAliasTimingCommandString(allocator, io, script, invocation, external_stdio, environ_map, positionals, shell_options);
     }
 
-    var parsed = try parser.parse(allocator, script, .{ .features = options.features.withStrictDiagnostics() });
+    var parsed = try parser.parse(allocator, script, .{ .features = invocation.features.withStrictDiagnostics() });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) {
         return .{ .output = try exec.parseDiagnosticsResult(allocator, script, parsed.diagnostics) };
@@ -6739,7 +6742,7 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, options.features, false)) |message| return semanticUnsupported(allocator, message);
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, false)) |message| return semanticUnsupported(allocator, message);
 
     var shell_state = shell.ShellState.init(allocator);
     defer shell_state.deinit();
@@ -6747,45 +6750,37 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
-    evaluator.features = options.features;
-    evaluator.arg_zero = options.arg_zero;
+    evaluator.features = invocation.features;
+    evaluator.arg_zero = invocation.arg_zero;
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
-    evaluator.external_stdio = semanticExternalStdio(options.external_stdio);
+    evaluator.external_stdio = external_stdio;
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
-    parser_resolver.features = options.features;
-    parser_resolver.arg_zero = options.arg_zero;
+    parser_resolver.features = invocation.features;
+    parser_resolver.arg_zero = invocation.arg_zero;
     const resolver = parser_resolver.resolver();
-    const eval_context = shell.EvalContext.init(.{
-        .target = .current_shell,
-        .source = semanticInputSource(options),
-        .interactive = false,
-    });
+    const eval_context = invocation.evalContext(.current_shell);
 
-    return runSemanticLoweredProgram(allocator, script, program, &evaluator, &shell_state, eval_context, resolver, options.stdin_script_file, true);
+    return runSemanticLoweredProgram(allocator, script, program, &evaluator, &shell_state, eval_context, resolver, invocation.stdin_script_file, invocation.stdin_script_source_offset, true);
 }
 
-fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !SemanticInvocationExecution {
+fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !SemanticInvocationExecution {
     var shell_state = shell.ShellState.init(allocator);
     defer shell_state.deinit();
     try initializeSemanticInvocationState(allocator, io, &shell_state, environ_map, positionals, shell_options);
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
-    evaluator.features = options.features;
-    evaluator.arg_zero = options.arg_zero;
+    evaluator.features = invocation.features;
+    evaluator.arg_zero = invocation.arg_zero;
     evaluator.io = io;
     evaluator.read_stdin_from_fd = true;
-    evaluator.external_stdio = semanticExternalStdio(options.external_stdio);
+    evaluator.external_stdio = external_stdio;
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
-    parser_resolver.features = options.features;
-    parser_resolver.arg_zero = options.arg_zero;
+    parser_resolver.features = invocation.features;
+    parser_resolver.arg_zero = invocation.arg_zero;
     const resolver = parser_resolver.resolver();
-    const eval_context = shell.EvalContext.init(.{
-        .target = .current_shell,
-        .source = if (options.stdin_script_file != null) .standard_input else if (options.source_path != null) .script_file else .command_string,
-        .interactive = false,
-    });
+    const eval_context = invocation.evalContext(.current_shell);
 
     var stdout: std.ArrayList(u8) = .empty;
     errdefer stdout.deinit(allocator);
@@ -6798,9 +6793,9 @@ fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io,
         while (true) {
             const source = std.mem.trim(u8, script[start..end], " \t\r\n;");
             if (source.len == 0) break;
-            const aliased = try semanticExpandAliases(allocator, source, options.features, &shell_state);
+            const aliased = try semanticExpandAliases(allocator, source, invocation.features, &shell_state);
             defer allocator.free(aliased);
-            var parsed = try parser.parse(allocator, aliased, .{ .features = options.features.withStrictDiagnostics() });
+            var parsed = try parser.parse(allocator, aliased, .{ .features = invocation.features.withStrictDiagnostics() });
             defer parsed.deinit();
             if (parsed.diagnostics.len == 0) {
                 var program = try ir.lowerSimpleCommands(allocator, parsed);
@@ -6811,7 +6806,7 @@ fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io,
                 };
                 defer alias_snapshot.deinit();
                 parser_resolver.alias_state = &alias_snapshot;
-                var execution = try runSemanticLoweredProgram(allocator, aliased, program, &evaluator, &shell_state, eval_context, resolver, options.stdin_script_file, false);
+                var execution = try runSemanticLoweredProgram(allocator, aliased, program, &evaluator, &shell_state, eval_context, resolver, invocation.stdin_script_file, invocation.stdin_script_source_offset, false);
                 defer execution.deinit(allocator);
                 switch (execution) {
                     .unsupported => |message| return semanticUnsupported(allocator, message),
@@ -6838,7 +6833,7 @@ fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_sh
     std.debug.assert(options.interactive);
     std.debug.assert(interactive_shell.executor.execution_depth == 0);
     if (interactive_shell.semantic_enabled) {
-        var semantic_execution = try runSemanticInteractiveCommandString(allocator, io, interactive_shell, script, options);
+        var semantic_execution = try runSemanticInteractiveCommandString(allocator, io, interactive_shell, script, semanticInvocationFromExecuteOptions(options), options.external_stdio);
         switch (semantic_execution) {
             .output => |output| {
                 semantic_execution = undefined;
@@ -6858,48 +6853,45 @@ fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_sh
     return result;
 }
 
-fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, options: exec.ExecuteOptions) !SemanticInvocationExecution {
-    assertSemanticInteractiveOptions(script, options);
+fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *InteractiveShell, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !SemanticInvocationExecution {
+    assertSemanticInteractiveOptions(script, invocation);
 
     const executor = &interactive_shell.executor;
     const shell_state = &interactive_shell.semantic_state;
     std.debug.assert(interactive_shell.semantic_enabled);
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
-    if (options.external_stdio != .inherit and options.external_stdio != .capture) return semanticUnsupported(allocator, "semantic interactive executor requires inherited or captured stdio");
-    if (options.stdin_script_file != null) return semanticUnsupported(allocator, "semantic interactive executor does not consume script stdin files");
+    if (external_stdio != .inherit and external_stdio != .capture) return semanticUnsupported(allocator, "semantic interactive executor requires inherited or captured stdio");
+    if (invocation.stdin_script_file != null) return semanticUnsupported(allocator, "semantic interactive executor does not consume script stdin files");
     if (executor.pending_exit != null) return semanticUnsupported(allocator, "semantic interactive executor does not run while an exit is pending");
     if (shell_state.options.verbose or shell_state.options.xtrace or shell_state.options.errexit) return semanticUnsupported(allocator, "semantic interactive executor does not yet preserve verbose/xtrace/errexit state");
 
-    var parsed = try parser.parse(allocator, script, .{ .mode = .interactive, .features = options.features.withStrictDiagnostics() });
+    var parsed = try parser.parse(allocator, script, .{ .mode = .interactive, .features = invocation.features.withStrictDiagnostics() });
     defer parsed.deinit();
     if (parsed.diagnostics.len != 0) return semanticUnsupported(allocator, "semantic interactive parser diagnostics are not handled by this path yet");
 
     var program = try ir.lowerSimpleCommands(allocator, parsed);
     defer program.deinit();
-    if (try semanticPreflightUnsupported(allocator, program, options.features, true)) |message| return semanticUnsupported(allocator, message);
+    if (try semanticPreflightUnsupported(allocator, program, invocation.features, true)) |message| return semanticUnsupported(allocator, message);
     if (semanticInteractiveProgramUnsupported(executor.*, shell_state.*, program)) |message| return semanticUnsupported(allocator, message);
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
-    evaluator.features = options.features;
-    evaluator.arg_zero = options.arg_zero;
+    evaluator.features = invocation.features;
+    evaluator.arg_zero = invocation.arg_zero;
     var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
-    parser_resolver.features = options.features;
-    parser_resolver.arg_zero = options.arg_zero;
+    parser_resolver.features = invocation.features;
+    parser_resolver.arg_zero = invocation.arg_zero;
     const resolver = parser_resolver.resolver();
-    const eval_context = shell.EvalContext.init(.{
-        .target = .current_shell,
-        .source = .command_string,
-        .interactive = true,
-    });
+    const eval_context = invocation.evalContext(.current_shell);
 
-    return runSemanticLoweredProgram(allocator, script, program, &evaluator, shell_state, eval_context, resolver, null, false);
+    return runSemanticLoweredProgram(allocator, script, program, &evaluator, shell_state, eval_context, resolver, null, 0, false);
 }
 
-fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, program: ir.Program, evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, resolver: shell.TrapActionResolver, stdin_script_file: ?std.Io.File, run_exit_trap: bool) !SemanticInvocationExecution {
+fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, program: ir.Program, evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, resolver: shell.TrapActionResolver, stdin_script_file: ?std.Io.File, stdin_script_source_offset: usize, run_exit_trap: bool) !SemanticInvocationExecution {
     eval_context.validate();
     shell_state.validate();
+    if (stdin_script_file == null) std.debug.assert(stdin_script_source_offset == 0);
 
     var accumulated_stdout: std.ArrayList(u8) = .empty;
     errdefer accumulated_stdout.deinit(allocator);
@@ -6916,7 +6908,7 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
     for (program.statements, 0..) |statement, statement_index| {
         std.debug.assert(statement.span.start <= statement.span.end);
         std.debug.assert(statement.span.end <= script.len);
-        if (semanticStdinScriptConsumedStatement(stdin_script_file, statement.span.start)) continue;
+        if (semanticStdinScriptConsumedStatement(stdin_script_file, stdin_script_source_offset, statement.span.start)) continue;
 
         const should_run = if (statement_index == 0) blk: {
             std.debug.assert(statement.op_before == .sequence);
@@ -6931,7 +6923,7 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
         const statement_end = semanticStatementSourceEnd(program, statement_index, script.len);
         const statement_script = std.mem.trim(u8, script[statement.span.start..statement_end], " \t\r\n;");
         std.debug.assert(statement_script.len != 0);
-        syncSemanticStdinScriptOffset(stdin_script_file, script, statement_end);
+        syncSemanticStdinScriptOffset(stdin_script_file, stdin_script_source_offset, script, statement_end);
         var body = (try resolver.resolve(allocator, statement_script, .TERM, eval_context, shell_state)) orelse return semanticUnsupported(allocator, "semantic parser lowering returned no body");
         defer body.deinit();
 
@@ -7126,19 +7118,19 @@ fn isSemanticAliasName(name: []const u8) bool {
     return true;
 }
 
-fn syncSemanticStdinScriptOffset(file: ?std.Io.File, script: []const u8, offset: usize) void {
+fn syncSemanticStdinScriptOffset(file: ?std.Io.File, source_offset: usize, script: []const u8, offset: usize) void {
     const stdin_file = file orelse return;
-    var adjusted_offset = offset;
-    if (adjusted_offset < script.len and script[adjusted_offset] == '\n') adjusted_offset += 1;
+    var adjusted_offset = source_offset + offset;
+    if (offset < script.len and script[offset] == '\n') adjusted_offset += 1;
     const seek_offset: std.c.off_t = @intCast(adjusted_offset);
     _ = std.c.lseek(stdin_file.handle, seek_offset, std.c.SEEK.SET);
 }
 
-fn semanticStdinScriptConsumedStatement(file: ?std.Io.File, statement_start: usize) bool {
+fn semanticStdinScriptConsumedStatement(file: ?std.Io.File, source_offset: usize, statement_start: usize) bool {
     const stdin_file = file orelse return false;
     const current = std.c.lseek(stdin_file.handle, 0, std.c.SEEK.CUR);
     if (current < 0) return false;
-    return @as(u64, @intCast(current)) > statement_start;
+    return @as(u64, @intCast(current)) > source_offset + statement_start;
 }
 
 fn semanticStatementSourceEnd(program: ir.Program, statement_index: usize, script_len: usize) usize {
@@ -7178,22 +7170,33 @@ fn semanticRedirectionsHaveHereDoc(redirections: []const ir.Redirection) bool {
     return false;
 }
 
-fn assertSemanticInteractiveOptions(script: []const u8, options: exec.ExecuteOptions) void {
-    std.debug.assert(options.interactive);
-    std.debug.assert(options.allow_external);
-    std.debug.assert(options.arg_zero.len != 0);
+fn assertSemanticInteractiveOptions(script: []const u8, invocation: shell.InvocationContext) void {
+    invocation.validate();
+    std.debug.assert(invocation.interactive);
+    std.debug.assert(invocation.arg_zero.len != 0);
     std.debug.assert(script.len == 0 or std.mem.indexOfScalar(u8, script, 0) == null);
 }
 
-fn assertSemanticStartupOptions(script: []const u8, options: exec.ExecuteOptions, positionals: []const []const u8) void {
-    std.debug.assert(!options.interactive);
-    std.debug.assert(options.allow_external);
-    std.debug.assert(options.arg_zero.len != 0);
+fn assertSemanticStartupOptions(script: []const u8, invocation: shell.InvocationContext, positionals: []const []const u8) void {
+    invocation.validate();
+    std.debug.assert(!invocation.interactive);
+    std.debug.assert(invocation.arg_zero.len != 0);
     std.debug.assert(script.len == 0 or std.mem.indexOfScalar(u8, script, 0) == null);
     for (positionals) |arg| std.debug.assert(std.mem.indexOfScalar(u8, arg, 0) == null);
 }
 
-fn semanticInputSource(options: exec.ExecuteOptions) shell.InputSource {
+fn semanticInvocationFromExecuteOptions(options: exec.ExecuteOptions) shell.InvocationContext {
+    return shell.InvocationContext.init(.{
+        .features = options.features,
+        .arg_zero = options.arg_zero,
+        .source = semanticInputSourceFromExecuteOptions(options),
+        .interactive = options.interactive,
+        .stdin_script_file = options.stdin_script_file,
+        .stdin_script_source_offset = options.stdin_script_source_offset,
+    });
+}
+
+fn semanticInputSourceFromExecuteOptions(options: exec.ExecuteOptions) shell.InputSource {
     if (options.source_path != null) return .script_file;
     if (options.stdin_script_file != null) return .standard_input;
     return .command_string;
@@ -7202,15 +7205,6 @@ fn semanticInputSource(options: exec.ExecuteOptions) shell.InputSource {
 fn semanticUnsupported(allocator: std.mem.Allocator, message: []const u8) !SemanticInvocationExecution {
     std.debug.assert(message.len != 0);
     return .{ .unsupported = try allocator.dupe(u8, message) };
-}
-
-fn semanticExternalStdio(stdio: exec.ExternalStdio) shell.eval.ExternalStdio {
-    return switch (stdio) {
-        .capture => .capture,
-        .capture_stdout => .capture_stdout,
-        .inherit_output => .inherit_output,
-        .inherit => .inherit,
-    };
 }
 
 fn unsupportedSemanticCommandResult(allocator: std.mem.Allocator, message: []const u8) !exec.CommandResult {
@@ -11080,7 +11074,7 @@ test "semantic interactive shell state persists variable mutations without legac
     executor.arg_zero = "rush";
     try interactive_shell.syncSemanticFromExecutor(std.testing.io);
 
-    var assign = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SEMANTIC=state", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var assign = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SEMANTIC=state", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
     defer assign.deinit(std.testing.allocator);
     switch (assign) {
         .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
@@ -11154,7 +11148,7 @@ test "semantic interactive fallback happens before any partial execution" {
     executor.arg_zero = "rush";
     try interactive_shell.syncSemanticFromExecutor(std.testing.io);
 
-    var semantic = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var semantic = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
     defer semantic.deinit(std.testing.allocator);
     switch (semantic) {
         .unsupported => {},
@@ -11182,7 +11176,8 @@ test "semantic non-interactive invocation initializes environment arg zero and p
         std.testing.allocator,
         std.testing.io,
         "printf '<%s>\n' \"$0\" \"$#\" \"$1\" \"$RUSH_IMPORTED_ENV\" \"$IFS\" \"$OPTIND\" \"$SHLVL\"",
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "semantic-rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "semantic-rush" }),
+        .inherit,
         &env,
         &.{"positional"},
         .{},
@@ -11209,7 +11204,8 @@ test "semantic non-interactive invocation executes foreground simple pipelines" 
         \\! false
         \\printf 'negated:%s\n' "$?"
     ,
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11235,7 +11231,8 @@ test "semantic non-interactive invocation lowers function bodies at call time" {
         \\outer() { inner() { printf 'same-list:%s\n' "$1"; }; inner nested; }
         \\outer
     ,
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11261,7 +11258,8 @@ test "semantic non-interactive invocation lowers function for bodies per iterati
         \\show() { for x in "$@"; do echo "<$x>"; done; }
         \\show "a b" c ""
     ,
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11289,7 +11287,8 @@ test "semantic non-interactive invocation executes function calls in pipelines w
         \\made
         \\printf 'missing:%s\n' "$?"
     ,
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11354,7 +11353,8 @@ test "semantic non-interactive invocation executes compound pipeline stages" {
         \\! { false; }
         \\printf 'negated-compound:%s\n' "$?"
     ,
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11388,7 +11388,8 @@ test "semantic non-interactive invocation starts top-level background pipelines"
         \\: & printf 'builtin:%s:%s\n' "$?" "$!"
         \\/bin/cat /dev/null | /bin/cat & printf 'pipeline:%s:%s\n' "$?" "$!"
     ,
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11421,7 +11422,8 @@ test "semantic non-interactive invocation executes simple command redirections" 
         std.testing.allocator,
         std.testing.io,
         "echo redirected > " ++ path,
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11447,7 +11449,8 @@ test "semantic non-interactive invocation executes formerly gated production pip
         std.testing.allocator,
         std.testing.io,
         "true && : &",
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11470,7 +11473,8 @@ test "semantic non-interactive invocation executes formerly gated production pip
         std.testing.allocator,
         std.testing.io,
         "{ printf 'compound\n'; } > " ++ path ++ " | /bin/cat",
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},
@@ -11493,7 +11497,8 @@ test "semantic non-interactive invocation executes formerly gated production pip
         std.testing.allocator,
         std.testing.io,
         "{ printf \"$(printf dynamic)\\n\"; } | /bin/cat",
-        .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .arg_zero = "rush" },
+        shell.InvocationContext.init(.{ .arg_zero = "rush" }),
+        .inherit,
         null,
         &.{},
         .{},

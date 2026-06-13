@@ -9,6 +9,16 @@ const fd = @import("fd.zig");
 
 pub const ProcessId = std.posix.pid_t;
 
+pub const ExternalStdio = enum {
+    capture,
+    capture_stdout,
+    /// Externals write to the shell's stdout and stderr but read script input,
+    /// not the terminal. Used for the last stage of an interactive pipeline,
+    /// where stdin is the pipe but output belongs to the tty.
+    inherit_output,
+    inherit,
+};
+
 pub const WaitStatus = union(enum) {
     exited: u8,
     signaled: u8,

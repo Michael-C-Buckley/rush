@@ -5,6 +5,7 @@
 //! POSIX adapter objects.
 
 const std = @import("std");
+const compat = @import("../compat.zig");
 
 pub const ExecutionTarget = enum {
     current_shell,
@@ -31,6 +32,59 @@ pub const InputSource = enum {
     script_file,
     standard_input,
     interactive,
+};
+
+pub const InvocationContext = struct {
+    features: compat.Features = .{},
+    arg_zero: []const u8 = "rush",
+    source: InputSource = .command_string,
+    interactive: bool = false,
+    /// Borrowed handle for the original stdin script stream. The context does
+    /// not own or close it; entry-point execution glue uses it only to keep the
+    /// underlying stdin offset synchronized when script commands also read from
+    /// stdin.
+    stdin_script_file: ?std.Io.File = null,
+    stdin_script_source_offset: usize = 0,
+
+    pub const Init = struct {
+        features: compat.Features = .{},
+        arg_zero: []const u8 = "rush",
+        source: InputSource = .command_string,
+        interactive: bool = false,
+        /// Borrowed handle for the original stdin script stream. The context
+        /// does not own or close it.
+        stdin_script_file: ?std.Io.File = null,
+        stdin_script_source_offset: usize = 0,
+    };
+
+    pub fn init(options: Init) InvocationContext {
+        const invocation: InvocationContext = .{
+            .features = options.features,
+            .arg_zero = options.arg_zero,
+            .source = options.source,
+            .interactive = options.interactive,
+            .stdin_script_file = options.stdin_script_file,
+            .stdin_script_source_offset = options.stdin_script_source_offset,
+        };
+        invocation.validate();
+        return invocation;
+    }
+
+    pub fn evalContext(self: InvocationContext, target: ExecutionTarget) EvalContext {
+        self.validate();
+        return EvalContext.init(.{
+            .target = target,
+            .source = self.source,
+            .interactive = self.interactive,
+        });
+    }
+
+    pub fn validate(self: InvocationContext) void {
+        std.debug.assert(self.arg_zero.len != 0);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.arg_zero, 0) == null);
+        if (self.source != .standard_input) std.debug.assert(self.stdin_script_file == null);
+        if (self.stdin_script_file == null) std.debug.assert(self.stdin_script_source_offset == 0);
+    }
 };
 
 pub const EvalContext = struct {

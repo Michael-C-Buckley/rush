@@ -28,12 +28,7 @@ pub const EvalError = std.mem.Allocator.Error || error{
     Unimplemented,
 };
 
-pub const ExternalStdio = enum {
-    capture,
-    capture_stdout,
-    inherit_output,
-    inherit,
-};
+pub const ExternalStdio = runtime.ExternalStdio;
 
 pub const Evaluator = struct {
     allocator: std.mem.Allocator,
