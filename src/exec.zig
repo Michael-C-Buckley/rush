@@ -4110,6 +4110,7 @@ pub const Executor = struct {
                 try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, statement.span.start, next_start);
                 if (self.shouldSkipForNoexec(options)) break;
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
+                self.refreshBackgroundJobs();
                 self.setCurrentLineNumber(program.source, statement.span.start);
                 const and_or_guard_context = isFollowedByAndOrListOp(program.statements, statement_index);
                 var statement_options = options;
@@ -4142,6 +4143,7 @@ pub const Executor = struct {
                 try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, pipeline.span.start, next_start);
                 if (self.shouldSkipForNoexec(options)) break;
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
+                self.refreshBackgroundJobs();
                 self.setCurrentLineNumber(program.source, pipeline.span.start);
                 const and_or_guard_context = isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index);
                 var pipeline_options = options;
@@ -4171,6 +4173,7 @@ pub const Executor = struct {
             const next_start = if (command_index + 1 < program.commands.len) program.commands[command_index + 1].span.start else program.source.len;
             try self.appendOrWriteVerboseInput(options, &stderr, program.source, &verbose_read_offset, command.span.start, next_start);
             if (self.shouldSkipForNoexec(options)) break;
+            self.refreshBackgroundJobs();
             self.setCurrentLineNumber(program.source, command.span.start);
             var command_options = options;
             command_options.verbose_input_echo = false;
@@ -4810,18 +4813,7 @@ pub const Executor = struct {
             const pid: std.c.pid_t = @intCast(job.pid);
             const result = std.c.waitpid(pid, &status, flags);
             if (result <= 0 or result != pid) continue;
-            const wait_status: u32 = @intCast(status);
-            job.status = exitStatusFromWaitStatus(wait_status);
-            job.stop_signal = null;
-            job.termination_signal = null;
-            if (std.posix.W.IFSTOPPED(wait_status)) {
-                job.state = .stopped;
-                job.stop_signal = signalStatusNumber(std.posix.W.STOPSIG(wait_status));
-            } else {
-                job.state = .done;
-                if (std.posix.W.IFSIGNALED(wait_status)) job.termination_signal = signalStatusNumber(std.posix.W.TERMSIG(wait_status));
-            }
-            if (job.state == .stopped) saveJobTerminalModes(job);
+            applyBackgroundJobWaitStatus(job, @bitCast(status));
             self.queueJobNotification(job) catch {};
         }
     }
@@ -22647,6 +22639,23 @@ test "executor runs compound async jobs as waitable children" {
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("compound\n", result.stdout);
+}
+
+test "executor opportunistically reaps completed background jobs" {
+    var lowered = try parseAndLower(std.testing.allocator, "/bin/sh -c 'exit 7' & /bin/sleep 0.1; :");
+    defer lowered.parsed.deinit();
+    defer lowered.program.deinit();
+
+    var executor = Executor.init(std.testing.allocator);
+    defer executor.deinit();
+    var result = try executor.executeProgram(lowered.program, .{ .io = std.testing.io, .allow_external = true });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(usize, 1), executor.background_jobs.items.len);
+    const job = executor.background_jobs.items[0];
+    try std.testing.expectEqual(JobState.done, job.state);
+    try std.testing.expectEqual(@as(ExitStatus, 7), job.status);
 }
 
 test "executor waits for representative asynchronous compound forms" {
