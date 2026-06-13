@@ -97,6 +97,95 @@ pub const ShellOptions = struct {
     }
 };
 
+pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool {
+    if (spelling.len < 2) return false;
+    if (spelling[0] != '-' and spelling[0] != '+') return false;
+    for (spelling[1..]) |option| switch (option) {
+        'a', 'b', 'e', 'f', 'h', 'm', 'n', 'u', 'x', 'v', 'C' => {},
+        else => return false,
+    };
+
+    const enabled = spelling[0] == '-';
+    for (spelling[1..]) |option| switch (option) {
+        'a' => options.set(.allexport, enabled),
+        'b' => options.set(.notify, enabled),
+        'e' => options.set(.errexit, enabled),
+        'f' => options.set(.noglob, enabled),
+        'h' => {},
+        'm' => options.set(.monitor, enabled),
+        'n' => options.set(.noexec, enabled),
+        'u' => options.set(.nounset, enabled),
+        'x' => options.set(.xtrace, enabled),
+        'v' => options.set(.verbose, enabled),
+        'C' => options.set(.noclobber, enabled),
+        else => unreachable,
+    };
+    return true;
+}
+
+pub fn applyShellOptionName(options: *ShellOptions, name: []const u8, enabled: bool) bool {
+    if (std.mem.eql(u8, name, "pipefail")) {
+        options.set(.pipefail, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "emacs")) {
+        options.set(.emacs, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "ignoreeof")) {
+        options.set(.ignoreeof, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "vi")) {
+        options.set(.vi, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "monitor")) {
+        options.set(.monitor, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "allexport")) {
+        options.set(.allexport, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "noglob")) {
+        options.set(.noglob, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "noclobber")) {
+        options.set(.noclobber, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "noexec")) {
+        options.set(.noexec, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "notify")) {
+        options.set(.notify, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "nolog")) {
+        return true;
+    }
+    if (std.mem.eql(u8, name, "nounset")) {
+        options.set(.nounset, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "errexit")) {
+        options.set(.errexit, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "xtrace")) {
+        options.set(.xtrace, enabled);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "verbose")) {
+        options.set(.verbose, enabled);
+        return true;
+    }
+    return false;
+}
+
 pub const VariableAttributes = struct {
     exported: ?bool = null,
     readonly: bool = false,
@@ -1068,6 +1157,29 @@ test "ShellOptions toggles every modeled option deterministically" {
         shell_options.set(option, false);
         try std.testing.expect(!shell_options.enabled(option));
     }
+}
+
+test "ShellOptions parses short and named invocation options" {
+    var options: ShellOptions = .{};
+
+    try std.testing.expect(applyShellOptionShort(&options, "-euC"));
+    try std.testing.expect(options.errexit);
+    try std.testing.expect(options.nounset);
+    try std.testing.expect(options.noclobber);
+
+    try std.testing.expect(applyShellOptionShort(&options, "+e"));
+    try std.testing.expect(!options.errexit);
+    try std.testing.expect(applyShellOptionName(&options, "pipefail", true));
+    try std.testing.expect(options.pipefail);
+    try std.testing.expect(applyShellOptionName(&options, "vi", true));
+    try std.testing.expect(options.vi);
+    try std.testing.expect(!options.emacs);
+    try std.testing.expect(applyShellOptionName(&options, "emacs", true));
+    try std.testing.expect(options.emacs);
+    try std.testing.expect(!options.vi);
+
+    try std.testing.expect(!applyShellOptionShort(&options, "-z"));
+    try std.testing.expect(!applyShellOptionName(&options, "unknown", true));
 }
 
 test "ShellState reports readonly assignment as semantic error" {

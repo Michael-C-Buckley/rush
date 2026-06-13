@@ -54,7 +54,7 @@ const ShellInvocation = struct {
     kind: InvocationKind,
     source: []const u8,
     features: compat.Features = .{},
-    shell_options: exec.ShellOptions = .{},
+    shell_options: shell.ShellOptions = .{},
     monitor_option_explicit: bool = false,
     arg_zero: []const u8,
     positionals: []const []const u8 = &.{},
@@ -173,7 +173,7 @@ fn parseShellInvocation(args: []const []const u8) ?ShellInvocation {
     std.debug.assert(args.len != 0);
 
     var features: compat.Features = .{};
-    var shell_options: exec.ShellOptions = .{};
+    var shell_options: shell.ShellOptions = .{};
     var monitor_option_explicit = false;
     var interactive = false;
     var command_string = false;
@@ -207,11 +207,11 @@ fn parseShellInvocation(args: []const []const u8) ?ShellInvocation {
                 if (index + 1 >= args.len) return null;
                 index += 1;
                 const option_name = args[index];
-                if (!exec.applyShellOptionName(&shell_options, option_name, enabled)) return null;
+                if (!shell.applyShellOptionName(&shell_options, option_name, enabled)) return null;
                 if (std.mem.eql(u8, option_name, "monitor")) monitor_option_explicit = true;
             } else {
                 var option_spelling = [_]u8{ arg[0], option };
-                if (!exec.applyShellOptionShort(&shell_options, option_spelling[0..])) return null;
+                if (!shell.applyShellOptionShort(&shell_options, option_spelling[0..])) return null;
                 if (option == 'm') monitor_option_explicit = true;
             }
         }
@@ -248,7 +248,7 @@ pub const History = struct {
     pub const HistoryRecord = struct {
         cmd: []const u8,
         when: i64 = 0,
-        status: exec.ExitStatus = 0,
+        status: shell.ExitStatus = 0,
         exit_signal: ?u8 = null,
         cwd: []const u8 = "",
         duration_ms: ?i64 = null,
@@ -299,15 +299,15 @@ pub const History = struct {
         try self.addRecord(.{ .cmd = line });
     }
 
-    pub fn addCommand(self: *History, io: std.Io, line: []const u8, status: exec.ExitStatus, started_at: i64, duration_ms: i64) !void {
+    pub fn addCommand(self: *History, io: std.Io, line: []const u8, status: shell.ExitStatus, started_at: i64, duration_ms: i64) !void {
         try self.addCommandRecord(io, line, status, started_at, duration_ms, true);
     }
 
-    pub fn appendCommand(self: *History, io: std.Io, line: []const u8, status: exec.ExitStatus, started_at: i64, duration_ms: i64) !void {
+    pub fn appendCommand(self: *History, io: std.Io, line: []const u8, status: shell.ExitStatus, started_at: i64, duration_ms: i64) !void {
         try self.addCommandRecord(io, line, status, started_at, duration_ms, false);
     }
 
-    fn addCommandRecord(self: *History, io: std.Io, line: []const u8, status: exec.ExitStatus, started_at: i64, duration_ms: i64, dedupe: bool) !void {
+    fn addCommandRecord(self: *History, io: std.Io, line: []const u8, status: shell.ExitStatus, started_at: i64, duration_ms: i64, dedupe: bool) !void {
         if (line.len == 0) return;
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
@@ -496,7 +496,7 @@ fn fcHistoryEntries(context: *anyopaque, allocator: std.mem.Allocator) ![]exec.H
     return history.fcEntries(allocator);
 }
 
-fn appendFcHistoryCommand(context: *anyopaque, io: std.Io, line: []const u8, status: exec.ExitStatus, started_at: i64, duration_ms: i64) !void {
+fn appendFcHistoryCommand(context: *anyopaque, io: std.Io, line: []const u8, status: shell.ExitStatus, started_at: i64, duration_ms: i64) !void {
     const history: *History = @ptrCast(@alignCast(context));
     try history.appendCommand(io, line, status, started_at, duration_ms);
 }
@@ -850,7 +850,7 @@ fn durationMillis(start: std.Io.Clock.Timestamp, end: std.Io.Clock.Timestamp) i6
     return @max(start.durationTo(end).raw.toMilliseconds(), 0);
 }
 
-fn exitSignalFromStatus(status: exec.ExitStatus) ?u8 {
+fn exitSignalFromStatus(status: shell.ExitStatus) ?u8 {
     if (status < 128) return null;
     return status - 128;
 }
@@ -6072,7 +6072,7 @@ const InteractiveOptions = struct {
     arg_zero: []const u8 = "rush",
     login: bool = false,
     features: compat.Features = .{},
-    shell_options: exec.ShellOptions = .{},
+    shell_options: shell.ShellOptions = .{},
     monitor_option_explicit: bool = false,
     positionals: []const []const u8 = &.{},
 };
@@ -6115,7 +6115,7 @@ const InteractiveShell = struct {
     }
 };
 
-fn setInteractiveStartupShellOptions(shell_options: *exec.ShellOptions, monitor_option_explicit: bool, stdin_is_tty: bool) void {
+fn setInteractiveStartupShellOptions(shell_options: *shell.ShellOptions, monitor_option_explicit: bool, stdin_is_tty: bool) void {
     if (stdin_is_tty and !monitor_option_explicit) shell_options.monitor = true;
     shell_options.noexec = false;
 }
@@ -6136,7 +6136,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     const terminal_hostname = try localHostname(allocator);
     defer allocator.free(terminal_hostname);
 
-    var last_status: exec.ExitStatus = 0;
+    var last_status: shell.ExitStatus = 0;
     var interactive_shell = InteractiveShell.init(allocator);
     defer interactive_shell.deinit();
     const executor = &interactive_shell.executor;
@@ -6144,8 +6144,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try executor.importEnvironment(environ_map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
-    executor.shell_options = options.shell_options;
-    setInteractiveStartupShellOptions(&executor.shell_options, options.monitor_option_explicit, stdinIsTty(io));
+    var startup_shell_options = options.shell_options;
+    setInteractiveStartupShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
+    executor.shell_options = legacyShellOptions(startup_shell_options, .{});
     if (options.positionals.len != 0) try executor.global_positionals.set(allocator, options.positionals);
     try loadInteractiveConfig(allocator, io, executor, options);
     if (executor.pending_exit) |status| return status;
@@ -6202,7 +6203,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const ui_theme = interactiveUiTheme(executor.*);
         const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt,
-            .editing_mode = interactiveEditingMode(executor.shell_options),
+            .editing_mode = interactiveEditingMode(semanticShellOptions(executor.shell_options)),
             .prompt_refresh_interval_ms = executor.promptRefreshIntervalMs(),
             .hook_context = &completion_context,
             .run_hooks = runInteractiveIntervalHooks,
@@ -6423,7 +6424,7 @@ test "interactive incomplete input requests continuation until complete" {
     try std.testing.expect(!try interactiveInputNeedsContinuation(std.testing.allocator, "cat <<EOF\nbody\nEOF", .{}));
 }
 
-fn interactiveEditingMode(options: exec.ShellOptions) line_editor.EditingMode {
+fn interactiveEditingMode(options: shell.ShellOptions) line_editor.EditingMode {
     return if (options.vi) .vi else .emacs;
 }
 
@@ -6483,7 +6484,7 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     errdefer stderr.deinit(allocator);
     var history = History.init(allocator);
     defer history.deinit();
-    var last_status: exec.ExitStatus = 0;
+    var last_status: shell.ExitStatus = 0;
     var interactive_shell = InteractiveShell.init(allocator);
     defer interactive_shell.deinit();
     const executor = &interactive_shell.executor;
@@ -6666,7 +6667,7 @@ fn stderrIsTty(io: std.Io) bool {
     return std.Io.File.stderr().isTty(io) catch false;
 }
 
-fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: exec.ShellOptions) !exec.CommandResult {
+fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !exec.CommandResult {
     if (shouldUseSemanticNonInteractiveExecutor(options, interactive_options)) {
         var semantic_execution = try runSemanticCommandString(allocator, io, script, options, environ_map, positionals, shell_options);
         switch (semantic_execution) {
@@ -6685,14 +6686,15 @@ fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, scr
     return runOldCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, interactive_options, shell_options);
 }
 
-fn runOldCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: exec.ShellOptions) !exec.CommandResult {
+fn runOldCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !exec.CommandResult {
     var executor = exec.Executor.init(allocator);
     defer executor.deinit();
     if (environ_map) |map| try executor.importEnvironment(map);
     try executor.initializeShellVariables(io);
     executor.arg_zero = options.arg_zero;
-    executor.shell_options = shell_options;
-    if (interactive_options) |startup_options| setInteractiveStartupShellOptions(&executor.shell_options, startup_options.monitor_option_explicit, stdinIsTty(io));
+    var startup_shell_options = shell_options;
+    if (interactive_options) |startup_options| setInteractiveStartupShellOptions(&startup_shell_options, startup_options.monitor_option_explicit, stdinIsTty(io));
+    executor.shell_options = legacyShellOptions(startup_shell_options, .{});
     if (positionals.len != 0) try executor.global_positionals.set(allocator, positionals);
     if (interactive_options) |startup_options| {
         try loadInteractiveConfig(allocator, io, &executor, startup_options);
@@ -6719,7 +6721,7 @@ const SemanticInvocationExecution = union(enum) {
     }
 };
 
-fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: exec.ShellOptions) !SemanticInvocationExecution {
+fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !SemanticInvocationExecution {
     assertSemanticStartupOptions(script, options, positionals);
 
     if (shell_options.noexec or shell_options.verbose or shell_options.xtrace) return semanticUnsupported(allocator, "semantic executor does not yet implement non-interactive noexec/verbose/xtrace startup modes");
@@ -6763,7 +6765,7 @@ fn runSemanticCommandString(allocator: std.mem.Allocator, io: std.Io, script: []
     return runSemanticLoweredProgram(allocator, script, program, &evaluator, &shell_state, eval_context, resolver, options.stdin_script_file, true);
 }
 
-fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: exec.ShellOptions) !SemanticInvocationExecution {
+fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: exec.ExecuteOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !SemanticInvocationExecution {
     var shell_state = shell.ShellState.init(allocator);
     defer shell_state.deinit();
     try initializeSemanticInvocationState(allocator, io, &shell_state, environ_map, positionals, shell_options);
@@ -6789,7 +6791,7 @@ fn runSemanticAliasTimingCommandString(allocator: std.mem.Allocator, io: std.Io,
     errdefer stdout.deinit(allocator);
     var stderr: std.ArrayList(u8) = .empty;
     errdefer stderr.deinit(allocator);
-    var status: exec.ExitStatus = 0;
+    var status: shell.ExitStatus = 0;
     var start = skipSemanticChunkSeparators(script, 0);
     while (start < script.len) {
         var end = extendSemanticHereDocChunk(script, start, semanticLineEnd(script, start));
@@ -6909,7 +6911,7 @@ fn runSemanticLoweredProgram(allocator: std.mem.Allocator, script: []const u8, p
         accumulated_stderr.deinit(allocator);
     };
 
-    var status: exec.ExitStatus = 0;
+    var status: shell.ExitStatus = 0;
     var control_flow: shell.ControlFlow = .normal;
     for (program.statements, 0..) |statement, statement_index| {
         std.debug.assert(statement.span.start <= statement.span.end);
@@ -7026,7 +7028,7 @@ fn semanticBackgroundPipelineFromPipeline(plan: shell.PipelinePlan) SemanticBack
     }) };
 }
 
-fn appendSemanticExitTrap(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *exec.ExitStatus, evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, resolver: shell.TrapActionResolver) !void {
+fn appendSemanticExitTrap(allocator: std.mem.Allocator, stdout: *std.ArrayList(u8), stderr: *std.ArrayList(u8), status: *shell.ExitStatus, evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, resolver: shell.TrapActionResolver) !void {
     if (shell_state.getTrapForSignal(.EXIT) == null) return;
     shell_state.last_status = status.*;
     try shell_state.appendPendingTrap(.EXIT);
@@ -7343,9 +7345,9 @@ fn syncExecutorFromSemanticInteractiveState(executor: *exec.Executor, shell_stat
     if (shell_state.pending_exit) |status| executor.pending_exit = status;
 }
 
-fn initializeSemanticInvocationState(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: exec.ShellOptions) !void {
+fn initializeSemanticInvocationState(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: shell.ShellOptions) !void {
     shell_state.validate();
-    shell_state.options = semanticShellOptions(shell_options);
+    shell_state.options = shell_options;
 
     if (environ_map) |map| {
         var iterator = map.iterator();
@@ -7679,7 +7681,7 @@ fn semanticCommandUnsupportedMessage(plan: shell.CommandPlan, legacy_fallback_ga
     };
 }
 
-fn emptyCommandResult(allocator: std.mem.Allocator, status: exec.ExitStatus) !exec.CommandResult {
+fn emptyCommandResult(allocator: std.mem.Allocator, status: shell.ExitStatus) !exec.CommandResult {
     const stdout = try allocator.alloc(u8, 0);
     errdefer allocator.free(stdout);
     const stderr = try allocator.alloc(u8, 0);
@@ -7964,7 +7966,7 @@ test "history can persist and reload" {
     try loaded.load(std.testing.io, path);
     try std.testing.expectEqualStrings("echo saved", loaded.suggest("echo").?);
     try std.testing.expectEqual(@as(i64, 42), loaded.records.items[0].when);
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), loaded.records.items[0].status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), loaded.records.items[0].status);
     try std.testing.expectEqualStrings("/tmp", loaded.records.items[0].cwd);
 }
 
@@ -7986,7 +7988,7 @@ test "history writes commands through to sqlite fts" {
     defer reloaded.deinit();
     try reloaded.load(std.testing.io, path);
     try std.testing.expectEqualStrings("git checkout feature", reloaded.suggest("git").?);
-    try std.testing.expectEqual(@as(exec.ExitStatus, 130), reloaded.records.items[0].status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 130), reloaded.records.items[0].status);
     try std.testing.expectEqual(@as(?u8, 2), reloaded.records.items[0].exit_signal);
     try std.testing.expectEqual(@as(i64, 55), reloaded.records.items[0].duration_ms.?);
 
@@ -8614,7 +8616,7 @@ test "completion manifest provider arrays preserve tags order and first duplicat
         \\}
     , .{ .io = std.testing.io });
     defer script_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), script_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), script_result.status);
     try loadCompletionManifest(std.testing.allocator, &executor,
         \\{
         \\  "manifestVersion": 1,
@@ -9606,7 +9608,7 @@ test "completion cache refresh updates entries in background" {
         \\complete git --subcommands --function __rush_complete_git
     , .{ .io = std.testing.io });
     defer setup_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup_result.status);
 
     var history = History.init(std.testing.allocator);
     defer history.deinit();
@@ -9637,7 +9639,7 @@ test "interactive completion uses semantic executor path for commands variables 
         \\complete echo --argument --function __rush_complete_variables
     , .{ .io = std.testing.io });
     defer variable_setup.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), variable_setup.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), variable_setup.status);
     const variable_completions = try executor.collectCompletionsForInput("echo RUSH", "echo RUSH".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(variable_completions);
     try std.testing.expect(hasCompletionCandidate(variable_completions, "RUSH_COMPLETION_VAR"));
@@ -9650,7 +9652,7 @@ test "interactive completion uses semantic executor path for commands variables 
         \\complete cat --argument --function __rush_complete_paths
     , .{ .io = std.testing.io });
     defer path_setup.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), path_setup.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), path_setup.status);
     const path_completions = try executor.collectCompletionsForInput("cat rush-complete", "cat rush-complete".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(path_completions);
     try std.testing.expect(hasCompletionCandidate(path_completions, path));
@@ -9763,7 +9765,7 @@ test "interactive semantic diagnostics render spans without message line" {
         \\complete git --subcommand commit
     , .{ .io = std.testing.io });
     defer setup_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup_result.status);
 
     var history = History.init(std.testing.allocator);
     defer history.deinit();
@@ -10447,7 +10449,7 @@ test "runReplInput executes lines and tracks status" {
     var result = try runReplInput(std.testing.allocator, std.testing.io, "echo hi\nfalse\nexit\n");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), result.status);
     try std.testing.expectEqualStrings("$ hi\n$ $ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10456,7 +10458,7 @@ test "runReplInput stops when exit builtin requests shell exit" {
     var result = try runReplInput(std.testing.allocator, std.testing.io, "echo before\nexit 7\necho after\n");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 7), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 7), result.status);
     try std.testing.expectEqualStrings("$ before\n$ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10473,7 +10475,7 @@ test "runReplInput wires fc to interactive history without recording fc itself" 
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("$ one\n$ two\n$ printf 'one\\n'\nprintf 'two\\n'\n$ again\n$ printf 'one\\n'\nprintf 'two\\n'\nprintf 'again\\n'\n$ ", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10517,7 +10519,7 @@ test "interactive hooks dispatch pending real signal trap" {
     defer executor.deinit();
     var setup = try runScriptWithExecutor(std.testing.allocator, &executor, "trap 'echo term-trap' TERM", .{ .io = std.testing.io, .allow_external = true, .interactive = true });
     defer setup.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup.status);
 
     var history = History.init(std.testing.allocator);
     defer history.deinit();
@@ -10563,11 +10565,11 @@ test "interactive interrupt runs INT trap" {
     defer executor.deinit();
     var setup = try runScriptWithExecutor(std.testing.allocator, &executor, "trap 'echo trapped' INT", .{ .io = std.testing.io, .allow_external = true, .interactive = true });
     defer setup.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup.status);
 
     var result = (try runInteractiveInterruptTrap(std.testing.io, &executor, "rush", .{})) orelse return error.MissingTrapResult;
     defer result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("trapped\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10585,7 +10587,7 @@ test "command string operands set the command name and positional parameters" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("myname:2:a:b c\na b c\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10603,7 +10605,7 @@ test "command string invocation preserves trailing EOF backslash literal" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("a\\\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10629,7 +10631,7 @@ test "command string Bash source operands temporarily override positionals" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("source:myname:2:sourced:two words\nafter:myname:2:caller one:caller two\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10652,7 +10654,7 @@ test "script file invocation sets command name and positional parameters" {
     var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("rush-script-invocation-test.rush:2:arg one:two words\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10667,7 +10669,7 @@ test "script file invocation preserves trailing EOF backslash without final newl
     var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("a\\\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10687,7 +10689,7 @@ test "script file invocation accepts sources larger than one mib" {
     var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10705,7 +10707,7 @@ test "script file invocation shell options affect execution" {
     var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10733,7 +10735,7 @@ test "standard input invocation accepts -s operands and shell options" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("rush:2:posarg:two words\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10788,7 +10790,7 @@ test "command string invocation shell options affect execution" {
     );
     defer errexit.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 1), errexit.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), errexit.status);
     try std.testing.expectEqualStrings("", errexit.stdout);
     try std.testing.expectEqualStrings("", errexit.stderr);
 
@@ -10805,7 +10807,7 @@ test "command string invocation shell options affect execution" {
     );
     defer clustered_errexit.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 1), clustered_errexit.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), clustered_errexit.status);
     try std.testing.expectEqualStrings("", clustered_errexit.stdout);
     try std.testing.expectEqualStrings("", clustered_errexit.stderr);
 
@@ -10822,7 +10824,7 @@ test "command string invocation shell options affect execution" {
     );
     defer option_after_c.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 1), option_after_c.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), option_after_c.status);
     try std.testing.expectEqualStrings("", option_after_c.stdout);
     try std.testing.expectEqualStrings("", option_after_c.stderr);
 
@@ -10839,7 +10841,7 @@ test "command string invocation shell options affect execution" {
     );
     defer nounset.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 1), nounset.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), nounset.status);
     try std.testing.expectEqualStrings("", nounset.stdout);
     try std.testing.expect(std.mem.indexOf(u8, nounset.stderr, "unset parameter") != null);
 
@@ -10856,7 +10858,7 @@ test "command string invocation shell options affect execution" {
     );
     defer flags.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), flags.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), flags.status);
     try std.testing.expectEqualStrings("<bemu>\n", flags.stdout);
     try std.testing.expectEqualStrings("", flags.stderr);
 
@@ -10873,7 +10875,7 @@ test "command string invocation shell options affect execution" {
     );
     defer noexec.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), noexec.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), noexec.status);
     try std.testing.expectEqualStrings("", noexec.stdout);
     try std.testing.expectEqualStrings("", noexec.stderr);
 
@@ -10890,7 +10892,7 @@ test "command string invocation shell options affect execution" {
     );
     defer invalid_noexec.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), invalid_noexec.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), invalid_noexec.status);
     try std.testing.expectEqualStrings("", invalid_noexec.stdout);
     try std.testing.expect(std.mem.indexOf(u8, invalid_noexec.stderr, "misplaced reserved word") != null);
 
@@ -10907,7 +10909,7 @@ test "command string invocation shell options affect execution" {
     );
     defer invalid_elif_noexec.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), invalid_elif_noexec.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), invalid_elif_noexec.status);
     try std.testing.expectEqualStrings("", invalid_elif_noexec.stdout);
     try std.testing.expect(std.mem.indexOf(u8, invalid_elif_noexec.stderr, "missing then in elif clause") != null);
 }
@@ -10917,7 +10919,7 @@ test "command string set -v does not echo already-read input" {
     var result = try runShellInvocationWithEnvironment(std.testing.allocator, std.testing.io, invocation, null, .capture, false);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("command-string-verbose\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10927,7 +10929,7 @@ test "command string read consumes piped real stdin" {
     var result = try runInvocationWithPipeStdin(invocation, "pipe value\n");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("x=[pipe value] status=0\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10942,7 +10944,7 @@ test "command string read consumes file real stdin" {
     var result = try runInvocationWithFileStdin(invocation, path);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("x=[file value] status=0\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10957,7 +10959,7 @@ test "command string read keeps explicit stdin redirection precedence" {
     var result = try runInvocationWithPipeStdin(invocation, "real stdin value\n");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("x=[redirected value] status=0\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10967,7 +10969,7 @@ test "standard input script source still leaves read at EOF" {
     var result = try runInvocationWithPipeStdin(invocation, "read x; status=$?; printf 'x=[%s] status=%s\n' \"$x\" \"$status\"\n");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("x=[] status=1\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -10991,7 +10993,7 @@ test "standard input file script seeks stdin before external commands" {
     const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, output_path, std.testing.allocator, .unlimited);
     defer std.testing.allocator.free(output);
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
     try std.testing.expectEqualStrings("start\necho end >> rush-stdin-script-seek-external.out\n", output);
@@ -11007,7 +11009,7 @@ test "standard input file script skips lines consumed by read" {
     var result = try runInvocationWithFileStdin(invocation, path);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("after\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11022,7 +11024,7 @@ test "invalid arithmetic expansion returns a shell diagnostic" {
         var result = try runScript(std.testing.allocator, std.testing.io, script);
         defer result.deinit();
 
-        try std.testing.expectEqual(@as(exec.ExitStatus, 1), result.status);
+        try std.testing.expectEqual(@as(shell.ExitStatus, 1), result.status);
         try std.testing.expectEqualStrings("", result.stdout);
         try std.testing.expect(std.mem.indexOf(u8, result.stderr, "invalid arithmetic expression") != null);
         try std.testing.expect(std.mem.indexOf(u8, result.stderr, "after") == null);
@@ -11044,7 +11046,7 @@ test "runScriptWithEnvironment imports initial shell variables" {
     , .{ .io = std.testing.io, .allow_external = true }, &env);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ppid-ok\n<present>\n< \t\n>\n<1>\npwd-ok\n", result.stdout);
 }
 
@@ -11058,14 +11060,14 @@ test "semantic interactive command updates executor status for later commands" {
 
     var false_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "false", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer false_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 1), false_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 1), false_result.status);
     try std.testing.expectEqualStrings("", false_result.stdout);
     try std.testing.expectEqualStrings("", false_result.stderr);
     try std.testing.expectEqualStrings("1", executor.last_status_text[0..executor.last_status_text_len]);
 
     var status_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo $?", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer status_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), status_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), status_result.status);
     try std.testing.expectEqualStrings("1\n", status_result.stdout);
     try std.testing.expectEqualStrings("", status_result.stderr);
 }
@@ -11081,7 +11083,7 @@ test "semantic interactive shell state persists variable mutations without legac
     var assign = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SEMANTIC=state", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer assign.deinit(std.testing.allocator);
     switch (assign) {
-        .output => |output| try std.testing.expectEqual(@as(exec.ExitStatus, 0), output.status),
+        .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
         .unsupported => return error.ExpectedSemanticOutput,
     }
     try interactive_shell.syncExecutorFromSemantic();
@@ -11089,7 +11091,7 @@ test "semantic interactive shell state persists variable mutations without legac
 
     var readback = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "printf '%s\n' \"$RUSH_INTERACTIVE_SEMANTIC\"", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer readback.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), readback.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), readback.status);
     try std.testing.expectEqualStrings("state\n", readback.stdout);
     try std.testing.expectEqualStrings("", readback.stderr);
 }
@@ -11107,12 +11109,12 @@ test "semantic interactive command falls back for function-shadowed builtins" {
 
     var define = try runScriptWithExecutor(std.testing.allocator, executor, "echo() { printf 'function\\n' > " ++ path ++ "; }", .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
     defer define.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), define.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), define.status);
     try interactive_shell.syncSemanticFromExecutor(std.testing.io);
 
     var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo semantic", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("", result.stderr);
 
     const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
@@ -11129,13 +11131,13 @@ test "semantic interactive unset function stays on legacy state bridge" {
 
     var define = try runScriptWithExecutor(std.testing.allocator, executor, "rush_semantic_unset_fn() { :; }", .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
     defer define.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), define.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), define.status);
     try std.testing.expect(executor.functions.contains("rush_semantic_unset_fn"));
     try interactive_shell.syncSemanticFromExecutor(std.testing.io);
 
     var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "unset -f rush_semantic_unset_fn", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("", result.stderr);
     try std.testing.expect(!executor.functions.contains("rush_semantic_unset_fn"));
 }
@@ -11162,7 +11164,7 @@ test "semantic interactive fallback happens before any partial execution" {
 
     var result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
     defer result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("", result.stderr);
 
     const output = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .unlimited);
@@ -11190,7 +11192,7 @@ test "semantic non-interactive invocation initializes environment arg zero and p
     switch (execution) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("<semantic-rush>\n<1>\n<positional>\n<semantic>\n< \t\n>\n<1>\n<6>\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11217,7 +11219,7 @@ test "semantic non-interactive invocation executes foreground simple pipelines" 
     switch (execution) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("pipe:value\nstatus:0\nnegated:0\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11243,7 +11245,7 @@ test "semantic non-interactive invocation lowers function bodies at call time" {
     switch (execution) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("call:first:2\nsame-list:nested\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11269,7 +11271,7 @@ test "semantic non-interactive invocation lowers function for bodies per iterati
     switch (execution) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("f1\nf2\n<a b>\n<c>\n<>\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11297,7 +11299,7 @@ test "semantic non-interactive invocation executes function calls in pipelines w
     switch (execution) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("pipe:value\nmissing:127\n", result.stdout);
             try std.testing.expect(std.mem.indexOf(u8, result.stderr, "made: command not found") != null);
         },
@@ -11362,7 +11364,7 @@ test "semantic non-interactive invocation executes compound pipeline stages" {
     switch (execution) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("brace\nsubshell\nif\nwhile\nfor\ncase\nnegated-compound:0\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11396,7 +11398,7 @@ test "semantic non-interactive invocation starts top-level background pipelines"
     switch (execution) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("", result.stderr);
 
             var lines = std.mem.splitScalar(u8, result.stdout, '\n');
@@ -11429,7 +11431,7 @@ test "semantic non-interactive invocation executes simple command redirections" 
     switch (execution) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11454,7 +11456,7 @@ test "semantic non-interactive invocation executes formerly gated production pip
     switch (async_and_or) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11477,7 +11479,7 @@ test "semantic non-interactive invocation executes formerly gated production pip
     switch (redirected_compound_stage) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11500,7 +11502,7 @@ test "semantic non-interactive invocation executes formerly gated production pip
     switch (dynamic_compound_stage) {
         .unsupported => return error.ExpectedSemanticExecution,
         .output => |result| {
-            try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+            try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
             try std.testing.expectEqualStrings("dynamic\n", result.stdout);
             try std.testing.expectEqualStrings("", result.stderr);
         },
@@ -11531,7 +11533,7 @@ test "runScriptWithEnvironment initializes and exports SHLVL" {
 
         const expected = try std.fmt.allocPrint(std.testing.allocator, "<{s}>\nexported:{s}\n", .{ case.expected, case.expected });
         defer std.testing.allocator.free(expected);
-        try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+        try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
         try std.testing.expectEqualStrings(expected, result.stdout);
         try std.testing.expectEqualStrings("", result.stderr);
     }
@@ -11564,7 +11566,7 @@ test "runScriptWithEnvironment preserves valid inherited logical PWD" {
     , .{ .io = std.testing.io, .allow_external = true }, &env);
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("logical-pwd\npwd-L\npwd-P\n", result.stdout);
 }
 
@@ -11596,7 +11598,7 @@ test "runScriptWithEnvironment exports PWD and OLDPWD after cd" {
     const oldpwd_line = try std.fmt.allocPrint(std.testing.allocator, "OLDPWD={s}\n", .{original_cwd});
     defer std.testing.allocator.free(oldpwd_line);
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, pwd_line) != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, oldpwd_line) != null);
 }
@@ -11609,7 +11611,7 @@ test "runScriptWithOptions accepts inherit mode for external commands" {
     });
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11622,7 +11624,7 @@ test "runScriptWithOptions captures simple external command output semantically"
     });
     defer captured.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), captured.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), captured.status);
     try std.testing.expectEqualStrings("out", captured.stdout);
     try std.testing.expectEqualStrings("err", captured.stderr);
 
@@ -11633,7 +11635,7 @@ test "runScriptWithOptions captures simple external command output semantically"
     });
     defer stdout_only.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), stdout_only.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), stdout_only.status);
     try std.testing.expectEqualStrings("out", stdout_only.stdout);
     try std.testing.expectEqualStrings("", stdout_only.stderr);
 }
@@ -11642,7 +11644,7 @@ test "runScript executes builtins" {
     var result = try runScript(std.testing.allocator, std.testing.io, "echo hello");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("hello\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11656,20 +11658,20 @@ test "compatibility feature plumbing accepts Bash mode without changing baseline
     defer executor.deinit();
     var result = try executor.executeProgram(program, .{ .features = .bash() });
     defer result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("ok\n", result.stdout);
 }
 
 test "POSIX mode reports misplaced reserved words" {
     var bare = try runScript(std.testing.allocator, std.testing.io, "then echo bad");
     defer bare.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), bare.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), bare.status);
     try std.testing.expectEqualStrings("", bare.stdout);
     try std.testing.expect(std.mem.indexOf(u8, bare.stderr, "misplaced reserved word") != null);
 
     var expanded = try runScript(std.testing.allocator, std.testing.io, "x=for; $x i in 1");
     defer expanded.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 127), expanded.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 127), expanded.status);
     try std.testing.expect(std.mem.indexOf(u8, expanded.stderr, "for: command not found") != null);
 
     const alias_script =
@@ -11678,7 +11680,7 @@ test "POSIX mode reports misplaced reserved words" {
     ;
     var alias_result = try runScript(std.testing.allocator, std.testing.io, alias_script);
     defer alias_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), alias_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), alias_result.status);
     try std.testing.expectEqualStrings("", alias_result.stdout);
     try std.testing.expect(std.mem.indexOf(u8, alias_result.stderr, "misplaced reserved word") != null);
     try std.testing.expect(std.mem.indexOf(u8, alias_result.stderr, "bad\n") == null);
@@ -11688,7 +11690,7 @@ test "runScript returns parse diagnostics" {
     var result = try runScript(std.testing.allocator, std.testing.io, "echo | ");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "missing command after pipeline operator") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "echo | ") != null);
@@ -11703,7 +11705,7 @@ test "runScript executes newline-continued pipeline" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("before\nafter\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11719,7 +11721,7 @@ test "production shell execution preserves semantic builtin state and sequencing
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("semantic shell\nnew\nafter\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11728,7 +11730,7 @@ test "production shell execution handles deterministic builtin pipeline" {
     var result = try runScript(std.testing.allocator, std.testing.io, "printf 'pipe-value\n' | /bin/cat");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("pipe-value\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11737,7 +11739,7 @@ test "production shell execution handles compound pipeline stage" {
     var result = try runScript(std.testing.allocator, std.testing.io, "{ printf 'compound-value\n'; } | /bin/cat");
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("compound-value\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11750,7 +11752,7 @@ test "production shell execution handles pipeline function call" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("status:0 value:\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11763,7 +11765,7 @@ test "runScript reports misplaced reserved words before execution" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "misplaced reserved word") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "echo after") == null);
@@ -11796,7 +11798,7 @@ test "parser smoke corpus parses representative snippets" {
 test "executor smoke corpus returns expected statuses and output fragments" {
     const Case = struct {
         script: []const u8,
-        status: exec.ExitStatus,
+        status: shell.ExitStatus,
         stdout_contains: []const u8 = "",
         stderr_contains: []const u8 = "",
     };
@@ -11837,7 +11839,7 @@ test "aliases do not replace reserved words or function definition names" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "ok\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "function\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "bad\n") == null);
@@ -11854,7 +11856,7 @@ test "repl expands aliases defined on previous input lines" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
     try std.testing.expectEqualStrings("$ $ alias-ok\n$ lsx='echo alias-ok'\n$ $ $ ", result.stdout);
     try std.testing.expectEqualStrings("lsx: command not found\n", result.stderr);
 }
@@ -11873,7 +11875,7 @@ test "aliases recursively expand and trailing blanks keep command position" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "recursive-ok recursive-trailing-ok\n") != null);
     try std.testing.expectEqualStrings("self: command not found\n", result.stderr);
@@ -11890,7 +11892,7 @@ test "non-interactive aliases affect later complete commands" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("script-alias-ok\ncompound-ok\nscript-alias-ok trailing-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11903,7 +11905,7 @@ test "chunked alias scripts run EXIT trap once" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("body\nbye\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11919,7 +11921,7 @@ test "alias timing chunks keep multi-line here-doc bodies intact" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("alias-ok\nhello\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11936,7 +11938,7 @@ test "aliases expand at parser-recognized command word positions" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("parser-ok\nparser-ok\nif-ok\nparser-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11953,7 +11955,7 @@ test "aliases expand inside command substitutions without touching here-doc bodi
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("subst-ok\nbody\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11972,7 +11974,7 @@ test "aliases can introduce reserved-word compound commands" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("alias-if-ok\nalias-while-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -11988,7 +11990,7 @@ test "aliases defined by eval and dot affect later complete commands" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("eval-ok\ndot-ok\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -12006,7 +12008,7 @@ test "aliases defined on a read line affect only later read lines" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("same-line:127\nsame-ok\neval-line:127\neval-ok\ndot-line:127\ndot-ok\n", result.stdout);
     try std.testing.expectEqualStrings("zzsamecmd: command not found\nzzevalcmd: command not found\nzzdotcmd: command not found\n", result.stderr);
 }
@@ -12014,17 +12016,17 @@ test "aliases defined on a read line affect only later read lines" {
 test "prompt rendering subcommands are scoped while repaint is public" {
     var prompt_result = try runScript(std.testing.allocator, std.testing.io, "prompt text hi");
     defer prompt_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), prompt_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), prompt_result.status);
     try std.testing.expectEqualStrings("prompt: not rendering a prompt\n", prompt_result.stderr);
 
     var repaint_result = try runScript(std.testing.allocator, std.testing.io, "prompt repaint");
     defer repaint_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), repaint_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), repaint_result.status);
     try std.testing.expectEqualStrings("", repaint_result.stderr);
 
     var command_result = try runScript(std.testing.allocator, std.testing.io, "command -v prompt");
     defer command_result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), command_result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), command_result.status);
     try std.testing.expectEqualStrings("prompt\n", command_result.stdout);
 }
 
@@ -12038,7 +12040,7 @@ test "rush_style sees rush-owned color scheme" {
         \\rush_style() { rush_style_history_match="fg=$rush_color_scheme"; }
     , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
     defer setup.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup.status);
 
     try applyInteractiveColorScheme(&executor, std.testing.io, .light);
     try std.testing.expectEqualStrings("light", executor.getEnv("rush_color_scheme").?);
@@ -12058,7 +12060,7 @@ test "interactive color reports define rgb theme variables" {
         \\rush_style() { rush_style_history_match="fg=$rush_color_blue"; }
     , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" });
     defer setup.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), setup.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup.status);
 
     try applyInteractiveColorReport(&executor, std.testing.io, .{ .kind = .{ .index = 4 }, .value = .{ 0x01, 0x23, 0x45 } });
     try std.testing.expectEqualStrings("#012345", executor.getEnv("rush_color_blue").?);
@@ -12076,7 +12078,7 @@ test "repl uses rush_prompt function to build prompt text" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("$ \x1b[38;5;4mcustom\x1b[0m > ok\n\x1b[38;5;4mcustom\x1b[0m > ", result.stdout);
 }
 
@@ -12088,7 +12090,7 @@ test "repl uses literal PS1 fallback prompt" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("$ custom> ok\ncustom> ", result.stdout);
 }
 
@@ -12148,7 +12150,7 @@ test "interactive startup enables monitor by default for tty stdin" {
         .{},
     );
     defer default_monitor.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), default_monitor.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), default_monitor.status);
     try std.testing.expectEqualStrings("monitor:on\n", default_monitor.stdout);
     try std.testing.expectEqualStrings("", default_monitor.stderr);
 
@@ -12163,7 +12165,7 @@ test "interactive startup enables monitor by default for tty stdin" {
         .{},
     );
     defer explicit_disabled.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), explicit_disabled.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), explicit_disabled.status);
     try std.testing.expectEqualStrings("monitor:off\n", explicit_disabled.stdout);
     try std.testing.expectEqualStrings("", explicit_disabled.stderr);
 }
@@ -12260,7 +12262,7 @@ test "interactive command string invocation sources ENV before script" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("loaded\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -12287,7 +12289,7 @@ test "interactive command string invocation exits immediately when user config e
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 7), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 7), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -12314,7 +12316,7 @@ test "interactive command string invocation exits immediately when user config e
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 127), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 127), result.status);
     try std.testing.expectEqualStrings("", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -12340,7 +12342,7 @@ test "non-interactive command string invocation does not source ENV" {
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("unset\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -12372,7 +12374,7 @@ test "interactive command string invocation parameter-expands ENV_DIR before scr
     );
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("loaded\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
 }
@@ -12393,7 +12395,7 @@ test "embedded config default prompt renders cwd and dollar sign" {
 
     var result = try runScriptWithExecutor(std.testing.allocator, &executor, embedded_config, .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush", .source_path = embedded_config_path });
     defer result.deinit();
-    try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
 
     const prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
     defer std.testing.allocator.free(prompt);
@@ -12550,7 +12552,7 @@ test "prompt async returns cached stdout and requests repaint" {
     const cold_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
     defer std.testing.allocator.free(cold_prompt);
     try std.testing.expectEqualStrings("", cold_prompt);
-    try std.testing.expectEqual(@as(exec.ExitStatus, 7), executor.lastStatus());
+    try std.testing.expectEqual(@as(shell.ExitStatus, 7), executor.lastStatus());
 
     executor.waitForPromptAsyncRefreshes();
     try std.testing.expectEqual(@as(usize, 1), repaint.count);
@@ -12558,7 +12560,7 @@ test "prompt async returns cached stdout and requests repaint" {
     const warm_prompt = try executor.renderPrompt(.{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush" }, "rush$ ");
     defer std.testing.allocator.free(warm_prompt);
     try std.testing.expectEqualStrings("fresh", warm_prompt);
-    try std.testing.expectEqual(@as(exec.ExitStatus, 7), executor.lastStatus());
+    try std.testing.expectEqual(@as(shell.ExitStatus, 7), executor.lastStatus());
 }
 
 test "prompt async suppresses stderr from refresh output" {
@@ -12595,7 +12597,7 @@ test "prompt event hooks run hidden and preserve status" {
 
     try executor.runPromptEventHooks(std.testing.io, "prompt", &.{});
     try std.testing.expectEqualStrings("7", executor.getEnv("PROMPT_HOOK").?);
-    try std.testing.expectEqual(@as(exec.ExitStatus, 7), executor.lastStatus());
+    try std.testing.expectEqual(@as(shell.ExitStatus, 7), executor.lastStatus());
 }
 
 test "variable and interval hooks use prompt repaint primitive" {
@@ -12639,7 +12641,7 @@ test "startup config runtime errors include source path and line" {
     , .{ .io = std.testing.io, .allow_external = true, .arg_zero = "rush", .source_path = "/tmp/rush/config.rush" });
     defer result.deinit();
 
-    try std.testing.expectEqual(@as(exec.ExitStatus, 2), result.status);
+    try std.testing.expectEqual(@as(shell.ExitStatus, 2), result.status);
     try std.testing.expectEqualStrings("before\n", result.stdout);
     try std.testing.expectEqualStrings("/tmp/rush/config.rush:2: complete: --function requires --subcommands, --options, --argument, or --option-value\n", result.stderr);
 }
@@ -12881,7 +12883,7 @@ fn runSh(allocator: std.mem.Allocator, script: []const u8) !exec.CommandResult {
     };
 }
 
-fn processStatus(term: std.process.Child.Term) exec.ExitStatus {
+fn processStatus(term: std.process.Child.Term) shell.ExitStatus {
     return switch (term) {
         .exited => |code| code,
         .signal => |sig| 128 + @as(u8, @intCast(@intFromEnum(sig))),

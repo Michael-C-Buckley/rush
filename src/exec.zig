@@ -8,6 +8,7 @@ const expand = @import("expand.zig");
 const history_module = @import("history.zig");
 const ir = @import("ir.zig");
 const parser = @import("parser.zig");
+const shell_state = @import("shell/state.zig");
 const vaxis = @import("vaxis");
 const zeit = @import("zeit");
 
@@ -155,6 +156,45 @@ pub const ShellOptions = struct {
     allexport: bool = false,
 };
 
+fn semanticShellOptions(options: ShellOptions) shell_state.ShellOptions {
+    return .{
+        .allexport = options.allexport,
+        .emacs = options.emacs,
+        .errexit = options.errexit,
+        .ignoreeof = options.ignoreeof,
+        .monitor = options.monitor,
+        .noclobber = options.noclobber,
+        .noexec = options.noexec,
+        .noglob = options.noglob,
+        .notify = options.notify,
+        .nounset = options.nounset,
+        .pipefail = options.pipefail,
+        .verbose = options.verbose,
+        .vi = options.vi,
+        .xtrace = options.xtrace,
+    };
+}
+
+fn legacyShellOptions(options: shell_state.ShellOptions, shopt: ShoptOptions) ShellOptions {
+    return .{
+        .shopt = shopt,
+        .pipefail = options.pipefail,
+        .emacs = options.emacs,
+        .ignoreeof = options.ignoreeof,
+        .vi = options.vi,
+        .monitor = options.monitor,
+        .noglob = options.noglob,
+        .noclobber = options.noclobber,
+        .noexec = options.noexec,
+        .notify = options.notify,
+        .nounset = options.nounset,
+        .errexit = options.errexit,
+        .xtrace = options.xtrace,
+        .verbose = options.verbose,
+        .allexport = options.allexport,
+    };
+}
+
 const shell_option_flags_max = 10;
 
 fn shellOptionFlags(options: ShellOptions, buffer: *[shell_option_flags_max]u8) []const u8 {
@@ -202,95 +242,20 @@ fn shellOptionFlags(options: ShellOptions, buffer: *[shell_option_flags_max]u8) 
     return buffer[0..len];
 }
 
-pub fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool {
-    if (spelling.len < 2) return false;
-    if (spelling[0] != '-' and spelling[0] != '+') return false;
-    for (spelling[1..]) |option| switch (option) {
-        'a', 'b', 'e', 'f', 'h', 'm', 'n', 'u', 'x', 'v', 'C' => {},
-        else => return false,
-    };
-
-    const enabled = spelling[0] == '-';
-    for (spelling[1..]) |option| switch (option) {
-        'a' => options.allexport = enabled,
-        'b' => options.notify = enabled,
-        'e' => options.errexit = enabled,
-        'f' => options.noglob = enabled,
-        'h' => {},
-        'm' => options.monitor = enabled,
-        'n' => options.noexec = enabled,
-        'u' => options.nounset = enabled,
-        'x' => options.xtrace = enabled,
-        'v' => options.verbose = enabled,
-        'C' => options.noclobber = enabled,
-        else => unreachable,
-    };
+fn applyShellOptionShort(options: *ShellOptions, spelling: []const u8) bool {
+    var semantic_options = semanticShellOptions(options.*);
+    if (!shell_state.applyShellOptionShort(&semantic_options, spelling)) return false;
+    const shopt = options.shopt;
+    options.* = legacyShellOptions(semantic_options, shopt);
     return true;
 }
 
-pub fn applyShellOptionName(options: *ShellOptions, name: []const u8, enabled: bool) bool {
-    if (std.mem.eql(u8, name, "pipefail")) {
-        options.pipefail = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "emacs")) {
-        options.emacs = enabled;
-        if (enabled) options.vi = false;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "ignoreeof")) {
-        options.ignoreeof = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "vi")) {
-        options.vi = enabled;
-        options.emacs = !enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "monitor")) {
-        options.monitor = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "allexport")) {
-        options.allexport = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "noglob")) {
-        options.noglob = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "noclobber")) {
-        options.noclobber = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "noexec")) {
-        options.noexec = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "notify")) {
-        options.notify = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "nolog")) {
-        return true;
-    }
-    if (std.mem.eql(u8, name, "nounset")) {
-        options.nounset = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "errexit")) {
-        options.errexit = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "xtrace")) {
-        options.xtrace = enabled;
-        return true;
-    }
-    if (std.mem.eql(u8, name, "verbose")) {
-        options.verbose = enabled;
-        return true;
-    }
-    return false;
+fn applyShellOptionName(options: *ShellOptions, name: []const u8, enabled: bool) bool {
+    var semantic_options = semanticShellOptions(options.*);
+    if (!shell_state.applyShellOptionName(&semantic_options, name, enabled)) return false;
+    const shopt = options.shopt;
+    options.* = legacyShellOptions(semantic_options, shopt);
+    return true;
 }
 
 pub const CommandResult = struct {
