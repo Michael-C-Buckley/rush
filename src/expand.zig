@@ -2418,6 +2418,11 @@ const ArithmeticParser = struct {
                     .mod_assign => blk: {
                         break :blk try checkedRem(try self.lookupNumber(name), rhs);
                     },
+                    .shl_assign => (try self.lookupNumber(name)) << shiftAmount(rhs),
+                    .shr_assign => (try self.lookupNumber(name)) >> shiftAmount(rhs),
+                    .bit_and_assign => (try self.lookupNumber(name)) & rhs,
+                    .bit_or_assign => (try self.lookupNumber(name)) | rhs,
+                    .bit_xor_assign => (try self.lookupNumber(name)) ^ rhs,
                 };
                 try self.setNumber(name, value);
                 return value;
@@ -2427,7 +2432,7 @@ const ArithmeticParser = struct {
         return self.parseTernary();
     }
 
-    const AssignmentOperator = enum { assign, add_assign, sub_assign, mul_assign, div_assign, mod_assign };
+    const AssignmentOperator = enum { assign, add_assign, sub_assign, mul_assign, div_assign, mod_assign, shl_assign, shr_assign, bit_and_assign, bit_or_assign, bit_xor_assign };
 
     fn assignmentOperator(self: *ArithmeticParser) ?AssignmentOperator {
         if (self.index >= self.input.len) return null;
@@ -2436,6 +2441,8 @@ const ArithmeticParser = struct {
             self.index += 1;
             return .assign;
         }
+        if (self.eatString("<<=")) return .shl_assign;
+        if (self.eatString(">>=")) return .shr_assign;
         if (self.index + 1 >= self.input.len or self.input[self.index + 1] != '=') return null;
         const op: AssignmentOperator = switch (self.input[self.index]) {
             '+' => .add_assign,
@@ -2443,6 +2450,9 @@ const ArithmeticParser = struct {
             '*' => .mul_assign,
             '/' => .div_assign,
             '%' => .mod_assign,
+            '&' => .bit_and_assign,
+            '|' => .bit_or_assign,
+            '^' => .bit_xor_assign,
             else => return null,
         };
         self.index += 2;
@@ -6143,6 +6153,21 @@ fn arithmeticSetRecorderSet(context: ?*anyopaque, name: []const u8, value: []con
     recorder.last_name_len = name.len;
     recorder.last_value_len = value.len;
     recorder.count += 1;
+}
+
+test "arithmetic expansion evaluates shift and bitwise compound assignments" {
+    var recorder: ArithmeticSetRecorder = .{};
+
+    try std.testing.expectEqual(@as(i64, 6), try evalArithmetic("USER_NUM<<=1", test_env, recorder.envSet()));
+    try std.testing.expectEqualStrings("6", recorder.lastValue());
+    try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("USER_NUM>>=1", test_env, recorder.envSet()));
+    try std.testing.expectEqualStrings("1", recorder.lastValue());
+    try std.testing.expectEqual(@as(i64, 3), try evalArithmetic("USER_NUM&=3", test_env, recorder.envSet()));
+    try std.testing.expectEqualStrings("3", recorder.lastValue());
+    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("USER_NUM|=4", test_env, recorder.envSet()));
+    try std.testing.expectEqualStrings("7", recorder.lastValue());
+    try std.testing.expectEqual(@as(i64, 2), try evalArithmetic("USER_NUM^=1", test_env, recorder.envSet()));
+    try std.testing.expectEqualStrings("2", recorder.lastValue());
 }
 
 test "arithmetic expansion short-circuits logical operands" {
