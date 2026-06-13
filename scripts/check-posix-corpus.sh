@@ -58,6 +58,12 @@ if [ -n "${RUSH_CORPUS_WORKER:-}" ]; then
   actual_stdout=$tmp/stdout
   actual_stderr=$tmp/stderr
 
+  if [ -f "$case_dir/tmpdir" ]; then
+    mkdir "$tmp/tmpdir"
+    TMPDIR=$tmp/tmpdir
+    export TMPDIR
+  fi
+
   rush_args=
   if [ -f "$case_dir/args" ]; then
     rush_args=$(cat "$case_dir/args")

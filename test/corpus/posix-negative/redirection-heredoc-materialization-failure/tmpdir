@@ -1,0 +1,2 @@
+# Run with TMPDIR pointing at an isolated directory so the fixture can fill
+# Rush's heredoc temp namespace instead of the test working directory.

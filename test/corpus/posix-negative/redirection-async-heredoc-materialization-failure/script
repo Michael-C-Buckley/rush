@@ -1,6 +1,7 @@
+tmpdir=${TMPDIR:-/tmp}
 i=0
 while test "$i" -lt 32; do
-  : > ".rush-heredoc-$$-$i.tmp"
+  : > "$tmpdir/.rush-heredoc-$$-$i.tmp"
   i=$((i + 1))
 done
 cat <<EOF &
@@ -8,3 +9,8 @@ data
 EOF
 echo spawn=$?
 wait
+i=0
+while test "$i" -lt 32; do
+  rm -f "$tmpdir/.rush-heredoc-$$-$i.tmp"
+  i=$((i + 1))
+done
