@@ -1217,6 +1217,7 @@ fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
 const CompletionScriptLoader = struct {
     allocator: std.mem.Allocator,
     attempted: std.StringHashMapUnmanaged(void) = .empty,
+    semantic_state: ?*const shell.ShellState = null,
 
     pub fn init(allocator: std.mem.Allocator) CompletionScriptLoader {
         return .{ .allocator = allocator };
@@ -1239,37 +1240,45 @@ const CompletionScriptLoader = struct {
             return;
         }
 
-        try self.loadDataDirs(io, executor, command, arg_zero);
-        if (try xdgDataHomeCompletionManifestPath(self.allocator, executor.*, command)) |path| {
+        const env_view = self.envView(executor);
+        try self.loadDataDirs(io, executor, env_view, command, arg_zero);
+        if (try xdgDataHomeCompletionManifestPath(self.allocator, env_view, command)) |path| {
             defer self.allocator.free(path);
             const loaded_manifest = loadOptionalCompletionManifest(self.allocator, io, executor, path) catch false;
             if (!loaded_manifest) {
-                if (try xdgDataHomeCompletionPath(self.allocator, executor.*, command)) |script_path| {
+                if (try xdgDataHomeCompletionPath(self.allocator, env_view, command)) |script_path| {
                     defer self.allocator.free(script_path);
                     sourceOptionalConfig(self.allocator, io, executor, script_path, arg_zero) catch {};
                 }
             }
-        } else if (try xdgDataHomeCompletionPath(self.allocator, executor.*, command)) |path| {
+        } else if (try xdgDataHomeCompletionPath(self.allocator, env_view, command)) |path| {
             defer self.allocator.free(path);
             sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
         }
-        if (try xdgConfigCompletionManifestPath(self.allocator, executor.*, command)) |path| {
+        if (try xdgConfigCompletionManifestPath(self.allocator, env_view, command)) |path| {
             defer self.allocator.free(path);
             const loaded_manifest = loadOptionalCompletionManifest(self.allocator, io, executor, path) catch false;
             if (!loaded_manifest) {
-                if (try xdgConfigCompletionPath(self.allocator, executor.*, command)) |script_path| {
+                if (try xdgConfigCompletionPath(self.allocator, env_view, command)) |script_path| {
                     defer self.allocator.free(script_path);
                     sourceOptionalConfig(self.allocator, io, executor, script_path, arg_zero) catch {};
                 }
             }
-        } else if (try xdgConfigCompletionPath(self.allocator, executor.*, command)) |path| {
+        } else if (try xdgConfigCompletionPath(self.allocator, env_view, command)) |path| {
             defer self.allocator.free(path);
             sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
         }
     }
 
-    fn loadDataDirs(self: *CompletionScriptLoader, io: std.Io, executor: *exec.Executor, command: []const u8, arg_zero: []const u8) !void {
-        const data_dirs = executor.getEnv("XDG_DATA_DIRS") orelse "/usr/local/share:/usr/share";
+    fn envView(self: CompletionScriptLoader, executor: *const exec.Executor) CompletionEnvironment {
+        const env_view: CompletionEnvironment = .{ .shell_state = self.semantic_state, .executor = executor };
+        env_view.validate();
+        return env_view;
+    }
+
+    fn loadDataDirs(self: *CompletionScriptLoader, io: std.Io, executor: *exec.Executor, env_view: CompletionEnvironment, command: []const u8, arg_zero: []const u8) !void {
+        env_view.validate();
+        const data_dirs = env_view.get("XDG_DATA_DIRS") orelse "/usr/local/share:/usr/share";
         var iter = std.mem.splitScalar(u8, data_dirs, ':');
         while (iter.next()) |dir| {
             if (dir.len == 0) continue;
@@ -1282,6 +1291,26 @@ const CompletionScriptLoader = struct {
             defer self.allocator.free(path);
             sourceOptionalConfig(self.allocator, io, executor, path, arg_zero) catch {};
         }
+    }
+};
+
+const CompletionEnvironment = struct {
+    shell_state: ?*const shell.ShellState = null,
+    executor: ?*const exec.Executor = null,
+
+    fn validate(self: CompletionEnvironment) void {
+        std.debug.assert(self.shell_state != null or self.executor != null);
+        if (self.shell_state) |shell_state| shell_state.validate();
+    }
+
+    fn get(self: CompletionEnvironment, name: []const u8) ?[]const u8 {
+        self.validate();
+        std.debug.assert(isValidShellVariableName(name));
+        if (self.shell_state) |shell_state| {
+            if (shell_state.getVariable(name)) |variable| return variable.value;
+        }
+        if (self.executor) |executor| return executor.getEnv(name);
+        return null;
     }
 };
 
@@ -1448,19 +1477,20 @@ fn completionManifestPathInDir(allocator: std.mem.Allocator, dir: []const u8, co
     return std.fs.path.join(allocator, &.{ dir, "rush", "completions", file_name });
 }
 
-fn xdgDataHomeCompletionPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
-    return xdgDataHomeCompletionFilePath(allocator, executor, command, completionPathInDir);
+fn xdgDataHomeCompletionPath(allocator: std.mem.Allocator, environment: CompletionEnvironment, command: []const u8) !?[]const u8 {
+    return xdgDataHomeCompletionFilePath(allocator, environment, command, completionPathInDir);
 }
 
-fn xdgDataHomeCompletionManifestPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
-    return xdgDataHomeCompletionFilePath(allocator, executor, command, completionManifestPathInDir);
+fn xdgDataHomeCompletionManifestPath(allocator: std.mem.Allocator, environment: CompletionEnvironment, command: []const u8) !?[]const u8 {
+    return xdgDataHomeCompletionFilePath(allocator, environment, command, completionManifestPathInDir);
 }
 
-fn xdgDataHomeCompletionFilePath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8, comptime pathFn: fn (std.mem.Allocator, []const u8, []const u8) anyerror![]const u8) !?[]const u8 {
-    if (executor.getEnv("XDG_DATA_HOME")) |xdg_data_home| {
+fn xdgDataHomeCompletionFilePath(allocator: std.mem.Allocator, environment: CompletionEnvironment, command: []const u8, comptime pathFn: fn (std.mem.Allocator, []const u8, []const u8) anyerror![]const u8) !?[]const u8 {
+    environment.validate();
+    if (environment.get("XDG_DATA_HOME")) |xdg_data_home| {
         if (xdg_data_home.len != 0) return try pathFn(allocator, xdg_data_home, command);
     }
-    if (executor.getEnv("HOME")) |home| {
+    if (environment.get("HOME")) |home| {
         if (home.len != 0) {
             const data_home = try std.fs.path.join(allocator, &.{ home, ".local", "share" });
             defer allocator.free(data_home);
@@ -1470,19 +1500,20 @@ fn xdgDataHomeCompletionFilePath(allocator: std.mem.Allocator, executor: exec.Ex
     return null;
 }
 
-fn xdgConfigCompletionPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
-    return xdgConfigCompletionFilePath(allocator, executor, command, completionPathInDir);
+fn xdgConfigCompletionPath(allocator: std.mem.Allocator, environment: CompletionEnvironment, command: []const u8) !?[]const u8 {
+    return xdgConfigCompletionFilePath(allocator, environment, command, completionPathInDir);
 }
 
-fn xdgConfigCompletionManifestPath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8) !?[]const u8 {
-    return xdgConfigCompletionFilePath(allocator, executor, command, completionManifestPathInDir);
+fn xdgConfigCompletionManifestPath(allocator: std.mem.Allocator, environment: CompletionEnvironment, command: []const u8) !?[]const u8 {
+    return xdgConfigCompletionFilePath(allocator, environment, command, completionManifestPathInDir);
 }
 
-fn xdgConfigCompletionFilePath(allocator: std.mem.Allocator, executor: exec.Executor, command: []const u8, comptime pathFn: fn (std.mem.Allocator, []const u8, []const u8) anyerror![]const u8) !?[]const u8 {
-    if (executor.getEnv("XDG_CONFIG_HOME")) |xdg_config_home| {
+fn xdgConfigCompletionFilePath(allocator: std.mem.Allocator, environment: CompletionEnvironment, command: []const u8, comptime pathFn: fn (std.mem.Allocator, []const u8, []const u8) anyerror![]const u8) !?[]const u8 {
+    environment.validate();
+    if (environment.get("XDG_CONFIG_HOME")) |xdg_config_home| {
         if (xdg_config_home.len != 0) return try pathFn(allocator, xdg_config_home, command);
     }
-    if (executor.getEnv("HOME")) |home| {
+    if (environment.get("HOME")) |home| {
         if (home.len != 0) {
             const config_home = try std.fs.path.join(allocator, &.{ home, ".config" });
             defer allocator.free(config_home);
@@ -6339,6 +6370,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const title = try terminalTitlePath(allocator, cwd, executor.getEnv("HOME"));
         defer if (title.owned) allocator.free(title.text);
         try terminal.reportWindowTitle(title.text);
+        completion_loader.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         var completion_context: InteractiveCompletionContext = .{ .executor = executor, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
         const ui_theme = prompt_service.theme();
         const read_options: editor_driver.ReadLineOptions = .{
@@ -8543,14 +8575,24 @@ test "completion script paths follow XDG data and config homes" {
     try executor.setEnv("HOME", "/home/me");
     try executor.setEnv("XDG_DATA_HOME", "/data");
     try executor.setEnv("XDG_CONFIG_HOME", "/config");
+    const environment: CompletionEnvironment = .{ .executor = &executor };
 
-    const data_path = (try xdgDataHomeCompletionPath(std.testing.allocator, executor, "git")).?;
+    const data_path = (try xdgDataHomeCompletionPath(std.testing.allocator, environment, "git")).?;
     defer std.testing.allocator.free(data_path);
     try std.testing.expectEqualStrings("/data/rush/completions/git.rush", data_path);
 
-    const config_path = (try xdgConfigCompletionPath(std.testing.allocator, executor, "git")).?;
+    const config_path = (try xdgConfigCompletionPath(std.testing.allocator, environment, "git")).?;
     defer std.testing.allocator.free(config_path);
     try std.testing.expectEqualStrings("/config/rush/completions/git.rush", config_path);
+
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("HOME", "/semantic-home", .{});
+    try shell_state.putVariable("XDG_DATA_HOME", "/semantic-data", .{});
+    const semantic_environment: CompletionEnvironment = .{ .shell_state = &shell_state, .executor = &executor };
+    const semantic_data_path = (try xdgDataHomeCompletionPath(std.testing.allocator, semantic_environment, "git")).?;
+    defer std.testing.allocator.free(semantic_data_path);
+    try std.testing.expectEqualStrings("/semantic-data/rush/completions/git.rush", semantic_data_path);
 }
 
 test "completion script command names are safe file basenames" {
