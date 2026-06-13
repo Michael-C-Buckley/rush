@@ -165,6 +165,14 @@ pub fn build(b: *std.Build) void {
     });
     invocation_stdin_check.addArtifactArg(exe);
 
+    const bracket_loop_benchmark_step = b.step("bracket-loop-benchmark", "Check that [ builtin loops do not trigger glob directory scans");
+    const bracket_loop_benchmark = b.addSystemCommand(&.{"env"});
+    bracket_loop_benchmark.addPrefixedArtifactArg("RUSH=", exe);
+    bracket_loop_benchmark.addArgs(&.{ "sh", "scripts/check-bracket-loop-benchmark.sh" });
+    bracket_loop_benchmark.step.dependOn(&exe.step);
+    bracket_loop_benchmark.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
+    bracket_loop_benchmark_step.dependOn(&bracket_loop_benchmark.step);
+
     const install_completion_manifest_check_step = b.step("completion-install-check", "Verify installed completion manifests load from XDG data dirs");
     const install_completion_manifest_check = b.addSystemCommand(&.{
         "sh",
@@ -195,6 +203,7 @@ pub fn build(b: *std.Build) void {
     check_step.dependOn(fmt_step);
     check_step.dependOn(&completion_validate.step);
     check_step.dependOn(&invocation_stdin_check.step);
+    check_step.dependOn(&bracket_loop_benchmark.step);
     check_step.dependOn(&install_completion_manifest_check.step);
 
     const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
