@@ -16,6 +16,8 @@ pub const BuiltinSemanticClass = enum {
     status_constant,
     output,
     predicate,
+    declaration,
+    shell_state,
 
     pub fn isNonMutating(self: BuiltinSemanticClass) bool {
         return switch (self) {
@@ -24,7 +26,14 @@ pub const BuiltinSemanticClass = enum {
             .output,
             .predicate,
             => true,
-            .unsupported => false,
+            .unsupported, .declaration, .shell_state => false,
+        };
+    }
+
+    pub fn isStateful(self: BuiltinSemanticClass) bool {
+        return switch (self) {
+            .declaration, .shell_state => true,
+            .unsupported, .no_op, .status_constant, .output, .predicate => false,
         };
     }
 };
@@ -62,6 +71,8 @@ pub const Builtin = struct {
             .status_constant => std.debug.assert(std.mem.eql(u8, self.name, "true") or std.mem.eql(u8, self.name, "false")),
             .output => std.debug.assert(std.mem.eql(u8, self.name, "echo") or std.mem.eql(u8, self.name, "printf")),
             .predicate => std.debug.assert(std.mem.eql(u8, self.name, "test") or std.mem.eql(u8, self.name, "[")),
+            .declaration => std.debug.assert(std.mem.eql(u8, self.name, "export") or std.mem.eql(u8, self.name, "readonly") or std.mem.eql(u8, self.name, "unset")),
+            .shell_state => std.debug.assert(std.mem.eql(u8, self.name, "set") or std.mem.eql(u8, self.name, "shift") or std.mem.eql(u8, self.name, "alias") or std.mem.eql(u8, self.name, "unalias") or std.mem.eql(u8, self.name, "trap")),
         }
     }
 };
@@ -74,18 +85,18 @@ pub const default_builtins = [_]Builtin{
     Builtin.init("eval", .special),
     Builtin.init("exec", .special),
     Builtin.init("exit", .special),
-    Builtin.init("export", .special),
-    Builtin.init("readonly", .special),
+    Builtin.initWithSemantics("export", .special, .declaration),
+    Builtin.initWithSemantics("readonly", .special, .declaration),
     Builtin.init("return", .special),
-    Builtin.init("set", .special),
-    Builtin.init("shift", .special),
+    Builtin.initWithSemantics("set", .special, .shell_state),
+    Builtin.initWithSemantics("shift", .special, .shell_state),
     Builtin.init("times", .special),
-    Builtin.init("trap", .special),
-    Builtin.init("unset", .special),
+    Builtin.initWithSemantics("trap", .special, .shell_state),
+    Builtin.initWithSemantics("unset", .special, .declaration),
 
     Builtin.initWithSemantics("[", .regular, .predicate),
     Builtin.init("abbr", .regular),
-    Builtin.init("alias", .regular),
+    Builtin.initWithSemantics("alias", .regular, .shell_state),
     Builtin.init("bg", .regular),
     Builtin.init("cd", .regular),
     Builtin.init("color", .regular),
@@ -113,7 +124,7 @@ pub const default_builtins = [_]Builtin{
     Builtin.init("type", .regular),
     Builtin.init("ulimit", .regular),
     Builtin.init("umask", .regular),
-    Builtin.init("unalias", .regular),
+    Builtin.initWithSemantics("unalias", .regular, .shell_state),
     Builtin.init("wait", .regular),
 };
 

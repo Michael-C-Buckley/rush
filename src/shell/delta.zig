@@ -32,6 +32,16 @@ pub const VariableFlagMutation = struct {
     enabled: bool = true,
 };
 
+pub const NameValueMutation = struct {
+    name: []const u8,
+    value: []const u8,
+};
+
+pub const TrapMutation = struct {
+    name: []const u8,
+    action: ?[]const u8,
+};
+
 pub const OptionChange = struct {
     option: state.ShellOption,
     enabled: bool,
@@ -43,7 +53,13 @@ pub const StateDelta = struct {
     state: DeltaState = .pending,
     variable_assignments: std.ArrayList(VariableAssignment) = .empty,
     variable_flags: std.ArrayList(VariableFlagMutation) = .empty,
+    variable_unsets: std.ArrayList([]const u8) = .empty,
+    function_unsets: std.ArrayList([]const u8) = .empty,
     option_changes: std.ArrayList(OptionChange) = .empty,
+    alias_sets: std.ArrayList(NameValueMutation) = .empty,
+    alias_unsets: std.ArrayList([]const u8) = .empty,
+    clear_aliases: bool = false,
+    trap_mutations: std.ArrayList(TrapMutation) = .empty,
     positionals: ?[][]const u8 = null,
     logical_cwd: ?[]const u8 = null,
     last_status: ?state.ExitStatus = null,
@@ -63,7 +79,25 @@ pub const StateDelta = struct {
             self.allocator.free(mutation.name);
         }
         self.variable_flags.deinit(self.allocator);
+
+        for (self.variable_unsets.items) |name| self.allocator.free(name);
+        self.variable_unsets.deinit(self.allocator);
+        for (self.function_unsets.items) |name| self.allocator.free(name);
+        self.function_unsets.deinit(self.allocator);
         self.option_changes.deinit(self.allocator);
+
+        for (self.alias_sets.items) |mutation| {
+            self.allocator.free(mutation.name);
+            self.allocator.free(mutation.value);
+        }
+        self.alias_sets.deinit(self.allocator);
+        for (self.alias_unsets.items) |name| self.allocator.free(name);
+        self.alias_unsets.deinit(self.allocator);
+        for (self.trap_mutations.items) |mutation| {
+            self.allocator.free(mutation.name);
+            if (mutation.action) |action| self.allocator.free(action);
+        }
+        self.trap_mutations.deinit(self.allocator);
 
         if (self.positionals) |args| {
             for (args) |arg| self.allocator.free(arg);
@@ -89,9 +123,15 @@ pub const StateDelta = struct {
         for (self.variable_flags.items) |mutation| {
             try cloned.appendVariableFlag(mutation.name, mutation.flag, mutation.enabled);
         }
+        for (self.variable_unsets.items) |name| try cloned.unsetVariable(name);
+        for (self.function_unsets.items) |name| try cloned.unsetFunction(name);
         for (self.option_changes.items) |change| {
             try cloned.setOption(change.option, change.enabled);
         }
+        for (self.alias_sets.items) |mutation| try cloned.setAlias(mutation.name, mutation.value);
+        for (self.alias_unsets.items) |name| try cloned.unsetAlias(name);
+        if (self.clear_aliases) cloned.clearAliases();
+        for (self.trap_mutations.items) |mutation| try cloned.setTrap(mutation.name, mutation.action);
         if (self.positionals) |args| try cloned.replacePositionals(args);
         if (self.logical_cwd) |cwd| try cloned.setLogicalCwd(cwd);
         if (self.last_status) |status| cloned.setLastStatus(status);
@@ -102,7 +142,13 @@ pub const StateDelta = struct {
     pub fn isEmpty(self: StateDelta) bool {
         return self.variable_assignments.items.len == 0 and
             self.variable_flags.items.len == 0 and
+            self.variable_unsets.items.len == 0 and
+            self.function_unsets.items.len == 0 and
             self.option_changes.items.len == 0 and
+            self.alias_sets.items.len == 0 and
+            self.alias_unsets.items.len == 0 and
+            !self.clear_aliases and
+            self.trap_mutations.items.len == 0 and
             self.positionals == null and
             self.logical_cwd == null and
             self.last_status == null;
@@ -169,12 +215,94 @@ pub const StateDelta = struct {
         try self.appendVariableFlag(name, .readonly, true);
     }
 
+    pub fn unsetVariable(self: *StateDelta, name: []const u8) !void {
+        self.assertPending();
+        state.assertValidVariableName(name);
+
+        for (self.variable_unsets.items) |existing| {
+            if (std.mem.eql(u8, existing, name)) return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.variable_unsets.append(self.allocator, owned_name);
+    }
+
+    pub fn unsetFunction(self: *StateDelta, name: []const u8) !void {
+        self.assertPending();
+        state.assertValidVariableName(name);
+
+        for (self.function_unsets.items) |existing| {
+            if (std.mem.eql(u8, existing, name)) return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.function_unsets.append(self.allocator, owned_name);
+    }
+
     pub fn setOption(self: *StateDelta, option: state.ShellOption, enabled: bool) !void {
         self.assertPending();
-        for (self.option_changes.items) |change| {
-            std.debug.assert(change.option != option);
+        for (self.option_changes.items) |*change| {
+            if (change.option == option) {
+                change.enabled = enabled;
+                return;
+            }
         }
         try self.option_changes.append(self.allocator, .{ .option = option, .enabled = enabled });
+    }
+
+    pub fn setAlias(self: *StateDelta, name: []const u8, value: []const u8) !void {
+        self.assertPending();
+        state.assertValidAliasName(name);
+
+        if (findNameValueMutation(&self.alias_sets, name)) |mutation| {
+            const owned_value = try self.allocator.dupe(u8, value);
+            self.allocator.free(mutation.value);
+            mutation.value = owned_value;
+            return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+        try self.alias_sets.append(self.allocator, .{ .name = owned_name, .value = owned_value });
+    }
+
+    pub fn unsetAlias(self: *StateDelta, name: []const u8) !void {
+        self.assertPending();
+        state.assertValidAliasName(name);
+
+        for (self.alias_unsets.items) |existing| {
+            if (std.mem.eql(u8, existing, name)) return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.alias_unsets.append(self.allocator, owned_name);
+    }
+
+    pub fn clearAliases(self: *StateDelta) void {
+        self.assertPending();
+        self.clear_aliases = true;
+    }
+
+    pub fn setTrap(self: *StateDelta, name: []const u8, action: ?[]const u8) !void {
+        self.assertPending();
+        state.assertValidTrapName(name);
+
+        if (findTrapMutation(self, name)) |mutation| {
+            if (mutation.action) |old_action| self.allocator.free(old_action);
+            mutation.action = if (action) |action_value| try self.allocator.dupe(u8, action_value) else null;
+            return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_action = if (action) |action_value| try self.allocator.dupe(u8, action_value) else null;
+        errdefer if (owned_action) |action_value| self.allocator.free(action_value);
+        try self.trap_mutations.append(self.allocator, .{ .name = owned_name, .action = owned_action });
     }
 
     pub fn replacePositionals(self: *StateDelta, args: []const []const u8) !void {
@@ -213,6 +341,9 @@ pub const StateDelta = struct {
         for (self.variable_assignments.items) |assignment| {
             if (shell_state.isVariableReadonly(assignment.name)) return assignment.name;
         }
+        for (self.variable_unsets.items) |name| {
+            if (shell_state.isVariableReadonly(name)) return name;
+        }
         return null;
     }
 
@@ -249,8 +380,20 @@ pub const StateDelta = struct {
                 },
             }
         }
+        for (self.variable_unsets.items) |name| try shell_state.unsetVariable(name);
+        for (self.function_unsets.items) |name| shell_state.unsetFunction(name);
         for (self.option_changes.items) |change| {
             shell_state.options.set(change.option, change.enabled);
+        }
+        if (self.clear_aliases) shell_state.clearAliases();
+        for (self.alias_sets.items) |mutation| try shell_state.setAlias(mutation.name, mutation.value);
+        for (self.alias_unsets.items) |name| _ = shell_state.unsetAlias(name);
+        for (self.trap_mutations.items) |mutation| {
+            if (mutation.action) |action| {
+                try shell_state.setTrap(mutation.name, action);
+            } else {
+                shell_state.clearTrap(mutation.name);
+            }
         }
         if (self.positionals) |args| try shell_state.replacePositionals(args);
         if (self.logical_cwd) |cwd| try shell_state.setLogicalCwd(cwd);
@@ -276,7 +419,10 @@ pub const StateDelta = struct {
         if (flag == .readonly) std.debug.assert(enabled);
 
         for (self.variable_flags.items) |mutation| {
-            std.debug.assert(!std.mem.eql(u8, mutation.name, name) or mutation.flag != flag);
+            if (std.mem.eql(u8, mutation.name, name) and mutation.flag == flag) {
+                std.debug.assert(mutation.enabled == enabled);
+                return;
+            }
         }
 
         const owned_name = try self.allocator.dupe(u8, name);
@@ -288,6 +434,20 @@ pub const StateDelta = struct {
 fn findVariableAssignment(delta: *StateDelta, name: []const u8) ?*VariableAssignment {
     for (delta.variable_assignments.items) |*assignment| {
         if (std.mem.eql(u8, assignment.name, name)) return assignment;
+    }
+    return null;
+}
+
+fn findNameValueMutation(list: *std.ArrayList(NameValueMutation), name: []const u8) ?*NameValueMutation {
+    for (list.items) |*mutation| {
+        if (std.mem.eql(u8, mutation.name, name)) return mutation;
+    }
+    return null;
+}
+
+fn findTrapMutation(delta: *StateDelta, name: []const u8) ?*TrapMutation {
+    for (delta.trap_mutations.items) |*mutation| {
+        if (std.mem.eql(u8, mutation.name, name)) return mutation;
     }
     return null;
 }

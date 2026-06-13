@@ -35,6 +35,7 @@ pub const Adapter = struct {
             .get_cwd_fn = getCwd,
             .change_cwd_fn = changeCwd,
             .access_fn = access,
+            .inspect_path_fn = inspectPath,
         };
     }
 
@@ -141,6 +142,16 @@ fn access(context: *anyopaque, request: fs.AccessRequest) fs.AccessError!void {
     try std.Io.Dir.cwd().access(adapter.io, request.path, request.toStdOptions());
 }
 
+fn inspectPath(context: *anyopaque, request: fs.InspectPathRequest) fs.InspectPathError!fs.InspectPathResult {
+    const adapter = adapterFromContext(context);
+    request.validate();
+    const stat = try std.Io.Dir.cwd().statFile(adapter.io, request.path, request.toStdOptions());
+    return .{
+        .stat = stat,
+        .identity = pathIdentity(request.path, request.follow_symlinks),
+    };
+}
+
 fn spawn(context: *anyopaque, request: process.SpawnRequest) process.SpawnError!process.SpawnResult {
     const adapter = adapterFromContext(context);
     request.validate();
@@ -170,6 +181,29 @@ fn waitStatusFromTerm(term: std.process.Child.Term) process.WaitStatus {
         .signal => |signal| .{ .signaled = @intCast(@intFromEnum(signal)) },
         .stopped => |signal| .{ .stopped = @intCast(@intFromEnum(signal)) },
         .unknown => |status| .{ .unknown = status },
+    };
+}
+
+fn pathIdentity(path: []const u8, follow_symlinks: bool) ?fs.PathIdentity {
+    std.debug.assert(path.len != 0);
+    const path_z = std.posix.toPosixPath(path) catch return null;
+
+    if (comptime builtin.os.tag == .linux) {
+        var statx_result: std.os.linux.Statx = undefined;
+        const flags: u32 = if (follow_symlinks) 0 else std.c.AT.SYMLINK_NOFOLLOW;
+        if (std.c.statx(std.c.AT.FDCWD, &path_z, flags, std.os.linux.STATX.BASIC_STATS, &statx_result) != 0) return null;
+        return .{
+            .device = (@as(u64, statx_result.dev_major) << 32) | statx_result.dev_minor,
+            .inode = statx_result.ino,
+        };
+    }
+
+    var stat_result: std.c.Stat = undefined;
+    const flags: u32 = if (follow_symlinks) 0 else std.c.AT.SYMLINK_NOFOLLOW;
+    if (std.c.fstatat(std.c.AT.FDCWD, &path_z, &stat_result, flags) != 0) return null;
+    return .{
+        .device = @intCast(stat_result.dev),
+        .inode = @intCast(stat_result.ino),
     };
 }
 
@@ -321,6 +355,8 @@ test "runtime posix adapter performs cwd and access smoke operations" {
     try std.testing.expect(cwd.path.len != 0);
 
     try fs_port.access(.{ .path = "." });
+    const metadata = try fs_port.inspectPath(.{ .path = "." });
+    try std.testing.expectEqual(std.Io.File.Kind.directory, metadata.stat.kind);
     try fs_port.changeCwd(.{ .path = cwd.path });
 }
 

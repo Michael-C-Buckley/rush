@@ -81,19 +81,62 @@ pub const AccessRequest = struct {
     }
 };
 
+pub const InspectPathRequest = struct {
+    path: Path,
+    follow_symlinks: bool = true,
+
+    /// `path` is borrowed for the duration of the call. The result is a
+    /// low-level metadata snapshot; callers own shell policy.
+    pub fn init(path: Path) InspectPathRequest {
+        const request: InspectPathRequest = .{ .path = path };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: InspectPathRequest) void {
+        std.debug.assert(self.path.len != 0);
+    }
+
+    pub fn toStdOptions(self: InspectPathRequest) std.Io.Dir.StatFileOptions {
+        self.validate();
+        return .{ .follow_symlinks = self.follow_symlinks };
+    }
+};
+
+pub const PathIdentity = struct {
+    device: u64,
+    inode: u64,
+
+    pub fn validate(self: PathIdentity) void {
+        std.debug.assert(self.inode != 0);
+    }
+};
+
+pub const InspectPathResult = struct {
+    stat: std.Io.File.Stat,
+    identity: ?PathIdentity = null,
+
+    pub fn validate(self: InspectPathResult) void {
+        if (self.identity) |identity| identity.validate();
+    }
+};
+
 pub const GetCwdError = std.process.CurrentPathError;
 pub const ChangeCwdError = std.process.SetCurrentPathError;
 pub const AccessError = std.Io.Dir.AccessError;
+pub const InspectPathError = std.Io.Dir.StatFileError;
 
 pub const GetCwdFn = *const fn (*anyopaque, GetCwdRequest) GetCwdError!GetCwdResult;
 pub const ChangeCwdFn = *const fn (*anyopaque, ChangeCwdRequest) ChangeCwdError!void;
 pub const AccessFn = *const fn (*anyopaque, AccessRequest) AccessError!void;
+pub const InspectPathFn = *const fn (*anyopaque, InspectPathRequest) InspectPathError!InspectPathResult;
 
 pub const Port = struct {
     context: *anyopaque,
     get_cwd_fn: GetCwdFn,
     change_cwd_fn: ChangeCwdFn,
     access_fn: AccessFn,
+    inspect_path_fn: InspectPathFn,
 
     pub fn getCwd(self: Port, request: GetCwdRequest) GetCwdError!GetCwdResult {
         request.validate();
@@ -110,6 +153,13 @@ pub const Port = struct {
     pub fn access(self: Port, request: AccessRequest) AccessError!void {
         request.validate();
         try self.access_fn(self.context, request);
+    }
+
+    pub fn inspectPath(self: Port, request: InspectPathRequest) InspectPathError!InspectPathResult {
+        request.validate();
+        const result = try self.inspect_path_fn(self.context, request);
+        result.validate();
+        return result;
     }
 };
 
@@ -128,4 +178,12 @@ test "runtime fs requests validate borrowed path and buffer lifetimes" {
     try std.testing.expect(!options.read);
     try std.testing.expect(!options.write);
     try std.testing.expect(!options.execute);
+
+    const inspect_request = InspectPathRequest.init(".");
+    inspect_request.validate();
+    const inspect_options = inspect_request.toStdOptions();
+    try std.testing.expect(inspect_options.follow_symlinks);
+
+    const identity: PathIdentity = .{ .device = 1, .inode = 2 };
+    identity.validate();
 }

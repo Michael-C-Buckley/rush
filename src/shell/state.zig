@@ -16,6 +16,7 @@ pub const Scope = enum {
 
 pub const ShellOption = enum {
     allexport,
+    emacs,
     errexit,
     ignoreeof,
     monitor,
@@ -26,11 +27,13 @@ pub const ShellOption = enum {
     nounset,
     pipefail,
     verbose,
+    vi,
     xtrace,
 };
 
 pub const ShellOptions = struct {
     allexport: bool = false,
+    emacs: bool = true,
     errexit: bool = false,
     ignoreeof: bool = false,
     monitor: bool = false,
@@ -41,11 +44,16 @@ pub const ShellOptions = struct {
     nounset: bool = false,
     pipefail: bool = false,
     verbose: bool = false,
+    vi: bool = false,
     xtrace: bool = false,
 
     pub fn set(self: *ShellOptions, option: ShellOption, value: bool) void {
         switch (option) {
             .allexport => self.allexport = value,
+            .emacs => {
+                self.emacs = value;
+                if (value) self.vi = false;
+            },
             .errexit => self.errexit = value,
             .ignoreeof => self.ignoreeof = value,
             .monitor => self.monitor = value,
@@ -56,6 +64,10 @@ pub const ShellOptions = struct {
             .nounset => self.nounset = value,
             .pipefail => self.pipefail = value,
             .verbose => self.verbose = value,
+            .vi => {
+                self.vi = value;
+                self.emacs = !value;
+            },
             .xtrace => self.xtrace = value,
         }
     }
@@ -63,6 +75,7 @@ pub const ShellOptions = struct {
     pub fn enabled(self: ShellOptions, option: ShellOption) bool {
         return switch (option) {
             .allexport => self.allexport,
+            .emacs => self.emacs,
             .errexit => self.errexit,
             .ignoreeof => self.ignoreeof,
             .monitor => self.monitor,
@@ -73,6 +86,7 @@ pub const ShellOptions = struct {
             .nounset => self.nounset,
             .pipefail => self.pipefail,
             .verbose => self.verbose,
+            .vi => self.vi,
             .xtrace => self.xtrace,
         };
     }
@@ -93,10 +107,21 @@ pub const Variable = struct {
     readonly: bool = false,
 };
 
+pub const Alias = struct {
+    value: []const u8,
+};
+
+pub const Trap = struct {
+    action: []const u8,
+};
+
 pub const ShellState = struct {
     allocator: std.mem.Allocator,
     scope: Scope = .current_shell,
     variables: std.StringHashMapUnmanaged(Variable) = .empty,
+    functions: std.StringHashMapUnmanaged(void) = .empty,
+    aliases: std.StringHashMapUnmanaged(Alias) = .empty,
+    traps: std.StringHashMapUnmanaged(Trap) = .empty,
     positionals: std.ArrayList([]const u8) = .empty,
     options: ShellOptions = .{},
     logical_cwd: []const u8 = "",
@@ -114,6 +139,24 @@ pub const ShellState = struct {
             self.allocator.free(entry.value_ptr.value);
         }
         self.variables.deinit(self.allocator);
+
+        var functions = self.functions.iterator();
+        while (functions.next()) |entry| self.allocator.free(entry.key_ptr.*);
+        self.functions.deinit(self.allocator);
+
+        var aliases = self.aliases.iterator();
+        while (aliases.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.value);
+        }
+        self.aliases.deinit(self.allocator);
+
+        var traps = self.traps.iterator();
+        while (traps.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.action);
+        }
+        self.traps.deinit(self.allocator);
 
         freePositionals(self.allocator, self.positionals.items);
         self.positionals.deinit(self.allocator);
@@ -138,6 +181,15 @@ pub const ShellState = struct {
                 .readonly = entry.value_ptr.readonly,
             });
         }
+
+        var functions = self.functions.iterator();
+        while (functions.next()) |entry| try cloned.putFunctionName(entry.key_ptr.*);
+
+        var aliases = self.aliases.iterator();
+        while (aliases.next()) |entry| try cloned.setAlias(entry.key_ptr.*, entry.value_ptr.value);
+
+        var traps = self.traps.iterator();
+        while (traps.next()) |entry| try cloned.setTrap(entry.key_ptr.*, entry.value_ptr.action);
 
         try cloned.replacePositionals(self.positionals.items);
         if (self.logical_cwd.len != 0) try cloned.setLogicalCwd(self.logical_cwd);
@@ -228,6 +280,115 @@ pub const ShellState = struct {
         self.validate();
     }
 
+    pub fn unsetVariable(self: *ShellState, name: []const u8) !void {
+        assertValidVariableName(name);
+        if (self.isVariableReadonly(name)) return error.ReadonlyVariable;
+
+        if (self.variables.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value.value);
+        }
+
+        self.validate();
+    }
+
+    pub fn putFunctionName(self: *ShellState, name: []const u8) !void {
+        assertValidVariableName(name);
+        if (self.functions.contains(name)) return;
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        try self.functions.put(self.allocator, owned_name, {});
+        self.validate();
+    }
+
+    pub fn unsetFunction(self: *ShellState, name: []const u8) void {
+        assertValidVariableName(name);
+        if (self.functions.fetchRemove(name)) |entry| self.allocator.free(entry.key);
+        self.validate();
+    }
+
+    pub fn getAlias(self: ShellState, name: []const u8) ?Alias {
+        assertValidAliasName(name);
+        return self.aliases.get(name);
+    }
+
+    pub fn setAlias(self: *ShellState, name: []const u8, value: []const u8) !void {
+        assertValidAliasName(name);
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+
+        const result = try self.aliases.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            self.allocator.free(result.value_ptr.value);
+            result.value_ptr.* = .{ .value = owned_value };
+        } else {
+            result.value_ptr.* = .{ .value = owned_value };
+        }
+
+        self.validate();
+    }
+
+    pub fn unsetAlias(self: *ShellState, name: []const u8) bool {
+        assertValidAliasName(name);
+        if (self.aliases.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value.value);
+            self.validate();
+            return true;
+        }
+        self.validate();
+        return false;
+    }
+
+    pub fn clearAliases(self: *ShellState) void {
+        var aliases = self.aliases.iterator();
+        while (aliases.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.value);
+        }
+        self.aliases.clearRetainingCapacity();
+        self.validate();
+    }
+
+    pub fn getTrap(self: ShellState, name: []const u8) ?Trap {
+        assertValidTrapName(name);
+        return self.traps.get(name);
+    }
+
+    pub fn setTrap(self: *ShellState, name: []const u8, action: []const u8) !void {
+        assertValidTrapName(name);
+
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_action = try self.allocator.dupe(u8, action);
+        errdefer self.allocator.free(owned_action);
+
+        const result = try self.traps.getOrPut(self.allocator, owned_name);
+        if (result.found_existing) {
+            self.allocator.free(owned_name);
+            self.allocator.free(result.value_ptr.action);
+            result.value_ptr.* = .{ .action = owned_action };
+        } else {
+            result.value_ptr.* = .{ .action = owned_action };
+        }
+
+        self.validate();
+    }
+
+    pub fn clearTrap(self: *ShellState, name: []const u8) void {
+        assertValidTrapName(name);
+        if (self.traps.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value.action);
+        }
+        self.validate();
+    }
+
     pub fn replacePositionals(self: *ShellState, args: []const []const u8) !void {
         var replacement: std.ArrayList([]const u8) = .empty;
         errdefer {
@@ -267,6 +428,12 @@ pub const ShellState = struct {
         while (variables.next()) |entry| {
             assertValidVariableName(entry.key_ptr.*);
         }
+        var functions = self.functions.iterator();
+        while (functions.next()) |entry| assertValidVariableName(entry.key_ptr.*);
+        var aliases = self.aliases.iterator();
+        while (aliases.next()) |entry| assertValidAliasName(entry.key_ptr.*);
+        var traps = self.traps.iterator();
+        while (traps.next()) |entry| assertValidTrapName(entry.key_ptr.*);
         if (self.logical_cwd.len != 0) assertValidLogicalCwd(self.logical_cwd);
     }
 };
@@ -282,6 +449,27 @@ pub fn assertValidVariableName(name: []const u8) void {
 pub fn assertValidLogicalCwd(cwd: []const u8) void {
     std.debug.assert(cwd.len != 0);
     std.debug.assert(cwd[0] == '/');
+}
+
+pub fn assertValidAliasName(name: []const u8) void {
+    std.debug.assert(name.len != 0);
+    for (name) |byte| {
+        std.debug.assert(std.ascii.isAlphabetic(byte) or std.ascii.isDigit(byte) or byte == '!' or byte == '%' or byte == ',' or byte == '-' or byte == '@' or byte == '_');
+    }
+}
+
+pub fn assertValidTrapName(name: []const u8) void {
+    std.debug.assert(isValidTrapName(name));
+}
+
+pub fn isValidTrapName(name: []const u8) bool {
+    return std.mem.eql(u8, name, "EXIT") or
+        std.mem.eql(u8, name, "HUP") or
+        std.mem.eql(u8, name, "INT") or
+        std.mem.eql(u8, name, "QUIT") or
+        std.mem.eql(u8, name, "TERM") or
+        std.mem.eql(u8, name, "USR1") or
+        std.mem.eql(u8, name, "USR2");
 }
 
 fn freePositionals(allocator: std.mem.Allocator, args: []const []const u8) void {
@@ -325,6 +513,7 @@ test "ShellState owns variables positionals cwd and clones for subshell isolatio
 test "ShellOptions toggles every modeled option deterministically" {
     const options = [_]ShellOption{
         .allexport,
+        .emacs,
         .errexit,
         .ignoreeof,
         .monitor,
@@ -335,12 +524,12 @@ test "ShellOptions toggles every modeled option deterministically" {
         .nounset,
         .pipefail,
         .verbose,
+        .vi,
         .xtrace,
     };
 
     var shell_options: ShellOptions = .{};
     for (options) |option| {
-        try std.testing.expect(!shell_options.enabled(option));
         shell_options.set(option, true);
         try std.testing.expect(shell_options.enabled(option));
         shell_options.set(option, false);

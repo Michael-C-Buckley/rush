@@ -34,6 +34,8 @@ pub const ShellState = state.ShellState;
 pub const ShellOption = state.ShellOption;
 pub const ShellOptions = state.ShellOptions;
 pub const StateDelta = delta.StateDelta;
+pub const Alias = state.Alias;
+pub const Trap = state.Trap;
 pub const Variable = state.Variable;
 pub const VariableAttributes = state.VariableAttributes;
 
