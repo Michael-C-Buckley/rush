@@ -30,5 +30,5 @@ pub const ExternalStdio = process.ExternalStdio;
 pub const PosixAdapter = posix.Adapter;
 
 pub fn posixPorts(adapter: *posix.Adapter) Ports {
-    return Ports.init(adapter.fdPort(), adapter.fsPort(), adapter.processPort());
+    return Ports.initWithSignal(adapter.fdPort(), adapter.fsPort(), adapter.processPort(), adapter.signalPort());
 }

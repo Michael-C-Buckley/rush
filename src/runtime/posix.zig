@@ -10,6 +10,7 @@ const builtin = @import("builtin");
 const fd = @import("fd.zig");
 const fs = @import("fs.zig");
 const process = @import("process.zig");
+const runtime_signal = @import("signal.zig");
 
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
 extern "c" fn tcsetpgrp(fd: std.c.fd_t, pgrp: std.c.pid_t) c_int;
@@ -54,6 +55,14 @@ pub const Adapter = struct {
             .run_fn = run,
             .continue_process_fn = continueProcess,
             .foreground_process_group_fn = foregroundProcessGroup,
+        };
+    }
+
+    pub fn signalPort(self: *Adapter) runtime_signal.Port {
+        return .{
+            .context = self,
+            .configure_fn = configureSignal,
+            .poll_fn = pollSignal,
         };
     }
 };
@@ -327,6 +336,41 @@ fn foregroundProcessGroup(context: *anyopaque, request: process.ForegroundProces
     try terminalSetProcessGroup(request.terminal, request.process_group);
     return .{ .previous_process_group = previous };
 }
+
+fn configureSignal(context: *anyopaque, request: runtime_signal.ConfigureRequest) runtime_signal.ConfigureError!void {
+    _ = adapterFromContext(context);
+    request.validate();
+    const posix_signal = posixSignalFromRuntimeNumber(request.signal) orelse return error.Unsupported;
+    const action: std.posix.Sigaction = .{
+        .handler = .{ .handler = switch (request.disposition) {
+            .default => std.posix.SIG.DFL,
+            .ignore => std.posix.SIG.IGN,
+            .caught => runtimeSignalHandler,
+        } },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    std.posix.sigaction(posix_signal, &action, null);
+}
+
+fn pollSignal(context: *anyopaque) runtime_signal.PollError!?runtime_signal.Event {
+    _ = adapterFromContext(context);
+    return runtime_signal.pollCaughtSignal();
+}
+
+fn runtimeSignalHandler(posix_signal: std.posix.SIG) callconv(.c) void {
+    runtime_signal.recordCaughtSignal(@intCast(@intFromEnum(posix_signal)));
+}
+
+fn posixSignalFromRuntimeNumber(number: runtime_signal.Number) ?std.posix.SIG {
+    runtime_signal.assertValidNumber(number);
+    inline for (supported_runtime_signals) |posix_signal| {
+        if (number == @as(runtime_signal.Number, @intCast(@intFromEnum(posix_signal)))) return posix_signal;
+    }
+    return null;
+}
+
+const supported_runtime_signals = [_]std.posix.SIG{ .HUP, .INT, .QUIT, .TERM, .USR1, .USR2 };
 
 fn terminalGetProcessGroup(terminal: fd.Descriptor) process.JobControlError!std.posix.pid_t {
     fd.assertValidDescriptor(terminal);
@@ -686,6 +730,31 @@ test "runtime posix adapter performs fd open duplicate close and pipe smoke oper
     const pipe_result = try fd_port.pipe(.{ .close_on_exec = true });
     try fd_port.close(.{ .descriptor = pipe_result.read });
     try fd_port.close(.{ .descriptor = pipe_result.write });
+}
+
+test "runtime posix adapter exposes signal configure and poll port" {
+    runtime_signal.resetProcessSignalStateForTesting();
+    defer runtime_signal.resetProcessSignalStateForTesting();
+
+    const action: std.posix.Sigaction = .{
+        .handler = .{ .handler = std.posix.SIG.DFL },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    var previous: std.posix.Sigaction = undefined;
+    std.posix.sigaction(.TERM, &action, &previous);
+    defer std.posix.sigaction(.TERM, &previous, null);
+
+    var adapter = Adapter.init(std.testing.io);
+    const signal_port = adapter.signalPort();
+    const term_number: runtime_signal.Number = @intCast(@intFromEnum(std.posix.SIG.TERM));
+    try signal_port.configure(.{ .signal = term_number, .disposition = .caught });
+
+    runtimeSignalHandler(.TERM);
+
+    const event = (try signal_port.poll()).?;
+    try std.testing.expectEqual(term_number, event.signal);
+    try std.testing.expectEqual(@as(?runtime_signal.Event, null), try signal_port.poll());
 }
 
 test "runtime posix adapter performs cwd and access smoke operations" {

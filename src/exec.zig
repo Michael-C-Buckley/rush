@@ -22,7 +22,6 @@ extern "c" fn pause() c_int;
 extern "c" fn snprintf(s: [*]u8, n: usize, format: [*:0]const u8, ...) c_int;
 
 var pending_trap_signal: std.atomic.Value(u8) = .init(0);
-var trap_signal_wake_fd: std.atomic.Value(std.posix.fd_t) = .init(-1);
 var test_term_signal_count: std.atomic.Value(u8) = .init(0);
 
 const supported_trap_signals = [_]std.posix.SIG{ .HUP, .INT, .QUIT, .TERM, .USR1, .USR2 };
@@ -7285,7 +7284,7 @@ pub const Executor = struct {
     }
 
     fn closeForkedPipelineStageFds(self: Executor, context: *const BuiltinPipelineContext, pipes: []const PipelinePipe, capture_stdout: PipelinePipe, capture_stderr: PipelinePipe) void {
-        trap_signal_wake_fd.store(-1, .release);
+        runtime.signal.disableWakeFdForForkedChild();
 
         var max_fd: std.posix.fd_t = 2;
         max_fd = maxFd(max_fd, context.stdin_file);
@@ -7315,7 +7314,7 @@ pub const Executor = struct {
     }
 
     fn closeForkedChildFds(self: Executor, io: std.Io) void {
-        trap_signal_wake_fd.store(-1, .release);
+        runtime.signal.disableWakeFdForForkedChild();
 
         var max_fd: std.posix.fd_t = 2;
         var open_fd_iter = self.open_fds.iterator();
@@ -10833,16 +10832,7 @@ fn restoreForegroundTerminal(terminal: ?ForegroundTerminal) void {
 
 fn trapSignalHandler(signal: std.posix.SIG) callconv(.c) void {
     pending_trap_signal.store(@intCast(@intFromEnum(signal)), .seq_cst);
-    const fd = trap_signal_wake_fd.load(.acquire);
-    if (fd != -1) _ = std.c.write(fd, "t", 1);
-}
-
-pub fn setTrapSignalWakeFd(fd: std.posix.fd_t) void {
-    trap_signal_wake_fd.store(fd, .release);
-}
-
-pub fn clearTrapSignalWakeFd(fd: std.posix.fd_t) void {
-    if (trap_signal_wake_fd.load(.acquire) == fd) trap_signal_wake_fd.store(-1, .release);
+    runtime.signal.wakeConfiguredFd();
 }
 
 fn testTermSignalHandler(signal: std.posix.SIG) callconv(.c) void {
@@ -19856,13 +19846,15 @@ test "executor restores trap signal handlers on clear and deinit" {
 test "trap signal handler wakes configured fd" {
     pending_trap_signal.store(0, .seq_cst);
     defer pending_trap_signal.store(0, .seq_cst);
+    runtime.signal.resetProcessSignalStateForTesting();
+    defer runtime.signal.resetProcessSignalStateForTesting();
 
     var pipe = try makePipelinePipe(std.testing.io);
     defer pipe.close(std.testing.io);
     const read_file = pipe.read.?;
     const write_file = pipe.write.?;
-    setTrapSignalWakeFd(write_file.handle);
-    defer clearTrapSignalWakeFd(write_file.handle);
+    runtime.signal.setWakeFd(write_file.handle);
+    defer runtime.signal.clearWakeFd(write_file.handle);
 
     trapSignalHandler(.TERM);
 

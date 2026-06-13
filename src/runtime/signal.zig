@@ -5,7 +5,14 @@
 
 const std = @import("std");
 
+const fd = @import("fd.zig");
+
 pub const Number = u8;
+
+const no_wake_fd: fd.Descriptor = -1;
+
+var pending_event: std.atomic.Value(Number) = .init(0);
+var wake_fd: std.atomic.Value(fd.Descriptor) = .init(no_wake_fd);
 
 pub const Disposition = enum {
     default,
@@ -64,6 +71,43 @@ pub fn assertValidNumber(number: Number) void {
     std.debug.assert(number != 0);
 }
 
+pub fn recordCaughtSignal(number: Number) void {
+    assertValidNumber(number);
+    pending_event.store(number, .seq_cst);
+    wakeConfiguredFd();
+}
+
+pub fn pollCaughtSignal() ?Event {
+    const raw = pending_event.load(.seq_cst);
+    if (raw == 0) return null;
+    if (pending_event.cmpxchgStrong(raw, 0, .seq_cst, .seq_cst) != null) return null;
+    return .{ .signal = raw };
+}
+
+pub fn wakeConfiguredFd() void {
+    const descriptor = wake_fd.load(.acquire);
+    if (descriptor != no_wake_fd) _ = std.c.write(descriptor, "t", 1);
+}
+
+pub fn setWakeFd(descriptor: fd.Descriptor) void {
+    fd.assertValidDescriptor(descriptor);
+    wake_fd.store(descriptor, .release);
+}
+
+pub fn clearWakeFd(descriptor: fd.Descriptor) void {
+    fd.assertValidDescriptor(descriptor);
+    if (wake_fd.load(.acquire) == descriptor) wake_fd.store(no_wake_fd, .release);
+}
+
+pub fn disableWakeFdForForkedChild() void {
+    wake_fd.store(no_wake_fd, .release);
+}
+
+pub fn resetProcessSignalStateForTesting() void {
+    pending_event.store(0, .seq_cst);
+    disableWakeFdForForkedChild();
+}
+
 test "runtime signal port validates numeric events without shell policy" {
     var fake: FakeSignalPort = .{};
     const port = fake.port();
@@ -76,6 +120,17 @@ test "runtime signal port validates numeric events without shell policy" {
     const event = (try port.poll()).?;
     try std.testing.expectEqual(@as(Number, 2), event.signal);
     try std.testing.expectEqual(@as(?Event, null), try port.poll());
+}
+
+test "runtime signal process state records caught signals" {
+    resetProcessSignalStateForTesting();
+    defer resetProcessSignalStateForTesting();
+
+    recordCaughtSignal(15);
+
+    const event = pollCaughtSignal() orelse return error.MissingSignalEvent;
+    try std.testing.expectEqual(@as(Number, 15), event.signal);
+    try std.testing.expectEqual(@as(?Event, null), pollCaughtSignal());
 }
 
 const FakeSignalPort = struct {

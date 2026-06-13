@@ -6288,8 +6288,8 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try interactive_shell.syncSemanticFromExecutor(io);
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
-    exec.setTrapSignalWakeFd(terminal.trapSignalWakeFd());
-    defer exec.clearTrapSignalWakeFd(terminal.trapSignalWakeFd());
+    runtime.signal.setWakeFd(terminal.trapSignalWakeFd());
+    defer runtime.signal.clearWakeFd(terminal.trapSignalWakeFd());
     try prompt_service.applyColorScheme(io, .unknown);
     try syncInteractiveTerminalSize(executor, terminal);
     if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);

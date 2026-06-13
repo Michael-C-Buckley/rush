@@ -210,12 +210,11 @@ edge until it has a narrower home.
   mutations go through `src/shell/state.zig` and POSIX waiting/signals through
   `src/runtime/*`. Blocker: interactive startup and hooks can still run
   arbitrary legacy Rush scripts.
-- `src/main.zig:6155`, `src/main.zig:6156`, `src/main.zig:6347`, and
-  `src/main.zig:6475` depend on `exec.setTrapSignalWakeFd`,
-  `exec.clearTrapSignalWakeFd`, `exec.stopped_jobs_exit_warning`, and signal
-  trap execution. Owner: `src/runtime/signal.zig` for wake-fd/signal adapter
-  state; shell trap state remains in `src/shell/state.zig`. Blocker: job control
-  and pending traps are still stored and executed by `exec.Executor`.
+- `src/main.zig:6347` and `src/main.zig:6475` depend on
+  `exec.stopped_jobs_exit_warning` and signal trap execution. Owner:
+  `src/runtime/signal.zig` for wake-fd/signal adapter state; shell trap state
+  remains in `src/shell/state.zig`. Blocker: job control and pending traps are
+  still stored and executed by `exec.Executor`.
 - `src/main.zig:6688`, `src/main.zig:6835`, `src/main.zig:7689`,
   `src/main.zig:7754`, `src/main.zig:7831`, and the many inline tests below
   `src/main.zig:7960` keep `exec.Executor` live as the old execution engine.
