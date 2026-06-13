@@ -6637,6 +6637,288 @@ fn runScriptWithExecutor(allocator: std.mem.Allocator, executor: *exec.Executor,
     };
 }
 
+const ExecutorComparisonCase = struct {
+    source_name: []const u8,
+    script: []const u8,
+    features: compat.Features = .{},
+    shell_options: exec.ShellOptions = .{},
+
+    fn validate(self: ExecutorComparisonCase) void {
+        std.debug.assert(self.source_name.len != 0);
+        // The current semantic script lowering path is intentionally a small
+        // comparison subset, not an arbitrary-script production executor.
+        std.debug.assert(self.script.len != 0);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.source_name, 0) == null);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.script, 0) == null);
+        std.debug.assert(!self.shell_options.monitor);
+        std.debug.assert(!self.shell_options.notify);
+        std.debug.assert(!self.shell_options.verbose);
+        std.debug.assert(!self.shell_options.xtrace);
+    }
+};
+
+const ExecutorComparisonOutput = struct {
+    allocator: std.mem.Allocator,
+    status: exec.ExitStatus,
+    stdout: []const u8,
+    stderr: []const u8,
+    control_flow: shell.ControlFlow = .normal,
+
+    fn init(allocator: std.mem.Allocator, status: exec.ExitStatus, stdout: []const u8, stderr: []const u8, control_flow: shell.ControlFlow) !ExecutorComparisonOutput {
+        control_flow.validate();
+        const owned_stdout = try allocator.dupe(u8, stdout);
+        errdefer allocator.free(owned_stdout);
+        const owned_stderr = try allocator.dupe(u8, stderr);
+        errdefer allocator.free(owned_stderr);
+
+        const result: ExecutorComparisonOutput = .{
+            .allocator = allocator,
+            .status = status,
+            .stdout = owned_stdout,
+            .stderr = owned_stderr,
+            .control_flow = control_flow,
+        };
+        result.validate();
+        return result;
+    }
+
+    fn deinit(self: *ExecutorComparisonOutput) void {
+        self.allocator.free(self.stdout);
+        self.allocator.free(self.stderr);
+        self.* = undefined;
+    }
+
+    fn validate(self: ExecutorComparisonOutput) void {
+        self.control_flow.validate();
+        std.debug.assert(std.mem.indexOfScalar(u8, self.stdout, 0) == null);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.stderr, 0) == null);
+    }
+};
+
+const SemanticComparisonExecution = union(enum) {
+    output: ExecutorComparisonOutput,
+    unsupported: []const u8,
+
+    fn deinit(self: *SemanticComparisonExecution, allocator: std.mem.Allocator) void {
+        switch (self.*) {
+            .output => |*output| output.deinit(),
+            .unsupported => |message| allocator.free(message),
+        }
+        self.* = undefined;
+    }
+};
+
+const ExecutorComparisonDifference = struct {
+    allocator: std.mem.Allocator,
+    message: []const u8,
+
+    fn deinit(self: *ExecutorComparisonDifference) void {
+        self.allocator.free(self.message);
+        self.* = undefined;
+    }
+};
+
+fn compareOldAndSemanticExecutors(allocator: std.mem.Allocator, io: std.Io, case: ExecutorComparisonCase) !?ExecutorComparisonDifference {
+    case.validate();
+
+    const reference_script = case.script;
+    const semantic_script = case.script;
+    std.debug.assert(reference_script.ptr == semantic_script.ptr);
+    std.debug.assert(std.mem.eql(u8, reference_script, semantic_script));
+
+    const reference_options: exec.ExecuteOptions = .{
+        .io = io,
+        .allow_external = false,
+        .features = case.features,
+        .external_stdio = .capture,
+        .interactive = false,
+        .foreground_terminal = false,
+        .arg_zero = "rush-compare-old",
+    };
+    std.debug.assert(!reference_options.allow_external);
+    std.debug.assert(reference_options.external_stdio == .capture);
+    std.debug.assert(!reference_options.interactive);
+
+    var reference_result = try runCommandStringWithEnvironment(allocator, io, reference_script, reference_options, null, &.{}, null, case.shell_options);
+    defer reference_result.deinit();
+    var reference = try ExecutorComparisonOutput.init(allocator, reference_result.status, reference_result.stdout, reference_result.stderr, .normal);
+    defer reference.deinit();
+
+    var semantic_execution = try runSemanticComparisonScript(allocator, io, semantic_script, case);
+    defer semantic_execution.deinit(allocator);
+
+    switch (semantic_execution) {
+        .unsupported => |message| return try formatComparisonDifference(allocator, case.source_name, "semantic_unsupported", "old executor produced a comparable result", message),
+        .output => |semantic| return compareExecutorOutputs(allocator, case.source_name, reference, semantic),
+    }
+}
+
+fn runSemanticComparisonScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8, case: ExecutorComparisonCase) !SemanticComparisonExecution {
+    case.validate();
+    std.debug.assert(std.mem.eql(u8, script, case.script));
+
+    var shell_state = shell.ShellState.init(allocator);
+    defer shell_state.deinit();
+    try initializeSemanticComparisonState(allocator, io, &shell_state, case.shell_options);
+
+    var evaluator = shell.eval.Evaluator.init(allocator);
+    var parser_resolver = shell.ParserTrapActionResolver.init(&evaluator);
+    parser_resolver.features = case.features;
+    var resolver = parser_resolver.resolver();
+    const eval_context = shell.EvalContext.forTarget(.current_shell);
+
+    var body = (try resolver.resolve(allocator, script, .TERM, eval_context, &shell_state)) orelse {
+        const message = try allocator.dupe(u8, "semantic parser lowering did not produce a comparison body");
+        return .{ .unsupported = message };
+    };
+    defer body.deinit();
+
+    if (semanticComparisonFailureMessage(body)) |message| {
+        return .{ .unsupported = try allocator.dupe(u8, message) };
+    }
+
+    var command_outcome = evaluateSemanticComparisonBody(&evaluator, &shell_state, eval_context, body) catch |err| switch (err) {
+        error.Unimplemented => {
+            const message = try std.fmt.allocPrint(allocator, "semantic evaluator returned Unimplemented for comparison subset script '{s}'", .{case.source_name});
+            return .{ .unsupported = message };
+        },
+        else => |e| return e,
+    };
+    defer command_outcome.deinit();
+
+    command_outcome.validateForContext(eval_context);
+    const output = try ExecutorComparisonOutput.init(allocator, command_outcome.status, command_outcome.stdout.items, command_outcome.stderr.items, command_outcome.control_flow);
+    return .{ .output = output };
+}
+
+fn initializeSemanticComparisonState(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, shell_options: exec.ShellOptions) !void {
+    shell_state.validate();
+    shell_state.options = semanticShellOptions(shell_options);
+    try shell_state.putVariable("IFS", " \t\n", .{});
+    try shell_state.putVariable("OPTIND", "1", .{});
+    try shell_state.putVariable("SHLVL", "1", .{ .exported = true });
+
+    var ppid_buffer: [32]u8 = undefined;
+    const ppid = try std.fmt.bufPrint(&ppid_buffer, "{d}", .{std.posix.getppid()});
+    try shell_state.putVariable("PPID", ppid, .{});
+
+    const cwd = try std.process.currentPathAlloc(io, allocator);
+    defer allocator.free(cwd);
+    try shell_state.putVariable("PWD", cwd, .{ .exported = true });
+    try shell_state.setLogicalCwd(cwd);
+    shell_state.validate();
+}
+
+fn semanticShellOptions(options: exec.ShellOptions) shell.ShellOptions {
+    return .{
+        .allexport = options.allexport,
+        .emacs = options.emacs,
+        .errexit = options.errexit,
+        .ignoreeof = options.ignoreeof,
+        .monitor = options.monitor,
+        .noclobber = options.noclobber,
+        .noexec = options.noexec,
+        .noglob = options.noglob,
+        .notify = options.notify,
+        .nounset = options.nounset,
+        .pipefail = options.pipefail,
+        .verbose = options.verbose,
+        .vi = options.vi,
+        .xtrace = options.xtrace,
+    };
+}
+
+fn semanticComparisonFailureMessage(body: shell.TrapActionBody) ?[]const u8 {
+    body.validate();
+    return switch (body) {
+        .failure => |failure| failure.message,
+        .owned => |owned| switch (owned.body) {
+            .failure => |failure| failure.message,
+            .simple, .compound, .pipeline => null,
+        },
+        .simple, .compound, .pipeline => null,
+    };
+}
+
+fn evaluateSemanticComparisonBody(evaluator: *shell.eval.Evaluator, shell_state: *shell.ShellState, eval_context: shell.EvalContext, body: shell.TrapActionBody) shell.eval.EvalError!shell.CommandOutcome {
+    body.validate();
+    eval_context.validate();
+    return switch (body) {
+        .simple => |plan| shell.eval.evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
+        .compound => |plan| shell.eval.evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
+        .pipeline => |plan| shell.eval.evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+        .owned => |owned| switch (owned.body) {
+            .simple => |plan| shell.eval.evaluatePlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
+            .compound => |plan| shell.eval.evaluateCompoundPlan(evaluator, shell_state, eval_context.withTarget(plan.target), plan),
+            .pipeline => |plan| shell.eval.evaluatePipelinePlan(evaluator, shell_state, eval_context, plan),
+            .failure => error.Unimplemented,
+        },
+        .failure => error.Unimplemented,
+    };
+}
+
+fn compareExecutorOutputs(allocator: std.mem.Allocator, source_name: []const u8, reference: ExecutorComparisonOutput, semantic: ExecutorComparisonOutput) !?ExecutorComparisonDifference {
+    reference.validate();
+    semantic.validate();
+
+    if (reference.status != semantic.status) {
+        const old_status = try std.fmt.allocPrint(allocator, "{d}", .{reference.status});
+        defer allocator.free(old_status);
+        const semantic_status = try std.fmt.allocPrint(allocator, "{d}", .{semantic.status});
+        defer allocator.free(semantic_status);
+        return try formatComparisonDifference(allocator, source_name, "status", old_status, semantic_status);
+    }
+    if (!std.mem.eql(u8, reference.stdout, semantic.stdout)) return try formatComparisonDifference(allocator, source_name, "stdout", reference.stdout, semantic.stdout);
+    if (!std.mem.eql(u8, reference.stderr, semantic.stderr)) return try formatComparisonDifference(allocator, source_name, "stderr", reference.stderr, semantic.stderr);
+    if (!std.meta.eql(reference.control_flow, semantic.control_flow)) {
+        const old_control = try controlFlowComparisonText(allocator, reference.control_flow);
+        defer allocator.free(old_control);
+        const semantic_control = try controlFlowComparisonText(allocator, semantic.control_flow);
+        defer allocator.free(semantic_control);
+        return try formatComparisonDifference(allocator, source_name, "control_flow", old_control, semantic_control);
+    }
+    return null;
+}
+
+fn controlFlowComparisonText(allocator: std.mem.Allocator, control_flow: shell.ControlFlow) ![]const u8 {
+    control_flow.validate();
+    return switch (control_flow) {
+        .normal => allocator.dupe(u8, "normal"),
+        .exit => |status| std.fmt.allocPrint(allocator, "exit({d})", .{status}),
+        .return_from_scope => |request| std.fmt.allocPrint(allocator, "return({s}, {d})", .{ @tagName(request.scope), request.status }),
+        .break_loop => |depth| std.fmt.allocPrint(allocator, "break({d})", .{depth}),
+        .continue_loop => |depth| std.fmt.allocPrint(allocator, "continue({d})", .{depth}),
+        .fatal => |status| std.fmt.allocPrint(allocator, "fatal({d})", .{status}),
+    };
+}
+
+fn formatComparisonDifference(allocator: std.mem.Allocator, source_name: []const u8, field: []const u8, old_value: []const u8, semantic_value: []const u8) !ExecutorComparisonDifference {
+    std.debug.assert(source_name.len != 0);
+    std.debug.assert(field.len != 0);
+    const message = try std.fmt.allocPrint(allocator,
+        \\executor comparison mismatch for {s}: {s} differs
+        \\old executor:
+        \\---
+        \\{s}
+        \\---
+        \\semantic executor:
+        \\---
+        \\{s}
+        \\---
+        \\
+    , .{ source_name, field, old_value, semantic_value });
+    return .{ .allocator = allocator, .message = message };
+}
+
+fn expectOldNewExecutorComparison(case: ExecutorComparisonCase) !void {
+    if (try compareOldAndSemanticExecutors(std.testing.allocator, std.testing.io, case)) |difference| {
+        var mutable_difference = difference;
+        defer mutable_difference.deinit();
+        std.debug.print("{s}", .{mutable_difference.message});
+        return error.ExecutorComparisonMismatch;
+    }
+}
+
 fn scriptDiagnosticsResult(allocator: std.mem.Allocator, executor: *exec.Executor, script: []const u8, options: exec.ExecuteOptions) !exec.CommandResult {
     const aliased = try executor.expandAliasesForScriptWithFeatures(script, options.features);
     defer allocator.free(aliased);
@@ -10390,6 +10672,45 @@ test "runScript executes newline-continued pipeline" {
     try std.testing.expectEqual(@as(exec.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("before\nafter\n", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "old new executor compare harness matches simple builtin script" {
+    try expectOldNewExecutorComparison(.{
+        .source_name = "compare/simple-builtin",
+        .script = "printf 'semantic %s\n' shell",
+    });
+}
+
+test "old new executor compare harness matches assignment and builtin state" {
+    try expectOldNewExecutorComparison(.{
+        .source_name = "compare/assignment-builtin-state",
+        .script =
+        \\export VALUE=new
+        \\export -p
+        ,
+    });
+}
+
+test "old new executor compare harness matches deterministic builtin pipeline" {
+    try expectOldNewExecutorComparison(.{
+        .source_name = "compare/builtin-pipeline",
+        .script = "printf 'pipe-value\n' | read PIPE_VALUE",
+    });
+}
+
+test "old new executor compare harness reports source and differing field" {
+    var reference = try ExecutorComparisonOutput.init(std.testing.allocator, 0, "old\n", "", .normal);
+    defer reference.deinit();
+    var semantic = try ExecutorComparisonOutput.init(std.testing.allocator, 0, "semantic\n", "", .normal);
+    defer semantic.deinit();
+
+    var difference = (try compareExecutorOutputs(std.testing.allocator, "compare/synthetic-mismatch", reference, semantic)) orelse return error.ExpectedComparisonMismatch;
+    defer difference.deinit();
+
+    try std.testing.expect(std.mem.indexOf(u8, difference.message, "compare/synthetic-mismatch") != null);
+    try std.testing.expect(std.mem.indexOf(u8, difference.message, "stdout differs") != null);
+    try std.testing.expect(std.mem.indexOf(u8, difference.message, "old executor") != null);
+    try std.testing.expect(std.mem.indexOf(u8, difference.message, "semantic executor") != null);
 }
 
 test "runScript reports misplaced reserved words before execution" {
