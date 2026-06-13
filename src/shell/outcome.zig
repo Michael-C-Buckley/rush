@@ -69,6 +69,8 @@ pub const ControlFlow = union(enum) {
 pub const CommandOutcome = struct {
     allocator: std.mem.Allocator,
     status: ExitStatus,
+    stdout: std.ArrayList(u8) = .empty,
+    stderr: std.ArrayList(u8) = .empty,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     state_delta: delta.StateDelta,
     control_flow: ControlFlow = .normal,
@@ -95,12 +97,22 @@ pub const CommandOutcome = struct {
     }
 
     pub fn deinit(self: *CommandOutcome) void {
+        self.stdout.deinit(self.allocator);
+        self.stderr.deinit(self.allocator);
         for (self.diagnostics.items) |diagnostic| {
             self.allocator.free(diagnostic.message);
         }
         self.diagnostics.deinit(self.allocator);
         self.state_delta.deinit();
         self.* = undefined;
+    }
+
+    pub fn appendStdout(self: *CommandOutcome, bytes: []const u8) !void {
+        try self.stdout.appendSlice(self.allocator, bytes);
+    }
+
+    pub fn appendStderr(self: *CommandOutcome, bytes: []const u8) !void {
+        try self.stderr.appendSlice(self.allocator, bytes);
     }
 
     pub fn addDiagnostic(self: *CommandOutcome, message: []const u8) !void {
@@ -185,8 +197,12 @@ test "CommandOutcome owns diagnostics and commits or discards its delta" {
     defer outcome.deinit();
 
     try outcome.addDiagnostic("note");
+    try outcome.appendStdout("out");
+    try outcome.appendStderr("err");
     try std.testing.expectEqual(@as(usize, 1), outcome.diagnostics.items.len);
     try std.testing.expectEqualStrings("note", outcome.diagnostics.items[0].message);
+    try std.testing.expectEqualStrings("out", outcome.stdout.items);
+    try std.testing.expectEqualStrings("err", outcome.stderr.items);
 
     try outcome.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqual(delta.DeltaState.consumed, outcome.state_delta.state);

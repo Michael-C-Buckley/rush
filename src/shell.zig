@@ -16,6 +16,8 @@ pub const redirection_plan = @import("shell/redirection_plan.zig");
 pub const state = @import("shell/state.zig");
 
 pub const Builtin = builtin.Builtin;
+pub const BuiltinKind = builtin.BuiltinKind;
+pub const BuiltinSemanticClass = builtin.BuiltinSemanticClass;
 pub const CommandOutcome = outcome.CommandOutcome;
 pub const CommandPlan = command_plan.CommandPlan;
 pub const ControlFlow = outcome.ControlFlow;

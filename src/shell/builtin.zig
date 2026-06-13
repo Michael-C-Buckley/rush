@@ -10,12 +10,36 @@ pub const BuiltinKind = enum {
     special,
 };
 
+pub const BuiltinSemanticClass = enum {
+    unsupported,
+    no_op,
+    status_constant,
+    output,
+    predicate,
+
+    pub fn isNonMutating(self: BuiltinSemanticClass) bool {
+        return switch (self) {
+            .no_op,
+            .status_constant,
+            .output,
+            .predicate,
+            => true,
+            .unsupported => false,
+        };
+    }
+};
+
 pub const Builtin = struct {
     name: []const u8,
     kind: BuiltinKind = .regular,
+    semantic_class: BuiltinSemanticClass = .unsupported,
 
     pub fn init(name: []const u8, kind: BuiltinKind) Builtin {
-        const definition: Builtin = .{ .name = name, .kind = kind };
+        return initWithSemantics(name, kind, .unsupported);
+    }
+
+    pub fn initWithSemantics(name: []const u8, kind: BuiltinKind, semantic_class: BuiltinSemanticClass) Builtin {
+        const definition: Builtin = .{ .name = name, .kind = kind, .semantic_class = semantic_class };
         definition.validate();
         return definition;
     }
@@ -25,13 +49,25 @@ pub const Builtin = struct {
         return self.kind == .special;
     }
 
+    pub fn isSemanticallyNonMutating(self: Builtin) bool {
+        self.validate();
+        return self.semantic_class.isNonMutating();
+    }
+
     pub fn validate(self: Builtin) void {
         std.debug.assert(self.name.len != 0);
+        switch (self.semantic_class) {
+            .unsupported => {},
+            .no_op => std.debug.assert(std.mem.eql(u8, self.name, ":")),
+            .status_constant => std.debug.assert(std.mem.eql(u8, self.name, "true") or std.mem.eql(u8, self.name, "false")),
+            .output => std.debug.assert(std.mem.eql(u8, self.name, "echo") or std.mem.eql(u8, self.name, "printf")),
+            .predicate => std.debug.assert(std.mem.eql(u8, self.name, "test") or std.mem.eql(u8, self.name, "[")),
+        }
     }
 };
 
 pub const default_builtins = [_]Builtin{
-    Builtin.init(":", .special),
+    Builtin.initWithSemantics(":", .special, .no_op),
     Builtin.init(".", .special),
     Builtin.init("break", .special),
     Builtin.init("continue", .special),
@@ -47,7 +83,7 @@ pub const default_builtins = [_]Builtin{
     Builtin.init("trap", .special),
     Builtin.init("unset", .special),
 
-    Builtin.init("[", .regular),
+    Builtin.initWithSemantics("[", .regular, .predicate),
     Builtin.init("abbr", .regular),
     Builtin.init("alias", .regular),
     Builtin.init("bg", .regular),
@@ -55,10 +91,10 @@ pub const default_builtins = [_]Builtin{
     Builtin.init("color", .regular),
     Builtin.init("command", .regular),
     Builtin.init("complete", .regular),
-    Builtin.init("echo", .regular),
+    Builtin.initWithSemantics("echo", .regular, .output),
     Builtin.init("env", .regular),
     Builtin.init("event", .regular),
-    Builtin.init("false", .regular),
+    Builtin.initWithSemantics("false", .regular, .status_constant),
     Builtin.init("fc", .regular),
     Builtin.init("fg", .regular),
     Builtin.init("getopts", .regular),
@@ -67,13 +103,13 @@ pub const default_builtins = [_]Builtin{
     Builtin.init("jobs", .regular),
     Builtin.init("kill", .regular),
     Builtin.init("local", .regular),
-    Builtin.init("printf", .regular),
+    Builtin.initWithSemantics("printf", .regular, .output),
     Builtin.init("pwd", .regular),
     Builtin.init("read", .regular),
     Builtin.init("shopt", .regular),
     Builtin.init("source", .regular),
-    Builtin.init("test", .regular),
-    Builtin.init("true", .regular),
+    Builtin.initWithSemantics("test", .regular, .predicate),
+    Builtin.initWithSemantics("true", .regular, .status_constant),
     Builtin.init("type", .regular),
     Builtin.init("ulimit", .regular),
     Builtin.init("umask", .regular),
@@ -138,7 +174,14 @@ test "builtin registry classifies POSIX special builtins separately" {
 
     const regular = lookup("echo") orelse return error.TestExpectedEqual;
     try std.testing.expectEqual(BuiltinKind.regular, regular.kind);
+    try std.testing.expectEqual(BuiltinSemanticClass.output, regular.semantic_class);
+    try std.testing.expect(regular.isSemanticallyNonMutating());
     try std.testing.expect(!regular.isSpecial());
     try std.testing.expect(!isSpecialBuiltin("echo"));
+    try std.testing.expectEqual(BuiltinSemanticClass.no_op, (lookup(":") orelse return error.TestExpectedEqual).semantic_class);
+    try std.testing.expectEqual(BuiltinSemanticClass.status_constant, (lookup("true") orelse return error.TestExpectedEqual).semantic_class);
+    try std.testing.expectEqual(BuiltinSemanticClass.status_constant, (lookup("false") orelse return error.TestExpectedEqual).semantic_class);
+    try std.testing.expectEqual(BuiltinSemanticClass.predicate, (lookup("test") orelse return error.TestExpectedEqual).semantic_class);
+    try std.testing.expectEqual(BuiltinSemanticClass.predicate, (lookup("[") orelse return error.TestExpectedEqual).semantic_class);
     try std.testing.expectEqual(@as(?Builtin, null), lookup("definitely-not-a-builtin"));
 }
