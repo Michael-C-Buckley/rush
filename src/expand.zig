@@ -929,7 +929,10 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
             return error.ParameterExpansionFailed;
         },
         .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
-            const base = value orelse "";
+            const base = value orelse blk: {
+                if (options.nounset and !isNounsetExemptParameter(parsed.name)) return error.NounsetParameter;
+                break :blk "";
+            };
             var pattern = try expandPatternWord(allocator, parsed.word, options);
             defer pattern.deinit(allocator);
             return removePattern(allocator, base, pattern, parsed.operator, options.extglob);
@@ -5688,6 +5691,23 @@ test "parameter expansion supports pattern removal operators" {
     const extglob_on = try expandWordScalar(std.testing.allocator, "${USER#@(rush|bash)-}", .{ .env = test_env, .features = compat.Features.bash(), .extglob = true });
     defer std.testing.allocator.free(extglob_on);
     try std.testing.expectEqualStrings("user", extglob_on);
+}
+
+test "parameter pattern removal operators honor nounset" {
+    const cases = [_][]const u8{
+        "${MISSING%foo}",
+        "${MISSING%%foo}",
+        "${MISSING#foo}",
+        "${MISSING##foo}",
+        "\"${MISSING%foo}\"",
+    };
+    for (cases) |case| {
+        try std.testing.expectError(error.NounsetParameter, expandWord(std.testing.allocator, case, .{ .nounset = true }));
+    }
+
+    const unset_without_nounset = try expandWordScalar(std.testing.allocator, "${MISSING%foo}:${MISSING#foo}", .{});
+    defer std.testing.allocator.free(unset_without_nounset);
+    try std.testing.expectEqualStrings(":", unset_without_nounset);
 }
 
 test "glob matcher supports extglob operators when enabled" {
