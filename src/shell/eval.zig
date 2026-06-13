@@ -217,6 +217,79 @@ pub const ParserTrapActionResolver = struct {
     }
 };
 
+const ParserCommandSubstitutionResolver = struct {
+    owner: *ParserTrapActionResolver,
+    signal: state.TrapSignal,
+    expansion_context: *CommandSubstitutionExpansionContext,
+    local_functions: []const command_plan.FunctionDefinition = &.{},
+
+    fn commandSubstitutionResolver(self: *ParserCommandSubstitutionResolver) CommandSubstitutionResolver {
+        return .{ .context = self, .resolveFn = resolve };
+    }
+
+    fn validate(self: ParserCommandSubstitutionResolver) void {
+        self.owner.validate();
+        self.signal.validate();
+        self.expansion_context.shell_state.validate();
+        self.expansion_context.eval_context.validate();
+        std.debug.assert(self.expansion_context.shell_state.acceptsExecutionTarget(self.expansion_context.eval_context.target));
+        for (self.local_functions) |definition| definition.validate();
+    }
+
+    fn resolve(opaque_context: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) anyerror!?CommandSubstitutionBody {
+        std.debug.assert(opaque_context != null);
+        const self: *ParserCommandSubstitutionResolver = @ptrCast(@alignCast(opaque_context.?));
+        self.validate();
+
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        errdefer allocator.destroy(arena);
+        arena.* = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+
+        const arena_allocator = arena.allocator();
+        var lowerer: TrapActionLowerer = .{
+            .allocator = arena_allocator,
+            .owner = self.owner,
+            .shell_state = self.expansion_context.shell_state,
+            .eval_context = self.expansion_context.eval_context,
+            .signal = self.signal,
+            .local_functions = .empty,
+        };
+        try lowerer.local_functions.appendSlice(arena_allocator, self.local_functions);
+
+        const payload = try lowerer.lowerCommandSubstitution(script);
+        payload.validate();
+        return .{ .owned = OwnedCommandSubstitutionBody.init(allocator, arena, payload) };
+    }
+};
+
+const TrapActionExpansionCommandSubstitutions = struct {
+    resolver: ParserCommandSubstitutionResolver = undefined,
+    context: CommandSubstitutionExpansionContext = undefined,
+
+    fn init(self: *TrapActionExpansionCommandSubstitutions, lowerer: *TrapActionLowerer, expansion_eval_context: context.EvalContext) void {
+        lowerer.shell_state.validate();
+        expansion_eval_context.validate();
+        self.resolver = .{
+            .owner = lowerer.owner,
+            .signal = lowerer.signal,
+            .expansion_context = undefined,
+            .local_functions = lowerer.local_functions.items,
+        };
+        self.context = CommandSubstitutionExpansionContext.init(lowerer.owner.evaluator, lowerer.shell_state, expansion_eval_context, self.resolver.commandSubstitutionResolver());
+        self.resolver.expansion_context = &self.context;
+    }
+
+    fn deinit(self: *TrapActionExpansionCommandSubstitutions) void {
+        self.context.deinit();
+        self.* = undefined;
+    }
+
+    fn commandSubstitution(self: *TrapActionExpansionCommandSubstitutions) expand.CommandSubstitution {
+        return self.context.commandSubstitution();
+    }
+};
+
 const TrapActionLowerer = struct {
     allocator: std.mem.Allocator,
     owner: *ParserTrapActionResolver,
@@ -234,6 +307,21 @@ const TrapActionLowerer = struct {
 
         const program = try ir.lowerSimpleCommands(self.allocator, parsed);
         return self.lowerProgram(program, self.eval_context.target, true);
+    }
+
+    fn lowerCommandSubstitution(self: *TrapActionLowerer, script: []const u8) !CommandSubstitutionBodyPayload {
+        const parsed = try parser.parse(self.allocator, script, .{ .features = self.owner.features.withStrictDiagnostics() });
+        if (parsed.diagnostics.len != 0) return self.commandSubstitutionDiagnosticFailure(parsed.diagnostics[0]);
+        if (parsed.incomplete) return error.Unimplemented;
+
+        const program = try ir.lowerSimpleCommands(self.allocator, parsed);
+        const payload = try self.lowerProgram(program, .subshell, true);
+        return switch (payload) {
+            .simple => |plan| .{ .simple = plan },
+            .compound => |plan| .{ .compound = plan },
+            .pipeline => |plan| .{ .pipeline = plan },
+            .failure => error.Unimplemented,
+        };
     }
 
     fn lowerProgram(self: *TrapActionLowerer, program: ir.Program, target: context.ExecutionTarget, trap_body: bool) !TrapActionBodyPayload {
@@ -512,12 +600,17 @@ const TrapActionLowerer = struct {
         for (command.argv, 0..) |word, index| argv_words[index] = word.raw;
 
         const expansion_target = self.expansionTarget(target);
+        const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var last_background_pid_buffer: [32]u8 = undefined;
+        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        command_substitutions.init(self, expansion_eval_context);
+        defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
-            .eval_context = self.eval_context.withTarget(expansion_target),
+            .eval_context = expansion_eval_context,
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
+            .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
@@ -654,12 +747,17 @@ const TrapActionLowerer = struct {
 
     fn expandScalar(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
+        const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var last_background_pid_buffer: [32]u8 = undefined;
+        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        command_substitutions.init(self, expansion_eval_context);
+        defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
-            .eval_context = self.eval_context.withTarget(expansion_target),
+            .eval_context = expansion_eval_context,
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
+            .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
@@ -672,12 +770,17 @@ const TrapActionLowerer = struct {
 
     fn expandFields(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) !expand.ExpansionResult {
         const expansion_target = self.expansionTarget(target);
+        const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var last_background_pid_buffer: [32]u8 = undefined;
+        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        command_substitutions.init(self, expansion_eval_context);
+        defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
-            .eval_context = self.eval_context.withTarget(expansion_target),
+            .eval_context = expansion_eval_context,
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
+            .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
@@ -690,12 +793,17 @@ const TrapActionLowerer = struct {
 
     fn expandHereDoc(self: *TrapActionLowerer, text: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
+        const expansion_eval_context = self.eval_context.withTarget(expansion_target);
         var last_background_pid_buffer: [32]u8 = undefined;
+        var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
+        command_substitutions.init(self, expansion_eval_context);
+        defer command_substitutions.deinit();
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
-            .eval_context = self.eval_context.withTarget(expansion_target),
+            .eval_context = expansion_eval_context,
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
+            .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
@@ -718,6 +826,13 @@ const TrapActionLowerer = struct {
 
     fn parserDiagnosticFailure(self: *TrapActionLowerer, diagnostic: parser.Diagnostic) !TrapActionBodyPayload {
         return self.failure(.parse_error, "trap {s}: parse error: {s}", .{ self.signal.name(), diagnostic.message });
+    }
+
+    fn commandSubstitutionDiagnosticFailure(self: *TrapActionLowerer, diagnostic: parser.Diagnostic) !CommandSubstitutionBodyPayload {
+        const message = try std.fmt.allocPrint(self.allocator, "trap {s}: command substitution parse error: {s}", .{ self.signal.name(), diagnostic.message });
+        const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{message} }, .target = .subshell });
+        plan.validate();
+        return .{ .simple = plan };
     }
 
     fn failure(self: *TrapActionLowerer, kind: TrapActionFailureKind, comptime fmt: []const u8, args: anytype) !TrapActionBodyPayload {
@@ -791,12 +906,12 @@ pub const RuntimeSignalObservation = struct {
     }
 };
 
-pub const CommandSubstitutionBody = union(enum) {
+pub const CommandSubstitutionBodyPayload = union(enum) {
     simple: command_plan.CommandPlan,
     compound: command_plan.CompoundCommandPlan,
     pipeline: pipeline_plan.PipelinePlan,
 
-    pub fn validate(self: CommandSubstitutionBody) void {
+    fn validate(self: CommandSubstitutionBodyPayload) void {
         switch (self) {
             .simple => |plan| {
                 plan.validate();
@@ -810,6 +925,54 @@ pub const CommandSubstitutionBody = union(enum) {
                 plan.validate();
                 for (plan.stages, 0..) |_, index| std.debug.assert(plan.stageTarget(index) != .current_shell);
             },
+        }
+    }
+};
+
+pub const OwnedCommandSubstitutionBody = struct {
+    allocator: std.mem.Allocator,
+    arena: *std.heap.ArenaAllocator,
+    body: CommandSubstitutionBodyPayload,
+
+    fn init(allocator: std.mem.Allocator, arena: *std.heap.ArenaAllocator, body: CommandSubstitutionBodyPayload) OwnedCommandSubstitutionBody {
+        body.validate();
+        const owned: OwnedCommandSubstitutionBody = .{ .allocator = allocator, .arena = arena, .body = body };
+        owned.validate();
+        return owned;
+    }
+
+    fn deinit(self: *OwnedCommandSubstitutionBody) void {
+        self.validate();
+        self.arena.deinit();
+        self.allocator.destroy(self.arena);
+        self.* = undefined;
+    }
+
+    fn validate(self: OwnedCommandSubstitutionBody) void {
+        self.body.validate();
+    }
+};
+
+pub const CommandSubstitutionBody = union(enum) {
+    simple: command_plan.CommandPlan,
+    compound: command_plan.CompoundCommandPlan,
+    pipeline: pipeline_plan.PipelinePlan,
+    owned: OwnedCommandSubstitutionBody,
+
+    pub fn deinit(self: *CommandSubstitutionBody) void {
+        switch (self.*) {
+            .owned => |*owned| owned.deinit(),
+            .simple, .compound, .pipeline => {},
+        }
+        self.* = undefined;
+    }
+
+    pub fn validate(self: CommandSubstitutionBody) void {
+        switch (self) {
+            .simple => |plan| (CommandSubstitutionBodyPayload{ .simple = plan }).validate(),
+            .compound => |plan| (CommandSubstitutionBodyPayload{ .compound = plan }).validate(),
+            .pipeline => |plan| (CommandSubstitutionBodyPayload{ .pipeline = plan }).validate(),
+            .owned => |owned| owned.validate(),
         }
     }
 };
@@ -1355,6 +1518,19 @@ fn evaluateCommandSubstitutionBody(evaluator: *Evaluator, substitution_state: *s
         .simple => |plan| evaluatePlan(evaluator, substitution_state, substitution_context.withTarget(plan.target), plan),
         .compound => |plan| evaluateCompoundPlan(evaluator, substitution_state, substitution_context.withTarget(plan.target), plan),
         .pipeline => |plan| evaluatePipelinePlan(evaluator, substitution_state, substitution_context, plan),
+        .owned => |owned| evaluateCommandSubstitutionBodyPayload(evaluator, substitution_state, substitution_context, owned.body),
+    };
+}
+
+fn evaluateCommandSubstitutionBodyPayload(evaluator: *Evaluator, substitution_state: *state.ShellState, substitution_context: context.EvalContext, body: CommandSubstitutionBodyPayload) EvalError!outcome.CommandOutcome {
+    substitution_state.validate();
+    substitution_context.validate();
+    assertCommandSubstitutionContext(substitution_context);
+    body.validate();
+    return switch (body) {
+        .simple => |plan| evaluatePlan(evaluator, substitution_state, substitution_context.withTarget(plan.target), plan),
+        .compound => |plan| evaluateCompoundPlan(evaluator, substitution_state, substitution_context.withTarget(plan.target), plan),
+        .pipeline => |plan| evaluatePipelinePlan(evaluator, substitution_state, substitution_context, plan),
     };
 }
 
@@ -1440,7 +1616,8 @@ fn runSemanticCommandSubstitution(opaque_context: ?*anyopaque, allocator: std.me
         std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
     }
 
-    const body = (try expansion_context.resolver.resolve(allocator, script)) orelse return error.Unimplemented;
+    var body = (try expansion_context.resolver.resolve(allocator, script)) orelse return error.Unimplemented;
+    defer body.deinit();
     var result = try evaluateCommandSubstitutionInState(expansion_context.evaluator, &substitution_state, substitution_context, body);
     defer result.deinit();
 
@@ -6180,6 +6357,46 @@ test "semantic parser trap resolver lowers arbitrary simple actions at delivery 
     try std.testing.expectEqualStrings("ok", shell_state.getVariable("TRAP_MUTATED").?.value);
     try std.testing.expectEqual(@as(state.ExitStatus, 23), shell_state.last_status);
     try std.testing.expectEqual(@as(usize, 0), shell_state.pending_traps.items.len);
+}
+
+test "semantic parser trap resolver expands nested command substitutions in action words" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+
+    shell_state.last_status = 24;
+    try shell_state.setTrapForSignal(.TERM, "echo outer-$(printf \"%s\" \"$(printf inner)\")");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), parser_resolver.resolver())).?;
+    defer trap_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 24), trap_outcome.status);
+    try std.testing.expectEqualStrings("outer-inner\n", trap_outcome.stdout.items);
+
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(state.ExitStatus, 24), shell_state.last_status);
+}
+
+test "semantic parser trap command substitutions isolate body mutations from parent trap state" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+    var parser_resolver = ParserTrapActionResolver.init(&evaluator);
+
+    shell_state.last_status = 25;
+    try shell_state.setTrapForSignal(.TERM, "echo \"$(echo ${MUTATED_IN_SUB:=inner})\"; TRAP_MUTATED=ok");
+    try shell_state.appendPendingTrap(.TERM);
+
+    var trap_outcome = (try executePendingTraps(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), parser_resolver.resolver())).?;
+    defer trap_outcome.deinit();
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 25), trap_outcome.status);
+    try std.testing.expectEqualStrings("inner\n", trap_outcome.stdout.items);
+
+    try trap_outcome.commitDelta(&shell_state, .current_shell);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("MUTATED_IN_SUB"));
+    try std.testing.expectEqualStrings("ok", shell_state.getVariable("TRAP_MUTATED").?.value);
+    try std.testing.expectEqual(@as(state.ExitStatus, 25), shell_state.last_status);
 }
 
 test "semantic parser trap resolver lowers compound pipeline and and-or actions" {
