@@ -1,8 +1,7 @@
 //! Semantic evaluation entry point for the redesigned shell core.
 //!
 //! Evaluation will consume side-effect-free plans, call runtime ports for host
-//! effects when needed, and return `CommandOutcome` data. The old executor stays
-//! the behavioral reference while this path grows slice by slice.
+//! effects when needed, and return `CommandOutcome` data.
 
 const std = @import("std");
 const assignment_runtime = @import("assignment.zig");

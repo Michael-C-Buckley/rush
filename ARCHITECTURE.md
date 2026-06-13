@@ -7,9 +7,8 @@ Rush is a shell aiming for Bash compatibility with better UX: Bash syntax with F
 - Start at the POSIX shell layer, then add Bash compatibility incrementally.
 - Design the parser for both execution and interactive tooling, especially completions and syntax highlighting.
 - Design the interpreter so Bash-specific behavior can be added later without rewriting the POSIX core.
-- Grow the shell execution redesign beside the existing executor. The old
-  executor remains the behavioral reference until the new executor proves each
-  slice of behavior.
+- Keep production shell execution centered on the semantic shell core and shrink
+  any remaining legacy executor dependencies as semantic coverage expands.
 
 ## Shell execution redesign contract
 
@@ -147,9 +146,9 @@ The redesign should make these checks natural to express:
 - Diagnostics for ordinary shell errors are reproducible values in
   `CommandOutcome`; assertion failures are not part of the shell language
   surface and should only arise from invalid internal states.
-- Old executor differential tests can compare behavior slice by slice while the
-  new executor grows beside it, without requiring parser, IR, expansion,
-  completion, UI, or old executor movement.
+- Production entry-point tests should exercise the semantic shell core through
+  parser/IR lowering and runtime ports without requiring parser, IR, expansion,
+  completion, or UI movement.
 
 ## Parser
 

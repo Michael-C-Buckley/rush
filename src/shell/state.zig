@@ -1,8 +1,7 @@
 //! Authoritative mutable model for the redesigned semantic shell core.
 //!
-//! The old executor still owns behavior today. This module establishes the
-//! owned state vocabulary that later semantic tasks will mutate through
-//! explicit `StateDelta` commit points.
+//! This module owns the shell state vocabulary mutated through explicit
+//! `StateDelta` commit points.
 
 const std = @import("std");
 const command_plan = @import("command_plan.zig");
