@@ -11,6 +11,7 @@ const command_plan = @import("command_plan.zig");
 const consequence = @import("consequence.zig");
 const context = @import("context.zig");
 const delta = @import("delta.zig");
+const expand = @import("../expand.zig");
 const outcome = @import("outcome.zig");
 const pipeline_plan = @import("pipeline_plan.zig");
 const redirection_plan = @import("redirection_plan.zig");
@@ -48,6 +49,118 @@ pub const Evaluator = struct {
 
     pub fn initWithRuntimePorts(allocator: std.mem.Allocator, ports: runtime.Ports) Evaluator {
         return .{ .allocator = allocator, .fd_port = ports.fd, .fs_port = ports.fs, .process_port = ports.process };
+    }
+};
+
+pub const CommandSubstitutionBody = union(enum) {
+    simple: command_plan.CommandPlan,
+    compound: command_plan.CompoundCommandPlan,
+    pipeline: pipeline_plan.PipelinePlan,
+
+    pub fn validate(self: CommandSubstitutionBody) void {
+        switch (self) {
+            .simple => |plan| {
+                plan.validate();
+                std.debug.assert(plan.target != .current_shell);
+            },
+            .compound => |plan| {
+                plan.validate();
+                std.debug.assert(plan.target != .current_shell);
+            },
+            .pipeline => |plan| {
+                plan.validate();
+                for (plan.stages, 0..) |_, index| std.debug.assert(plan.stageTarget(index) != .current_shell);
+            },
+        }
+    }
+};
+
+pub const CommandSubstitutionResult = struct {
+    allocator: std.mem.Allocator,
+    status: outcome.ExitStatus,
+    control_flow: outcome.ControlFlow = .normal,
+    output: std.ArrayList(u8) = .empty,
+    stderr: std.ArrayList(u8) = .empty,
+    diagnostics: std.ArrayList(outcome.Diagnostic) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator, status: outcome.ExitStatus) CommandSubstitutionResult {
+        const result: CommandSubstitutionResult = .{ .allocator = allocator, .status = status };
+        result.validate();
+        return result;
+    }
+
+    pub fn deinit(self: *CommandSubstitutionResult) void {
+        self.output.deinit(self.allocator);
+        self.stderr.deinit(self.allocator);
+        for (self.diagnostics.items) |diagnostic| self.allocator.free(diagnostic.message);
+        self.diagnostics.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn validate(self: CommandSubstitutionResult) void {
+        self.control_flow.validate();
+        std.debug.assert(self.control_flow == .normal);
+        if (self.output.items.len != 0) std.debug.assert(self.output.items[self.output.items.len - 1] != '\n');
+    }
+};
+
+pub const CommandSubstitutionResolver = struct {
+    context: ?*anyopaque = null,
+    resolveFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8) anyerror!?CommandSubstitutionBody = null,
+
+    pub fn resolve(self: CommandSubstitutionResolver, allocator: std.mem.Allocator, script: []const u8) !?CommandSubstitutionBody {
+        const resolve_fn = self.resolveFn orelse return null;
+        const body = try resolve_fn(self.context, allocator, script);
+        if (body) |resolved| resolved.validate();
+        return body;
+    }
+
+    pub fn validate(self: CommandSubstitutionResolver) void {
+        std.debug.assert(self.resolveFn != null);
+    }
+};
+
+pub const CommandSubstitutionExpansionContext = struct {
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    resolver: CommandSubstitutionResolver,
+    last_status: ?outcome.ExitStatus = null,
+    last_control_flow: outcome.ControlFlow = .normal,
+    max_depth_observed: u32 = 0,
+    stderr: std.ArrayList(u8) = .empty,
+    diagnostics: std.ArrayList(outcome.Diagnostic) = .empty,
+
+    pub fn init(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, resolver: CommandSubstitutionResolver) CommandSubstitutionExpansionContext {
+        shell_state.validate();
+        eval_context.validate();
+        resolver.validate();
+        return .{
+            .evaluator = evaluator,
+            .shell_state = shell_state,
+            .eval_context = eval_context,
+            .resolver = resolver,
+        };
+    }
+
+    pub fn deinit(self: *CommandSubstitutionExpansionContext) void {
+        self.stderr.deinit(self.evaluator.allocator);
+        for (self.diagnostics.items) |diagnostic| self.evaluator.allocator.free(diagnostic.message);
+        self.diagnostics.deinit(self.evaluator.allocator);
+        self.* = undefined;
+    }
+
+    pub fn commandSubstitution(self: *CommandSubstitutionExpansionContext) expand.CommandSubstitution {
+        self.validate();
+        return .{ .context = self, .runFn = runSemanticCommandSubstitution };
+    }
+
+    pub fn validate(self: CommandSubstitutionExpansionContext) void {
+        self.shell_state.validate();
+        self.eval_context.validate();
+        self.resolver.validate();
+        self.last_control_flow.validate();
+        if (self.last_status == null) std.debug.assert(self.last_control_flow == .normal);
     }
 };
 
@@ -245,6 +358,161 @@ pub fn evaluatePipelinePlan(evaluator: *Evaluator, shell_state: *state.ShellStat
     }
 
     return try finishPipelineOutcome(evaluator.allocator, shell_state.options, eval_context, plan, statuses, state_delta, &buffers);
+}
+
+pub fn evaluateCommandSubstitution(evaluator: *Evaluator, parent_state: *state.ShellState, parent_context: context.EvalContext, body: CommandSubstitutionBody) EvalError!CommandSubstitutionResult {
+    parent_state.validate();
+    parent_context.validate();
+    body.validate();
+    const substitution_context = parent_context.enterCommandSubstitution();
+    return evaluateCommandSubstitutionSnapshot(evaluator, parent_state, substitution_context, body);
+}
+
+fn evaluateCommandSubstitutionSnapshot(evaluator: *Evaluator, parent_state: *state.ShellState, substitution_context: context.EvalContext, body: CommandSubstitutionBody) EvalError!CommandSubstitutionResult {
+    parent_state.validate();
+    substitution_context.validate();
+    assertCommandSubstitutionContext(substitution_context);
+    body.validate();
+    const parent_fingerprint = shellStateMutationFingerprint(parent_state.*);
+    defer std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
+
+    var substitution_state = parent_state.snapshotForSubshell(evaluator.allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    defer substitution_state.deinit();
+
+    return evaluateCommandSubstitutionInState(evaluator, &substitution_state, substitution_context, body);
+}
+
+fn evaluateCommandSubstitutionInState(evaluator: *Evaluator, substitution_state: *state.ShellState, substitution_context: context.EvalContext, body: CommandSubstitutionBody) EvalError!CommandSubstitutionResult {
+    substitution_state.validate();
+    substitution_context.validate();
+    assertCommandSubstitutionContext(substitution_context);
+    std.debug.assert(substitution_state.acceptsExecutionTarget(.subshell));
+    body.validate();
+
+    var body_outcome = try evaluateCommandSubstitutionBody(evaluator, substitution_state, substitution_context, body);
+    defer body_outcome.deinit();
+
+    const visible_status = body_outcome.control_flow.status(body_outcome.status);
+    try applyCommandSubstitutionOutcome(substitution_state, &body_outcome);
+    const result = try commandSubstitutionResultFromOutcome(evaluator.allocator, visible_status, body_outcome);
+    result.validate();
+    return result;
+}
+
+fn evaluateCommandSubstitutionBody(evaluator: *Evaluator, substitution_state: *state.ShellState, substitution_context: context.EvalContext, body: CommandSubstitutionBody) EvalError!outcome.CommandOutcome {
+    substitution_state.validate();
+    substitution_context.validate();
+    assertCommandSubstitutionContext(substitution_context);
+    body.validate();
+    return switch (body) {
+        .simple => |plan| evaluatePlan(evaluator, substitution_state, substitution_context.withTarget(plan.target), plan),
+        .compound => |plan| evaluateCompoundPlan(evaluator, substitution_state, substitution_context.withTarget(plan.target), plan),
+        .pipeline => |plan| evaluatePipelinePlan(evaluator, substitution_state, substitution_context, plan),
+    };
+}
+
+fn applyCommandSubstitutionOutcome(substitution_state: *state.ShellState, command_outcome: *outcome.CommandOutcome) EvalError!void {
+    substitution_state.validate();
+    command_outcome.validate();
+    std.debug.assert(substitution_state.acceptsExecutionTarget(.subshell));
+    const target = command_outcome.state_delta.target;
+    std.debug.assert(target != .current_shell);
+    if (target.allowsShellStateCommit() and substitution_state.acceptsExecutionTarget(target)) {
+        command_outcome.commitDelta(substitution_state, target) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
+    } else {
+        std.debug.assert(target == .child_process);
+        command_outcome.discardDelta(target);
+        substitution_state.last_status = command_outcome.control_flow.status(command_outcome.status);
+    }
+    substitution_state.validate();
+}
+
+fn commandSubstitutionResultFromOutcome(allocator: std.mem.Allocator, visible_status: outcome.ExitStatus, command_outcome: outcome.CommandOutcome) EvalError!CommandSubstitutionResult {
+    command_outcome.validate();
+    var result = CommandSubstitutionResult.init(allocator, visible_status);
+    errdefer result.deinit();
+
+    const trimmed = trimCommandSubstitutionOutput(command_outcome.stdout.items);
+    try result.output.appendSlice(allocator, trimmed);
+    std.debug.assert(result.output.items.len == trimmed.len);
+    if (trimmed.len != 0) std.debug.assert(result.output.items.ptr != command_outcome.stdout.items.ptr);
+
+    try result.stderr.appendSlice(allocator, command_outcome.stderr.items);
+    for (command_outcome.diagnostics.items) |diagnostic| {
+        const owned_message = try allocator.dupe(u8, diagnostic.message);
+        errdefer allocator.free(owned_message);
+        try result.diagnostics.append(allocator, .{ .message = owned_message });
+    }
+    result.control_flow = .normal;
+    result.validate();
+    return result;
+}
+
+fn trimCommandSubstitutionOutput(output_bytes: []const u8) []const u8 {
+    var end = output_bytes.len;
+    while (end != 0 and output_bytes[end - 1] == '\n') end -= 1;
+    std.debug.assert(end <= output_bytes.len);
+    if (end != 0) std.debug.assert(output_bytes[end - 1] != '\n');
+    return output_bytes[0..end];
+}
+
+fn assertCommandSubstitutionContext(substitution_context: context.EvalContext) void {
+    substitution_context.validate();
+    std.debug.assert(substitution_context.command_substitution_depth != 0);
+    std.debug.assert(substitution_context.target == .subshell);
+    std.debug.assert(substitution_context.target.isIsolatedFromParent());
+}
+
+fn runSemanticCommandSubstitution(opaque_context: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) anyerror![]const u8 {
+    std.debug.assert(opaque_context != null);
+    const expansion_context: *CommandSubstitutionExpansionContext = @ptrCast(@alignCast(opaque_context.?));
+    expansion_context.validate();
+
+    const parent_state = expansion_context.shell_state;
+    const parent_fingerprint = shellStateMutationFingerprint(parent_state.*);
+    const previous_eval_context = expansion_context.eval_context;
+    const substitution_context = previous_eval_context.enterCommandSubstitution();
+    assertCommandSubstitutionContext(substitution_context);
+
+    var substitution_state = parent_state.snapshotForSubshell(expansion_context.evaluator.allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
+    defer substitution_state.deinit();
+
+    expansion_context.eval_context = substitution_context;
+    expansion_context.shell_state = &substitution_state;
+    expansion_context.max_depth_observed = @max(expansion_context.max_depth_observed, substitution_context.command_substitution_depth);
+    defer {
+        expansion_context.shell_state = parent_state;
+        expansion_context.eval_context = previous_eval_context;
+        expansion_context.validate();
+        std.debug.assert(shellStateMutationFingerprint(parent_state.*) == parent_fingerprint);
+    }
+
+    const body = (try expansion_context.resolver.resolve(allocator, script)) orelse return error.Unimplemented;
+    var result = try evaluateCommandSubstitutionInState(expansion_context.evaluator, &substitution_state, substitution_context, body);
+    defer result.deinit();
+
+    expansion_context.last_status = result.status;
+    expansion_context.last_control_flow = result.control_flow;
+    try expansion_context.stderr.appendSlice(expansion_context.evaluator.allocator, result.stderr.items);
+    for (result.diagnostics.items) |diagnostic| {
+        const owned_message = try expansion_context.evaluator.allocator.dupe(u8, diagnostic.message);
+        errdefer expansion_context.evaluator.allocator.free(owned_message);
+        try expansion_context.diagnostics.append(expansion_context.evaluator.allocator, .{ .message = owned_message });
+    }
+
+    const owned_output = try allocator.dupe(u8, result.output.items);
+    std.debug.assert(owned_output.len == result.output.items.len);
+    if (owned_output.len != 0) std.debug.assert(owned_output.ptr != result.output.items.ptr);
+    return owned_output;
 }
 
 fn evaluateSingleStagePipeline(evaluator: *Evaluator, shell_state: *state.ShellState, eval_context: context.EvalContext, plan: pipeline_plan.PipelinePlan, statuses: []outcome.ExitStatus, buffers: *EvaluationBuffers) EvalError!delta.StateDelta {
@@ -3682,6 +3950,138 @@ test "semantic evaluator models alias unalias and trap registration deltas" {
     defer list_trap.deinit();
     try std.testing.expectEqualStrings("trap -- 'echo bye' INT\n", list_trap.stdout.items);
     list_trap.discardDelta(.current_shell);
+}
+
+test "semantic command substitution captures owned output and trims only trailing newlines" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const printf_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{ "printf", "%s\n\n", "line1\nline2" } },
+        .target = .subshell,
+    });
+    var result = try evaluateCommandSubstitution(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), .{ .simple = printf_plan });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqual(outcome.ControlFlow.normal, result.control_flow);
+    try std.testing.expectEqualStrings("line1\nline2", result.output.items);
+    try std.testing.expectEqualStrings("", result.stderr.items);
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+}
+
+test "semantic command substitution sees parent variables but isolates body mutations" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("PARENT", "outer", .{ .exported = true });
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const assignments = [_]command_plan.Assignment{.{ .name = "SUB", .value = "inner" }};
+    const commands = [_]command_plan.CommandPlan{
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments }, .target = .subshell }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "export", "SUB" } }, .target = .subshell }),
+        command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{ "export", "-p" } }, .target = .subshell }),
+    };
+    const compound: command_plan.CompoundCommandPlan = .{ .target = .subshell, .body = .{ .sequence = .{ .commands = &commands } } };
+
+    var result = try evaluateCommandSubstitution(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), .{ .compound = compound });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 0), result.status);
+    try std.testing.expectEqualStrings("export PARENT='outer'\nexport SUB='inner'", result.output.items);
+    try std.testing.expectEqualStrings("outer", shell_state.getVariable("PARENT").?.value);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("SUB"));
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
+}
+
+test "semantic command substitution propagates status and diagnostics without parent leakage" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    shell_state.last_status = 42;
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const missing_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"missing"} },
+        .target = .subshell,
+    });
+    var result = try evaluateCommandSubstitution(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), .{ .simple = missing_plan });
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(outcome.ExitStatus, 127), result.status);
+    try std.testing.expectEqualStrings("", result.output.items);
+    try std.testing.expectEqualStrings("missing: command not found\n", result.stderr.items);
+    try std.testing.expectEqualStrings("missing: command not found", result.diagnostics.items[0].message);
+    try std.testing.expectEqual(@as(state.ExitStatus, 42), shell_state.last_status);
+}
+
+test "semantic expansion callback evaluates nested command substitutions through evaluator" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    var evaluator = Evaluator.init(std.testing.allocator);
+
+    const NestedResolver = struct {
+        allocator: std.mem.Allocator,
+        expansion_context: ?*CommandSubstitutionExpansionContext = null,
+        allocated: std.ArrayList([]const u8) = .empty,
+        inner_argv: [3][]const u8 = .{ "printf", "%s\n", "inner" },
+        outer_argv: [3][]const u8 = .{ "printf", "%s\n", "" },
+
+        fn init(allocator: std.mem.Allocator) @This() {
+            return .{ .allocator = allocator };
+        }
+
+        fn deinit(self: *@This()) void {
+            for (self.allocated.items) |bytes| self.allocator.free(bytes);
+            self.allocated.deinit(self.allocator);
+            self.* = undefined;
+        }
+
+        fn resolve(opaque_context: ?*anyopaque, _: std.mem.Allocator, script: []const u8) anyerror!?CommandSubstitutionBody {
+            std.debug.assert(opaque_context != null);
+            const self: *@This() = @ptrCast(@alignCast(opaque_context.?));
+            if (std.mem.eql(u8, script, "inner")) {
+                const plan = command_plan.classifyExpandedSimpleCommand(.{
+                    .command = .{ .argv = &self.inner_argv },
+                    .target = .subshell,
+                });
+                return .{ .simple = plan };
+            }
+            if (std.mem.eql(u8, script, "outer $(inner)")) {
+                const expanded = try expand.expandWordScalar(self.allocator, script, .{
+                    .command_substitution = self.expansion_context.?.commandSubstitution(),
+                });
+                errdefer self.allocator.free(expanded);
+                try self.allocated.append(self.allocator, expanded);
+                self.outer_argv[2] = expanded;
+                const plan = command_plan.classifyExpandedSimpleCommand(.{
+                    .command = .{ .argv = &self.outer_argv },
+                    .target = .subshell,
+                });
+                return .{ .simple = plan };
+            }
+            return null;
+        }
+    };
+
+    var resolver = NestedResolver.init(std.testing.allocator);
+    defer resolver.deinit();
+    var expansion_context = CommandSubstitutionExpansionContext.init(&evaluator, &shell_state, context.EvalContext.forTarget(.current_shell), .{
+        .context = &resolver,
+        .resolveFn = NestedResolver.resolve,
+    });
+    defer expansion_context.deinit();
+    resolver.expansion_context = &expansion_context;
+
+    const rendered = try expand.expandWordScalar(std.testing.allocator, "prefix-$(outer $(inner))-suffix", .{
+        .command_substitution = expansion_context.commandSubstitution(),
+    });
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("prefix-outer inner-suffix", rendered);
+    try std.testing.expectEqual(@as(?outcome.ExitStatus, 0), expansion_context.last_status);
+    try std.testing.expect(expansion_context.max_depth_observed >= 2);
+    try std.testing.expectEqual(@as(state.ExitStatus, 0), shell_state.last_status);
 }
 
 const FakeFdOperation = union(enum) {
