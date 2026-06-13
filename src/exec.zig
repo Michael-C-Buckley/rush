@@ -4094,8 +4094,10 @@ pub const Executor = struct {
                 if (self.shouldSkipForNoexec(options)) break;
                 if (shouldSkipPipeline(statement.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, statement.span.start);
+                const and_or_guard_context = isFollowedByAndOrListOp(program.statements, statement_index);
                 var statement_options = options;
                 statement_options.verbose_input_echo = false;
+                statement_options.suppress_errexit = statement_options.suppress_errexit or and_or_guard_context;
                 var result = (if (statement.async_after)
                     self.executeAsyncStatement(program, statement, statement_options)
                 else
@@ -4108,7 +4110,7 @@ pub const Executor = struct {
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
                 const negated_pipeline = statement.kind == .pipeline and program.pipelines[statement.index].negated;
-                const ignored_status = self.applyErrexit(last_status, options, negated_pipeline or isFollowedByAndOrListOp(program.statements, statement_index), result_errexit_ignored_status);
+                const ignored_status = self.applyErrexit(last_status, options, negated_pipeline or and_or_guard_context, result_errexit_ignored_status);
                 result.errexit_ignored_status = ignored_status;
                 last_errexit_ignored_status = ignored_status;
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
@@ -4124,8 +4126,10 @@ pub const Executor = struct {
                 if (self.shouldSkipForNoexec(options)) break;
                 if (shouldSkipPipeline(pipeline.op_before, last_status)) continue;
                 self.setCurrentLineNumber(program.source, pipeline.span.start);
+                const and_or_guard_context = isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index);
                 var pipeline_options = options;
                 pipeline_options.verbose_input_echo = false;
+                pipeline_options.suppress_errexit = pipeline_options.suppress_errexit or and_or_guard_context;
                 var result = (if (pipeline.async_after)
                     self.executeAsyncPipeline(program, pipeline, pipeline_options)
                 else
@@ -4137,7 +4141,7 @@ pub const Executor = struct {
                 try self.dispatchPendingSignalTrap(options, &stdout, &stderr);
                 last_status = self.pending_exit orelse result_status;
                 self.setLastStatus(last_status);
-                const ignored_status = self.applyErrexit(last_status, options, pipeline.negated or isPipelineFollowedByAndOrListOp(program.pipelines, pipeline_index), result_errexit_ignored_status);
+                const ignored_status = self.applyErrexit(last_status, options, pipeline.negated or and_or_guard_context, result_errexit_ignored_status);
                 result.errexit_ignored_status = ignored_status;
                 last_errexit_ignored_status = ignored_status;
                 if (self.pending_exit != null or self.pending_return != null or self.pending_loop_control != null or self.pending_command_abort) break;
@@ -21868,6 +21872,24 @@ test "executor implements set shell option baseline" {
     defer and_or_suppressed.deinit();
     try std.testing.expectEqual(@as(ExitStatus, 0), and_or_suppressed.status);
     try std.testing.expectEqualStrings("ok\nafter\n", and_or_suppressed.stdout);
+
+    var and_or_body_suppressed_executor = Executor.init(std.testing.allocator);
+    defer and_or_body_suppressed_executor.deinit();
+    var and_or_body_suppressed = try and_or_body_suppressed_executor.executeScriptSlice(
+        \\set -e
+        \\f() { false; }
+        \\f || true
+        \\{ false; } || true
+        \\f && echo bad
+        \\f2() { false; true; }
+        \\f2 || true
+        \\outer() { inner() { false; }; inner; }
+        \\outer || true
+        \\echo after
+    , .{});
+    defer and_or_body_suppressed.deinit();
+    try std.testing.expectEqual(@as(ExitStatus, 0), and_or_body_suppressed.status);
+    try std.testing.expectEqualStrings("after\n", and_or_body_suppressed.stdout);
 
     var negated_errexit_executor = Executor.init(std.testing.allocator);
     defer negated_errexit_executor.deinit();
