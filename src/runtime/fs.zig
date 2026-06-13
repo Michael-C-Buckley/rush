@@ -11,6 +11,7 @@ pub const Operation = enum {
     get_cwd,
     set_cwd,
     inspect_path,
+    list_dir,
 };
 
 pub const GetCwdRequest = struct {
@@ -121,15 +122,55 @@ pub const InspectPathResult = struct {
     }
 };
 
+pub const ListDirRequest = struct {
+    allocator: std.mem.Allocator,
+    path: Path,
+
+    /// `path` is borrowed for the duration of the call. Returned names are
+    /// owned by `allocator`; callers must release them with `ListDirResult.deinit`.
+    pub fn init(allocator: std.mem.Allocator, path: Path) ListDirRequest {
+        const request: ListDirRequest = .{ .allocator = allocator, .path = path };
+        request.validate();
+        return request;
+    }
+
+    pub fn validate(self: ListDirRequest) void {
+        std.debug.assert(self.path.len != 0);
+    }
+};
+
+pub const ListDirResult = struct {
+    allocator: std.mem.Allocator,
+    entries: []const []const u8,
+
+    pub fn deinit(self: *ListDirResult) void {
+        for (self.entries) |entry| self.allocator.free(entry);
+        self.allocator.free(self.entries);
+        self.* = undefined;
+    }
+
+    pub fn release(self: *ListDirResult) []const []const u8 {
+        const entries = self.entries;
+        self.entries = &.{};
+        return entries;
+    }
+
+    pub fn validate(self: ListDirResult) void {
+        for (self.entries) |entry| std.debug.assert(entry.len != 0);
+    }
+};
+
 pub const GetCwdError = std.process.CurrentPathError;
 pub const ChangeCwdError = std.process.SetCurrentPathError;
 pub const AccessError = std.Io.Dir.AccessError;
 pub const InspectPathError = std.Io.Dir.StatFileError;
+pub const ListDirError = std.mem.Allocator.Error || std.Io.Dir.OpenError || std.Io.Dir.Iterator.Error;
 
 pub const GetCwdFn = *const fn (*anyopaque, GetCwdRequest) GetCwdError!GetCwdResult;
 pub const ChangeCwdFn = *const fn (*anyopaque, ChangeCwdRequest) ChangeCwdError!void;
 pub const AccessFn = *const fn (*anyopaque, AccessRequest) AccessError!void;
 pub const InspectPathFn = *const fn (*anyopaque, InspectPathRequest) InspectPathError!InspectPathResult;
+pub const ListDirFn = *const fn (*anyopaque, ListDirRequest) ListDirError!ListDirResult;
 
 pub const Port = struct {
     context: *anyopaque,
@@ -137,6 +178,7 @@ pub const Port = struct {
     change_cwd_fn: ChangeCwdFn,
     access_fn: AccessFn,
     inspect_path_fn: InspectPathFn,
+    list_dir_fn: ListDirFn,
 
     pub fn getCwd(self: Port, request: GetCwdRequest) GetCwdError!GetCwdResult {
         request.validate();
@@ -158,6 +200,13 @@ pub const Port = struct {
     pub fn inspectPath(self: Port, request: InspectPathRequest) InspectPathError!InspectPathResult {
         request.validate();
         const result = try self.inspect_path_fn(self.context, request);
+        result.validate();
+        return result;
+    }
+
+    pub fn listDir(self: Port, request: ListDirRequest) ListDirError!ListDirResult {
+        request.validate();
+        const result = try self.list_dir_fn(self.context, request);
         result.validate();
         return result;
     }
@@ -186,4 +235,7 @@ test "runtime fs requests validate borrowed path and buffer lifetimes" {
 
     const identity: PathIdentity = .{ .device = 1, .inode = 2 };
     identity.validate();
+
+    const list_request = ListDirRequest.init(std.testing.allocator, ".");
+    list_request.validate();
 }

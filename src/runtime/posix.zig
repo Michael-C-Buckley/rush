@@ -37,6 +37,7 @@ pub const Adapter = struct {
             .change_cwd_fn = changeCwd,
             .access_fn = access,
             .inspect_path_fn = inspectPath,
+            .list_dir_fn = listDir,
         };
     }
 
@@ -156,6 +157,33 @@ fn inspectPath(context: *anyopaque, request: fs.InspectPathRequest) fs.InspectPa
     return .{
         .stat = stat,
         .identity = pathIdentity(request.path, request.follow_symlinks),
+    };
+}
+
+fn listDir(context: *anyopaque, request: fs.ListDirRequest) fs.ListDirError!fs.ListDirResult {
+    const adapter = adapterFromContext(context);
+    request.validate();
+
+    var dir = try std.Io.Dir.cwd().openDir(adapter.io, request.path, .{ .iterate = true });
+    defer dir.close(adapter.io);
+
+    var entries: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (entries.items) |entry| request.allocator.free(entry);
+        entries.deinit(request.allocator);
+    }
+
+    var iterator = dir.iterate();
+    while (try iterator.next(adapter.io)) |entry| {
+        if (entry.name.len == 0) continue;
+        const owned_name = try request.allocator.dupe(u8, entry.name);
+        errdefer request.allocator.free(owned_name);
+        try entries.append(request.allocator, owned_name);
+    }
+
+    return .{
+        .allocator = request.allocator,
+        .entries = try entries.toOwnedSlice(request.allocator),
     };
 }
 

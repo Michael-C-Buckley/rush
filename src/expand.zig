@@ -115,6 +115,37 @@ pub const CommandSubstitution = struct {
     }
 };
 
+pub const PathnameEntries = struct {
+    entries: []const []const u8,
+
+    pub fn deinit(self: *PathnameEntries, allocator: std.mem.Allocator) void {
+        for (self.entries) |entry| allocator.free(entry);
+        allocator.free(self.entries);
+        self.* = undefined;
+    }
+};
+
+pub const PathnameLookup = struct {
+    context: ?*anyopaque = null,
+    listDirFn: ?*const fn (?*anyopaque, std.mem.Allocator, []const u8) anyerror!PathnameEntries = null,
+    pathExistsFn: ?*const fn (?*anyopaque, []const u8) anyerror!bool = null,
+
+    pub fn enabled(self: PathnameLookup) bool {
+        return self.listDirFn != null and self.pathExistsFn != null;
+    }
+
+    pub fn listDir(self: PathnameLookup, allocator: std.mem.Allocator, path: []const u8) !PathnameEntries {
+        std.debug.assert(path.len != 0);
+        const list_dir = self.listDirFn orelse unreachable;
+        return list_dir(self.context, allocator, path);
+    }
+
+    pub fn pathExists(self: PathnameLookup, path: []const u8) !bool {
+        const path_exists = self.pathExistsFn orelse unreachable;
+        return path_exists(self.context, path);
+    }
+};
+
 pub const ParameterError = struct {
     name: []const u8 = "",
     message: []const u8 = "",
@@ -147,6 +178,7 @@ pub const Options = struct {
     io: ?std.Io = null,
     features: compat.Features = .{},
     command_substitution: CommandSubstitution = .{},
+    pathname_lookup: PathnameLookup = .{},
     positionals: []const []const u8 = &.{},
     option_flags: []const u8 = "",
     pathname_expansion: bool = true,
@@ -267,8 +299,12 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
     }
 
     if (options.pathname_expansion and pathname_expansion_safe and !quoted_expansion_glob) {
-        if (options.io) |io| {
-            try applyPathnameExpansion(allocator, io, &fields, .{ .nullglob = options.pathname_nullglob, .dotglob = options.pathname_dotglob, .extglob = options.extglob });
+        const pathname_options: PathnameExpansionOptions = .{ .nullglob = options.pathname_nullglob, .dotglob = options.pathname_dotglob, .extglob = options.extglob };
+        if (options.pathname_lookup.enabled()) {
+            try applyPathnameExpansion(allocator, options.pathname_lookup, &fields, pathname_options);
+        } else if (options.io) |io| {
+            var io_context: IoPathnameLookupContext = .{ .io = io };
+            try applyPathnameExpansion(allocator, ioPathnameLookup(&io_context), &fields, pathname_options);
         }
     }
 
@@ -4573,7 +4609,58 @@ const PathnameExpansionOptions = struct {
     extglob: bool = false,
 };
 
-fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std.ArrayList([]const u8), options: PathnameExpansionOptions) !void {
+const IoPathnameLookupContext = struct {
+    io: std.Io,
+};
+
+fn ioPathnameLookup(context: *IoPathnameLookupContext) PathnameLookup {
+    return .{
+        .context = context,
+        .listDirFn = listPathnameDirWithIo,
+        .pathExistsFn = pathnameExistsWithIo,
+    };
+}
+
+fn listPathnameDirWithIo(opaque_context: ?*anyopaque, allocator: std.mem.Allocator, path: []const u8) !PathnameEntries {
+    std.debug.assert(opaque_context != null);
+    const context: *IoPathnameLookupContext = @ptrCast(@alignCast(opaque_context.?));
+    var dir = std.Io.Dir.cwd().openDir(context.io, path, .{ .iterate = true }) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir => return .{ .entries = &.{} },
+        else => return err,
+    };
+    defer dir.close(context.io);
+
+    var entries: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (entries.items) |entry| allocator.free(entry);
+        entries.deinit(allocator);
+    }
+
+    var iterator = dir.iterate();
+    while (try iterator.next(context.io)) |entry| {
+        if (entry.name.len == 0) continue;
+        const owned_name = try allocator.dupe(u8, entry.name);
+        errdefer allocator.free(owned_name);
+        try entries.append(allocator, owned_name);
+    }
+
+    return .{ .entries = try entries.toOwnedSlice(allocator) };
+}
+
+fn pathnameExistsWithIo(opaque_context: ?*anyopaque, path: []const u8) !bool {
+    std.debug.assert(opaque_context != null);
+    const context: *IoPathnameLookupContext = @ptrCast(@alignCast(opaque_context.?));
+    if (path.len == 0) return true;
+    var file = std.Io.Dir.cwd().openFile(context.io, path, .{}) catch |err| switch (err) {
+        error.FileNotFound, error.NotDir => return false,
+        else => return err,
+    };
+    file.close(context.io);
+    return true;
+}
+
+fn applyPathnameExpansion(allocator: std.mem.Allocator, lookup: PathnameLookup, fields: *std.ArrayList([]const u8), options: PathnameExpansionOptions) !void {
+    std.debug.assert(lookup.enabled());
     var expanded: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (expanded.items) |field| allocator.free(field);
@@ -4582,7 +4669,7 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
 
     for (fields.items) |field| {
         if (hasGlobSyntaxWithOptions(field, .{ .extglob = options.extglob })) {
-            const matches = try expandPathnamePatternWithOptions(allocator, io, field, options);
+            const matches = try expandPathnamePatternWithLookupOptions(allocator, lookup, field, options);
             defer allocator.free(matches);
             if (matches.len != 0) {
                 allocator.free(field);
@@ -4604,21 +4691,33 @@ fn applyPathnameExpansion(allocator: std.mem.Allocator, io: std.Io, fields: *std
 }
 
 pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8) ![][]const u8 {
-    return expandPathnamePatternWithOptions(allocator, io, pattern, .{});
+    var io_context: IoPathnameLookupContext = .{ .io = io };
+    return expandPathnamePatternWithLookupOptions(allocator, ioPathnameLookup(&io_context), pattern, .{});
 }
 
-fn expandPathnamePatternWithOptions(allocator: std.mem.Allocator, io: std.Io, pattern: []const u8, options: PathnameExpansionOptions) ![][]const u8 {
+fn expandPathnamePatternWithLookupOptions(allocator: std.mem.Allocator, lookup: PathnameLookup, pattern: []const u8, options: PathnameExpansionOptions) ![][]const u8 {
+    std.debug.assert(lookup.enabled());
     const special = try allocator.alloc(bool, pattern.len);
     defer allocator.free(special);
     @memset(special, true);
-    return expandPathnameExpansionPatternWithOptions(allocator, io, .{ .text = pattern, .special = special }, options);
+    return expandPathnameExpansionPatternWithLookupOptions(allocator, lookup, .{ .text = pattern, .special = special }, options);
+}
+
+pub fn expandPathnamePatternWithLookup(allocator: std.mem.Allocator, lookup: PathnameLookup, pattern: []const u8) ![][]const u8 {
+    return expandPathnamePatternWithLookupOptions(allocator, lookup, pattern, .{});
 }
 
 pub fn expandPathnameExpansionPattern(allocator: std.mem.Allocator, io: std.Io, pattern: ExpansionPattern) ![][]const u8 {
-    return expandPathnameExpansionPatternWithOptions(allocator, io, pattern, .{});
+    var io_context: IoPathnameLookupContext = .{ .io = io };
+    return expandPathnameExpansionPatternWithLookupOptions(allocator, ioPathnameLookup(&io_context), pattern, .{});
 }
 
-fn expandPathnameExpansionPatternWithOptions(allocator: std.mem.Allocator, io: std.Io, pattern: ExpansionPattern, options: PathnameExpansionOptions) ![][]const u8 {
+pub fn expandPathnameExpansionPatternWithLookup(allocator: std.mem.Allocator, lookup: PathnameLookup, pattern: ExpansionPattern) ![][]const u8 {
+    return expandPathnameExpansionPatternWithLookupOptions(allocator, lookup, pattern, .{});
+}
+
+fn expandPathnameExpansionPatternWithLookupOptions(allocator: std.mem.Allocator, lookup: PathnameLookup, pattern: ExpansionPattern, options: PathnameExpansionOptions) ![][]const u8 {
+    std.debug.assert(lookup.enabled());
     std.debug.assert(pattern.text.len == pattern.special.len);
 
     var prefixes: std.ArrayList([]const u8) = .empty;
@@ -4648,11 +4747,11 @@ fn expandPathnameExpansionPatternWithOptions(allocator: std.mem.Allocator, io: s
 
         for (prefixes.items) |prefix| {
             if (patternHasGlobSyntaxWithOptions(component, .{ .extglob = options.extglob })) {
-                try appendGlobComponentMatches(allocator, io, &next_prefixes, prefix, component, options);
+                try appendGlobComponentMatches(allocator, lookup, &next_prefixes, prefix, component, options);
             } else {
                 const candidate = try joinPathComponent(allocator, prefix, component.text);
                 errdefer allocator.free(candidate);
-                if (try pathComponentExists(io, candidate)) try next_prefixes.append(allocator, candidate) else allocator.free(candidate);
+                if (try lookup.pathExists(candidate)) try next_prefixes.append(allocator, candidate) else allocator.free(candidate);
             }
         }
 
@@ -4668,20 +4767,16 @@ fn expandPathnameExpansionPatternWithOptions(allocator: std.mem.Allocator, io: s
     return prefixes.toOwnedSlice(allocator);
 }
 
-fn appendGlobComponentMatches(allocator: std.mem.Allocator, io: std.Io, matches: *std.ArrayList([]const u8), prefix: []const u8, component: ExpansionPattern, options: PathnameExpansionOptions) !void {
+fn appendGlobComponentMatches(allocator: std.mem.Allocator, lookup: PathnameLookup, matches: *std.ArrayList([]const u8), prefix: []const u8, component: ExpansionPattern, options: PathnameExpansionOptions) !void {
     const dir_path = if (prefix.len == 0) "." else prefix;
-    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| switch (err) {
-        error.FileNotFound, error.NotDir => return,
-        else => return err,
-    };
-    defer dir.close(io);
+    var entries = try lookup.listDir(allocator, dir_path);
+    defer entries.deinit(allocator);
 
-    var iterator = dir.iterate();
-    while (try iterator.next(io)) |entry| {
-        if (entry.name.len == 0) continue;
-        if (entry.name[0] == '.' and !options.dotglob and (component.text.len == 0 or component.text[0] != '.')) continue;
-        if (globPatternMatchesWithOptions(component, entry.name, .{ .extglob = options.extglob, .backslash_escape = false })) {
-            try matches.append(allocator, try joinPathComponent(allocator, prefix, entry.name));
+    for (entries.entries) |entry_name| {
+        if (entry_name.len == 0) continue;
+        if (entry_name[0] == '.' and !options.dotglob and (component.text.len == 0 or component.text[0] != '.')) continue;
+        if (globPatternMatchesWithOptions(component, entry_name, .{ .extglob = options.extglob, .backslash_escape = false })) {
+            try matches.append(allocator, try joinPathComponent(allocator, prefix, entry_name));
         }
     }
 }
@@ -4691,16 +4786,6 @@ fn joinPathComponent(allocator: std.mem.Allocator, prefix: []const u8, component
     if (component.len == 0) return allocator.dupe(u8, prefix);
     if (std.mem.eql(u8, prefix, "/")) return std.fmt.allocPrint(allocator, "/{s}", .{component});
     return std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, component });
-}
-
-fn pathComponentExists(io: std.Io, path: []const u8) !bool {
-    if (path.len == 0) return true;
-    var file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| switch (err) {
-        error.FileNotFound, error.NotDir => return false,
-        else => return err,
-    };
-    file.close(io);
-    return true;
 }
 
 fn lessThanString(_: void, a: []const u8, b: []const u8) bool {
