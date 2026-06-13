@@ -170,6 +170,7 @@ pub const ParserTrapActionResolver = struct {
     evaluator: *Evaluator,
     features: compat.Features = .{},
     externals: []const command_plan.ExternalResolution = &.{},
+    arg_zero: []const u8 = "rush",
 
     pub fn init(evaluator: *Evaluator) ParserTrapActionResolver {
         return .{ .evaluator = evaluator };
@@ -182,6 +183,7 @@ pub const ParserTrapActionResolver = struct {
 
     pub fn validate(self: ParserTrapActionResolver) void {
         _ = self.evaluator.allocator;
+        std.debug.assert(self.arg_zero.len != 0);
         for (self.externals) |external| external.validate();
     }
 
@@ -311,7 +313,6 @@ const TrapActionLowerer = struct {
     fn lowerPipeline(self: *TrapActionLowerer, program: ir.Program, pipeline: ir.Pipeline, target: context.ExecutionTarget) !TrapActionBodyPayload {
         if (pipeline.async_after) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: background pipelines are not supported by the semantic trap resolver", .{self.signal.name()});
         if (pipeline.command_indexes.len == 1 and !pipeline.negated) {
-            if (program.commands[pipeline.command_indexes[0]].redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: simple-command redirections need redirection lowering", .{self.signal.name()});
             const plan = try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
             return .{ .simple = plan };
         }
@@ -330,17 +331,17 @@ const TrapActionLowerer = struct {
 
     fn lowerSingleSimplePipeline(self: *TrapActionLowerer, program: ir.Program, pipeline: ir.Pipeline, target: context.ExecutionTarget) !?command_plan.CommandPlan {
         if (pipeline.async_after or pipeline.negated or pipeline.command_indexes.len != 1 or pipeline.stage_spans.len != 1) return null;
-        if (program.commands[pipeline.command_indexes[0]].redirections.len != 0) return null;
         return try self.lowerIrSimpleCommand(program.commands[pipeline.command_indexes[0]], target);
     }
 
     fn lowerBraceGroup(self: *TrapActionLowerer, group: ir.BraceGroup, target: context.ExecutionTarget) !TrapActionBodyPayload {
-        if (group.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const redirections = try self.lowerRedirections(group.redirections, .regular_command);
+        if (redirections == .failure) return .{ .failure = redirections.failure };
         const list = try self.lowerSimpleCommandListSource(group.body, target);
         switch (list) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |command_list| {
-                const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .brace_group = command_list } };
+                const plan: command_plan.CompoundCommandPlan = .{ .target = target, .redirections = redirections.plan, .body = .{ .brace_group = command_list } };
                 plan.validate();
                 return .{ .compound = plan };
             },
@@ -348,12 +349,13 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerSubshell(self: *TrapActionLowerer, subshell: ir.Subshell) !TrapActionBodyPayload {
-        if (subshell.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const redirections = try self.lowerRedirections(subshell.redirections, .regular_command);
+        if (redirections == .failure) return .{ .failure = redirections.failure };
         const list = try self.lowerSimpleCommandListSource(subshell.body, .subshell);
         switch (list) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
             .list => |command_list| {
-                const plan: command_plan.CompoundCommandPlan = .{ .target = .subshell, .body = .{ .subshell = command_list } };
+                const plan: command_plan.CompoundCommandPlan = .{ .target = .subshell, .redirections = redirections.plan, .body = .{ .subshell = command_list } };
                 plan.validate();
                 return .{ .compound = plan };
             },
@@ -361,7 +363,8 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerIfCommand(self: *TrapActionLowerer, command: ir.IfCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
-        if (command.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const redirections = try self.lowerRedirections(command.redirections, .regular_command);
+        if (redirections == .failure) return .{ .failure = redirections.failure };
         const condition_result = try self.lowerSimpleCommandListSource(command.condition, target);
         const condition = switch (condition_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
@@ -382,13 +385,14 @@ const TrapActionLowerer = struct {
         }
         const branches = try self.allocator.alloc(command_plan.IfBranch, 1);
         branches[0] = .{ .condition = condition, .body = then_body };
-        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .if_clause = .{ .branches = branches, .else_body = else_body } } };
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .redirections = redirections.plan, .body = .{ .if_clause = .{ .branches = branches, .else_body = else_body } } };
         plan.validate();
         return .{ .compound = plan };
     }
 
     fn lowerLoopCommand(self: *TrapActionLowerer, command: ir.LoopCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
-        if (command.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const redirections = try self.lowerRedirections(command.redirections, .regular_command);
+        if (redirections == .failure) return .{ .failure = redirections.failure };
         const condition_result = try self.lowerSimpleCommandListSource(command.condition, target);
         const condition = switch (condition_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
@@ -404,13 +408,14 @@ const TrapActionLowerer = struct {
             .while_loop => .{ .while_loop = loop },
             .until_loop => .{ .until_loop = loop },
         };
-        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = compound_body };
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .redirections = redirections.plan, .body = compound_body };
         plan.validate();
         return .{ .compound = plan };
     }
 
     fn lowerForCommand(self: *TrapActionLowerer, command: ir.ForCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
-        if (command.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const redirections = try self.lowerRedirections(command.redirections, .regular_command);
+        if (redirections == .failure) return .{ .failure = redirections.failure };
         const body_result = try self.lowerSimpleCommandListSource(command.body, target);
         const body = switch (body_result) {
             .failure => |trap_failure| return .{ .failure = trap_failure },
@@ -422,13 +427,14 @@ const TrapActionLowerer = struct {
             break :blk command_plan.ForWords{ .explicit = explicit };
         };
         const name = try self.allocator.dupe(u8, command.name);
-        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .for_loop = .{ .variable_name = name, .words = words, .body = body } } };
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .redirections = redirections.plan, .body = .{ .for_loop = .{ .variable_name = name, .words = words, .body = body } } };
         plan.validate();
         return .{ .compound = plan };
     }
 
     fn lowerCaseCommand(self: *TrapActionLowerer, command: ir.CaseCommand, target: context.ExecutionTarget) !TrapActionBodyPayload {
-        if (command.redirections.len != 0) return self.failure(.unsupported_shape, "trap {s}: unsupported trap action: compound redirections need redirection lowering", .{self.signal.name()});
+        const redirections = try self.lowerRedirections(command.redirections, .regular_command);
+        if (redirections == .failure) return .{ .failure = redirections.failure };
         const arms = try self.allocator.alloc(command_plan.CaseArm, command.arms.len);
         for (command.arms, 0..) |arm, arm_index| {
             const patterns = try self.allocator.alloc([]const u8, arm.patterns.len);
@@ -441,7 +447,7 @@ const TrapActionLowerer = struct {
             arms[arm_index] = .{ .patterns = patterns, .body = body };
         }
         const word = try self.expandScalar(command.word.raw, target);
-        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .body = .{ .case_clause = .{ .word = word, .arms = arms } } };
+        const plan: command_plan.CompoundCommandPlan = .{ .target = target, .redirections = redirections.plan, .body = .{ .case_clause = .{ .word = word, .arms = arms } } };
         plan.validate();
         return .{ .compound = plan };
     }
@@ -475,7 +481,6 @@ const TrapActionLowerer = struct {
     }
 
     fn lowerIrSimpleCommand(self: *TrapActionLowerer, command: ir.SimpleCommand, target: context.ExecutionTarget) !command_plan.CommandPlan {
-        std.debug.assert(command.redirections.len == 0);
         const assignment_words = try self.allocator.alloc([]const u8, command.assignments.len);
         for (command.assignments, 0..) |word, index| assignment_words[index] = word.raw;
         const argv_words = try self.allocator.alloc([]const u8, command.argv.len);
@@ -487,6 +492,7 @@ const TrapActionLowerer = struct {
             .eval_context = self.eval_context.withTarget(expansion_target),
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
+            .arg_zero = self.owner.arg_zero,
         });
         defer expansion.deinit();
 
@@ -498,21 +504,104 @@ const TrapActionLowerer = struct {
             return err;
         };
         expanded.command.validate();
-        const lookup = try self.lookupSnapshot();
+        const lookup = try self.lookupSnapshot(expanded.command);
+        const plan_without_redirections = command_plan.classifyExpandedSimpleCommand(.{ .command = expanded.command, .lookup = lookup, .target = target });
+        const redirections = try self.lowerRedirections(command.redirections, redirectionFailurePolicy(plan_without_redirections.class(), self.eval_context));
+        if (redirections == .failure) {
+            return command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{redirections.failure.message} }, .target = target });
+        }
+        expanded.command.redirections = redirections.plan;
         const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = expanded.command, .lookup = lookup, .target = target });
         plan.validate();
         return plan;
     }
 
-    fn lookupSnapshot(self: *TrapActionLowerer) !command_plan.LookupSnapshot {
+    fn lookupSnapshot(self: *TrapActionLowerer, command: command_plan.ExpandedSimpleCommand) !command_plan.LookupSnapshot {
         var functions: std.ArrayList(command_plan.FunctionDefinition) = .empty;
         errdefer functions.deinit(self.allocator);
         var iterator = self.shell_state.functions.iterator();
         while (iterator.next()) |entry| try functions.append(self.allocator, entry.value_ptr.*);
+
+        var externals: std.ArrayList(command_plan.ExternalResolution) = .empty;
+        errdefer externals.deinit(self.allocator);
+        try externals.appendSlice(self.allocator, self.owner.externals);
+        if (try self.resolveExternal(command)) |external| try externals.append(self.allocator, external);
+
         return .{
             .functions = try functions.toOwnedSlice(self.allocator),
-            .externals = self.owner.externals,
+            .externals = try externals.toOwnedSlice(self.allocator),
         };
+    }
+
+    const LoweredRedirections = union(enum) {
+        plan: redirection_plan.RedirectionPlan,
+        failure: TrapActionFailure,
+    };
+
+    fn lowerRedirections(self: *TrapActionLowerer, redirections: []const ir.Redirection, failure_policy: redirection_plan.FailurePolicy) !LoweredRedirections {
+        if (redirections.len == 0) return .{ .plan = .{} };
+
+        var specs: std.ArrayList(redirection_plan.RedirectionSpec) = .empty;
+        defer specs.deinit(self.allocator);
+
+        for (redirections) |redirection| {
+            const spec = (try self.lowerRedirection(redirection)) orelse {
+                return .{ .failure = .{ .kind = .unsupported_shape, .message = try std.fmt.allocPrint(self.allocator, "trap {s}: unsupported trap action: malformed redirection", .{self.signal.name()}) } };
+            };
+            try specs.append(self.allocator, spec);
+        }
+
+        const plan_result = try redirection_plan.RedirectionPlan.build(self.allocator, specs.items, .{
+            .noclobber = self.shell_state.options.noclobber,
+            .failure_policy = failure_policy,
+        });
+        return switch (plan_result) {
+            .plan => |plan| .{ .plan = plan },
+            .failure => |planning_failure| .{ .failure = .{
+                .kind = .unsupported_shape,
+                .status = consequence.statusForRedirectionFailure(planning_failure.consequence),
+                .message = try std.fmt.allocPrint(self.allocator, "trap {s}: redirection planning error: {s}", .{ self.signal.name(), planning_failure.diagnosticText() }),
+            } },
+        };
+    }
+
+    fn lowerRedirection(self: *TrapActionLowerer, redirection: ir.Redirection) !?redirection_plan.RedirectionSpec {
+        const operator = redirectionOperator(redirection.operator) orelse return null;
+        const descriptor = if (redirection.io_number) |io_number| std.fmt.parseInt(runtime.fd.Descriptor, io_number.text, 10) catch return null else null;
+        if (descriptor) |fd| if (!runtime.fd.isValidDescriptor(fd)) return null;
+
+        if (operator == .here_doc) {
+            const body = redirection.here_doc orelse "";
+            const data = if (redirection.here_doc_quoted) try self.allocator.dupe(u8, body) else try self.expandHereDoc(body, self.eval_context.target);
+            return .{ .descriptor = descriptor, .operator = operator, .operand = .{ .here_doc = .{ .bytes = data } } };
+        }
+
+        const target_word = redirection.target orelse return null;
+        const fields = try self.expandFields(target_word.raw, self.eval_context.target);
+        return .{ .descriptor = descriptor, .operator = operator, .operand = .{ .fields = .{ .fields = fields.fields } } };
+    }
+
+    fn resolveExternal(self: *TrapActionLowerer, command: command_plan.ExpandedSimpleCommand) !?command_plan.ExternalResolution {
+        command.validate();
+        if (command.argv.len == 0) return null;
+        const name = command.argv[0];
+        if (name.len == 0) return null;
+        if (std.mem.indexOfScalar(u8, name, '/') != null) {
+            const owned_path = try self.allocator.dupe(u8, name);
+            return .{ .name = name, .path = owned_path };
+        }
+
+        const fs_port = self.owner.evaluator.fs_port orelse return null;
+        const path_value = commandLookupPath(self.shell_state.*, command) orelse return null;
+        var parts = std.mem.splitScalar(u8, path_value, ':');
+        while (parts.next()) |part| {
+            const dir = if (part.len == 0) "." else part;
+            const candidate = try std.mem.concat(self.allocator, u8, &.{ dir, "/", name });
+            errdefer self.allocator.free(candidate);
+            if (isExecutableRegularFile(fs_port, candidate)) return .{ .name = name, .path = candidate };
+            self.allocator.free(candidate);
+        }
+        return null;
     }
 
     fn expandScalar(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
@@ -522,12 +611,42 @@ const TrapActionLowerer = struct {
             .eval_context = self.eval_context.withTarget(expansion_target),
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
+            .arg_zero = self.owner.arg_zero,
         });
         defer expansion.deinit();
         return expansion.expandWordScalar(raw) catch |err| {
             if (expansion.classifyError(err)) |expansion_failure| return std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ expansion_failure.name, expansion_failure.message });
             return err;
         };
+    }
+
+    fn expandFields(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) !expand.ExpansionResult {
+        const expansion_target = self.expansionTarget(target);
+        var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
+            .shell_state = self.shell_state,
+            .eval_context = self.eval_context.withTarget(expansion_target),
+            .fs_port = self.owner.evaluator.fs_port,
+            .features = self.owner.features,
+            .arg_zero = self.owner.arg_zero,
+        });
+        defer expansion.deinit();
+        return expansion.expandWordFields(raw) catch |err| {
+            if (expansion.classifyError(err)) |_| return err;
+            return err;
+        };
+    }
+
+    fn expandHereDoc(self: *TrapActionLowerer, text: []const u8, target: context.ExecutionTarget) ![]const u8 {
+        const expansion_target = self.expansionTarget(target);
+        var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
+            .shell_state = self.shell_state,
+            .eval_context = self.eval_context.withTarget(expansion_target),
+            .fs_port = self.owner.evaluator.fs_port,
+            .features = self.owner.features,
+            .arg_zero = self.owner.arg_zero,
+        });
+        defer expansion.deinit();
+        return expansion.expandHereDocBody(text);
     }
 
     fn expansionTarget(self: TrapActionLowerer, target: context.ExecutionTarget) context.ExecutionTarget {
@@ -549,6 +668,48 @@ const TrapActionLowerer = struct {
         return .{ .failure = trap_failure };
     }
 };
+
+fn redirectionOperator(token: parser.TokenKind) ?redirection_plan.RedirectionOperator {
+    return switch (token) {
+        .less => .input,
+        .greater => .output,
+        .dless, .dless_dash => .here_doc,
+        .dgreat => .append,
+        .less_and => .duplicate_input,
+        .greater_and => .duplicate_output,
+        .less_great => .input_output,
+        .clobber => .clobber,
+        else => null,
+    };
+}
+
+fn redirectionFailurePolicy(command_class: command_plan.CommandClass, eval_context: context.EvalContext) redirection_plan.FailurePolicy {
+    eval_context.validate();
+    return switch (command_class) {
+        .special_builtin => if (eval_context.interactive) .special_builtin_interactive else .special_builtin_non_interactive,
+        else => .regular_command,
+    };
+}
+
+fn commandLookupPath(shell_state: state.ShellState, command: command_plan.ExpandedSimpleCommand) ?[]const u8 {
+    shell_state.validate();
+    command.validate();
+    var path_value: ?[]const u8 = null;
+    for (command.assignments) |assignment| {
+        assignment.validate();
+        if (std.mem.eql(u8, assignment.name, "PATH")) path_value = assignment.value;
+    }
+    if (path_value) |value| return value;
+    const path = shell_state.getVariable("PATH") orelse return null;
+    return path.value;
+}
+
+fn isExecutableRegularFile(fs_port: runtime.fs.Port, path: []const u8) bool {
+    const metadata = fs_port.inspectPath(.{ .path = path }) catch return false;
+    if (metadata.stat.kind != .file) return false;
+    fs_port.access(.{ .path = path, .execute = true }) catch return false;
+    return true;
+}
 
 pub const RuntimeSignalObservation = struct {
     signal: state.TrapSignal,
