@@ -718,6 +718,11 @@ fn expandArithmeticExpression(
 
     var index: usize = 0;
     while (index < expression.len) {
+        if (expression[index] == '"') {
+            index += 1;
+            continue;
+        }
+
         if (expression[index] == '\\' and
             index + 1 < expression.len and
             isArithmeticBackslashEscaped(expression[index + 1]))
@@ -9414,6 +9419,11 @@ test "arithmetic expansion evaluates integer expressions" {
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("value=7", result.fields[0]);
+
+    var quoted = try expandWord(std.testing.allocator, "value=$((\"1\" + 2))", .{});
+    defer quoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted.fields.len);
+    try std.testing.expectEqualStrings("value=3", quoted.fields[0]);
 }
 
 test "arithmetic expansion trims shell blanks around variable integer values" {
@@ -9620,12 +9630,10 @@ test "arithmetic expansion applies POSIX quote and backslash preprocessing" {
     try std.testing.expectEqualStrings("$((1 + \\${MISSING:-2))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
 
-    try std.testing.expectError(
-        error.ArithmeticExpansionFailed,
-        expandWordScalar(std.testing.allocator, "$((\"1\" + 2))", .{ .arithmetic_error = &arithmetic_error }),
-    );
-    try std.testing.expectEqualStrings("$((\"1\" + 2))", arithmetic_error.expression);
-    try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
+    var quoted = try expandWord(std.testing.allocator, "$((\"1\" + 2))", .{});
+    defer quoted.deinit();
+    try std.testing.expectEqual(@as(usize, 1), quoted.fields.len);
+    try std.testing.expectEqualStrings("3", quoted.fields[0]);
 }
 
 test "arithmetic expansion records diagnostics instead of leaking parser errors" {

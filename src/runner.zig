@@ -1970,7 +1970,6 @@ test "standard input file script skips lines consumed by read" {
 test "invalid arithmetic expansion returns a shell diagnostic" {
     const cases = [_][]const u8{
         "echo $((2 ** 3)); echo after",
-        "echo $((\"1\" + 2)); echo after",
     };
 
     for (cases) |script| {
