@@ -70,6 +70,18 @@
 
   <p>These notes are not a complete compatibility matrix. They are for cases where Rush makes a deliberate choice, where common system shells disagree, or where an older Bash version behaves differently from current Bash.</p>
 
+  <h2 id="posix-mode"><a href="#posix-mode">POSIX mode</a></h2>
+
+  <h3 id="assigning-defaults-to-positional-parameters"><a href="#assigning-defaults-to-positional-parameters">Assigning defaults to positional parameters</a></h3>
+
+  <p>Rush treats an attempt to assign a default value to a positional parameter with <code>${parameter:=word}</code> as a fatal expansion error when the assignment would be required.</p>
+
+  <pre><span class="cmd">set</span> <span class="opt">--</span> <span class="str">''</span>
+<span class="cmd">printf</span> <span class="str">'%s\n'</span> <span class="var">${1:=fallback}</span>
+<span class="cmd">printf</span> <span class="str">'after\n'</span></pre>
+
+  <p>POSIX parameter assignment through <code>:=</code> assigns only shell variables; positional parameters cannot be assigned this way. Rush reports the error and does not print <code>after</code>. This matches dash, ksh93, and yash. Bash 3.2 and Bash 5.3 in POSIX mode report the error but continue executing the script. zsh 5.9 in <code>sh</code> emulation assigns the positional parameter and continues.</p>
+
   <h2 id="bash"><a href="#bash">Bash</a></h2>
 
   <h3 id="bash-3-2"><a href="#bash-3-2">Bash 3.2</a></h3>
