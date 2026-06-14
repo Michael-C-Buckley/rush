@@ -115,6 +115,24 @@
             .status = 0,
         },
         .{
+            .name = "bang negates successful subshell pipeline with required blank",
+            .script =
+            \\! ( true )
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "bang negates failing subshell pipeline with required blank",
+            .script =
+            \\! ( false )
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "bang negates rightmost command status in multi-command pipeline",
             .script =
             \\! true | false
