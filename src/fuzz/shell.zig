@@ -44,8 +44,10 @@ const redirection_source_base = 5;
 const redirection_table_len = 64;
 const closed_duplicate_source: fd.Descriptor = 30;
 const eval_max_redirection_steps = 5;
-const eval_max_redirection_plans = 8;
-const eval_max_commands = 6;
+const eval_max_redirection_plans = 24;
+const eval_max_commands = 20;
+const eval_max_pipeline_stages = 4;
+const eval_max_stage_commands = 3;
 
 const eval_assignment_names = [_][]const u8{ "A", "B", "C", "rush_var" };
 const eval_command_names = [_][]const u8{ ":", "true", "false" };
@@ -93,6 +95,10 @@ test "fuzz shell redirection rollback" {
 
 test "fuzz shell eval redirection invariants" {
     try std.testing.fuzz({}, fuzzShellEvalRedirectionInvariants, .{});
+}
+
+test "fuzz shell eval pipeline invariants" {
+    try std.testing.fuzz({}, fuzzShellEvalPipelineInvariants, .{});
 }
 
 fn fuzzShellDelta(_: void, smith: *std.testing.Smith) anyerror!void {
@@ -282,6 +288,48 @@ fn fuzzShellEvalRedirectionInvariants(_: void, smith: *std.testing.Smith) anyerr
     try std.testing.expectEqualSlices(?u16, &initial_table, &fake.table);
 }
 
+fn fuzzShellEvalPipelineInvariants(_: void, smith: *std.testing.Smith) anyerror!void {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try populateInitialState(smith, &shell_state);
+    shell_state.options.set(.pipefail, smith.boolWeighted(1, 1));
+
+    var initial_state = try shell_state.clone(std.testing.allocator);
+    defer initial_state.deinit();
+
+    var fake: FuzzFdRuntime = .{};
+    const initial_table = fake.table;
+    var evaluator = shell.eval.Evaluator.initWithFdPort(std.testing.allocator, fake.port());
+
+    var storage: EvalPlanStorage = .{};
+    const plan = generatePipelineSubject(smith, &storage, shell_state.options.enabled(.pipefail));
+    const eval_context = shell.EvalContext.forTarget(.current_shell);
+
+    var command_outcome = try shell.eval.evaluatePipelinePlan(&evaluator, &shell_state, eval_context, plan);
+    defer command_outcome.deinit();
+
+    command_outcome.validateForContext(eval_context);
+    try std.testing.expectEqualSlices(?u16, &initial_table, &fake.table);
+    try expectShellStatesEqual(initial_state, shell_state);
+
+    const statuses = command_outcome.state_delta.last_pipeline_statuses orelse return error.MissingPipelineStatuses;
+    try std.testing.expectEqual(plan.stages.len, statuses.len);
+    const aggregation = shell.pipeline_plan.aggregateStatus(.{
+        .stage_count = plan.stages.len,
+        .statuses = statuses,
+        .status_rule = plan.status_rule,
+        .negated = plan.negated,
+    });
+    try std.testing.expectEqual(aggregation.final_status, command_outcome.status);
+    try std.testing.expectEqual(aggregation.final_status, command_outcome.state_delta.last_status.?);
+
+    var committed = try shell_state.clone(std.testing.allocator);
+    defer committed.deinit();
+    try command_outcome.commitDelta(&committed, .current_shell);
+    committed.validate();
+    try std.testing.expectEqualSlices(?u16, &initial_table, &fake.table);
+}
+
 fn populateInitialState(smith: *std.testing.Smith, shell_state: *shell.ShellState) !void {
     for (variable_names) |name| {
         if (!smith.boolWeighted(1, 1)) continue;
@@ -448,6 +496,7 @@ const EvalPlanStorage = struct {
     assignments: [eval_max_commands][1]shell.Assignment = undefined,
     argv: [eval_max_commands][1][]const u8 = undefined,
     commands: [eval_max_commands]shell.CommandPlan = undefined,
+    stages: [eval_max_pipeline_stages]shell.PipelineStagePlan = undefined,
     command_count: usize = 0,
 
     fn redirectionPlan(self: *EvalPlanStorage, smith: *std.testing.Smith) shell.RedirectionPlan {
@@ -506,6 +555,48 @@ const EvalPlanStorage = struct {
             .target = target,
         });
     }
+
+    fn stage(self: *EvalPlanStorage, smith: *std.testing.Smith, single_stage: bool) shell.PipelineStagePlan {
+        return switch (smith.index(4)) {
+            0, 1 => .{ .simple = self.simpleCommand(smith, if (single_stage) .current_shell else .subshell) },
+            2 => .{ .compound = self.braceGroup(smith, if (single_stage) .current_shell else .subshell) },
+            3 => .{ .compound = self.subshell(smith) },
+            else => unreachable,
+        };
+    }
+
+    fn braceGroup(self: *EvalPlanStorage, smith: *std.testing.Smith, target: shell.ExecutionTarget) shell.CompoundCommandPlan {
+        const command_count = 1 + smith.index(eval_max_stage_commands);
+        const commands = self.commandSlice(smith, target, command_count);
+        const plan: shell.CompoundCommandPlan = .{
+            .target = target,
+            .redirections = self.redirectionPlan(smith),
+            .body = .{ .brace_group = .{ .commands = commands } },
+        };
+        plan.validate();
+        return plan;
+    }
+
+    fn subshell(self: *EvalPlanStorage, smith: *std.testing.Smith) shell.CompoundCommandPlan {
+        const command_count = 1 + smith.index(eval_max_stage_commands);
+        const commands = self.commandSlice(smith, .subshell, command_count);
+        const plan: shell.CompoundCommandPlan = .{
+            .target = .subshell,
+            .redirections = self.redirectionPlan(smith),
+            .body = .{ .subshell = .{ .commands = commands } },
+        };
+        plan.validate();
+        return plan;
+    }
+
+    fn commandSlice(self: *EvalPlanStorage, smith: *std.testing.Smith, target: shell.ExecutionTarget, count: usize) []const shell.CommandPlan {
+        std.debug.assert(self.command_count + count <= eval_max_commands);
+        const start = self.command_count;
+        for (0..count) |index| {
+            self.commands[start + index] = self.simpleCommand(smith, target);
+        }
+        return self.commands[start..self.command_count];
+    }
 };
 
 fn generateEvalSubject(smith: *std.testing.Smith, storage: *EvalPlanStorage) EvalSubject {
@@ -528,6 +619,19 @@ fn generateEvalSubject(smith: *std.testing.Smith, storage: *EvalPlanStorage) Eva
     };
     plan.validate();
     return .{ .compound = plan };
+}
+
+fn generatePipelineSubject(smith: *std.testing.Smith, storage: *EvalPlanStorage, pipefail: bool) shell.PipelinePlan {
+    const stage_count = 1 + smith.index(eval_max_pipeline_stages);
+    for (0..stage_count) |index| {
+        storage.stages[index] = storage.stage(smith, stage_count == 1);
+    }
+    const plan = shell.PipelinePlan.init(storage.stages[0..stage_count], .{
+        .negated = smith.boolWeighted(1, 1),
+        .status_rule = if (pipefail) .pipefail else .last_command,
+    });
+    plan.validate();
+    return plan;
 }
 
 fn generatedEvalRedirectionStep(smith: *std.testing.Smith, ordinal: usize) redirection_plan.RedirectionStep {
