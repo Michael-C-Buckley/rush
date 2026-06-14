@@ -59,6 +59,33 @@
             .status = 0,
         },
         .{
+            .name = "input-output redirection supplies standard input",
+            .script =
+            \\printf 'abc' >rw
+            \\cat <>rw
+            \\printf '\n'
+            ,
+            .stdout =
+            \\abc
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "redirection without a command is performed in the current environment",
+            .script =
+            \\: >created
+            \\test -f created && printf 'created\n'
+            ,
+            .stdout =
+            \\created
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "redirections are evaluated left to right when stdout is redirected before stderr duplication",
             .script =
             \\{ printf '%s\n' out; printf '%s\n' err >&2; } >both 2>&1
@@ -96,6 +123,17 @@
             ,
             .stdout =
             \\<value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "here document dash strips leading tabs",
+            .script = "cat <<-EOF\n\tone\n\t\ttwo\nEOF\n",
+            .stdout =
+            \\one
+            \\two
             \\
             ,
             .stderr = "",
