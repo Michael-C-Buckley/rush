@@ -14,6 +14,7 @@ pub const parser = @import("parser.zig");
 pub const expand = @import("expand.zig");
 pub const ir = @import("ir.zig");
 pub const history = @import("history.zig");
+pub const cli_invocation = @import("invocation.zig");
 pub const interactive = @import("interactive.zig");
 pub const shell = @import("shell.zig");
 pub const runtime = @import("runtime.zig");
@@ -65,20 +66,12 @@ const RunOptions = struct {
     stdin_script_source_offset: usize = 0,
 };
 
-const InvocationKind = enum { command_string, script_file, standard_input };
-
-const ShellInvocation = struct {
-    kind: InvocationKind,
-    source: []const u8,
-    features: compat.Features = .{},
-    shell_options: shell.ShellOptions = .{},
-    monitor_option_explicit: bool = false,
-    arg_zero: []const u8,
-    positionals: []const []const u8 = &.{},
-    interactive: bool = false,
-};
-
-const CommandStringInvocation = ShellInvocation;
+const InvocationKind = cli_invocation.Kind;
+const ShellInvocation = cli_invocation.ShellInvocation;
+const parseCommandStringInvocation = cli_invocation.parseCommandString;
+const parseShellInvocation = cli_invocation.parse;
+const shouldRunInteractiveStandardInput = cli_invocation.shouldRunInteractiveStandardInput;
+const isLoginArgZero = cli_invocation.isLoginArgZero;
 
 pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
@@ -138,79 +131,6 @@ pub fn main(init: std.process.Init) !u8 {
     try writeAll(init.io, .stdout, result.stdout);
     try writeAll(init.io, .stderr, result.stderr);
     return result.status;
-}
-
-fn parseCommandStringInvocation(args: []const []const u8) ?CommandStringInvocation {
-    const invocation = parseShellInvocation(args) orelse return null;
-    if (invocation.kind != .command_string) return null;
-    return invocation;
-}
-
-fn parseShellInvocation(args: []const []const u8) ?ShellInvocation {
-    std.debug.assert(args.len != 0);
-
-    var features: compat.Features = .{};
-    var shell_options: shell.ShellOptions = .{};
-    var monitor_option_explicit = false;
-    var interactive_mode = false;
-    var command_string = false;
-    var standard_input = false;
-    var index: usize = 1;
-    while (index < args.len) {
-        const arg = args[index];
-        if (std.mem.eql(u8, arg, "--")) {
-            index += 1;
-            break;
-        }
-        if (std.mem.eql(u8, arg, "--posix-strict")) {
-            features = .strictPosix();
-            index += 1;
-            continue;
-        }
-        if (arg.len == 0 or (arg[0] != '-' and arg[0] != '+')) break;
-        if (arg.len == 1 or (arg[0] == '-' and arg[1] == '-')) return null;
-
-        const enabled = arg[0] == '-';
-        var option_index: usize = 1;
-        while (option_index < arg.len) : (option_index += 1) {
-            const option = arg[option_index];
-            if (enabled and option == 'c') {
-                command_string = true;
-            } else if (enabled and option == 's') {
-                standard_input = true;
-            } else if (enabled and option == 'i') {
-                interactive_mode = true;
-            } else if (option == 'o') {
-                if (index + 1 >= args.len) return null;
-                index += 1;
-                const option_name = args[index];
-                if (!shell.applyShellOptionName(&shell_options, option_name, enabled)) return null;
-                if (std.mem.eql(u8, option_name, "monitor")) monitor_option_explicit = true;
-            } else {
-                var option_spelling = [_]u8{ arg[0], option };
-                if (!shell.applyShellOptionShort(&shell_options, option_spelling[0..])) return null;
-                if (option == 'm') monitor_option_explicit = true;
-            }
-        }
-
-        index += 1;
-    }
-
-    const operands = args[index..];
-    if (command_string) {
-        if (operands.len == 0) return null;
-        const arg_zero = if (operands.len >= 2) operands[1] else args[0];
-        const positionals = if (operands.len >= 3) operands[2..] else &.{};
-        return .{ .kind = .command_string, .source = operands[0], .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = arg_zero, .positionals = positionals, .interactive = interactive_mode };
-    }
-    if (standard_input) {
-        return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = args[0], .positionals = operands, .interactive = interactive_mode };
-    }
-    if (operands.len != 0) {
-        const path = operands[0];
-        return .{ .kind = .script_file, .source = path, .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = path, .positionals = operands[1..], .interactive = interactive_mode };
-    }
-    return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = args[0], .interactive = interactive_mode };
 }
 
 fn unixTimestamp(io: std.Io) i64 {
@@ -806,12 +726,6 @@ fn readStandardInputScript(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
     var buffer: [4096]u8 = undefined;
     var reader = std.Io.File.stdin().reader(io, &buffer);
     return reader.interface.allocRemaining(allocator, .unlimited);
-}
-
-fn shouldRunInteractiveStandardInput(invocation: ShellInvocation, stdin_is_tty: bool, stderr_is_tty: bool) bool {
-    if (invocation.kind != .standard_input) return false;
-    if (!stdin_is_tty) return false;
-    return invocation.interactive or stderr_is_tty;
 }
 
 fn stdinIsTty(io: std.Io) bool {
@@ -1971,11 +1885,6 @@ fn configReadErrorMessage(err: anyerror) []const u8 {
 
 fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
     try InteractiveConfigService.init(allocator, io, shell_state, arg_zero, .{}).sourceScript(contents, source_path);
-}
-
-fn isLoginArgZero(arg_zero: []const u8) bool {
-    const base = std.fs.path.basename(arg_zero);
-    return base.len != 0 and base[0] == '-';
 }
 
 const OutputStream = enum { stdout, stderr };
@@ -3900,146 +3809,6 @@ test "embedded default config sets prompt defaults without clobbering inherited 
     try std.testing.expectEqualStrings("> ", shell_state.getVariable("PS2").?.value);
 }
 
-test "command string invocation accepts interactive flag before -c" {
-    const invocation = parseCommandStringInvocation(&.{ "rush", "-i", "-c", "exit" }) orelse return error.ExpectedInvocation;
-
-    try std.testing.expectEqualStrings("exit", invocation.source);
-    try std.testing.expectEqualStrings("rush", invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 0), invocation.positionals.len);
-    try std.testing.expect(invocation.interactive);
-    try std.testing.expect(!invocation.features.strict_diagnostics);
-}
-
-test "command string invocation accepts posix strict with interactive flag before -c" {
-    const cases = [_][]const []const u8{
-        &.{ "rush", "--posix-strict", "-i", "-c", "echo positional", "name", "one" },
-        &.{ "rush", "-i", "--posix-strict", "-c", "echo positional", "name", "one" },
-    };
-
-    for (cases) |args| {
-        const invocation = parseCommandStringInvocation(args) orelse return error.ExpectedInvocation;
-        try std.testing.expectEqualStrings("echo positional", invocation.source);
-        try std.testing.expectEqualStrings("name", invocation.arg_zero);
-        try std.testing.expectEqual(@as(usize, 1), invocation.positionals.len);
-        try std.testing.expectEqualStrings("one", invocation.positionals[0]);
-        try std.testing.expect(invocation.interactive);
-        try std.testing.expect(invocation.features.strict_diagnostics);
-    }
-}
-
-test "command string invocation accepts set option flags before -c" {
-    const invocation = parseCommandStringInvocation(
-        &.{ "rush", "-eu", "-o", "pipefail", "-c", "echo positional", "name", "-o", "nounset" },
-    ) orelse return error.ExpectedInvocation;
-
-    try std.testing.expectEqualStrings("echo positional", invocation.source);
-    try std.testing.expectEqualStrings("name", invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
-    try std.testing.expectEqualStrings("-o", invocation.positionals[0]);
-    try std.testing.expectEqualStrings("nounset", invocation.positionals[1]);
-    try std.testing.expect(invocation.shell_options.errexit);
-    try std.testing.expect(invocation.shell_options.nounset);
-    try std.testing.expect(invocation.shell_options.pipefail);
-}
-
-test "command string invocation continues option parsing after -c" {
-    const invocation = parseCommandStringInvocation(
-        &.{ "rush", "-c", "-e", "printf '%s:%s:%s\n' \"$0\" \"$1\" \"$2\"", "name", "one", "two" },
-    ) orelse return error.ExpectedInvocation;
-
-    try std.testing.expectEqualStrings("printf '%s:%s:%s\n' \"$0\" \"$1\" \"$2\"", invocation.source);
-    try std.testing.expectEqualStrings("name", invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
-    try std.testing.expectEqualStrings("one", invocation.positionals[0]);
-    try std.testing.expectEqualStrings("two", invocation.positionals[1]);
-    try std.testing.expect(invocation.shell_options.errexit);
-}
-
-test "command string invocation accepts -c in clustered short options" {
-    const invocation = parseCommandStringInvocation(
-        &.{ "rush", "-ec", "printf '%s:%s:%s\n' \"$0\" \"$1\" \"$2\"", "name", "one", "two" },
-    ) orelse return error.ExpectedInvocation;
-
-    try std.testing.expectEqualStrings("printf '%s:%s:%s\n' \"$0\" \"$1\" \"$2\"", invocation.source);
-    try std.testing.expectEqualStrings("name", invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
-    try std.testing.expectEqualStrings("one", invocation.positionals[0]);
-    try std.testing.expectEqualStrings("two", invocation.positionals[1]);
-    try std.testing.expect(invocation.shell_options.errexit);
-}
-
-test "command string invocation lets -c win when clustered with -s" {
-    const sc_invocation = parseCommandStringInvocation(&.{ "rush", "-sc", "echo ok" }) orelse return error.ExpectedInvocation;
-    try std.testing.expectEqualStrings("echo ok", sc_invocation.source);
-    try std.testing.expectEqualStrings("rush", sc_invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 0), sc_invocation.positionals.len);
-
-    const cs_invocation = parseCommandStringInvocation(&.{ "rush", "-cs", "echo ok" }) orelse return error.ExpectedInvocation;
-    try std.testing.expectEqualStrings("echo ok", cs_invocation.source);
-    try std.testing.expectEqualStrings("rush", cs_invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 0), cs_invocation.positionals.len);
-}
-
-test "standard input invocation continues option parsing after -s" {
-    const invocation = parseShellInvocation(&.{ "rush", "-s", "-e", "posarg", "two words" }) orelse return error.ExpectedInvocation;
-
-    try std.testing.expectEqual(InvocationKind.standard_input, invocation.kind);
-    try std.testing.expectEqualStrings("-", invocation.source);
-    try std.testing.expectEqualStrings("rush", invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
-    try std.testing.expectEqualStrings("posarg", invocation.positionals[0]);
-    try std.testing.expectEqualStrings("two words", invocation.positionals[1]);
-    try std.testing.expect(invocation.shell_options.errexit);
-}
-
-test "script file invocation accepts options before script operand" {
-    const invocation = parseShellInvocation(
-        &.{ "rush", "--posix-strict", "-eu", "-o", "pipefail", "script.rush", "-o", "nounset" },
-    ) orelse return error.ExpectedInvocation;
-
-    try std.testing.expectEqual(InvocationKind.script_file, invocation.kind);
-    try std.testing.expectEqualStrings("script.rush", invocation.source);
-    try std.testing.expectEqualStrings("script.rush", invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 2), invocation.positionals.len);
-    try std.testing.expectEqualStrings("-o", invocation.positionals[0]);
-    try std.testing.expectEqualStrings("nounset", invocation.positionals[1]);
-    try std.testing.expect(invocation.features.strict_diagnostics);
-    try std.testing.expect(invocation.shell_options.errexit);
-    try std.testing.expect(invocation.shell_options.nounset);
-    try std.testing.expect(invocation.shell_options.pipefail);
-}
-
-test "script file invocation accepts option terminator" {
-    const invocation = parseShellInvocation(&.{ "rush", "-e", "--", "-script.rush", "arg" }) orelse return error.ExpectedInvocation;
-
-    try std.testing.expectEqual(InvocationKind.script_file, invocation.kind);
-    try std.testing.expectEqualStrings("-script.rush", invocation.source);
-    try std.testing.expectEqualStrings("-script.rush", invocation.arg_zero);
-    try std.testing.expectEqual(@as(usize, 1), invocation.positionals.len);
-    try std.testing.expectEqualStrings("arg", invocation.positionals[0]);
-    try std.testing.expect(invocation.shell_options.errexit);
-}
-
-test "command string invocation rejects invalid set option flags" {
-    try std.testing.expect(parseCommandStringInvocation(&.{ "rush", "-z", "-c", "echo bad" }) == null);
-    try std.testing.expect(parseCommandStringInvocation(&.{ "rush", "+z", "-c", "echo bad" }) == null);
-    try std.testing.expect(parseCommandStringInvocation(&.{ "rush", "-o", "-c", "echo bad" }) == null);
-    try std.testing.expect(parseCommandStringInvocation(&.{ "rush", "-o", "unknown", "-c", "echo bad" }) == null);
-    try std.testing.expect(parseShellInvocation(&.{ "rush", "-z", "script.rush" }) == null);
-    try std.testing.expect(parseShellInvocation(&.{ "rush", "+z", "script.rush" }) == null);
-}
-
-test "command string invocation still requires -c" {
-    try std.testing.expect(parseCommandStringInvocation(&.{ "rush", "-i" }) == null);
-}
-
-test "login shell detection follows argv0 dash convention" {
-    try std.testing.expect(isLoginArgZero("-rush"));
-    try std.testing.expect(isLoginArgZero("/bin/-rush"));
-    try std.testing.expect(!isLoginArgZero("rush"));
-    try std.testing.expect(!isLoginArgZero("/bin/rush"));
-}
-
 test "integration harness compares selected scripts with /bin/sh" {
     try expectMatchesSh("echo hello");
     try expectMatchesSh("false");
@@ -4120,6 +3889,7 @@ test {
     std.testing.refAllDecls(expand);
     std.testing.refAllDecls(ir);
     std.testing.refAllDecls(history);
+    std.testing.refAllDecls(cli_invocation);
     std.testing.refAllDecls(interactive);
     std.testing.refAllDecls(shell);
     std.testing.refAllDecls(runtime);
