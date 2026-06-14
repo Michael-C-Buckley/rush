@@ -11,6 +11,15 @@ zigdoc std.posix.getuid
 zigdoc vaxis.Window
 ```
 
+## Validation
+
+Use these commands for repository validation:
+
+```bash
+zig build test
+zig build compile-check
+```
+
 ## Current Zig Patterns
 
 **ArrayList:**

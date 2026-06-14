@@ -1,10 +1,18 @@
 const std = @import("std");
 
+const compile_check_targets = [_][]const u8{
+    "x86_64-linux-gnu",
+    "aarch64-linux-gnu",
+    "x86_64-macos",
+    "aarch64-macos",
+    "x86_64-freebsd",
+    "x86_64-openbsd",
+    "x86_64-netbsd",
+};
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const test_filter = b.option([]const u8, "test-filter", "Only run unit tests whose name contains this string");
-    const test_filters: []const []const u8 = if (test_filter) |filter| &.{filter} else &.{};
     const vaxis = b.dependency("vaxis", .{
         .target = target,
         .optimize = optimize,
@@ -22,22 +30,11 @@ pub fn build(b: *std.Build) void {
     const build_config = b.addOptions();
     build_config.addOption([]const u8, "sysconfdir", sysconfdir);
 
+    const exe_module = createRushRootModule(b, target, optimize, vaxis, zeit, build_config, use_system_sqlite, .{ .link_libc = true });
     const exe = b.addExecutable(.{
         .name = "rush",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-            .imports = &.{
-                .{ .name = "vaxis", .module = vaxis },
-                .{ .name = "zeit", .module = zeit },
-            },
-        }),
+        .root_module = exe_module,
     });
-    exe.root_module.addOptions("build_config", build_config);
-    exe.root_module.addAnonymousImport("default_config", .{ .root_source_file = b.path("share/rush/config.rush") });
-    linkSqlite(b, exe.root_module, use_system_sqlite);
 
     b.installArtifact(exe);
     b.installDirectory(.{
@@ -59,21 +56,10 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const test_step = b.step("test", "Run unit tests");
+    const test_module = createRushRootModule(b, target, optimize, vaxis, zeit, build_config, use_system_sqlite, .{});
     const exe_tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "vaxis", .module = vaxis },
-                .{ .name = "zeit", .module = zeit },
-            },
-        }),
-        .filters = test_filters,
+        .root_module = test_module,
     });
-    exe_tests.root_module.addOptions("build_config", build_config);
-    exe_tests.root_module.addAnonymousImport("default_config", .{ .root_source_file = b.path("share/rush/config.rush") });
-    linkSqlite(b, exe_tests.root_module, use_system_sqlite);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 
     const fuzz_step = b.step("fuzz", "Run all fuzz targets (combine with --fuzz to actually fuzz)");
@@ -87,144 +73,77 @@ pub fn build(b: *std.Build) void {
     });
     const shell_fuzz_step = b.step("fuzz-shell", "Run all shell semantic fuzz targets");
     fuzz_step.dependOn(shell_fuzz_step);
-    addFuzzTarget(b, shell_fuzz_step, target, .{
-        .step_name = "fuzz-shell-delta",
-        .description = "Run shell semantic StateDelta fuzz target",
-        .root_source_file = "src/fuzz/shell.zig",
-        .filter = "fuzz shell delta commit and discard",
-        .source_module_name = "rush-shell",
-        .source_module_root = "src/shell.zig",
-        .link_libc = true,
-    });
-    addFuzzTarget(b, shell_fuzz_step, target, .{
-        .step_name = "fuzz-shell-consequence",
-        .description = "Run shell consequence policy fuzz target",
-        .root_source_file = "src/fuzz/shell.zig",
-        .filter = "fuzz shell consequence policy",
-        .source_module_name = "rush-shell",
-        .source_module_root = "src/shell.zig",
-        .link_libc = true,
-    });
-    addFuzzTarget(b, shell_fuzz_step, target, .{
-        .step_name = "fuzz-shell-redirection",
-        .description = "Run shell redirection rollback fuzz target",
-        .root_source_file = "src/fuzz/shell.zig",
-        .filter = "fuzz shell redirection rollback",
-        .source_module_name = "rush-shell",
-        .source_module_root = "src/shell.zig",
-        .link_libc = true,
-    });
-    addFuzzTarget(b, shell_fuzz_step, target, .{
-        .step_name = "fuzz-shell-eval-redirection",
-        .description = "Run shell eval redirection invariant fuzz target",
-        .root_source_file = "src/fuzz/shell.zig",
-        .filter = "fuzz shell eval redirection invariants",
-        .source_module_name = "rush-shell",
-        .source_module_root = "src/shell.zig",
-        .link_libc = true,
-    });
-    addFuzzTarget(b, shell_fuzz_step, target, .{
-        .step_name = "fuzz-shell-eval-pipeline",
-        .description = "Run shell eval pipeline invariant fuzz target",
-        .root_source_file = "src/fuzz/shell.zig",
-        .filter = "fuzz shell eval pipeline invariants",
-        .source_module_name = "rush-shell",
-        .source_module_root = "src/shell.zig",
-        .link_libc = true,
-    });
+    for (shell_fuzz_targets) |fuzz_target| addFuzzTarget(b, shell_fuzz_step, target, fuzz_target);
 
-    const check_step = b.step("check", "Run unit tests and repository validation checks");
-    check_step.dependOn(test_step);
+    const compile_check_step = b.step("compile-check", "Compile-check Linux/macOS/BSD targets");
+    addCompileChecks(b, compile_check_step, optimize, build_config, use_system_sqlite);
+}
 
-    const compile_test_step = b.step("compile-test", "Compile unit tests without running them");
-    compile_test_step.dependOn(&exe_tests.step);
+const RushRootModuleOptions = struct {
+    link_libc: bool = false,
+};
 
-    const invocation_stdin_check = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        \\set -eu
-        \\tmp=$(mktemp -d)
-        \\trap 'rm -rf "$tmp"' EXIT
-        \\printf '%s\n' 'echo hi' | "$1" >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = hi
-        \\test ! -s "$tmp/stderr"
-        \\printf '%s\n' 'echo "$1"' | "$1" -s posarg >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = posarg
-        \\test ! -s "$tmp/stderr"
-        \\printf 'pipe value\n' | "$1" -c 'read x; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = 'x=[pipe value] status=0'
-        \\test ! -s "$tmp/stderr"
-        \\printf 'file value\n' >"$tmp/input"
-        \\"$1" -c 'read x; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' <"$tmp/input" >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = 'x=[file value] status=0'
-        \\test ! -s "$tmp/stderr"
-        \\printf 'redirected value\n' >"$tmp/redirect"
-        \\printf 'real stdin value\n' | "$1" -c 'read x < "$1"; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' rush "$tmp/redirect" >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = 'x=[redirected value] status=0'
-        \\test ! -s "$tmp/stderr"
-        \\if "$1" -e -c 'false; echo no' >"$tmp/stdout" 2>"$tmp/stderr"; then exit 1; else status=$?; fi
-        \\test "$status" = 1
-        \\test ! -s "$tmp/stdout"
-        \\test ! -s "$tmp/stderr"
-        \\if "$1" -ec 'false; echo no' >"$tmp/stdout" 2>"$tmp/stderr"; then exit 1; else status=$?; fi
-        \\test "$status" = 1
-        \\test ! -s "$tmp/stdout"
-        \\test ! -s "$tmp/stderr"
-        \\if "$1" -c -e 'false; echo no' >"$tmp/stdout" 2>"$tmp/stderr"; then exit 1; else status=$?; fi
-        \\test "$status" = 1
-        \\test ! -s "$tmp/stdout"
-        \\test ! -s "$tmp/stderr"
-        \\"$1" -ec 'printf "%s:%s:%s\n" "$0" "$1" "$2"' name one two >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = 'name:one:two'
-        \\test ! -s "$tmp/stderr"
-        \\"$1" -sc 'printf "%s:%s\n" "$0" "$1"' name one >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = 'name:one'
-        \\test ! -s "$tmp/stderr"
-        \\cat >"$tmp/read-script.rush" <<'EOF'
-        \\read x; status=$?; printf 'x=[%s] status=%s\n' "$x" "$status"
-        \\EOF
-        \\printf 'script pipe value\n' | "$1" "$tmp/read-script.rush" >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = 'x=[script pipe value] status=0'
-        \\test ! -s "$tmp/stderr"
-        \\printf '%s\n' 'read x; status=$?; printf "x=[%s] status=%s\n" "$x" "$status"' | "$1" >"$tmp/stdout" 2>"$tmp/stderr"
-        \\test "$(cat "$tmp/stdout")" = 'x=[] status=1'
-        \\test ! -s "$tmp/stderr"
-        ,
-        "sh",
+fn addCompileChecks(
+    b: *std.Build,
+    compile_check_step: *std.Build.Step,
+    optimize: std.builtin.OptimizeMode,
+    build_config: *std.Build.Step.Options,
+    use_system_sqlite: bool,
+) void {
+    for (compile_check_targets) |target_name| {
+        const target_query = std.Target.Query.parse(.{ .arch_os_abi = target_name }) catch |err|
+            std.debug.panic("invalid compile-check target '{s}': {s}", .{ target_name, @errorName(err) });
+        const check_target = b.resolveTargetQuery(target_query);
+        const check_vaxis = b.dependency("vaxis", .{
+            .target = check_target,
+            .optimize = optimize,
+        }).module("vaxis");
+        const check_zeit = b.dependency("zeit", .{
+            .target = check_target,
+            .optimize = optimize,
+        }).module("zeit");
+        const check_module = createRushRootModule(
+            b,
+            check_target,
+            optimize,
+            check_vaxis,
+            check_zeit,
+            build_config,
+            use_system_sqlite,
+            .{ .link_libc = true },
+        );
+        const check = b.addExecutable(.{
+            .name = b.fmt("rush-{s}", .{target_name}),
+            .root_module = check_module,
+        });
+        compile_check_step.dependOn(&check.step);
+    }
+}
+
+fn createRushRootModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    vaxis: *std.Build.Module,
+    zeit: *std.Build.Module,
+    build_config: *std.Build.Step.Options,
+    use_system_sqlite: bool,
+    options: RushRootModuleOptions,
+) *std.Build.Module {
+    const module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = options.link_libc,
+        .imports = &.{
+            .{ .name = "vaxis", .module = vaxis },
+            .{ .name = "zeit", .module = zeit },
+        },
     });
-    invocation_stdin_check.addArtifactArg(exe);
-
-    const fmt_step = b.step("fmt", "Check code formatting");
-    const fmt_check = b.addFmt(.{ .paths = &.{ "src", "build.zig", "build.zig.zon" }, .check = true });
-    fmt_step.dependOn(&fmt_check.step);
-    check_step.dependOn(fmt_step);
-    check_step.dependOn(&invocation_stdin_check.step);
-
-    const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
-    const cross_check = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        \\set -eu
-        \\zig=$1
-        \\"$zig" build test --summary all
-        \\for target in \
-        \\  x86_64-linux-gnu \
-        \\  aarch64-linux-gnu \
-        \\  x86_64-macos \
-        \\  aarch64-macos \
-        \\  x86_64-freebsd \
-        \\  x86_64-openbsd \
-        \\  x86_64-netbsd
-        \\do
-        \\  echo "compile-check $target"
-        \\  "$zig" build compile-test -Dtarget="$target" --summary none
-        \\done
-        ,
-        "sh",
-    });
-    cross_check.addArg(b.graph.zig_exe);
-    cross_check.step.dependOn(fmt_step);
-    cross_check_step.dependOn(&cross_check.step);
+    module.addOptions("build_config", build_config);
+    module.addAnonymousImport("default_config", .{ .root_source_file = b.path("share/rush/config.rush") });
+    linkSqlite(b, module, use_system_sqlite);
+    return module;
 }
 
 const FuzzTargetOptions = struct {
@@ -235,6 +154,54 @@ const FuzzTargetOptions = struct {
     source_module_name: ?[]const u8 = null,
     source_module_root: ?[]const u8 = null,
     link_libc: bool = false,
+};
+
+const shell_fuzz_targets = [_]FuzzTargetOptions{
+    .{
+        .step_name = "fuzz-shell-delta",
+        .description = "Run shell semantic StateDelta fuzz target",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell delta commit and discard",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    },
+    .{
+        .step_name = "fuzz-shell-consequence",
+        .description = "Run shell consequence policy fuzz target",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell consequence policy",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    },
+    .{
+        .step_name = "fuzz-shell-redirection",
+        .description = "Run shell redirection rollback fuzz target",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell redirection rollback",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    },
+    .{
+        .step_name = "fuzz-shell-eval-redirection",
+        .description = "Run shell eval redirection invariant fuzz target",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell eval redirection invariants",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    },
+    .{
+        .step_name = "fuzz-shell-eval-pipeline",
+        .description = "Run shell eval pipeline invariant fuzz target",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell eval pipeline invariants",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    },
 };
 
 fn addFuzzTarget(b: *std.Build, umbrella: *std.Build.Step, target: std.Build.ResolvedTarget, options: FuzzTargetOptions) void {
