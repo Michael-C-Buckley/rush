@@ -42,6 +42,17 @@ pub const TrapMutation = struct {
     action: ?[]const u8,
 };
 
+pub const EventHookMutation = struct {
+    event: []const u8,
+    function: []const u8,
+};
+
+pub const IntervalHookMutation = struct {
+    name: []const u8,
+    interval_ms: u64,
+    function: []const u8,
+};
+
 pub const OptionChange = struct {
     option: state.ShellOption,
     enabled: bool,
@@ -74,6 +85,8 @@ pub const StateDelta = struct {
     abbreviation_sets: std.ArrayList(NameValueMutation) = .empty,
     abbreviation_unsets: std.ArrayList([]const u8) = .empty,
     trap_mutations: std.ArrayList(TrapMutation) = .empty,
+    event_hook_adds: std.ArrayList(EventHookMutation) = .empty,
+    interval_hook_adds: std.ArrayList(IntervalHookMutation) = .empty,
     pending_trap_enqueues: std.ArrayList(state.TrapSignal) = .empty,
     pending_trap_consume_count: usize = 0,
     pending_exit: ?state.ExitStatus = null,
@@ -132,6 +145,16 @@ pub const StateDelta = struct {
             if (mutation.action) |action| self.allocator.free(action);
         }
         self.trap_mutations.deinit(self.allocator);
+        for (self.event_hook_adds.items) |mutation| {
+            self.allocator.free(mutation.event);
+            self.allocator.free(mutation.function);
+        }
+        self.event_hook_adds.deinit(self.allocator);
+        for (self.interval_hook_adds.items) |mutation| {
+            self.allocator.free(mutation.name);
+            self.allocator.free(mutation.function);
+        }
+        self.interval_hook_adds.deinit(self.allocator);
         self.pending_trap_enqueues.deinit(self.allocator);
 
         if (self.positionals) |args| {
@@ -178,6 +201,8 @@ pub const StateDelta = struct {
         for (self.abbreviation_sets.items) |mutation| try cloned.setAbbreviation(mutation.name, mutation.value);
         for (self.abbreviation_unsets.items) |name| try cloned.unsetAbbreviation(name);
         for (self.trap_mutations.items) |mutation| try cloned.setTrap(mutation.name, mutation.action);
+        for (self.event_hook_adds.items) |mutation| try cloned.addEventHook(mutation.event, mutation.function);
+        for (self.interval_hook_adds.items) |mutation| try cloned.addIntervalHook(mutation.name, mutation.interval_ms, mutation.function);
         for (self.pending_trap_enqueues.items) |signal| try cloned.enqueuePendingTrap(signal);
         if (self.pending_trap_consume_count != 0) cloned.consumePendingTraps(self.pending_trap_consume_count);
         if (self.pending_exit) |status| cloned.setPendingExit(status);
@@ -209,6 +234,8 @@ pub const StateDelta = struct {
             self.abbreviation_sets.items.len == 0 and
             self.abbreviation_unsets.items.len == 0 and
             self.trap_mutations.items.len == 0 and
+            self.event_hook_adds.items.len == 0 and
+            self.interval_hook_adds.items.len == 0 and
             self.pending_trap_enqueues.items.len == 0 and
             self.pending_trap_consume_count == 0 and
             self.pending_exit == null and
@@ -425,6 +452,30 @@ pub const StateDelta = struct {
         try self.trap_mutations.append(self.allocator, .{ .name = owned_name, .action = owned_action });
     }
 
+    pub fn addEventHook(self: *StateDelta, event: []const u8, function: []const u8) !void {
+        self.assertPending();
+        state.assertValidEventName(event);
+        state.assertValidVariableName(function);
+        const owned_event = try self.allocator.dupe(u8, event);
+        errdefer self.allocator.free(owned_event);
+        const owned_function = try self.allocator.dupe(u8, function);
+        errdefer self.allocator.free(owned_function);
+        try self.event_hook_adds.append(self.allocator, .{ .event = owned_event, .function = owned_function });
+    }
+
+    pub fn addIntervalHook(self: *StateDelta, name: []const u8, interval_ms: u64, function: []const u8) !void {
+        self.assertPending();
+        std.debug.assert(name.len != 0);
+        std.debug.assert(std.mem.indexOfScalar(u8, name, 0) == null);
+        std.debug.assert(interval_ms != 0);
+        state.assertValidVariableName(function);
+        const owned_name = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(owned_name);
+        const owned_function = try self.allocator.dupe(u8, function);
+        errdefer self.allocator.free(owned_function);
+        try self.interval_hook_adds.append(self.allocator, .{ .name = owned_name, .interval_ms = interval_ms, .function = owned_function });
+    }
+
     pub fn enqueuePendingTrap(self: *StateDelta, signal: state.TrapSignal) !void {
         self.assertPending();
         signal.validate();
@@ -627,6 +678,8 @@ pub const StateDelta = struct {
                 shell_state.clearTrap(mutation.name);
             }
         }
+        for (self.event_hook_adds.items) |mutation| try shell_state.addEventHook(mutation.event, mutation.function);
+        for (self.interval_hook_adds.items) |mutation| try shell_state.addIntervalHook(mutation.name, mutation.interval_ms, mutation.function);
         if (self.pending_trap_consume_count != 0) shell_state.consumePendingTraps(self.pending_trap_consume_count);
         for (self.pending_trap_enqueues.items) |signal| try shell_state.appendPendingTrap(signal);
         if (self.clear_pending_exit) shell_state.clearPendingExit();

@@ -922,6 +922,7 @@ fn exitSignalFromStatus(status: shell.ExitStatus) ?u8 {
 const InteractiveCompletionContext = struct {
     executor: *exec.Executor,
     semantic_state: ?*shell.ShellState = null,
+    prompt_runtime: ?*InteractivePromptRuntime = null,
     history: *const History,
     cache: *CompletionCache,
     loader: *CompletionScriptLoader,
@@ -937,13 +938,58 @@ const InteractiveCompletionContext = struct {
     cancel: ?*completion_model.CancellationToken = null,
 
     fn promptService(self: InteractiveCompletionContext) InteractivePromptService {
-        return .{ .executor = self.executor, .semantic_state = self.semantic_state, .arg_zero = self.arg_zero, .features = self.features };
+        const semantic_state = self.semantic_state orelse unreachable;
+        const prompt_runtime = self.prompt_runtime orelse unreachable;
+        return .{ .shell_state = semantic_state, .runtime = prompt_runtime, .arg_zero = self.arg_zero, .features = self.features };
+    }
+};
+
+const InteractivePromptRuntime = struct {
+    executor: exec.Executor,
+
+    fn init(allocator: std.mem.Allocator) InteractivePromptRuntime {
+        return .{ .executor = exec.Executor.init(allocator) };
+    }
+
+    fn deinit(self: *InteractivePromptRuntime) void {
+        self.executor.deinit();
+        self.* = undefined;
+    }
+
+    fn syncFromShellState(self: *InteractivePromptRuntime, shell_state: shell.ShellState) !void {
+        shell_state.validate();
+        std.debug.assert(shell_state.scope == .current_shell);
+        try syncExecutorFromSemanticInteractiveState(&self.executor, shell_state);
+        if (shell_state.getFunction("rush_prompt")) |definition| {
+            if (definition.source_body) |body| {
+                if (definition.redirections.steps.len == 0) try self.executor.setFunction("rush_prompt", body, &.{}) else self.executor.unsetFunction("rush_prompt");
+            } else self.executor.unsetFunction("rush_prompt");
+        } else {
+            self.executor.unsetFunction("rush_prompt");
+        }
+        if (shell_state.getFunction("rush_style")) |definition| {
+            if (definition.source_body) |body| {
+                if (definition.redirections.steps.len == 0) try self.executor.setFunction("rush_style", body, &.{}) else self.executor.unsetFunction("rush_style");
+            } else self.executor.unsetFunction("rush_style");
+        } else {
+            self.executor.unsetFunction("rush_style");
+        }
+        var functions = shell_state.functions.iterator();
+        while (functions.next()) |entry| {
+            if (entry.value_ptr.source_body) |body| {
+                if (entry.value_ptr.redirections.steps.len == 0) try self.executor.setFunction(entry.key_ptr.*, body, &.{});
+            }
+        }
+    }
+
+    fn syncVariablesToShellState(self: *InteractivePromptRuntime, shell_state: *shell.ShellState) !void {
+        try self.executor.exportVariablesToShellState(shell_state);
     }
 };
 
 const InteractivePromptService = struct {
-    executor: *exec.Executor,
-    semantic_state: ?*const shell.ShellState = null,
+    shell_state: *shell.ShellState,
+    runtime: *InteractivePromptRuntime,
     arg_zero: []const u8 = "rush",
     features: compat.Features = .{},
 
@@ -961,11 +1007,8 @@ const InteractivePromptService = struct {
     }
 
     fn shellOptions(self: InteractivePromptService) shell.ShellOptions {
-        if (self.semantic_state) |semantic_state| {
-            semantic_state.validate();
-            return semantic_state.options;
-        }
-        return semanticShellOptions(self.executor.shell_options);
+        self.shell_state.validate();
+        return self.shell_state.options;
     }
 
     fn promptText(self: InteractivePromptService, name: []const u8, fallback: []const u8) []const u8 {
@@ -974,15 +1017,14 @@ const InteractivePromptService = struct {
 
     fn getEnv(self: InteractivePromptService, name: []const u8) ?[]const u8 {
         std.debug.assert(isValidShellVariableName(name));
-        if (self.semantic_state) |semantic_state| {
-            semantic_state.validate();
-            if (semantic_state.getVariable(name)) |variable| return variable.value;
-        }
-        return self.executor.getEnv(name);
+        self.shell_state.validate();
+        if (self.shell_state.getVariable(name)) |variable| return variable.value;
+        return null;
     }
 
     fn renderWithFallback(self: InteractivePromptService, allocator: std.mem.Allocator, io: std.Io, fallback_prompt: []const u8) ![]const u8 {
-        return self.executor.renderPrompt(.{
+        try self.runtime.syncFromShellState(self.shell_state.*);
+        const prompt = self.runtime.executor.renderPrompt(.{
             .io = io,
             .allow_external = true,
             .features = self.features,
@@ -992,30 +1034,57 @@ const InteractivePromptService = struct {
             error.RecursivePrompt => try allocator.dupe(u8, fallback_prompt),
             else => |e| return e,
         };
+        try self.runtime.syncVariablesToShellState(self.shell_state);
+        return prompt;
     }
 
     fn refreshIntervalMs(self: InteractivePromptService) ?u64 {
-        return self.executor.promptRefreshIntervalMs();
+        return self.runtime.executor.promptRefreshIntervalMs();
     }
 
     fn runEventHooks(self: InteractivePromptService, io: std.Io, event: []const u8, args: []const []const u8) !void {
-        try self.executor.runPromptEventHooks(io, event, args);
+        shell.assertValidEventName(event);
+        self.shell_state.validate();
+        const hooks = self.shell_state.event_hooks.get(event) orelse return;
+        for (hooks.items) |hook| try self.runHookFunction(io, hook.function, args);
     }
 
     fn runPendingVariableHooks(self: InteractivePromptService, io: std.Io) !void {
-        try self.executor.runPendingVariableHooks(io);
+        self.shell_state.validate();
+        var pending = self.shell_state.pending_variable_hooks;
+        self.shell_state.pending_variable_hooks = .empty;
+        defer {
+            for (pending.items) |name| self.shell_state.allocator.free(name);
+            pending.deinit(self.shell_state.allocator);
+        }
+        for (pending.items) |name| try self.runEventHooks(io, "variable", &.{name});
     }
 
     fn intervalWaitMs(self: InteractivePromptService, io: std.Io) ?u64 {
-        return self.executor.promptIntervalWaitMs(io);
+        self.shell_state.validate();
+        if (self.shell_state.interval_hooks.items.len == 0) return null;
+        const now = promptNowMs(io);
+        var wait_ms: ?u64 = null;
+        for (self.shell_state.interval_hooks.items) |hook| {
+            const due_at = hook.last_run_ms +| hook.interval_ms;
+            const remaining = if (due_at <= now) 0 else due_at - now;
+            wait_ms = if (wait_ms) |current| @min(current, remaining) else remaining;
+        }
+        return wait_ms;
     }
 
     fn runDueIntervals(self: InteractivePromptService, io: std.Io) !void {
-        try self.executor.runDuePromptIntervals(io);
+        self.shell_state.validate();
+        const now = promptNowMs(io);
+        for (self.shell_state.interval_hooks.items) |*hook| {
+            if (hook.last_run_ms != 0 and now -| hook.last_run_ms < hook.interval_ms) continue;
+            hook.last_run_ms = now;
+            try self.runHookFunction(io, hook.function, &.{hook.name});
+        }
     }
 
     fn applyColorScheme(self: InteractivePromptService, io: std.Io, scheme: editor_driver.ColorScheme) !void {
-        try self.executor.setRushStateVariable("rush_color_scheme", colorSchemeName(scheme));
+        try self.shell_state.putVariable("rush_color_scheme", colorSchemeName(scheme), .{});
         try self.runStyleHook(io);
     }
 
@@ -1023,7 +1092,7 @@ const InteractivePromptService = struct {
         const variable = colorReportVariable(report) orelse return;
         var value_buffer: [8]u8 = undefined;
         const value = try std.fmt.bufPrint(&value_buffer, "#{x:0>2}{x:0>2}{x:0>2}", .{ report.value[0], report.value[1], report.value[2] });
-        try self.executor.setRushStateVariable(variable, value);
+        try self.shell_state.putVariable(variable, value, .{});
         try self.runStyleHook(io);
     }
 
@@ -1044,14 +1113,27 @@ const InteractivePromptService = struct {
     }
 
     fn runStyleHook(self: InteractivePromptService, io: std.Io) !void {
-        if (!self.executor.hasFunction("rush_style")) return;
-        const style_options: exec.ExecuteOptions = .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = self.arg_zero };
-        var result = try self.executor.executeScriptSlice("rush_style", style_options);
+        if (self.shell_state.getFunction("rush_style") == null) return;
+        try self.runHookFunction(io, "rush_style", &.{});
+    }
+
+    fn runHookFunction(self: InteractivePromptService, io: std.Io, function: []const u8, args: []const []const u8) !void {
+        if (self.shell_state.getFunction(function) == null) return;
+        try self.runtime.syncFromShellState(self.shell_state.*);
+        var script: std.ArrayList(u8) = .empty;
+        defer script.deinit(self.shell_state.allocator);
+        try appendShellQuotedMain(self.shell_state.allocator, &script, function);
+        for (args) |arg| {
+            try script.append(self.shell_state.allocator, ' ');
+            try appendShellQuotedMain(self.shell_state.allocator, &script, arg);
+        }
+        var result = try self.runtime.executor.executeScriptSlice(script.items, .{ .io = io, .allow_external = true, .external_stdio = .capture, .suppress_errexit = true, .arg_zero = self.arg_zero });
         defer result.deinit();
+        try self.runtime.syncVariablesToShellState(self.shell_state);
     }
 
     fn applyUiStyleVariable(self: InteractivePromptService, style: *line_editor.UiStyle, name: []const u8) void {
-        const value = self.executor.getEnv(name) orelse return;
+        const value = self.getEnv(name) orelse return;
         style.* = line_editor.parseUiStyle(value) orelse style.*;
     }
 };
@@ -1087,6 +1169,8 @@ fn cloneInteractiveCompletionContext(context: *anyopaque, allocator: std.mem.All
 
     cloned.* = .{
         .executor = executor,
+        .semantic_state = source.semantic_state,
+        .prompt_runtime = source.prompt_runtime,
         .history = history,
         .cache = cache,
         .loader = loader,
@@ -1153,13 +1237,40 @@ fn refreshInteractiveColorReport(context: *anyopaque, allocator: std.mem.Allocat
 }
 
 fn applyInteractiveColorScheme(executor: *exec.Executor, io: std.Io, scheme: editor_driver.ColorScheme) !void {
-    const prompt_service: InteractivePromptService = .{ .executor = executor, .arg_zero = executor.arg_zero };
-    try prompt_service.applyColorScheme(io, scheme);
+    try executor.setRushStateVariable("rush_color_scheme", colorSchemeName(scheme));
+    if (executor.hasFunction("rush_style")) {
+        var result = try executor.executeScriptSlice("rush_style", .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = executor.arg_zero });
+        defer result.deinit();
+    }
 }
 
 fn applyInteractiveColorReport(executor: *exec.Executor, io: std.Io, report: editor_driver.ColorReport) !void {
-    const prompt_service: InteractivePromptService = .{ .executor = executor, .arg_zero = executor.arg_zero };
-    try prompt_service.applyColorReport(io, report);
+    const variable = colorReportVariable(report) orelse return;
+    var value_buffer: [8]u8 = undefined;
+    const value = try std.fmt.bufPrint(&value_buffer, "#{x:0>2}{x:0>2}{x:0>2}", .{ report.value[0], report.value[1], report.value[2] });
+    try executor.setRushStateVariable(variable, value);
+    if (executor.hasFunction("rush_style")) {
+        var result = try executor.executeScriptSlice("rush_style", .{ .io = io, .allow_external = true, .external_stdio = .capture, .arg_zero = executor.arg_zero });
+        defer result.deinit();
+    }
+}
+
+fn promptNowMs(io: std.Io) u64 {
+    const timestamp = std.Io.Timestamp.now(io, .real);
+    if (timestamp.nanoseconds <= 0) return 0;
+    return @intCast(@divFloor(timestamp.nanoseconds, std.time.ns_per_ms));
+}
+
+fn appendShellQuotedMain(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8) !void {
+    try out.append(allocator, '\'');
+    for (text) |byte| {
+        if (byte == '\'') {
+            try out.appendSlice(allocator, "'\\''");
+        } else {
+            try out.append(allocator, byte);
+        }
+    }
+    try out.append(allocator, '\'');
 }
 
 fn colorReportVariable(report: editor_driver.ColorReport) ?[]const u8 {
@@ -1190,16 +1301,32 @@ fn colorSchemeName(scheme: editor_driver.ColorScheme) []const u8 {
 }
 
 fn interactiveUiTheme(executor: exec.Executor) line_editor.UiTheme {
-    var executor_copy = executor;
-    const prompt_service: InteractivePromptService = .{ .executor = &executor_copy, .arg_zero = executor.arg_zero };
-    return prompt_service.theme();
+    var ui_theme: line_editor.UiTheme = .{};
+    applyExecutorUiStyleVariable(executor, &ui_theme.completion_selected, "rush_style_completion_selected");
+    applyExecutorUiStyleVariable(executor, &ui_theme.completion_directory, "rush_style_completion_directory");
+    applyExecutorUiStyleVariable(executor, &ui_theme.completion_option, "rush_style_completion_option");
+    applyExecutorUiStyleVariable(executor, &ui_theme.completion_variable, "rush_style_completion_variable");
+    applyExecutorUiStyleVariable(executor, &ui_theme.completion_function, "rush_style_completion_function");
+    applyExecutorUiStyleVariable(executor, &ui_theme.completion_file, "rush_style_completion_file");
+    applyExecutorUiStyleVariable(executor, &ui_theme.completion_description, "rush_style_completion_description");
+    applyExecutorUiStyleVariable(executor, &ui_theme.completion_flash, "rush_style_completion_flash");
+    applyExecutorUiStyleVariable(executor, &ui_theme.history_match, "rush_style_history_match");
+    applyExecutorUiStyleVariable(executor, &ui_theme.autosuggestion, "rush_style_autosuggestion");
+    applyExecutorUiStyleVariable(executor, &ui_theme.diagnostic_error, "rush_style_diagnostic_error");
+    return ui_theme;
+}
+
+fn applyExecutorUiStyleVariable(executor: exec.Executor, style: *line_editor.UiStyle, name: []const u8) void {
+    const value = executor.getEnv(name) orelse return;
+    style.* = line_editor.parseUiStyle(value) orelse style.*;
 }
 
 fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor_driver.HookResult {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    const prompt_service = completion_context.promptService();
-    const refresh_prompt = if (prompt_service.intervalWaitMs(io)) |wait_ms| wait_ms == 0 else false;
-    try prompt_service.runDueIntervals(io);
+    const has_prompt_service = completion_context.prompt_runtime != null and completion_context.semantic_state != null;
+    const prompt_service = if (has_prompt_service) completion_context.promptService() else null;
+    const refresh_prompt = if (prompt_service) |service| if (service.intervalWaitMs(io)) |wait_ms| wait_ms == 0 else false else false;
+    if (prompt_service) |service| try service.runDueIntervals(io);
 
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
@@ -1232,7 +1359,10 @@ fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator
 
 fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     const completion_context: *InteractiveCompletionContext = @ptrCast(@alignCast(context));
-    var wait_ms = completion_context.promptService().intervalWaitMs(io);
+    var wait_ms: ?u64 = if (completion_context.prompt_runtime != null and completion_context.semantic_state != null)
+        completion_context.promptService().intervalWaitMs(io)
+    else
+        null;
     const wants_job_poll = if (completion_context.semantic_state) |semantic_state|
         shellStateWantsImmediateJobNotificationPoll(semantic_state)
     else
@@ -6478,7 +6608,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var completion_executor = exec.Executor.init(allocator);
     defer completion_executor.deinit();
     try completion_executor.copyCompletionStateFrom(executor);
-    var prompt_service: InteractivePromptService = .{ .executor = executor, .semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null, .arg_zero = options.arg_zero, .features = options.features };
+    var prompt_runtime = InteractivePromptRuntime.init(allocator);
+    defer prompt_runtime.deinit();
+    var prompt_service: InteractivePromptService = .{ .shell_state = &interactive_shell.semantic_state, .runtime = &prompt_runtime, .arg_zero = options.arg_zero, .features = options.features };
     var terminal = try editor_driver.TerminalSession.init(allocator, io);
     defer terminal.deinit();
     runtime.signal.setWakeFd(terminal.trapSignalWakeFd());
@@ -6486,7 +6618,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     try prompt_service.applyColorScheme(io, .unknown);
     try syncInteractiveTerminalSize(executor, terminal);
     if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-    executor.setPromptRepaintHandler(&terminal, requestInteractivePromptRepaint);
+    prompt_runtime.executor.setPromptRepaintHandler(&terminal, requestInteractivePromptRepaint);
 
     var completion_cache = CompletionCache.init(completion_allocator);
     defer completion_cache.deinit();
@@ -6501,7 +6633,6 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         terminal.refreshWinsize();
         try syncInteractiveTerminalSize(executor, terminal);
         if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
-        prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         const notifications = if (interactive_shell.semantic_enabled)
             try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
         else
@@ -6509,11 +6640,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer allocator.free(notifications);
         try writeAll(io, .stderr, notifications);
         try prompt_service.runPendingVariableHooks(io);
-        try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
-        prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         try prompt_service.runEventHooks(io, "prompt", &.{});
-        try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
-        prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;
@@ -6530,7 +6657,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         defer if (title.owned) allocator.free(title.text);
         try terminal.reportWindowTitle(title.text);
         completion_loader.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
-        var completion_context: InteractiveCompletionContext = .{ .executor = &completion_executor, .semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
+        var completion_context: InteractiveCompletionContext = .{ .executor = &completion_executor, .semantic_state = &interactive_shell.semantic_state, .prompt_runtime = &prompt_runtime, .history = &history, .cache = &completion_cache, .loader = &completion_loader, .io = io, .cwd = cwd, .arg_zero = options.arg_zero, .features = options.features };
         const ui_theme = prompt_service.theme();
         const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt,
@@ -6610,7 +6737,6 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
         while (try interactiveInputNeedsContinuation(allocator, command.items, options.features)) {
             var continuation_options = read_options;
-            prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
             continuation_options.prompt = prompt_service.continuationPrompt();
             continuation_options.prompt_refresh_interval_ms = null;
             continuation_options.prompt_context = null;
@@ -6687,7 +6813,6 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
             try prompt_service.runEventHooks(io, "preexec", &.{input});
-            try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
             var result = try runInteractiveScript(allocator, io, executor, &interactive_shell, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
             defer result.deinit();
@@ -6700,7 +6825,6 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             var status_buffer: [3]u8 = undefined;
             const status_text = try std.fmt.bufPrint(&status_buffer, "{d}", .{result.status});
             try prompt_service.runEventHooks(io, "postexec", &.{ input, status_text });
-            try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
             try terminal.finishSemanticCommand(result.status);
             completion_cache.clear();
             if (interactivePendingExit(&interactive_shell)) |status| {
@@ -6818,7 +6942,9 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     var interactive_executor = exec.Executor.init(allocator);
     defer interactive_executor.deinit();
     const executor = &interactive_executor;
-    var prompt_service: InteractivePromptService = .{ .executor = executor };
+    var prompt_runtime = InteractivePromptRuntime.init(allocator);
+    defer prompt_runtime.deinit();
+    var prompt_service: InteractivePromptService = .{ .shell_state = &interactive_shell.semantic_state, .runtime = &prompt_runtime };
     {
         var result = try runScriptWithExecutor(allocator, executor, embedded_config, .{ .io = io, .allow_external = true, .arg_zero = "rush", .source_path = embedded_config_path });
         defer result.deinit();
@@ -6833,7 +6959,6 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         defer result.deinit();
     }
     try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
-    prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
@@ -6861,7 +6986,6 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         last_status = result.status;
         if (!history_service.consumeSuppressNextAppend()) try history_service.addCommand(io, line, result.status, command_started_at, 0);
         try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
-        prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
         if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;
@@ -12993,12 +13117,6 @@ test "repl uses literal PS1 fallback prompt" {
 }
 
 test "interactive prompt service prefers ShellState prompts and editing mode" {
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    try executor.setEnv("PS1", "legacy> ");
-    try executor.setEnv("PS2", "legacy2> ");
-    executor.shell_options.vi = false;
-
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
     try shell_state.putVariable("PS1", "semantic> ", .{});
@@ -13006,13 +13124,47 @@ test "interactive prompt service prefers ShellState prompts and editing mode" {
     shell_state.options.vi = true;
     shell_state.validate();
 
-    const prompt_service: InteractivePromptService = .{ .executor = &executor, .semantic_state = &shell_state };
+    var prompt_runtime = InteractivePromptRuntime.init(std.testing.allocator);
+    defer prompt_runtime.deinit();
+    const prompt_service: InteractivePromptService = .{ .shell_state = &shell_state, .runtime = &prompt_runtime };
     const prompt = try prompt_service.render(std.testing.allocator, std.testing.io);
     defer std.testing.allocator.free(prompt);
 
     try std.testing.expectEqualStrings("semantic> ", prompt);
     try std.testing.expectEqualStrings("semantic2> ", prompt_service.continuationPrompt());
     try std.testing.expectEqual(line_editor.EditingMode.vi, prompt_service.editingMode());
+}
+
+test "interactive prompt service renders ShellState prompt functions and hooks" {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("PS1", "$ ", .{});
+
+    var setup = try runSemanticShellStateScript(std.testing.allocator, std.testing.io, &shell_state,
+        \\rush_prompt() { prompt segment --fg blue custom; prompt text ' > '; }
+        \\on_prompt() { PROMPT_HOOK=ran; }
+        \\on_interval() { INTERVAL_HOOK=$1; }
+        \\event prompt on_prompt
+        \\interval tick --interval 100000 on_interval
+    , "test:prompt-hooks", "rush", .{}, .capture);
+    defer setup.deinit();
+    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup.status);
+
+    var prompt_runtime = InteractivePromptRuntime.init(std.testing.allocator);
+    defer prompt_runtime.deinit();
+    const prompt_service: InteractivePromptService = .{ .shell_state = &shell_state, .runtime = &prompt_runtime };
+
+    try prompt_service.runEventHooks(std.testing.io, "prompt", &.{});
+    try std.testing.expectEqualStrings("ran", shell_state.getVariable("PROMPT_HOOK").?.value);
+
+    const prompt = try prompt_service.render(std.testing.allocator, std.testing.io);
+    defer std.testing.allocator.free(prompt);
+    try std.testing.expectEqualStrings("\x1b[38;5;4mcustom\x1b[0m > ", prompt);
+
+    try std.testing.expectEqual(@as(?u64, 0), prompt_service.intervalWaitMs(std.testing.io));
+    try prompt_service.runDueIntervals(std.testing.io);
+    try std.testing.expectEqualStrings("tick", shell_state.getVariable("INTERVAL_HOOK").?.value);
+    try std.testing.expect((prompt_service.intervalWaitMs(std.testing.io) orelse 0) > 0);
 }
 
 test "interactive startup initializes prompt variables and sources ENV" {

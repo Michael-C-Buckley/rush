@@ -3510,6 +3510,26 @@ pub const Executor = struct {
         return self.env.get(name);
     }
 
+    pub fn exportVariablesToShellState(self: Executor, shell_state_ptr: *shell_state.ShellState) !void {
+        shell_state_ptr.validate();
+        var variables = self.env.iterator();
+        while (variables.next()) |entry| {
+            const name = entry.key_ptr.*;
+            const value = entry.value_ptr.*;
+            if (!isShellName(name)) continue;
+            if (std.mem.indexOfScalar(u8, value, 0) != null) continue;
+            const exported = self.exported.contains(name);
+            const readonly = self.readonly.contains(name);
+            if (shell_state_ptr.getVariable(name)) |current| {
+                if (std.mem.eql(u8, current.value, value) and current.exported == exported and current.readonly == readonly) continue;
+            }
+            try shell_state_ptr.putVariable(name, value, .{
+                .exported = exported,
+                .readonly = readonly,
+            });
+        }
+    }
+
     fn logicalCwd(self: *Executor, io: std.Io) ![:0]u8 {
         if (self.getEnv("PWD")) |pwd| {
             if (self.validLogicalPwd(pwd)) return self.allocator.dupeZ(u8, pwd);
@@ -3704,7 +3724,7 @@ pub const Executor = struct {
         if (value) |text| try self.setEnv(name, text);
     }
 
-    fn unsetFunction(self: *Executor, name: []const u8) void {
+    pub fn unsetFunction(self: *Executor, name: []const u8) void {
         if (self.functions.fetchRemove(name)) |entry| {
             self.allocator.free(entry.key);
             var value = entry.value;
@@ -4824,7 +4844,7 @@ pub const Executor = struct {
         });
     }
 
-    fn setFunction(self: *Executor, name: []const u8, body: []const u8, redirections: []const ir.Redirection) !void {
+    pub fn setFunction(self: *Executor, name: []const u8, body: []const u8, redirections: []const ir.Redirection) !void {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         var function_value = try self.functionValueFromParts(body, redirections);

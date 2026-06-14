@@ -77,6 +77,7 @@ pub const ShellOption = state.ShellOption;
 pub const ShellOptions = state.ShellOptions;
 pub const applyShellOptionName = state.applyShellOptionName;
 pub const applyShellOptionShort = state.applyShellOptionShort;
+pub const assertValidEventName = state.assertValidEventName;
 pub const StatementList = command_plan.StatementList;
 pub const StatementListEntry = command_plan.StatementListEntry;
 pub const StatementListOperator = command_plan.StatementListOperator;

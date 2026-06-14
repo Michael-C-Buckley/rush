@@ -3861,6 +3861,8 @@ fn evaluateBuiltin(evaluator: *Evaluator, shell_state: state.ShellState, eval_co
     if (std.mem.eql(u8, definition.name, "alias")) return normalEvaluation(try evaluateAlias(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "unalias")) return normalEvaluation(try evaluateUnalias(shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "trap")) return normalEvaluation(try evaluateTrap(evaluator.allocator, shell_state, plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "event")) return normalEvaluation(try evaluateEvent(plan.argv, state_delta, buffers));
+    if (std.mem.eql(u8, definition.name, "interval")) return normalEvaluation(try evaluateInterval(plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "local")) return normalEvaluation(try evaluateLocal(evaluator, shell_state, eval_context, plan, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "read")) return normalEvaluation(try evaluateRead(evaluator, shell_state, plan.argv, state_delta, buffers));
     if (std.mem.eql(u8, definition.name, "cd")) return normalEvaluation(try evaluateCd(evaluator, shell_state, plan.argv, state_delta, buffers));
@@ -3996,6 +3998,37 @@ fn evaluatePrompt(argv: []const []const u8, buffers: *EvaluationBuffers) !outcom
     std.debug.assert(std.mem.eql(u8, argv[0], "prompt"));
     if (argv.len >= 2 and std.mem.eql(u8, argv[1], "repaint")) return 0;
     return builtinStatusError(buffers, 2, "prompt", "not rendering a prompt");
+}
+
+fn evaluateEvent(argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "event"));
+    if (argv.len != 3) return builtinUsageError(buffers, "event", "usage: EVENT FUNCTION");
+    const event = argv[1];
+    if (!isPromptEventName(event)) return builtinUsageError(buffers, "event", "unsupported event");
+    const function = argv[2];
+    if (!isShellName(function)) return builtinUsageError(buffers, "event", "invalid function name");
+    try state_delta.addEventHook(event, function);
+    return 0;
+}
+
+fn evaluateInterval(argv: []const []const u8, state_delta: *delta.StateDelta, buffers: *EvaluationBuffers) !outcome.ExitStatus {
+    std.debug.assert(argv.len != 0);
+    std.debug.assert(std.mem.eql(u8, argv[0], "interval"));
+    if (argv.len != 5 or !std.mem.eql(u8, argv[2], "--interval")) return builtinUsageError(buffers, "interval", "usage: NAME --interval MS FUNCTION");
+    const interval_ms = std.fmt.parseUnsigned(u64, argv[3], 10) catch return builtinUsageError(buffers, "interval", "invalid interval");
+    if (interval_ms == 0) return builtinUsageError(buffers, "interval", "invalid interval");
+    const function = argv[4];
+    if (!isShellName(function)) return builtinUsageError(buffers, "interval", "invalid function name");
+    try state_delta.addIntervalHook(argv[1], interval_ms, function);
+    return 0;
+}
+
+fn isPromptEventName(name: []const u8) bool {
+    return std.mem.eql(u8, name, "prompt") or
+        std.mem.eql(u8, name, "preexec") or
+        std.mem.eql(u8, name, "postexec") or
+        std.mem.eql(u8, name, "variable");
 }
 
 fn evaluateCommandBuiltin(argv: []const []const u8, stdout: *std.ArrayList(u8), buffers: *EvaluationBuffers) !outcome.ExitStatus {
