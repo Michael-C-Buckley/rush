@@ -75,5 +75,66 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "command -v writes a found utility name",
+            .script =
+            \\command -v printf
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\printf
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "dot executes a file in the current environment",
+            .script =
+            \\printf '%s\n' 'sourced=value' >file.sh
+            \\. ./file.sh
+            \\printf '<%s>\n' "$sourced"
+            ,
+            .stdout =
+            \\<value>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "true and false return their specified statuses",
+            .script =
+            \\true
+            \\printf '<%s>\n' "$?"
+            \\false
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "alias query writes the alias and unalias removes it",
+            .script =
+            \\alias ll='printf hi'
+            \\alias ll
+            \\unalias ll
+            \\alias ll >/dev/null 2>&1
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\ll='printf hi'
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }
