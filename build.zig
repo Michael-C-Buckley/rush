@@ -115,6 +115,15 @@ pub fn build(b: *std.Build) void {
         .source_module_root = "src/shell.zig",
         .link_libc = true,
     });
+    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+        .step_name = "fuzz-shell-eval-redirection",
+        .description = "Run shell eval redirection invariant fuzz target",
+        .root_source_file = "src/fuzz/shell.zig",
+        .filter = "fuzz shell eval redirection invariants",
+        .source_module_name = "rush-shell",
+        .source_module_root = "src/shell.zig",
+        .link_libc = true,
+    });
 
     const check_step = b.step("check", "Run unit tests and repository validation checks");
     check_step.dependOn(test_step);

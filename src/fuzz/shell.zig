@@ -43,6 +43,12 @@ const redirection_target_count = 5;
 const redirection_source_base = 5;
 const redirection_table_len = 64;
 const closed_duplicate_source: fd.Descriptor = 30;
+const eval_max_redirection_steps = 5;
+const eval_max_redirection_plans = 8;
+const eval_max_commands = 6;
+
+const eval_assignment_names = [_][]const u8{ "A", "B", "C", "rush_var" };
+const eval_command_names = [_][]const u8{ ":", "true", "false" };
 
 const VariableAction = enum {
     keep,
@@ -83,6 +89,10 @@ test "fuzz shell consequence policy" {
 
 test "fuzz shell redirection rollback" {
     try std.testing.fuzz({}, fuzzShellRedirectionRollback, .{});
+}
+
+test "fuzz shell eval redirection invariants" {
+    try std.testing.fuzz({}, fuzzShellEvalRedirectionInvariants, .{});
 }
 
 fn fuzzShellDelta(_: void, smith: *std.testing.Smith) anyerror!void {
@@ -235,6 +245,43 @@ fn fuzzShellRedirectionRollback(_: void, smith: *std.testing.Smith) anyerror!voi
     }
 }
 
+fn fuzzShellEvalRedirectionInvariants(_: void, smith: *std.testing.Smith) anyerror!void {
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try populateInitialState(smith, &shell_state);
+
+    var initial_state = try shell_state.clone(std.testing.allocator);
+    defer initial_state.deinit();
+
+    var fake: FuzzFdRuntime = .{};
+    const initial_table = fake.table;
+    var evaluator = shell.eval.Evaluator.initWithFdPort(std.testing.allocator, fake.port());
+
+    var storage: EvalPlanStorage = .{};
+    const subject = generateEvalSubject(smith, &storage);
+    const eval_context = shell.EvalContext.forTarget(subject.target());
+
+    var command_outcome = switch (subject) {
+        .simple => |plan| try shell.eval.evaluatePlan(&evaluator, &shell_state, eval_context, plan),
+        .compound => |plan| try shell.eval.evaluateCompoundPlan(&evaluator, &shell_state, eval_context, plan),
+    };
+    defer command_outcome.deinit();
+
+    command_outcome.validateForContext(eval_context);
+    try std.testing.expectEqualSlices(?u16, &initial_table, &fake.table);
+    try expectShellStatesEqual(initial_state, shell_state);
+
+    if (subject.target() == .current_shell) {
+        var committed = try shell_state.clone(std.testing.allocator);
+        defer committed.deinit();
+        try command_outcome.commitDelta(&committed, .current_shell);
+        committed.validate();
+    } else {
+        command_outcome.discardDelta(subject.target());
+    }
+    try std.testing.expectEqualSlices(?u16, &initial_table, &fake.table);
+}
+
 fn populateInitialState(smith: *std.testing.Smith, shell_state: *shell.ShellState) !void {
     for (variable_names) |name| {
         if (!smith.boolWeighted(1, 1)) continue;
@@ -378,6 +425,127 @@ fn generatedPath(smith: *std.testing.Smith) []const u8 {
         1 => "out-b",
         2 => "out-c",
         3 => "out-d",
+        else => unreachable,
+    };
+}
+
+const EvalSubject = union(enum) {
+    simple: shell.CommandPlan,
+    compound: shell.CompoundCommandPlan,
+
+    fn target(self: EvalSubject) shell.ExecutionTarget {
+        return switch (self) {
+            .simple => |plan| plan.target,
+            .compound => |plan| plan.target,
+        };
+    }
+};
+
+const EvalPlanStorage = struct {
+    redirection_steps: [eval_max_redirection_plans][eval_max_redirection_steps]redirection_plan.RedirectionStep = undefined,
+    rollback_steps: [eval_max_redirection_plans][eval_max_redirection_steps]redirection_plan.RestorationStep = undefined,
+    redirection_plan_count: usize = 0,
+    assignments: [eval_max_commands][1]shell.Assignment = undefined,
+    argv: [eval_max_commands][1][]const u8 = undefined,
+    commands: [eval_max_commands]shell.CommandPlan = undefined,
+    command_count: usize = 0,
+
+    fn redirectionPlan(self: *EvalPlanStorage, smith: *std.testing.Smith) shell.RedirectionPlan {
+        std.debug.assert(self.redirection_plan_count < eval_max_redirection_plans);
+        const index = self.redirection_plan_count;
+        self.redirection_plan_count += 1;
+
+        const step_count = smith.index(eval_max_redirection_steps + 1);
+        for (0..step_count) |ordinal| {
+            self.redirection_steps[index][ordinal] = generatedEvalRedirectionStep(smith, ordinal);
+            self.rollback_steps[index][ordinal] = .{
+                .ordinal = ordinal,
+                .target = self.redirection_steps[index][ordinal].target(),
+            };
+        }
+
+        const plan: shell.RedirectionPlan = .{
+            .steps = self.redirection_steps[index][0..step_count],
+            .rollback_steps = self.rollback_steps[index][0..step_count],
+            .failure_consequence = if (smith.boolWeighted(1, 3)) .fatal_shell_error else .command_failure,
+        };
+        plan.validate();
+        return plan;
+    }
+
+    fn simpleCommand(self: *EvalPlanStorage, smith: *std.testing.Smith, target: shell.ExecutionTarget) shell.CommandPlan {
+        std.debug.assert(self.command_count < eval_max_commands);
+        const index = self.command_count;
+        self.command_count += 1;
+
+        const redirections = self.redirectionPlan(smith);
+        const expanded = switch (smith.index(5)) {
+            0 => shell.ExpandedSimpleCommand{ .redirections = redirections },
+            1, 2 => blk: {
+                self.assignments[index][0] = .{
+                    .name = eval_assignment_names[smith.index(eval_assignment_names.len)],
+                    .value = pickValue(smith, &variable_values),
+                };
+                break :blk shell.ExpandedSimpleCommand{
+                    .assignments = self.assignments[index][0..1],
+                    .redirections = redirections,
+                };
+            },
+            3, 4 => blk: {
+                self.argv[index][0] = eval_command_names[smith.index(eval_command_names.len)];
+                break :blk shell.ExpandedSimpleCommand{
+                    .argv = self.argv[index][0..1],
+                    .redirections = redirections,
+                };
+            },
+            else => unreachable,
+        };
+
+        return shell.command_plan.classifyExpandedSimpleCommand(.{
+            .command = expanded,
+            .target = target,
+        });
+    }
+};
+
+fn generateEvalSubject(smith: *std.testing.Smith, storage: *EvalPlanStorage) EvalSubject {
+    const kind = smith.index(4);
+    if (kind == 0) return .{ .simple = storage.simpleCommand(smith, .current_shell) };
+
+    const target: shell.ExecutionTarget = if (kind == 3) .subshell else .current_shell;
+    const command_count = 1 + smith.index(eval_max_commands);
+    for (0..command_count) |index| {
+        storage.commands[index] = storage.simpleCommand(smith, target);
+    }
+    const body: shell.CompoundBody = if (target == .subshell)
+        .{ .subshell = .{ .commands = storage.commands[0..command_count] } }
+    else
+        .{ .brace_group = .{ .commands = storage.commands[0..command_count] } };
+    const plan: shell.CompoundCommandPlan = .{
+        .target = target,
+        .redirections = storage.redirectionPlan(smith),
+        .body = body,
+    };
+    plan.validate();
+    return .{ .compound = plan };
+}
+
+fn generatedEvalRedirectionStep(smith: *std.testing.Smith, ordinal: usize) redirection_plan.RedirectionStep {
+    const target = @as(fd.Descriptor, @intCast(smith.index(6)));
+    return switch (smith.index(6)) {
+        0 => redirection_plan.RedirectionStep.openPath(ordinal, target, generatedPath(smith), .{ .access = .write_only, .create = true, .truncate = true }),
+        1 => redirection_plan.RedirectionStep.openPath(ordinal, target, generatedPath(smith), .{ .access = .read_write, .create = true }),
+        2 => redirection_plan.RedirectionStep.openPath(ordinal, target, "missing", .{ .access = .read_only }),
+        3, 4 => redirection_plan.RedirectionStep.duplicate(ordinal, target, generatedEvalSource(smith)),
+        5 => redirection_plan.RedirectionStep.close(ordinal, target),
+        else => unreachable,
+    };
+}
+
+fn generatedEvalSource(smith: *std.testing.Smith) fd.Descriptor {
+    return switch (smith.index(8)) {
+        0...6 => |descriptor| @intCast(descriptor),
+        7 => closed_duplicate_source,
         else => unreachable,
     };
 }
