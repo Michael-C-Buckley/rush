@@ -249,9 +249,13 @@ const ViRepeat = union(enum) {
 };
 
 pub const HistoryView = struct {
+    /// Borrowed static history entries. They must remain valid for the lifetime
+    /// of the line session and are copied into the edit buffer before use.
     entries: []const []const u8 = &.{},
     now: i64 = 0,
     context: ?*anyopaque = null,
+    /// Provider callbacks return allocator-owned `HistoryEntry` values. The
+    /// line session copies `entry.text` before calling `HistoryEntry.deinit`.
     previous: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, ?i64) anyerror!?HistoryEntry = null,
     next: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, i64) anyerror!?HistoryEntry = null,
     by_number: ?*const fn (*anyopaque, std.mem.Allocator, usize) anyerror!?HistoryEntry = null,
@@ -261,6 +265,8 @@ pub const HistoryView = struct {
 
     pub const HistoryEntry = struct {
         id: i64,
+        /// Owned by the allocator passed to the provider callback or by the
+        /// helper that constructed this entry; always release with `deinit`.
         text: []const u8,
         when: i64 = 0,
 
