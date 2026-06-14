@@ -36,6 +36,32 @@
             .status = 0,
         },
         .{
+            .name = "read without -r removes backslash escapes",
+            .script =
+            \\printf 'a b\\c\n' | { read first rest; printf '<%s>:<%s>\n' "$first" "$rest"; }
+            ,
+            .stdout =
+            \\<a>:<bc>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pwd output can be redirected",
+            .script =
+            \\pwd >out
+            \\test -s out
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "export marks a variable for child command environments",
             .script =
             \\export exported=value

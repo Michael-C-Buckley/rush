@@ -5884,7 +5884,8 @@ fn evaluateRead(
     std.debug.assert(std.mem.eql(u8, argv[0], "read"));
 
     var name_index: usize = 1;
-    if (name_index < argv.len and std.mem.eql(u8, argv[name_index], "-r")) name_index += 1;
+    const preserve_backslashes = name_index < argv.len and std.mem.eql(u8, argv[name_index], "-r");
+    if (preserve_backslashes) name_index += 1;
     if (name_index < argv.len and std.mem.startsWith(u8, argv[name_index], "-") and !std.mem.eql(
         u8,
         argv[name_index],
@@ -5908,8 +5909,25 @@ fn evaluateRead(
         null;
     defer if (fd_line) |line| evaluator.allocator.free(line);
     const line = buffered_line orelse fd_line orelse return 1;
-    try assignReadFields(line, argv[name_index..], state_delta);
+    const read_line = if (preserve_backslashes)
+        line
+    else
+        try readLineWithEscapesRemoved(evaluator.allocator, line);
+    defer if (!preserve_backslashes) evaluator.allocator.free(read_line);
+    try assignReadFields(read_line, argv[name_index..], state_delta);
     return 0;
+}
+
+fn readLineWithEscapesRemoved(allocator: std.mem.Allocator, line: []const u8) ![]const u8 {
+    var normalized: std.ArrayList(u8) = .empty;
+    errdefer normalized.deinit(allocator);
+
+    var index: usize = 0;
+    while (index < line.len) : (index += 1) {
+        if (line[index] == '\\' and index + 1 < line.len) index += 1;
+        try normalized.append(allocator, line[index]);
+    }
+    return normalized.toOwnedSlice(allocator);
 }
 
 fn readLineFromStdinFd(allocator: std.mem.Allocator) !?[]const u8 {
