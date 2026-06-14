@@ -420,6 +420,7 @@ pub const ShellState = struct {
     pending_exit: ?ExitStatus = null,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList(BackgroundJobNotification) = .empty,
+    warned_stopped_jobs_on_exit: bool = false,
     next_job_id: usize = 1,
     current_job_id: ?usize = null,
     previous_job_id: ?usize = null,
@@ -485,6 +486,7 @@ pub const ShellState = struct {
         cloned.last_status = self.last_status;
         cloned.pending_exit = self.pending_exit;
         cloned.trap_execution = self.trap_execution;
+        cloned.warned_stopped_jobs_on_exit = self.warned_stopped_jobs_on_exit;
 
         var variables = self.variables.iterator();
         while (variables.next()) |entry| {

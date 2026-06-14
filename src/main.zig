@@ -46,6 +46,7 @@ const embedded_config = @embedFile("default_config");
 const embedded_config_path = "embedded:config.rush";
 const omitted_newline_marker = "\x1b[2m⏎\x1b[22m\r\n";
 const ignoreeof_message = "Use \"exit\" to leave the shell.\r\n";
+const stopped_jobs_exit_warning = "You have stopped jobs.\n";
 const immediate_notify_poll_ms = 50;
 
 pub const CommandResult = struct {
@@ -457,9 +458,9 @@ pub const History = struct {
         return .{ .id = @intCast(index), .text = try allocator.dupe(u8, self.entries.items[index]) };
     }
 
-    pub fn fcEntries(self: *History, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
+    pub fn fcEntries(self: *History, allocator: std.mem.Allocator) ![]history_module.HistoryEntry {
         if (self.db) |db| return queryFcHistoryEntries(db, allocator);
-        var entries: std.ArrayList(exec.HistoryEntry) = .empty;
+        var entries: std.ArrayList(history_module.HistoryEntry) = .empty;
         errdefer {
             for (entries.items) |entry| allocator.free(entry.command);
             entries.deinit(allocator);
@@ -491,17 +492,10 @@ pub const History = struct {
 
 const InteractiveHistoryService = struct {
     history: *History,
+    suppress_next_append: bool = false,
 
     fn init(history: *History) InteractiveHistoryService {
         return .{ .history = history };
-    }
-
-    fn attachFc(self: *InteractiveHistoryService, executor: *exec.Executor) void {
-        executor.setCommandHistory(.{
-            .context = self,
-            .list = fcHistoryEntries,
-            .append = appendFcHistoryCommand,
-        });
     }
 
     fn lineEditorView(self: *InteractiveHistoryService, io: std.Io) line_editor.HistoryView {
@@ -521,8 +515,14 @@ const InteractiveHistoryService = struct {
         try self.history.addCommand(io, line, status, started_at, duration_ms);
     }
 
-    fn consumeSuppressNextAppend(_: *InteractiveHistoryService, executor: *exec.Executor) bool {
-        return executor.consumeSuppressNextInteractiveHistoryAppend();
+    fn suppressNextAppend(self: *InteractiveHistoryService) void {
+        self.suppress_next_append = true;
+    }
+
+    fn consumeSuppressNextAppend(self: *InteractiveHistoryService) bool {
+        const suppress = self.suppress_next_append;
+        self.suppress_next_append = false;
+        return suppress;
     }
 
     fn previousEntry(self: *InteractiveHistoryService, allocator: std.mem.Allocator, prefix: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
@@ -537,7 +537,7 @@ const InteractiveHistoryService = struct {
         return self.history.numberedEntry(allocator, number);
     }
 
-    fn fcEntries(self: *InteractiveHistoryService, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
+    fn fcEntries(self: *InteractiveHistoryService, allocator: std.mem.Allocator) ![]history_module.HistoryEntry {
         return self.history.fcEntries(allocator);
     }
 
@@ -571,16 +571,6 @@ fn nextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, prefix: [
 fn numberedHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, number: usize) !?line_editor.HistoryView.HistoryEntry {
     const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
     return history_service.numberedEntry(allocator, number);
-}
-
-fn fcHistoryEntries(context: *anyopaque, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
-    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
-    return history_service.fcEntries(allocator);
-}
-
-fn appendFcHistoryCommand(context: *anyopaque, io: std.Io, line: []const u8, status: shell.ExitStatus, started_at: i64, duration_ms: i64) !void {
-    const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
-    try history_service.appendFcCommand(io, line, status, started_at, duration_ms);
 }
 
 fn searchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?line_editor.HistoryView.HistoryEntry {
@@ -667,12 +657,12 @@ fn queryHistoryEntryByNumber(db: *sqlite.sqlite3, allocator: std.mem.Allocator, 
     return .{ .id = sqlite.sqlite3_column_int64(stmt, 0), .text = try allocator.dupe(u8, std.mem.span(command_text)), .when = sqlite.sqlite3_column_int64(stmt, 2) };
 }
 
-fn queryFcHistoryEntries(db: *sqlite.sqlite3, allocator: std.mem.Allocator) ![]exec.HistoryEntry {
+fn queryFcHistoryEntries(db: *sqlite.sqlite3, allocator: std.mem.Allocator) ![]history_module.HistoryEntry {
     var stmt: ?*sqlite.sqlite3_stmt = null;
     try sqliteCheck(sqlite.sqlite3_prepare_v2(db, "select id, command from history order by id asc", -1, &stmt, null), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
 
-    var entries: std.ArrayList(exec.HistoryEntry) = .empty;
+    var entries: std.ArrayList(history_module.HistoryEntry) = .empty;
     errdefer {
         for (entries.items) |entry| allocator.free(entry.command);
         entries.deinit(allocator);
@@ -1215,22 +1205,20 @@ fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator
     errdefer output.deinit(allocator);
     var should_refresh_prompt = refresh_prompt;
 
-    if (try completion_context.executor.executePendingSignalTrap(.{ .io = io, .allow_external = true, .features = completion_context.features, .interactive = true, .arg_zero = completion_context.arg_zero })) |trap_result| {
-        var result = trap_result;
-        defer result.deinit();
-        try output.appendSlice(allocator, result.stdout);
-        try output.appendSlice(allocator, result.stderr);
-        should_refresh_prompt = true;
+    if (completion_context.semantic_state) |semantic_state| {
+        if (try executeInteractivePendingTraps(allocator, io, semantic_state, completion_context.arg_zero, completion_context.features)) |trap_result| {
+            var result = trap_result;
+            defer result.deinit();
+            try output.appendSlice(allocator, result.stdout);
+            try output.appendSlice(allocator, result.stderr);
+            should_refresh_prompt = true;
+        }
     }
 
-    if (completion_context.executor.shell_options.notify) {
-        if (completion_context.semantic_state) |semantic_state| {
+    if (completion_context.semantic_state) |semantic_state| {
+        if (semantic_state.options.notify) {
             const notifications = try drainInteractiveSemanticJobNotifications(allocator, io, semantic_state);
             defer allocator.free(notifications);
-            try output.appendSlice(allocator, notifications);
-        } else {
-            const notifications = try completion_context.executor.drainJobNotifications();
-            defer completion_context.executor.allocator.free(notifications);
             try output.appendSlice(allocator, notifications);
         }
     }
@@ -1238,7 +1226,7 @@ fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator
     return .{
         .output = try output.toOwnedSlice(allocator),
         .refresh_prompt = should_refresh_prompt,
-        .stop = if (completion_context.semantic_state) |semantic_state| semantic_state.pending_exit != null else completion_context.executor.pending_exit != null,
+        .stop = if (completion_context.semantic_state) |semantic_state| semantic_state.pending_exit != null else false,
     };
 }
 
@@ -1248,7 +1236,7 @@ fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     const wants_job_poll = if (completion_context.semantic_state) |semantic_state|
         shellStateWantsImmediateJobNotificationPoll(semantic_state)
     else
-        completion_context.executor.wantsImmediateJobNotificationPoll();
+        false;
     if (wants_job_poll) {
         wait_ms = if (wait_ms) |current| @min(current, immediate_notify_poll_ms) else immediate_notify_poll_ms;
     }
@@ -1272,6 +1260,40 @@ fn drainInteractiveSemanticJobNotifications(allocator: std.mem.Allocator, io: st
     return output;
 }
 
+fn executeInteractivePendingTraps(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) !?CommandResult {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    std.debug.assert(arg_zero.len != 0);
+
+    var adapter = runtime.PosixAdapter.init(io);
+    var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
+    evaluator.io = io;
+    evaluator.features = features;
+    evaluator.arg_zero = arg_zero;
+    evaluator.external_stdio = .inherit;
+    const eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true });
+
+    if (try shell.eval.observeRuntimeSignal(&evaluator, shell_state, eval_context)) |observed| {
+        var observation = observed;
+        defer observation.deinit();
+        try observation.command_outcome.commitDelta(shell_state, .current_shell);
+    }
+
+    var resolver = shell.eval.ParserTrapActionResolver.init(&evaluator);
+    resolver.features = features;
+    resolver.arg_zero = arg_zero;
+    var trap_outcome = (try shell.eval.executePendingTraps(&evaluator, shell_state, eval_context, resolver.resolver())) orelse return null;
+    defer trap_outcome.deinit();
+
+    const stdout = try trap_outcome.stdout.toOwnedSlice(allocator);
+    errdefer allocator.free(stdout);
+    const stderr = try trap_outcome.stderr.toOwnedSlice(allocator);
+    errdefer allocator.free(stderr);
+    try trap_outcome.commitDelta(shell_state, .current_shell);
+    shell_state.validate();
+    return .{ .allocator = allocator, .status = trap_outcome.status, .stdout = stdout, .stderr = stderr };
+}
+
 fn shellStateWantsImmediateJobNotificationPoll(shell_state: *const shell.ShellState) bool {
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
@@ -1282,6 +1304,37 @@ fn shellStateWantsImmediateJobNotificationPoll(shell_state: *const shell.ShellSt
         if (job.state != .done or job.notified_state != job.state) return true;
     }
     return false;
+}
+
+fn interactivePendingExit(interactive_shell: *const InteractiveShell) ?shell.ExitStatus {
+    if (!interactive_shell.semantic_enabled) return null;
+    interactive_shell.semantic_state.validate();
+    std.debug.assert(interactive_shell.semantic_state.scope == .current_shell);
+    return interactive_shell.semantic_state.pending_exit;
+}
+
+fn shellStateHasStoppedJobs(shell_state: shell.ShellState) bool {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    for (shell_state.background_jobs.items) |job| {
+        job.validate();
+        if (job.state == .stopped) return true;
+    }
+    return false;
+}
+
+fn shouldWarnBeforeExitWithStoppedJobs(shell_state: *shell.ShellState) bool {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    if (!shellStateHasStoppedJobs(shell_state.*)) {
+        shell_state.warned_stopped_jobs_on_exit = false;
+        shell_state.validate();
+        return false;
+    }
+    if (shell_state.warned_stopped_jobs_on_exit) return false;
+    shell_state.warned_stopped_jobs_on_exit = true;
+    shell_state.validate();
+    return true;
 }
 
 const CompletionScriptLoader = struct {
@@ -6415,14 +6468,13 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     var interactive_executor = exec.Executor.init(allocator);
     defer interactive_executor.deinit();
     const executor = &interactive_executor;
-    history_service.attachFc(executor);
     try interactive_shell.initializeSemanticStartup(io, environ_map, options);
     try executor.importEnvironment(environ_map);
     executor.arg_zero = options.arg_zero;
     try syncInteractiveExecutorFromShell(executor, interactive_shell);
     try InteractiveConfigService.initInteractive(allocator, io, executor, &interactive_shell, options.arg_zero).load(options);
-    try syncInteractiveExecutorFromShell(executor, interactive_shell);
-    if (executor.pending_exit) |status| return status;
+    try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
+    if (interactivePendingExit(&interactive_shell)) |status| return status;
     var completion_executor = exec.Executor.init(allocator);
     defer completion_executor.deinit();
     try completion_executor.copyCompletionStateFrom(executor);
@@ -6442,7 +6494,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
     defer completion_loader.deinit();
 
     repl_loop: while (true) {
-        if (executor.pending_exit) |status| {
+        if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;
         }
@@ -6453,7 +6505,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const notifications = if (interactive_shell.semantic_enabled)
             try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
         else
-            try executor.drainJobNotifications();
+            try allocator.dupe(u8, "");
         defer allocator.free(notifications);
         try writeAll(io, .stderr, notifications);
         try prompt_service.runPendingVariableHooks(io);
@@ -6462,7 +6514,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         try prompt_service.runEventHooks(io, "prompt", &.{});
         try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
         prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
-        if (executor.pending_exit) |status| {
+        if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;
         }
@@ -6514,7 +6566,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
         const line = switch (read_result) {
             .submitted => |line| line,
             .canceled => {
-                if (try runInteractiveInterruptTrap(io, executor, options.arg_zero, options.features)) |result| {
+                if (try runInteractiveInterruptTrap(allocator, io, &interactive_shell.semantic_state, options.arg_zero, options.features)) |result| {
                     var trap_result = result;
                     defer trap_result.deinit();
                     try terminal.leaveEditorMode();
@@ -6526,7 +6578,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
                     if (outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
                     last_status = trap_result.status;
                     try terminal.finishSemanticCommand(trap_result.status);
-                    if (executor.pending_exit) |status| {
+                    if (interactivePendingExit(&interactive_shell)) |status| {
                         last_status = status;
                         editor_mode_left = false;
                         break;
@@ -6538,7 +6590,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
                 continue;
             },
             .interrupted => {
-                if (executor.pending_exit) |status| {
+                if (interactivePendingExit(&interactive_shell)) |status| {
                     last_status = status;
                     break;
                 }
@@ -6571,7 +6623,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             const continuation_line = switch (continuation_read_result) {
                 .submitted => |continuation_line| continuation_line,
                 .canceled => {
-                    if (try runInteractiveInterruptTrap(io, executor, options.arg_zero, options.features)) |result| {
+                    if (try runInteractiveInterruptTrap(allocator, io, &interactive_shell.semantic_state, options.arg_zero, options.features)) |result| {
                         var trap_result = result;
                         defer trap_result.deinit();
                         try terminal.leaveEditorMode();
@@ -6583,7 +6635,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
                         if (outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
                         last_status = trap_result.status;
                         try terminal.finishSemanticCommand(trap_result.status);
-                        if (executor.pending_exit) |status| {
+                        if (interactivePendingExit(&interactive_shell)) |status| {
                             last_status = status;
                             editor_mode_left = false;
                             break :repl_loop;
@@ -6595,7 +6647,7 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
                     continue :repl_loop;
                 },
                 .interrupted => {
-                    if (executor.pending_exit) |status| {
+                    if (interactivePendingExit(&interactive_shell)) |status| {
                         last_status = status;
                         break :repl_loop;
                     }
@@ -6614,9 +6666,9 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
 
         const input = command.items;
         if (std.mem.eql(u8, input, "exit")) {
-            if (executor.shouldWarnBeforeExitWithStoppedJobs()) {
+            if (shouldWarnBeforeExitWithStoppedJobs(&interactive_shell.semantic_state)) {
                 try terminal.finishSemanticCommand(0);
-                try writeAll(io, .stderr, exec.stopped_jobs_exit_warning);
+                try writeAll(io, .stderr, stopped_jobs_exit_warning);
                 continue;
             }
             try terminal.finishSemanticCommand(0);
@@ -6644,14 +6696,14 @@ pub fn runInteractive(allocator: std.mem.Allocator, completion_allocator: std.me
             if (outputNeedsNewlineMarker(result.stdout, result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
             last_status = result.status;
             executor.setLastCommandDuration(command_duration_ms);
-            if (!history_service.consumeSuppressNextAppend(executor)) try history_service.addCommand(io, input, result.status, command_started_at, command_duration_ms);
+            if (!history_service.consumeSuppressNextAppend()) try history_service.addCommand(io, input, result.status, command_started_at, command_duration_ms);
             var status_buffer: [3]u8 = undefined;
             const status_text = try std.fmt.bufPrint(&status_buffer, "{d}", .{result.status});
             try prompt_service.runEventHooks(io, "postexec", &.{ input, status_text });
             try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
             try terminal.finishSemanticCommand(result.status);
             completion_cache.clear();
-            if (executor.pending_exit) |status| {
+            if (interactivePendingExit(&interactive_shell)) |status| {
                 last_status = status;
                 editor_mode_left = false;
                 break;
@@ -6744,9 +6796,12 @@ fn outputNeedsNewlineMarker(stdout: []const u8, stderr: []const u8) bool {
     return output[output.len - 1] != '\n';
 }
 
-fn runInteractiveInterruptTrap(io: std.Io, executor: *exec.Executor, arg_zero: []const u8, features: compat.Features) !?CommandResult {
-    const result = (try executor.executeSignalTrap("INT", .{ .io = io, .allow_external = true, .features = features, .interactive = true, .arg_zero = arg_zero })) orelse return null;
-    return commandResultFromExecutorResult(result);
+fn runInteractiveInterruptTrap(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) !?CommandResult {
+    shell_state.validate();
+    std.debug.assert(shell_state.scope == .current_shell);
+    if (shell_state.trapDisposition(.INT) != .caught) return null;
+    try shell_state.appendPendingTrap(.INT);
+    return executeInteractivePendingTraps(allocator, io, shell_state, arg_zero, features);
 }
 
 pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8) !CommandResult {
@@ -6763,7 +6818,6 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
     var interactive_executor = exec.Executor.init(allocator);
     defer interactive_executor.deinit();
     const executor = &interactive_executor;
-    history_service.attachFc(executor);
     var prompt_service: InteractivePromptService = .{ .executor = executor };
     {
         var result = try runScriptWithExecutor(allocator, executor, embedded_config, .{ .io = io, .allow_external = true, .arg_zero = "rush", .source_path = embedded_config_path });
@@ -6783,14 +6837,14 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
 
     var lines = std.mem.splitScalar(u8, input, '\n');
     while (lines.next()) |line| {
-        if (executor.pending_exit) |status| {
+        if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;
         }
         const notifications = if (interactive_shell.semantic_enabled)
             try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
         else
-            try executor.drainJobNotifications();
+            try allocator.dupe(u8, "");
         try stderr.appendSlice(allocator, notifications);
         allocator.free(notifications);
         const prompt = try prompt_service.render(allocator, io);
@@ -6805,10 +6859,10 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
         last_status = result.status;
-        if (!history_service.consumeSuppressNextAppend(executor)) try history_service.addCommand(io, line, result.status, command_started_at, 0);
+        if (!history_service.consumeSuppressNextAppend()) try history_service.addCommand(io, line, result.status, command_started_at, 0);
         try syncInteractiveShellSemanticFromExecutor(&interactive_shell, io, executor.*);
         prompt_service.semantic_state = if (interactive_shell.semantic_enabled) &interactive_shell.semantic_state else null;
-        if (executor.pending_exit) |status| {
+        if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;
         }
@@ -10980,6 +11034,8 @@ test "runReplInput reports unsupported fc history bridge without legacy fallback
 test "interactive notify schedules editor job notification polling" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
     var history = History.init(std.testing.allocator);
     defer history.deinit();
     var cache = CompletionCache.init(std.testing.allocator);
@@ -10988,6 +11044,7 @@ test "interactive notify schedules editor job notification polling" {
     defer loader.deinit();
     var context: InteractiveCompletionContext = .{
         .executor = &executor,
+        .semantic_state = &shell_state,
         .history = &history,
         .cache = &cache,
         .loader = &loader,
@@ -10995,19 +11052,13 @@ test "interactive notify schedules editor job notification polling" {
     };
 
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
-    try executor.background_jobs.append(std.testing.allocator, .{
-        .id = 1,
-        .pid = 999_999,
-        .command = try std.testing.allocator.dupe(u8, "sleep 1"),
-        .child = undefined,
-    });
+    try shell_state.appendJobNotification(.{ .job_id = 1, .state = .done, .command = "sleep 1" });
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
 
-    executor.shell_options.notify = true;
+    shell_state.options.notify = true;
     try std.testing.expectEqual(@as(?u64, immediate_notify_poll_ms), try nextInteractiveIntervalMs(&context, std.testing.io));
 
-    executor.background_jobs.items[0].state = .done;
-    executor.background_jobs.items[0].notified_state = .done;
+    shell_state.consumeJobNotifications(1);
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
 }
 
@@ -11068,12 +11119,13 @@ test "semantic interactive sync refuses legacy executor interactive services" {
     try std.testing.expectEqualStrings("semantic ShellState cannot yet preserve legacy executor interactive services", trap_unsupported.?);
 }
 
-test "interactive hooks dispatch pending real signal trap" {
+test "interactive hooks dispatch pending semantic signal trap" {
     var executor = exec.Executor.init(std.testing.allocator);
     defer executor.deinit();
-    var setup = try runScriptWithExecutor(std.testing.allocator, &executor, "trap 'echo term-trap' TERM", .{ .io = std.testing.io, .allow_external = true, .interactive = true });
-    defer setup.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup.status);
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setTrapForSignal(.TERM, "echo term-trap");
+    try shell_state.appendPendingTrap(.TERM);
 
     var history = History.init(std.testing.allocator);
     defer history.deinit();
@@ -11083,13 +11135,13 @@ test "interactive hooks dispatch pending real signal trap" {
     defer loader.deinit();
     var context: InteractiveCompletionContext = .{
         .executor = &executor,
+        .semantic_state = &shell_state,
         .history = &history,
         .cache = &cache,
         .loader = &loader,
         .io = std.testing.io,
     };
 
-    try std.posix.raise(.TERM);
     const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
     defer std.testing.allocator.free(hook_result.output);
 
@@ -11115,13 +11167,11 @@ test "interactive signal handlers catch interrupt quit and terminate" {
 }
 
 test "interactive interrupt runs INT trap" {
-    var executor = exec.Executor.init(std.testing.allocator);
-    defer executor.deinit();
-    var setup = try runScriptWithExecutor(std.testing.allocator, &executor, "trap 'echo trapped' INT", .{ .io = std.testing.io, .allow_external = true, .interactive = true });
-    defer setup.deinit();
-    try std.testing.expectEqual(@as(shell.ExitStatus, 0), setup.status);
+    var shell_state = shell.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.setTrapForSignal(.INT, "echo trapped");
 
-    var result = (try runInteractiveInterruptTrap(std.testing.io, &executor, "rush", .{})) orelse return error.MissingTrapResult;
+    var result = (try runInteractiveInterruptTrap(std.testing.allocator, std.testing.io, &shell_state, "rush", .{})) orelse return error.MissingTrapResult;
     defer result.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("trapped\n", result.stdout);
