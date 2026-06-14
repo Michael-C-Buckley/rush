@@ -1814,6 +1814,29 @@ pub const CompletionVariantPattern = completion.VariantPattern;
 pub const CompletionManifestCommandState = completion.ManifestCommandState;
 pub const CompletionVariantProbeState = completion.VariantProbeState;
 
+const CompletionSession = struct {
+    state: completion.State,
+    builder: ?CompletionBuilder = null,
+    builder_ref: ?*CompletionBuilder = null,
+    context: ?CompletionEvalContext = null,
+
+    fn init(allocator: std.mem.Allocator) CompletionSession {
+        return .{ .state = completion.State.init(allocator) };
+    }
+
+    fn deinit(self: *CompletionSession, allocator: std.mem.Allocator) void {
+        self.state.deinit();
+        if (self.builder) |*builder| builder.deinit(allocator);
+        self.* = undefined;
+    }
+
+    fn activeBuilder(self: *CompletionSession) ?*CompletionBuilder {
+        if (self.builder_ref) |builder| return builder;
+        if (self.builder) |*builder| return builder;
+        return null;
+    }
+};
+
 pub const Executor = struct {
     allocator: std.mem.Allocator,
     env: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -1831,7 +1854,7 @@ pub const Executor = struct {
     event_hooks: std.StringHashMapUnmanaged(std.ArrayList(EventHook)) = .empty,
     interval_hooks: std.ArrayList(IntervalHook) = .empty,
     pending_variable_hooks: std.ArrayList([]const u8) = .empty,
-    completions: completion.State,
+    completion_session: CompletionSession,
     background_jobs: std.ArrayList(BackgroundJob) = .empty,
     pending_job_notifications: std.ArrayList([]const u8) = .empty,
     next_job_id: usize = 1,
@@ -1874,9 +1897,6 @@ pub const Executor = struct {
     prompt_async_entries: std.StringHashMapUnmanaged(PromptAsyncEntry) = .empty,
     prompt_async_refreshes: std.ArrayList(*PromptAsyncRefresh) = .empty,
     prompt_async_owner: ?*Executor = null,
-    completion_builder: ?CompletionBuilder = null,
-    completion_builder_ref: ?*CompletionBuilder = null,
-    completion_context: ?CompletionEvalContext = null,
     command_history: ?CommandHistory = null,
     suppress_next_interactive_history_append: bool = false,
     getopts_offset: usize = 1,
@@ -1898,7 +1918,7 @@ pub const Executor = struct {
     parsed_body_cache_inserts: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator) Executor {
-        var executor: Executor = .{ .allocator = allocator, .completions = completion.State.init(allocator), .ignored_trap_signals_at_entry = ignoredTrapSignalsAtEntry() };
+        var executor: Executor = .{ .allocator = allocator, .completion_session = CompletionSession.init(allocator), .ignored_trap_signals_at_entry = ignoredTrapSignalsAtEntry() };
         executor.setLastStatus(0);
         executor.setPidText();
         return executor;
@@ -2331,7 +2351,7 @@ pub const Executor = struct {
         self.interval_hooks.deinit(self.allocator);
         for (self.pending_variable_hooks.items) |name| self.allocator.free(name);
         self.pending_variable_hooks.deinit(self.allocator);
-        self.completions.deinit();
+        self.completion_session.deinit(self.allocator);
         for (self.background_jobs.items) |job| self.allocator.free(job.command);
         self.background_jobs.deinit(self.allocator);
         for (self.pending_job_notifications.items) |notification| self.allocator.free(notification);
@@ -2353,7 +2373,6 @@ pub const Executor = struct {
         }
         self.prompt_async_entries.deinit(self.allocator);
         self.prompt_async_refreshes.deinit(self.allocator);
-        if (self.completion_builder) |*builder| builder.deinit(self.allocator);
         self.global_positionals.deinit(self.allocator);
         for (self.call_frames.items) |*frame| frame.deinit(self.allocator);
         self.call_frames.deinit(self.allocator);
@@ -2367,43 +2386,43 @@ pub const Executor = struct {
     }
 
     pub fn registerCompletionRule(self: *Executor, rule: completion.Rule) !void {
-        try self.completions.registerRule(rule);
+        try self.completion_session.state.registerRule(rule);
     }
 
     pub fn completionGeneration(self: Executor) u64 {
-        return self.completions.generation;
+        return self.completion_session.state.generation;
     }
 
     pub fn completionRules(self: Executor) []const completion.Rule {
-        return self.completions.rules.items;
+        return self.completion_session.state.rules.items;
     }
 
     pub fn completionProviderDiagnostics(self: Executor) []const CompletionProviderDiagnostic {
-        return self.completions.provider_diagnostics.items;
+        return self.completion_session.state.provider_diagnostics.items;
     }
 
     pub fn registerCompletionManifestCommandState(self: *Executor, state: CompletionManifestCommandState) !void {
-        try self.completions.registerManifestCommandState(state);
+        try self.completion_session.state.registerManifestCommandState(state);
     }
 
     pub fn completionManifestCommandState(self: Executor, command: []const u8) ?CompletionManifestCommandState {
-        return self.completions.manifestCommandState(command);
+        return self.completion_session.state.manifestCommandState(command);
     }
 
     pub fn registerCompletionVariantProbe(self: *Executor, command: []const u8, args: []const []const u8, patterns: []const CompletionVariantPattern) !void {
-        try self.completions.registerVariantProbe(command, args, patterns);
+        try self.completion_session.state.registerVariantProbe(command, args, patterns);
     }
 
     pub fn completionVariantProbeState(self: Executor, command: []const u8) ?CompletionVariantProbeState {
-        return self.completions.variantProbeState(command);
+        return self.completion_session.state.variantProbeState(command);
     }
 
     pub fn setCompletionVariantProbeMock(self: *Executor, command: []const u8, output: []const u8) !void {
-        try self.completions.setVariantProbeMock(command, output);
+        try self.completion_session.state.setVariantProbeMock(command, output);
     }
 
     pub fn completionVariantProbeCount(self: Executor, command: []const u8) usize {
-        return self.completions.variantProbeCount(command);
+        return self.completion_session.state.variantProbeCount(command);
     }
 
     pub fn hasBuiltin(self: Executor, name: []const u8) bool {
@@ -2411,10 +2430,10 @@ pub const Executor = struct {
     }
 
     fn resolveCompletionVariantsForRoot(self: *Executor, root: []const u8, options: ExecuteOptions) !void {
-        const probe_index = for (self.completions.variant_probes.items, 0..) |probe, index| {
+        const probe_index = for (self.completion_session.state.variant_probes.items, 0..) |probe, index| {
             if (std.mem.eql(u8, probe.command, root)) break index;
         } else return;
-        var probe = &self.completions.variant_probes.items[probe_index];
+        var probe = &self.completion_session.state.variant_probes.items[probe_index];
         probe.last_probed = false;
         probe.last_cached = false;
         if (probe.probed) {
@@ -2425,7 +2444,7 @@ pub const Executor = struct {
         probe.probed = true;
         if (self.hasFunction(root) or self.hasBuiltin(root)) {
             probe.skipped_shadow = true;
-            self.completions.applyVariantSelection(root, null);
+            self.completion_session.state.applyVariantSelection(root, null);
             return;
         }
 
@@ -2434,12 +2453,12 @@ pub const Executor = struct {
         defer self.allocator.free(output);
         const selected = completionVariantSelection(probe.patterns, output);
         if (selected) |name| probe.selected = try self.allocator.dupe(u8, name);
-        self.completions.applyVariantSelection(root, selected);
+        self.completion_session.state.applyVariantSelection(root, selected);
     }
 
     fn runCompletionVariantProbe(self: *Executor, probe: CompletionVariantProbeState, options: ExecuteOptions) ![]u8 {
-        try self.completions.incrementVariantProbeCount(probe.command);
-        if (self.completions.variant_probe_mocks.get(probe.command)) |mock| return try self.allocator.dupe(u8, mock);
+        try self.completion_session.state.incrementVariantProbeCount(probe.command);
+        if (self.completion_session.state.variant_probe_mocks.get(probe.command)) |mock| return try self.allocator.dupe(u8, mock);
         const io = options.io orelse return self.allocator.alloc(u8, 0);
         var script: std.ArrayList(u8) = .empty;
         defer script.deinit(self.allocator);
@@ -2460,18 +2479,18 @@ pub const Executor = struct {
     }
 
     fn clearCompletionProviderDiagnostics(self: *Executor) void {
-        self.completions.clearProviderDiagnostics();
+        self.completion_session.state.clearProviderDiagnostics();
     }
 
     fn appendCompletionProviderDiagnostic(self: *Executor, function: []const u8, command: []const u8, status: ?ExitStatus, err: ?anyerror, stderr: []const u8) !void {
-        try self.completions.appendProviderDiagnostic(function, command, status, err, stderr);
+        try self.completion_session.state.appendProviderDiagnostic(function, command, status, err, stderr);
     }
 
     fn completionCommandKnown(self: Executor, command: []const u8, io: ?std.Io) !bool {
         if (builtinFor(command) != null) return true;
         if (self.functions.get(command) != null) return true;
         if (self.aliases.get(command) != null) return true;
-        for (self.completions.rules.items) |rule| {
+        for (self.completion_session.state.rules.items) |rule| {
             if (std.mem.eql(u8, rule.root, command)) return true;
         }
         if (try self.completionCommandInPath(command, io)) return true;
@@ -2496,8 +2515,8 @@ pub const Executor = struct {
 
     fn loadCompletionScriptForRoot(self: *Executor, root: []const u8, options: ExecuteOptions) !void {
         const io = options.io orelse return;
-        if (root.len == 0 or self.completions.loadedScript(root)) return;
-        try self.completions.markLoadedScript(root);
+        if (root.len == 0 or self.completion_session.state.loadedScript(root)) return;
+        try self.completion_session.state.markLoadedScript(root);
         const file_name = try rootCompletionFileName(self.allocator, root);
         defer self.allocator.free(file_name);
         if (file_name.len == 0) return;
@@ -2527,7 +2546,7 @@ pub const Executor = struct {
     }
 
     fn isManifestCompanionCompletionScript(self: Executor, root: []const u8, path: []const u8) bool {
-        for (self.completions.rules.items) |rule| {
+        for (self.completion_session.state.rules.items) |rule| {
             if (rule.source.kind != .manifest) continue;
             if (!std.mem.eql(u8, rule.root, root)) continue;
             if (rule.source.companion_path) |companion_path| {
@@ -2558,51 +2577,49 @@ pub const Executor = struct {
     }
 
     fn ensureCompletionCompanionLoaded(self: *Executor, io: std.Io, path: []const u8, options: ExecuteOptions) !void {
-        if (path.len == 0 or self.completions.loadedCompanion(path)) return;
-        try self.completions.markLoadedCompanion(path);
+        if (path.len == 0 or self.completion_session.state.loadedCompanion(path)) return;
+        try self.completion_session.state.markLoadedCompanion(path);
         _ = try self.sourceCompletionScript(io, path, options, true);
     }
 
     pub fn lastCompletionContext(self: Executor) ?CompletionEvalContext {
-        return self.completions.last_context;
+        return self.completion_session.state.last_context;
     }
 
     fn activeCompletionBuilder(self: *Executor) ?*CompletionBuilder {
-        if (self.completion_builder_ref) |builder| return builder;
-        if (self.completion_builder) |*builder| return builder;
-        return null;
+        return self.completion_session.activeBuilder();
     }
 
     pub fn lastCompletionTracePath(self: Executor) ?[]const []const u8 {
-        return self.completions.last_trace_path;
+        return self.completion_session.state.last_trace_path;
     }
 
     pub fn lastCompletionSemantic(self: Executor) ?CompletionSemanticContext {
-        return self.completions.last_semantic;
+        return self.completion_session.state.last_semantic;
     }
 
     pub fn lastCompletionPrecommandDepthLimited(self: Executor) bool {
-        return self.completions.last_precommand_depth_limited;
+        return self.completion_session.state.last_precommand_depth_limited;
     }
 
     fn clearLastCompletionTrace(self: *Executor) void {
-        self.completions.clearLastTrace();
+        self.completion_session.state.clearLastTrace();
     }
 
     fn storeLastCompletionSemantic(self: *Executor, semantic: CompletionSemanticContext) !void {
-        try self.completions.storeLastSemantic(semantic);
+        try self.completion_session.state.storeLastSemantic(semantic);
     }
 
     fn offsetLastCompletionSemantic(self: *Executor, offset: usize) void {
-        self.completions.offsetLastSemantic(offset);
+        self.completion_session.state.offsetLastSemantic(offset);
     }
 
     fn storeLastCompletionTracePath(self: *Executor, root: []const u8, path: []const []const u8) !void {
-        try self.completions.storeLastTracePath(root, path);
+        try self.completion_session.state.storeLastTracePath(root, path);
     }
 
     fn storeCombinedLastCompletionTracePath(self: *Executor, outer: CompletionSemanticContext, inner: []const []const u8) !void {
-        try self.completions.storeCombinedLastTracePath(outer, inner);
+        try self.completion_session.state.storeCombinedLastTracePath(outer, inner);
     }
 
     pub fn collectCompletionsForInput(self: *Executor, source: []const u8, cursor: usize, options: ExecuteOptions) ![]completion.Candidate {
@@ -2622,7 +2639,7 @@ pub const Executor = struct {
 
         if (semantic.precommand_start) |start| {
             if (precommand_depth >= precommand_completion_depth_limit) {
-                self.completions.last_precommand_depth_limited = true;
+                self.completion_session.state.last_precommand_depth_limited = true;
                 try self.storeLastCompletionSemantic(semantic);
                 try self.storeLastCompletionTracePath(semantic.root, semantic.path);
                 return self.allocator.alloc(completion.Candidate, 0);
@@ -2635,7 +2652,7 @@ pub const Executor = struct {
                 candidate.replace_end += start;
             }
             self.offsetLastCompletionSemantic(start);
-            if (self.completions.last_trace_path) |inner_path| try self.storeCombinedLastCompletionTracePath(semantic, inner_path);
+            if (self.completion_session.state.last_trace_path) |inner_path| try self.storeCombinedLastCompletionTracePath(semantic, inner_path);
             return candidates;
         }
 
@@ -2775,11 +2792,11 @@ pub const Executor = struct {
             if (is_current or token.span.end > clamped_cursor) break;
             const word = token.lexeme(view.source);
             previous = word;
-            if (stop_after_unknown_option and !findCompletionSubcommand(self.completions.rules.items, root, path.items, word)) break;
+            if (stop_after_unknown_option and !findCompletionSubcommand(self.completion_session.state.rules.items, root, path.items, word)) break;
             stop_after_unknown_option = false;
             if (options_terminated) {
-                const operand_state = completionActiveArgumentState(self.completions.rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
-                const rest_command_line = completionArgumentStateIsRestCommandLine(self.completions.rules.items, root, path.items, operand_state);
+                const operand_state = completionActiveArgumentState(self.completion_session.state.rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
+                const rest_command_line = completionArgumentStateIsRestCommandLine(self.completion_session.state.rules.items, root, path.items, operand_state);
                 if (rest_command_line and precommand_start == null) precommand_start = view.offset + token.span.start;
                 try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = true, .rest_command_line = rest_command_line });
                 previous_argument_state = operand_state;
@@ -2787,29 +2804,29 @@ pub const Executor = struct {
                 argument_index += 1;
             } else if (std.mem.eql(u8, word, "--")) {
                 options_terminated = true;
-            } else if (findCompletionOption(self.completions.rules.items, root, path.items, word)) |matched| {
+            } else if (findCompletionOption(self.completion_session.state.rules.items, root, path.items, word)) |matched| {
                 try appendParsedCompletionOption(self.allocator, &parsed_options, matched);
                 if (consumeDetachedCompletionOptionValues(&parsed_options, words.items, view.source, parser_context, clamped_cursor, &index, &previous, matched)) |active| option_value = active;
                 if (matched.terminates_options) options_terminated = true;
-            } else if (analyzeShortOptionCluster(self.completions.rules.items, root, path.items, word)) |cluster| {
+            } else if (analyzeShortOptionCluster(self.completion_session.state.rules.items, root, path.items, word)) |cluster| {
                 if (!cluster.valid) {
                     suspicious = token.span;
                     stop_after_unknown_option = true;
                 } else if (cluster.takes_next_value) {
-                    _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completions.rules.items, root, path.items, word);
-                    if (shortCompletionClusterTerminatesOptions(self.completions.rules.items, root, path.items, word)) options_terminated = true;
+                    _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_session.state.rules.items, root, path.items, word);
+                    if (shortCompletionClusterTerminatesOptions(self.completion_session.state.rules.items, root, path.items, word)) options_terminated = true;
                     if (cluster.value_offset) |value_offset| {
-                        if (findShortCompletionOption(self.completions.rules.items, root, path.items, word[value_offset])) |matched| {
+                        if (findShortCompletionOption(self.completion_session.state.rules.items, root, path.items, word[value_offset])) |matched| {
                             if (consumeDetachedCompletionOptionValues(&parsed_options, words.items, view.source, parser_context, clamped_cursor, &index, &previous, matched)) |active| {
                                 option_value = .{ .name = active.name, .spelling = word, .value_index = active.value_index, .from = word, .from_offset = value_offset };
                             }
                         }
                     }
                 } else {
-                    _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completions.rules.items, root, path.items, word);
-                    if (shortCompletionClusterTerminatesOptions(self.completions.rules.items, root, path.items, word)) options_terminated = true;
+                    _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_session.state.rules.items, root, path.items, word);
+                    if (shortCompletionClusterTerminatesOptions(self.completion_session.state.rules.items, root, path.items, word)) options_terminated = true;
                     if (cluster.value_offset) |value_offset| {
-                        if (findShortCompletionOption(self.completions.rules.items, root, path.items, word[value_offset])) |matched| {
+                        if (findShortCompletionOption(self.completion_session.state.rules.items, root, path.items, word[value_offset])) |matched| {
                             var attached = matched;
                             attached.attached_value = true;
                             attached.spelling = word;
@@ -2823,11 +2840,11 @@ pub const Executor = struct {
             } else if (isOptionLike(word)) {
                 suspicious = token.span;
                 stop_after_unknown_option = true;
-            } else if (argument_index == 0 and findCompletionSubcommand(self.completions.rules.items, root, path.items, word)) {
+            } else if (argument_index == 0 and findCompletionSubcommand(self.completion_session.state.rules.items, root, path.items, word)) {
                 try path.append(self.allocator, word);
             } else {
-                const operand_state = completionActiveArgumentState(self.completions.rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
-                const rest_command_line = completionArgumentStateIsRestCommandLine(self.completions.rules.items, root, path.items, operand_state);
+                const operand_state = completionActiveArgumentState(self.completion_session.state.rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
+                const rest_command_line = completionArgumentStateIsRestCommandLine(self.completion_session.state.rules.items, root, path.items, operand_state);
                 if (rest_command_line and precommand_start == null) precommand_start = view.offset + token.span.start;
                 try operands.append(self.allocator, .{ .value = word, .index = argument_index, .state = operand_state, .after_terminator = false, .rest_command_line = rest_command_line });
                 previous_argument_state = operand_state;
@@ -2837,8 +2854,8 @@ pub const Executor = struct {
             index += 1;
         }
 
-        const argument_state = completionActiveArgumentState(self.completions.rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
-        if (precommand_start == null and completionArgumentStateIsRestCommandLine(self.completions.rules.items, root, path.items, argument_state)) {
+        const argument_state = completionActiveArgumentState(self.completion_session.state.rules.items, root, path.items, argument_index, previous_argument_state, previous_argument, parsed_options.items, options_terminated);
+        if (precommand_start == null and completionArgumentStateIsRestCommandLine(self.completion_session.state.rules.items, root, path.items, argument_state)) {
             precommand_start = replace_start;
         }
 
@@ -2846,14 +2863,14 @@ pub const Executor = struct {
         var semantic_replace_start = replace_start;
         var value_segment: ?CompletionValueSegment = null;
         if (option_value == null) {
-            if (attachedCompletionOptionValue(self.completions.rules.items, root, path.items, semantic_prefix)) |attached| {
+            if (attachedCompletionOptionValue(self.completion_session.state.rules.items, root, path.items, semantic_prefix)) |attached| {
                 option_value = .{ .name = attached.name, .spelling = attached.spelling, .from = attached.from, .from_offset = attached.from_offset };
                 semantic_prefix = semantic_prefix[attached.value_offset..];
                 semantic_replace_start += attached.value_offset;
             }
         }
         if (option_value) |active_option_value| {
-            const grammar = completionValueGrammarForOption(self.completions.rules.items, root, path.items, active_option_value);
+            const grammar = completionValueGrammarForOption(self.completion_session.state.rules.items, root, path.items, active_option_value);
             if (!grammar.isEmpty()) {
                 const active = activeCompletionValueSegment(semantic_prefix, semantic_replace_start, grammar);
                 semantic_prefix = active.prefix;
@@ -2871,9 +2888,9 @@ pub const Executor = struct {
             .command
         else if (options_terminated)
             .argument
-        else if (std.mem.startsWith(u8, semantic_prefix, "-") or (semantic_prefix.len != 0 and completionOptionPrefixMatches(self.completions.rules.items, root, path.items, semantic_prefix)))
+        else if (std.mem.startsWith(u8, semantic_prefix, "-") or (semantic_prefix.len != 0 and completionOptionPrefixMatches(self.completion_session.state.rules.items, root, path.items, semantic_prefix)))
             .option
-        else if (argument_state == null and (semantic_prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completions.rules.items, root, path.items)))
+        else if (argument_state == null and (semantic_prefix.len == 0 or path.items.len == 0 or completionContextHasSubcommands(self.completion_session.state.rules.items, root, path.items)))
             .subcommand
         else
             .argument;
@@ -2957,12 +2974,12 @@ pub const Executor = struct {
             if (token.span.end > clamped_cursor) break;
             const word = token.lexeme(source);
             const word_complete = token.span.end < clamped_cursor;
-            const has_option_rules = completionContextHasOptions(self.completions.rules.items, root, path.items);
+            const has_option_rules = completionContextHasOptions(self.completion_session.state.rules.items, root, path.items);
             if (options_terminated) {
                 continue;
             } else if (std.mem.eql(u8, word, "--")) {
                 options_terminated = true;
-            } else if (findCompletionOption(self.completions.rules.items, root, path.items, word)) |matched| {
+            } else if (findCompletionOption(self.completion_session.state.rules.items, root, path.items, word)) |matched| {
                 if (matchedCompletionOptionSuppression(parsed_options.items, matched)) |suppression| {
                     try diagnostics.append(self.allocator, .{
                         .kind = completionDiagnosticKindForOptionSuppression(suppression),
@@ -2983,7 +3000,7 @@ pub const Executor = struct {
                     });
                 }
                 if (matched.terminates_options) options_terminated = true;
-            } else if (if (has_option_rules) analyzeShortOptionCluster(self.completions.rules.items, root, path.items, word) else null) |cluster| {
+            } else if (if (has_option_rules) analyzeShortOptionCluster(self.completion_session.state.rules.items, root, path.items, word) else null) |cluster| {
                 if (!cluster.valid) {
                     if (word_complete) {
                         try diagnostics.append(self.allocator, .{
@@ -2995,7 +3012,7 @@ pub const Executor = struct {
                         });
                     }
                 } else {
-                    if (try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completions.rules.items, root, path.items, word)) |suppression| {
+                    if (try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_session.state.rules.items, root, path.items, word)) |suppression| {
                         try diagnostics.append(self.allocator, .{
                             .kind = completionDiagnosticKindForOptionSuppression(suppression),
                             .severity = .err,
@@ -3004,10 +3021,10 @@ pub const Executor = struct {
                             .message = completionDiagnosticMessageForOptionSuppression(suppression),
                         });
                     }
-                    if (shortCompletionClusterTerminatesOptions(self.completions.rules.items, root, path.items, word)) options_terminated = true;
+                    if (shortCompletionClusterTerminatesOptions(self.completion_session.state.rules.items, root, path.items, word)) options_terminated = true;
                     if (cluster.takes_next_value) {
                         if (cluster.value_offset) |value_offset| {
-                            const missing_value = if (findShortCompletionOption(self.completions.rules.items, root, path.items, word[value_offset])) |matched|
+                            const missing_value = if (findShortCompletionOption(self.completion_session.state.rules.items, root, path.items, word[value_offset])) |matched|
                                 !skipCompletedDetachedCompletionOptionValues(words.items, clamped_cursor, &index, matched)
                             else
                                 true;
@@ -3030,7 +3047,7 @@ pub const Executor = struct {
                             });
                         }
                     } else if (cluster.value_offset) |value_offset| {
-                        if (findShortCompletionOption(self.completions.rules.items, root, path.items, word[value_offset])) |matched| {
+                        if (findShortCompletionOption(self.completion_session.state.rules.items, root, path.items, word[value_offset])) |matched| {
                             var attached = matched;
                             attached.attached_value = true;
                             attached.value = word[value_offset + 1 ..];
@@ -3039,7 +3056,7 @@ pub const Executor = struct {
                     }
                 }
             } else if (isOptionLike(word)) {
-                if (has_option_rules and word_complete and !completionOptionPrefixMatches(self.completions.rules.items, root, path.items, word)) {
+                if (has_option_rules and word_complete and !completionOptionPrefixMatches(self.completion_session.state.rules.items, root, path.items, word)) {
                     try diagnostics.append(self.allocator, .{
                         .kind = .unknown_option,
                         .severity = .err,
@@ -3048,10 +3065,10 @@ pub const Executor = struct {
                         .message = "unknown option",
                     });
                 }
-            } else if (findCompletionSubcommand(self.completions.rules.items, root, path.items, word)) {
+            } else if (findCompletionSubcommand(self.completion_session.state.rules.items, root, path.items, word)) {
                 try path.append(self.allocator, word);
-            } else if (completionContextHasSubcommands(self.completions.rules.items, root, path.items)) {
-                if (word_complete and !completionSubcommandPrefixMatches(self.completions.rules.items, root, path.items, word)) {
+            } else if (completionContextHasSubcommands(self.completion_session.state.rules.items, root, path.items)) {
+                if (word_complete and !completionSubcommandPrefixMatches(self.completion_session.state.rules.items, root, path.items, word)) {
                     try diagnostics.append(self.allocator, .{
                         .kind = .unknown_subcommand,
                         .severity = .err,
@@ -3088,22 +3105,25 @@ pub const Executor = struct {
         var provider = Executor.init(self.allocator);
         defer provider.deinit();
         try provider.copyStateFromWithOptions(self, .{ .completions = false });
+        std.debug.assert(provider.activeCompletionBuilder() == null);
+        std.debug.assert(provider.completion_session.context == null);
         defer provider.cleanupCompletionProviderBackgroundJobs(options.io);
 
         const stored_function_value = provider.functions.getPtr(function) orelse return self.allocator.alloc(completion.Candidate, 0);
         var function_value = try provider.cloneFunctionValue(stored_function_value);
         defer function_value.deinit(provider.allocator);
-        provider.completion_builder = .{};
-        if (provider.completion_builder) |*builder| provider.completion_builder_ref = builder;
-        provider.completion_context = context;
+        provider.completion_session.builder = .{};
+        if (provider.completion_session.builder) |*builder| provider.completion_session.builder_ref = builder;
+        std.debug.assert(provider.completion_session.builder_ref != null);
+        provider.completion_session.context = context;
         try setCompletionContextVariables(&provider, context);
         errdefer {
-            if (provider.completion_builder) |*completion_builder| {
+            if (provider.completion_session.builder) |*completion_builder| {
                 completion_builder.deinit(self.allocator);
-                provider.completion_builder = null;
+                provider.completion_session.builder = null;
             }
-            provider.completion_builder_ref = null;
-            provider.completion_context = null;
+            provider.completion_session.builder_ref = null;
+            provider.completion_session.context = null;
         }
 
         var argv = [_]ir.WordRef{
@@ -3114,10 +3134,10 @@ pub const Executor = struct {
         var completion_options = options;
         completion_options.external_stdio = .capture;
         var result = provider.executeFunctionBody(call, &function_value, completion_options) catch |err| {
-            provider.completion_builder.?.deinit(self.allocator);
-            provider.completion_builder = null;
-            provider.completion_builder_ref = null;
-            provider.completion_context = null;
+            provider.completion_session.builder.?.deinit(self.allocator);
+            provider.completion_session.builder = null;
+            provider.completion_session.builder_ref = null;
+            provider.completion_session.context = null;
             switch (err) {
                 error.OutOfMemory => return err,
                 else => {
@@ -3128,16 +3148,18 @@ pub const Executor = struct {
         };
         defer result.deinit();
 
-        var builder = provider.completion_builder.?;
-        provider.completion_builder = null;
-        provider.completion_builder_ref = null;
+        std.debug.assert(provider.completion_session.builder != null);
+        std.debug.assert(provider.completion_session.builder_ref != null);
+        var builder = provider.completion_session.builder.?;
+        provider.completion_session.builder = null;
+        provider.completion_session.builder_ref = null;
         errdefer builder.deinit(self.allocator);
-        const final_context = provider.completion_context orelse context;
+        const final_context = provider.completion_session.context orelse context;
         var stored_context = final_context;
         stored_context.parsed_options = &.{};
         stored_context.operands = &.{};
-        self.completions.last_context = stored_context;
-        provider.completion_context = null;
+        self.completion_session.state.last_context = stored_context;
+        provider.completion_session.context = null;
 
         if (result.status != 0) {
             builder.deinit(self.allocator);
@@ -3173,7 +3195,7 @@ pub const Executor = struct {
     }
 
     fn collectRootCommandCompletions(self: *Executor, context: CompletionEvalContext, options: ExecuteOptions) ![]completion.Candidate {
-        self.completions.last_context = context;
+        self.completion_session.state.last_context = context;
         var builder: CompletionBuilder = .{};
         errdefer builder.deinit(self.allocator);
         var seen: std.StringHashMapUnmanaged(void) = .empty;
@@ -3214,7 +3236,7 @@ pub const Executor = struct {
     fn appendStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !void {
         if (try self.appendActiveShortOptionClusterCandidates(builder, context)) return;
 
-        for (self.completions.rules.items) |rule| {
+        for (self.completion_session.state.rules.items) |rule| {
             switch (rule.kind) {
                 .dynamic_subcommands, .dynamic_options, .dynamic_argument, .dynamic_option_value => {},
                 .subcommand => {
@@ -3258,19 +3280,19 @@ pub const Executor = struct {
     fn appendActiveShortOptionClusterCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionSemanticContext) !bool {
         if (context.position != .option) return false;
         if (!isShortOptionCluster(context.prefix)) return false;
-        if (findCompletionOption(self.completions.rules.items, context.root, context.path, context.prefix) != null) return false;
-        const cluster = analyzeShortOptionCluster(self.completions.rules.items, context.root, context.path, context.prefix) orelse return false;
+        if (findCompletionOption(self.completion_session.state.rules.items, context.root, context.path, context.prefix) != null) return false;
+        const cluster = analyzeShortOptionCluster(self.completion_session.state.rules.items, context.root, context.path, context.prefix) orelse return false;
         if (!cluster.valid) return false;
         if (cluster.value_offset != null) return true;
 
         var parsed_options: std.ArrayList(CompletionParsedOption) = .empty;
         defer parsed_options.deinit(self.allocator);
         try parsed_options.appendSlice(self.allocator, context.parsed_options);
-        _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completions.rules.items, context.root, context.path, context.prefix);
+        _ = try appendShortCompletionClusterParsedOptions(self.allocator, &parsed_options, self.completion_session.state.rules.items, context.root, context.path, context.prefix);
 
         var cluster_context = context;
         cluster_context.parsed_options = parsed_options.items;
-        for (self.completions.rules.items) |rule| {
+        for (self.completion_session.state.rules.items) |rule| {
             if (rule.kind != .option) continue;
             if (!completionOptionRuleContextAppliesToPath(rule, context.root, context.path)) continue;
             const short = rule.option.short orelse continue;
@@ -3461,7 +3483,7 @@ pub const Executor = struct {
     }
 
     fn appendDynamicStructuredCompletionCandidates(self: *Executor, builder: *CompletionBuilder, context: CompletionEvalContext, semantic: CompletionSemanticContext, options: ExecuteOptions) !void {
-        for (self.completions.rules.items) |rule| {
+        for (self.completion_session.state.rules.items) |rule| {
             if (rule.argument.rest_command_line) continue;
             if (!completionDynamicRuleMatches(rule, semantic)) continue;
             var provider_context = context;
@@ -3481,7 +3503,7 @@ pub const Executor = struct {
                     const candidates = try self.collectCompletionsFromFunction(function, context.command, provider_context, options, rule.source.companion_path);
                     defer self.freeCompletions(candidates);
                     for (candidates) |candidate| {
-                        if (completionOptionCandidateSuppression(self.completions.rules.items, semantic, candidate) != null) continue;
+                        if (completionOptionCandidateSuppression(self.completion_session.state.rules.items, semantic, candidate) != null) continue;
                         var provider_candidate = candidate;
                         applyRuleProviderMetadata(&provider_candidate, rule);
                         var suffix_buffer: [1]u8 = undefined;
@@ -3501,7 +3523,7 @@ pub const Executor = struct {
     }
 
     fn appendStaticProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, values: []const completion.StaticProviderValue, context: CompletionEvalContext, rule: completion.Rule) !void {
-        self.completions.last_context = context;
+        self.completion_session.state.last_context = context;
         const kind: completion.Kind = switch (rule.kind) {
             .dynamic_subcommands => .subcommand,
             else => .plain,
@@ -3533,7 +3555,7 @@ pub const Executor = struct {
     }
 
     fn appendBuiltinProviderCompletionCandidates(self: *Executor, builder: *CompletionBuilder, provider_kind: completion.ProviderKind, context: CompletionEvalContext, options: ExecuteOptions) !void {
-        self.completions.last_context = context;
+        self.completion_session.state.last_context = context;
         switch (provider_kind) {
             .function, .static_enum => {},
             .builtin_files => {
@@ -3599,7 +3621,7 @@ pub const Executor = struct {
     }
 
     fn hasExplicitCompletionRuleForContext(self: Executor, context: CompletionSemanticContext) bool {
-        for (self.completions.rules.items) |rule| {
+        for (self.completion_session.state.rules.items) |rule| {
             switch (rule.kind) {
                 .dynamic_argument => if (completionDynamicRuleMatches(rule, context)) return true,
                 .dynamic_option_value => if (context.position == .option_value and completionDynamicRuleMatches(rule, context)) return true,
@@ -4394,7 +4416,10 @@ pub const Executor = struct {
         std.debug.assert(other.execution_depth == 0);
         std.debug.assert(self.env.count() == 0);
         std.debug.assert(self.functions.count() == 0);
-        std.debug.assert(self.completions.rules.items.len == 0);
+        std.debug.assert(self.completion_session.state.rules.items.len == 0);
+        std.debug.assert(self.completion_session.builder == null);
+        std.debug.assert(self.completion_session.builder_ref == null);
+        std.debug.assert(self.completion_session.context == null);
         std.debug.assert(self.open_fds.count() == 0);
 
         self.shell_options = other.shell_options;
@@ -4409,9 +4434,9 @@ pub const Executor = struct {
         self.pid_text_len = other.pid_text_len;
         self.last_background_pid_text = other.last_background_pid_text;
         self.last_background_pid_text_len = other.last_background_pid_text_len;
-        self.completion_context = other.completion_context;
-        self.completion_builder_ref = other.completion_builder_ref;
-        self.completions.last_context = other.completions.last_context;
+        self.completion_session.context = other.completion_session.context;
+        self.completion_session.builder_ref = other.completion_session.builder_ref;
+        self.completion_session.state.last_context = other.completion_session.state.last_context;
         self.command_history = other.command_history;
         self.process_state_isolated = other.process_state_isolated;
         self.rlimit_overrides = other.rlimit_overrides;
@@ -4438,7 +4463,7 @@ pub const Executor = struct {
             }
         }
         try self.global_positionals.set(self.allocator, other.global_positionals.params);
-        try self.completions.copyFrom(&other.completions);
+        try self.completion_session.state.copyFrom(&other.completion_session.state);
     }
 
     const CopyStateOptions = struct {
@@ -4446,6 +4471,10 @@ pub const Executor = struct {
     };
 
     fn copyStateFromWithOptions(self: *Executor, other: *const Executor, copy_options: CopyStateOptions) !void {
+        std.debug.assert(self.completion_session.builder == null);
+        std.debug.assert(self.completion_session.builder_ref == null);
+        std.debug.assert(self.completion_session.context == null);
+
         self.shell_options = other.shell_options;
         self.loop_control_boundary_outer_depth = other.loop_control_boundary_outer_depth;
         self.getopts_offset = other.getopts_offset;
@@ -4465,9 +4494,9 @@ pub const Executor = struct {
         self.prompt_refresh_interval_ms = other.prompt_refresh_interval_ms;
         self.prompt_repaint_handler = other.prompt_repaint_handler;
         self.prompt_async_owner = other.prompt_async_owner orelse @constCast(other);
-        self.completion_context = other.completion_context;
-        self.completion_builder_ref = other.completion_builder_ref;
-        self.completions.last_context = other.completions.last_context;
+        self.completion_session.context = other.completion_session.context;
+        self.completion_session.builder_ref = other.completion_session.builder_ref;
+        self.completion_session.state.last_context = other.completion_session.state.last_context;
         self.command_history = other.command_history;
         self.process_state_isolated = other.process_state_isolated;
         self.rlimit_overrides = other.rlimit_overrides;
@@ -4492,7 +4521,7 @@ pub const Executor = struct {
         var abbr_iter = other.abbreviations.iterator();
         while (abbr_iter.next()) |entry| try self.setAbbreviation(entry.key_ptr.*, entry.value_ptr.*);
         if (copy_options.completions) {
-            try self.completions.copyFrom(&other.completions);
+            try self.completion_session.state.copyFrom(&other.completion_session.state);
         }
         self.ignored_trap_signals_at_entry = other.ignored_trap_signals_at_entry;
         var trap_iter = other.traps.iterator();
@@ -6032,7 +6061,7 @@ pub const Executor = struct {
         try child.resetCaughtTrapsForInProcessSubshell(self);
         child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
-        if (is_last and self.completion_builder != null) child.completion_builder = .{};
+        if (is_last and self.completion_session.builder != null) child.completion_session.builder = .{};
 
         var guard = try self.savePipelineSubshellProcessState(options);
         defer guard.restore();
@@ -6047,7 +6076,7 @@ pub const Executor = struct {
     }
 
     fn shouldRunLastPipelineStageInCurrentShell(self: Executor, command: ir.SimpleCommand) bool {
-        if (self.completion_builder == null) return false;
+        if (self.completion_session.builder == null) return false;
         if (command.argv.len == 0) return false;
         return std.mem.eql(u8, command.argv[0].text, "completion");
     }
@@ -6061,7 +6090,7 @@ pub const Executor = struct {
         try child.resetCaughtTrapsForInProcessSubshell(self);
         child.process_state_isolated = true;
         child.loop_control_boundary_outer_depth = self.loop_depth + self.loop_control_boundary_outer_depth;
-        if (is_last and self.completion_builder != null) child.completion_builder = .{};
+        if (is_last and self.completion_session.builder != null) child.completion_session.builder = .{};
 
         var guard = try self.savePipelineSubshellProcessState(options);
         defer guard.restore();
@@ -6073,11 +6102,11 @@ pub const Executor = struct {
     }
 
     fn mergeCompletionBuilderFrom(self: *Executor, child: *Executor) !void {
-        var child_builder = child.completion_builder orelse return;
-        child.completion_builder = null;
+        var child_builder = child.completion_session.builder orelse return;
+        child.completion_session.builder = null;
         defer child_builder.deinit(self.allocator);
 
-        if (self.completion_builder) |*parent_builder| {
+        if (self.completion_session.builder) |*parent_builder| {
             for (child_builder.candidates.items) |candidate| try parent_builder.appendCandidate(self.allocator, candidate);
         }
     }
@@ -6177,7 +6206,7 @@ pub const Executor = struct {
     }
 
     fn canExecuteRealSpanPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
-        if (self.completion_builder != null or self.completion_builder_ref != null or self.completion_context != null) return false;
+        if (self.completion_session.builder != null or self.completion_session.builder_ref != null or self.completion_session.context != null) return false;
         if (pipeline.stage_spans.len == pipeline.command_indexes.len) return false;
         if (!options.allow_external or options.io == null or pipeline.stage_spans.len < 2) return false;
         for (pipeline.command_indexes) |command_index| {
@@ -6403,7 +6432,7 @@ pub const Executor = struct {
     }
 
     fn canExecuteRealPipeline(self: Executor, program: ir.Program, pipeline: ir.Pipeline, options: ExecuteOptions) bool {
-        if (self.completion_builder != null or self.completion_builder_ref != null or self.completion_context != null) return false;
+        if (self.completion_session.builder != null or self.completion_session.builder_ref != null or self.completion_session.context != null) return false;
         if (pipeline.stage_spans.len != pipeline.command_indexes.len) return false;
         if (!options.allow_external or options.io == null or pipeline.command_indexes.len < 2) return false;
         for (pipeline.command_indexes) |command_index| {
@@ -8605,7 +8634,7 @@ pub const Executor = struct {
             child.script_stdin_offset = 0;
             child.script_stdin_file = std.Io.File.stdin();
         }
-        if (substitution_context.executor.completion_builder != null) child.completion_builder = .{};
+        if (substitution_context.executor.completion_session.builder != null) child.completion_session.builder = .{};
         if (substitution_context.executor.prompt_builder != null) child.prompt_builder = .{};
         child.pending_exit = null;
         var result = try child.executeScriptSlice(script, sub_options);
@@ -11346,7 +11375,7 @@ fn builtinForName(self: Executor, name: []const u8) ?BuiltinFn {
         if (std.mem.eql(u8, name, "prompt_async")) return builtinPromptAsync;
         if (std.mem.eql(u8, name, "prompt_time")) return builtinPromptTime;
     }
-    if (self.completion_builder != null or self.completion_builder_ref != null) {
+    if (self.completion_session.builder != null or self.completion_session.builder_ref != null) {
         if (std.mem.eql(u8, name, "completion")) return builtinCompletion;
     }
     return builtinFor(name);
@@ -12148,27 +12177,28 @@ fn parseCompletionPattern(allocator: std.mem.Allocator, pattern: []const u8) !Co
 
 fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const u8, options: ExecuteOptions) !CommandResult {
     const builder = self.activeCompletionBuilder() orelse return errorResult(self.allocator, 2, "completion", "not completing a command");
+    std.debug.assert(self.completion_session.context != null);
     if (command.argv.len < 2) return errorResult(self.allocator, 2, "completion", "missing subcommand");
     const subcommand = command.argv[1].text;
     if (std.mem.eql(u8, subcommand, "prefix")) return completionContextLine(self, subcommand, completionContextValue(self.*, .prefix));
     if (std.mem.eql(u8, subcommand, "command")) return completionContextLine(self, subcommand, completionContextValue(self.*, .command));
     if (std.mem.eql(u8, subcommand, "command-path")) return completionContextLine(self, subcommand, completionContextValue(self.*, .command_path));
     if (std.mem.eql(u8, subcommand, "argument-index")) {
-        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         const text = try std.fmt.allocPrint(self.allocator, "{d}\n", .{context.argument_index});
         return .{ .allocator = self.allocator, .status = 0, .stdout = text, .stderr = try self.allocator.alloc(u8, 0) };
     }
     if (std.mem.eql(u8, subcommand, "operand-index")) {
-        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         const text = try std.fmt.allocPrint(self.allocator, "{d}\n", .{context.argument_index});
         return .{ .allocator = self.allocator, .status = 0, .stdout = text, .stderr = try self.allocator.alloc(u8, 0) };
     }
     if (std.mem.eql(u8, subcommand, "argument-state")) {
-        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         return stdoutLine(self.allocator, context.argument_state orelse "", 0);
     }
     if (std.mem.eql(u8, subcommand, "operand-state")) {
-        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         return stdoutLine(self.allocator, context.argument_state orelse "", 0);
     }
     if (std.mem.eql(u8, subcommand, "option-present")) return builtinCompletionOptionPresent(self, command);
@@ -12177,16 +12207,16 @@ fn builtinCompletion(self: *Executor, command: ir.SimpleCommand, stdin: []const 
     if (std.mem.eql(u8, subcommand, "operand")) return builtinCompletionOperand(self, command);
     if (std.mem.eql(u8, subcommand, "options-terminated")) {
         if (command.argv.len != 2) return errorResult(self.allocator, 2, "completion", "unsupported context option");
-        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         return stdoutLine(self.allocator, if (context.options_terminated) "true" else "false", 0);
     }
     if (std.mem.eql(u8, subcommand, "previous")) return completionContextLine(self, subcommand, completionContextValue(self.*, .previous));
     if (std.mem.eql(u8, subcommand, "position")) {
-        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         return stdoutLine(self.allocator, if (context.option_value != null) "option_value" else @tagName(context.position), 0);
     }
     if (std.mem.eql(u8, subcommand, "option-value-index")) {
-        const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+        const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
         const option_value = context.option_value orelse return errorResult(self.allocator, 2, "completion", "missing active option");
         return stdoutLineFmt(self.allocator, "{d}", .{option_value.value_index}, 0);
     }
@@ -12255,14 +12285,14 @@ const CompletionOptionSelector = struct {
 };
 
 fn builtinCompletionOptionPresent(self: *Executor, command: ir.SimpleCommand) !CommandResult {
-    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
     const selector = completionOptionSelectorFromCommand(command, 2) catch |err| return completionOptionSelectorErrorResult(self, err);
     const present = completionParsedOptionMatchesSelector(self.*, context, selector) != null;
     return stdoutLine(self.allocator, if (present) "true" else "false", if (present) 0 else 1);
 }
 
 fn builtinCompletionOptionValues(self: *Executor, command: ir.SimpleCommand) !CommandResult {
-    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
     const selector = completionOptionSelectorFromCommand(command, 2) catch |err| return completionOptionSelectorErrorResult(self, err);
     const selector_key = completionOptionSelectorKey(self.*, context, selector);
 
@@ -12278,7 +12308,7 @@ fn builtinCompletionOptionValues(self: *Executor, command: ir.SimpleCommand) !Co
 
 fn builtinCompletionOperands(self: *Executor, command: ir.SimpleCommand) !CommandResult {
     if (command.argv.len != 2) return errorResult(self.allocator, 2, "completion", "unsupported context option");
-    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
 
     var out: std.Io.Writer.Allocating = .init(self.allocator);
     errdefer out.deinit();
@@ -12288,7 +12318,7 @@ fn builtinCompletionOperands(self: *Executor, command: ir.SimpleCommand) !Comman
 
 fn builtinCompletionOperand(self: *Executor, command: ir.SimpleCommand) !CommandResult {
     if (command.argv.len != 3) return errorResult(self.allocator, 2, "completion", "missing operand index");
-    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
     const requested = std.fmt.parseInt(usize, command.argv[2].text, 10) catch return errorResult(self.allocator, 2, "completion", "invalid operand index");
     for (context.operands) |operand| {
         if (operand.index == requested) return stdoutLine(self.allocator, operand.value, 0);
@@ -12330,7 +12360,7 @@ fn completionParsedOptionMatchesSelectorKey(option: CompletionParsedOption, sele
 }
 
 fn completionOptionSelectorKey(self: Executor, context: CompletionEvalContext, selector: CompletionOptionSelector) []const u8 {
-    for (self.completions.rules.items) |rule| {
+    for (self.completion_session.state.rules.items) |rule| {
         if (rule.kind != .option and rule.kind != .dynamic_option_value) continue;
         if (!std.mem.eql(u8, rule.root, context.command)) continue;
         if (!completionEvalRuleAppliesToPath(rule, context.command_path)) continue;
@@ -12487,7 +12517,7 @@ fn setCompletionContextVariables(self: *Executor, context: CompletionEvalContext
 }
 
 fn completionContextValue(self: Executor, field: CompletionContextField) ?[]const u8 {
-    const context = self.completion_context orelse return null;
+    const context = self.completion_session.context orelse return null;
     return switch (field) {
         .prefix => context.prefix,
         .command => context.command,
@@ -12503,7 +12533,7 @@ fn completionContextLine(self: *Executor, name: []const u8, value: ?[]const u8) 
 
 fn completionOptionContextLine(self: *Executor, name: []const u8, field: enum { name, spelling }) !CommandResult {
     _ = name;
-    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
     const option_value = context.option_value orelse return errorResult(self.allocator, 2, "completion", "missing active option");
     var spelling_buffer: [2]u8 = undefined;
     return stdoutLine(self.allocator, switch (field) {
@@ -12514,7 +12544,7 @@ fn completionOptionContextLine(self: *Executor, name: []const u8, field: enum { 
 
 fn completionValueSegmentContextLine(self: *Executor, name: []const u8, field: enum { segment, separator, position, key }) !CommandResult {
     _ = name;
-    const context = self.completion_context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
+    const context = self.completion_session.context orelse return errorResult(self.allocator, 2, "completion", "missing completion context");
     const segment = context.value_segment orelse return errorResult(self.allocator, 2, "completion", "missing active value segment");
     return switch (field) {
         .segment => stdoutLine(self.allocator, segment.segment, 0),
@@ -12526,7 +12556,7 @@ fn completionValueSegmentContextLine(self: *Executor, name: []const u8, field: e
 
 fn updateCompletionOptionValueContext(self: *Executor, option: completion.Option) bool {
     if (option.argument == null) return false;
-    var context = self.completion_context orelse return false;
+    var context = self.completion_session.context orelse return false;
     if (context.option_value != null) return true;
 
     if (option.long) |long| {
@@ -12538,7 +12568,7 @@ fn updateCompletionOptionValueContext(self: *Executor, option: completion.Option
             context.option_value = .{ .name = spelling[2..], .spelling = spelling };
             context.prefix = context.prefix[attached_prefix.len..];
             context.replace_start = value_start;
-            self.completion_context = context;
+            self.completion_session.context = context;
             return true;
         }
 
@@ -12546,7 +12576,7 @@ fn updateCompletionOptionValueContext(self: *Executor, option: completion.Option
         const spelling = std.fmt.bufPrint(&spelling_buffer, "--{s}", .{long}) catch return false;
         if (std.mem.eql(u8, context.previous, spelling)) {
             context.option_value = .{ .name = context.previous[2..], .spelling = context.previous };
-            self.completion_context = context;
+            self.completion_session.context = context;
             return true;
         }
     }
@@ -12555,7 +12585,7 @@ fn updateCompletionOptionValueContext(self: *Executor, option: completion.Option
         const spelling = std.fmt.bufPrint(&spelling_buffer, "-{s}", .{short}) catch return false;
         if (std.mem.eql(u8, context.previous, spelling)) {
             context.option_value = .{ .name = context.previous[1..], .spelling = context.previous };
-            self.completion_context = context;
+            self.completion_session.context = context;
             return true;
         }
     }
@@ -12577,7 +12607,7 @@ fn completionPrefixOption(self: *Executor, command: ir.SimpleCommand, start: usi
         }
     }
     if (prefix) |value| return value;
-    const context = self.completion_context orelse return "";
+    const context = self.completion_session.context orelse return "";
     return context.prefix;
 }
 
@@ -12604,9 +12634,9 @@ fn builtinCompletionFiles(self: *Executor, builder: *CompletionBuilder, command:
             return errorResult(self.allocator, 2, "completion", "unsupported helper option");
         }
     }
-    const effective_prefix = prefix orelse if (self.completion_context) |context| context.prefix else "";
-    const replace_start: usize = if (prefix == null) if (self.completion_context) |context| context.replace_start else 0 else 0;
-    const replace_end: usize = if (prefix == null) if (self.completion_context) |context| context.replace_end else effective_prefix.len else effective_prefix.len;
+    const effective_prefix = prefix orelse if (self.completion_session.context) |context| context.prefix else "";
+    const replace_start: usize = if (prefix == null) if (self.completion_session.context) |context| context.replace_start else 0 else 0;
+    const replace_end: usize = if (prefix == null) if (self.completion_session.context) |context| context.replace_end else effective_prefix.len else effective_prefix.len;
     try appendPathCandidates(self, builder, io, effective_prefix, replace_start, replace_end, extension, directories_only, append_slash);
     return emptyResult(self.allocator, 0);
 }
@@ -12711,13 +12741,13 @@ fn builtinCompletionExecutables(self: *Executor, builder: *CompletionBuilder, co
 }
 
 fn completionHelperReplaceStart(self: Executor, prefix: []const u8) usize {
-    const context = self.completion_context orelse return 0;
+    const context = self.completion_session.context orelse return 0;
     if (!std.mem.eql(u8, context.prefix, prefix)) return 0;
     return context.replace_start;
 }
 
 fn completionHelperReplaceEnd(self: Executor, prefix: []const u8) usize {
-    const context = self.completion_context orelse return prefix.len;
+    const context = self.completion_session.context orelse return prefix.len;
     if (!std.mem.eql(u8, context.prefix, prefix)) return prefix.len;
     return context.replace_end;
 }
@@ -25238,7 +25268,7 @@ test "complete requires function providers to declare a structured context" {
 
     try std.testing.expectEqual(@as(ExitStatus, 2), result.status);
     try std.testing.expectEqualStrings("complete: --function requires --subcommands, --options, --argument, or --option-value\n", result.stderr);
-    try std.testing.expectEqual(@as(usize, 0), executor.completions.rules.items.len);
+    try std.testing.expectEqual(@as(usize, 0), executor.completion_session.state.rules.items.len);
 }
 
 test "complete accepts structured function provider selectors" {
@@ -25258,11 +25288,11 @@ test "complete accepts structured function provider selectors" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqual(@as(usize, 4), executor.completions.rules.items.len);
-    try std.testing.expectEqual(completion.RuleKind.dynamic_subcommands, executor.completions.rules.items[0].kind);
-    try std.testing.expectEqual(completion.RuleKind.dynamic_options, executor.completions.rules.items[1].kind);
-    try std.testing.expectEqual(completion.RuleKind.dynamic_argument, executor.completions.rules.items[2].kind);
-    try std.testing.expectEqual(completion.RuleKind.dynamic_option_value, executor.completions.rules.items[3].kind);
+    try std.testing.expectEqual(@as(usize, 4), executor.completion_session.state.rules.items.len);
+    try std.testing.expectEqual(completion.RuleKind.dynamic_subcommands, executor.completion_session.state.rules.items[0].kind);
+    try std.testing.expectEqual(completion.RuleKind.dynamic_options, executor.completion_session.state.rules.items[1].kind);
+    try std.testing.expectEqual(completion.RuleKind.dynamic_argument, executor.completion_session.state.rules.items[2].kind);
+    try std.testing.expectEqual(completion.RuleKind.dynamic_option_value, executor.completion_session.state.rules.items[3].kind);
 }
 
 test "complete registers static subcommand rules" {
@@ -25277,8 +25307,8 @@ test "complete registers static subcommand rules" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    try std.testing.expectEqual(@as(usize, 1), executor.completions.rules.items.len);
-    const rule = executor.completions.rules.items[0];
+    try std.testing.expectEqual(@as(usize, 1), executor.completion_session.state.rules.items.len);
+    const rule = executor.completion_session.state.rules.items[0];
     try std.testing.expectEqual(completion.RuleKind.subcommand, rule.kind);
     try std.testing.expectEqualStrings("git", rule.root);
     try std.testing.expectEqual(@as(usize, 0), rule.path.len);
@@ -25298,7 +25328,7 @@ test "complete registers static option rules" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    const rule = executor.completions.rules.items[0];
+    const rule = executor.completion_session.state.rules.items[0];
     try std.testing.expectEqual(completion.RuleKind.option, rule.kind);
     try std.testing.expectEqualStrings("git", rule.root);
     try std.testing.expectEqualStrings("C", rule.option.short.?);
@@ -25319,7 +25349,7 @@ test "complete registers path scoped option rules" {
     defer result.deinit();
 
     try std.testing.expectEqual(@as(ExitStatus, 0), result.status);
-    const rule = executor.completions.rules.items[0];
+    const rule = executor.completion_session.state.rules.items[0];
     try std.testing.expectEqual(completion.RuleKind.option, rule.kind);
     try std.testing.expectEqualStrings("git", rule.root);
     try std.testing.expectEqual(@as(usize, 1), rule.path.len);
@@ -28072,17 +28102,17 @@ test "completion lazy-loads structured scripts from XDG data home" {
     try executor.setEnv("XDG_DATA_HOME", "test/fixtures/completion-data");
     try executor.setEnv("XDG_DATA_DIRS", "");
 
-    try std.testing.expectEqual(@as(usize, 0), executor.completions.rules.items.len);
+    try std.testing.expectEqual(@as(usize, 0), executor.completion_session.state.rules.items.len);
     const static_candidates = try executor.collectCompletionsForInput("fixturetool st", "fixturetool st".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(static_candidates);
     try expectCandidate(static_candidates, "static", .subcommand);
-    try std.testing.expect(executor.completions.rules.items.len != 0);
-    const loaded_rule_count = executor.completions.rules.items.len;
+    try std.testing.expect(executor.completion_session.state.rules.items.len != 0);
+    const loaded_rule_count = executor.completion_session.state.rules.items.len;
 
     const option_candidates = try executor.collectCompletionsForInput("fixturetool --v", "fixturetool --v".len, .{ .io = std.testing.io });
     defer executor.freeCompletions(option_candidates);
     try expectCandidate(option_candidates, "--verbose", .option);
-    try std.testing.expectEqual(loaded_rule_count, executor.completions.rules.items.len);
+    try std.testing.expectEqual(loaded_rule_count, executor.completion_session.state.rules.items.len);
 }
 
 test "completion lazy-loaded scripts can provide dynamic file arguments" {
