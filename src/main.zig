@@ -12,8 +12,8 @@ pub const interactive = @import("interactive.zig");
 pub const shell = @import("shell.zig");
 pub const runner = @import("runner.zig");
 pub const runtime = @import("runtime.zig");
-pub const line_editor = @import("line_editor.zig");
-pub const editor_driver = @import("editor_driver.zig");
+pub const line_editor = @import("editor.zig").line;
+pub const editor_driver = @import("editor.zig").driver;
 pub const event_loop = @import("event_loop.zig");
 
 const usage =

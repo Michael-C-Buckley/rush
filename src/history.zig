@@ -6,7 +6,7 @@ const sqlite = @cImport({
     @cInclude("sqlite3.h");
 });
 
-const line_editor = @import("line_editor.zig");
+const line_editor = @import("editor.zig").line;
 const shell = @import("shell.zig");
 
 const ExitStatus = shell.ExitStatus;

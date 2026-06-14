@@ -4,7 +4,7 @@ const std = @import("std");
 
 const shell = @import("../shell.zig");
 const interactive_input = @import("input.zig");
-const line_editor = @import("../line_editor.zig");
+const line_editor = @import("../editor.zig").line;
 
 pub fn text(shell_state: *shell.ShellState, name: []const u8, fallback: []const u8) []const u8 {
     return getEnv(shell_state, name) orelse fallback;

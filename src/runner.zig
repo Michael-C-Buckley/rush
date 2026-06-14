@@ -3,7 +3,7 @@
 const std = @import("std");
 
 const cli_invocation = @import("invocation.zig");
-const editor_driver = @import("editor_driver.zig");
+const editor_driver = @import("editor.zig").driver;
 const runtime = @import("runtime.zig");
 const shell = @import("shell.zig");
 const compat = shell.compat;

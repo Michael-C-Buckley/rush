@@ -3,7 +3,7 @@
 const std = @import("std");
 
 const compat = @import("../shell/compat.zig");
-const line_editor = @import("../line_editor.zig");
+const line_editor = @import("../editor.zig").line;
 const parser = @import("../shell/parser.zig");
 const shell = @import("../shell.zig");
 

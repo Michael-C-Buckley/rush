@@ -6,8 +6,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const vaxis = @import("vaxis");
 
-const event_loop = @import("event_loop.zig");
-const line_editor = @import("line_editor.zig");
+const event_loop = @import("../event_loop.zig");
+const line_editor = @import("line.zig");
 const completion = @import("completion.zig");
 
 extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
