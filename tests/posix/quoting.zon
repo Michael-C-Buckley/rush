@@ -1,0 +1,75 @@
+.{
+    .name = "2.2 Quoting",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "backslash preserves the literal value of the following character",
+            .script =
+            \\printf '<%s>\n' a\ b \* \$HOME
+            ,
+            .stdout =
+            \\<a b>
+            \\<*>
+            \\<$HOME>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backslash-newline line continuation is removed before tokenization",
+            .script =
+            \\printf '<%s>\n' foo\
+            \\bar
+            ,
+            .stdout =
+            \\<foobar>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "single quotes preserve literal text",
+            .script =
+            \\x=value
+            \\printf '<%s>\n' '$x * a b'
+            ,
+            .stdout =
+            \\<$x * a b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "double quotes preserve spaces while allowing parameter and command substitution",
+            .script =
+            \\x=value
+            \\printf '<%s>\n' "pre $x" "$(printf cmd)"
+            ,
+            .stdout =
+            \\<pre value>
+            \\<cmd>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "backslash inside double quotes only quotes dollar backquote double-quote backslash and newline",
+            .script =
+            \\printf '<%s>\n' "a\ b" "a\$b" "a\\b" "a\"b"
+            ,
+            .stdout =
+            \\<a\ b>
+            \\<a$b>
+            \\<a\b>
+            \\<a"b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

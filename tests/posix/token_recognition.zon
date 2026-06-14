@@ -1,0 +1,60 @@
+.{
+    .name = "2.3 Token Recognition",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "unquoted number sign begins a comment at the start of a word",
+            .script =
+            \\printf '%s\n' before
+            \\# printf '%s\n' bad
+            \\printf '%s\n' after # printf '%s\n' bad
+            ,
+            .stdout =
+            \\before
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "number sign within a word is ordinary text",
+            .script =
+            \\printf '<%s>\n' a#b
+            ,
+            .stdout =
+            \\<a#b>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "semicolon operator separates commands without surrounding blanks",
+            .script =
+            \\printf '%s\n' one;printf '%s\n' two
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "newline separates commands",
+            .script =
+            \\printf '%s\n' one
+            \\printf '%s\n' two
+            ,
+            .stdout =
+            \\one
+            \\two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
