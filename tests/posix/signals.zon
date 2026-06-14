@@ -1,0 +1,76 @@
+.{
+    .name = "2.11 Signals and Error Handling",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "EXIT trap runs after the script body completes",
+            .script =
+            \\trap 'printf "%s\n" exit-trap' 0
+            \\printf '%s\n' body
+            ,
+            .stdout =
+            \\body
+            \\exit-trap
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "EXIT trap sees the status that exits the shell",
+            .script =
+            \\trap 'printf "<%s>\n" "$?"' 0
+            \\exit 7
+            ,
+            .stdout =
+            \\<7>
+            \\
+            ,
+            .stderr = "",
+            .status = 7,
+        },
+        .{
+            .name = "EXIT signal name is equivalent to signal number zero",
+            .script =
+            \\trap 'printf "%s\n" exit-name' EXIT
+            \\printf '%s\n' body
+            ,
+            .stdout =
+            \\body
+            \\exit-name
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "trap dash resets the EXIT trap to its default action",
+            .script =
+            \\trap 'printf "%s\n" bad' 0
+            \\trap - 0
+            \\printf '%s\n' body
+            ,
+            .stdout =
+            \\body
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "a later trap action replaces an earlier EXIT trap",
+            .script =
+            \\trap 'printf "%s\n" first' 0
+            \\trap 'printf "%s\n" second' 0
+            \\printf '%s\n' body
+            ,
+            .stdout =
+            \\body
+            \\second
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
