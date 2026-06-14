@@ -20,7 +20,12 @@ pub const Ports = struct {
         return .{ .fd = fd_port, .fs = fs_port, .process = process_port };
     }
 
-    pub fn initWithSignal(fd_port: fd.Port, fs_port: fs.Port, process_port: process.Port, signal_port: signal.Port) Ports {
+    pub fn initWithSignal(
+        fd_port: fd.Port,
+        fs_port: fs.Port,
+        process_port: process.Port,
+        signal_port: signal.Port,
+    ) Ports {
         return .{ .fd = fd_port, .fs = fs_port, .process = process_port, .signal = signal_port };
     }
 };

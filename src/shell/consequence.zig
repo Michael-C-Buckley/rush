@@ -58,7 +58,13 @@ pub const Decision = struct {
     }
 };
 
-pub fn decideForSimpleCommand(shell_options: state.ShellOptions, eval_context: context.EvalContext, plan: command_plan.CommandPlan, status: outcome.ExitStatus, control_flow: outcome.ControlFlow) Decision {
+pub fn decideForSimpleCommand(
+    shell_options: state.ShellOptions,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    status: outcome.ExitStatus,
+    control_flow: outcome.ControlFlow,
+) Decision {
     eval_context.validate();
     plan.validate();
     control_flow.validateForContext(eval_context);
@@ -66,20 +72,33 @@ pub fn decideForSimpleCommand(shell_options: state.ShellOptions, eval_context: c
 
     if (control_flow != .normal) return decisionForExistingFlow(eval_context, status, control_flow);
     if (status == 0) return normalDecision(eval_context, status, null);
-    if (plan.class() == .special_builtin) return decideForShellError(shell_options, eval_context, .special_builtin_failure, status);
+    if (plan.class() == .special_builtin) {
+        return decideForShellError(shell_options, eval_context, .special_builtin_failure, status);
+    }
     return decideForStatus(shell_options, eval_context, status);
 }
 
-pub fn decideForCompoundCommand(shell_options: state.ShellOptions, eval_context: context.EvalContext, status: outcome.ExitStatus, control_flow: outcome.ControlFlow) Decision {
+pub fn decideForCompoundCommand(
+    shell_options: state.ShellOptions,
+    eval_context: context.EvalContext,
+    status: outcome.ExitStatus,
+    control_flow: outcome.ControlFlow,
+) Decision {
     eval_context.validate();
     control_flow.validateForContext(eval_context);
     if (control_flow != .normal) return decisionForExistingFlow(eval_context, status, control_flow);
     return decideForStatus(shell_options, eval_context, status);
 }
 
-pub fn decideForStatus(shell_options: state.ShellOptions, eval_context: context.EvalContext, status: outcome.ExitStatus) Decision {
+pub fn decideForStatus(
+    shell_options: state.ShellOptions,
+    eval_context: context.EvalContext,
+    status: outcome.ExitStatus,
+) Decision {
     eval_context.validate();
-    if (!shouldApplyErrexit(shell_options, eval_context, status)) return normalDecision(eval_context, status, if (status == 0) null else .nonzero_status);
+    if (!shouldApplyErrexit(shell_options, eval_context, status)) {
+        return normalDecision(eval_context, status, if (status == 0) null else .nonzero_status);
+    }
     const decision: Decision = .{
         .status = status,
         .kind = .nonzero_status,
@@ -90,7 +109,12 @@ pub fn decideForStatus(shell_options: state.ShellOptions, eval_context: context.
     return decision;
 }
 
-pub fn decideForShellError(shell_options: state.ShellOptions, eval_context: context.EvalContext, kind: ShellErrorKind, status: outcome.ExitStatus) Decision {
+pub fn decideForShellError(
+    shell_options: state.ShellOptions,
+    eval_context: context.EvalContext,
+    kind: ShellErrorKind,
+    status: outcome.ExitStatus,
+) Decision {
     eval_context.validate();
     std.debug.assert(kind != .nonzero_status);
     std.debug.assert(status != 0);
@@ -120,7 +144,12 @@ pub fn decideForShellError(shell_options: state.ShellOptions, eval_context: cont
     return normalDecision(eval_context, status, kind);
 }
 
-pub fn decideForRedirectionFailure(shell_options: state.ShellOptions, eval_context: context.EvalContext, failure_consequence: redirection_plan.FailureConsequence, status: outcome.ExitStatus) Decision {
+pub fn decideForRedirectionFailure(
+    shell_options: state.ShellOptions,
+    eval_context: context.EvalContext,
+    failure_consequence: redirection_plan.FailureConsequence,
+    status: outcome.ExitStatus,
+) Decision {
     eval_context.validate();
     std.debug.assert(status != 0);
     switch (failure_consequence) {
@@ -145,7 +174,11 @@ pub fn statusForRedirectionFailure(failure_consequence: redirection_plan.Failure
     };
 }
 
-pub fn applyToOutcome(command_outcome: *outcome.CommandOutcome, eval_context: context.EvalContext, decision: Decision) void {
+pub fn applyToOutcome(
+    command_outcome: *outcome.CommandOutcome,
+    eval_context: context.EvalContext,
+    decision: Decision,
+) void {
     command_outcome.validateForContext(eval_context);
     decision.validate(eval_context);
     std.debug.assert(command_outcome.status == decision.status);
@@ -153,14 +186,22 @@ pub fn applyToOutcome(command_outcome: *outcome.CommandOutcome, eval_context: co
     command_outcome.validateForContext(eval_context);
 }
 
-pub fn shouldApplyErrexit(shell_options: state.ShellOptions, eval_context: context.EvalContext, status: outcome.ExitStatus) bool {
+pub fn shouldApplyErrexit(
+    shell_options: state.ShellOptions,
+    eval_context: context.EvalContext,
+    status: outcome.ExitStatus,
+) bool {
     eval_context.validate();
     if (status == 0) return false;
     if (!shell_options.enabled(.errexit)) return false;
     return eval_context.observesErrexit();
 }
 
-fn decisionForExistingFlow(eval_context: context.EvalContext, status: outcome.ExitStatus, control_flow: outcome.ControlFlow) Decision {
+fn decisionForExistingFlow(
+    eval_context: context.EvalContext,
+    status: outcome.ExitStatus,
+    control_flow: outcome.ControlFlow,
+) Decision {
     const decision: Decision = switch (control_flow) {
         .normal => unreachable,
         .exit => .{ .status = status, .consequence = .errexit_exit, .control_flow = control_flow },
@@ -199,6 +240,7 @@ test "consequence policy applies errexit only in observing contexts" {
 
     const unsuppressed = decideForStatus(options, root, 1);
     try std.testing.expectEqual(ErrorConsequence.errexit_exit, unsuppressed.consequence);
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(outcome.ControlFlow{ .exit = 1 }, unsuppressed.control_flow);
 
     const suppressed = decideForStatus(options, root.ignoreErrexit(), 1);
@@ -215,6 +257,7 @@ test "consequence policy treats modeled shell errors as fatal in non-interactive
 
     const readonly = decideForShellError(options, ignored, .readonly_assignment, 1);
     try std.testing.expectEqual(ErrorConsequence.fatal_shell_error, readonly.consequence);
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(outcome.ControlFlow{ .fatal = 1 }, readonly.control_flow);
 
     const expansion = decideForShellError(.{}, root, .expansion_error, 2);
@@ -234,15 +277,27 @@ test "consequence policy normalizes redirection failures through one decision pa
     options.set(.errexit, true);
     const root = context.EvalContext.forTarget(.current_shell);
 
-    const command_failure = decideForRedirectionFailure(options, root, .command_failure, statusForRedirectionFailure(.command_failure));
+    const command_failure = decideForRedirectionFailure(
+        options,
+        root,
+        .command_failure,
+        statusForRedirectionFailure(.command_failure),
+    );
     try std.testing.expectEqual(ErrorConsequence.errexit_exit, command_failure.consequence);
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(outcome.ControlFlow{ .exit = 1 }, command_failure.control_flow);
 
     const suppressed = decideForRedirectionFailure(options, root.ignoreErrexit(), .command_failure, 1);
     try std.testing.expectEqual(ErrorConsequence.normal_outcome, suppressed.consequence);
 
-    const fatal = decideForRedirectionFailure(.{}, root.ignoreErrexit(), .fatal_shell_error, statusForRedirectionFailure(.fatal_shell_error));
+    const fatal = decideForRedirectionFailure(
+        .{},
+        root.ignoreErrexit(),
+        .fatal_shell_error,
+        statusForRedirectionFailure(.fatal_shell_error),
+    );
     try std.testing.expectEqual(ErrorConsequence.fatal_shell_error, fatal.consequence);
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(outcome.ControlFlow{ .fatal = 2 }, fatal.control_flow);
 }
 
@@ -252,8 +307,15 @@ test "consequence policy applies special builtin failures before errexit" {
     const argv = [_][]const u8{ "return", "extra" };
     const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &argv } });
 
-    const decision = decideForSimpleCommand(options, context.EvalContext.forTarget(.current_shell).ignoreErrexit(), plan, 2, .normal);
+    const decision = decideForSimpleCommand(
+        options,
+        context.EvalContext.forTarget(.current_shell).ignoreErrexit(),
+        plan,
+        2,
+        .normal,
+    );
     try std.testing.expectEqual(ShellErrorKind.special_builtin_failure, decision.kind.?);
     try std.testing.expectEqual(ErrorConsequence.fatal_shell_error, decision.consequence);
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(outcome.ControlFlow{ .fatal = 2 }, decision.control_flow);
 }

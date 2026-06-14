@@ -7,6 +7,7 @@
 const std = @import("std");
 const fd = @import("fd.zig");
 
+// ziglint-ignore: Z006 type alias
 pub const ProcessId = std.posix.pid_t;
 
 pub const ExternalStdio = enum {
@@ -349,7 +350,10 @@ pub const WaitFn = *const fn (*anyopaque, WaitRequest) WaitError!WaitResult;
 pub const PollWaitFn = *const fn (*anyopaque, PollWaitRequest) WaitError!PollWaitResult;
 pub const RunFn = *const fn (*anyopaque, RunRequest) RunError!RunResult;
 pub const ContinueProcessFn = *const fn (*anyopaque, ContinueProcessRequest) JobControlError!void;
-pub const ForegroundProcessGroupFn = *const fn (*anyopaque, ForegroundProcessGroupRequest) JobControlError!ForegroundProcessGroupResult;
+pub const ForegroundProcessGroupFn = *const fn (
+    *anyopaque,
+    ForegroundProcessGroupRequest,
+) JobControlError!ForegroundProcessGroupResult;
 
 pub const Port = struct {
     context: *anyopaque,
@@ -409,7 +413,10 @@ pub const Port = struct {
         try continue_process_fn(self.context, request);
     }
 
-    pub fn foregroundProcessGroup(self: Port, request: ForegroundProcessGroupRequest) JobControlError!ForegroundProcessGroupResult {
+    pub fn foregroundProcessGroup(
+        self: Port,
+        request: ForegroundProcessGroupRequest,
+    ) JobControlError!ForegroundProcessGroupResult {
         request.validate();
         const foreground_process_group_fn = self.foreground_process_group_fn orelse return error.OperationUnsupported;
         const result = try foreground_process_group_fn(self.context, request);

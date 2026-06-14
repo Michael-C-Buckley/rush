@@ -72,7 +72,14 @@ pub fn main(init: std.process.Init) !u8 {
         });
     }
 
-    var result = runShellInvocationWithEnvironment(allocator, init.io, invocation, init.environ_map, .inherit, login_shell) catch |err| switch (err) {
+    var result = runShellInvocationWithEnvironment(
+        allocator,
+        init.io,
+        invocation,
+        init.environ_map,
+        .inherit,
+        login_shell,
+    ) catch |err| switch (err) {
         error.FileNotFound => {
             try writeScriptReadError(init.io, invocation.source, "file not found");
             return 2;
@@ -96,7 +103,12 @@ pub fn main(init: std.process.Init) !u8 {
 
 const InteractiveOptions = interactive.startup.Options;
 
-pub fn runInteractive(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, options: InteractiveOptions) !u8 {
+pub fn runInteractive(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ_map: *const std.process.Environ.Map,
+    options: InteractiveOptions,
+) !u8 {
     return interactive.session.run(allocator, io, environ_map, options);
 }
 
@@ -108,15 +120,33 @@ pub fn runScript(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !
     return runner.runScript(allocator, io, script);
 }
 
-pub fn runScriptWithOptions(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: RunOptions) !CommandResult {
+pub fn runScriptWithOptions(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    script: []const u8,
+    options: RunOptions,
+) !CommandResult {
     return runner.runScriptWithOptions(allocator, io, script, options);
 }
 
-pub fn runScriptWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: RunOptions, environ_map: ?*const std.process.Environ.Map) !CommandResult {
+pub fn runScriptWithEnvironment(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    script: []const u8,
+    options: RunOptions,
+    environ_map: ?*const std.process.Environ.Map,
+) !CommandResult {
     return runner.runScriptWithEnvironment(allocator, io, script, options, environ_map);
 }
 
-fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, invocation: ShellInvocation, environ_map: ?*const std.process.Environ.Map, external_stdio: runtime.ExternalStdio, login_shell: bool) !CommandResult {
+fn runShellInvocationWithEnvironment(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    invocation: ShellInvocation,
+    environ_map: ?*const std.process.Environ.Map,
+    external_stdio: runtime.ExternalStdio,
+    login_shell: bool,
+) !CommandResult {
     var loaded_script = try runner.loadInvocationScript(allocator, io, invocation, external_stdio);
     defer loaded_script.deinit();
     const interactive_options: ?InteractiveOptions = if (invocation.interactive) .{
@@ -127,7 +157,16 @@ fn runShellInvocationWithEnvironment(allocator: std.mem.Allocator, io: std.Io, i
         .monitor_option_explicit = invocation.monitor_option_explicit,
         .positionals = invocation.positionals,
     } else null;
-    return runCommandStringWithEnvironment(allocator, io, loaded_script.script, loaded_script.options, environ_map, invocation.positionals, interactive_options, invocation.shell_options);
+    return runCommandStringWithEnvironment(
+        allocator,
+        io,
+        loaded_script.script,
+        loaded_script.options,
+        environ_map,
+        invocation.positionals,
+        interactive_options,
+        invocation.shell_options,
+    );
 }
 
 fn stdinIsTty(io: std.Io) bool {
@@ -138,11 +177,37 @@ fn stderrIsTty(io: std.Io) bool {
     return std.Io.File.stderr().isTty(io) catch false;
 }
 
-fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: RunOptions, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, interactive_options: ?InteractiveOptions, shell_options: shell.ShellOptions) !CommandResult {
+fn runCommandStringWithEnvironment(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    script: []const u8,
+    options: RunOptions,
+    environ_map: ?*const std.process.Environ.Map,
+    positionals: []const []const u8,
+    interactive_options: ?InteractiveOptions,
+    shell_options: shell.ShellOptions,
+) !CommandResult {
     if (interactive_options) |startup_options| {
-        return interactive.session.runCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, startup_options, shell_options);
+        return interactive.session.runCommandStringWithEnvironment(
+            allocator,
+            io,
+            script,
+            options,
+            environ_map,
+            positionals,
+            startup_options,
+            shell_options,
+        );
     }
-    return runner.runCommandStringWithEnvironment(allocator, io, script, options, environ_map, positionals, shell_options);
+    return runner.runCommandStringWithEnvironment(
+        allocator,
+        io,
+        script,
+        options,
+        environ_map,
+        positionals,
+        shell_options,
+    );
 }
 
 const OutputStream = enum { stdout, stderr };

@@ -1,6 +1,7 @@
 //! Editor-facing completion model and pure application helpers.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub const CancellationToken = struct {
     canceled: std.atomic.Value(bool) = .init(false),
@@ -69,15 +70,17 @@ pub const CancellationToken = struct {
 };
 
 fn lockMutex(mutex: *std.atomic.Mutex) void {
+    // ziglint-ignore: Z026 yielding during spin-wait is best effort
     while (!mutex.tryLock()) std.Thread.yield() catch {};
 }
 
 fn terminateProcess(child: CancellationToken.CancelableChild) void {
     if (child.pid <= 0) return;
-    switch (@import("builtin").os.tag) {
+    switch (builtin.os.tag) {
         .windows => {},
         else => {
             const pid: std.posix.pid_t = @intCast(child.pid);
+            // ziglint-ignore: Z026 best-effort cancellation of stale completion worker
             std.posix.kill(if (child.process_group) -pid else pid, .TERM) catch {};
         },
     }
@@ -372,7 +375,11 @@ pub fn candidateMatchTrace(source: []const u8, candidate: Candidate, policy: Mat
     };
 }
 
-pub fn candidateSuppressionReason(candidate: Candidate, query: []const u8, policy: MatcherPolicy) MatchSuppressionReason {
+pub fn candidateSuppressionReason(
+    candidate: Candidate,
+    query: []const u8,
+    policy: MatcherPolicy,
+) MatchSuppressionReason {
     if (policy.mode == .prefix) {
         var fuzzy_policy = policy;
         fuzzy_policy.mode = .fuzzy;
@@ -418,7 +425,10 @@ const PathMatchInput = struct {
 
 fn pathMatchInput(text: []const u8, query: []const u8, policy: MatcherPolicy) PathMatchInput {
     if (policy.path_segments == .full) return .{ .text = text, .query = query };
-    const query_slash = std.mem.lastIndexOfScalar(u8, query, '/') orelse return .{ .text = lastPathSegment(text), .query = query };
+    const query_slash = std.mem.lastIndexOfScalar(u8, query, '/') orelse return .{
+        .text = lastPathSegment(text),
+        .query = query,
+    };
     const query_dir = query[0 .. query_slash + 1];
     if (!startsWithPolicy(text, query_dir, policy)) return .{ .text = "", .query = query };
     return .{ .text = text[query_dir.len..], .query = query[query_slash + 1 ..] };
@@ -466,7 +476,12 @@ pub fn fuzzyMatchPositions(allocator: std.mem.Allocator, text: []const u8, query
     return matchPositions(allocator, text, query, .engineDefault());
 }
 
-pub fn matchPositions(allocator: std.mem.Allocator, text: []const u8, query: []const u8, policy: MatcherPolicy) !?[]usize {
+pub fn matchPositions(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    query: []const u8,
+    policy: MatcherPolicy,
+) !?[]usize {
     if (matchRank(text, query, policy) == null) return null;
     var positions: std.ArrayList(usize) = .empty;
     errdefer positions.deinit(allocator);

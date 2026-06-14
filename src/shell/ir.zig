@@ -231,7 +231,9 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     }
 
     for (parsed.nodes, 0..) |node, node_index| {
-        if (node.kind != .simple_command or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
+        if (node.kind != .simple_command or
+            spanStartsInRanges(node.span, here_doc_ranges.items) or
+            spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         command_indexes_by_node[node_index] = commands.items.len;
         const lowered = try lowerSimpleCommand(allocator, parsed, parser.NodeId.init(node_index));
         try commands.append(allocator, lowered);
@@ -239,62 +241,153 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
 
     var previous_pipeline_token_end: ?usize = null;
     for (parsed.nodes) |node| {
-        if (node.kind != .pipeline or spanStartsInRanges(node.span, here_doc_ranges.items) or spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
+        if (node.kind != .pipeline or
+            spanStartsInRanges(node.span, here_doc_ranges.items) or
+            spanStartsInRanges(node.span, nested_body_ranges.items)) continue;
         var lowered = try lowerPipeline(allocator, parsed, node, command_indexes_by_node, missing_command);
         if (previous_pipeline_token_end) |previous_end| {
             lowered.op_before = listOpBetween(parsed.tokens, previous_end, node.token_start);
         }
-        lowered.async_after = statementHasAsyncTerminator(parsed.tokens, node.token_end, nextStatementStart(parsed, node.token_end));
+        lowered.async_after = statementHasAsyncTerminator(
+            parsed.tokens,
+            node.token_end,
+            nextStatementStart(parsed, node.token_end),
+        );
         previous_pipeline_token_end = node.token_end;
-        try statement_refs.append(allocator, .{ .kind = .pipeline, .index = pipelines.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        try statement_refs.append(allocator, .{
+            .kind = .pipeline,
+            .index = pipelines.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try pipelines.append(allocator, lowered);
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .if_command or spanStartsInSkippedRange(node.span, here_doc_ranges.items, nested_body_ranges.items, compound_pipeline_stage_ranges.items)) continue;
-        try statement_refs.append(allocator, .{ .kind = .if_command, .index = if_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        if (node.kind != .if_command or spanStartsInSkippedRange(
+            node.span,
+            here_doc_ranges.items,
+            nested_body_ranges.items,
+            compound_pipeline_stage_ranges.items,
+        )) continue;
+        try statement_refs.append(allocator, .{
+            .kind = .if_command,
+            .index = if_commands.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try if_commands.append(allocator, try lowerIfCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .loop_command or spanStartsInSkippedRange(node.span, here_doc_ranges.items, nested_body_ranges.items, compound_pipeline_stage_ranges.items)) continue;
-        try statement_refs.append(allocator, .{ .kind = .loop_command, .index = loop_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        if (node.kind != .loop_command or spanStartsInSkippedRange(
+            node.span,
+            here_doc_ranges.items,
+            nested_body_ranges.items,
+            compound_pipeline_stage_ranges.items,
+        )) continue;
+        try statement_refs.append(allocator, .{
+            .kind = .loop_command,
+            .index = loop_commands.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try loop_commands.append(allocator, try lowerLoopCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .for_command or spanStartsInSkippedRange(node.span, here_doc_ranges.items, nested_body_ranges.items, compound_pipeline_stage_ranges.items)) continue;
-        try statement_refs.append(allocator, .{ .kind = .for_command, .index = for_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        if (node.kind != .for_command or spanStartsInSkippedRange(
+            node.span,
+            here_doc_ranges.items,
+            nested_body_ranges.items,
+            compound_pipeline_stage_ranges.items,
+        )) continue;
+        try statement_refs.append(allocator, .{
+            .kind = .for_command,
+            .index = for_commands.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try for_commands.append(allocator, try lowerForCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .case_command or spanStartsInSkippedRange(node.span, here_doc_ranges.items, nested_body_ranges.items, compound_pipeline_stage_ranges.items)) continue;
-        try statement_refs.append(allocator, .{ .kind = .case_command, .index = case_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        if (node.kind != .case_command or spanStartsInSkippedRange(
+            node.span,
+            here_doc_ranges.items,
+            nested_body_ranges.items,
+            compound_pipeline_stage_ranges.items,
+        )) continue;
+        try statement_refs.append(allocator, .{
+            .kind = .case_command,
+            .index = case_commands.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try case_commands.append(allocator, try lowerCaseCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .function_definition or spanStartsInSkippedRange(node.span, here_doc_ranges.items, nested_body_ranges.items, compound_pipeline_stage_ranges.items)) continue;
-        try statement_refs.append(allocator, .{ .kind = .function_definition, .index = function_definitions.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        if (node.kind != .function_definition or spanStartsInSkippedRange(
+            node.span,
+            here_doc_ranges.items,
+            nested_body_ranges.items,
+            compound_pipeline_stage_ranges.items,
+        )) continue;
+        try statement_refs.append(allocator, .{
+            .kind = .function_definition,
+            .index = function_definitions.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try function_definitions.append(allocator, try lowerFunctionDefinition(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .bash_test_command or spanStartsInSkippedRange(node.span, here_doc_ranges.items, nested_body_ranges.items, compound_pipeline_stage_ranges.items)) continue;
-        try statement_refs.append(allocator, .{ .kind = .bash_test_command, .index = bash_test_commands.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        if (node.kind != .bash_test_command or spanStartsInSkippedRange(
+            node.span,
+            here_doc_ranges.items,
+            nested_body_ranges.items,
+            compound_pipeline_stage_ranges.items,
+        )) continue;
+        try statement_refs.append(allocator, .{
+            .kind = .bash_test_command,
+            .index = bash_test_commands.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try bash_test_commands.append(allocator, try lowerBashTestCommand(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .brace_group or spanStartsInSkippedRange(node.span, here_doc_ranges.items, nested_body_ranges.items, compound_pipeline_stage_ranges.items)) continue;
-        try statement_refs.append(allocator, .{ .kind = .brace_group, .index = brace_groups.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        if (node.kind != .brace_group or spanStartsInSkippedRange(
+            node.span,
+            here_doc_ranges.items,
+            nested_body_ranges.items,
+            compound_pipeline_stage_ranges.items,
+        )) continue;
+        try statement_refs.append(allocator, .{
+            .kind = .brace_group,
+            .index = brace_groups.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try brace_groups.append(allocator, try lowerBraceGroup(allocator, parsed, node));
     }
 
     for (parsed.nodes) |node| {
-        if (node.kind != .subshell or spanStartsInSkippedRange(node.span, here_doc_ranges.items, nested_body_ranges.items, compound_pipeline_stage_ranges.items)) continue;
-        try statement_refs.append(allocator, .{ .kind = .subshell, .index = subshells.items.len, .token_start = node.token_start, .token_end = node.token_end });
+        if (node.kind != .subshell or spanStartsInSkippedRange(
+            node.span,
+            here_doc_ranges.items,
+            nested_body_ranges.items,
+            compound_pipeline_stage_ranges.items,
+        )) continue;
+        try statement_refs.append(allocator, .{
+            .kind = .subshell,
+            .index = subshells.items.len,
+            .token_start = node.token_start,
+            .token_end = node.token_end,
+        });
         try subshells.append(allocator, try lowerSubshell(allocator, parsed, node));
     }
 
@@ -303,15 +396,26 @@ pub fn lowerSimpleCommands(allocator: std.mem.Allocator, parsed: parser.ParseRes
     errdefer statements.deinit(allocator);
     var previous_statement_end: ?usize = null;
     for (statement_refs.items) |statement_ref| {
-        var statement: Statement = .{ .kind = statement_ref.kind, .index = statement_ref.index, .span = statementSpan(parsed, statement_ref) };
+        var statement: Statement = .{
+            .kind = statement_ref.kind,
+            .index = statement_ref.index,
+            .span = statementSpan(parsed, statement_ref),
+        };
         if (previous_statement_end) |previous_end| {
             if (previous_end <= statement_ref.token_start) {
                 statement.op_before = listOpBetween(parsed.tokens, previous_end, statement_ref.token_start);
             }
         }
-        statement.async_after = statementHasAsyncTerminator(parsed.tokens, statement_ref.token_end, nextStatementStart(parsed, statement_ref.token_end));
+        statement.async_after = statementHasAsyncTerminator(
+            parsed.tokens,
+            statement_ref.token_end,
+            nextStatementStart(parsed, statement_ref.token_end),
+        );
         if (statement.kind == .pipeline) pipelines.items[statement.index].async_after = statement.async_after;
-        previous_statement_end = if (previous_statement_end) |previous_end| @max(previous_end, statement_ref.token_end) else statement_ref.token_end;
+        previous_statement_end = if (previous_statement_end) |previous_end|
+            @max(previous_end, statement_ref.token_end)
+        else
+            statement_ref.token_end;
         try statements.append(allocator, statement);
     }
 
@@ -336,7 +440,12 @@ pub fn lowerParsedList(allocator: std.mem.Allocator, parsed: parser.ParseResult,
     return lowerListNode(allocator, parsed, list_node, list_node.span);
 }
 
-fn lowerListNode(allocator: std.mem.Allocator, parsed: parser.ParseResult, list_node: parser.Node, source_span: parser.Span) !Program {
+fn lowerListNode(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    list_node: parser.Node,
+    source_span: parser.Span,
+) !Program {
     std.debug.assert(list_node.kind == .list);
     var commands: std.ArrayList(SimpleCommand) = .empty;
     var pipelines: std.ArrayList(Pipeline) = .empty;
@@ -387,10 +496,19 @@ fn lowerListNode(allocator: std.mem.Allocator, parsed: parser.ParseResult, list_
         var statement: Statement = switch (child_node.kind) {
             .pipeline => blk: {
                 var lowered = try lowerPipelineDirect(allocator, parsed, child_node, &commands);
-                lowered.async_after = statementHasAsyncTerminator(parsed.tokens, child_node.token_end, nextListStatementStart(parsed, list_node, child_node.token_end));
+                lowered.async_after = statementHasAsyncTerminator(
+                    parsed.tokens,
+                    child_node.token_end,
+                    nextListStatementStart(parsed, list_node, child_node.token_end),
+                );
                 const pipeline_index = pipelines.items.len;
                 try pipelines.append(allocator, lowered);
-                break :blk .{ .kind = .pipeline, .index = pipeline_index, .span = child_node.span, .async_after = lowered.async_after };
+                break :blk .{
+                    .kind = .pipeline,
+                    .index = pipeline_index,
+                    .span = child_node.span,
+                    .async_after = lowered.async_after,
+                };
             },
             .if_command => blk: {
                 const index = if_commands.items.len;
@@ -434,10 +552,19 @@ fn lowerListNode(allocator: std.mem.Allocator, parsed: parser.ParseResult, list_
             },
             else => continue,
         };
-        if (previous_statement_end) |previous_end| statement.op_before = listOpBetween(parsed.tokens, previous_end, child_node.token_start);
-        statement.async_after = statementHasAsyncTerminator(parsed.tokens, child_node.token_end, nextListStatementStart(parsed, list_node, child_node.token_end));
+        if (previous_statement_end) |previous_end| {
+            statement.op_before = listOpBetween(parsed.tokens, previous_end, child_node.token_start);
+        }
+        statement.async_after = statementHasAsyncTerminator(
+            parsed.tokens,
+            child_node.token_end,
+            nextListStatementStart(parsed, list_node, child_node.token_end),
+        );
         if (statement.kind == .pipeline) pipelines.items[statement.index].async_after = statement.async_after;
-        previous_statement_end = if (previous_statement_end) |previous_end| @max(previous_end, child_node.token_end) else child_node.token_end;
+        previous_statement_end = if (previous_statement_end) |previous_end|
+            @max(previous_end, child_node.token_end)
+        else
+            child_node.token_end;
         try statements.append(allocator, statement);
     }
 
@@ -489,7 +616,12 @@ fn isStatementNode(kind: parser.NodeKind) bool {
     };
 }
 
-fn lowerPipelineDirect(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node, commands: *std.ArrayList(SimpleCommand)) !Pipeline {
+fn lowerPipelineDirect(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    node: parser.Node,
+    commands: *std.ArrayList(SimpleCommand),
+) !Pipeline {
     std.debug.assert(node.kind == .pipeline);
     var command_indexes: std.ArrayList(usize) = .empty;
     errdefer command_indexes.deinit(allocator);
@@ -598,7 +730,9 @@ fn collectNestedBodyRanges(allocator: std.mem.Allocator, parsed: parser.ParseRes
         for (parsed.nodeChildren(node)) |child| switch (child) {
             .node => |node_id| {
                 const child_node = parsed.nodes[node_id.index()];
-                if (node.kind == .function_definition and isFunctionBodyNode(child_node.kind)) try ranges.append(allocator, child_node.span);
+                if (node.kind == .function_definition and isFunctionBodyNode(child_node.kind)) {
+                    try ranges.append(allocator, child_node.span);
+                }
                 if (child_node.kind == .list) try ranges.append(allocator, child_node.span);
             },
             .token => {},
@@ -607,7 +741,10 @@ fn collectNestedBodyRanges(allocator: std.mem.Allocator, parsed: parser.ParseRes
     return ranges;
 }
 
-fn collectCompoundPipelineStageRanges(allocator: std.mem.Allocator, parsed: parser.ParseResult) !std.ArrayList(parser.Span) {
+fn collectCompoundPipelineStageRanges(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+) !std.ArrayList(parser.Span) {
     var ranges: std.ArrayList(parser.Span) = .empty;
     errdefer ranges.deinit(allocator);
     for (parsed.nodes) |node| {
@@ -670,7 +807,14 @@ fn collectHereDocRanges(allocator: std.mem.Allocator, parsed: parser.ParseResult
         defer freePendingHereDocs(allocator, pending.items);
         var body_start = hereDocBodyStartFromLine(parsed.source, line) orelse continue;
         for (pending.items) |doc| {
-            const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs, !doc.quoted);
+            const extraction = try extractHereDocFromBodyStart(
+                allocator,
+                parsed.source,
+                body_start,
+                doc.delimiter,
+                doc.strip_tabs,
+                !doc.quoted,
+            );
             defer allocator.free(extraction.body);
             try ranges.append(allocator, extraction.range);
             body_start = extraction.range.end;
@@ -686,7 +830,12 @@ fn spanStartsInRanges(span: parser.Span, ranges: []const parser.Span) bool {
     return false;
 }
 
-fn spanStartsInSkippedRange(span: parser.Span, here_doc_ranges: []const parser.Span, nested_body_ranges: []const parser.Span, compound_pipeline_stage_ranges: []const parser.Span) bool {
+fn spanStartsInSkippedRange(
+    span: parser.Span,
+    here_doc_ranges: []const parser.Span,
+    nested_body_ranges: []const parser.Span,
+    compound_pipeline_stage_ranges: []const parser.Span,
+) bool {
     return spanStartsInRanges(span, here_doc_ranges) or
         spanStartsInRanges(span, nested_body_ranges) or
         spanStartsInRanges(span, compound_pipeline_stage_ranges);
@@ -701,7 +850,10 @@ const LoweredStatementRef = struct {
 
 fn statementSpan(parsed: parser.ParseResult, statement_ref: LoweredStatementRef) parser.Span {
     if (statement_ref.token_start >= statement_ref.token_end) return .empty(parsed.source.len);
-    return .init(parsed.tokens[statement_ref.token_start].span.start, parsed.tokens[statement_ref.token_end - 1].span.end);
+    return .init(
+        parsed.tokens[statement_ref.token_start].span.start,
+        parsed.tokens[statement_ref.token_end - 1].span.end,
+    );
 }
 
 fn lessThanStatementRef(_: void, a: LoweredStatementRef, b: LoweredStatementRef) bool {
@@ -744,7 +896,12 @@ fn lowerBraceGroup(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
     };
 }
 
-fn directTokenChildMatching(parsed: parser.ParseResult, node: parser.Node, kind: parser.TokenKind, lexeme: ?[]const u8) ?usize {
+fn directTokenChildMatching(
+    parsed: parser.ParseResult,
+    node: parser.Node,
+    kind: parser.TokenKind,
+    lexeme: ?[]const u8,
+) ?usize {
     for (parsed.nodeChildren(node)) |child| switch (child) {
         .token => |token_id| {
             const token_index = token_id.index();
@@ -760,7 +917,11 @@ fn directTokenChildMatching(parsed: parser.ParseResult, node: parser.Node, kind:
     return null;
 }
 
-fn lowerCompoundRedirections(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !std.ArrayList(Redirection) {
+fn lowerCompoundRedirections(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    node: parser.Node,
+) !std.ArrayList(Redirection) {
     var redirections: std.ArrayList(Redirection) = .empty;
     errdefer {
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);
@@ -800,7 +961,11 @@ fn lowerBashTestCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult
     };
 }
 
-fn lowerFunctionDefinition(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !FunctionDefinition {
+fn lowerFunctionDefinition(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    node: parser.Node,
+) !FunctionDefinition {
     std.debug.assert(node.kind == .function_definition);
     var body_node: ?parser.Node = null;
     var open_brace: ?usize = null;
@@ -824,8 +989,18 @@ fn lowerFunctionDefinition(allocator: std.mem.Allocator, parsed: parser.ParseRes
     }
     const name = try allocator.dupe(u8, parsed.tokens[node.token_start].lexeme(parsed.source));
     errdefer allocator.free(name);
-    const body_start = if (open_brace) |index| index + 1 else if (body_node) |body| body.token_start else node.token_end;
-    const body_end = if (open_brace != null) close_brace orelse node.token_end else if (body_node) |body| body.token_end else node.token_end;
+    const body_start = if (open_brace) |index|
+        index + 1
+    else if (body_node) |body|
+        body.token_start
+    else
+        node.token_end;
+    const body_end = if (open_brace != null)
+        close_brace orelse node.token_end
+    else if (body_node) |body|
+        body.token_end
+    else
+        node.token_end;
     var redirections = try lowerCompoundRedirections(allocator, parsed, node);
     errdefer {
         for (redirections.items) |redirection| freeRedirection(allocator, redirection);
@@ -892,7 +1067,8 @@ fn lowerCaseCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
         }
 
         const body_start = if (pattern_end) |token_index| token_index + 1 else child_node.token_end;
-        const body_end = if (body_start < child_node.token_end and parsed.tokens[child_node.token_end - 1].kind == .dsemicolon)
+        const body_end = if (body_start < child_node.token_end and
+            parsed.tokens[child_node.token_end - 1].kind == .dsemicolon)
             child_node.token_end - 1
         else
             child_node.token_end;
@@ -983,7 +1159,10 @@ fn lowerForCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, nod
         .name = name,
         .words = try words.toOwnedSlice(allocator),
         .use_positionals = in_token == null,
-        .body = if (body_node) |body| spanSlice(parsed, body.token_start, body.token_end) else spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
+        .body = if (body_node) |body|
+            spanSlice(parsed, body.token_start, body.token_end)
+        else
+            spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
@@ -1030,8 +1209,14 @@ fn lowerLoopCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, no
     return .{
         .span = node.span,
         .kind = if (std.mem.eql(u8, opener, "while")) .while_loop else .until_loop,
-        .condition = if (condition_node) |condition| spanSlice(parsed, condition.token_start, condition.token_end) else spanSlice(parsed, node.token_start + 1, do_index),
-        .body = if (body_node) |body| spanSlice(parsed, body.token_start, body.token_end) else spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
+        .condition = if (condition_node) |condition|
+            spanSlice(parsed, condition.token_start, condition.token_end)
+        else
+            spanSlice(parsed, node.token_start + 1, do_index),
+        .body = if (body_node) |body|
+            spanSlice(parsed, body.token_start, body.token_end)
+        else
+            spanSlice(parsed, @min(do_index + 1, node.token_end), done_index),
         .redirections = try redirections.toOwnedSlice(allocator),
     };
 }
@@ -1084,7 +1269,10 @@ fn lowerIfCommand(allocator: std.mem.Allocator, parsed: parser.ParseResult, node
 
     return .{
         .span = node.span,
-        .condition = if (condition_node) |condition| spanSlice(parsed, condition.token_start, condition.token_end) else "",
+        .condition = if (condition_node) |condition|
+            spanSlice(parsed, condition.token_start, condition.token_end)
+        else
+            "",
         .then_body = if (then_node) |then_body| spanSlice(parsed, then_body.token_start, then_body.token_end) else "",
         .else_body = else_body,
         .redirections = try redirections.toOwnedSlice(allocator),
@@ -1102,7 +1290,11 @@ fn isReservedPosition(parsed: parser.ParseResult, start: usize, token_index: usi
         if (isListSeparatorToken(token.kind)) return true;
         if (token.kind.isTrivia()) continue;
         const lexeme = if (token.kind == .word) token.lexeme(parsed.source) else "";
-        return std.mem.eql(u8, lexeme, "then") or std.mem.eql(u8, lexeme, "else") or std.mem.eql(u8, lexeme, "elif") or std.mem.eql(u8, lexeme, "do") or std.mem.eql(u8, lexeme, "in");
+        return std.mem.eql(u8, lexeme, "then") or
+            std.mem.eql(u8, lexeme, "else") or
+            std.mem.eql(u8, lexeme, "elif") or
+            std.mem.eql(u8, lexeme, "do") or
+            std.mem.eql(u8, lexeme, "in");
     }
     return true;
 }
@@ -1123,7 +1315,13 @@ fn spanSlice(parsed: parser.ParseResult, token_start: usize, token_end: usize) [
     return parsed.source[start..end];
 }
 
-fn lowerPipeline(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node, command_indexes_by_node: []const usize, missing_command: usize) !Pipeline {
+fn lowerPipeline(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    node: parser.Node,
+    command_indexes_by_node: []const usize,
+    missing_command: usize,
+) !Pipeline {
     var command_indexes: std.ArrayList(usize) = .empty;
     errdefer command_indexes.deinit(allocator);
     var stage_spans: std.ArrayList(parser.Span) = .empty;
@@ -1270,7 +1468,11 @@ const OrderedHereDoc = struct {
     quoted: bool,
 };
 
-fn extractOrderedHereDocForRedirection(allocator: std.mem.Allocator, parsed: parser.ParseResult, node: parser.Node) !?OrderedHereDoc {
+fn extractOrderedHereDocForRedirection(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    node: parser.Node,
+) !?OrderedHereDoc {
     const line = sourceLineBounds(parsed.source, node.span.start);
     var pending = try collectPendingHereDocsOnLine(allocator, parsed, line);
     defer pending.deinit(allocator);
@@ -1278,7 +1480,14 @@ fn extractOrderedHereDocForRedirection(allocator: std.mem.Allocator, parsed: par
 
     var body_start = hereDocBodyStartFromLine(parsed.source, line) orelse return null;
     for (pending.items) |doc| {
-        const extraction = try extractHereDocFromBodyStart(allocator, parsed.source, body_start, doc.delimiter, doc.strip_tabs, !doc.quoted);
+        const extraction = try extractHereDocFromBodyStart(
+            allocator,
+            parsed.source,
+            body_start,
+            doc.delimiter,
+            doc.strip_tabs,
+            !doc.quoted,
+        );
         body_start = extraction.range.end;
         if (doc.redirection_start == node.span.start) return .{ .body = extraction.body, .quoted = doc.quoted };
         allocator.free(extraction.body);
@@ -1286,7 +1495,11 @@ fn extractOrderedHereDocForRedirection(allocator: std.mem.Allocator, parsed: par
     return null;
 }
 
-fn collectPendingHereDocsOnLine(allocator: std.mem.Allocator, parsed: parser.ParseResult, line: SourceLine) !std.ArrayList(PendingHereDoc) {
+fn collectPendingHereDocsOnLine(
+    allocator: std.mem.Allocator,
+    parsed: parser.ParseResult,
+    line: SourceLine,
+) !std.ArrayList(PendingHereDoc) {
     var pending: std.ArrayList(PendingHereDoc) = .empty;
     errdefer {
         freePendingHereDocs(allocator, pending.items);
@@ -1295,7 +1508,12 @@ fn collectPendingHereDocsOnLine(allocator: std.mem.Allocator, parsed: parser.Par
     for (parsed.nodes) |node| {
         if (node.kind != .redirection or node.span.start < line.start or node.span.start >= line.end) continue;
         const info = try hereDocInfoForNode(allocator, parsed, node) orelse continue;
-        try pending.append(allocator, .{ .redirection_start = node.span.start, .delimiter = info.delimiter, .strip_tabs = info.strip_tabs, .quoted = info.quoted });
+        try pending.append(allocator, .{
+            .redirection_start = node.span.start,
+            .delimiter = info.delimiter,
+            .strip_tabs = info.strip_tabs,
+            .quoted = info.quoted,
+        });
     }
     std.mem.sort(PendingHereDoc, pending.items, {}, lessThanPendingHereDoc);
     return pending;
@@ -1356,7 +1574,14 @@ fn isHereDocRedirectionNode(parsed: parser.ParseResult, node: parser.Node) bool 
     return false;
 }
 
-fn extractHereDocFromBodyStart(allocator: std.mem.Allocator, source: []const u8, range_start: usize, delimiter: []const u8, strip_tabs: bool, allow_continuation: bool) !HereDocExtraction {
+fn extractHereDocFromBodyStart(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    range_start: usize,
+    delimiter: []const u8,
+    strip_tabs: bool,
+    allow_continuation: bool,
+) !HereDocExtraction {
     var body: std.ArrayList(u8) = .empty;
     errdefer body.deinit(allocator);
     var index = range_start;
@@ -1422,7 +1647,10 @@ fn wordRefFromSpan(allocator: std.mem.Allocator, parsed: parser.ParseResult, spa
     const raw = try wordRawForExpansion(allocator, parsed.source, span);
     errdefer allocator.free(raw);
     const text = expand.expandWordScalar(allocator, raw, .{}) catch |err| switch (err) {
-        error.NounsetParameter, error.ParameterExpansionFailed, error.ArithmeticExpansionFailed => try allocator.dupe(u8, raw),
+        error.NounsetParameter,
+        error.ParameterExpansionFailed,
+        error.ArithmeticExpansionFailed,
+        => try allocator.dupe(u8, raw),
         else => return err,
     };
     errdefer allocator.free(text);

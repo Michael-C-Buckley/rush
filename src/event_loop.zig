@@ -27,7 +27,7 @@ pub const EventLoop = switch (builtin.os.tag) {
     else => @compileError("unsupported event loop platform"),
 };
 
-const SelectEventLoop = struct {
+pub const SelectEventLoop = struct {
     const max_registrations = 32;
 
     const Registration = struct {
@@ -104,21 +104,21 @@ const SelectEventLoop = struct {
     }
 
     fn fdSet(fd: std.posix.fd_t, set: *c.fd_set) void {
-        const index: usize = @intCast(@divTrunc(fd, fdSetBits));
-        const bit: u5 = @intCast(@mod(fd, fdSetBits));
+        const index: usize = @intCast(@divTrunc(fd, fd_set_bits));
+        const bit: u5 = @intCast(@mod(fd, fd_set_bits));
         set.fds_bits[index] |= @as(c_int, 1) << bit;
     }
 
     fn fdIsSet(fd: std.posix.fd_t, set: *const c.fd_set) bool {
-        const index: usize = @intCast(@divTrunc(fd, fdSetBits));
-        const bit: u5 = @intCast(@mod(fd, fdSetBits));
+        const index: usize = @intCast(@divTrunc(fd, fd_set_bits));
+        const bit: u5 = @intCast(@mod(fd, fd_set_bits));
         return (set.fds_bits[index] & (@as(c_int, 1) << bit)) != 0;
     }
 };
 
-const fdSetBits: comptime_int = @bitSizeOf(c_int);
+const fd_set_bits: comptime_int = @bitSizeOf(c_int);
 
-const KqueueEventLoop = struct {
+pub const KqueueEventLoop = struct {
     fd: std.posix.fd_t,
 
     pub fn init() !KqueueEventLoop {
@@ -168,7 +168,12 @@ const KqueueEventLoop = struct {
             .sec = @intCast(ms / 1000),
             .nsec = @intCast((ms % 1000) * std.time.ns_per_ms),
         } else null;
-        const count = try std.Io.Kqueue.kevent(self.fd, &.{}, events[0..@min(events.len, out.len)], if (timeout) |*value| value else null);
+        const count = try std.Io.Kqueue.kevent(
+            self.fd,
+            &.{},
+            events[0..@min(events.len, out.len)],
+            if (timeout) |*value| value else null,
+        );
         for (events[0..count], 0..) |event, index| {
             out[index] = .{ .source = @enumFromInt(event.udata) };
         }
@@ -176,7 +181,7 @@ const KqueueEventLoop = struct {
     }
 };
 
-const EpollEventLoop = struct {
+pub const EpollEventLoop = struct {
     fd: std.posix.fd_t,
 
     pub fn init() !EpollEventLoop {

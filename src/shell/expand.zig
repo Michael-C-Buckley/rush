@@ -292,14 +292,28 @@ pub fn expandWord(allocator: std.mem.Allocator, raw: []const u8, options: Option
     var quoted_expansion_glob = false;
 
     const ifs = options.env.get("IFS") orelse " \t\n";
-    try appendWordPartsUnquoted(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, parts, options, ifs, false);
+    try appendWordPartsUnquoted(
+        allocator,
+        &fields,
+        &current,
+        &force_current_field,
+        &quoted_expansion_glob,
+        parts,
+        options,
+        ifs,
+        false,
+    );
 
     if (current.items.len != 0 or force_current_field) {
         try fields.append(allocator, try current.toOwnedSlice(allocator));
     }
 
     if (options.pathname_expansion and pathname_expansion_safe and !quoted_expansion_glob) {
-        const pathname_options: PathnameExpansionOptions = .{ .nullglob = options.pathname_nullglob, .dotglob = options.pathname_dotglob, .extglob = options.extglob };
+        const pathname_options: PathnameExpansionOptions = .{
+            .nullglob = options.pathname_nullglob,
+            .dotglob = options.pathname_dotglob,
+            .extglob = options.extglob,
+        };
         if (options.pathname_lookup.enabled()) {
             try applyPathnameExpansion(allocator, options.pathname_lookup, &fields, pathname_options);
         } else if (options.io) |io| {
@@ -332,7 +346,17 @@ fn expandWordFieldsNoPathname(allocator: std.mem.Allocator, raw: []const u8, opt
     var quoted_expansion_glob = false;
 
     const ifs = options.env.get("IFS") orelse " \t\n";
-    try appendWordPartsUnquoted(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, parts, options, ifs, true);
+    try appendWordPartsUnquoted(
+        allocator,
+        &fields,
+        &current,
+        &force_current_field,
+        &quoted_expansion_glob,
+        parts,
+        options,
+        ifs,
+        true,
+    );
 
     if (current.items.len != 0 or force_current_field) {
         try fields.append(allocator, try current.toOwnedSlice(allocator));
@@ -344,17 +368,48 @@ fn expandWordFieldsNoPathname(allocator: std.mem.Allocator, raw: []const u8, opt
     };
 }
 
-fn appendWordPartsUnquoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_expansion_glob: *bool, parts: WordParts, options: Options, ifs: []const u8, operator_word: bool) !void {
+fn appendWordPartsUnquoted(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_expansion_glob: *bool,
+    parts: WordParts,
+    options: Options,
+    ifs: []const u8,
+    operator_word: bool,
+) !void {
     for (parts.parts) |part| {
         if (part.kind == .double_quoted) {
-            try appendDoubleQuotedText(allocator, fields, current, force_current_field, quoted_expansion_glob, part.value(parts.raw), options, ifs);
+            try appendDoubleQuotedText(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_expansion_glob,
+                part.value(parts.raw),
+                options,
+                ifs,
+            );
             continue;
         }
         if (part.kind == .single_quoted) force_current_field.* = true;
         if (part.kind == .dollar_single_quoted) force_current_field.* = true;
-        const split = part.kind == .parameter or part.kind == .command_substitution or part.kind == .arithmetic or (operator_word and part.kind == .unquoted);
+        const split = part.kind == .parameter or
+            part.kind == .command_substitution or
+            part.kind == .arithmetic or
+            (operator_word and part.kind == .unquoted);
         if (part.kind == .parameter) {
-            try appendParameterExpansionUnquoted(allocator, fields, current, force_current_field, quoted_expansion_glob, part.value(parts.raw), options, ifs);
+            try appendParameterExpansionUnquoted(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_expansion_glob,
+                part.value(parts.raw),
+                options,
+                ifs,
+            );
             continue;
         }
 
@@ -440,7 +495,11 @@ fn parseParameterWordPartsInDoubleQuotes(allocator: std.mem.Allocator, raw: []co
     return parseWordPartsWithOptions(allocator, raw, .{ .single_quotes = false });
 }
 
-fn parseWordPartsWithOptions(allocator: std.mem.Allocator, raw: []const u8, parse_options: WordPartParseOptions) !WordParts {
+fn parseWordPartsWithOptions(
+    allocator: std.mem.Allocator,
+    raw: []const u8,
+    parse_options: WordPartParseOptions,
+) !WordParts {
     var parts: std.ArrayList(WordPart) = .empty;
     errdefer parts.deinit(allocator);
 
@@ -542,7 +601,13 @@ fn parseWordPartsWithOptions(allocator: std.mem.Allocator, raw: []const u8, pars
     };
 }
 
-fn flushUnquoted(allocator: std.mem.Allocator, raw: []const u8, parts: *std.ArrayList(WordPart), start: *?usize, end: usize) !void {
+fn flushUnquoted(
+    allocator: std.mem.Allocator,
+    raw: []const u8,
+    parts: *std.ArrayList(WordPart),
+    start: *?usize,
+    end: usize,
+) !void {
     _ = raw;
     const actual_start = start.* orelse return;
     if (actual_start < end) {
@@ -608,7 +673,11 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
     return switch (part.kind) {
         .unquoted, .single_quoted => allocator.dupe(u8, part.value(raw)),
         .dollar_single_quoted => renderDollarSingleQuotedContent(allocator, part.value(raw)),
-        .escaped => if (std.mem.eql(u8, part.value(raw), "\n")) allocator.dupe(u8, "") else allocator.dupe(u8, part.value(raw)),
+        .escaped => if (std.mem.eql(
+            u8,
+            part.value(raw),
+            "\n",
+        )) allocator.dupe(u8, "") else allocator.dupe(u8, part.value(raw)),
         .double_quoted => renderDoubleQuotedContent(allocator, part.value(raw), options),
         .parameter => renderParameter(allocator, part.value(raw), options, false),
         .arithmetic => renderArithmetic(allocator, part.source(raw), part.value(raw), options),
@@ -623,20 +692,36 @@ fn renderPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, opt
     };
 }
 
-fn renderArithmetic(allocator: std.mem.Allocator, source: []const u8, expression: []const u8, options: Options) anyerror![]const u8 {
+fn renderArithmetic(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    expression: []const u8,
+    options: Options,
+) anyerror![]const u8 {
     const expanded_expression = try expandArithmeticExpression(allocator, expression, options);
     defer allocator.free(expanded_expression);
-    const value = evalArithmetic(expanded_expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, source, err, options);
+    const value = evalArithmetic(
+        expanded_expression,
+        options.env,
+        options.env_set,
+    ) catch |err| return arithmeticExpansionFailed(allocator, source, err, options);
     return std.fmt.allocPrint(allocator, "{d}", .{value});
 }
 
-fn expandArithmeticExpression(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror![]const u8 {
+fn expandArithmeticExpression(
+    allocator: std.mem.Allocator,
+    expression: []const u8,
+    options: Options,
+) anyerror![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
     var index: usize = 0;
     while (index < expression.len) {
-        if (expression[index] == '\\' and index + 1 < expression.len and isArithmeticBackslashEscaped(expression[index + 1])) {
+        if (expression[index] == '\\' and
+            index + 1 < expression.len and
+            isArithmeticBackslashEscaped(expression[index + 1]))
+        {
             if (expression[index + 1] == '\n') {
                 index += 2;
                 continue;
@@ -646,7 +731,11 @@ fn expandArithmeticExpression(allocator: std.mem.Allocator, expression: []const 
             continue;
         }
 
-        const part = (if (expression[index] == '$' or expression[index] == '`') try substitutionPart(allocator, expression, index) else null) orelse {
+        const part = (if (expression[index] == '$' or expression[index] == '`') try substitutionPart(
+            allocator,
+            expression,
+            index,
+        ) else null) orelse {
             try output.append(allocator, expression[index]);
             index += 1;
             continue;
@@ -661,7 +750,12 @@ fn expandArithmeticExpression(allocator: std.mem.Allocator, expression: []const 
     return output.toOwnedSlice(allocator);
 }
 
-fn renderArithmeticExpressionExpansion(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) anyerror![]const u8 {
+fn renderArithmeticExpressionExpansion(
+    allocator: std.mem.Allocator,
+    raw: []const u8,
+    part: WordPart,
+    options: Options,
+) anyerror![]const u8 {
     return switch (part.kind) {
         .parameter => renderParameter(allocator, part.value(raw), options, true),
         .arithmetic => renderArithmetic(allocator, part.source(raw), part.value(raw), options),
@@ -677,7 +771,12 @@ fn renderArithmeticExpressionExpansion(allocator: std.mem.Allocator, raw: []cons
     };
 }
 
-fn arithmeticExpansionFailed(allocator: std.mem.Allocator, source: []const u8, err: anyerror, options: Options) anyerror {
+fn arithmeticExpansionFailed(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    err: anyerror,
+    options: Options,
+) anyerror {
     const message = switch (err) {
         error.InvalidArithmetic => "invalid arithmetic expression",
         error.DivisionByZero => "division by zero",
@@ -874,7 +973,14 @@ const SegmentedTextBuilder = struct {
         self.* = undefined;
     }
 
-    fn append(self: *SegmentedTextBuilder, allocator: std.mem.Allocator, rendered: []const u8, split_enabled: bool, force_field: bool, quoted_glob: bool) !void {
+    fn append(
+        self: *SegmentedTextBuilder,
+        allocator: std.mem.Allocator,
+        rendered: []const u8,
+        split_enabled: bool,
+        force_field: bool,
+        quoted_glob: bool,
+    ) !void {
         try self.text.appendSlice(allocator, rendered);
         for (rendered) |_| try self.split.append(allocator, split_enabled);
         self.force_field = self.force_field or force_field;
@@ -900,7 +1006,12 @@ const SegmentedTextBuilder = struct {
     }
 };
 
-fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn renderParameter(
+    allocator: std.mem.Allocator,
+    expression: []const u8,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     const parsed = parseParameterExpression(expression, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
     if (parsed.name_prefix) |kind| return renderNamePrefixJoined(allocator, parsed.name, kind, options);
@@ -917,7 +1028,11 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
         if (isWholePositionalParameterName(parsed.name) and options.features.isBash()) {
             const values = try positionalSliceValues(allocator, operation, options);
             defer allocator.free(values);
-            return joinPositionals(allocator, values, positionalSliceScalarJoinSeparator(parsed.name, in_double_quotes, options));
+            return joinPositionals(
+                allocator,
+                values,
+                positionalSliceScalarJoinSeparator(parsed.name, in_double_quotes, options),
+            );
         }
     }
 
@@ -972,7 +1087,11 @@ fn renderParameter(allocator: std.mem.Allocator, expression: []const u8, options
         },
         .assign_default => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
-            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
+            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(
+                allocator,
+                options,
+                parsed.name,
+            );
             const expanded = try expandParameterWord(allocator, parsed.word, options, in_double_quotes);
             errdefer allocator.free(expanded);
             try options.env_set.set(parsed.name, expanded);
@@ -1018,10 +1137,19 @@ fn hasParameterStringOperation(parsed: ParameterExpression) bool {
     return parsed.substring != null or parsed.replacement != null or parsed.case_modification != null;
 }
 
-fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8, options: Options) anyerror!SegmentedText {
+fn renderParameterSegmented(
+    allocator: std.mem.Allocator,
+    expression: []const u8,
+    options: Options,
+) anyerror!SegmentedText {
     const parsed = parseParameterExpression(expression, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
-    if (parsed.name_prefix != null or parsed.indirect or parsed.array_keys != null or parsed.array_whole != null or parsed.array_index != null) {
+    if (parsed.name_prefix != null or
+        parsed.indirect or
+        parsed.array_keys != null or
+        parsed.array_whole != null or
+        parsed.array_index != null)
+    {
         const rendered = try renderParameter(allocator, expression, options, false);
         defer allocator.free(rendered);
         return segmentedFromText(allocator, rendered, true, false, false);
@@ -1036,32 +1164,66 @@ fn renderParameterSegmented(allocator: std.mem.Allocator, expression: []const u8
     const is_null = if (value) |text| text.len == 0 else true;
 
     switch (parsed.operator) {
-        .none, .length, .error_if_unset, .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
+        .none,
+        .length,
+        .error_if_unset,
+        .remove_small_suffix,
+        .remove_large_suffix,
+        .remove_small_prefix,
+        .remove_large_prefix,
+        => {
             const rendered = try renderParameter(allocator, expression, options, false);
             defer allocator.free(rendered);
             return segmentedFromText(allocator, rendered, true, false, false);
         },
         .default_value => {
-            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(allocator, value.?, true, false, false);
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(
+                allocator,
+                value.?,
+                true,
+                false,
+                false,
+            );
             return expandParameterWordSegmented(allocator, parsed.word, options);
         },
         .assign_default => {
-            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(allocator, value.?, true, false, false);
-            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
+            if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(
+                allocator,
+                value.?,
+                true,
+                false,
+                false,
+            );
+            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(
+                allocator,
+                options,
+                parsed.name,
+            );
             const expanded = try expandParameterWord(allocator, parsed.word, options, false);
             defer allocator.free(expanded);
             try options.env_set.set(parsed.name, expanded);
             return segmentedFromText(allocator, expanded, true, false, false);
         },
         .alternate_value => {
-            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(allocator, "", true, false, false);
+            if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return segmentedFromText(
+                allocator,
+                "",
+                true,
+                false,
+                false,
+            );
             return expandParameterWordSegmented(allocator, parsed.word, options);
         },
         .invalid => unreachable,
     }
 }
 
-fn renderSubstring(allocator: std.mem.Allocator, value: []const u8, operation: ParameterSubstringOperation, options: Options) anyerror![]const u8 {
+fn renderSubstring(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    operation: ParameterSubstringOperation,
+    options: Options,
+) anyerror![]const u8 {
     const value_len = std.math.cast(i64, value.len) orelse std.math.maxInt(i64);
     const offset = try evaluateArrayIndexValue(allocator, operation.offset, options);
     const start_value = if (offset < 0) value_len + offset else offset;
@@ -1083,9 +1245,21 @@ fn renderSubstring(allocator: std.mem.Allocator, value: []const u8, operation: P
     return allocator.dupe(u8, value[start..end]);
 }
 
-fn renderStringOperation(allocator: std.mem.Allocator, value: []const u8, parsed: ParameterExpression, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn renderStringOperation(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    parsed: ParameterExpression,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     if (parsed.substring) |operation| return renderSubstring(allocator, value, operation, options);
-    if (parsed.replacement) |operation| return renderReplacement(allocator, value, operation, options, in_double_quotes);
+    if (parsed.replacement) |operation| return renderReplacement(
+        allocator,
+        value,
+        operation,
+        options,
+        in_double_quotes,
+    );
     if (parsed.case_modification) |operation| return renderCaseModification(allocator, value, operation, options);
     unreachable;
 }
@@ -1102,7 +1276,13 @@ fn badSubstringExpressionExpansion(allocator: std.mem.Allocator, options: Option
     return error.ParameterExpansionFailed;
 }
 
-fn renderReplacement(allocator: std.mem.Allocator, value: []const u8, operation: ParameterReplacementOperation, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn renderReplacement(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    operation: ParameterReplacementOperation,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     var pattern = try expandPatternWord(allocator, operation.pattern, options);
     defer pattern.deinit(allocator);
 
@@ -1112,7 +1292,12 @@ fn renderReplacement(allocator: std.mem.Allocator, value: []const u8, operation:
     return replacePattern(allocator, value, pattern, replacement, operation.kind, options.extglob);
 }
 
-fn renderCaseModification(allocator: std.mem.Allocator, value: []const u8, operation: ParameterCaseOperation, options: Options) ![]const u8 {
+fn renderCaseModification(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    operation: ParameterCaseOperation,
+    options: Options,
+) ![]const u8 {
     var pattern = if (operation.pattern) |pattern_text|
         try expandPatternWord(allocator, pattern_text, options)
     else
@@ -1122,13 +1307,23 @@ fn renderCaseModification(allocator: std.mem.Allocator, value: []const u8, opera
     return renderCaseModificationWithPattern(allocator, value, operation.kind, pattern, options.extglob);
 }
 
-fn renderCaseModificationWithPattern(allocator: std.mem.Allocator, value: []const u8, kind: ParameterCaseKind, pattern: ExpansionPattern, extglob: bool) ![]const u8 {
+fn renderCaseModificationWithPattern(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    kind: ParameterCaseKind,
+    pattern: ExpansionPattern,
+    extglob: bool,
+) ![]const u8 {
     const output = try allocator.dupe(u8, value);
     errdefer allocator.free(output);
 
     switch (kind) {
         .uppercase_first => {
-            if (output.len > 0 and casePatternMatchesByte(pattern, output[0], extglob)) output[0] = std.ascii.toUpper(output[0]);
+            if (output.len > 0 and casePatternMatchesByte(
+                pattern,
+                output[0],
+                extglob,
+            )) output[0] = std.ascii.toUpper(output[0]);
         },
         .uppercase_all => {
             for (output) |*byte| {
@@ -1136,7 +1331,11 @@ fn renderCaseModificationWithPattern(allocator: std.mem.Allocator, value: []cons
             }
         },
         .lowercase_first => {
-            if (output.len > 0 and casePatternMatchesByte(pattern, output[0], extglob)) output[0] = std.ascii.toLower(output[0]);
+            if (output.len > 0 and casePatternMatchesByte(
+                pattern,
+                output[0],
+                extglob,
+            )) output[0] = std.ascii.toLower(output[0]);
         },
         .lowercase_all => {
             for (output) |*byte| {
@@ -1165,7 +1364,14 @@ const PatternMatch = struct {
     end: usize,
 };
 
-fn replacePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, kind: ParameterReplacementKind, extglob: bool) ![]const u8 {
+fn replacePattern(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    pattern: ExpansionPattern,
+    replacement: ParameterReplacementText,
+    kind: ParameterReplacementKind,
+    extglob: bool,
+) ![]const u8 {
     return switch (kind) {
         .first => replaceFirstPattern(allocator, value, pattern, replacement, extglob),
         .global => replaceGlobalPattern(allocator, value, pattern, replacement, extglob),
@@ -1174,7 +1380,13 @@ fn replacePattern(allocator: std.mem.Allocator, value: []const u8, pattern: Expa
     };
 }
 
-fn replaceFirstPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, extglob: bool) ![]const u8 {
+fn replaceFirstPattern(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    pattern: ExpansionPattern,
+    replacement: ParameterReplacementText,
+    extglob: bool,
+) ![]const u8 {
     const match = findPatternMatch(value, pattern, 0, extglob) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
@@ -1184,7 +1396,13 @@ fn replaceFirstPattern(allocator: std.mem.Allocator, value: []const u8, pattern:
     return output.toOwnedSlice(allocator);
 }
 
-fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, extglob: bool) ![]const u8 {
+fn replaceGlobalPattern(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    pattern: ExpansionPattern,
+    replacement: ParameterReplacementText,
+    extglob: bool,
+) ![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
@@ -1208,7 +1426,13 @@ fn replaceGlobalPattern(allocator: std.mem.Allocator, value: []const u8, pattern
     return output.toOwnedSlice(allocator);
 }
 
-fn replacePrefixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, extglob: bool) ![]const u8 {
+fn replacePrefixPattern(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    pattern: ExpansionPattern,
+    replacement: ParameterReplacementText,
+    extglob: bool,
+) ![]const u8 {
     const match_end = findPrefixPatternMatch(value, pattern, extglob) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
@@ -1217,7 +1441,13 @@ fn replacePrefixPattern(allocator: std.mem.Allocator, value: []const u8, pattern
     return output.toOwnedSlice(allocator);
 }
 
-fn replaceSuffixPattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, replacement: ParameterReplacementText, extglob: bool) ![]const u8 {
+fn replaceSuffixPattern(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    pattern: ExpansionPattern,
+    replacement: ParameterReplacementText,
+    extglob: bool,
+) ![]const u8 {
     const match_start = findSuffixPatternMatch(value, pattern, extglob) orelse return allocator.dupe(u8, value);
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
@@ -1226,7 +1456,12 @@ fn replaceSuffixPattern(allocator: std.mem.Allocator, value: []const u8, pattern
     return output.toOwnedSlice(allocator);
 }
 
-fn appendExpandedReplacement(allocator: std.mem.Allocator, output: *std.ArrayList(u8), replacement: ParameterReplacementText, match: []const u8) !void {
+fn appendExpandedReplacement(
+    allocator: std.mem.Allocator,
+    output: *std.ArrayList(u8),
+    replacement: ParameterReplacementText,
+    match: []const u8,
+) !void {
     std.debug.assert(replacement.text.len == replacement.replace_match.len);
 
     var index: usize = 0;
@@ -1237,7 +1472,11 @@ fn appendExpandedReplacement(allocator: std.mem.Allocator, output: *std.ArrayLis
             index += 1;
             continue;
         }
-        if (byte == '\\' and replacement.replace_match[index] and index + 1 < replacement.text.len and replacement.replace_match[index + 1]) {
+        if (byte == '\\' and
+            replacement.replace_match[index] and
+            index + 1 < replacement.text.len and
+            replacement.replace_match[index + 1])
+        {
             const escaped = replacement.text[index + 1];
             if (escaped == '&' or escaped == '\\') {
                 try output.append(allocator, escaped);
@@ -1256,7 +1495,11 @@ fn findPatternMatch(value: []const u8, pattern: ExpansionPattern, start_index: u
     while (start <= value.len) : (start += 1) {
         var end = value.len;
         while (end >= start) {
-            if (globPatternMatchesWithOptions(pattern, value[start..end], .{ .extglob = extglob })) return .{ .start = start, .end = end };
+            if (globPatternMatchesWithOptions(
+                pattern,
+                value[start..end],
+                .{ .extglob = extglob },
+            )) return .{ .start = start, .end = end };
             if (end == start) break;
             end -= 1;
         }
@@ -1282,14 +1525,31 @@ fn findSuffixPatternMatch(value: []const u8, pattern: ExpansionPattern, extglob:
     return null;
 }
 
-fn renderArrayElement(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
-    const index = (try evaluateRecoverableArrayElementIndex(allocator, name, index_text, options, name)) orelse return allocator.alloc(u8, 0);
+fn renderArrayElement(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    index_text: []const u8,
+    options: Options,
+) anyerror![]const u8 {
+    const index = (try evaluateRecoverableArrayElementIndex(
+        allocator,
+        name,
+        index_text,
+        options,
+        name,
+    )) orelse return allocator.alloc(u8, 0);
     if (options.arrays.get(name, index)) |value| return allocator.dupe(u8, value);
     if (options.nounset) return error.NounsetParameter;
     return allocator.alloc(u8, 0);
 }
 
-fn renderArrayElementParameter(allocator: std.mem.Allocator, parsed: ParameterExpression, index_text: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn renderArrayElementParameter(
+    allocator: std.mem.Allocator,
+    parsed: ParameterExpression,
+    index_text: []const u8,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     if (parsed.operator == .length) return renderArrayElementLength(allocator, parsed.name, index_text, options);
     if (hasParameterStringOperation(parsed)) {
         const base = try renderArrayElement(allocator, parsed.name, index_text, options);
@@ -1313,7 +1573,14 @@ fn renderArrayElementParameter(allocator: std.mem.Allocator, parsed: ParameterEx
         },
         .assign_default => {
             if (parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.dupe(u8, value.?);
-            return assignArrayElementDefault(allocator, parsed.name, index_text, parsed.word, options, in_double_quotes);
+            return assignArrayElementDefault(
+                allocator,
+                parsed.name,
+                index_text,
+                parsed.word,
+                options,
+                in_double_quotes,
+            );
         },
         .alternate_value => {
             if (!parameterHasUsableValue(is_set, is_null, parsed.colon)) return allocator.alloc(u8, 0);
@@ -1336,10 +1603,23 @@ fn renderArrayElementParameter(allocator: std.mem.Allocator, parsed: ParameterEx
     }
 }
 
-fn renderArrayWholeParameter(allocator: std.mem.Allocator, parsed: ParameterExpression, kind: ParameterArrayWholeKind, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn renderArrayWholeParameter(
+    allocator: std.mem.Allocator,
+    parsed: ParameterExpression,
+    kind: ParameterArrayWholeKind,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     if (parsed.operator == .length) return std.fmt.allocPrint(allocator, "{d}", .{options.arrays.len(parsed.name)});
     if (hasParameterStringOperation(parsed)) {
-        var values = try renderArrayStringOperationValues(allocator, parsed.name, kind, parsed, options, in_double_quotes);
+        var values = try renderArrayStringOperationValues(
+            allocator,
+            parsed.name,
+            kind,
+            parsed,
+            options,
+            in_double_quotes,
+        );
         defer values.deinit(allocator);
         return joinValues(allocator, values.fields, arrayValueScalarJoinSeparator(kind, options));
     }
@@ -1347,11 +1627,21 @@ fn renderArrayWholeParameter(allocator: std.mem.Allocator, parsed: ParameterExpr
     switch (parsed.operator) {
         .none => return renderArrayValuesJoined(allocator, parsed.name, kind, options),
         .default_value => {
-            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(allocator, parsed.name, kind, options);
+            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(
+                allocator,
+                parsed.name,
+                kind,
+                options,
+            );
             return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
         },
         .assign_default => {
-            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(allocator, parsed.name, kind, options);
+            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(
+                allocator,
+                parsed.name,
+                kind,
+                options,
+            );
             return parameterAssignmentInvalid(allocator, options, parsed.name);
         },
         .alternate_value => {
@@ -1359,7 +1649,12 @@ fn renderArrayWholeParameter(allocator: std.mem.Allocator, parsed: ParameterExpr
             return expandParameterWord(allocator, parsed.word, options, in_double_quotes);
         },
         .error_if_unset => {
-            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(allocator, parsed.name, kind, options);
+            if (arrayHasUsableValue(parsed.name, options, parsed.colon)) return renderArrayValuesJoined(
+                allocator,
+                parsed.name,
+                kind,
+                options,
+            );
             return parameterExpansionError(allocator, options, parsed.name, parsed.word, in_double_quotes);
         },
         .remove_small_suffix, .remove_large_suffix, .remove_small_prefix, .remove_large_prefix => {
@@ -1371,12 +1666,30 @@ fn renderArrayWholeParameter(allocator: std.mem.Allocator, parsed: ParameterExpr
     }
 }
 
-fn arrayElementValue(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror!?[]const u8 {
-    const index = (try evaluateRecoverableArrayElementIndex(allocator, name, index_text, options, name)) orelse return null;
+fn arrayElementValue(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    index_text: []const u8,
+    options: Options,
+) anyerror!?[]const u8 {
+    const index = (try evaluateRecoverableArrayElementIndex(
+        allocator,
+        name,
+        index_text,
+        options,
+        name,
+    )) orelse return null;
     return options.arrays.get(name, index);
 }
 
-fn assignArrayElementDefault(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, word: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn assignArrayElementDefault(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    index_text: []const u8,
+    word: []const u8,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     const index = try evaluateArrayIndex(allocator, name, index_text, options, name);
     const expanded = try expandParameterWord(allocator, word, options, in_double_quotes);
     errdefer allocator.free(expanded);
@@ -1388,7 +1701,13 @@ fn arrayHasUsableValue(name: []const u8, options: Options, colon: bool) bool {
     return parameterHasUsableValue(options.arrays.len(name) != 0, false, colon);
 }
 
-fn parameterExpansionError(allocator: std.mem.Allocator, options: Options, name_text: []const u8, word: []const u8, in_double_quotes: bool) anyerror {
+fn parameterExpansionError(
+    allocator: std.mem.Allocator,
+    options: Options,
+    name_text: []const u8,
+    word: []const u8,
+    in_double_quotes: bool,
+) anyerror {
     const message = if (word.len != 0)
         try expandParameterWord(allocator, word, options, in_double_quotes)
     else
@@ -1407,7 +1726,12 @@ fn parameterExpansionError(allocator: std.mem.Allocator, options: Options, name_
     return error.ParameterExpansionFailed;
 }
 
-fn renderArrayElementLength(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options) anyerror![]const u8 {
+fn renderArrayElementLength(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    index_text: []const u8,
+    options: Options,
+) anyerror![]const u8 {
     const diagnostic_name = try std.fmt.allocPrint(allocator, "{s}]", .{index_text});
     defer allocator.free(diagnostic_name);
     const value = try evaluateArrayIndexValue(allocator, index_text, options);
@@ -1421,11 +1745,23 @@ fn renderArrayElementLength(allocator: std.mem.Allocator, name: []const u8, inde
     return allocator.dupe(u8, "0");
 }
 
-fn renderArrayValuesJoined(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, options: Options) ![]const u8 {
+fn renderArrayValuesJoined(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    kind: ParameterArrayWholeKind,
+    options: Options,
+) ![]const u8 {
     return joinArrayValues(allocator, name, options, arrayValueScalarJoinSeparator(kind, options));
 }
 
-fn renderArrayStringOperationValues(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, parsed: ParameterExpression, options: Options, in_double_quotes: bool) anyerror!ExpandedWordFields {
+fn renderArrayStringOperationValues(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    kind: ParameterArrayWholeKind,
+    parsed: ParameterExpression,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror!ExpandedWordFields {
     _ = kind;
     if (parsed.substring) |operation| return arraySliceValues(allocator, name, operation, options);
 
@@ -1439,13 +1775,21 @@ fn renderArrayStringOperationValues(allocator: std.mem.Allocator, name: []const 
         var pattern = try expandPatternWord(allocator, operation.pattern, options);
         defer pattern.deinit(allocator);
 
-        var replacement = try expandParameterReplacementWord(allocator, operation.replacement, options, in_double_quotes);
+        var replacement = try expandParameterReplacementWord(
+            allocator,
+            operation.replacement,
+            options,
+            in_double_quotes,
+        );
         defer replacement.deinit(allocator);
 
         const len = options.arrays.len(name);
         for (0..len) |ordinal| {
             const value = options.arrays.value(name, ordinal) orelse continue;
-            try values.append(allocator, try replacePattern(allocator, value, pattern, replacement, operation.kind, options.extglob));
+            try values.append(
+                allocator,
+                try replacePattern(allocator, value, pattern, replacement, operation.kind, options.extglob),
+            );
         }
         return .{ .fields = try values.toOwnedSlice(allocator) };
     }
@@ -1460,7 +1804,10 @@ fn renderArrayStringOperationValues(allocator: std.mem.Allocator, name: []const 
         const len = options.arrays.len(name);
         for (0..len) |ordinal| {
             const value = options.arrays.value(name, ordinal) orelse continue;
-            try values.append(allocator, try renderCaseModificationWithPattern(allocator, value, operation.kind, pattern, options.extglob));
+            try values.append(
+                allocator,
+                try renderCaseModificationWithPattern(allocator, value, operation.kind, pattern, options.extglob),
+            );
         }
         return .{ .fields = try values.toOwnedSlice(allocator) };
     }
@@ -1468,7 +1815,13 @@ fn renderArrayStringOperationValues(allocator: std.mem.Allocator, name: []const 
     unreachable;
 }
 
-fn renderArrayKeysJoined(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, options: Options, in_double_quotes: bool) ![]const u8 {
+fn renderArrayKeysJoined(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    kind: ParameterArrayWholeKind,
+    options: Options,
+    in_double_quotes: bool,
+) ![]const u8 {
     return joinArrayKeys(allocator, name, options, arrayKeyScalarJoinSeparator(kind, in_double_quotes, options));
 }
 
@@ -1492,7 +1845,11 @@ fn renderIndirectParameter(allocator: std.mem.Allocator, name: []const u8, optio
     return allocator.dupe(u8, value);
 }
 
-fn parseIndirectArrayExpansionTarget(allocator: std.mem.Allocator, target_name: []const u8, options: Options) !?BashArrayExpansionTarget {
+fn parseIndirectArrayExpansionTarget(
+    allocator: std.mem.Allocator,
+    target_name: []const u8,
+    options: Options,
+) !?BashArrayExpansionTarget {
     if (parseBashArrayExpansionTarget(target_name)) |array_target| return array_target;
     if (looksLikeArrayTarget(target_name)) return invalidIndirectTargetExpansion(allocator, options, target_name);
     return null;
@@ -1514,7 +1871,12 @@ fn invalidIndirectTargetExpansion(allocator: std.mem.Allocator, options: Options
     return error.ParameterExpansionFailed;
 }
 
-fn renderNamePrefixJoined(allocator: std.mem.Allocator, prefix: []const u8, kind: ParameterArrayWholeKind, options: Options) ![]const u8 {
+fn renderNamePrefixJoined(
+    allocator: std.mem.Allocator,
+    prefix: []const u8,
+    kind: ParameterArrayWholeKind,
+    options: Options,
+) ![]const u8 {
     _ = kind;
     const names = try matchingVariableNames(allocator, prefix, options);
     defer freeVariableNameList(allocator, names);
@@ -1553,19 +1915,39 @@ fn arrayKeyScalarJoinSeparator(kind: ParameterArrayWholeKind, in_double_quotes: 
     };
 }
 
-fn evaluateArrayIndex(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options, diagnostic_name: []const u8) anyerror!usize {
+fn evaluateArrayIndex(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    index_text: []const u8,
+    options: Options,
+    diagnostic_name: []const u8,
+) anyerror!usize {
     const value = try evaluateArrayIndexValue(allocator, index_text, options);
-    if (value < 0) return normalizeNegativeArrayIndex(name, value, options) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
+    if (value < 0) return normalizeNegativeArrayIndex(name, value, options) orelse return badArraySubscriptExpansion(
+        allocator,
+        options,
+        diagnostic_name,
+    );
     return std.math.cast(usize, value) orelse return badArraySubscriptExpansion(allocator, options, diagnostic_name);
 }
 
 fn evaluateArrayIndexValue(allocator: std.mem.Allocator, index_text: []const u8, options: Options) anyerror!i64 {
     const expanded_expression = try expandArithmeticExpression(allocator, index_text, options);
     defer allocator.free(expanded_expression);
-    return evalArithmetic(expanded_expression, options.env, options.env_set) catch |err| return arithmeticExpansionFailed(allocator, index_text, err, options);
+    return evalArithmetic(
+        expanded_expression,
+        options.env,
+        options.env_set,
+    ) catch |err| return arithmeticExpansionFailed(allocator, index_text, err, options);
 }
 
-fn evaluateRecoverableArrayElementIndex(allocator: std.mem.Allocator, name: []const u8, index_text: []const u8, options: Options, diagnostic_name: []const u8) anyerror!?usize {
+fn evaluateRecoverableArrayElementIndex(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    index_text: []const u8,
+    options: Options,
+    diagnostic_name: []const u8,
+) anyerror!?usize {
     const value = try evaluateArrayIndexValue(allocator, index_text, options);
     if (value < 0) {
         if (normalizeNegativeArrayIndex(name, value, options)) |index| return index;
@@ -1598,7 +1980,13 @@ fn badArraySubscriptExpansion(allocator: std.mem.Allocator, options: Options, na
     return error.ParameterExpansionFailed;
 }
 
-fn segmentedFromText(allocator: std.mem.Allocator, text: []const u8, split_enabled: bool, force_field: bool, quoted_glob: bool) !SegmentedText {
+fn segmentedFromText(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    split_enabled: bool,
+    force_field: bool,
+    quoted_glob: bool,
+) !SegmentedText {
     const owned_text = try allocator.dupe(u8, text);
     errdefer allocator.free(owned_text);
     const split = try allocator.alloc(bool, owned_text.len);
@@ -1611,7 +1999,11 @@ fn segmentedFromText(allocator: std.mem.Allocator, text: []const u8, split_enabl
     };
 }
 
-fn expandParameterWordSegmented(allocator: std.mem.Allocator, word: []const u8, options: Options) anyerror!SegmentedText {
+fn expandParameterWordSegmented(
+    allocator: std.mem.Allocator,
+    word: []const u8,
+    options: Options,
+) anyerror!SegmentedText {
     const tilde_expanded = try expandTilde(allocator, word, options.env);
     defer allocator.free(tilde_expanded);
 
@@ -1762,12 +2154,26 @@ pub fn expandWordPatterns(allocator: std.mem.Allocator, raw: []const u8, options
         if (part.kind == .parameter) {
             const parameter = part.value(parts.raw);
             if (std.mem.eql(u8, parameter, "@")) {
-                try appendUnquotedAtPattern(allocator, &fields, &current_text, &current_special, options.positionals, ifs);
+                try appendUnquotedAtPattern(
+                    allocator,
+                    &fields,
+                    &current_text,
+                    &current_special,
+                    options.positionals,
+                    ifs,
+                );
                 continue;
             }
             if (std.mem.eql(u8, parameter, "*")) {
                 if (ifs.len == 0) {
-                    try appendUnquotedAtPattern(allocator, &fields, &current_text, &current_special, options.positionals, ifs);
+                    try appendUnquotedAtPattern(
+                        allocator,
+                        &fields,
+                        &current_text,
+                        &current_special,
+                        options.positionals,
+                        ifs,
+                    );
                     continue;
                 }
                 const joined = try joinPositionalsWithIfs(allocator, options.positionals, ifs);
@@ -1792,7 +2198,15 @@ pub fn expandWordPatterns(allocator: std.mem.Allocator, raw: []const u8, options
                 force_current_field = true;
                 try appendPatternBytes(allocator, &current_text, &current_special, rendered, false);
             },
-            .arithmetic, .command_substitution => try appendSplitPatternText(allocator, &fields, &current_text, &current_special, rendered, ifs, true),
+            .arithmetic, .command_substitution => try appendSplitPatternText(
+                allocator,
+                &fields,
+                &current_text,
+                &current_special,
+                rendered,
+                ifs,
+                true,
+            ),
             .parameter => unreachable,
         }
     }
@@ -1832,24 +2246,46 @@ fn expandPatternWord(allocator: std.mem.Allocator, raw: []const u8, options: Opt
     return .{ .text = try text.toOwnedSlice(allocator), .special = try special.toOwnedSlice(allocator) };
 }
 
-fn appendSegmentedPatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: SegmentedText) !void {
+fn appendSegmentedPatternPart(
+    allocator: std.mem.Allocator,
+    text: *std.ArrayList(u8),
+    special: *std.ArrayList(bool),
+    rendered: SegmentedText,
+) !void {
     try text.appendSlice(allocator, rendered.text);
     try special.appendSlice(allocator, rendered.split);
 }
 
-fn appendPatternPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
+fn appendPatternPart(
+    allocator: std.mem.Allocator,
+    text: *std.ArrayList(u8),
+    special: *std.ArrayList(bool),
+    rendered: []const u8,
+    meta_active: bool,
+) !void {
     try text.appendSlice(allocator, rendered);
     for (rendered) |_| {
         try special.append(allocator, meta_active);
     }
 }
 
-fn appendPatternBytes(allocator: std.mem.Allocator, text: *std.ArrayList(u8), special: *std.ArrayList(bool), rendered: []const u8, meta_active: bool) !void {
+fn appendPatternBytes(
+    allocator: std.mem.Allocator,
+    text: *std.ArrayList(u8),
+    special: *std.ArrayList(bool),
+    rendered: []const u8,
+    meta_active: bool,
+) !void {
     try text.appendSlice(allocator, rendered);
     for (rendered) |_| try special.append(allocator, meta_active);
 }
 
-fn appendCurrentPatternField(allocator: std.mem.Allocator, fields: *std.ArrayList(ExpansionPattern), current_text: *std.ArrayList(u8), current_special: *std.ArrayList(bool)) !void {
+fn appendCurrentPatternField(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList(ExpansionPattern),
+    current_text: *std.ArrayList(u8),
+    current_special: *std.ArrayList(bool),
+) !void {
     const text = try current_text.toOwnedSlice(allocator);
     errdefer allocator.free(text);
     const special = try current_special.toOwnedSlice(allocator);
@@ -1858,7 +2294,15 @@ fn appendCurrentPatternField(allocator: std.mem.Allocator, fields: *std.ArrayLis
     try fields.append(allocator, .{ .text = text, .special = special });
 }
 
-fn appendSplitPatternText(allocator: std.mem.Allocator, fields: *std.ArrayList(ExpansionPattern), current_text: *std.ArrayList(u8), current_special: *std.ArrayList(bool), text: []const u8, ifs: []const u8, meta_active: bool) !void {
+fn appendSplitPatternText(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList(ExpansionPattern),
+    current_text: *std.ArrayList(u8),
+    current_special: *std.ArrayList(bool),
+    text: []const u8,
+    ifs: []const u8,
+    meta_active: bool,
+) !void {
     if (ifs.len == 0) {
         try appendPatternBytes(allocator, current_text, current_special, text, meta_active);
         return;
@@ -1889,7 +2333,14 @@ fn appendSplitPatternText(allocator: std.mem.Allocator, fields: *std.ArrayList(E
     }
 }
 
-fn appendSplitPatternSegmentedText(allocator: std.mem.Allocator, fields: *std.ArrayList(ExpansionPattern), current_text: *std.ArrayList(u8), current_special: *std.ArrayList(bool), text: SegmentedText, ifs: []const u8) !void {
+fn appendSplitPatternSegmentedText(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList(ExpansionPattern),
+    current_text: *std.ArrayList(u8),
+    current_special: *std.ArrayList(bool),
+    text: SegmentedText,
+    ifs: []const u8,
+) !void {
     std.debug.assert(text.text.len == text.split.len);
     if (ifs.len == 0) {
         try current_text.appendSlice(allocator, text.text);
@@ -1922,7 +2373,14 @@ fn appendSplitPatternSegmentedText(allocator: std.mem.Allocator, fields: *std.Ar
     }
 }
 
-fn appendUnquotedAtPattern(allocator: std.mem.Allocator, fields: *std.ArrayList(ExpansionPattern), current_text: *std.ArrayList(u8), current_special: *std.ArrayList(bool), positionals: []const []const u8, ifs: []const u8) !void {
+fn appendUnquotedAtPattern(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList(ExpansionPattern),
+    current_text: *std.ArrayList(u8),
+    current_special: *std.ArrayList(bool),
+    positionals: []const []const u8,
+    ifs: []const u8,
+) !void {
     for (positionals, 0..) |param, index| {
         try appendSplitPatternText(allocator, fields, current_text, current_special, param, ifs, true);
         if (index + 1 < positionals.len and current_text.items.len != 0) {
@@ -1931,12 +2389,22 @@ fn appendUnquotedAtPattern(allocator: std.mem.Allocator, fields: *std.ArrayList(
     }
 }
 
-fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, extglob: bool) ![]const u8 {
+fn removePattern(
+    allocator: std.mem.Allocator,
+    value: []const u8,
+    pattern: ExpansionPattern,
+    operator: ParameterOperator,
+    extglob: bool,
+) ![]const u8 {
     return switch (operator) {
         .remove_small_suffix => blk: {
             var start = value.len;
             while (true) {
-                if (globPatternMatchesWithOptions(pattern, value[start..], .{ .extglob = extglob })) break :blk allocator.dupe(u8, value[0..start]);
+                if (globPatternMatchesWithOptions(
+                    pattern,
+                    value[start..],
+                    .{ .extglob = extglob },
+                )) break :blk allocator.dupe(u8, value[0..start]);
                 if (start == 0) break;
                 start -= 1;
             }
@@ -1945,21 +2413,33 @@ fn removePattern(allocator: std.mem.Allocator, value: []const u8, pattern: Expan
         .remove_large_suffix => blk: {
             var start: usize = 0;
             while (start <= value.len) : (start += 1) {
-                if (globPatternMatchesWithOptions(pattern, value[start..], .{ .extglob = extglob })) break :blk allocator.dupe(u8, value[0..start]);
+                if (globPatternMatchesWithOptions(
+                    pattern,
+                    value[start..],
+                    .{ .extglob = extglob },
+                )) break :blk allocator.dupe(u8, value[0..start]);
             }
             break :blk allocator.dupe(u8, value);
         },
         .remove_small_prefix => blk: {
             var end: usize = 0;
             while (end <= value.len) : (end += 1) {
-                if (globPatternMatchesWithOptions(pattern, value[0..end], .{ .extglob = extglob })) break :blk allocator.dupe(u8, value[end..]);
+                if (globPatternMatchesWithOptions(
+                    pattern,
+                    value[0..end],
+                    .{ .extglob = extglob },
+                )) break :blk allocator.dupe(u8, value[end..]);
             }
             break :blk allocator.dupe(u8, value);
         },
         .remove_large_prefix => blk: {
             var end = value.len;
             while (true) {
-                if (globPatternMatchesWithOptions(pattern, value[0..end], .{ .extglob = extglob })) break :blk allocator.dupe(u8, value[end..]);
+                if (globPatternMatchesWithOptions(
+                    pattern,
+                    value[0..end],
+                    .{ .extglob = extglob },
+                )) break :blk allocator.dupe(u8, value[end..]);
                 if (end == 0) break;
                 end -= 1;
             }
@@ -1975,14 +2455,24 @@ fn isNounsetExemptParameter(name: []const u8) bool {
 
 /// Expands an operator word from ${parameter op word}. Tilde expansion only
 /// applies when the surrounding expansion is unquoted (POSIX XCU 2.6.1).
-fn expandParameterWord(allocator: std.mem.Allocator, word: []const u8, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn expandParameterWord(
+    allocator: std.mem.Allocator,
+    word: []const u8,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     if (!in_double_quotes) return expandWordScalar(allocator, word, options);
     var parts = try parseParameterWordPartsInDoubleQuotes(allocator, word);
     defer parts.deinit();
     return renderParameterWordParts(allocator, parts, options, true);
 }
 
-fn renderParameterWordParts(allocator: std.mem.Allocator, word: WordParts, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn renderParameterWordParts(
+    allocator: std.mem.Allocator,
+    word: WordParts,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
 
@@ -1995,7 +2485,13 @@ fn renderParameterWordParts(allocator: std.mem.Allocator, word: WordParts, optio
     return output.toOwnedSlice(allocator);
 }
 
-fn renderParameterWordPart(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options, in_double_quotes: bool) anyerror![]const u8 {
+fn renderParameterWordPart(
+    allocator: std.mem.Allocator,
+    raw: []const u8,
+    part: WordPart,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror![]const u8 {
     if (!in_double_quotes) return renderPart(allocator, raw, part, options);
     return switch (part.kind) {
         .parameter, .arithmetic, .command_substitution => renderDoubleQuotedExpansion(allocator, raw, part, options),
@@ -2005,7 +2501,12 @@ fn renderParameterWordPart(allocator: std.mem.Allocator, raw: []const u8, part: 
 
 // Bash 5.2 enables patsub_replacement by default; the shopt option can disable
 // it for subsequent replacement expansions.
-fn expandParameterReplacementWord(allocator: std.mem.Allocator, word: []const u8, options: Options, in_double_quotes: bool) anyerror!ParameterReplacementText {
+fn expandParameterReplacementWord(
+    allocator: std.mem.Allocator,
+    word: []const u8,
+    options: Options,
+    in_double_quotes: bool,
+) anyerror!ParameterReplacementText {
     const tilde_expanded: ?[]const u8 = if (!in_double_quotes) try expandTilde(allocator, word, options.env) else null;
     defer if (tilde_expanded) |expanded| allocator.free(expanded);
     const replacement_word = tilde_expanded orelse word;
@@ -2049,12 +2550,23 @@ fn expandParameterReplacementWord(allocator: std.mem.Allocator, word: []const u8
     };
 }
 
-fn appendParameterReplacementPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), replace_match: *std.ArrayList(bool), rendered: []const u8, replace_active: bool) !void {
+fn appendParameterReplacementPart(
+    allocator: std.mem.Allocator,
+    text: *std.ArrayList(u8),
+    replace_match: *std.ArrayList(bool),
+    rendered: []const u8,
+    replace_active: bool,
+) !void {
     try text.appendSlice(allocator, rendered);
     for (rendered) |_| try replace_match.append(allocator, replace_active);
 }
 
-fn appendSegmentedParameterReplacementPart(allocator: std.mem.Allocator, text: *std.ArrayList(u8), replace_match: *std.ArrayList(bool), rendered: SegmentedText) !void {
+fn appendSegmentedParameterReplacementPart(
+    allocator: std.mem.Allocator,
+    text: *std.ArrayList(u8),
+    replace_match: *std.ArrayList(bool),
+    rendered: SegmentedText,
+) !void {
     std.debug.assert(rendered.text.len == rendered.split.len);
     try text.appendSlice(allocator, rendered.text);
     try replace_match.appendSlice(allocator, rendered.split);
@@ -2248,7 +2760,11 @@ fn parseParameterExpansionSyntax(expression: []const u8, features: compat.Featur
     } };
 }
 
-fn parseParameterSuffixOperation(expression: []const u8, suffix_start: usize, target: ?ParameterTarget) ?ParameterOperation {
+fn parseParameterSuffixOperation(
+    expression: []const u8,
+    suffix_start: usize,
+    target: ?ParameterTarget,
+) ?ParameterOperation {
     if (suffix_start >= expression.len) return null;
 
     var operator_index = suffix_start;
@@ -2262,15 +2778,25 @@ fn parseParameterSuffixOperation(expression: []const u8, suffix_start: usize, ta
         '=' => .assign_default,
         '+' => .alternate_value,
         '?' => .error_if_unset,
-        '%' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '%') .remove_large_suffix else .remove_small_suffix,
-        '#' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '#') .remove_large_prefix else .remove_small_prefix,
+        '%' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '%')
+            .remove_large_suffix
+        else
+            .remove_small_suffix,
+        '#' => if (operator_index + 1 < expression.len and expression[operator_index + 1] == '#')
+            .remove_large_prefix
+        else
+            .remove_small_prefix,
         else => return null,
     };
-    const word_start = operator_index + @as(usize, if (operator == .remove_large_suffix or operator == .remove_large_prefix) 2 else 1);
+    const word_start = operator_index + @as(
+        usize,
+        if (operator == .remove_large_suffix or operator == .remove_large_prefix) 2 else 1,
+    );
     if (target) |parameter_target| {
         if (isHashSpecialParameter(parameter_target)) {
             if (colon and isPatternRemovalOperator(operator)) return null;
-            if (!colon and word_start == expression.len and isAmbiguousHashSpecialOmittedWordOperator(operator)) return null;
+            if (!colon and word_start == expression.len and isAmbiguousHashSpecialOmittedWordOperator(operator))
+                return null;
         }
     }
     if (isPatternRemovalOperator(operator)) {
@@ -2305,7 +2831,10 @@ fn isAmbiguousHashSpecialOmittedWordOperator(operator: ParameterOperator) bool {
 }
 
 fn isPatternRemovalOperator(operator: ParameterOperator) bool {
-    return operator == .remove_small_suffix or operator == .remove_large_suffix or operator == .remove_small_prefix or operator == .remove_large_prefix;
+    return operator == .remove_small_suffix or
+        operator == .remove_large_suffix or
+        operator == .remove_small_prefix or
+        operator == .remove_large_prefix;
 }
 
 const BashArraySubscript = union(enum) {
@@ -2350,7 +2879,10 @@ fn parseBashSubstringOperation(expression: []const u8, name_end: usize) ?Paramet
     }
 
     const length_separator = findBashSubstringLengthSeparator(expression, offset_start);
-    const offset = if (length_separator) |separator| expression[offset_start..separator] else expression[offset_start..];
+    const offset = if (length_separator) |separator|
+        expression[offset_start..separator]
+    else
+        expression[offset_start..];
     if (offset.len == 0) return null;
     if (length_separator) |separator| {
         const length = expression[separator + 1 ..];
@@ -2386,7 +2918,10 @@ fn parseBashReplacementOperation(expression: []const u8, name_end: usize) ?Param
     if (pattern_start >= expression.len) return null;
 
     const replacement_separator = findBashReplacementSeparator(expression, pattern_start);
-    const pattern = if (replacement_separator) |separator| expression[pattern_start..separator] else expression[pattern_start..];
+    const pattern = if (replacement_separator) |separator|
+        expression[pattern_start..separator]
+    else
+        expression[pattern_start..];
     if (pattern.len == 0) return null;
     const replacement = if (replacement_separator) |separator| expression[separator + 1 ..] else "";
     return .{ .replacement = .{ .kind = kind, .pattern = pattern, .replacement = replacement } };
@@ -2535,7 +3070,8 @@ fn skipDollarSingleQuotedText(text: []const u8, start: usize) ?usize {
 
 fn skipBracedParameterText(text: []const u8, start: usize) ?usize {
     std.debug.assert(text[start] == '$');
-    std.debug.assert(start + 1 < text.len and text[start + 1] == '{');
+    std.debug.assert(start + 1 < text.len);
+    std.debug.assert(text[start + 1] == '{');
     var index = start + 2;
     while (index < text.len) {
         switch (text[index]) {
@@ -2553,7 +3089,8 @@ fn skipBracedParameterText(text: []const u8, start: usize) ?usize {
 
 fn skipCommandSubstitutionText(text: []const u8, start: usize) ?usize {
     std.debug.assert(text[start] == '$');
-    std.debug.assert(start + 1 < text.len and text[start + 1] == '(');
+    std.debug.assert(start + 1 < text.len);
+    std.debug.assert(text[start + 1] == '(');
     var index = start + 2;
     var paren_depth: usize = 1;
     while (index < text.len) {
@@ -2580,7 +3117,9 @@ fn skipCommandSubstitutionText(text: []const u8, start: usize) ?usize {
 
 fn skipArithmeticExpansionText(text: []const u8, start: usize) ?usize {
     std.debug.assert(text[start] == '$');
-    std.debug.assert(start + 2 < text.len and text[start + 1] == '(' and text[start + 2] == '(');
+    std.debug.assert(start + 2 < text.len);
+    std.debug.assert(text[start + 1] == '(');
+    std.debug.assert(text[start + 2] == '(');
     var index = start + 3;
     var paren_depth: usize = 0;
     while (index < text.len) {
@@ -2618,12 +3157,22 @@ fn parseBashArrayExpansion(expression: []const u8, target: ParameterTarget, name
                 .array_subscript = parsed_subscript.subscript,
             } };
         }
-        const suffix_operation = parseParameterSuffixOperation(expression, parsed_subscript.end, null) orelse return .invalid;
+        const suffix_operation = parseParameterSuffixOperation(
+            expression,
+            parsed_subscript.end,
+            null,
+        ) orelse return .invalid;
         return .{ .expansion = .{
             .target = target,
             .operation = switch (suffix_operation) {
-                .word => |operation| .{ .array_word = .{ .subscript = parsed_subscript.subscript, .operation = operation } },
-                .pattern => |operation| .{ .array_pattern = .{ .subscript = parsed_subscript.subscript, .operation = operation } },
+                .word => |operation| .{ .array_word = .{
+                    .subscript = parsed_subscript.subscript,
+                    .operation = operation,
+                } },
+                .pattern => |operation| .{ .array_pattern = .{
+                    .subscript = parsed_subscript.subscript,
+                    .operation = operation,
+                } },
                 else => return .invalid,
             },
         } };
@@ -2836,7 +3385,19 @@ const ArithmeticParser = struct {
         return self.parseTernary();
     }
 
-    const AssignmentOperator = enum { assign, add_assign, sub_assign, mul_assign, div_assign, mod_assign, shl_assign, shr_assign, bit_and_assign, bit_or_assign, bit_xor_assign };
+    const AssignmentOperator = enum {
+        assign,
+        add_assign,
+        sub_assign,
+        mul_assign,
+        div_assign,
+        mod_assign,
+        shl_assign,
+        shr_assign,
+        bit_and_assign,
+        bit_or_assign,
+        bit_xor_assign,
+    };
 
     fn assignmentOperator(self: *ArithmeticParser) ?AssignmentOperator {
         if (self.index >= self.input.len) return null;
@@ -3109,7 +3670,11 @@ const ArithmeticParser = struct {
     }
 
     fn startsWith(self: ArithmeticParser, text: []const u8) bool {
-        return self.index + text.len <= self.input.len and std.mem.eql(u8, self.input[self.index .. self.index + text.len], text);
+        return self.index + text.len <= self.input.len and std.mem.eql(
+            u8,
+            self.input[self.index .. self.index + text.len],
+            text,
+        );
     }
 };
 
@@ -3159,7 +3724,11 @@ fn magnitudeTwosComplement(value: i64) u64 {
 
 fn numberEnd(input: []const u8, start: usize) ?usize {
     var end = start;
-    if (end + 2 <= input.len and (std.mem.eql(u8, input[end .. end + 2], "0x") or std.mem.eql(u8, input[end .. end + 2], "0X"))) {
+    if (end + 2 <= input.len and (std.mem.eql(u8, input[end .. end + 2], "0x") or std.mem.eql(
+        u8,
+        input[end .. end + 2],
+        "0X",
+    ))) {
         end += 2;
         while (end < input.len and std.ascii.isHex(input[end])) : (end += 1) {}
         return end;
@@ -3184,7 +3753,11 @@ fn parseIntegerConstant(text: []const u8) error{ InvalidArithmetic, Overflow }!i
 fn parseSignedIntegerConstant(rest: []const u8, negative: bool) error{ InvalidArithmetic, Overflow }!i64 {
     if (rest.len == 0) return error.InvalidArithmetic;
     const magnitude = blk: {
-        if (rest.len > 2 and (std.mem.startsWith(u8, rest, "0x") or std.mem.startsWith(u8, rest, "0X")) and std.ascii.isHex(rest[2])) {
+        if (rest.len > 2 and (std.mem.startsWith(u8, rest, "0x") or std.mem.startsWith(
+            u8,
+            rest,
+            "0X",
+        )) and std.ascii.isHex(rest[2])) {
             break :blk std.fmt.parseInt(u64, rest[2..], 16);
         }
         if (rest.len > 1 and rest[0] == '0') break :blk std.fmt.parseInt(u64, rest, 8);
@@ -3208,7 +3781,12 @@ pub fn evalArithmetic(input: []const u8, env: EnvLookup, env_set: EnvSet) anyerr
     return arithmetic_parser.parse();
 }
 
-fn commandSubstitutionScript(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, in_double_quotes: bool) ![]const u8 {
+fn commandSubstitutionScript(
+    allocator: std.mem.Allocator,
+    raw: []const u8,
+    part: WordPart,
+    in_double_quotes: bool,
+) ![]const u8 {
     const source = part.source(raw);
     if (source.len == 0 or source[0] != '`') return allocator.dupe(u8, part.value(raw));
 
@@ -3305,7 +3883,11 @@ fn renderDollarSingleQuotedContent(allocator: std.mem.Allocator, text: []const u
                 var value: u16 = 0;
                 var digits: usize = 0;
                 var cursor = index + 1;
-                while (cursor < text.len and digits < 3 and text[cursor] >= '0' and text[cursor] <= '7') : (cursor += 1) {
+                while (cursor < text.len and
+                    digits < 3 and
+                    text[cursor] >= '0' and
+                    text[cursor] <= '7') : (cursor += 1)
+                {
                     value = value * 8 + (text[cursor] - '0');
                     digits += 1;
                 }
@@ -3365,7 +3947,11 @@ fn renderDoubleQuotedContent(allocator: std.mem.Allocator, text: []const u8, opt
             continue;
         }
 
-        const part = (if (text[index] == '$' or text[index] == '`') try substitutionPart(allocator, text, index) else null) orelse {
+        const part = (if (text[index] == '$' or text[index] == '`') try substitutionPart(
+            allocator,
+            text,
+            index,
+        ) else null) orelse {
             index += 1;
             continue;
         };
@@ -3387,7 +3973,12 @@ fn appendDoubleQuotedLiteral(allocator: std.mem.Allocator, output: *std.ArrayLis
     try output.appendSlice(allocator, removed);
 }
 
-fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, part: WordPart, options: Options) ![]const u8 {
+fn renderDoubleQuotedExpansion(
+    allocator: std.mem.Allocator,
+    raw: []const u8,
+    part: WordPart,
+    options: Options,
+) ![]const u8 {
     return switch (part.kind) {
         .parameter => renderParameter(allocator, part.value(raw), options, true),
         .arithmetic => renderArithmetic(allocator, part.source(raw), part.value(raw), options),
@@ -3403,7 +3994,16 @@ fn renderDoubleQuotedExpansion(allocator: std.mem.Allocator, raw: []const u8, pa
     };
 }
 
-fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parameter: []const u8, options: Options, ifs: []const u8) anyerror!void {
+fn appendParameterExpansionUnquoted(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    parameter: []const u8,
+    options: Options,
+    ifs: []const u8,
+) anyerror!void {
     if (std.mem.eql(u8, parameter, "@")) {
         try appendUnquotedAt(allocator, fields, current, options.positionals, ifs);
         return;
@@ -3438,17 +4038,40 @@ fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.A
         switch (array_expansion.kind) {
             .values => switch (array_expansion.whole) {
                 .at => try appendUnquotedArrayValues(allocator, fields, current, array_expansion.name, options, ifs),
-                .star => try appendUnquotedArrayValuesStar(allocator, fields, current, array_expansion.name, options, ifs),
+                .star => try appendUnquotedArrayValuesStar(
+                    allocator,
+                    fields,
+                    current,
+                    array_expansion.name,
+                    options,
+                    ifs,
+                ),
             },
             .keys => switch (array_expansion.whole) {
                 .at => try appendUnquotedArrayKeys(allocator, fields, current, array_expansion.name, options, ifs),
-                .star => try appendUnquotedArrayKeysStar(allocator, fields, current, array_expansion.name, options, ifs),
+                .star => try appendUnquotedArrayKeysStar(
+                    allocator,
+                    fields,
+                    current,
+                    array_expansion.name,
+                    options,
+                    ifs,
+                ),
             },
         }
         return;
     }
     if (bashWholeArraySuffixExpansion(parameter, options.features)) |array_expansion| {
-        try appendUnquotedWholeArraySuffixExpansion(allocator, fields, current, force_current_field, quoted_glob, array_expansion, options, ifs);
+        try appendUnquotedWholeArraySuffixExpansion(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            array_expansion,
+            options,
+            ifs,
+        );
         return;
     }
     if (try bashIndirectWholeArrayExpansion(allocator, parameter, options)) |array_expansion| {
@@ -3461,7 +4084,14 @@ fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.A
     if (bashNamePrefixExpansion(parameter, options.features)) |prefix_expansion| {
         switch (prefix_expansion.kind) {
             .at => try appendUnquotedNamePrefixAt(allocator, fields, current, prefix_expansion.prefix, options, ifs),
-            .star => try appendUnquotedNamePrefixStar(allocator, fields, current, prefix_expansion.prefix, options, ifs),
+            .star => try appendUnquotedNamePrefixStar(
+                allocator,
+                fields,
+                current,
+                prefix_expansion.prefix,
+                options,
+                ifs,
+            ),
         }
         return;
     }
@@ -3469,7 +4099,16 @@ fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.A
     const parsed = parseParameterExpression(parameter, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
     if (isFieldAwareParameterWordOperator(parsed)) {
-        try appendParameterWordOperatorUnquoted(allocator, fields, current, force_current_field, quoted_glob, parsed, options, ifs);
+        try appendParameterWordOperatorUnquoted(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            parsed,
+            options,
+            ifs,
+        );
         return;
     }
 
@@ -3480,7 +4119,16 @@ fn appendParameterExpansionUnquoted(allocator: std.mem.Allocator, fields: *std.A
     try appendSplitSegmentedText(allocator, fields, current, rendered, ifs);
 }
 
-fn appendParameterWordOperatorUnquoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parsed: ParameterExpression, options: Options, ifs: []const u8) anyerror!void {
+fn appendParameterWordOperatorUnquoted(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    parsed: ParameterExpression,
+    options: Options,
+    ifs: []const u8,
+) anyerror!void {
     const value = try parameterExpressionValue(allocator, parsed, options);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
@@ -3502,12 +4150,23 @@ fn appendParameterWordOperatorUnquoted(allocator: std.mem.Allocator, fields: *st
                 return;
             }
             if (parsed.array_index) |index_text| {
-                const assigned = try assignArrayElementDefault(allocator, parsed.name, index_text, parsed.word, options, false);
+                const assigned = try assignArrayElementDefault(
+                    allocator,
+                    parsed.name,
+                    index_text,
+                    parsed.word,
+                    options,
+                    false,
+                );
                 defer allocator.free(assigned);
                 try appendSplitText(allocator, fields, current, assigned, ifs);
                 return;
             }
-            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
+            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(
+                allocator,
+                options,
+                parsed.name,
+            );
             const assigned = try expandParameterWord(allocator, parsed.word, options, false);
             defer allocator.free(assigned);
             try options.env_set.set(parsed.name, assigned);
@@ -3524,7 +4183,13 @@ fn appendParameterWordOperatorUnquoted(allocator: std.mem.Allocator, fields: *st
     }
 }
 
-fn appendExpandedFields(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, expanded_fields: []const []const u8) !void {
+fn appendExpandedFields(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    expanded_fields: []const []const u8,
+) !void {
     for (expanded_fields, 0..) |field, index| {
         try current.appendSlice(allocator, field);
         if (index + 1 < expanded_fields.len) {
@@ -3536,17 +4201,35 @@ fn appendExpandedFields(allocator: std.mem.Allocator, fields: *std.ArrayList([]c
 }
 
 fn isFieldAwareParameterWordOperator(parsed: ParameterExpression) bool {
-    if (parsed.name_prefix != null or parsed.indirect or parsed.array_keys != null or parsed.array_whole != null) return false;
+    if (parsed.name_prefix != null or
+        parsed.indirect or
+        parsed.array_keys != null or
+        parsed.array_whole != null) return false;
     if (parsed.substring != null or parsed.replacement != null or parsed.case_modification != null) return false;
-    return parsed.operator == .default_value or parsed.operator == .assign_default or parsed.operator == .alternate_value;
+    return parsed.operator == .default_value or
+        parsed.operator == .assign_default or
+        parsed.operator == .alternate_value;
 }
 
-fn parameterExpressionValue(allocator: std.mem.Allocator, parsed: ParameterExpression, options: Options) anyerror!?[]const u8 {
+fn parameterExpressionValue(
+    allocator: std.mem.Allocator,
+    parsed: ParameterExpression,
+    options: Options,
+) anyerror!?[]const u8 {
     if (parsed.array_index) |index_text| return arrayElementValue(allocator, parsed.name, index_text, options);
     return parameterValue(parsed.name, options);
 }
 
-fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, text: []const u8, options: Options, ifs: []const u8) !void {
+fn appendDoubleQuotedText(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    text: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     force_current_field.* = true;
     var index: usize = 0;
     var segment_start: usize = 0;
@@ -3582,7 +4265,15 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
         if (quotedPositionalAt(text, index)) |special| {
             try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
             switch (special.kind) {
-                .at => try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, options.positionals, true),
+                .at => try appendQuotedAt(
+                    allocator,
+                    fields,
+                    current,
+                    force_current_field,
+                    quoted_glob,
+                    options.positionals,
+                    true,
+                ),
                 .star => try appendQuotedStar(allocator, current, quoted_glob, options.positionals, ifs),
             }
             index = special.end;
@@ -3593,11 +4284,33 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
             try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
             switch (special.expansion.kind) {
                 .values => switch (special.expansion.whole) {
-                    .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, special.expansion.name, options),
-                    .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, special.expansion.name, options, ifs),
+                    .at => try appendQuotedArrayValues(
+                        allocator,
+                        fields,
+                        current,
+                        force_current_field,
+                        quoted_glob,
+                        special.expansion.name,
+                        options,
+                    ),
+                    .star => try appendQuotedArrayValuesStar(
+                        allocator,
+                        current,
+                        quoted_glob,
+                        special.expansion.name,
+                        options,
+                        ifs,
+                    ),
                 },
                 .keys => switch (special.expansion.whole) {
-                    .at => try appendQuotedArrayKeys(allocator, fields, current, force_current_field, special.expansion.name, options),
+                    .at => try appendQuotedArrayKeys(
+                        allocator,
+                        fields,
+                        current,
+                        force_current_field,
+                        special.expansion.name,
+                        options,
+                    ),
                     .star => try appendQuotedArrayKeysStar(allocator, current, special.expansion.name, options, ifs),
                 },
             }
@@ -3608,8 +4321,23 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
         if (try quotedIndirectWholeArrayExpansionAt(allocator, text, index, options)) |special| {
             try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
             switch (special.expansion.whole) {
-                .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, special.expansion.name, options),
-                .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, special.expansion.name, options, ifs),
+                .at => try appendQuotedArrayValues(
+                    allocator,
+                    fields,
+                    current,
+                    force_current_field,
+                    quoted_glob,
+                    special.expansion.name,
+                    options,
+                ),
+                .star => try appendQuotedArrayValuesStar(
+                    allocator,
+                    current,
+                    quoted_glob,
+                    special.expansion.name,
+                    options,
+                    ifs,
+                ),
             }
             index = special.end;
             segment_start = index;
@@ -3618,7 +4346,14 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
         if (quotedNamePrefixExpansionAt(text, index, options.features)) |special| {
             try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
             switch (special.expansion.kind) {
-                .at => try appendQuotedNamePrefixAt(allocator, fields, current, force_current_field, special.expansion.prefix, options),
+                .at => try appendQuotedNamePrefixAt(
+                    allocator,
+                    fields,
+                    current,
+                    force_current_field,
+                    special.expansion.prefix,
+                    options,
+                ),
                 .star => try appendQuotedNamePrefixStar(allocator, current, special.expansion.prefix, options, ifs),
             }
             index = special.end;
@@ -3627,7 +4362,17 @@ fn appendDoubleQuotedText(allocator: std.mem.Allocator, fields: *std.ArrayList([
         }
         if (try quotedParameterExpansionAt(allocator, text, index)) |special| {
             try appendQuotedSegment(allocator, current, quoted_glob, text[segment_start..index], options);
-            try appendParameterExpansionQuoted(allocator, fields, current, force_current_field, quoted_glob, special.expression, options, ifs, false);
+            try appendParameterExpansionQuoted(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_glob,
+                special.expression,
+                options,
+                ifs,
+                false,
+            );
             index = special.end;
             segment_start = index;
             continue;
@@ -3679,7 +4424,10 @@ fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
         '@' => .{ .kind = .at, .end = index + 2 },
         '*' => .{ .kind = .star, .end = index + 2 },
         '{' => blk: {
-            if (index + 3 < text.len and text[index + 3] == '}' and (text[index + 2] == '@' or text[index + 2] == '*')) {
+            if (index + 3 < text.len and
+                text[index + 3] == '}' and
+                (text[index + 2] == '@' or text[index + 2] == '*'))
+            {
                 break :blk .{ .kind = if (text[index + 2] == '@') .at else .star, .end = index + 4 };
             }
             break :blk null;
@@ -3688,24 +4436,57 @@ fn quotedPositionalAt(text: []const u8, index: usize) ?QuotedPositional {
     };
 }
 
-fn quotedPositionalSliceAt(allocator: std.mem.Allocator, text: []const u8, index: usize, options: Options) !?struct { expansion: BashPositionalSliceExpansion, end: usize } {
-    if (!options.features.isBash() or index + 3 >= text.len or text[index] != '$' or text[index + 1] != '{') return null;
+fn quotedPositionalSliceAt(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    index: usize,
+    options: Options,
+) !?struct { expansion: BashPositionalSliceExpansion, end: usize } {
+    if (!options.features.isBash() or
+        index + 3 >= text.len or
+        text[index] != '$' or
+        text[index + 1] != '{')
+    {
+        return null;
+    }
     const part = (try substitutionPart(allocator, text, index)) orelse return null;
     if (part.kind != .parameter) return null;
     const expansion = bashPositionalSliceExpansion(part.value(text), options.features) orelse return null;
     return .{ .expansion = expansion, .end = part.span.end };
 }
 
-fn quotedParameterExpansionAt(allocator: std.mem.Allocator, text: []const u8, index: usize) !?struct { expression: []const u8, end: usize } {
+fn quotedParameterExpansionAt(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    index: usize,
+) !?struct { expression: []const u8, end: usize } {
     if (index >= text.len or text[index] != '$') return null;
     const part = (try substitutionPart(allocator, text, index)) orelse return null;
     if (part.kind != .parameter) return null;
     return .{ .expression = part.value(text), .end = part.span.end };
 }
 
-fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parameter: []const u8, options: Options, ifs: []const u8, empty_at_removes_field: bool) anyerror!void {
+fn appendParameterExpansionQuoted(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    parameter: []const u8,
+    options: Options,
+    ifs: []const u8,
+    empty_at_removes_field: bool,
+) anyerror!void {
     if (std.mem.eql(u8, parameter, "@")) {
-        try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, options.positionals, empty_at_removes_field);
+        try appendQuotedAt(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            options.positionals,
+            empty_at_removes_field,
+        );
         return;
     }
     if (std.mem.eql(u8, parameter, "*")) {
@@ -3716,7 +4497,15 @@ fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.Arr
         const values = try positionalSliceValues(allocator, slice.operation, options);
         defer allocator.free(values);
         switch (slice.kind) {
-            .at => try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, values, false),
+            .at => try appendQuotedAt(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_glob,
+                values,
+                false,
+            ),
             .star => try appendQuotedStar(allocator, current, quoted_glob, values, ifs),
         }
         return;
@@ -3726,7 +4515,15 @@ fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.Arr
         var values = try renderArrayStringOperationValues(allocator, parsed.name, kind, parsed, options, true);
         defer values.deinit(allocator);
         switch (kind) {
-            .at => try appendQuotedAt(allocator, fields, current, force_current_field, quoted_glob, values.fields, true),
+            .at => try appendQuotedAt(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_glob,
+                values.fields,
+                true,
+            ),
             .star => try appendQuotedStar(allocator, current, quoted_glob, values.fields, ifs),
         }
         return;
@@ -3734,30 +4531,83 @@ fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.Arr
     if (bashWholeArrayExpansion(parameter, options.features)) |array_expansion| {
         switch (array_expansion.kind) {
             .values => switch (array_expansion.whole) {
-                .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, array_expansion.name, options),
-                .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, array_expansion.name, options, ifs),
+                .at => try appendQuotedArrayValues(
+                    allocator,
+                    fields,
+                    current,
+                    force_current_field,
+                    quoted_glob,
+                    array_expansion.name,
+                    options,
+                ),
+                .star => try appendQuotedArrayValuesStar(
+                    allocator,
+                    current,
+                    quoted_glob,
+                    array_expansion.name,
+                    options,
+                    ifs,
+                ),
             },
             .keys => switch (array_expansion.whole) {
-                .at => try appendQuotedArrayKeys(allocator, fields, current, force_current_field, array_expansion.name, options),
+                .at => try appendQuotedArrayKeys(
+                    allocator,
+                    fields,
+                    current,
+                    force_current_field,
+                    array_expansion.name,
+                    options,
+                ),
                 .star => try appendQuotedArrayKeysStar(allocator, current, array_expansion.name, options, ifs),
             },
         }
         return;
     }
     if (bashWholeArraySuffixExpansion(parameter, options.features)) |array_expansion| {
-        try appendQuotedWholeArraySuffixExpansion(allocator, fields, current, force_current_field, quoted_glob, array_expansion, options, ifs);
+        try appendQuotedWholeArraySuffixExpansion(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            array_expansion,
+            options,
+            ifs,
+        );
         return;
     }
     if (try bashIndirectWholeArrayExpansion(allocator, parameter, options)) |array_expansion| {
         switch (array_expansion.whole) {
-            .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, array_expansion.name, options),
-            .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, array_expansion.name, options, ifs),
+            .at => try appendQuotedArrayValues(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_glob,
+                array_expansion.name,
+                options,
+            ),
+            .star => try appendQuotedArrayValuesStar(
+                allocator,
+                current,
+                quoted_glob,
+                array_expansion.name,
+                options,
+                ifs,
+            ),
         }
         return;
     }
     if (bashNamePrefixExpansion(parameter, options.features)) |prefix_expansion| {
         switch (prefix_expansion.kind) {
-            .at => try appendQuotedNamePrefixAt(allocator, fields, current, force_current_field, prefix_expansion.prefix, options),
+            .at => try appendQuotedNamePrefixAt(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                prefix_expansion.prefix,
+                options,
+            ),
             .star => try appendQuotedNamePrefixStar(allocator, current, prefix_expansion.prefix, options, ifs),
         }
         return;
@@ -3766,7 +4616,16 @@ fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.Arr
     const parsed = parseParameterExpression(parameter, options.features);
     if (parsed.operator == .invalid) return invalidParameterExpansion(allocator, options);
     if (isFieldAwareParameterWordOperator(parsed)) {
-        try appendParameterWordOperatorQuoted(allocator, fields, current, force_current_field, quoted_glob, parsed, options, ifs);
+        try appendParameterWordOperatorQuoted(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            parsed,
+            options,
+            ifs,
+        );
         return;
     }
 
@@ -3777,7 +4636,16 @@ fn appendParameterExpansionQuoted(allocator: std.mem.Allocator, fields: *std.Arr
     force_current_field.* = true;
 }
 
-fn appendParameterWordOperatorQuoted(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, parsed: ParameterExpression, options: Options, ifs: []const u8) anyerror!void {
+fn appendParameterWordOperatorQuoted(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    parsed: ParameterExpression,
+    options: Options,
+    ifs: []const u8,
+) anyerror!void {
     const value = try parameterExpressionValue(allocator, parsed, options);
     const is_set = value != null;
     const is_null = if (value) |text| text.len == 0 else true;
@@ -3803,14 +4671,25 @@ fn appendParameterWordOperatorQuoted(allocator: std.mem.Allocator, fields: *std.
                 return;
             }
             if (parsed.array_index) |index_text| {
-                const assigned = try assignArrayElementDefault(allocator, parsed.name, index_text, parsed.word, options, true);
+                const assigned = try assignArrayElementDefault(
+                    allocator,
+                    parsed.name,
+                    index_text,
+                    parsed.word,
+                    options,
+                    true,
+                );
                 defer allocator.free(assigned);
                 if (hasGlobSyntax(assigned)) quoted_glob.* = true;
                 try current.appendSlice(allocator, assigned);
                 force_current_field.* = true;
                 return;
             }
-            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(allocator, options, parsed.name);
+            if (!isAssignableParameterName(parsed.name)) return parameterAssignmentInvalid(
+                allocator,
+                options,
+                parsed.name,
+            );
             const assigned = try expandParameterWord(allocator, parsed.word, options, true);
             defer allocator.free(assigned);
             try options.env_set.set(parsed.name, assigned);
@@ -3829,7 +4708,12 @@ fn appendParameterWordOperatorQuoted(allocator: std.mem.Allocator, fields: *std.
     }
 }
 
-fn expandParameterWordQuotedFields(allocator: std.mem.Allocator, word: []const u8, options: Options, ifs: []const u8) anyerror!ExpandedWordFields {
+fn expandParameterWordQuotedFields(
+    allocator: std.mem.Allocator,
+    word: []const u8,
+    options: Options,
+    ifs: []const u8,
+) anyerror!ExpandedWordFields {
     var parts = try parseParameterWordPartsInDoubleQuotes(allocator, word);
     defer parts.deinit();
 
@@ -3845,8 +4729,27 @@ fn expandParameterWordQuotedFields(allocator: std.mem.Allocator, word: []const u
 
     for (parts.parts) |part| {
         switch (part.kind) {
-            .parameter => try appendParameterExpansionQuoted(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, part.value(parts.raw), options, ifs, false),
-            .double_quoted => try appendDoubleQuotedText(allocator, &fields, &current, &force_current_field, &quoted_expansion_glob, part.value(parts.raw), options, ifs),
+            .parameter => try appendParameterExpansionQuoted(
+                allocator,
+                &fields,
+                &current,
+                &force_current_field,
+                &quoted_expansion_glob,
+                part.value(parts.raw),
+                options,
+                ifs,
+                false,
+            ),
+            .double_quoted => try appendDoubleQuotedText(
+                allocator,
+                &fields,
+                &current,
+                &force_current_field,
+                &quoted_expansion_glob,
+                part.value(parts.raw),
+                options,
+                ifs,
+            ),
             .unquoted, .single_quoted, .dollar_single_quoted, .escaped => {
                 const rendered = try renderPart(allocator, parts.raw, part, options);
                 defer allocator.free(rendered);
@@ -3874,7 +4777,11 @@ fn expandParameterWordQuotedFields(allocator: std.mem.Allocator, word: []const u
     };
 }
 
-fn quotedWholeArrayExpansionAt(text: []const u8, index: usize, features: compat.Features) ?struct { expansion: BashWholeArrayExpansion, end: usize } {
+fn quotedWholeArrayExpansionAt(
+    text: []const u8,
+    index: usize,
+    features: compat.Features,
+) ?struct { expansion: BashWholeArrayExpansion, end: usize } {
     if (!features.isBash() or index + 3 >= text.len or text[index] != '$' or text[index + 1] != '{') return null;
     const close = std.mem.indexOfScalarPos(u8, text, index + 2, '}') orelse return null;
     const expression = text[index + 2 .. close];
@@ -3882,7 +4789,11 @@ fn quotedWholeArrayExpansionAt(text: []const u8, index: usize, features: compat.
     return .{ .expansion = expansion, .end = close + 1 };
 }
 
-fn quotedNamePrefixExpansionAt(text: []const u8, index: usize, features: compat.Features) ?struct { expansion: BashNamePrefixExpansion, end: usize } {
+fn quotedNamePrefixExpansionAt(
+    text: []const u8,
+    index: usize,
+    features: compat.Features,
+) ?struct { expansion: BashNamePrefixExpansion, end: usize } {
     if (!features.isBash() or index + 3 >= text.len or text[index] != '$' or text[index + 1] != '{') return null;
     const close = std.mem.indexOfScalarPos(u8, text, index + 2, '}') orelse return null;
     const expression = text[index + 2 .. close];
@@ -3890,8 +4801,16 @@ fn quotedNamePrefixExpansionAt(text: []const u8, index: usize, features: compat.
     return .{ .expansion = expansion, .end = close + 1 };
 }
 
-fn quotedIndirectWholeArrayExpansionAt(allocator: std.mem.Allocator, text: []const u8, index: usize, options: Options) !?struct { expansion: BashIndirectWholeArrayExpansion, end: usize } {
-    if (!options.features.isBash() or index + 3 >= text.len or text[index] != '$' or text[index + 1] != '{') return null;
+fn quotedIndirectWholeArrayExpansionAt(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    index: usize,
+    options: Options,
+) !?struct { expansion: BashIndirectWholeArrayExpansion, end: usize } {
+    if (!options.features.isBash() or
+        index + 3 >= text.len or
+        text[index] != '$' or
+        text[index + 1] != '{') return null;
     const close = std.mem.indexOfScalarPos(u8, text, index + 2, '}') orelse return null;
     const expression = text[index + 2 .. close];
     const expansion = (try bashIndirectWholeArrayExpansion(allocator, expression, options)) orelse return null;
@@ -3929,11 +4848,19 @@ fn bashWholeArraySuffixExpansion(expression: []const u8, features: compat.Featur
     return switch (expansion.operation) {
         .array_word => |operation| switch (operation.subscript) {
             .index => null,
-            .whole => |kind| .{ .name = expansion.target.text, .whole = kind, .operation = .{ .word = operation.operation } },
+            .whole => |kind| .{
+                .name = expansion.target.text,
+                .whole = kind,
+                .operation = .{ .word = operation.operation },
+            },
         },
         .array_pattern => |operation| switch (operation.subscript) {
             .index => null,
-            .whole => |kind| .{ .name = expansion.target.text, .whole = kind, .operation = .{ .pattern = operation.operation } },
+            .whole => |kind| .{
+                .name = expansion.target.text,
+                .whole = kind,
+                .operation = .{ .pattern = operation.operation },
+            },
         },
         else => null,
     };
@@ -3972,7 +4899,11 @@ fn bashPositionalSliceExpansion(expression: []const u8, features: compat.Feature
     };
 }
 
-fn bashIndirectWholeArrayExpansion(allocator: std.mem.Allocator, expression: []const u8, options: Options) !?BashIndirectWholeArrayExpansion {
+fn bashIndirectWholeArrayExpansion(
+    allocator: std.mem.Allocator,
+    expression: []const u8,
+    options: Options,
+) !?BashIndirectWholeArrayExpansion {
     if (!options.features.isBash()) return null;
     const syntax = parseParameterExpansionSyntax(expression, options.features);
     const expansion = switch (syntax) {
@@ -3995,7 +4926,11 @@ fn bashIndirectWholeArrayExpansion(allocator: std.mem.Allocator, expression: []c
     };
 }
 
-fn positionalSliceValues(allocator: std.mem.Allocator, operation: ParameterSubstringOperation, options: Options) anyerror![]const []const u8 {
+fn positionalSliceValues(
+    allocator: std.mem.Allocator,
+    operation: ParameterSubstringOperation,
+    options: Options,
+) anyerror![]const []const u8 {
     const positional_count = std.math.cast(i64, options.positionals.len) orelse std.math.maxInt(i64);
     const offset = try evaluateArrayIndexValue(allocator, operation.offset, options);
     const start_value = if (offset < 0) positional_count + 1 + offset else offset;
@@ -4022,7 +4957,12 @@ fn positionalSliceValues(allocator: std.mem.Allocator, operation: ParameterSubst
     return values;
 }
 
-fn arraySliceValues(allocator: std.mem.Allocator, name: []const u8, operation: ParameterSubstringOperation, options: Options) anyerror!ExpandedWordFields {
+fn arraySliceValues(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    operation: ParameterSubstringOperation,
+    options: Options,
+) anyerror!ExpandedWordFields {
     const max_index = options.arrays.maxIndex(name) orelse return emptyExpandedWordFields(allocator);
     const max_value = std.math.cast(i64, max_index) orelse std.math.maxInt(i64) - 1;
     const offset = try evaluateArrayIndexValue(allocator, operation.offset, options);
@@ -4072,7 +5012,13 @@ fn positionalSliceAvailableCount(positional_count: i64, start_value: i64) i64 {
     return positional_count - start_value + 1;
 }
 
-fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8), quoted_glob: *bool, text: []const u8, options: Options) !void {
+fn appendQuotedSegment(
+    allocator: std.mem.Allocator,
+    current: *std.ArrayList(u8),
+    quoted_glob: *bool,
+    text: []const u8,
+    options: Options,
+) !void {
     const rendered = try renderDoubleQuotedContent(allocator, text, options);
     defer allocator.free(rendered);
     // Glob characters produced inside double quotes must not trigger
@@ -4081,7 +5027,13 @@ fn appendQuotedSegment(allocator: std.mem.Allocator, current: *std.ArrayList(u8)
     try current.appendSlice(allocator, rendered);
 }
 
-fn appendUnquotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), positionals: []const []const u8, ifs: []const u8) !void {
+fn appendUnquotedAt(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    positionals: []const []const u8,
+    ifs: []const u8,
+) !void {
     for (positionals, 0..) |param, index| {
         try appendSplitText(allocator, fields, current, param, ifs);
         if (index + 1 < positionals.len and current.items.len != 0) {
@@ -4090,7 +5042,13 @@ fn appendUnquotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const
     }
 }
 
-fn appendUnquotedStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), positionals: []const []const u8, ifs: []const u8) !void {
+fn appendUnquotedStar(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    positionals: []const []const u8,
+    ifs: []const u8,
+) !void {
     if (ifs.len == 0) {
         try appendUnquotedAt(allocator, fields, current, positionals, ifs);
         return;
@@ -4100,7 +5058,14 @@ fn appendUnquotedStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]con
     try appendSplitText(allocator, fields, current, joined, ifs);
 }
 
-fn appendUnquotedArrayValues(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, options: Options, ifs: []const u8) !void {
+fn appendUnquotedArrayValues(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const len = options.arrays.len(name);
     for (0..len) |ordinal| {
         const value = options.arrays.value(name, ordinal) orelse continue;
@@ -4111,13 +5076,27 @@ fn appendUnquotedArrayValues(allocator: std.mem.Allocator, fields: *std.ArrayLis
     }
 }
 
-fn appendUnquotedArrayValuesStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, options: Options, ifs: []const u8) !void {
+fn appendUnquotedArrayValuesStar(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const joined = try joinArrayValues(allocator, name, options, arrayJoinSeparatorFromIfs(ifs));
     defer allocator.free(joined);
     try appendSplitText(allocator, fields, current, joined, ifs);
 }
 
-fn appendUnquotedArrayKeys(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, options: Options, ifs: []const u8) !void {
+fn appendUnquotedArrayKeys(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const len = options.arrays.len(name);
     for (0..len) |ordinal| {
         var buffer: [std.fmt.count("{d}", .{std.math.maxInt(usize)})]u8 = undefined;
@@ -4129,20 +5108,67 @@ fn appendUnquotedArrayKeys(allocator: std.mem.Allocator, fields: *std.ArrayList(
     }
 }
 
-fn appendUnquotedArrayKeysStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, options: Options, ifs: []const u8) !void {
+fn appendUnquotedArrayKeysStar(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const joined = try joinArrayKeys(allocator, name, options, arrayJoinSeparatorFromIfs(ifs));
     defer allocator.free(joined);
     try appendSplitText(allocator, fields, current, joined, ifs);
 }
 
-fn appendUnquotedWholeArraySuffixExpansion(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, expansion: BashWholeArraySuffixExpansion, options: Options, ifs: []const u8) anyerror!void {
+fn appendUnquotedWholeArraySuffixExpansion(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    expansion: BashWholeArraySuffixExpansion,
+    options: Options,
+    ifs: []const u8,
+) anyerror!void {
     switch (expansion.operation) {
-        .word => |operation| try appendUnquotedWholeArrayWordOperation(allocator, fields, current, force_current_field, quoted_glob, expansion.name, expansion.whole, operation, options, ifs),
-        .pattern => |operation| try appendUnquotedWholeArrayPatternOperation(allocator, fields, current, expansion.name, expansion.whole, operation, options, ifs),
+        .word => |operation| try appendUnquotedWholeArrayWordOperation(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            expansion.name,
+            expansion.whole,
+            operation,
+            options,
+            ifs,
+        ),
+        .pattern => |operation| try appendUnquotedWholeArrayPatternOperation(
+            allocator,
+            fields,
+            current,
+            expansion.name,
+            expansion.whole,
+            operation,
+            options,
+            ifs,
+        ),
     }
 }
 
-fn appendUnquotedWholeArrayWordOperation(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, whole: ParameterArrayWholeKind, operation: ParameterWordOperation, options: Options, ifs: []const u8) anyerror!void {
+fn appendUnquotedWholeArrayWordOperation(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    name: []const u8,
+    whole: ParameterArrayWholeKind,
+    operation: ParameterWordOperation,
+    options: Options,
+    ifs: []const u8,
+) anyerror!void {
     const usable = arrayHasUsableValue(name, options, operation.colon);
     switch (operation.kind) {
         .default_value => {
@@ -4171,23 +5197,67 @@ fn appendUnquotedWholeArrayWordOperation(allocator: std.mem.Allocator, fields: *
     }
 }
 
-fn appendUnquotedWholeArrayValues(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, whole: ParameterArrayWholeKind, options: Options, ifs: []const u8) !void {
+fn appendUnquotedWholeArrayValues(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    whole: ParameterArrayWholeKind,
+    options: Options,
+    ifs: []const u8,
+) !void {
     switch (whole) {
         .at => try appendUnquotedArrayValues(allocator, fields, current, name, options, ifs),
         .star => try appendUnquotedArrayValuesStar(allocator, fields, current, name, options, ifs),
     }
 }
 
-fn appendUnquotedWholeArrayPatternOperation(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, whole: ParameterArrayWholeKind, operation: ParameterPatternOperation, options: Options, ifs: []const u8) !void {
+fn appendUnquotedWholeArrayPatternOperation(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    whole: ParameterArrayWholeKind,
+    operation: ParameterPatternOperation,
+    options: Options,
+    ifs: []const u8,
+) !void {
     var pattern = try expandPatternWord(allocator, operation.word, options);
     defer pattern.deinit(allocator);
     switch (whole) {
-        .at => try appendUnquotedArrayValuesRemovingPattern(allocator, fields, current, name, pattern, operation.kind, options, ifs),
-        .star => try appendUnquotedArrayValuesStarRemovingPattern(allocator, fields, current, name, pattern, operation.kind, options, ifs),
+        .at => try appendUnquotedArrayValuesRemovingPattern(
+            allocator,
+            fields,
+            current,
+            name,
+            pattern,
+            operation.kind,
+            options,
+            ifs,
+        ),
+        .star => try appendUnquotedArrayValuesStarRemovingPattern(
+            allocator,
+            fields,
+            current,
+            name,
+            pattern,
+            operation.kind,
+            options,
+            ifs,
+        ),
     }
 }
 
-fn appendUnquotedArrayValuesRemovingPattern(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, ifs: []const u8) !void {
+fn appendUnquotedArrayValuesRemovingPattern(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    pattern: ExpansionPattern,
+    operator: ParameterOperator,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const len = options.arrays.len(name);
     for (0..len) |ordinal| {
         const value = options.arrays.value(name, ordinal) orelse continue;
@@ -4200,13 +5270,29 @@ fn appendUnquotedArrayValuesRemovingPattern(allocator: std.mem.Allocator, fields
     }
 }
 
-fn appendUnquotedArrayValuesStarRemovingPattern(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, ifs: []const u8) !void {
+fn appendUnquotedArrayValuesStarRemovingPattern(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    pattern: ExpansionPattern,
+    operator: ParameterOperator,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const joined = try joinArrayValuesRemovingPatternForIfs(allocator, name, pattern, operator, options, ifs);
     defer allocator.free(joined);
     try appendSplitText(allocator, fields, current, joined, ifs);
 }
 
-fn appendUnquotedNamePrefixAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), prefix: []const u8, options: Options, ifs: []const u8) !void {
+fn appendUnquotedNamePrefixAt(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    prefix: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const names = try matchingVariableNames(allocator, prefix, options);
     defer freeVariableNameList(allocator, names);
     for (names, 0..) |name, index| {
@@ -4217,7 +5303,14 @@ fn appendUnquotedNamePrefixAt(allocator: std.mem.Allocator, fields: *std.ArrayLi
     }
 }
 
-fn appendUnquotedNamePrefixStar(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), prefix: []const u8, options: Options, ifs: []const u8) !void {
+fn appendUnquotedNamePrefixStar(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    prefix: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const names = try matchingVariableNames(allocator, prefix, options);
     defer freeVariableNameList(allocator, names);
     const joined = try joinNames(allocator, names, arrayJoinSeparatorFromIfs(ifs));
@@ -4244,7 +5337,15 @@ fn joinValues(allocator: std.mem.Allocator, values: []const []const u8, separato
     return joined.toOwnedSlice(allocator);
 }
 
-fn appendQuotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, positionals: []const []const u8, empty_removes_field: bool) !void {
+fn appendQuotedAt(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    positionals: []const []const u8,
+    empty_removes_field: bool,
+) !void {
     if (positionals.len == 0) {
         if (empty_removes_field) force_current_field.* = false;
         return;
@@ -4260,7 +5361,13 @@ fn appendQuotedAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u
     }
 }
 
-fn appendQuotedStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), quoted_glob: *bool, positionals: []const []const u8, ifs: []const u8) !void {
+fn appendQuotedStar(
+    allocator: std.mem.Allocator,
+    current: *std.ArrayList(u8),
+    quoted_glob: *bool,
+    positionals: []const []const u8,
+    ifs: []const u8,
+) !void {
     const separator = arrayJoinSeparatorFromIfs(ifs);
     for (positionals, 0..) |param, index| {
         if (hasGlobSyntax(param)) quoted_glob.* = true;
@@ -4269,7 +5376,15 @@ fn appendQuotedStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), q
     }
 }
 
-fn appendQuotedArrayValues(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, options: Options) !void {
+fn appendQuotedArrayValues(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    name: []const u8,
+    options: Options,
+) !void {
     const len = options.arrays.len(name);
     if (len == 0) {
         force_current_field.* = false;
@@ -4287,7 +5402,14 @@ fn appendQuotedArrayValues(allocator: std.mem.Allocator, fields: *std.ArrayList(
     }
 }
 
-fn appendQuotedArrayValuesStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), quoted_glob: *bool, name: []const u8, options: Options, ifs: []const u8) !void {
+fn appendQuotedArrayValuesStar(
+    allocator: std.mem.Allocator,
+    current: *std.ArrayList(u8),
+    quoted_glob: *bool,
+    name: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const len = options.arrays.len(name);
     const separator = arrayJoinSeparatorFromIfs(ifs);
     for (0..len) |ordinal| {
@@ -4298,7 +5420,14 @@ fn appendQuotedArrayValuesStar(allocator: std.mem.Allocator, current: *std.Array
     }
 }
 
-fn appendQuotedArrayKeys(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, name: []const u8, options: Options) !void {
+fn appendQuotedArrayKeys(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    name: []const u8,
+    options: Options,
+) !void {
     const len = options.arrays.len(name);
     if (len == 0) {
         force_current_field.* = false;
@@ -4316,7 +5445,13 @@ fn appendQuotedArrayKeys(allocator: std.mem.Allocator, fields: *std.ArrayList([]
     }
 }
 
-fn appendQuotedArrayKeysStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), name: []const u8, options: Options, ifs: []const u8) !void {
+fn appendQuotedArrayKeysStar(
+    allocator: std.mem.Allocator,
+    current: *std.ArrayList(u8),
+    name: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const len = options.arrays.len(name);
     const separator = arrayJoinSeparatorFromIfs(ifs);
     for (0..len) |ordinal| {
@@ -4327,25 +5462,87 @@ fn appendQuotedArrayKeysStar(allocator: std.mem.Allocator, current: *std.ArrayLi
     }
 }
 
-fn appendQuotedWholeArraySuffixExpansion(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, expansion: BashWholeArraySuffixExpansion, options: Options, ifs: []const u8) anyerror!void {
+fn appendQuotedWholeArraySuffixExpansion(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    expansion: BashWholeArraySuffixExpansion,
+    options: Options,
+    ifs: []const u8,
+) anyerror!void {
     switch (expansion.operation) {
-        .word => |operation| try appendQuotedWholeArrayWordOperation(allocator, fields, current, force_current_field, quoted_glob, expansion.name, expansion.whole, operation, options, ifs),
-        .pattern => |operation| try appendQuotedWholeArrayPatternOperation(allocator, fields, current, force_current_field, quoted_glob, expansion.name, expansion.whole, operation, options, ifs),
+        .word => |operation| try appendQuotedWholeArrayWordOperation(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            expansion.name,
+            expansion.whole,
+            operation,
+            options,
+            ifs,
+        ),
+        .pattern => |operation| try appendQuotedWholeArrayPatternOperation(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            expansion.name,
+            expansion.whole,
+            operation,
+            options,
+            ifs,
+        ),
     }
 }
 
-fn appendQuotedWholeArrayWordOperation(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, whole: ParameterArrayWholeKind, operation: ParameterWordOperation, options: Options, ifs: []const u8) anyerror!void {
+fn appendQuotedWholeArrayWordOperation(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    name: []const u8,
+    whole: ParameterArrayWholeKind,
+    operation: ParameterWordOperation,
+    options: Options,
+    ifs: []const u8,
+) anyerror!void {
     const usable = arrayHasUsableValue(name, options, operation.colon);
     switch (operation.kind) {
         .default_value => {
-            if (usable) return appendQuotedWholeArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, whole, options, ifs);
+            if (usable) return appendQuotedWholeArrayValues(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_glob,
+                name,
+                whole,
+                options,
+                ifs,
+            );
             var expanded = try expandParameterWordQuotedFields(allocator, operation.word, options, ifs);
             defer expanded.deinit(allocator);
             if (expanded.quoted_glob) quoted_glob.* = true;
             try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
         },
         .assign_default => {
-            if (usable) return appendQuotedWholeArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, whole, options, ifs);
+            if (usable) return appendQuotedWholeArrayValues(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_glob,
+                name,
+                whole,
+                options,
+                ifs,
+            );
             return parameterAssignmentInvalid(allocator, options, name);
         },
         .alternate_value => {
@@ -4356,30 +5553,90 @@ fn appendQuotedWholeArrayWordOperation(allocator: std.mem.Allocator, fields: *st
             try appendExpandedFields(allocator, fields, current, force_current_field, expanded.fields);
         },
         .error_if_unset => {
-            if (usable) return appendQuotedWholeArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, whole, options, ifs);
+            if (usable) return appendQuotedWholeArrayValues(
+                allocator,
+                fields,
+                current,
+                force_current_field,
+                quoted_glob,
+                name,
+                whole,
+                options,
+                ifs,
+            );
             return parameterExpansionError(allocator, options, name, operation.word, true);
         },
         else => unreachable,
     }
 }
 
-fn appendQuotedWholeArrayValues(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, whole: ParameterArrayWholeKind, options: Options, ifs: []const u8) !void {
+fn appendQuotedWholeArrayValues(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    name: []const u8,
+    whole: ParameterArrayWholeKind,
+    options: Options,
+    ifs: []const u8,
+) !void {
     switch (whole) {
         .at => try appendQuotedArrayValues(allocator, fields, current, force_current_field, quoted_glob, name, options),
         .star => try appendQuotedArrayValuesStar(allocator, current, quoted_glob, name, options, ifs),
     }
 }
 
-fn appendQuotedWholeArrayPatternOperation(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, whole: ParameterArrayWholeKind, operation: ParameterPatternOperation, options: Options, ifs: []const u8) !void {
+fn appendQuotedWholeArrayPatternOperation(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    name: []const u8,
+    whole: ParameterArrayWholeKind,
+    operation: ParameterPatternOperation,
+    options: Options,
+    ifs: []const u8,
+) !void {
     var pattern = try expandPatternWord(allocator, operation.word, options);
     defer pattern.deinit(allocator);
     switch (whole) {
-        .at => try appendQuotedArrayValuesRemovingPattern(allocator, fields, current, force_current_field, quoted_glob, name, pattern, operation.kind, options),
-        .star => try appendQuotedArrayValuesStarRemovingPattern(allocator, current, quoted_glob, name, pattern, operation.kind, options, ifs),
+        .at => try appendQuotedArrayValuesRemovingPattern(
+            allocator,
+            fields,
+            current,
+            force_current_field,
+            quoted_glob,
+            name,
+            pattern,
+            operation.kind,
+            options,
+        ),
+        .star => try appendQuotedArrayValuesStarRemovingPattern(
+            allocator,
+            current,
+            quoted_glob,
+            name,
+            pattern,
+            operation.kind,
+            options,
+            ifs,
+        ),
     }
 }
 
-fn appendQuotedArrayValuesRemovingPattern(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, quoted_glob: *bool, name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options) !void {
+fn appendQuotedArrayValuesRemovingPattern(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    quoted_glob: *bool,
+    name: []const u8,
+    pattern: ExpansionPattern,
+    operator: ParameterOperator,
+    options: Options,
+) !void {
     const len = options.arrays.len(name);
     if (len == 0) {
         force_current_field.* = false;
@@ -4399,14 +5656,30 @@ fn appendQuotedArrayValuesRemovingPattern(allocator: std.mem.Allocator, fields: 
     }
 }
 
-fn appendQuotedArrayValuesStarRemovingPattern(allocator: std.mem.Allocator, current: *std.ArrayList(u8), quoted_glob: *bool, name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, ifs: []const u8) !void {
+fn appendQuotedArrayValuesStarRemovingPattern(
+    allocator: std.mem.Allocator,
+    current: *std.ArrayList(u8),
+    quoted_glob: *bool,
+    name: []const u8,
+    pattern: ExpansionPattern,
+    operator: ParameterOperator,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const joined = try joinArrayValuesRemovingPatternForIfs(allocator, name, pattern, operator, options, ifs);
     defer allocator.free(joined);
     if (hasGlobSyntax(joined)) quoted_glob.* = true;
     try current.appendSlice(allocator, joined);
 }
 
-fn appendQuotedNamePrefixAt(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), force_current_field: *bool, prefix: []const u8, options: Options) !void {
+fn appendQuotedNamePrefixAt(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    force_current_field: *bool,
+    prefix: []const u8,
+    options: Options,
+) !void {
     const names = try matchingVariableNames(allocator, prefix, options);
     defer freeVariableNameList(allocator, names);
     if (names.len == 0) {
@@ -4423,7 +5696,13 @@ fn appendQuotedNamePrefixAt(allocator: std.mem.Allocator, fields: *std.ArrayList
     }
 }
 
-fn appendQuotedNamePrefixStar(allocator: std.mem.Allocator, current: *std.ArrayList(u8), prefix: []const u8, options: Options, ifs: []const u8) !void {
+fn appendQuotedNamePrefixStar(
+    allocator: std.mem.Allocator,
+    current: *std.ArrayList(u8),
+    prefix: []const u8,
+    options: Options,
+    ifs: []const u8,
+) !void {
     const names = try matchingVariableNames(allocator, prefix, options);
     defer freeVariableNameList(allocator, names);
     const joined = try joinNames(allocator, names, arrayJoinSeparatorFromIfs(ifs));
@@ -4431,7 +5710,12 @@ fn appendQuotedNamePrefixStar(allocator: std.mem.Allocator, current: *std.ArrayL
     try current.appendSlice(allocator, joined);
 }
 
-fn joinArrayValues(allocator: std.mem.Allocator, name: []const u8, options: Options, separator: []const u8) ![]const u8 {
+fn joinArrayValues(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    options: Options,
+    separator: []const u8,
+) ![]const u8 {
     var joined: std.ArrayList(u8) = .empty;
     errdefer joined.deinit(allocator);
     const len = options.arrays.len(name);
@@ -4443,16 +5727,44 @@ fn joinArrayValues(allocator: std.mem.Allocator, name: []const u8, options: Opti
     return joined.toOwnedSlice(allocator);
 }
 
-fn joinArrayValuesRemovingPattern(allocator: std.mem.Allocator, name: []const u8, kind: ParameterArrayWholeKind, pattern: ExpansionPattern, operator: ParameterOperator, options: Options) ![]const u8 {
+fn joinArrayValuesRemovingPattern(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    kind: ParameterArrayWholeKind,
+    pattern: ExpansionPattern,
+    operator: ParameterOperator,
+    options: Options,
+) ![]const u8 {
     const separator = arrayValueScalarJoinSeparator(kind, options);
     return joinArrayValuesRemovingPatternWithSeparator(allocator, name, pattern, operator, options, separator);
 }
 
-fn joinArrayValuesRemovingPatternForIfs(allocator: std.mem.Allocator, name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, ifs: []const u8) ![]const u8 {
-    return joinArrayValuesRemovingPatternWithSeparator(allocator, name, pattern, operator, options, arrayJoinSeparatorFromIfs(ifs));
+fn joinArrayValuesRemovingPatternForIfs(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    pattern: ExpansionPattern,
+    operator: ParameterOperator,
+    options: Options,
+    ifs: []const u8,
+) ![]const u8 {
+    return joinArrayValuesRemovingPatternWithSeparator(
+        allocator,
+        name,
+        pattern,
+        operator,
+        options,
+        arrayJoinSeparatorFromIfs(ifs),
+    );
 }
 
-fn joinArrayValuesRemovingPatternWithSeparator(allocator: std.mem.Allocator, name: []const u8, pattern: ExpansionPattern, operator: ParameterOperator, options: Options, separator: []const u8) ![]const u8 {
+fn joinArrayValuesRemovingPatternWithSeparator(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    pattern: ExpansionPattern,
+    operator: ParameterOperator,
+    options: Options,
+    separator: []const u8,
+) ![]const u8 {
     var joined: std.ArrayList(u8) = .empty;
     errdefer joined.deinit(allocator);
     const len = options.arrays.len(name);
@@ -4525,7 +5837,13 @@ fn arrayJoinSeparatorFromIfs(ifs: []const u8) []const u8 {
     return if (ifs.len == 0) "" else ifs[0..1];
 }
 
-fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: []const u8, ifs: []const u8) !void {
+fn appendSplitText(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    text: []const u8,
+    ifs: []const u8,
+) !void {
     if (ifs.len == 0) {
         try current.appendSlice(allocator, text);
         return;
@@ -4558,7 +5876,13 @@ fn appendSplitText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const 
     }
 }
 
-fn appendSplitSegmentedText(allocator: std.mem.Allocator, fields: *std.ArrayList([]const u8), current: *std.ArrayList(u8), text: SegmentedText, ifs: []const u8) !void {
+fn appendSplitSegmentedText(
+    allocator: std.mem.Allocator,
+    fields: *std.ArrayList([]const u8),
+    current: *std.ArrayList(u8),
+    text: SegmentedText,
+    ifs: []const u8,
+) !void {
     std.debug.assert(text.text.len == text.split.len);
     if (ifs.len == 0) {
         try current.appendSlice(allocator, text.text);
@@ -4621,7 +5945,11 @@ fn ioPathnameLookup(context: *IoPathnameLookupContext) PathnameLookup {
     };
 }
 
-fn listPathnameDirWithIo(opaque_context: ?*anyopaque, allocator: std.mem.Allocator, path: []const u8) !PathnameEntries {
+fn listPathnameDirWithIo(
+    opaque_context: ?*anyopaque,
+    allocator: std.mem.Allocator, // ziglint-ignore: Z023 (callback iface)
+    path: []const u8,
+) !PathnameEntries {
     std.debug.assert(opaque_context != null);
     const context: *IoPathnameLookupContext = @ptrCast(@alignCast(opaque_context.?));
     var dir = std.Io.Dir.cwd().openDir(context.io, path, .{ .iterate = true }) catch |err| switch (err) {
@@ -4659,7 +5987,12 @@ fn pathnameExistsWithIo(opaque_context: ?*anyopaque, path: []const u8) !bool {
     return true;
 }
 
-fn applyPathnameExpansion(allocator: std.mem.Allocator, lookup: PathnameLookup, fields: *std.ArrayList([]const u8), options: PathnameExpansionOptions) !void {
+fn applyPathnameExpansion(
+    allocator: std.mem.Allocator,
+    lookup: PathnameLookup,
+    fields: *std.ArrayList([]const u8),
+    options: PathnameExpansionOptions,
+) !void {
     std.debug.assert(lookup.enabled());
     var expanded: std.ArrayList([]const u8) = .empty;
     errdefer {
@@ -4695,28 +6028,55 @@ pub fn expandPathnamePattern(allocator: std.mem.Allocator, io: std.Io, pattern: 
     return expandPathnamePatternWithLookupOptions(allocator, ioPathnameLookup(&io_context), pattern, .{});
 }
 
-fn expandPathnamePatternWithLookupOptions(allocator: std.mem.Allocator, lookup: PathnameLookup, pattern: []const u8, options: PathnameExpansionOptions) ![][]const u8 {
+fn expandPathnamePatternWithLookupOptions(
+    allocator: std.mem.Allocator,
+    lookup: PathnameLookup,
+    pattern: []const u8,
+    options: PathnameExpansionOptions,
+) ![][]const u8 {
     std.debug.assert(lookup.enabled());
     const special = try allocator.alloc(bool, pattern.len);
     defer allocator.free(special);
     @memset(special, true);
-    return expandPathnameExpansionPatternWithLookupOptions(allocator, lookup, .{ .text = pattern, .special = special }, options);
+    return expandPathnameExpansionPatternWithLookupOptions(
+        allocator,
+        lookup,
+        .{ .text = pattern, .special = special },
+        options,
+    );
 }
 
-pub fn expandPathnamePatternWithLookup(allocator: std.mem.Allocator, lookup: PathnameLookup, pattern: []const u8) ![][]const u8 {
+pub fn expandPathnamePatternWithLookup(
+    allocator: std.mem.Allocator,
+    lookup: PathnameLookup,
+    pattern: []const u8,
+) ![][]const u8 {
     return expandPathnamePatternWithLookupOptions(allocator, lookup, pattern, .{});
 }
 
-pub fn expandPathnameExpansionPattern(allocator: std.mem.Allocator, io: std.Io, pattern: ExpansionPattern) ![][]const u8 {
+pub fn expandPathnameExpansionPattern(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    pattern: ExpansionPattern,
+) ![][]const u8 {
     var io_context: IoPathnameLookupContext = .{ .io = io };
     return expandPathnameExpansionPatternWithLookupOptions(allocator, ioPathnameLookup(&io_context), pattern, .{});
 }
 
-pub fn expandPathnameExpansionPatternWithLookup(allocator: std.mem.Allocator, lookup: PathnameLookup, pattern: ExpansionPattern) ![][]const u8 {
+pub fn expandPathnameExpansionPatternWithLookup(
+    allocator: std.mem.Allocator,
+    lookup: PathnameLookup,
+    pattern: ExpansionPattern,
+) ![][]const u8 {
     return expandPathnameExpansionPatternWithLookupOptions(allocator, lookup, pattern, .{});
 }
 
-fn expandPathnameExpansionPatternWithLookupOptions(allocator: std.mem.Allocator, lookup: PathnameLookup, pattern: ExpansionPattern, options: PathnameExpansionOptions) ![][]const u8 {
+fn expandPathnameExpansionPatternWithLookupOptions(
+    allocator: std.mem.Allocator,
+    lookup: PathnameLookup,
+    pattern: ExpansionPattern,
+    options: PathnameExpansionOptions,
+) ![][]const u8 {
     std.debug.assert(lookup.enabled());
     std.debug.assert(pattern.text.len == pattern.special.len);
 
@@ -4751,7 +6111,10 @@ fn expandPathnameExpansionPatternWithLookupOptions(allocator: std.mem.Allocator,
             } else {
                 const candidate = try joinPathComponent(allocator, prefix, component.text);
                 errdefer allocator.free(candidate);
-                if (try lookup.pathExists(candidate)) try next_prefixes.append(allocator, candidate) else allocator.free(candidate);
+                if (try lookup.pathExists(candidate)) try next_prefixes.append(
+                    allocator,
+                    candidate,
+                ) else allocator.free(candidate);
             }
         }
 
@@ -4767,15 +6130,28 @@ fn expandPathnameExpansionPatternWithLookupOptions(allocator: std.mem.Allocator,
     return prefixes.toOwnedSlice(allocator);
 }
 
-fn appendGlobComponentMatches(allocator: std.mem.Allocator, lookup: PathnameLookup, matches: *std.ArrayList([]const u8), prefix: []const u8, component: ExpansionPattern, options: PathnameExpansionOptions) !void {
+fn appendGlobComponentMatches(
+    allocator: std.mem.Allocator,
+    lookup: PathnameLookup,
+    matches: *std.ArrayList([]const u8),
+    prefix: []const u8,
+    component: ExpansionPattern,
+    options: PathnameExpansionOptions,
+) !void {
     const dir_path = if (prefix.len == 0) "." else prefix;
     var entries = try lookup.listDir(allocator, dir_path);
     defer entries.deinit(allocator);
 
     for (entries.entries) |entry_name| {
         if (entry_name.len == 0) continue;
-        if (entry_name[0] == '.' and !options.dotglob and (component.text.len == 0 or component.text[0] != '.')) continue;
-        if (globPatternMatchesWithOptions(component, entry_name, .{ .extglob = options.extglob, .backslash_escape = false })) {
+        if (entry_name[0] == '.' and
+            !options.dotglob and
+            (component.text.len == 0 or component.text[0] != '.')) continue;
+        if (globPatternMatchesWithOptions(
+            component,
+            entry_name,
+            .{ .extglob = options.extglob, .backslash_escape = false },
+        )) {
             try matches.append(allocator, try joinPathComponent(allocator, prefix, entry_name));
         }
     }
@@ -4823,7 +6199,11 @@ fn patternHasGlobSyntaxWithOptions(pattern: ExpansionPattern, options: GlobSynta
         if (options.extglob and startsExtglobOperator(pattern.text, pattern.special, index)) return true;
         switch (c) {
             '*', '?' => if (pattern.special[index]) return true,
-            '[' => if (pattern.special[index] and bracketExpressionEnd(pattern.text, pattern.special, index) != null) return true,
+            '[' => if (pattern.special[index] and bracketExpressionEnd(
+                pattern.text,
+                pattern.special,
+                index,
+            ) != null) return true,
             else => {},
         }
     }
@@ -4882,7 +6262,14 @@ fn isGlobSpecial(special: ?[]const bool, index: usize) bool {
     return if (special) |mask| mask[index] else true;
 }
 
-fn globMatchesAt(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, pattern_index: usize, text: []const u8, text_index: usize) bool {
+fn globMatchesAt(
+    pattern: []const u8,
+    special: ?[]const bool,
+    options: GlobMatchOptions,
+    pattern_index: usize,
+    text: []const u8,
+    text_index: usize,
+) bool {
     if (pattern_index == pattern.len) return text_index == text.len;
 
     if (options.extglob) {
@@ -4899,20 +6286,51 @@ fn globMatchesAt(pattern: []const u8, special: ?[]const bool, options: GlobMatch
                 if (next_text == text.len) break;
             }
             return false;
-        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
-        '?' => if (isGlobSpecial(special, pattern_index)) return text_index < text.len and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1) else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
+        } else {
+            if (text_index >= text.len) return false;
+            if (pattern[pattern_index] != text[text_index]) return false;
+            return globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+        },
+        '?' => {
+            if (text_index >= text.len) return false;
+            if (!isGlobSpecial(special, pattern_index) and pattern[pattern_index] != text[text_index]) return false;
+            return globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+        },
         '[' => if (isGlobSpecial(special, pattern_index)) {
             if (matchBracket(pattern, special, pattern_index, text, text_index)) |matched| {
-                return matched.ok and globMatchesAt(pattern, special, options, matched.next_pattern, text, text_index + 1);
+                return matched.ok and globMatchesAt(
+                    pattern,
+                    special,
+                    options,
+                    matched.next_pattern,
+                    text,
+                    text_index + 1,
+                );
             }
-            return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
-        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
+            if (text_index >= text.len) return false;
+            if (pattern[pattern_index] != text[text_index]) return false;
+            return globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+        } else {
+            if (text_index >= text.len) return false;
+            if (pattern[pattern_index] != text[text_index]) return false;
+            return globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+        },
         '\\' => if (options.backslash_escape and isGlobSpecial(special, pattern_index)) {
             const escaped_index = pattern_index + 1;
             if (escaped_index >= pattern.len) return false;
-            return text_index < text.len and pattern[escaped_index] == text[text_index] and globMatchesAt(pattern, special, options, escaped_index + 1, text, text_index + 1);
-        } else return text_index < text.len and pattern[pattern_index] == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
-        else => |c| return text_index < text.len and c == text[text_index] and globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1),
+            if (text_index >= text.len) return false;
+            if (pattern[escaped_index] != text[text_index]) return false;
+            return globMatchesAt(pattern, special, options, escaped_index + 1, text, text_index + 1);
+        } else {
+            if (text_index >= text.len) return false;
+            if (pattern[pattern_index] != text[text_index]) return false;
+            return globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+        },
+        else => |c| {
+            if (text_index >= text.len) return false;
+            if (c != text[text_index]) return false;
+            return globMatchesAt(pattern, special, options, pattern_index + 1, text, text_index + 1);
+        },
     }
 }
 
@@ -4956,7 +6374,10 @@ fn parseExtglob(pattern: []const u8, special: ?[]const bool, pattern_index: usiz
 
 fn bracketExpressionEnd(pattern: []const u8, special: ?[]const bool, pattern_index: usize) ?usize {
     var index = pattern_index + 1;
-    if (index < pattern.len and (pattern[index] == '!' or pattern[index] == '^') and isGlobSpecial(special, index)) index += 1;
+    if (index < pattern.len and (pattern[index] == '!' or pattern[index] == '^') and isGlobSpecial(
+        special,
+        index,
+    )) index += 1;
     var first_expression = true;
     while (index < pattern.len) : (index += 1) {
         if (pattern[index] == ']' and !first_expression and isGlobSpecial(special, index)) return index;
@@ -4965,10 +6386,24 @@ fn bracketExpressionEnd(pattern: []const u8, special: ?[]const bool, pattern_ind
     return null;
 }
 
-fn extglobMatches(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8, text_index: usize) bool {
+fn extglobMatches(
+    pattern: []const u8,
+    special: ?[]const bool,
+    options: GlobMatchOptions,
+    extglob: ExtglobPattern,
+    text: []const u8,
+    text_index: usize,
+) bool {
     return switch (extglob.operator) {
         '@' => extglobMatchOne(pattern, special, options, extglob, text, text_index),
-        '?' => globMatchesAt(pattern, special, options, extglob.next_pattern, text, text_index) or extglobMatchOne(pattern, special, options, extglob, text, text_index),
+        '?' => globMatchesAt(
+            pattern,
+            special,
+            options,
+            extglob.next_pattern,
+            text,
+            text_index,
+        ) or extglobMatchOne(pattern, special, options, extglob, text, text_index),
         '*' => extglobMatchRepeat(pattern, special, options, extglob, text, text_index, false),
         '+' => extglobMatchRepeat(pattern, special, options, extglob, text, text_index, true),
         '!' => extglobMatchNegated(pattern, special, options, extglob, text, text_index),
@@ -4976,7 +6411,14 @@ fn extglobMatches(pattern: []const u8, special: ?[]const bool, options: GlobMatc
     };
 }
 
-fn extglobMatchOne(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8, text_index: usize) bool {
+fn extglobMatchOne(
+    pattern: []const u8,
+    special: ?[]const bool,
+    options: GlobMatchOptions,
+    extglob: ExtglobPattern,
+    text: []const u8,
+    text_index: usize,
+) bool {
     var cursor = extglob.body_start;
     while (cursor <= extglob.body_end) {
         const alternative = nextExtglobAlternative(pattern, special, extglob.body_end, cursor);
@@ -4991,7 +6433,15 @@ fn extglobMatchOne(pattern: []const u8, special: ?[]const bool, options: GlobMat
     return false;
 }
 
-fn extglobMatchRepeat(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8, text_index: usize, require_one: bool) bool {
+fn extglobMatchRepeat(
+    pattern: []const u8,
+    special: ?[]const bool,
+    options: GlobMatchOptions,
+    extglob: ExtglobPattern,
+    text: []const u8,
+    text_index: usize,
+    require_one: bool,
+) bool {
     if (!require_one and globMatchesAt(pattern, special, options, extglob.next_pattern, text, text_index)) return true;
 
     var cursor = extglob.body_start;
@@ -5001,7 +6451,14 @@ fn extglobMatchRepeat(pattern: []const u8, special: ?[]const bool, options: Glob
         while (end <= text.len) : (end += 1) {
             if (!globMatchesAlternative(pattern, special, options, alternative, text[text_index..end])) continue;
             if (end == text_index) {
-                if (require_one and globMatchesAt(pattern, special, options, extglob.next_pattern, text, end)) return true;
+                if (require_one and globMatchesAt(
+                    pattern,
+                    special,
+                    options,
+                    extglob.next_pattern,
+                    text,
+                    end,
+                )) return true;
                 continue;
             }
             if (extglobMatchRepeat(pattern, special, options, extglob, text, end, false)) return true;
@@ -5012,7 +6469,14 @@ fn extglobMatchRepeat(pattern: []const u8, special: ?[]const bool, options: Glob
     return false;
 }
 
-fn extglobMatchNegated(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8, text_index: usize) bool {
+fn extglobMatchNegated(
+    pattern: []const u8,
+    special: ?[]const bool,
+    options: GlobMatchOptions,
+    extglob: ExtglobPattern,
+    text: []const u8,
+    text_index: usize,
+) bool {
     var end = text_index;
     while (end <= text.len) : (end += 1) {
         if (!extglobBodyMatchesWhole(pattern, special, options, extglob, text[text_index..end]) and
@@ -5021,7 +6485,13 @@ fn extglobMatchNegated(pattern: []const u8, special: ?[]const bool, options: Glo
     return false;
 }
 
-fn extglobBodyMatchesWhole(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, extglob: ExtglobPattern, text: []const u8) bool {
+fn extglobBodyMatchesWhole(
+    pattern: []const u8,
+    special: ?[]const bool,
+    options: GlobMatchOptions,
+    extglob: ExtglobPattern,
+    text: []const u8,
+) bool {
     var cursor = extglob.body_start;
     while (cursor <= extglob.body_end) {
         const alternative = nextExtglobAlternative(pattern, special, extglob.body_end, cursor);
@@ -5032,7 +6502,13 @@ fn extglobBodyMatchesWhole(pattern: []const u8, special: ?[]const bool, options:
     return false;
 }
 
-fn globMatchesAlternative(pattern: []const u8, special: ?[]const bool, options: GlobMatchOptions, alternative: ExtglobAlternative, text: []const u8) bool {
+fn globMatchesAlternative(
+    pattern: []const u8,
+    special: ?[]const bool,
+    options: GlobMatchOptions,
+    alternative: ExtglobAlternative,
+    text: []const u8,
+) bool {
     return globMatchesAt(
         pattern[alternative.start..alternative.end],
         if (special) |mask| mask[alternative.start..alternative.end] else null,
@@ -5049,7 +6525,12 @@ const ExtglobAlternative = struct {
     next: ?usize,
 };
 
-fn nextExtglobAlternative(pattern: []const u8, special: ?[]const bool, body_end: usize, start: usize) ExtglobAlternative {
+fn nextExtglobAlternative(
+    pattern: []const u8,
+    special: ?[]const bool,
+    body_end: usize,
+    start: usize,
+) ExtglobAlternative {
     var index = start;
     var depth: usize = 0;
     while (index < body_end) : (index += 1) {
@@ -5077,7 +6558,13 @@ fn nextExtglobAlternative(pattern: []const u8, special: ?[]const bool, body_end:
 
 const BracketMatch = struct { ok: bool, next_pattern: usize };
 
-fn matchBracket(pattern: []const u8, special: ?[]const bool, pattern_index: usize, text: []const u8, text_index: usize) ?BracketMatch {
+fn matchBracket(
+    pattern: []const u8,
+    special: ?[]const bool,
+    pattern_index: usize,
+    text: []const u8,
+    text_index: usize,
+) ?BracketMatch {
     if (text_index >= text.len) return .{ .ok = false, .next_pattern = pattern_index + 1 };
     var index = pattern_index + 1;
     if (index >= pattern.len) return null;
@@ -5098,7 +6585,10 @@ fn matchBracket(pattern: []const u8, special: ?[]const bool, pattern_index: usiz
             index = class.end_index;
             continue;
         }
-        if (index + 2 < pattern.len and pattern[index + 1] == '-' and isGlobSpecial(special, index + 1) and pattern[index + 2] != ']') {
+        if (index + 2 < pattern.len and pattern[index + 1] == '-' and isGlobSpecial(
+            special,
+            index + 1,
+        ) and pattern[index + 2] != ']') {
             const start = pattern[index];
             const end = pattern[index + 2];
             if (text[text_index] >= start and text[text_index] <= end) matched = true;
@@ -5113,7 +6603,12 @@ fn matchBracket(pattern: []const u8, special: ?[]const bool, pattern_index: usiz
 
 const BracketCharacterClassMatch = struct { ok: bool, end_index: usize };
 
-fn matchBracketCharacterClass(pattern: []const u8, special: ?[]const bool, index: usize, text: u8) ?BracketCharacterClassMatch {
+fn matchBracketCharacterClass(
+    pattern: []const u8,
+    special: ?[]const bool,
+    index: usize,
+    text: u8,
+) ?BracketCharacterClassMatch {
     if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
 
     const name_start = index + 2;
@@ -5326,7 +6821,13 @@ pub fn expandParameters(allocator: std.mem.Allocator, raw: []const u8, options: 
     return output.toOwnedSlice(allocator);
 }
 
-fn expandParameterAt(allocator: std.mem.Allocator, raw: []const u8, index: *usize, options: Options, output: *std.ArrayList(u8)) anyerror!bool {
+fn expandParameterAt(
+    allocator: std.mem.Allocator,
+    raw: []const u8,
+    index: *usize,
+    options: Options,
+    output: *std.ArrayList(u8),
+) anyerror!bool {
     std.debug.assert(raw[index.*] == '$');
     const dollar = index.*;
     index.* += 1;
@@ -5480,7 +6981,11 @@ fn isNameContinue(c: u8) bool {
     return isNameStart(c) or std.ascii.isDigit(c);
 }
 
-fn testCommandSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
+fn testCommandSubstitution(
+    _: ?*anyopaque,
+    allocator: std.mem.Allocator, // ziglint-ignore: Z023 (callback iface)
+    script: []const u8,
+) ![]const u8 {
     if (std.mem.eql(u8, script, "echo hi")) return allocator.dupe(u8, "hi\n\n");
     if (std.mem.eql(u8, script, "printf 2")) return allocator.dupe(u8, "2\n");
     if (std.mem.eql(u8, script, "printf /")) return allocator.dupe(u8, "/");
@@ -5691,7 +7196,11 @@ test "word part rendering expands parameters outside single quotes" {
 }
 
 test "dollar single quotes process POSIX escapes before expansion phases" {
-    const scalar = try expandWordScalar(std.testing.allocator, "pre$'a\\n\\t\\\\\\'b'post:$'\\a\\b\\e\\f\\r\\v\\x41\\101'", .{});
+    const scalar = try expandWordScalar(
+        std.testing.allocator,
+        "pre$'a\\n\\t\\\\\\'b'post:$'\\a\\b\\e\\f\\r\\v\\x41\\101'",
+        .{},
+    );
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("prea\n\t\\'bpost:\x07\x08\x1b\x0c\r\x0bAA", scalar);
 
@@ -5707,7 +7216,11 @@ test "dollar single quotes process POSIX escapes before expansion phases" {
 }
 
 test "expansion phases include tilde parameter and quote removal" {
-    const expanded = try expandWordScalar(std.testing.allocator, "~/src/$USER/'literal $USER'/\"x\"", .{ .env = test_env });
+    const expanded = try expandWordScalar(
+        std.testing.allocator,
+        "~/src/$USER/'literal $USER'/\"x\"",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(expanded);
 
     try std.testing.expectEqualStrings("/home/rush/src/rush-user/literal $USER/x", expanded);
@@ -5721,18 +7234,30 @@ test "parameter expansion supports braced names and missing values" {
 }
 
 test "parameter-only expansion preserves non-parameter syntax" {
-    const expanded = try expandParametersScalar(std.testing.allocator, "'$USER':${MISSING:-$USER}:$(printf '$USER'):`printf '$USER'`", .{ .env = test_env });
+    const expanded = try expandParametersScalar(
+        std.testing.allocator,
+        "'$USER':${MISSING:-$USER}:$(printf '$USER'):`printf '$USER'`",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(expanded);
 
     try std.testing.expectEqualStrings("'rush-user':rush-user:$(printf '$USER'):`printf '$USER'`", expanded);
 }
 
 test "parameter expansion supports POSIX operators" {
-    const defaults = try expandWordScalar(std.testing.allocator, "${USER:-fallback}:${MISSING:-fallback}:${EMPTY:-fallback}:${EMPTY-fallback}", .{ .env = test_env });
+    const defaults = try expandWordScalar(
+        std.testing.allocator,
+        "${USER:-fallback}:${MISSING:-fallback}:${EMPTY:-fallback}:${EMPTY-fallback}",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(defaults);
     try std.testing.expectEqualStrings("rush-user:fallback:fallback:", defaults);
 
-    const alternate = try expandWordScalar(std.testing.allocator, "${USER:+yes}:${MISSING:+yes}:${EMPTY:+yes}:${EMPTY+yes}", .{ .env = test_env });
+    const alternate = try expandWordScalar(
+        std.testing.allocator,
+        "${USER:+yes}:${MISSING:+yes}:${EMPTY:+yes}:${EMPTY+yes}",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(alternate);
     try std.testing.expectEqualStrings("yes:::yes", alternate);
 
@@ -5740,7 +7265,11 @@ test "parameter expansion supports POSIX operators" {
     defer std.testing.allocator.free(lengths);
     try std.testing.expectEqualStrings("9:0:0", lengths);
 
-    const hash_special = try expandWordScalar(std.testing.allocator, "${#}:${##}:${#:-fallback}:${#-fallback}:${#+alternate}:${#?required}:${#=fallback}", .{ .env = test_env });
+    const hash_special = try expandWordScalar(
+        std.testing.allocator,
+        "${#}:${##}:${#:-fallback}:${#-fallback}:${#+alternate}:${#?required}:${#=fallback}",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(hash_special);
     try std.testing.expectEqualStrings("2:1:2:2:alternate:2:2", hash_special);
 
@@ -5748,7 +7277,10 @@ test "parameter expansion supports POSIX operators" {
     defer std.testing.allocator.free(hash_patterns);
     try std.testing.expectEqualStrings("2:2:", hash_patterns);
 
-    try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }));
+    try std.testing.expectError(
+        error.ParameterExpansionFailed,
+        expandWordScalar(std.testing.allocator, "${MISSING:?required}", .{ .env = test_env }),
+    );
 }
 
 test "structured parameter parser classifies POSIX forms" {
@@ -6187,7 +7719,10 @@ test "structured parameter parser accepts Bash string operations" {
         else => try std.testing.expect(false),
     }
 
-    const nested_array_replacement = try expectParameterSyntaxWithFeatures("arr[$(printf ']')]/two/TWO", compat.Features.bash());
+    const nested_array_replacement = try expectParameterSyntaxWithFeatures(
+        "arr[$(printf ']')]/two/TWO",
+        compat.Features.bash(),
+    );
     try expectParameterTarget(nested_array_replacement.target, .name, "arr");
     switch (nested_array_replacement.array_subscript.?) {
         .index => |index| try std.testing.expectEqualStrings("$(printf ']')", index),
@@ -6221,7 +7756,10 @@ test "structured parameter parser accepts Bash string operations" {
         else => try std.testing.expect(false),
     }
 
-    const patterned_case_modification = try expectParameterSyntaxWithFeatures("USER^^[[:lower:]]", compat.Features.bash());
+    const patterned_case_modification = try expectParameterSyntaxWithFeatures(
+        "USER^^[[:lower:]]",
+        compat.Features.bash(),
+    );
     switch (patterned_case_modification.operation) {
         .case_modification => |operation| {
             try std.testing.expectEqual(ParameterCaseKind.uppercase_all, operation.kind);
@@ -6283,7 +7821,11 @@ test "parameter assignment expansion rejects non-variable targets when assignmen
     defer std.testing.allocator.free(set_positional);
     try std.testing.expectEqualStrings("one", set_positional);
 
-    const null_positional_without_colon = try expandWordScalar(std.testing.allocator, "<${2=fallback}>", .{ .positionals = &params });
+    const null_positional_without_colon = try expandWordScalar(
+        std.testing.allocator,
+        "<${2=fallback}>",
+        .{ .positionals = &params },
+    );
     defer std.testing.allocator.free(null_positional_without_colon);
     try std.testing.expectEqualStrings("<>", null_positional_without_colon);
 
@@ -6302,7 +7844,14 @@ test "parameter assignment expansion rejects non-variable targets when assignmen
         var parameter_error: ParameterError = .{};
         defer parameter_error.clear(std.testing.allocator);
 
-        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case.raw, .{ .positionals = &params, .parameter_error = &parameter_error }));
+        try std.testing.expectError(
+            error.ParameterExpansionFailed,
+            expandWordScalar(
+                std.testing.allocator,
+                case.raw,
+                .{ .positionals = &params, .parameter_error = &parameter_error },
+            ),
+        );
         try std.testing.expectEqualStrings(case.name, parameter_error.name);
         try std.testing.expectEqualStrings("cannot assign in this way", parameter_error.message);
     }
@@ -6341,20 +7890,31 @@ test "parameter expansion rejects malformed braced forms" {
         var parameter_error: ParameterError = .{};
         defer parameter_error.clear(std.testing.allocator);
 
-        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case, .{ .env = test_env, .parameter_error = &parameter_error }));
+        try std.testing.expectError(
+            error.ParameterExpansionFailed,
+            expandWordScalar(std.testing.allocator, case, .{ .env = test_env, .parameter_error = &parameter_error }),
+        );
         try std.testing.expectEqualStrings("parameter", parameter_error.name);
         try std.testing.expectEqualStrings("bad substitution", parameter_error.message);
     }
 }
 
 test "parameter expansion supports Bash arithmetic indexed array subscripts" {
-    const expanded = try expandWordScalar(std.testing.allocator, "${arr[USER_NUM - 1]}:${arr[$USER_NUM]}", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    const expanded = try expandWordScalar(
+        std.testing.allocator,
+        "${arr[USER_NUM - 1]}:${arr[$USER_NUM]}",
+        .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(expanded);
     try std.testing.expectEqualStrings("two words:three", expanded);
 }
 
 test "parameter expansion supports Bash whole indexed array operations" {
-    var unquoted_values = try expandWord(std.testing.allocator, "${arr[@]}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var unquoted_values = try expandWord(
+        std.testing.allocator,
+        "${arr[@]}",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer unquoted_values.deinit();
     try std.testing.expectEqual(@as(usize, 5), unquoted_values.fields.len);
     try std.testing.expectEqualStrings("zero", unquoted_values.fields[0]);
@@ -6363,7 +7923,11 @@ test "parameter expansion supports Bash whole indexed array operations" {
     try std.testing.expectEqualStrings("three", unquoted_values.fields[3]);
     try std.testing.expectEqualStrings("five", unquoted_values.fields[4]);
 
-    var quoted_values = try expandWord(std.testing.allocator, "pre\"${arr[@]}\"post", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_values = try expandWord(
+        std.testing.allocator,
+        "pre\"${arr[@]}\"post",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_values.deinit();
     try std.testing.expectEqual(@as(usize, 4), quoted_values.fields.len);
     try std.testing.expectEqualStrings("prezero", quoted_values.fields[0]);
@@ -6371,12 +7935,20 @@ test "parameter expansion supports Bash whole indexed array operations" {
     try std.testing.expectEqualStrings("three", quoted_values.fields[2]);
     try std.testing.expectEqualStrings("fivepost", quoted_values.fields[3]);
 
-    var quoted_star = try expandWord(std.testing.allocator, "\"${arr[*]}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_star = try expandWord(
+        std.testing.allocator,
+        "\"${arr[*]}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_star.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_star.fields.len);
     try std.testing.expectEqualStrings("zero two words three five", quoted_star.fields[0]);
 
-    var quoted_keys = try expandWord(std.testing.allocator, "\"${!arr[@]}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_keys = try expandWord(
+        std.testing.allocator,
+        "\"${!arr[@]}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_keys.deinit();
     try std.testing.expectEqual(@as(usize, 4), quoted_keys.fields.len);
     try std.testing.expectEqualStrings("0", quoted_keys.fields[0]);
@@ -6384,18 +7956,30 @@ test "parameter expansion supports Bash whole indexed array operations" {
     try std.testing.expectEqualStrings("3", quoted_keys.fields[2]);
     try std.testing.expectEqualStrings("5", quoted_keys.fields[3]);
 
-    const scalar = try expandWordScalar(std.testing.allocator, "${#arr[@]}:${#arr[2]}:${arr[-1]}:${arr[-4]}:${!arr[*]}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    const scalar = try expandWordScalar(
+        std.testing.allocator,
+        "${#arr[@]}:${#arr[2]}:${arr[-1]}:${arr[-4]}:${!arr[*]}",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("4:9:five:two words:0 2 3 5", scalar);
 }
 
 test "parameter expansion supports Bash array word and pattern suffix operations" {
-    const element = try expandWordScalar(std.testing.allocator, "${arr[2]:-fallback}:${arr[4]:-fallback}:${arr[2]#two }", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    const element = try expandWordScalar(
+        std.testing.allocator,
+        "${arr[2]:-fallback}:${arr[4]:-fallback}:${arr[2]#two }",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(element);
     try std.testing.expectEqualStrings("two words:fallback:words", element);
 
     var array_assign_recorder: ArithmeticSetRecorder = .{};
-    const element_assign = try expandWordScalar(std.testing.allocator, "${arr[4]:=fallback}", .{ .arrays = test_arrays, .arrays_set = array_assign_recorder.arraySet(), .features = compat.Features.bash() });
+    const element_assign = try expandWordScalar(
+        std.testing.allocator,
+        "${arr[4]:=fallback}",
+        .{ .arrays = test_arrays, .arrays_set = array_assign_recorder.arraySet(), .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(element_assign);
     try std.testing.expectEqualStrings("fallback", element_assign);
     try std.testing.expectEqual(@as(usize, 1), array_assign_recorder.count);
@@ -6403,7 +7987,11 @@ test "parameter expansion supports Bash array word and pattern suffix operations
     try std.testing.expectEqual(@as(usize, 4), array_assign_recorder.last_index);
     try std.testing.expectEqualStrings("fallback", array_assign_recorder.lastValue());
 
-    var missing_element_default = try expandWord(std.testing.allocator, "${arr[4]:-${arr[@]}}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var missing_element_default = try expandWord(
+        std.testing.allocator,
+        "${arr[4]:-${arr[@]}}",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer missing_element_default.deinit();
     try std.testing.expectEqual(@as(usize, 5), missing_element_default.fields.len);
     try std.testing.expectEqualStrings("zero", missing_element_default.fields[0]);
@@ -6412,7 +8000,11 @@ test "parameter expansion supports Bash array word and pattern suffix operations
     try std.testing.expectEqualStrings("three", missing_element_default.fields[3]);
     try std.testing.expectEqualStrings("five", missing_element_default.fields[4]);
 
-    var quoted_default_set = try expandWord(std.testing.allocator, "\"${arr[@]:-fallback}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_default_set = try expandWord(
+        std.testing.allocator,
+        "\"${arr[@]:-fallback}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_default_set.deinit();
     try std.testing.expectEqual(@as(usize, 4), quoted_default_set.fields.len);
     try std.testing.expectEqualStrings("zero", quoted_default_set.fields[0]);
@@ -6420,17 +8012,29 @@ test "parameter expansion supports Bash array word and pattern suffix operations
     try std.testing.expectEqualStrings("three", quoted_default_set.fields[2]);
     try std.testing.expectEqualStrings("five", quoted_default_set.fields[3]);
 
-    var quoted_default_missing = try expandWord(std.testing.allocator, "\"${missing[@]:-fallback}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_default_missing = try expandWord(
+        std.testing.allocator,
+        "\"${missing[@]:-fallback}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_default_missing.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_default_missing.fields.len);
     try std.testing.expectEqualStrings("fallback", quoted_default_missing.fields[0]);
 
-    var quoted_alternate = try expandWord(std.testing.allocator, "\"${arr[@]:+alt value}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_alternate = try expandWord(
+        std.testing.allocator,
+        "\"${arr[@]:+alt value}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_alternate.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_alternate.fields.len);
     try std.testing.expectEqualStrings("alt value", quoted_alternate.fields[0]);
 
-    var unquoted_pattern = try expandWord(std.testing.allocator, "${arr[@]#t}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var unquoted_pattern = try expandWord(
+        std.testing.allocator,
+        "${arr[@]#t}",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer unquoted_pattern.deinit();
     try std.testing.expectEqual(@as(usize, 5), unquoted_pattern.fields.len);
     try std.testing.expectEqualStrings("zero", unquoted_pattern.fields[0]);
@@ -6439,7 +8043,11 @@ test "parameter expansion supports Bash array word and pattern suffix operations
     try std.testing.expectEqualStrings("hree", unquoted_pattern.fields[3]);
     try std.testing.expectEqualStrings("five", unquoted_pattern.fields[4]);
 
-    var quoted_pattern = try expandWord(std.testing.allocator, "\"${arr[@]#t}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_pattern = try expandWord(
+        std.testing.allocator,
+        "\"${arr[@]#t}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_pattern.deinit();
     try std.testing.expectEqual(@as(usize, 4), quoted_pattern.fields.len);
     try std.testing.expectEqualStrings("zero", quoted_pattern.fields[0]);
@@ -6447,33 +8055,57 @@ test "parameter expansion supports Bash array word and pattern suffix operations
     try std.testing.expectEqualStrings("hree", quoted_pattern.fields[2]);
     try std.testing.expectEqualStrings("five", quoted_pattern.fields[3]);
 
-    var quoted_star_pattern = try expandWord(std.testing.allocator, "\"${arr[*]#t}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_star_pattern = try expandWord(
+        std.testing.allocator,
+        "\"${arr[*]#t}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_star_pattern.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_star_pattern.fields.len);
     try std.testing.expectEqualStrings("zero wo words hree five", quoted_star_pattern.fields[0]);
 }
 
 test "parameter expansion supports Bash indirect and name-prefix operations" {
-    const indirect = try expandWordScalar(std.testing.allocator, "${!USER_REF}:${!STATUS_REF}:${!BAD_REF}", .{ .env = test_env, .features = compat.Features.bash() });
+    const indirect = try expandWordScalar(
+        std.testing.allocator,
+        "${!USER_REF}:${!STATUS_REF}:${!BAD_REF}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(indirect);
     try std.testing.expectEqualStrings("rush-user:0:", indirect);
 
-    const indirect_array = try expandWordScalar(std.testing.allocator, "${!ARRAY_REF}:${!ARRAY_EXPR_REF}:${!ARRAY_NEG_REF}:${!ARRAY_MISSING_REF}", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    const indirect_array = try expandWordScalar(
+        std.testing.allocator,
+        "${!ARRAY_REF}:${!ARRAY_EXPR_REF}:${!ARRAY_NEG_REF}:${!ARRAY_MISSING_REF}",
+        .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(indirect_array);
     try std.testing.expectEqualStrings("two words:two words:five:", indirect_array);
 
-    var unquoted_array = try expandWord(std.testing.allocator, "${!ARRAY_REF}", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    var unquoted_array = try expandWord(
+        std.testing.allocator,
+        "${!ARRAY_REF}",
+        .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer unquoted_array.deinit();
     try std.testing.expectEqual(@as(usize, 2), unquoted_array.fields.len);
     try std.testing.expectEqualStrings("two", unquoted_array.fields[0]);
     try std.testing.expectEqualStrings("words", unquoted_array.fields[1]);
 
-    var quoted_array = try expandWord(std.testing.allocator, "\"${!ARRAY_REF}\"", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_array = try expandWord(
+        std.testing.allocator,
+        "\"${!ARRAY_REF}\"",
+        .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_array.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_array.fields.len);
     try std.testing.expectEqualStrings("two words", quoted_array.fields[0]);
 
-    var unquoted_values = try expandWord(std.testing.allocator, "${!ARRAY_VALUES_AT_REF}", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    var unquoted_values = try expandWord(
+        std.testing.allocator,
+        "${!ARRAY_VALUES_AT_REF}",
+        .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer unquoted_values.deinit();
     try std.testing.expectEqual(@as(usize, 5), unquoted_values.fields.len);
     try std.testing.expectEqualStrings("zero", unquoted_values.fields[0]);
@@ -6482,7 +8114,11 @@ test "parameter expansion supports Bash indirect and name-prefix operations" {
     try std.testing.expectEqualStrings("three", unquoted_values.fields[3]);
     try std.testing.expectEqualStrings("five", unquoted_values.fields[4]);
 
-    var quoted_values = try expandWord(std.testing.allocator, "\"${!ARRAY_VALUES_AT_REF}\"", .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_values = try expandWord(
+        std.testing.allocator,
+        "\"${!ARRAY_VALUES_AT_REF}\"",
+        .{ .env = test_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_values.deinit();
     try std.testing.expectEqual(@as(usize, 4), quoted_values.fields.len);
     try std.testing.expectEqualStrings("zero", quoted_values.fields[0]);
@@ -6490,27 +8126,47 @@ test "parameter expansion supports Bash indirect and name-prefix operations" {
     try std.testing.expectEqualStrings("three", quoted_values.fields[2]);
     try std.testing.expectEqualStrings("five", quoted_values.fields[3]);
 
-    var quoted_star_values = try expandWord(std.testing.allocator, "\"${!ARRAY_VALUES_STAR_REF}\"", .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_star_values = try expandWord(
+        std.testing.allocator,
+        "\"${!ARRAY_VALUES_STAR_REF}\"",
+        .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_star_values.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_star_values.fields.len);
     try std.testing.expectEqualStrings("zero,two words,three,five", quoted_star_values.fields[0]);
 
-    const scalar = try expandWordScalar(std.testing.allocator, "${!RUSH_PREFIX_*}", .{ .env = test_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
+    const scalar = try expandWordScalar(
+        std.testing.allocator,
+        "${!RUSH_PREFIX_*}",
+        .{ .env = test_env, .variable_names = test_variable_names, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA RUSH_PREFIX_BETA", scalar);
 
-    var unquoted = try expandWord(std.testing.allocator, "${!RUSH_PREFIX_@}", .{ .env = test_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
+    var unquoted = try expandWord(
+        std.testing.allocator,
+        "${!RUSH_PREFIX_@}",
+        .{ .env = test_env, .variable_names = test_variable_names, .features = compat.Features.bash() },
+    );
     defer unquoted.deinit();
     try std.testing.expectEqual(@as(usize, 2), unquoted.fields.len);
     try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA", unquoted.fields[0]);
     try std.testing.expectEqualStrings("RUSH_PREFIX_BETA", unquoted.fields[1]);
 
-    var quoted_star = try expandWord(std.testing.allocator, "\"${!RUSH_PREFIX_*}\"", .{ .env = test_comma_ifs_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
+    var quoted_star = try expandWord(
+        std.testing.allocator,
+        "\"${!RUSH_PREFIX_*}\"",
+        .{ .env = test_comma_ifs_env, .variable_names = test_variable_names, .features = compat.Features.bash() },
+    );
     defer quoted_star.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_star.fields.len);
     try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA,RUSH_PREFIX_BETA", quoted_star.fields[0]);
 
-    var quoted_at = try expandWord(std.testing.allocator, "\"${!RUSH_PREFIX_@}\"", .{ .env = test_comma_ifs_env, .variable_names = test_variable_names, .features = compat.Features.bash() });
+    var quoted_at = try expandWord(
+        std.testing.allocator,
+        "\"${!RUSH_PREFIX_@}\"",
+        .{ .env = test_comma_ifs_env, .variable_names = test_variable_names, .features = compat.Features.bash() },
+    );
     defer quoted_at.deinit();
     try std.testing.expectEqual(@as(usize, 2), quoted_at.fields.len);
     try std.testing.expectEqualStrings("RUSH_PREFIX_ALPHA", quoted_at.fields[0]);
@@ -6518,65 +8174,127 @@ test "parameter expansion supports Bash indirect and name-prefix operations" {
 }
 
 test "parameter expansion supports Bash string operations" {
-    const substring = try expandWordScalar(std.testing.allocator, "${PATHLIKE:1}:${PATHLIKE:5:5}:${PATHLIKE: -4:2}:${MISSING:1}", .{ .env = test_env, .features = compat.Features.bash() });
+    const substring = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE:1}:${PATHLIKE:5:5}:${PATHLIKE: -4:2}:${MISSING:1}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(substring);
     try std.testing.expectEqualStrings("usr/local/bin/rush:local:ru:", substring);
 
-    const nested_substring = try expandWordScalar(std.testing.allocator, "${PATHLIKE:${MISSING:-1}:3}:${PATHLIKE:1 + (0 ? 9 : 2):3}:${PATHLIKE:0 ? 9 : 2:3}", .{ .env = test_env, .features = compat.Features.bash() });
+    const nested_substring = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE:${MISSING:-1}:3}:${PATHLIKE:1 + (0 ? 9 : 2):3}:${PATHLIKE:0 ? 9 : 2:3}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(nested_substring);
     try std.testing.expectEqualStrings("usr:r/l:sr/", nested_substring);
 
-    const negative_length_substring = try expandWordScalar(std.testing.allocator, "${PATHLIKE:1:-5}:${PATHLIKE: -4:-1}:${PATHLIKE: -99:-1}:${PATHLIKE:99:-1}", .{ .env = test_env, .features = compat.Features.bash() });
+    const negative_length_substring = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE:1:-5}:${PATHLIKE: -4:-1}:${PATHLIKE: -99:-1}:${PATHLIKE:99:-1}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(negative_length_substring);
     try std.testing.expectEqualStrings("usr/local/bin:rus::", negative_length_substring);
 
     const params = [_][]const u8{ "01234567890abcdefgh", "abcdefg" };
-    const positional_and_special_substring = try expandWordScalar(std.testing.allocator, "${1:7:-2}:${2: -4:-1}:${-:0:-1}", .{ .positionals = &params, .option_flags = "Cf", .features = compat.Features.bash() });
+    const positional_and_special_substring = try expandWordScalar(
+        std.testing.allocator,
+        "${1:7:-2}:${2: -4:-1}:${-:0:-1}",
+        .{ .positionals = &params, .option_flags = "Cf", .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(positional_and_special_substring);
     try std.testing.expectEqualStrings("7890abcdef:def:C", positional_and_special_substring);
 
-    const replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/local/LOCAL}:${PATHLIKE//\\//_}:${PATHLIKE/#\\/*/root}:${PATHLIKE/%rush/shell}:${PATHLIKE/bin}", .{ .env = test_env, .features = compat.Features.bash() });
+    const replacement = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE/local/LOCAL}:${PATHLIKE//\\//_}:${PATHLIKE/#\\/*/root}:${PATHLIKE/%rush/shell}:${PATHLIKE/bin}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(replacement);
-    try std.testing.expectEqualStrings("/usr/LOCAL/bin/rush:_usr_local_bin_rush:root:/usr/local/bin/shell:/usr/local//rush", replacement);
+    try std.testing.expectEqualStrings(
+        "/usr/LOCAL/bin/rush:_usr_local_bin_rush:root:/usr/local/bin/shell:/usr/local//rush",
+        replacement,
+    );
 
-    const nested_replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/$(printf /)/_}:${PATHLIKE/'/'/_}", .{ .env = test_env, .features = compat.Features.bash(), .command_substitution = test_command_substitution });
+    const nested_replacement = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE/$(printf /)/_}:${PATHLIKE/'/'/_}",
+        .{ .env = test_env, .features = compat.Features.bash(), .command_substitution = test_command_substitution },
+    );
     defer std.testing.allocator.free(nested_replacement);
     try std.testing.expectEqualStrings("_usr/local/bin/rush:_usr/local/bin/rush", nested_replacement);
 
-    const pattern_replacement = try expandWordScalar(std.testing.allocator, "${PATHLIKE/b*/X}:${PATHLIKE/#\\/*/ROOT}", .{ .env = test_env, .features = compat.Features.bash() });
+    const pattern_replacement = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE/b*/X}:${PATHLIKE/#\\/*/ROOT}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(pattern_replacement);
     try std.testing.expectEqualStrings("/usr/local/X:ROOT", pattern_replacement);
 
-    const array_string_operations = try expandWordScalar(std.testing.allocator, "${arr[2]/two/TWO}:${arr[@]/e/E}:${arr[*]^^}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    const array_string_operations = try expandWordScalar(
+        std.testing.allocator,
+        "${arr[2]/two/TWO}:${arr[@]/e/E}:${arr[*]^^}",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(array_string_operations);
-    try std.testing.expectEqualStrings("TWO words:zEro two words thrEe fivE:ZERO TWO WORDS THREE FIVE", array_string_operations);
+    try std.testing.expectEqualStrings(
+        "TWO words:zEro two words thrEe fivE:ZERO TWO WORDS THREE FIVE",
+        array_string_operations,
+    );
 
-    const case_modification = try expandWordScalar(std.testing.allocator, "${USER^}:${USER^^}:${USER,}:${USER,,}", .{ .env = test_env, .features = compat.Features.bash() });
+    const case_modification = try expandWordScalar(
+        std.testing.allocator,
+        "${USER^}:${USER^^}:${USER,}:${USER,,}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(case_modification);
     try std.testing.expectEqualStrings("Rush-user:RUSH-USER:rush-user:rush-user", case_modification);
 
-    const patterned_case_modification = try expandWordScalar(std.testing.allocator, "${USER^^[rs]}:${USER^^[[:lower:]]}:${USER^[!r]}:${USER,,[RU]}", .{ .env = test_env, .features = compat.Features.bash() });
+    const patterned_case_modification = try expandWordScalar(
+        std.testing.allocator,
+        "${USER^^[rs]}:${USER^^[[:lower:]]}:${USER^[!r]}:${USER,,[RU]}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(patterned_case_modification);
     try std.testing.expectEqualStrings("RuSh-uSeR:RUSH-USER:rush-user:rush-user", patterned_case_modification);
 }
 
 test "parameter expansion supports Bash array string operations" {
-    const element = try expandWordScalar(std.testing.allocator, "${arr[2]:1:3}:${arr[2]/words/WORDS}:${arr[2]^^[tw]}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    const element = try expandWordScalar(
+        std.testing.allocator,
+        "${arr[2]:1:3}:${arr[2]/words/WORDS}:${arr[2]^^[tw]}",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(element);
     try std.testing.expectEqualStrings("wo :two WORDS:TWo Words", element);
 
-    var quoted_slice = try expandWord(std.testing.allocator, "\"${arr[@]:2:2}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_slice = try expandWord(
+        std.testing.allocator,
+        "\"${arr[@]:2:2}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_slice.deinit();
     try std.testing.expectEqual(@as(usize, 2), quoted_slice.fields.len);
     try std.testing.expectEqualStrings("two words", quoted_slice.fields[0]);
     try std.testing.expectEqualStrings("three", quoted_slice.fields[1]);
 
-    var quoted_star_slice = try expandWord(std.testing.allocator, "\"${arr[*]:2:2}\"", .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_star_slice = try expandWord(
+        std.testing.allocator,
+        "\"${arr[*]:2:2}\"",
+        .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_star_slice.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_star_slice.fields.len);
     try std.testing.expectEqualStrings("two words,three", quoted_star_slice.fields[0]);
 
-    var quoted_replacement = try expandWord(std.testing.allocator, "\"${arr[@]//o/O}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_replacement = try expandWord(
+        std.testing.allocator,
+        "\"${arr[@]//o/O}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_replacement.deinit();
     try std.testing.expectEqual(@as(usize, 4), quoted_replacement.fields.len);
     try std.testing.expectEqualStrings("zerO", quoted_replacement.fields[0]);
@@ -6584,12 +8302,20 @@ test "parameter expansion supports Bash array string operations" {
     try std.testing.expectEqualStrings("three", quoted_replacement.fields[2]);
     try std.testing.expectEqualStrings("five", quoted_replacement.fields[3]);
 
-    var quoted_star_replacement = try expandWord(std.testing.allocator, "\"${arr[*]//o/O}\"", .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_star_replacement = try expandWord(
+        std.testing.allocator,
+        "\"${arr[*]//o/O}\"",
+        .{ .env = test_comma_ifs_env, .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_star_replacement.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_star_replacement.fields.len);
     try std.testing.expectEqualStrings("zerO,twO wOrds,three,five", quoted_star_replacement.fields[0]);
 
-    var unquoted_case_modification = try expandWord(std.testing.allocator, "${arr[@]^^[of]}", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var unquoted_case_modification = try expandWord(
+        std.testing.allocator,
+        "${arr[@]^^[of]}",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer unquoted_case_modification.deinit();
     try std.testing.expectEqual(@as(usize, 5), unquoted_case_modification.fields.len);
     try std.testing.expectEqualStrings("zerO", unquoted_case_modification.fields[0]);
@@ -6602,46 +8328,78 @@ test "parameter expansion supports Bash array string operations" {
 test "parameter expansion supports Bash positional slice fields" {
     const params = [_][]const u8{ "a b", "", "c", "d" };
 
-    var quoted_at = try expandWord(std.testing.allocator, "pre\"${@:2:2}\"post", .{ .env = test_env, .positionals = &params, .features = compat.Features.bash() });
+    var quoted_at = try expandWord(
+        std.testing.allocator,
+        "pre\"${@:2:2}\"post",
+        .{ .env = test_env, .positionals = &params, .features = compat.Features.bash() },
+    );
     defer quoted_at.deinit();
     try std.testing.expectEqual(@as(usize, 2), quoted_at.fields.len);
     try std.testing.expectEqualStrings("pre", quoted_at.fields[0]);
     try std.testing.expectEqualStrings("cpost", quoted_at.fields[1]);
 
-    var quoted_zero = try expandWord(std.testing.allocator, "\"${@:0:2}\"", .{ .env = test_env, .positionals = &params, .features = compat.Features.bash() });
+    var quoted_zero = try expandWord(
+        std.testing.allocator,
+        "\"${@:0:2}\"",
+        .{ .env = test_env, .positionals = &params, .features = compat.Features.bash() },
+    );
     defer quoted_zero.deinit();
     try std.testing.expectEqual(@as(usize, 2), quoted_zero.fields.len);
     try std.testing.expectEqualStrings("rush-test", quoted_zero.fields[0]);
     try std.testing.expectEqualStrings("a b", quoted_zero.fields[1]);
 
-    var quoted_star = try expandWord(std.testing.allocator, "\"${*:1:3}\"", .{ .env = test_comma_ifs_env, .positionals = &params, .features = compat.Features.bash() });
+    var quoted_star = try expandWord(
+        std.testing.allocator,
+        "\"${*:1:3}\"",
+        .{ .env = test_comma_ifs_env, .positionals = &params, .features = compat.Features.bash() },
+    );
     defer quoted_star.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_star.fields.len);
     try std.testing.expectEqualStrings("a b,,c", quoted_star.fields[0]);
 
-    var quoted_tail = try expandWord(std.testing.allocator, "\"${@:3}\"", .{ .positionals = &params, .features = compat.Features.bash() });
+    var quoted_tail = try expandWord(
+        std.testing.allocator,
+        "\"${@:3}\"",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer quoted_tail.deinit();
     try std.testing.expectEqual(@as(usize, 2), quoted_tail.fields.len);
     try std.testing.expectEqualStrings("c", quoted_tail.fields[0]);
     try std.testing.expectEqualStrings("d", quoted_tail.fields[1]);
 
-    var unquoted_at = try expandWord(std.testing.allocator, "${@:1:3}", .{ .positionals = &params, .features = compat.Features.bash() });
+    var unquoted_at = try expandWord(
+        std.testing.allocator,
+        "${@:1:3}",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer unquoted_at.deinit();
     try std.testing.expectEqual(@as(usize, 3), unquoted_at.fields.len);
     try std.testing.expectEqualStrings("a", unquoted_at.fields[0]);
     try std.testing.expectEqualStrings("b", unquoted_at.fields[1]);
     try std.testing.expectEqualStrings("c", unquoted_at.fields[2]);
 
-    var empty_quoted = try expandWord(std.testing.allocator, "\"${@:99:2}\"", .{ .positionals = &params, .features = compat.Features.bash() });
+    var empty_quoted = try expandWord(
+        std.testing.allocator,
+        "\"${@:99:2}\"",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer empty_quoted.deinit();
     try std.testing.expectEqual(@as(usize, 1), empty_quoted.fields.len);
     try std.testing.expectEqualStrings("", empty_quoted.fields[0]);
 
-    var empty_unquoted = try expandWord(std.testing.allocator, "${@:99:2}", .{ .positionals = &params, .features = compat.Features.bash() });
+    var empty_unquoted = try expandWord(
+        std.testing.allocator,
+        "${@:99:2}",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer empty_unquoted.deinit();
     try std.testing.expectEqual(@as(usize, 0), empty_unquoted.fields.len);
 
-    const scalar = try expandWordScalar(std.testing.allocator, "${@:1:3}:${*:2:2}", .{ .positionals = &params, .features = compat.Features.bash() });
+    const scalar = try expandWordScalar(
+        std.testing.allocator,
+        "${@:1:3}:${*:2:2}",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("a b  c: c", scalar);
 }
@@ -6649,34 +8407,54 @@ test "parameter expansion supports Bash positional slice fields" {
 test "parameter expansion supports Bash field producers in operator words" {
     const params = [_][]const u8{ "a b", "", "c", "d" };
 
-    var unquoted_default = try expandWord(std.testing.allocator, "${missing:-${@:1:3}}", .{ .positionals = &params, .features = compat.Features.bash() });
+    var unquoted_default = try expandWord(
+        std.testing.allocator,
+        "${missing:-${@:1:3}}",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer unquoted_default.deinit();
     try std.testing.expectEqual(@as(usize, 3), unquoted_default.fields.len);
     try std.testing.expectEqualStrings("a", unquoted_default.fields[0]);
     try std.testing.expectEqualStrings("b", unquoted_default.fields[1]);
     try std.testing.expectEqualStrings("c", unquoted_default.fields[2]);
 
-    var quoted_default = try expandWord(std.testing.allocator, "\"${missing:-${@:1:3}}\"", .{ .positionals = &params, .features = compat.Features.bash() });
+    var quoted_default = try expandWord(
+        std.testing.allocator,
+        "\"${missing:-${@:1:3}}\"",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer quoted_default.deinit();
     try std.testing.expectEqual(@as(usize, 3), quoted_default.fields.len);
     try std.testing.expectEqualStrings("a b", quoted_default.fields[0]);
     try std.testing.expectEqualStrings("", quoted_default.fields[1]);
     try std.testing.expectEqualStrings("c", quoted_default.fields[2]);
 
-    var embedded_quoted_default = try expandWord(std.testing.allocator, "pre\"${missing:-${@:2:2}}\"post", .{ .positionals = &params, .features = compat.Features.bash() });
+    var embedded_quoted_default = try expandWord(
+        std.testing.allocator,
+        "pre\"${missing:-${@:2:2}}\"post",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer embedded_quoted_default.deinit();
     try std.testing.expectEqual(@as(usize, 2), embedded_quoted_default.fields.len);
     try std.testing.expectEqualStrings("pre", embedded_quoted_default.fields[0]);
     try std.testing.expectEqualStrings("cpost", embedded_quoted_default.fields[1]);
 
-    var quoted_alternate = try expandWord(std.testing.allocator, "\"${USER:+${@:1:3}}\"", .{ .env = test_env, .positionals = &params, .features = compat.Features.bash() });
+    var quoted_alternate = try expandWord(
+        std.testing.allocator,
+        "\"${USER:+${@:1:3}}\"",
+        .{ .env = test_env, .positionals = &params, .features = compat.Features.bash() },
+    );
     defer quoted_alternate.deinit();
     try std.testing.expectEqual(@as(usize, 3), quoted_alternate.fields.len);
     try std.testing.expectEqualStrings("a b", quoted_alternate.fields[0]);
     try std.testing.expectEqualStrings("", quoted_alternate.fields[1]);
     try std.testing.expectEqualStrings("c", quoted_alternate.fields[2]);
 
-    var quoted_at_word = try expandWord(std.testing.allocator, "\"${missing:-$@}\"", .{ .positionals = &params, .features = compat.Features.bash() });
+    var quoted_at_word = try expandWord(
+        std.testing.allocator,
+        "\"${missing:-$@}\"",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer quoted_at_word.deinit();
     try std.testing.expectEqual(@as(usize, 4), quoted_at_word.fields.len);
     try std.testing.expectEqualStrings("a b", quoted_at_word.fields[0]);
@@ -6684,7 +8462,11 @@ test "parameter expansion supports Bash field producers in operator words" {
     try std.testing.expectEqualStrings("c", quoted_at_word.fields[2]);
     try std.testing.expectEqualStrings("d", quoted_at_word.fields[3]);
 
-    var quoted_array_default = try expandWord(std.testing.allocator, "\"${missing:-${arr[@]}}\"", .{ .arrays = test_arrays, .features = compat.Features.bash() });
+    var quoted_array_default = try expandWord(
+        std.testing.allocator,
+        "\"${missing:-${arr[@]}}\"",
+        .{ .arrays = test_arrays, .features = compat.Features.bash() },
+    );
     defer quoted_array_default.deinit();
     try std.testing.expectEqual(@as(usize, 4), quoted_array_default.fields.len);
     try std.testing.expectEqualStrings("zero", quoted_array_default.fields[0]);
@@ -6697,7 +8479,11 @@ test "parameter assignment operator words store Bash scalar field producer value
     const params = [_][]const u8{ "a b", "", "c", "d" };
 
     var quoted_word_recorder: ArithmeticSetRecorder = .{};
-    var quoted_word = try expandWord(std.testing.allocator, "${assigned:=\"one two\"}", .{ .env_set = quoted_word_recorder.envSet(), .features = compat.Features.bash() });
+    var quoted_word = try expandWord(
+        std.testing.allocator,
+        "${assigned:=\"one two\"}",
+        .{ .env_set = quoted_word_recorder.envSet(), .features = compat.Features.bash() },
+    );
     defer quoted_word.deinit();
     try std.testing.expectEqual(@as(usize, 2), quoted_word.fields.len);
     try std.testing.expectEqualStrings("one", quoted_word.fields[0]);
@@ -6706,7 +8492,11 @@ test "parameter assignment operator words store Bash scalar field producer value
     try std.testing.expectEqualStrings("one two", quoted_word_recorder.lastValue());
 
     var quoted_at_recorder: ArithmeticSetRecorder = .{};
-    var quoted_at = try expandWord(std.testing.allocator, "\"${assigned:=$@}\"", .{ .positionals = &params, .env_set = quoted_at_recorder.envSet(), .features = compat.Features.bash() });
+    var quoted_at = try expandWord(
+        std.testing.allocator,
+        "\"${assigned:=$@}\"",
+        .{ .positionals = &params, .env_set = quoted_at_recorder.envSet(), .features = compat.Features.bash() },
+    );
     defer quoted_at.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_at.fields.len);
     try std.testing.expectEqualStrings("a b  c d", quoted_at.fields[0]);
@@ -6714,7 +8504,16 @@ test "parameter assignment operator words store Bash scalar field producer value
     try std.testing.expectEqualStrings("a b  c d", quoted_at_recorder.lastValue());
 
     var unquoted_slice_recorder: ArithmeticSetRecorder = .{};
-    var unquoted_slice = try expandWord(std.testing.allocator, "${assigned:=${@:1:3}}", .{ .positionals = &params, .env = test_comma_ifs_env, .env_set = unquoted_slice_recorder.envSet(), .features = compat.Features.bash() });
+    var unquoted_slice = try expandWord(
+        std.testing.allocator,
+        "${assigned:=${@:1:3}}",
+        .{
+            .positionals = &params,
+            .env = test_comma_ifs_env,
+            .env_set = unquoted_slice_recorder.envSet(),
+            .features = compat.Features.bash(),
+        },
+    );
     defer unquoted_slice.deinit();
     try std.testing.expectEqual(@as(usize, 1), unquoted_slice.fields.len);
     try std.testing.expectEqualStrings("a b  c", unquoted_slice.fields[0]);
@@ -6722,7 +8521,16 @@ test "parameter assignment operator words store Bash scalar field producer value
     try std.testing.expectEqualStrings("a b  c", unquoted_slice_recorder.lastValue());
 
     var quoted_slice_recorder: ArithmeticSetRecorder = .{};
-    var quoted_slice = try expandWord(std.testing.allocator, "\"${assigned:=${@:1:3}}\"", .{ .positionals = &params, .env = test_comma_ifs_env, .env_set = quoted_slice_recorder.envSet(), .features = compat.Features.bash() });
+    var quoted_slice = try expandWord(
+        std.testing.allocator,
+        "\"${assigned:=${@:1:3}}\"",
+        .{
+            .positionals = &params,
+            .env = test_comma_ifs_env,
+            .env_set = quoted_slice_recorder.envSet(),
+            .features = compat.Features.bash(),
+        },
+    );
     defer quoted_slice.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted_slice.fields.len);
     try std.testing.expectEqualStrings("a b,,c", quoted_slice.fields[0]);
@@ -6730,7 +8538,16 @@ test "parameter assignment operator words store Bash scalar field producer value
     try std.testing.expectEqualStrings("a b,,c", quoted_slice_recorder.lastValue());
 
     var array_at_recorder: ArithmeticSetRecorder = .{};
-    var array_at = try expandWord(std.testing.allocator, "\"${assigned:=${arr[@]}}\"", .{ .env = test_comma_ifs_env, .arrays = test_arrays, .env_set = array_at_recorder.envSet(), .features = compat.Features.bash() });
+    var array_at = try expandWord(
+        std.testing.allocator,
+        "\"${assigned:=${arr[@]}}\"",
+        .{
+            .env = test_comma_ifs_env,
+            .arrays = test_arrays,
+            .env_set = array_at_recorder.envSet(),
+            .features = compat.Features.bash(),
+        },
+    );
     defer array_at.deinit();
     try std.testing.expectEqual(@as(usize, 1), array_at.fields.len);
     try std.testing.expectEqualStrings("zero two words three five", array_at.fields[0]);
@@ -6738,7 +8555,16 @@ test "parameter assignment operator words store Bash scalar field producer value
     try std.testing.expectEqualStrings("zero two words three five", array_at_recorder.lastValue());
 
     var array_keys_recorder: ArithmeticSetRecorder = .{};
-    var array_keys = try expandWord(std.testing.allocator, "${assigned:=${!arr[@]}}", .{ .env = test_comma_ifs_env, .arrays = test_arrays, .env_set = array_keys_recorder.envSet(), .features = compat.Features.bash() });
+    var array_keys = try expandWord(
+        std.testing.allocator,
+        "${assigned:=${!arr[@]}}",
+        .{
+            .env = test_comma_ifs_env,
+            .arrays = test_arrays,
+            .env_set = array_keys_recorder.envSet(),
+            .features = compat.Features.bash(),
+        },
+    );
     defer array_keys.deinit();
     try std.testing.expectEqual(@as(usize, 1), array_keys.fields.len);
     try std.testing.expectEqualStrings("0 2 3 5", array_keys.fields[0]);
@@ -6763,27 +8589,92 @@ test "parameter expansion diagnoses Bash negative substring lengths before the s
         var parameter_error: ParameterError = .{};
         defer parameter_error.clear(std.testing.allocator);
 
-        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case.raw, .{ .env = test_env, .positionals = &params, .option_flags = "Cf", .features = compat.Features.bash(), .parameter_error = &parameter_error }));
+        try std.testing.expectError(
+            error.ParameterExpansionFailed,
+            expandWordScalar(std.testing.allocator, case.raw, .{
+                .env = test_env,
+                .positionals = &params,
+                .option_flags = "Cf",
+                .features = compat.Features.bash(),
+                .parameter_error = &parameter_error,
+            }),
+        );
         try std.testing.expectEqualStrings(case.name, parameter_error.name);
         try std.testing.expectEqualStrings("substring expression < 0", parameter_error.message);
     }
 
-    var out_of_range = try expandWord(std.testing.allocator, "\"${@:99:-1}\"", .{ .positionals = &params, .features = compat.Features.bash() });
+    var out_of_range = try expandWord(
+        std.testing.allocator,
+        "\"${@:99:-1}\"",
+        .{ .positionals = &params, .features = compat.Features.bash() },
+    );
     defer out_of_range.deinit();
     try std.testing.expectEqual(@as(usize, 1), out_of_range.fields.len);
     try std.testing.expectEqualStrings("", out_of_range.fields[0]);
 }
 
 test "parameter expansion supports Bash replacement ampersand expansion" {
-    const direct = try expandWordScalar(std.testing.allocator, "${USER/rush/[&]}:${USER/rush/[\\&]}:${USER/rush/['&']}:${USER/rush/[\"&\"]}:${USER/rush/[\\\\&]}", .{ .env = test_env, .features = compat.Features.bash() });
+    const direct_source_multiline =
+        \\${USER/rush/[&]}:${USER/rush/[\&]}:
+        \\${USER/rush/['&']}:${USER/rush/["&"]}:${USER/rush/[\\&]}
+    ;
+    const direct_source = try std.mem.replaceOwned(
+        u8,
+        std.testing.allocator,
+        direct_source_multiline,
+        "\n",
+        "",
+    );
+    defer std.testing.allocator.free(direct_source);
+    const direct = try expandWordScalar(
+        std.testing.allocator,
+        direct_source,
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(direct);
-    try std.testing.expectEqualStrings("[rush]-user:[&]-user:[&]-user:[&]-user:[\\rush]-user", direct);
+    try std.testing.expectEqualStrings(
+        "[rush]-user:[&]-user:[&]-user:[&]-user:[\\rush]-user",
+        direct,
+    );
 
-    const nested = try expandWordScalar(std.testing.allocator, "${USER/rush/$AMP_REPL}:${USER/rush/\"$AMP_REPL\"}:${USER/rush/$ESC_AMP_REPL}:${USER/rush/$(printf '&X')}:${USER/rush/\"$(printf '&X')\"}", .{ .env = test_env, .features = compat.Features.bash(), .command_substitution = test_command_substitution });
+    const nested_source_multiline =
+        \\${USER/rush/$AMP_REPL}:${USER/rush/"$AMP_REPL"}:
+        \\${USER/rush/$ESC_AMP_REPL}:${USER/rush/$(printf '&X')}:
+        \\${USER/rush/"$(printf '&X')"}
+    ;
+    const nested_source = try std.mem.replaceOwned(
+        u8,
+        std.testing.allocator,
+        nested_source_multiline,
+        "\n",
+        "",
+    );
+    defer std.testing.allocator.free(nested_source);
+    const nested = try expandWordScalar(
+        std.testing.allocator,
+        nested_source,
+        .{
+            .env = test_env,
+            .features = compat.Features.bash(),
+            .command_substitution = test_command_substitution,
+        },
+    );
     defer std.testing.allocator.free(nested);
-    try std.testing.expectEqualStrings("rushX-user:&X-user:&X-user:rushX-user:&X-user", nested);
+    try std.testing.expectEqualStrings(
+        "rushX-user:&X-user:&X-user:rushX-user:&X-user",
+        nested,
+    );
 
-    const disabled = try expandWordScalar(std.testing.allocator, "${USER/rush/[&]}:${USER/rush/$AMP_REPL}:${USER/rush/$(printf '&X')}", .{ .env = test_env, .features = compat.Features.bash(), .command_substitution = test_command_substitution, .patsub_replacement = false });
+    const disabled = try expandWordScalar(
+        std.testing.allocator,
+        "${USER/rush/[&]}:${USER/rush/$AMP_REPL}:${USER/rush/$(printf '&X')}",
+        .{
+            .env = test_env,
+            .features = compat.Features.bash(),
+            .command_substitution = test_command_substitution,
+            .patsub_replacement = false,
+        },
+    );
     defer std.testing.allocator.free(disabled);
     try std.testing.expectEqualStrings("[&]-user:&X-user:&X-user", disabled);
 }
@@ -6802,7 +8693,14 @@ test "parameter expansion diagnoses malformed Bash indirect array targets" {
         var parameter_error: ParameterError = .{};
         defer parameter_error.clear(std.testing.allocator);
 
-        try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, case.raw, .{ .env = test_env, .features = compat.Features.bash(), .parameter_error = &parameter_error }));
+        try std.testing.expectError(
+            error.ParameterExpansionFailed,
+            expandWordScalar(
+                std.testing.allocator,
+                case.raw,
+                .{ .env = test_env, .features = compat.Features.bash(), .parameter_error = &parameter_error },
+            ),
+        );
         try std.testing.expectEqualStrings(case.name, parameter_error.name);
         try std.testing.expectEqualStrings("invalid variable name", parameter_error.message);
     }
@@ -6812,11 +8710,22 @@ test "parameter expansion handles Bash negative array subscripts on missing arra
     var parameter_error: ParameterError = .{};
     defer parameter_error.clear(std.testing.allocator);
 
-    try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "${missing[-1]}", .{ .features = compat.Features.bash(), .parameter_error = &parameter_error }));
+    try std.testing.expectError(
+        error.ParameterExpansionFailed,
+        expandWordScalar(
+            std.testing.allocator,
+            "${missing[-1]}",
+            .{ .features = compat.Features.bash(), .parameter_error = &parameter_error },
+        ),
+    );
     try std.testing.expectEqualStrings("missing", parameter_error.name);
     try std.testing.expectEqualStrings("bad array subscript", parameter_error.message);
 
-    const missing_length = try expandWordScalar(std.testing.allocator, "${#missing[-1]}", .{ .features = compat.Features.bash() });
+    const missing_length = try expandWordScalar(
+        std.testing.allocator,
+        "${#missing[-1]}",
+        .{ .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(missing_length);
     try std.testing.expectEqualStrings("0", missing_length);
 }
@@ -6825,29 +8734,56 @@ test "parameter expansion reports arithmetic errors in Bash array subscripts" {
     var arithmetic_error: ArithmeticError = .{};
     defer arithmetic_error.clear(std.testing.allocator);
 
-    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "${arr[1 / 0]}", .{ .arrays = test_arrays, .features = compat.Features.bash(), .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectError(
+        error.ArithmeticExpansionFailed,
+        expandWordScalar(
+            std.testing.allocator,
+            "${arr[1 / 0]}",
+            .{ .arrays = test_arrays, .features = compat.Features.bash(), .arithmetic_error = &arithmetic_error },
+        ),
+    );
     try std.testing.expectEqualStrings("1 / 0", arithmetic_error.expression);
     try std.testing.expectEqualStrings("division by zero", arithmetic_error.message);
 }
 
 test "parameter expansion supports pattern removal operators" {
-    const expanded = try expandWordScalar(std.testing.allocator, "${PATHLIKE%/*}:${PATHLIKE%%/*}:${PATHLIKE#*/}:${PATHLIKE##*/}", .{ .env = test_env });
+    const expanded = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE%/*}:${PATHLIKE%%/*}:${PATHLIKE#*/}:${PATHLIKE##*/}",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(expanded);
     try std.testing.expectEqualStrings("/usr/local/bin::usr/local/bin/rush:rush", expanded);
 
-    const class = try expandWordScalar(std.testing.allocator, "${PATHLIKE%%[[:digit:]]*}:${PATHLIKE##*[![:lower:]]}", .{ .env = test_env });
+    const class = try expandWordScalar(
+        std.testing.allocator,
+        "${PATHLIKE%%[[:digit:]]*}:${PATHLIKE##*[![:lower:]]}",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(class);
     try std.testing.expectEqualStrings("/usr/local/bin/rush:rush", class);
 
-    const quoted_class = try expandWordScalar(std.testing.allocator, "${USER_NUM#\"[[:digit:]]\"}", .{ .env = test_env });
+    const quoted_class = try expandWordScalar(
+        std.testing.allocator,
+        "${USER_NUM#\"[[:digit:]]\"}",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(quoted_class);
     try std.testing.expectEqualStrings("3", quoted_class);
 
-    const extglob_off = try expandWordScalar(std.testing.allocator, "${USER#@(rush|bash)-}", .{ .env = test_env, .features = compat.Features.bash() });
+    const extglob_off = try expandWordScalar(
+        std.testing.allocator,
+        "${USER#@(rush|bash)-}",
+        .{ .env = test_env, .features = compat.Features.bash() },
+    );
     defer std.testing.allocator.free(extglob_off);
     try std.testing.expectEqualStrings("rush-user", extglob_off);
 
-    const extglob_on = try expandWordScalar(std.testing.allocator, "${USER#@(rush|bash)-}", .{ .env = test_env, .features = compat.Features.bash(), .extglob = true });
+    const extglob_on = try expandWordScalar(
+        std.testing.allocator,
+        "${USER#@(rush|bash)-}",
+        .{ .env = test_env, .features = compat.Features.bash(), .extglob = true },
+    );
     defer std.testing.allocator.free(extglob_on);
     try std.testing.expectEqualStrings("user", extglob_on);
 }
@@ -6873,11 +8809,19 @@ test "parameter pattern removal treats unquoted expansion backslashes as pattern
     defer std.testing.allocator.free(suffix);
     try std.testing.expectEqualStrings("ab", suffix);
 
-    const escaped_backslash = try expandWordScalar(std.testing.allocator, "${AB_BACKSLASH%$TWO_BACKSLASHES}", .{ .env = env });
+    const escaped_backslash = try expandWordScalar(
+        std.testing.allocator,
+        "${AB_BACKSLASH%$TWO_BACKSLASHES}",
+        .{ .env = env },
+    );
     defer std.testing.allocator.free(escaped_backslash);
     try std.testing.expectEqualStrings("ab", escaped_backslash);
 
-    const trailing_escape = try expandWordScalar(std.testing.allocator, "${AB_BACKSLASH%$ONE_BACKSLASH}", .{ .env = env });
+    const trailing_escape = try expandWordScalar(
+        std.testing.allocator,
+        "${AB_BACKSLASH%$ONE_BACKSLASH}",
+        .{ .env = env },
+    );
     defer std.testing.allocator.free(trailing_escape);
     try std.testing.expectEqualStrings("ab\\", trailing_escape);
 
@@ -6895,7 +8839,10 @@ test "parameter pattern removal operators honor nounset" {
         "\"${MISSING%foo}\"",
     };
     for (cases) |case| {
-        try std.testing.expectError(error.NounsetParameter, expandWord(std.testing.allocator, case, .{ .nounset = true }));
+        try std.testing.expectError(
+            error.NounsetParameter,
+            expandWord(std.testing.allocator, case, .{ .nounset = true }),
+        );
     }
 
     const unset_without_nounset = try expandWordScalar(std.testing.allocator, "${MISSING%foo}:${MISSING#foo}", .{});
@@ -6957,11 +8904,19 @@ test "glob syntax detection requires complete bracket expressions" {
 }
 
 test "parameter operator word spans skip nested substitutions and quoted braces" {
-    const nested = try expandWordScalar(std.testing.allocator, "${MISSING:-$(printf 'a}b')}:${MISSING:-${USER}}:${MISSING:-$((1 + 2))}", .{ .env = test_env, .command_substitution = test_command_substitution });
+    const nested = try expandWordScalar(
+        std.testing.allocator,
+        "${MISSING:-$(printf 'a}b')}:${MISSING:-${USER}}:${MISSING:-$((1 + 2))}",
+        .{ .env = test_env, .command_substitution = test_command_substitution },
+    );
     defer std.testing.allocator.free(nested);
     try std.testing.expectEqualStrings("a}b:rush-user:3", nested);
 
-    const pattern = try expandWordScalar(std.testing.allocator, "${BRACED%$(printf '}cd')}:${BRACED%\"}cd\"}", .{ .env = test_env, .command_substitution = test_command_substitution });
+    const pattern = try expandWordScalar(
+        std.testing.allocator,
+        "${BRACED%$(printf '}cd')}:${BRACED%\"}cd\"}",
+        .{ .env = test_env, .command_substitution = test_command_substitution },
+    );
     defer std.testing.allocator.free(pattern);
     try std.testing.expectEqualStrings("ab:ab", pattern);
 }
@@ -7001,7 +8956,11 @@ test "quoted parameter operator words keep single quotes literal" {
     try std.testing.expectEqualStrings("'rush-user'", alternate.fields[0]);
 
     var assign_recorder: ArithmeticSetRecorder = .{};
-    var assign = try expandWord(std.testing.allocator, "\"${ASSIGNED:='a'}\"", .{ .env = test_env, .env_set = assign_recorder.envSet() });
+    var assign = try expandWord(
+        std.testing.allocator,
+        "\"${ASSIGNED:='a'}\"",
+        .{ .env = test_env, .env_set = assign_recorder.envSet() },
+    );
     defer assign.deinit();
     try std.testing.expectEqual(@as(usize, 1), assign.fields.len);
     try std.testing.expectEqualStrings("'a'", assign.fields[0]);
@@ -7009,7 +8968,14 @@ test "quoted parameter operator words keep single quotes literal" {
 
     var parameter_error: ParameterError = .{};
     defer parameter_error.clear(std.testing.allocator);
-    try std.testing.expectError(error.ParameterExpansionFailed, expandWordScalar(std.testing.allocator, "\"${MISSING?'$USER'}\"", .{ .env = test_env, .parameter_error = &parameter_error }));
+    try std.testing.expectError(
+        error.ParameterExpansionFailed,
+        expandWordScalar(
+            std.testing.allocator,
+            "\"${MISSING?'$USER'}\"",
+            .{ .env = test_env, .parameter_error = &parameter_error },
+        ),
+    );
     try std.testing.expectEqualStrings("'rush-user'", parameter_error.message);
 
     var unquoted = try expandWord(std.testing.allocator, "${MISSING-'a'}", .{ .env = test_env });
@@ -7120,25 +9086,41 @@ test "unquoted positional parameters split field-aware values" {
     try std.testing.expectEqualStrings("c", star.fields[2]);
 
     const spaced_params = [_][]const u8{ "a b", "c d" };
-    var empty_ifs_star = try expandWord(std.testing.allocator, "$*", .{ .positionals = &spaced_params, .env = test_empty_ifs_env });
+    var empty_ifs_star = try expandWord(
+        std.testing.allocator,
+        "$*",
+        .{ .positionals = &spaced_params, .env = test_empty_ifs_env },
+    );
     defer empty_ifs_star.deinit();
     try std.testing.expectEqual(@as(usize, 2), empty_ifs_star.fields.len);
     try std.testing.expectEqualStrings("a b", empty_ifs_star.fields[0]);
     try std.testing.expectEqualStrings("c d", empty_ifs_star.fields[1]);
 
-    var empty_ifs_at = try expandWord(std.testing.allocator, "$@", .{ .positionals = &spaced_params, .env = test_empty_ifs_env });
+    var empty_ifs_at = try expandWord(
+        std.testing.allocator,
+        "$@",
+        .{ .positionals = &spaced_params, .env = test_empty_ifs_env },
+    );
     defer empty_ifs_at.deinit();
     try std.testing.expectEqual(@as(usize, 2), empty_ifs_at.fields.len);
     try std.testing.expectEqualStrings("a b", empty_ifs_at.fields[0]);
     try std.testing.expectEqualStrings("c d", empty_ifs_at.fields[1]);
 
-    var embedded_empty_ifs_star = try expandWord(std.testing.allocator, "pre$*post", .{ .positionals = &spaced_params, .env = test_empty_ifs_env });
+    var embedded_empty_ifs_star = try expandWord(
+        std.testing.allocator,
+        "pre$*post",
+        .{ .positionals = &spaced_params, .env = test_empty_ifs_env },
+    );
     defer embedded_empty_ifs_star.deinit();
     try std.testing.expectEqual(@as(usize, 2), embedded_empty_ifs_star.fields.len);
     try std.testing.expectEqualStrings("prea b", embedded_empty_ifs_star.fields[0]);
     try std.testing.expectEqualStrings("c dpost", embedded_empty_ifs_star.fields[1]);
 
-    var embedded_empty_ifs_at = try expandWord(std.testing.allocator, "pre$@post", .{ .positionals = &spaced_params, .env = test_empty_ifs_env });
+    var embedded_empty_ifs_at = try expandWord(
+        std.testing.allocator,
+        "pre$@post",
+        .{ .positionals = &spaced_params, .env = test_empty_ifs_env },
+    );
     defer embedded_empty_ifs_at.deinit();
     try std.testing.expectEqual(@as(usize, 2), embedded_empty_ifs_at.fields.len);
     try std.testing.expectEqualStrings("prea b", embedded_empty_ifs_at.fields[0]);
@@ -7146,9 +9128,25 @@ test "unquoted positional parameters split field-aware values" {
 }
 
 test "braced multi-digit positional parameters use the full decimal index" {
-    const params = [_][]const u8{ "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten words", "eleven" };
+    const params = [_][]const u8{
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten words",
+        "eleven",
+    };
 
-    const scalar = try expandWordScalar(std.testing.allocator, "${10}:${11}:${12}:${01}:$10", .{ .positionals = &params });
+    const scalar = try expandWordScalar(
+        std.testing.allocator,
+        "${10}:${11}:${12}:${01}:$10",
+        .{ .positionals = &params },
+    );
     defer std.testing.allocator.free(scalar);
     try std.testing.expectEqualStrings("ten words:eleven::one:one0", scalar);
 
@@ -7201,32 +9199,56 @@ test "quote removal preserves non-special backslashes in double quotes" {
 }
 
 test "command substitution expands inside double quotes" {
-    var result = try expandWord(std.testing.allocator, "\"before-$(echo hi)-after\"", .{ .command_substitution = test_command_substitution });
+    var result = try expandWord(
+        std.testing.allocator,
+        "\"before-$(echo hi)-after\"",
+        .{ .command_substitution = test_command_substitution },
+    );
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("before-hi-after", result.fields[0]);
 
-    var spaced = try expandWord(std.testing.allocator, "\"$(echo hi)\"", .{ .command_substitution = test_command_substitution });
+    var spaced = try expandWord(
+        std.testing.allocator,
+        "\"$(echo hi)\"",
+        .{ .command_substitution = test_command_substitution },
+    );
     defer spaced.deinit();
     try std.testing.expectEqual(@as(usize, 1), spaced.fields.len);
     try std.testing.expectEqualStrings("hi", spaced.fields[0]);
 
-    var backquote = try expandWord(std.testing.allocator, "\"before-`echo hi`-after\"", .{ .command_substitution = test_command_substitution });
+    var backquote = try expandWord(
+        std.testing.allocator,
+        "\"before-`echo hi`-after\"",
+        .{ .command_substitution = test_command_substitution },
+    );
     defer backquote.deinit();
     try std.testing.expectEqual(@as(usize, 1), backquote.fields.len);
     try std.testing.expectEqualStrings("before-hi-after", backquote.fields[0]);
 }
 
-fn testScriptEchoSubstitution(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
+fn testScriptEchoSubstitution(
+    _: ?*anyopaque,
+    allocator: std.mem.Allocator, // ziglint-ignore: Z023 (callback iface)
+    script: []const u8,
+) ![]const u8 {
     return allocator.dupe(u8, script);
 }
 
 test "here-doc body keeps quotes and non-special backslashes literal" {
-    const literal = try expandHereDocBody(std.testing.allocator, "\"q\" 'one' \\\"x\\\" a\\tb \\$lit \\\\ ${UNSET_NAME:-~}", .{ .env = test_env });
+    const literal = try expandHereDocBody(
+        std.testing.allocator,
+        "\"q\" 'one' \\\"x\\\" a\\tb \\$lit \\\\ ${UNSET_NAME:-~}",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(literal);
     try std.testing.expectEqualStrings("\"q\" 'one' \\\"x\\\" a\\tb $lit \\ ~", literal);
 
-    const expanded = try expandHereDocBody(std.testing.allocator, "$USER $((1 + 2)) line\\\njoined", .{ .env = test_env });
+    const expanded = try expandHereDocBody(
+        std.testing.allocator,
+        "$USER $((1 + 2)) line\\\njoined",
+        .{ .env = test_env },
+    );
     defer std.testing.allocator.free(expanded);
     try std.testing.expectEqualStrings("rush-user 3 linejoined", expanded);
 }
@@ -7257,7 +9279,11 @@ test "double-quoted command substitution may contain double quotes" {
     try std.testing.expectEqualStrings("$(echo \"n $(echo \"d)p\")\")", nested.parts[0].value(nested.raw));
 
     const echo_script: CommandSubstitution = .{ .runFn = testScriptEchoSubstitution };
-    var rendered = try expandWord(std.testing.allocator, "\"$(cmd \"x)y\")\"", .{ .command_substitution = echo_script });
+    var rendered = try expandWord(
+        std.testing.allocator,
+        "\"$(cmd \"x)y\")\"",
+        .{ .command_substitution = echo_script },
+    );
     defer rendered.deinit();
     try std.testing.expectEqual(@as(usize, 1), rendered.fields.len);
     try std.testing.expectEqualStrings("cmd \"x)y\"", rendered.fields[0]);
@@ -7266,12 +9292,20 @@ test "double-quoted command substitution may contain double quotes" {
 test "command substitution parses case pattern parens" {
     const echo_script: CommandSubstitution = .{ .runFn = testScriptEchoSubstitution };
 
-    var rendered = try expandWord(std.testing.allocator, "\"$(case x in x) echo case-in-subst ;; esac)\"", .{ .command_substitution = echo_script });
+    var rendered = try expandWord(
+        std.testing.allocator,
+        "\"$(case x in x) echo case-in-subst ;; esac)\"",
+        .{ .command_substitution = echo_script },
+    );
     defer rendered.deinit();
     try std.testing.expectEqual(@as(usize, 1), rendered.fields.len);
     try std.testing.expectEqualStrings("case x in x) echo case-in-subst ;; esac", rendered.fields[0]);
 
-    var optional = try expandWord(std.testing.allocator, "\"$(case x in (x) echo optional ;; esac)\"", .{ .command_substitution = echo_script });
+    var optional = try expandWord(
+        std.testing.allocator,
+        "\"$(case x in (x) echo optional ;; esac)\"",
+        .{ .command_substitution = echo_script },
+    );
     defer optional.deinit();
     try std.testing.expectEqual(@as(usize, 1), optional.fields.len);
     try std.testing.expectEqualStrings("case x in (x) echo optional ;; esac", optional.fields[0]);
@@ -7280,7 +9314,11 @@ test "command substitution parses case pattern parens" {
 test "backquote escaped double-quote is unescaped only inside double quotes" {
     const echo_script: CommandSubstitution = .{ .runFn = testScriptEchoSubstitution };
 
-    var quoted = try expandWord(std.testing.allocator, "\"`cmd \\\"x y\\\"`\"", .{ .command_substitution = echo_script });
+    var quoted = try expandWord(
+        std.testing.allocator,
+        "\"`cmd \\\"x y\\\"`\"",
+        .{ .command_substitution = echo_script },
+    );
     defer quoted.deinit();
     try std.testing.expectEqual(@as(usize, 1), quoted.fields.len);
     try std.testing.expectEqualStrings("cmd \"x y\"", quoted.fields[0]);
@@ -7311,7 +9349,11 @@ test "command substitution parses and trims callback output" {
     try std.testing.expectEqual(WordPartKind.command_substitution, parts.parts[1].kind);
     try std.testing.expectEqualStrings("echo hi", parts.parts[1].value(parts.raw));
 
-    var result = try expandWord(std.testing.allocator, "before-$(echo hi)-after", .{ .command_substitution = test_command_substitution });
+    var result = try expandWord(
+        std.testing.allocator,
+        "before-$(echo hi)-after",
+        .{ .command_substitution = test_command_substitution },
+    );
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.fields.len);
     try std.testing.expectEqualStrings("before-hi-after", result.fields[0]);
@@ -7322,7 +9364,11 @@ test "command substitution parses and trims callback output" {
     try std.testing.expectEqual(WordPartKind.command_substitution, backquote_parts.parts[1].kind);
     try std.testing.expectEqualStrings("echo hi", backquote_parts.parts[1].value(backquote_parts.raw));
 
-    var backquote_result = try expandWord(std.testing.allocator, "before-`echo hi`-after", .{ .command_substitution = test_command_substitution });
+    var backquote_result = try expandWord(
+        std.testing.allocator,
+        "before-`echo hi`-after",
+        .{ .command_substitution = test_command_substitution },
+    );
     defer backquote_result.deinit();
     try std.testing.expectEqual(@as(usize, 1), backquote_result.fields.len);
     try std.testing.expectEqualStrings("before-hi-after", backquote_result.fields[0]);
@@ -7415,7 +9461,12 @@ fn arithmeticSetRecorderSet(context: ?*anyopaque, name: []const u8, value: []con
     recorder.count += 1;
 }
 
-fn arithmeticSetRecorderSetArray(context: ?*anyopaque, name: []const u8, index: usize, value: []const u8) anyerror!void {
+fn arithmeticSetRecorderSetArray(
+    context: ?*anyopaque,
+    name: []const u8,
+    index: usize,
+    value: []const u8,
+) anyerror!void {
     const recorder: *ArithmeticSetRecorder = @ptrCast(@alignCast(context.?));
     try std.testing.expect(name.len <= recorder.last_name.len);
     try std.testing.expect(value.len <= recorder.last_value.len);
@@ -7452,8 +9503,14 @@ test "arithmetic expansion short-circuits logical operands" {
 
     try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("0 && (1 / 0)", .{}, recorder.envSet()));
     try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 || (1 / 0)", .{}, recorder.envSet()));
-    try std.testing.expectEqual(@as(i64, 0), try evalArithmetic("0 && (9223372036854775807 + 1)", .{}, recorder.envSet()));
-    try std.testing.expectEqual(@as(i64, 1), try evalArithmetic("1 || (9223372036854775807 + 1)", .{}, recorder.envSet()));
+    try std.testing.expectEqual(
+        @as(i64, 0),
+        try evalArithmetic("0 && (9223372036854775807 + 1)", .{}, recorder.envSet()),
+    );
+    try std.testing.expectEqual(
+        @as(i64, 1),
+        try evalArithmetic("1 || (9223372036854775807 + 1)", .{}, recorder.envSet()),
+    );
 
     try std.testing.expectError(error.DivisionByZero, evalArithmetic("1 && (1 / 0)", .{}, recorder.envSet()));
     try std.testing.expectError(error.DivisionByZero, evalArithmetic("0 || (1 / 0)", .{}, recorder.envSet()));
@@ -7473,8 +9530,14 @@ test "arithmetic expansion evaluates only the selected conditional operand" {
 
     try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 ? 7 : (1 / 0)", .{}, recorder.envSet()));
     try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("0 ? (1 / 0) : 7", .{}, recorder.envSet()));
-    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("1 ? 7 : (9223372036854775807 + 1)", .{}, recorder.envSet()));
-    try std.testing.expectEqual(@as(i64, 7), try evalArithmetic("0 ? (9223372036854775807 + 1) : 7", .{}, recorder.envSet()));
+    try std.testing.expectEqual(
+        @as(i64, 7),
+        try evalArithmetic("1 ? 7 : (9223372036854775807 + 1)", .{}, recorder.envSet()),
+    );
+    try std.testing.expectEqual(
+        @as(i64, 7),
+        try evalArithmetic("0 ? (9223372036854775807 + 1) : 7", .{}, recorder.envSet()),
+    );
 
     try std.testing.expectError(error.DivisionByZero, evalArithmetic("0 ? 7 : (1 / 0)", .{}, recorder.envSet()));
     try std.testing.expectError(error.DivisionByZero, evalArithmetic("1 ? (1 / 0) : 7", .{}, recorder.envSet()));
@@ -7494,7 +9557,14 @@ test "arithmetic expansion rejects invalid variable values" {
     var arithmetic_error: ArithmeticError = .{};
     defer arithmetic_error.clear(std.testing.allocator);
 
-    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((EXPRESSION_VALUE))", .{ .env = test_env, .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectError(
+        error.ArithmeticExpansionFailed,
+        expandWordScalar(
+            std.testing.allocator,
+            "$((EXPRESSION_VALUE))",
+            .{ .env = test_env, .arithmetic_error = &arithmetic_error },
+        ),
+    );
     try std.testing.expectEqualStrings("$((EXPRESSION_VALUE))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
 }
@@ -7510,7 +9580,11 @@ test "arithmetic expansion preprocesses nested expansion tokens" {
     try std.testing.expectEqual(@as(usize, 1), unbraced.fields.len);
     try std.testing.expectEqualStrings("7", unbraced.fields[0]);
 
-    var command = try expandWord(std.testing.allocator, "$((1 + $(printf 2)))", .{ .command_substitution = test_command_substitution });
+    var command = try expandWord(
+        std.testing.allocator,
+        "$((1 + $(printf 2)))",
+        .{ .command_substitution = test_command_substitution },
+    );
     defer command.deinit();
     try std.testing.expectEqual(@as(usize, 1), command.fields.len);
     try std.testing.expectEqualStrings("3", command.fields[0]);
@@ -7527,7 +9601,11 @@ test "arithmetic expansion applies POSIX quote and backslash preprocessing" {
     try std.testing.expectEqual(@as(usize, 1), continuation.fields.len);
     try std.testing.expectEqualStrings("3", continuation.fields[0]);
 
-    var backquote = try expandWord(std.testing.allocator, "$((1 + `printf 2`))", .{ .command_substitution = test_command_substitution });
+    var backquote = try expandWord(
+        std.testing.allocator,
+        "$((1 + `printf 2`))",
+        .{ .command_substitution = test_command_substitution },
+    );
     defer backquote.deinit();
     try std.testing.expectEqual(@as(usize, 1), backquote.fields.len);
     try std.testing.expectEqualStrings("3", backquote.fields[0]);
@@ -7535,11 +9613,17 @@ test "arithmetic expansion applies POSIX quote and backslash preprocessing" {
     var arithmetic_error: ArithmeticError = .{};
     defer arithmetic_error.clear(std.testing.allocator);
 
-    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((1 + \\${MISSING:-2))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectError(
+        error.ArithmeticExpansionFailed,
+        expandWordScalar(std.testing.allocator, "$((1 + \\${MISSING:-2))", .{ .arithmetic_error = &arithmetic_error }),
+    );
     try std.testing.expectEqualStrings("$((1 + \\${MISSING:-2))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
 
-    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((\"1\" + 2))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectError(
+        error.ArithmeticExpansionFailed,
+        expandWordScalar(std.testing.allocator, "$((\"1\" + 2))", .{ .arithmetic_error = &arithmetic_error }),
+    );
     try std.testing.expectEqualStrings("$((\"1\" + 2))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
 }
@@ -7548,15 +9632,24 @@ test "arithmetic expansion records diagnostics instead of leaking parser errors"
     var arithmetic_error: ArithmeticError = .{};
     defer arithmetic_error.clear(std.testing.allocator);
 
-    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((2 ** 3))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectError(
+        error.ArithmeticExpansionFailed,
+        expandWordScalar(std.testing.allocator, "$((2 ** 3))", .{ .arithmetic_error = &arithmetic_error }),
+    );
     try std.testing.expectEqualStrings("$((2 ** 3))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("invalid arithmetic expression", arithmetic_error.message);
 
-    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((1 / 0))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectError(
+        error.ArithmeticExpansionFailed,
+        expandWordScalar(std.testing.allocator, "$((1 / 0))", .{ .arithmetic_error = &arithmetic_error }),
+    );
     try std.testing.expectEqualStrings("$((1 / 0))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("division by zero", arithmetic_error.message);
 
-    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((1 % 0))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectError(
+        error.ArithmeticExpansionFailed,
+        expandWordScalar(std.testing.allocator, "$((1 % 0))", .{ .arithmetic_error = &arithmetic_error }),
+    );
     try std.testing.expectEqualStrings("$((1 % 0))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("division by zero", arithmetic_error.message);
 
@@ -7567,7 +9660,14 @@ test "arithmetic expansion records diagnostics instead of leaking parser errors"
     try std.testing.expectError(error.Overflow, evalArithmetic("(-9223372036854775808) / -1", .{}, .{}));
     try std.testing.expectError(error.Overflow, evalArithmetic("0x8000000000000000", .{}, .{}));
 
-    try std.testing.expectError(error.ArithmeticExpansionFailed, expandWordScalar(std.testing.allocator, "$((9223372036854775807 + 1))", .{ .arithmetic_error = &arithmetic_error }));
+    try std.testing.expectError(
+        error.ArithmeticExpansionFailed,
+        expandWordScalar(
+            std.testing.allocator,
+            "$((9223372036854775807 + 1))",
+            .{ .arithmetic_error = &arithmetic_error },
+        ),
+    );
     try std.testing.expectEqualStrings("$((9223372036854775807 + 1))", arithmetic_error.expression);
     try std.testing.expectEqualStrings("arithmetic overflow", arithmetic_error.message);
 }
@@ -7647,13 +9747,21 @@ test "pathname expansion honors nullglob and dotglob options" {
     try std.testing.expectEqual(@as(usize, 1), default_glob.fields.len);
     try std.testing.expectEqualStrings(visible, default_glob.fields[0]);
 
-    var dotglob = try expandWord(std.testing.allocator, "rush-glob-shopt-dir/*.tmp", .{ .io = std.testing.io, .pathname_dotglob = true });
+    var dotglob = try expandWord(
+        std.testing.allocator,
+        "rush-glob-shopt-dir/*.tmp",
+        .{ .io = std.testing.io, .pathname_dotglob = true },
+    );
     defer dotglob.deinit();
     try std.testing.expectEqual(@as(usize, 2), dotglob.fields.len);
     try std.testing.expectEqualStrings(hidden, dotglob.fields[0]);
     try std.testing.expectEqualStrings(visible, dotglob.fields[1]);
 
-    var unmatched = try expandWord(std.testing.allocator, "rush-glob-shopt-dir/*.missing", .{ .io = std.testing.io, .pathname_nullglob = true });
+    var unmatched = try expandWord(
+        std.testing.allocator,
+        "rush-glob-shopt-dir/*.missing",
+        .{ .io = std.testing.io, .pathname_nullglob = true },
+    );
     defer unmatched.deinit();
     try std.testing.expectEqual(@as(usize, 0), unmatched.fields.len);
 }
@@ -7674,7 +9782,11 @@ test "pathname expansion honors extglob option" {
     try std.testing.expectEqual(@as(usize, 1), disabled.fields.len);
     try std.testing.expectEqualStrings("rush-extglob-@(a|b).tmp", disabled.fields[0]);
 
-    var enabled = try expandWord(std.testing.allocator, "rush-extglob-@(a|b).tmp", .{ .io = std.testing.io, .extglob = true });
+    var enabled = try expandWord(
+        std.testing.allocator,
+        "rush-extglob-@(a|b).tmp",
+        .{ .io = std.testing.io, .extglob = true },
+    );
     defer enabled.deinit();
     try std.testing.expectEqual(@as(usize, 2), enabled.fields.len);
     try std.testing.expectEqualStrings(a, enabled.fields[0]);
@@ -7720,12 +9832,20 @@ test "pathname expansion treats incomplete bracket expressions as literals" {
     try std.testing.expectEqual(@as(usize, 1), command_word.fields.len);
     try std.testing.expectEqualStrings("[", command_word.fields[0]);
 
-    var argument_word = try expandWord(std.testing.allocator, "]", .{ .io = std.testing.io, .pathname_nullglob = true });
+    var argument_word = try expandWord(
+        std.testing.allocator,
+        "]",
+        .{ .io = std.testing.io, .pathname_nullglob = true },
+    );
     defer argument_word.deinit();
     try std.testing.expectEqual(@as(usize, 1), argument_word.fields.len);
     try std.testing.expectEqualStrings("]", argument_word.fields[0]);
 
-    var embedded = try expandWord(std.testing.allocator, "rush-unclosed-[.tmp", .{ .io = std.testing.io, .pathname_nullglob = true });
+    var embedded = try expandWord(
+        std.testing.allocator,
+        "rush-unclosed-[.tmp",
+        .{ .io = std.testing.io, .pathname_nullglob = true },
+    );
     defer embedded.deinit();
     try std.testing.expectEqual(@as(usize, 1), embedded.fields.len);
     try std.testing.expectEqualStrings("rush-unclosed-[.tmp", embedded.fields[0]);
@@ -7747,7 +9867,11 @@ test "pathname expansion bracket expressions support POSIX character classes" {
     try std.testing.expectEqual(@as(usize, 1), upper_result.fields.len);
     try std.testing.expectEqualStrings(upper, upper_result.fields[0]);
 
-    var negated_result = try expandWord(std.testing.allocator, "rush-class-[![:digit:]].tmp", .{ .io = std.testing.io });
+    var negated_result = try expandWord(
+        std.testing.allocator,
+        "rush-class-[![:digit:]].tmp",
+        .{ .io = std.testing.io },
+    );
     defer negated_result.deinit();
     try std.testing.expectEqual(@as(usize, 2), negated_result.fields.len);
     try std.testing.expectEqualStrings(upper, negated_result.fields[0]);

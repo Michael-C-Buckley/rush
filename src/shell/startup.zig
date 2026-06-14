@@ -5,7 +5,14 @@ const build_options = @import("builtin");
 
 const state = @import("state.zig");
 
-pub fn initializeInvocationState(allocator: std.mem.Allocator, io: std.Io, shell_state: *state.ShellState, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, shell_options: state.ShellOptions) !void {
+pub fn initializeInvocationState(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *state.ShellState,
+    environ_map: ?*const std.process.Environ.Map,
+    positionals: []const []const u8,
+    shell_options: state.ShellOptions,
+) !void {
     shell_state.validate();
     shell_state.options = shell_options;
 
@@ -40,7 +47,14 @@ pub fn initializeInvocationState(allocator: std.mem.Allocator, io: std.Io, shell
     shell_state.validate();
 }
 
-pub fn initializeInteractiveState(allocator: std.mem.Allocator, io: std.Io, shell_state: *state.ShellState, environ_map: *const std.process.Environ.Map, positionals: []const []const u8, shell_options: state.ShellOptions) !void {
+pub fn initializeInteractiveState(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *state.ShellState,
+    environ_map: *const std.process.Environ.Map,
+    positionals: []const []const u8,
+    shell_options: state.ShellOptions,
+) !void {
     try initializeInvocationState(allocator, io, shell_state, environ_map, positionals, shell_options);
     shell_state.validate();
 }

@@ -683,7 +683,10 @@ pub fn classifyExpandedSimpleCommand(request: PlanRequest) CommandPlan {
     return CommandPlan.classify(request);
 }
 
-pub fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: FunctionDefinition) std.mem.Allocator.Error!FunctionDefinition {
+pub fn cloneFunctionDefinition(
+    allocator: std.mem.Allocator,
+    definition: FunctionDefinition,
+) std.mem.Allocator.Error!FunctionDefinition {
     definition.validate();
     const owned_name = try allocator.dupe(u8, definition.name);
     errdefer allocator.free(owned_name);
@@ -709,7 +712,10 @@ pub fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: Function
     redirections.deinit();
 }
 
-fn targetForClassification(default_target: context.ExecutionTarget, classification: Classification) context.ExecutionTarget {
+fn targetForClassification(
+    default_target: context.ExecutionTarget,
+    classification: Classification,
+) context.ExecutionTarget {
     return switch (classification) {
         .external => .child_process,
         else => default_target,
@@ -827,7 +833,10 @@ fn freeCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) void {
     freeClassification(allocator, plan.classification);
 }
 
-fn cloneAssignments(allocator: std.mem.Allocator, assignments: []const Assignment) std.mem.Allocator.Error![]const Assignment {
+fn cloneAssignments(
+    allocator: std.mem.Allocator,
+    assignments: []const Assignment,
+) std.mem.Allocator.Error![]const Assignment {
     const owned = try allocator.alloc(Assignment, assignments.len);
     errdefer allocator.free(owned);
     var initialized: usize = 0;
@@ -873,20 +882,29 @@ fn freeArgv(allocator: std.mem.Allocator, argv: []const []const u8) void {
     allocator.free(argv);
 }
 
-fn cloneClassification(allocator: std.mem.Allocator, classification: Classification, cloned_argv: []const []const u8) std.mem.Allocator.Error!Classification {
+fn cloneClassification(
+    allocator: std.mem.Allocator,
+    classification: Classification,
+    cloned_argv: []const []const u8,
+) std.mem.Allocator.Error!Classification {
     return switch (classification) {
         .empty => .{ .empty = {} },
         .assignment_only => .{ .assignment_only = {} },
         .special_builtin => |definition| .{ .special_builtin = definition },
         .regular_builtin => |definition| .{ .regular_builtin = definition },
-        .function_definition => |definition| .{ .function_definition = try cloneFunctionDefinition(allocator, definition) },
+        .function_definition => |definition| .{
+            .function_definition = try cloneFunctionDefinition(allocator, definition),
+        },
         .function => |definition| .{ .function = try cloneFunctionDefinition(allocator, definition) },
         .external => |resolution| .{ .external = try cloneExternalResolution(allocator, resolution) },
         .not_found => .{ .not_found = .{ .name = cloned_argv[0] } },
     };
 }
 
-fn cloneExternalResolution(allocator: std.mem.Allocator, resolution: ExternalResolution) std.mem.Allocator.Error!ExternalResolution {
+fn cloneExternalResolution(
+    allocator: std.mem.Allocator,
+    resolution: ExternalResolution,
+) std.mem.Allocator.Error!ExternalResolution {
     const name = try allocator.dupe(u8, resolution.name);
     errdefer allocator.free(name);
     const path = try allocator.dupe(u8, resolution.path);
@@ -905,7 +923,10 @@ fn freeClassification(allocator: std.mem.Allocator, classification: Classificati
     }
 }
 
-fn cloneCompoundCommandPlan(allocator: std.mem.Allocator, plan: CompoundCommandPlan) std.mem.Allocator.Error!CompoundCommandPlan {
+fn cloneCompoundCommandPlan(
+    allocator: std.mem.Allocator,
+    plan: CompoundCommandPlan,
+) std.mem.Allocator.Error!CompoundCommandPlan {
     plan.validate();
     var redirections = try plan.redirections.clone(allocator);
     errdefer redirections.deinit();
@@ -958,7 +979,10 @@ fn cloneAndOrPlan(allocator: std.mem.Allocator, plan: AndOrPlan) std.mem.Allocat
     var initialized: usize = 0;
     errdefer for (commands[0..initialized]) |command| freeCommandPlan(allocator, command.command);
     for (plan.commands, 0..) |command, index| {
-        commands[index] = .{ .operator = command.operator, .command = try cloneCommandPlan(allocator, command.command) };
+        commands[index] = .{
+            .operator = command.operator,
+            .command = try cloneCommandPlan(allocator, command.command),
+        };
         initialized += 1;
     }
     return .{ .commands = commands };
@@ -1122,7 +1146,11 @@ fn clonePipelinePlan(allocator: std.mem.Allocator, plan: PipelinePlan) std.mem.A
         stages[index] = try clonePipelineStagePlan(allocator, stage);
         initialized += 1;
     }
-    return PipelinePlan.init(stages, .{ .negated = plan.negated, .status_rule = plan.status_rule, .background = plan.background });
+    return PipelinePlan.init(stages, .{
+        .negated = plan.negated,
+        .status_rule = plan.status_rule,
+        .background = plan.background,
+    });
 }
 
 fn freePipelinePlan(allocator: std.mem.Allocator, plan: PipelinePlan) void {
@@ -1130,7 +1158,10 @@ fn freePipelinePlan(allocator: std.mem.Allocator, plan: PipelinePlan) void {
     allocator.free(plan.stages);
 }
 
-fn clonePipelineStagePlan(allocator: std.mem.Allocator, stage: PipelineStagePlan) std.mem.Allocator.Error!PipelineStagePlan {
+fn clonePipelineStagePlan(
+    allocator: std.mem.Allocator,
+    stage: PipelineStagePlan,
+) std.mem.Allocator.Error!PipelineStagePlan {
     stage.validate();
     return switch (stage) {
         .simple => |simple| .{ .simple = try cloneCommandPlan(allocator, simple) },
@@ -1145,7 +1176,10 @@ fn freePipelineStagePlan(allocator: std.mem.Allocator, stage: PipelineStagePlan)
     }
 }
 
-fn choosePipelineStrategy(stages: []const PipelineStagePlan, background: PipelineBackgroundMode) PipelineExecutionStrategy {
+fn choosePipelineStrategy(
+    stages: []const PipelineStagePlan,
+    background: PipelineBackgroundMode,
+) PipelineExecutionStrategy {
     std.debug.assert(stages.len != 0);
     for (stages) |stage| stage.validate();
     if (background == .background) return .background_deferred;
@@ -1190,7 +1224,10 @@ test "CommandPlan classifies expanded simple command shapes" {
     const assignments = [_]Assignment{.{ .name = "FOO", .value = "bar" }};
     const redirection_steps = [_]redirection_plan.RedirectionStep{redirection_plan.RedirectionStep.close(0, 1)};
     const rollback_steps = [_]redirection_plan.RestorationStep{.{ .ordinal = 0, .target = 1 }};
-    const redirections: redirection_plan.RedirectionPlan = .{ .steps = &redirection_steps, .rollback_steps = &rollback_steps };
+    const redirections: redirection_plan.RedirectionPlan = .{
+        .steps = &redirection_steps,
+        .rollback_steps = &rollback_steps,
+    };
     const echo_argv = [_][]const u8{ "echo", "hello" };
     const function_argv = [_][]const u8{"say_hi"};
     const external_argv = [_][]const u8{ "cat", "file" };
@@ -1212,7 +1249,10 @@ test "CommandPlan classifies expanded simple command shapes" {
     try std.testing.expectEqual(AssignmentEffect.persistent, assignment_only.assignmentEffect());
     try std.testing.expectEqual(@as(usize, 0), assignment_only.argv.len);
 
-    const special = classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &[_][]const u8{"export"} } });
+    const special = classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{"export"},
+    } });
     try std.testing.expectEqual(CommandClass.special_builtin, special.class());
     try std.testing.expectEqual(AssignmentEffect.persistent, special.assignmentEffect());
 
@@ -1220,11 +1260,17 @@ test "CommandPlan classifies expanded simple command shapes" {
     try std.testing.expectEqual(CommandClass.regular_builtin, regular.class());
     try std.testing.expectEqual(AssignmentEffect.temporary, regular.assignmentEffect());
 
-    const function_plan = classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &function_argv }, .lookup = lookup });
+    const function_plan = classifyExpandedSimpleCommand(.{
+        .command = .{ .assignments = &assignments, .argv = &function_argv },
+        .lookup = lookup,
+    });
     try std.testing.expectEqual(CommandClass.function, function_plan.class());
     try std.testing.expectEqual(AssignmentEffect.temporary, function_plan.assignmentEffect());
 
-    const external = classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &external_argv }, .lookup = lookup });
+    const external = classifyExpandedSimpleCommand(.{
+        .command = .{ .assignments = &assignments, .argv = &external_argv },
+        .lookup = lookup,
+    });
     try std.testing.expectEqual(CommandClass.external, external.class());
     try std.testing.expectEqual(AssignmentEffect.temporary, external.assignmentEffect());
     try std.testing.expectEqual(context.ExecutionTarget.child_process, external.target);
@@ -1256,21 +1302,40 @@ test "CommandPlan lookup precedence is special builtin function regular builtin 
         .{ .name = "only_external", .path = "/bin/only_external" },
         .{ .name = "/bin/regular", .path = "/bin/regular" },
     };
-    const lookup: LookupSnapshot = .{ .builtins = &colliding_builtins, .functions = &functions, .externals = &externals };
+    const lookup: LookupSnapshot = .{
+        .builtins = &colliding_builtins,
+        .functions = &functions,
+        .externals = &externals,
+    };
 
-    const special = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"special"} }, .lookup = lookup });
+    const special = classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"special"} },
+        .lookup = lookup,
+    });
     try std.testing.expectEqual(CommandClass.special_builtin, special.class());
 
-    const regular_collision = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"regular"} }, .lookup = lookup });
+    const regular_collision = classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"regular"} },
+        .lookup = lookup,
+    });
     try std.testing.expectEqual(CommandClass.function, regular_collision.class());
 
-    const builtin_collision = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"only_builtin"} }, .lookup = lookup });
+    const builtin_collision = classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"only_builtin"} },
+        .lookup = lookup,
+    });
     try std.testing.expectEqual(CommandClass.regular_builtin, builtin_collision.class());
 
-    const external = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"only_external"} }, .lookup = lookup });
+    const external = classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"only_external"} },
+        .lookup = lookup,
+    });
     try std.testing.expectEqual(CommandClass.external, external.class());
 
-    const path_command = classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"/bin/regular"} }, .lookup = lookup });
+    const path_command = classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"/bin/regular"} },
+        .lookup = lookup,
+    });
     try std.testing.expectEqual(CommandClass.external, path_command.class());
 }
 

@@ -69,7 +69,9 @@ pub const Builder = struct {
         owned_candidate.value = try self.dupeField(allocator, candidate.value);
         if (candidate.display) |display| owned_candidate.display = try self.dupeField(allocator, display);
         if (candidate.insert) |insert| owned_candidate.insert = try self.dupeField(allocator, insert);
-        if (candidate.description) |description| owned_candidate.description = try self.dupeField(allocator, description);
+        if (candidate.description) |description| {
+            owned_candidate.description = try self.dupeField(allocator, description);
+        }
         if (candidate.tag) |tag| owned_candidate.tag = try self.dupeField(allocator, tag);
         if (candidate.suffix) |suffix| owned_candidate.suffix = try self.dupeField(allocator, suffix);
         if (candidate.option) |option| {
@@ -94,7 +96,12 @@ pub const Builder = struct {
         try self.candidates.append(allocator, owned_candidate);
     }
 
-    pub fn applyValueSegmentSuffix(self: *Builder, allocator: std.mem.Allocator, start: usize, segment: ?ValueSegment) !void {
+    pub fn applyValueSegmentSuffix(
+        self: *Builder,
+        allocator: std.mem.Allocator,
+        start: usize,
+        segment: ?ValueSegment,
+    ) !void {
         var suffix_buffer: [1]u8 = undefined;
         const suffix = valueSegmentRemovableSuffix(segment, &suffix_buffer) orelse return;
         for (self.candidates.items[start..]) |*candidate| {
@@ -105,7 +112,12 @@ pub const Builder = struct {
         }
     }
 
-    pub fn applyOwnedRuleProviderMetadata(self: *Builder, allocator: std.mem.Allocator, candidate: *Candidate, rule: Rule) !void {
+    pub fn applyOwnedRuleProviderMetadata(
+        self: *Builder,
+        allocator: std.mem.Allocator,
+        candidate: *Candidate,
+        rule: Rule,
+    ) !void {
         if (candidate.tag == null) {
             if (rule.tag) |tag| candidate.tag = try self.dupeField(allocator, tag);
         }
@@ -131,7 +143,11 @@ pub const Builder = struct {
         return owned;
     }
 
-    fn dupeOptionExclusions(self: *Builder, allocator: std.mem.Allocator, excludes: []const OptionExclusion) ![]const OptionExclusion {
+    fn dupeOptionExclusions(
+        self: *Builder,
+        allocator: std.mem.Allocator,
+        excludes: []const OptionExclusion,
+    ) ![]const OptionExclusion {
         if (excludes.len == 0) return &.{};
         const owned = try allocator.alloc(OptionExclusion, excludes.len);
         errdefer allocator.free(owned);
@@ -194,7 +210,17 @@ pub const Argument = struct {
     reject_option_values: []const OptionValueCondition = &.{},
 
     pub fn hasSelector(self: Argument) bool {
-        return self.state != null or self.index != null or self.after_state != null or self.after_value != null or self.repeatable or self.rest_command_line or self.when_condition != null or self.after_condition != null or self.until_condition != null or self.require_option_values.len != 0 or self.reject_option_values.len != 0;
+        return self.state != null or
+            self.index != null or
+            self.after_state != null or
+            self.after_value != null or
+            self.repeatable or
+            self.rest_command_line or
+            self.when_condition != null or
+            self.after_condition != null or
+            self.until_condition != null or
+            self.require_option_values.len != 0 or
+            self.reject_option_values.len != 0;
     }
 };
 
@@ -215,7 +241,10 @@ pub const OptionValueCondition = struct {
     values: []const []const u8,
 };
 
-pub fn cloneArgumentCondition(allocator: std.mem.Allocator, condition: ?*const ArgumentCondition) !?*const ArgumentCondition {
+pub fn cloneArgumentCondition(
+    allocator: std.mem.Allocator,
+    condition: ?*const ArgumentCondition,
+) !?*const ArgumentCondition {
     const source = condition orelse return null;
     const owned = try allocator.create(ArgumentCondition);
     errdefer allocator.destroy(owned);
@@ -223,7 +252,10 @@ pub fn cloneArgumentCondition(allocator: std.mem.Allocator, condition: ?*const A
     return owned;
 }
 
-pub fn cloneArgumentConditionValue(allocator: std.mem.Allocator, condition: ArgumentCondition) anyerror!ArgumentCondition {
+pub fn cloneArgumentConditionValue(
+    allocator: std.mem.Allocator,
+    condition: ArgumentCondition,
+) anyerror!ArgumentCondition {
     return switch (condition) {
         .unsupported => .{ .unsupported = {} },
         .all => |children| .{ .all = try cloneArgumentConditionSlice(allocator, children) },
@@ -238,11 +270,16 @@ pub fn cloneArgumentConditionValue(allocator: std.mem.Allocator, condition: Argu
         .previous_state => |state| .{ .previous_state = try allocator.dupe(u8, state) },
         .option_present => |keys| .{ .option_present = try cloneArgumentConditionStringSlice(allocator, keys) },
         .option_absent => |keys| .{ .option_absent = try cloneArgumentConditionStringSlice(allocator, keys) },
-        .option_value => |condition_value| .{ .option_value = try cloneOptionValueCondition(allocator, condition_value) },
+        .option_value => |condition_value| .{
+            .option_value = try cloneOptionValueCondition(allocator, condition_value),
+        },
     };
 }
 
-fn cloneArgumentConditionSlice(allocator: std.mem.Allocator, children: []const ArgumentCondition) anyerror![]const ArgumentCondition {
+fn cloneArgumentConditionSlice(
+    allocator: std.mem.Allocator,
+    children: []const ArgumentCondition,
+) anyerror![]const ArgumentCondition {
     if (children.len == 0) return &.{};
     const owned = try allocator.alloc(ArgumentCondition, children.len);
     var initialized: usize = 0;
@@ -642,7 +679,11 @@ pub const State = struct {
     pub fn copyFrom(self: *State, other: *const State) !void {
         for (other.rules.items) |rule| try self.registerRule(rule);
         var provider_function_iter = other.provider_functions.iterator();
-        while (provider_function_iter.next()) |entry| try self.registerProviderFunction(entry.key_ptr.*, entry.value_ptr.*.body, entry.value_ptr.*.redirections);
+        while (provider_function_iter.next()) |entry| try self.registerProviderFunction(
+            entry.key_ptr.*,
+            entry.value_ptr.*.body,
+            entry.value_ptr.*.redirections,
+        );
         for (other.manifest_commands.items) |state| try self.registerManifestCommandState(state);
         for (other.variant_probes.items) |probe| {
             try self.registerVariantProbe(probe.command, probe.args, probe.patterns);
@@ -683,7 +724,10 @@ pub const State = struct {
                 .spellings = try cloneStringSlice(self.allocator, rule.option.spellings),
                 .argument = if (rule.option.argument) |argument| try self.allocator.dupe(u8, argument) else null,
                 .value_count = rule.option.value_count,
-                .exclusive_group = if (rule.option.exclusive_group) |group| try self.allocator.dupe(u8, group) else null,
+                .exclusive_group = if (rule.option.exclusive_group) |group|
+                    try self.allocator.dupe(u8, group)
+                else
+                    null,
                 .excludes = try cloneOptionExclusions(self.allocator, rule.option.excludes),
                 .repeatable = rule.option.repeatable,
                 .terminates_options = rule.option.terminates_options,
@@ -700,8 +744,14 @@ pub const State = struct {
                 .when_condition = try cloneArgumentCondition(self.allocator, rule.argument.when_condition),
                 .after_condition = try cloneArgumentCondition(self.allocator, rule.argument.after_condition),
                 .until_condition = try cloneArgumentCondition(self.allocator, rule.argument.until_condition),
-                .require_option_values = try cloneOptionValueConditions(self.allocator, rule.argument.require_option_values),
-                .reject_option_values = try cloneOptionValueConditions(self.allocator, rule.argument.reject_option_values),
+                .require_option_values = try cloneOptionValueConditions(
+                    self.allocator,
+                    rule.argument.require_option_values,
+                ),
+                .reject_option_values = try cloneOptionValueConditions(
+                    self.allocator,
+                    rule.argument.reject_option_values,
+                ),
             },
             .value_index = rule.value_index,
             .value_grammar = rule.value_grammar,
@@ -742,7 +792,12 @@ pub const State = struct {
         return self.provider_diagnostics.items;
     }
 
-    pub fn registerProviderFunction(self: *State, name: []const u8, body: []const u8, redirections: []const ir.Redirection) !void {
+    pub fn registerProviderFunction(
+        self: *State,
+        name: []const u8,
+        body: []const u8,
+        redirections: []const ir.Redirection,
+    ) !void {
         std.debug.assert(name.len != 0);
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
@@ -792,7 +847,12 @@ pub const State = struct {
         return null;
     }
 
-    pub fn registerVariantProbe(self: *State, command: []const u8, args: []const []const u8, patterns: []const VariantPattern) !void {
+    pub fn registerVariantProbe(
+        self: *State,
+        command: []const u8,
+        args: []const []const u8,
+        patterns: []const VariantPattern,
+    ) !void {
         var owned_args = try self.allocator.alloc([]const u8, args.len);
         var owned_arg_count: usize = 0;
         var owned_args_transferred = false;
@@ -919,7 +979,14 @@ pub const State = struct {
         self.provider_diagnostics.clearRetainingCapacity();
     }
 
-    pub fn appendProviderDiagnostic(self: *State, function: []const u8, command: []const u8, status: ?u8, err: ?anyerror, stderr: []const u8) !void {
+    pub fn appendProviderDiagnostic(
+        self: *State,
+        function: []const u8,
+        command: []const u8,
+        status: ?u8,
+        err: ?anyerror,
+        stderr: []const u8,
+    ) !void {
         const owned_function = try self.allocator.dupe(u8, function);
         errdefer self.allocator.free(owned_function);
         const owned_command = try self.allocator.dupe(u8, command);
@@ -1020,11 +1087,20 @@ pub const State = struct {
     }
 };
 
-pub fn applyCandidatesForInput(allocator: std.mem.Allocator, source: []const u8, candidates: []const Candidate) !Application {
+pub fn applyCandidatesForInput(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    candidates: []const Candidate,
+) !Application {
     return applyCandidatesForInputWithPolicy(allocator, source, candidates, .engineDefault());
 }
 
-pub fn applyCandidatesForInputWithPolicy(allocator: std.mem.Allocator, source: []const u8, candidates: []const Candidate, policy: MatcherPolicy) !Application {
+pub fn applyCandidatesForInputWithPolicy(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    candidates: []const Candidate,
+    policy: MatcherPolicy,
+) !Application {
     if (candidates.len == 0) return .none;
 
     var matches: std.ArrayList(Candidate) = .empty;
@@ -1077,7 +1153,11 @@ pub fn candidateQueryForInput(allocator: std.mem.Allocator, source: []const u8, 
     return decodeShellCompletionSlice(allocator, source, candidate.replace_start, candidate.replace_end);
 }
 
-pub fn candidateReplacementForInput(allocator: std.mem.Allocator, source: []const u8, candidate: Candidate) ![]const u8 {
+pub fn candidateReplacementForInput(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    candidate: Candidate,
+) ![]const u8 {
     std.debug.assert(candidate.replace_start <= candidate.replace_end);
     std.debug.assert(candidate.replace_end <= source.len);
     const replacement = try candidateReplacementAndSuffixForInput(allocator, source, candidate);
@@ -1090,8 +1170,20 @@ const CandidateReplacement = struct {
     suffix: ?[]const u8 = null,
 };
 
-fn candidateReplacementAndSuffixForInput(allocator: std.mem.Allocator, source: []const u8, candidate: Candidate) !CandidateReplacement {
-    return encodeShellCompletionReplacement(allocator, source, candidate.replace_start, candidate.replace_end, candidate.value, candidate.suffix, candidate.append_space);
+fn candidateReplacementAndSuffixForInput(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    candidate: Candidate,
+) !CandidateReplacement {
+    return encodeShellCompletionReplacement(
+        allocator,
+        source,
+        candidate.replace_start,
+        candidate.replace_end,
+        candidate.value,
+        candidate.suffix,
+        candidate.append_space,
+    );
 }
 
 pub fn decodeShellWordForCompletion(allocator: std.mem.Allocator, word: []const u8) ![]const u8 {
@@ -1188,7 +1280,15 @@ fn decodeShellCompletionSlice(allocator: std.mem.Allocator, source: []const u8, 
     return decoded.toOwnedSlice(allocator);
 }
 
-fn encodeShellCompletionReplacement(allocator: std.mem.Allocator, source: []const u8, replace_start: usize, replace_end: usize, value: []const u8, suffix: ?[]const u8, append_space: bool) !CandidateReplacement {
+fn encodeShellCompletionReplacement(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    replace_start: usize,
+    replace_end: usize,
+    value: []const u8,
+    suffix: ?[]const u8,
+    append_space: bool,
+) !CandidateReplacement {
     const context = shellCompletionContext(source, replace_start);
     var encoded: std.ArrayList(u8) = .empty;
     errdefer encoded.deinit(allocator);
@@ -1197,7 +1297,12 @@ fn encodeShellCompletionReplacement(allocator: std.mem.Allocator, source: []cons
     const suffix_start = encoded.items.len;
     if (suffix) |text| try appendShellEscapedValue(allocator, &encoded, context.quote, text);
     const suffix_end = encoded.items.len;
-    if (append_space and shouldCloseQuoteForCompletion(source, replace_end, context.quote, context.opening_quote != null)) {
+    if (append_space and shouldCloseQuoteForCompletion(
+        source,
+        replace_end,
+        context.quote,
+        context.opening_quote != null,
+    )) {
         try encoded.append(allocator, switch (context.quote) {
             .unquoted => unreachable,
             .single => '\'',
@@ -1206,11 +1311,19 @@ fn encodeShellCompletionReplacement(allocator: std.mem.Allocator, source: []cons
     }
     const text = try encoded.toOwnedSlice(allocator);
     errdefer allocator.free(text);
-    const encoded_suffix = if (suffix_start != suffix_end) try allocator.dupe(u8, text[suffix_start..suffix_end]) else null;
+    const encoded_suffix = if (suffix_start != suffix_end)
+        try allocator.dupe(u8, text[suffix_start..suffix_end])
+    else
+        null;
     return .{ .text = text, .suffix = encoded_suffix };
 }
 
-fn appendShellEscapedValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), quote: ShellQuote, value: []const u8) !void {
+fn appendShellEscapedValue(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    quote: ShellQuote,
+    value: []const u8,
+) !void {
     switch (quote) {
         .unquoted => {
             for (value, 0..) |byte, index| {
@@ -1252,14 +1365,22 @@ fn isDoubleQuoteEscapable(byte: u8) bool {
     };
 }
 
-fn shouldCloseQuoteForCompletion(source: []const u8, replace_end: usize, quote: ShellQuote, opened_at_replacement: bool) bool {
+fn shouldCloseQuoteForCompletion(
+    source: []const u8,
+    replace_end: usize,
+    quote: ShellQuote,
+    opened_at_replacement: bool,
+) bool {
     _ = source;
     _ = replace_end;
     _ = opened_at_replacement;
     return quote != .unquoted;
 }
 
-fn cloneStaticProviderValues(allocator: std.mem.Allocator, values: []const StaticProviderValue) ![]const StaticProviderValue {
+fn cloneStaticProviderValues(
+    allocator: std.mem.Allocator,
+    values: []const StaticProviderValue,
+) ![]const StaticProviderValue {
     if (values.len == 0) return &.{};
     const owned = try allocator.alloc(StaticProviderValue, values.len);
     var initialized: usize = 0;
@@ -1282,7 +1403,10 @@ fn cloneStaticProviderValues(allocator: std.mem.Allocator, values: []const Stati
     return owned;
 }
 
-fn cloneOptionValueConditions(allocator: std.mem.Allocator, conditions: []const OptionValueCondition) ![]const OptionValueCondition {
+fn cloneOptionValueConditions(
+    allocator: std.mem.Allocator,
+    conditions: []const OptionValueCondition,
+) ![]const OptionValueCondition {
     if (conditions.len == 0) return &.{};
     const owned = try allocator.alloc(OptionValueCondition, conditions.len);
     var initialized: usize = 0;
@@ -1353,7 +1477,10 @@ fn freeProviderFunctionWord(allocator: std.mem.Allocator, word: ir.WordRef) void
     allocator.free(word.text);
 }
 
-fn cloneProviderFunctionRedirections(allocator: std.mem.Allocator, redirections: []const ir.Redirection) ![]ir.Redirection {
+fn cloneProviderFunctionRedirections(
+    allocator: std.mem.Allocator,
+    redirections: []const ir.Redirection,
+) ![]ir.Redirection {
     const cloned = try allocator.alloc(ir.Redirection, redirections.len);
     errdefer allocator.free(cloned);
     for (redirections, 0..) |redirection, index| {
@@ -1408,7 +1535,7 @@ fn freeVariantProbeState(allocator: std.mem.Allocator, state: VariantProbeState)
 }
 
 test "application handles no candidates" {
-    const candidates = [_]Candidate{};
+    const candidates: [0]Candidate = .{};
     const application = try applyCandidates(std.testing.allocator, &candidates);
     defer application.deinit(std.testing.allocator);
 
@@ -1510,7 +1637,10 @@ test "matcher policy can suppress fuzzy matches for prefix-only mode" {
 
     try std.testing.expectEqual(MatchRank.fuzzy, candidateMatchRank(candidate, "gco", .engineDefault()).?);
     try std.testing.expect(candidateMatchRank(candidate, "gco", prefix_only) == null);
-    try std.testing.expectEqual(MatchSuppressionReason.prefix_only, candidateSuppressionReason(candidate, "gco", prefix_only));
+    try std.testing.expectEqual(
+        MatchSuppressionReason.prefix_only,
+        candidateSuppressionReason(candidate, "gco", prefix_only),
+    );
 }
 
 test "matcher policy treats hyphen and underscore as equivalent by default" {
@@ -1612,14 +1742,22 @@ test "application escapes unquoted completion replacements" {
 
 test "application preserves quote context when inserting completions" {
     const double_source = "cat \"two";
-    const double_candidates = [_]Candidate{.{ .value = "two words$HOME", .replace_start = 4, .replace_end = double_source.len }};
+    const double_candidates = [_]Candidate{.{
+        .value = "two words$HOME",
+        .replace_start = 4,
+        .replace_end = double_source.len,
+    }};
     const double_application = try applyCandidatesForInput(std.testing.allocator, double_source, &double_candidates);
     defer double_application.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("\"two words\\$HOME\"", double_application.edit.replacement);
     try std.testing.expect(double_application.edit.append_space);
 
     const single_source = "cat 'two";
-    const single_candidates = [_]Candidate{.{ .value = "two words", .replace_start = 4, .replace_end = single_source.len }};
+    const single_candidates = [_]Candidate{.{
+        .value = "two words",
+        .replace_start = 4,
+        .replace_end = single_source.len,
+    }};
     const single_application = try applyCandidatesForInput(std.testing.allocator, single_source, &single_candidates);
     defer single_application.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("'two words'", single_application.edit.replacement);
@@ -1638,13 +1776,23 @@ test "application decodes escaped prefixes before matching and reinserts escaped
 
 test "application escapes tilde and keeps directory completions open" {
     const tilde_source = "cat ~li";
-    const tilde_candidates = [_]Candidate{.{ .value = "~literal?", .replace_start = 4, .replace_end = tilde_source.len }};
+    const tilde_candidates = [_]Candidate{.{
+        .value = "~literal?",
+        .replace_start = 4,
+        .replace_end = tilde_source.len,
+    }};
     const tilde_application = try applyCandidatesForInput(std.testing.allocator, tilde_source, &tilde_candidates);
     defer tilde_application.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("\\~literal\\?", tilde_application.edit.replacement);
 
     const dir_source = "cat dir";
-    const dir_candidates = [_]Candidate{.{ .value = "dir name/", .kind = .directory, .replace_start = 4, .replace_end = dir_source.len, .append_space = false }};
+    const dir_candidates = [_]Candidate{.{
+        .value = "dir name/",
+        .kind = .directory,
+        .replace_start = 4,
+        .replace_end = dir_source.len,
+        .append_space = false,
+    }};
     const dir_application = try applyCandidatesForInput(std.testing.allocator, dir_source, &dir_candidates);
     defer dir_application.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("dir\\ name/", dir_application.edit.replacement);

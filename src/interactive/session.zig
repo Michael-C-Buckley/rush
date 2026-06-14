@@ -54,14 +54,26 @@ pub const Context = struct {
     features: compat.Features = .{},
 };
 
-pub fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor_driver.HookResult {
+pub fn runInteractiveIntervalHooks(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 - opaque context must come first (run_hooks callback ABI).
+    allocator: std.mem.Allocator,
+    // ziglint-ignore: Z023 - opaque context must come first (run_hooks callback ABI).
+    io: std.Io,
+) !editor_driver.HookResult {
     const interactive_context: *Context = @ptrCast(@alignCast(context));
     var output: std.ArrayList(u8) = .empty;
     errdefer output.deinit(allocator);
     var should_refresh_prompt = false;
 
     const semantic_state = interactive_context.semantic_state;
-    if (try executeInteractivePendingTraps(allocator, io, semantic_state, interactive_context.arg_zero, interactive_context.features)) |trap_result| {
+    if (try executeInteractivePendingTraps(
+        allocator,
+        io,
+        semantic_state,
+        interactive_context.arg_zero,
+        interactive_context.features,
+    )) |trap_result| {
         var result = trap_result;
         defer result.deinit();
         try output.appendSlice(allocator, result.stdout);
@@ -82,6 +94,8 @@ pub fn runInteractiveIntervalHooks(context: *anyopaque, allocator: std.mem.Alloc
     };
 }
 
+// ziglint-ignore: Z023 - signature is fixed by the next_hook_interval_ms
+// callback pointer type; the opaque context must come first.
 pub fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     _ = io;
     const interactive_context: *Context = @ptrCast(@alignCast(context));
@@ -91,14 +105,22 @@ pub fn nextInteractiveIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     return null;
 }
 
-fn drainInteractiveSemanticJobNotifications(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState) ![]const u8 {
+fn drainInteractiveSemanticJobNotifications(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+) ![]const u8 {
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
 
     var adapter = runtime.PosixAdapter.init(io);
     var evaluator = shell.eval.Evaluator.initWithRuntimePorts(allocator, runtime.posixPorts(&adapter));
     evaluator.io = io;
-    const eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true });
+    const eval_context = shell.EvalContext.init(.{
+        .target = .current_shell,
+        .source = .interactive,
+        .interactive = true,
+    });
     var outcome = try shell.eval.drainJobNotifications(&evaluator, shell_state, eval_context);
     defer outcome.deinit();
     try outcome.commitDelta(shell_state, .current_shell);
@@ -108,7 +130,13 @@ fn drainInteractiveSemanticJobNotifications(allocator: std.mem.Allocator, io: st
     return output;
 }
 
-fn executeInteractivePendingTraps(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) !?runner.CommandResult {
+fn executeInteractivePendingTraps(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    arg_zero: []const u8,
+    features: compat.Features,
+) !?runner.CommandResult {
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
     std.debug.assert(arg_zero.len != 0);
@@ -119,7 +147,11 @@ fn executeInteractivePendingTraps(allocator: std.mem.Allocator, io: std.Io, shel
     evaluator.features = features;
     evaluator.arg_zero = arg_zero;
     evaluator.external_stdio = .inherit;
-    const eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true });
+    const eval_context = shell.EvalContext.init(.{
+        .target = .current_shell,
+        .source = .interactive,
+        .interactive = true,
+    });
 
     if (try shell.eval.observeRuntimeSignal(&evaluator, shell_state, eval_context)) |observed| {
         var observation = observed;
@@ -130,7 +162,12 @@ fn executeInteractivePendingTraps(allocator: std.mem.Allocator, io: std.Io, shel
     var resolver = shell.eval.ParserTrapActionResolver.init(&evaluator);
     resolver.features = features;
     resolver.arg_zero = arg_zero;
-    var trap_outcome = (try shell.eval.executePendingTraps(&evaluator, shell_state, eval_context, resolver.resolver())) orelse return null;
+    var trap_outcome = (try shell.eval.executePendingTraps(
+        &evaluator,
+        shell_state,
+        eval_context,
+        resolver.resolver(),
+    )) orelse return null;
     defer trap_outcome.deinit();
 
     const stdout = try trap_outcome.stdout.toOwnedSlice(allocator);
@@ -204,19 +241,36 @@ pub const Shell = struct {
         self.* = undefined;
     }
 
-    pub fn initializeSemanticStartup(self: *Shell, io: std.Io, environ_map: *const std.process.Environ.Map, options: Options) !void {
+    pub fn initializeSemanticStartup(
+        self: *Shell,
+        io: std.Io,
+        environ_map: *const std.process.Environ.Map,
+        options: Options,
+    ) !void {
         self.semantic_state.deinit();
         self.semantic_state = shell.ShellState.init(self.allocator);
         self.semantic_enabled = false;
 
         var startup_shell_options = options.shell_options;
         startup.setShellOptions(&startup_shell_options, options.monitor_option_explicit, stdinIsTty(io));
-        try shell.startup.initializeInteractiveState(self.allocator, io, &self.semantic_state, environ_map, options.positionals, startup_shell_options);
+        try shell.startup.initializeInteractiveState(
+            self.allocator,
+            io,
+            &self.semantic_state,
+            environ_map,
+            options.positionals,
+            startup_shell_options,
+        );
         self.semantic_enabled = true;
     }
 };
 
-pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map, options: Options) !u8 {
+pub fn run(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ_map: *const std.process.Environ.Map,
+    options: Options,
+) !u8 {
     var signal_handlers = signals.install();
     defer signal_handlers.restore();
 
@@ -228,7 +282,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
     command_history.session_id = active_session_id;
     const history_path = try history.defaultPath(allocator, environ_map);
     defer if (history_path) |path| allocator.free(path);
-    if (history_path) |path| command_history.load(io, path) catch {};
+    if (history_path) |path| command_history.load(io, path) catch {
+        try writeAll(io, .stderr, "rush: history load failed\n");
+    };
     defer if (history_path) |path| command_history.save(io, path) catch {};
     const terminal_hostname = try history.localHostname(allocator);
     defer allocator.free(terminal_hostname);
@@ -251,7 +307,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
             break;
         }
         terminal.refreshWinsize();
-        if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+        if (interactive_shell.semantic_enabled) {
+            try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+        }
         const notifications = if (interactive_shell.semantic_enabled)
             try drainInteractiveSemanticJobNotifications(allocator, io, &interactive_shell.semantic_state)
         else
@@ -267,13 +325,24 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
         const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
         const physical_cwd = cwd_buffer[0..cwd_len];
-        const cwd = if (prompt_mod.getEnv(&interactive_shell.semantic_state, "PWD")) |pwd| if (pwd.len != 0) pwd else physical_cwd else physical_cwd;
+        const cwd = if (prompt_mod.getEnv(&interactive_shell.semantic_state, "PWD")) |pwd|
+            if (pwd.len != 0) pwd else physical_cwd
+        else
+            physical_cwd;
         command_history.current_cwd = physical_cwd;
         try terminal.reportCurrentDirectory(cwd, terminal_hostname);
-        const title = try interactive_input.titlePath(allocator, cwd, prompt_mod.getEnv(&interactive_shell.semantic_state, "HOME"));
+        const title = try interactive_input.titlePath(
+            allocator,
+            cwd,
+            prompt_mod.getEnv(&interactive_shell.semantic_state, "HOME"),
+        );
         defer if (title.owned) allocator.free(title.text);
         try terminal.reportWindowTitle(title.text);
-        var interactive_context: Context = .{ .semantic_state = &interactive_shell.semantic_state, .arg_zero = options.arg_zero, .features = options.features };
+        var interactive_context: Context = .{
+            .semantic_state = &interactive_shell.semantic_state,
+            .arg_zero = options.arg_zero,
+            .features = options.features,
+        };
         const read_options: editor_driver.ReadLineOptions = .{
             .prompt = prompt_text,
             .editing_mode = interactive_input.editingMode(interactive_shell.semantic_state.options),
@@ -285,11 +354,19 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
             .external_editor_tmpdir = prompt_mod.externalEditorTmpdir(&interactive_shell.semantic_state),
         };
         const read_result = try terminal.readLine(read_options);
-        if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+        if (interactive_shell.semantic_enabled) {
+            try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+        }
         const line = switch (read_result) {
             .submitted => |line| line,
             .canceled => {
-                if (try runInteractiveInterruptTrap(allocator, io, &interactive_shell.semantic_state, options.arg_zero, options.features)) |result| {
+                if (try runInteractiveInterruptTrap(
+                    allocator,
+                    io,
+                    &interactive_shell.semantic_state,
+                    options.arg_zero,
+                    options.features,
+                )) |result| {
                     var trap_result = result;
                     defer trap_result.deinit();
                     try terminal.leaveEditorMode();
@@ -298,7 +375,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
 
                     try writeAll(io, .stdout, trap_result.stdout);
                     try writeAll(io, .stderr, trap_result.stderr);
-                    if (interactive_input.outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
+                    if (interactive_input.outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) {
+                        try writeAll(io, .stderr, omitted_newline_marker);
+                    }
                     last_status = trap_result.status;
                     try terminal.finishSemanticCommand(trap_result.status);
                     if (interactivePendingExit(&interactive_shell)) |status| {
@@ -337,11 +416,19 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
             continuation_options.diagnostic_context = null;
             continuation_options.diagnose = null;
             const continuation_read_result = try terminal.readLine(continuation_options);
-            if (interactive_shell.semantic_enabled) try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+            if (interactive_shell.semantic_enabled) {
+                try syncSemanticTerminalSize(&interactive_shell.semantic_state, terminal);
+            }
             const continuation_line = switch (continuation_read_result) {
                 .submitted => |continuation_line| continuation_line,
                 .canceled => {
-                    if (try runInteractiveInterruptTrap(allocator, io, &interactive_shell.semantic_state, options.arg_zero, options.features)) |result| {
+                    if (try runInteractiveInterruptTrap(
+                        allocator,
+                        io,
+                        &interactive_shell.semantic_state,
+                        options.arg_zero,
+                        options.features,
+                    )) |result| {
                         var trap_result = result;
                         defer trap_result.deinit();
                         try terminal.leaveEditorMode();
@@ -350,7 +437,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
 
                         try writeAll(io, .stdout, trap_result.stdout);
                         try writeAll(io, .stderr, trap_result.stderr);
-                        if (interactive_input.outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
+                        if (interactive_input.outputNeedsNewlineMarker(trap_result.stdout, trap_result.stderr)) {
+                            try writeAll(io, .stderr, omitted_newline_marker);
+                        }
                         last_status = trap_result.status;
                         try terminal.finishSemanticCommand(trap_result.status);
                         if (interactivePendingExit(&interactive_shell)) |status| {
@@ -404,14 +493,37 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
 
             const command_started_at = unixTimestamp(io);
             const command_started = monotonicTimestamp(io);
-            var result = try runInteractiveScript(allocator, io, &interactive_shell, input, .{ .io = io, .allow_external = true, .features = options.features, .external_stdio = .inherit, .interactive = true, .arg_zero = options.arg_zero });
+            var result = try runInteractiveScript(
+                allocator,
+                io,
+                &interactive_shell,
+                input,
+                .{
+                    .io = io,
+                    .allow_external = true,
+                    .features = options.features,
+                    .external_stdio = .inherit,
+                    .interactive = true,
+                    .arg_zero = options.arg_zero,
+                },
+            );
             const command_duration_ms = durationMillis(command_started, monotonicTimestamp(io));
             defer result.deinit();
             try writeAll(io, .stdout, result.stdout);
             try writeAll(io, .stderr, result.stderr);
-            if (interactive_input.outputNeedsNewlineMarker(result.stdout, result.stderr)) try writeAll(io, .stderr, omitted_newline_marker);
+            if (interactive_input.outputNeedsNewlineMarker(result.stdout, result.stderr)) {
+                try writeAll(io, .stderr, omitted_newline_marker);
+            }
             last_status = result.status;
-            if (!history_service.consumeSuppressNextAppend()) try history_service.addCommand(io, input, result.status, command_started_at, command_duration_ms);
+            if (!history_service.consumeSuppressNextAppend()) {
+                try history_service.addCommand(
+                    io,
+                    input,
+                    result.status,
+                    command_started_at,
+                    command_duration_ms,
+                );
+            }
             try terminal.finishSemanticCommand(result.status);
             if (interactivePendingExit(&interactive_shell)) |status| {
                 last_status = status;
@@ -427,10 +539,23 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.pro
     return last_status;
 }
 
-fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *Shell, script: []const u8, options: runner.Options) !runner.CommandResult {
+fn runInteractiveScript(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    interactive_shell: *Shell,
+    script: []const u8,
+    options: runner.Options,
+) !runner.CommandResult {
     std.debug.assert(options.interactive);
     if (interactive_shell.semantic_enabled) {
-        var execution = try runSemanticInteractiveCommandString(allocator, io, interactive_shell, script, runner.invocationContext(options), options.external_stdio);
+        var execution = try runSemanticInteractiveCommandString(
+            allocator,
+            io,
+            interactive_shell,
+            script,
+            runner.invocationContext(options),
+            options.external_stdio,
+        );
         switch (execution) {
             .output => |output| {
                 execution = undefined;
@@ -444,15 +569,41 @@ fn runInteractiveScript(allocator: std.mem.Allocator, io: std.Io, interactive_sh
         }
     }
 
-    return runner.unsupported(allocator, "semantic interactive executor is disabled while legacy interactive services are active");
+    return runner.unsupported(
+        allocator,
+        "semantic interactive executor is disabled while legacy interactive services are active",
+    );
 }
 
-pub fn runSemanticInteractiveCommandString(allocator: std.mem.Allocator, io: std.Io, interactive_shell: *Shell, script: []const u8, invocation: shell.InvocationContext, external_stdio: runtime.ExternalStdio) !runner.SemanticInvocationExecution {
+pub fn runSemanticInteractiveCommandString(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    interactive_shell: *Shell,
+    script: []const u8,
+    invocation: shell.InvocationContext,
+    external_stdio: runtime.ExternalStdio,
+) !runner.SemanticInvocationExecution {
     std.debug.assert(interactive_shell.semantic_enabled);
-    return runner.runInteractiveCommandString(allocator, io, &interactive_shell.semantic_state, script, invocation, external_stdio);
+    return runner.runInteractiveCommandString(
+        allocator,
+        io,
+        &interactive_shell.semantic_state,
+        script,
+        invocation,
+        external_stdio,
+    );
 }
 
-pub fn runCommandStringWithEnvironment(allocator: std.mem.Allocator, io: std.Io, script: []const u8, options: runner.Options, environ_map: ?*const std.process.Environ.Map, positionals: []const []const u8, startup_options: Options, shell_options: shell.ShellOptions) !runner.CommandResult {
+pub fn runCommandStringWithEnvironment(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    script: []const u8,
+    options: runner.Options,
+    environ_map: ?*const std.process.Environ.Map,
+    positionals: []const []const u8,
+    startup_options: Options,
+    shell_options: shell.ShellOptions,
+) !runner.CommandResult {
     var interactive_run_options = options;
     interactive_run_options.interactive = true;
     var interactive_shell = Shell.init(allocator);
@@ -487,7 +638,13 @@ fn syncSemanticTerminalSize(shell_state: *shell.ShellState, terminal: editor_dri
     try shell_state.putVariable("COLUMNS", cols, .{ .exported = true });
 }
 
-pub fn runInteractiveInterruptTrap(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) !?runner.CommandResult {
+pub fn runInteractiveInterruptTrap(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    arg_zero: []const u8,
+    features: compat.Features,
+) !?runner.CommandResult {
     shell_state.validate();
     std.debug.assert(shell_state.scope == .current_shell);
     if (shell_state.trapDisposition(.INT) != .caught) return null;
@@ -535,12 +692,19 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
         if (line.len == 0) continue;
 
         const command_started_at = unixTimestamp(io);
-        var result = try runInteractiveScript(allocator, io, &interactive_shell, line, .{ .io = io, .allow_external = true, .interactive = true, .arg_zero = "rush" });
+        var result = try runInteractiveScript(allocator, io, &interactive_shell, line, .{
+            .io = io,
+            .allow_external = true,
+            .interactive = true,
+            .arg_zero = "rush",
+        });
         defer result.deinit();
         try stdout.appendSlice(allocator, result.stdout);
         try stderr.appendSlice(allocator, result.stderr);
         last_status = result.status;
-        if (!history_service.consumeSuppressNextAppend()) try history_service.addCommand(io, line, result.status, command_started_at, 0);
+        if (!history_service.consumeSuppressNextAppend()) {
+            try history_service.addCommand(io, line, result.status, command_started_at, 0);
+        }
         if (interactivePendingExit(&interactive_shell)) |status| {
             last_status = status;
             break;
@@ -558,7 +722,13 @@ pub fn runReplInput(allocator: std.mem.Allocator, io: std.Io, input: []const u8)
 extern "c" fn close(fd: c_int) c_int;
 extern "c" fn dup(fd: c_int) c_int;
 extern "c" fn dup2(oldfd: c_int, newfd: c_int) c_int;
-extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
+extern "c" fn openpty(
+    amaster: *c_int,
+    aslave: *c_int,
+    name: ?[*:0]u8,
+    termp: ?*const std.posix.termios,
+    winp: ?*const anyopaque,
+) c_int;
 
 const StdinGuard = struct {
     saved_fd: c_int,
@@ -596,7 +766,10 @@ test "interactive notify schedules editor job notification polling" {
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
 
     shell_state.options.notify = true;
-    try std.testing.expectEqual(@as(?u64, immediate_notify_poll_ms), try nextInteractiveIntervalMs(&context, std.testing.io));
+    try std.testing.expectEqual(
+        @as(?u64, immediate_notify_poll_ms),
+        try nextInteractiveIntervalMs(&context, std.testing.io),
+    );
 
     shell_state.consumeJobNotifications(1);
     try std.testing.expectEqual(@as(?u64, null), try nextInteractiveIntervalMs(&context, std.testing.io));
@@ -609,7 +782,10 @@ test "interactive semantic job notifications drain from ShellState" {
 
     var context: Context = .{ .semantic_state = &shell_state };
 
-    try std.testing.expectEqual(@as(?u64, immediate_notify_poll_ms), try nextInteractiveIntervalMs(&context, std.testing.io));
+    try std.testing.expectEqual(
+        @as(?u64, immediate_notify_poll_ms),
+        try nextInteractiveIntervalMs(&context, std.testing.io),
+    );
     const hook_result = try runInteractiveIntervalHooks(&context, std.testing.allocator, std.testing.io);
     defer std.testing.allocator.free(hook_result.output);
 
@@ -637,7 +813,13 @@ test "interactive interrupt runs INT trap" {
     defer shell_state.deinit();
     try shell_state.setTrapForSignal(.INT, "echo trapped");
 
-    var result = (try runInteractiveInterruptTrap(std.testing.allocator, std.testing.io, &shell_state, "rush", .{})) orelse return error.MissingTrapResult;
+    var result = (try runInteractiveInterruptTrap(
+        std.testing.allocator,
+        std.testing.io,
+        &shell_state,
+        "rush",
+        .{},
+    )) orelse return error.MissingTrapResult;
     defer result.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), result.status);
     try std.testing.expectEqualStrings("trapped\n", result.stdout);
@@ -650,14 +832,32 @@ test "semantic interactive command updates executor status for later commands" {
     defer env.deinit();
     try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
 
-    var false_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "false", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var false_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "false", .{
+        .io = std.testing.io,
+        .allow_external = true,
+        .external_stdio = .inherit,
+        .interactive = true,
+        .arg_zero = "rush",
+    });
     defer false_result.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 1), false_result.status);
     try std.testing.expectEqualStrings("", false_result.stdout);
     try std.testing.expectEqualStrings("", false_result.stderr);
     try std.testing.expectEqual(@as(shell.ExitStatus, 1), interactive_shell.semantic_state.last_status);
 
-    var status_result = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "echo $?", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var status_result = try runInteractiveScript(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "echo $?",
+        .{
+            .io = std.testing.io,
+            .allow_external = true,
+            .external_stdio = .inherit,
+            .interactive = true,
+            .arg_zero = "rush",
+        },
+    );
     defer status_result.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), status_result.status);
     try std.testing.expectEqualStrings("1\n", status_result.stdout);
@@ -670,15 +870,37 @@ test "semantic interactive shell state persists variable mutations without legac
     defer env.deinit();
     try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
 
-    var assign = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SEMANTIC=state", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    var assign = try runSemanticInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "RUSH_INTERACTIVE_SEMANTIC=state",
+        shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
+        .inherit,
+    );
     defer assign.deinit(std.testing.allocator);
     switch (assign) {
         .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
         .unsupported => return error.ExpectedSemanticOutput,
     }
-    try std.testing.expectEqualStrings("state", interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_SEMANTIC").?.value);
+    try std.testing.expectEqualStrings(
+        "state",
+        interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_SEMANTIC").?.value,
+    );
 
-    var readback = try runInteractiveScript(std.testing.allocator, std.testing.io, &interactive_shell, "printf '%s\n' \"$RUSH_INTERACTIVE_SEMANTIC\"", .{ .io = std.testing.io, .allow_external = true, .external_stdio = .inherit, .interactive = true, .arg_zero = "rush" });
+    var readback = try runInteractiveScript(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "printf '%s\n' \"$RUSH_INTERACTIVE_SEMANTIC\"",
+        .{
+            .io = std.testing.io,
+            .allow_external = true,
+            .external_stdio = .inherit,
+            .interactive = true,
+            .arg_zero = "rush",
+        },
+    );
     defer readback.deinit();
     try std.testing.expectEqual(@as(shell.ExitStatus, 0), readback.status);
     try std.testing.expectEqualStrings("state\n", readback.stdout);
@@ -691,7 +913,14 @@ test "semantic interactive assignment-bearing commands preserve assignment lifet
     defer env.deinit();
     try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
 
-    var temporary = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_TEMPORARY=discarded true", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    var temporary = try runSemanticInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "RUSH_INTERACTIVE_TEMPORARY=discarded true",
+        shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
+        .inherit,
+    );
     defer temporary.deinit(std.testing.allocator);
     switch (temporary) {
         .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
@@ -699,13 +928,23 @@ test "semantic interactive assignment-bearing commands preserve assignment lifet
     }
     try std.testing.expect(interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_TEMPORARY") == null);
 
-    var persistent = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "RUSH_INTERACTIVE_SPECIAL=persistent :", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    var persistent = try runSemanticInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "RUSH_INTERACTIVE_SPECIAL=persistent :",
+        shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
+        .inherit,
+    );
     defer persistent.deinit(std.testing.allocator);
     switch (persistent) {
         .output => |output| try std.testing.expectEqual(@as(shell.ExitStatus, 0), output.status),
         .unsupported => return error.ExpectedSemanticOutput,
     }
-    try std.testing.expectEqualStrings("persistent", interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_SPECIAL").?.value);
+    try std.testing.expectEqualStrings(
+        "persistent",
+        interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_SPECIAL").?.value,
+    );
 }
 test "semantic interactive external commands run through runtime ports without legacy fallback" {
     var interactive_shell = Shell.init(std.testing.allocator);
@@ -714,7 +953,14 @@ test "semantic interactive external commands run through runtime ports without l
     defer env.deinit();
     try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
 
-    var external = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "/usr/bin/printf 'semantic-external\\n'", shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .capture);
+    var external = try runSemanticInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "/usr/bin/printf 'semantic-external\\n'",
+        shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
+        .capture,
+    );
     defer external.deinit(std.testing.allocator);
     switch (external) {
         .unsupported => return error.ExpectedSemanticExecution,
@@ -739,7 +985,10 @@ test "semantic interactive startup initializes ShellState without executor shell
         .shell_options = .{ .ignoreeof = true },
     });
     try std.testing.expect(interactive_shell.semantic_enabled);
-    try std.testing.expectEqualStrings("present", interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_IMPORTED").?.value);
+    try std.testing.expectEqualStrings(
+        "present",
+        interactive_shell.semantic_state.getVariable("RUSH_INTERACTIVE_IMPORTED").?.value,
+    );
     try std.testing.expectEqualStrings("3", interactive_shell.semantic_state.getVariable("SHLVL").?.value);
     try std.testing.expectEqualStrings(" \t\n", interactive_shell.semantic_state.getVariable("IFS").?.value);
     try std.testing.expectEqualStrings("1", interactive_shell.semantic_state.getVariable("OPTIND").?.value);
@@ -750,7 +999,10 @@ test "semantic interactive startup initializes ShellState without executor shell
 }
 test "semantic interactive invocation executes simple command redirections without legacy fallback" {
     const path = "rush-semantic-interactive-redirection.tmp";
-    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     var interactive_shell = Shell.init(std.testing.allocator);
@@ -759,7 +1011,14 @@ test "semantic interactive invocation executes simple command redirections witho
     defer env.deinit();
     try interactive_shell.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush" });
 
-    var semantic = try runSemanticInteractiveCommandString(std.testing.allocator, std.testing.io, &interactive_shell, "echo before > " ++ path ++ "; echo redirected >> " ++ path, shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }), .inherit);
+    var semantic = try runSemanticInteractiveCommandString(
+        std.testing.allocator,
+        std.testing.io,
+        &interactive_shell,
+        "echo before > " ++ path ++ "; echo redirected >> " ++ path,
+        shell.InvocationContext.init(.{ .interactive = true, .arg_zero = "rush" }),
+        .inherit,
+    );
     defer semantic.deinit(std.testing.allocator);
     switch (semantic) {
         .unsupported => return error.ExpectedSemanticExecution,
@@ -804,7 +1063,10 @@ test "interactive startup enables monitor by default for tty stdin" {
 
     var explicit_disabled = Shell.init(std.testing.allocator);
     defer explicit_disabled.deinit();
-    try explicit_disabled.initializeSemanticStartup(std.testing.io, &env, .{ .arg_zero = "rush", .monitor_option_explicit = true });
+    try explicit_disabled.initializeSemanticStartup(std.testing.io, &env, .{
+        .arg_zero = "rush",
+        .monitor_option_explicit = true,
+    });
     try std.testing.expect(!explicit_disabled.semantic_state.options.monitor);
 }
 
@@ -869,7 +1131,10 @@ test "interactive command string invocation exits immediately when user config e
     const root = "rush-test-config-exec-failure-startup";
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush");
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = root ++ "/rush/config.rush", .data = "exec /nonexistent/rush-task-702 2>/dev/null\n" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = root ++ "/rush/config.rush",
+        .data = "exec /nonexistent/rush-task-702 2>/dev/null\n",
+    });
 
     var env = std.process.Environ.Map.init(std.testing.allocator);
     defer env.deinit();

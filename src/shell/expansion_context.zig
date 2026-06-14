@@ -204,7 +204,11 @@ pub const ShellExpansion = struct {
         return .{ .name = owned_name, .value = owned_value };
     }
 
-    pub fn expandSimpleCommand(self: *ShellExpansion, assignment_words: []const []const u8, argv_words: []const []const u8) !OwnedExpandedSimpleCommand {
+    pub fn expandSimpleCommand(
+        self: *ShellExpansion,
+        assignment_words: []const []const u8,
+        argv_words: []const []const u8,
+    ) !OwnedExpandedSimpleCommand {
         var assignments: std.ArrayList(command_plan.Assignment) = .empty;
         errdefer {
             for (assignments.items) |assignment| {
@@ -229,16 +233,26 @@ pub const ShellExpansion = struct {
 
     pub fn classifyError(self: ShellExpansion, err: anyerror) ?ExpansionFailure {
         return switch (err) {
-            error.NounsetParameter => .{ .kind = .nounset_parameter, .name = "parameter", .message = "parameter not set" },
+            error.NounsetParameter => .{
+                .kind = .nounset_parameter,
+                .name = "parameter",
+                .message = "parameter not set",
+            },
             error.ParameterExpansionFailed => .{
                 .kind = .parameter_expansion,
                 .name = if (self.parameter_error.name.len != 0) self.parameter_error.name else "parameter",
-                .message = if (self.parameter_error.message.len != 0) self.parameter_error.message else "expansion failed",
+                .message = if (self.parameter_error.message.len != 0)
+                    self.parameter_error.message
+                else
+                    "expansion failed",
             },
             error.ArithmeticExpansionFailed => .{
                 .kind = .arithmetic_expansion,
                 .name = "arithmetic",
-                .message = if (self.arithmetic_error.message.len != 0) self.arithmetic_error.message else "invalid arithmetic expression",
+                .message = if (self.arithmetic_error.message.len != 0)
+                    self.arithmetic_error.message
+                else
+                    "invalid arithmetic expression",
             },
             else => null,
         };
@@ -278,9 +292,17 @@ pub const ShellExpansion = struct {
     }
 
     fn prepareSpecialParameterBuffers(self: *ShellExpansion) void {
-        const status_text = std.fmt.bufPrint(&self.last_status_text, "{d}", .{self.shell_state.last_status}) catch unreachable;
+        const status_text = std.fmt.bufPrint(
+            &self.last_status_text,
+            "{d}",
+            .{self.shell_state.last_status},
+        ) catch unreachable;
         self.last_status_text_len = status_text.len;
-        const count_text = std.fmt.bufPrint(&self.positional_count_text, "{d}", .{self.shell_state.positionals.items.len}) catch unreachable;
+        const count_text = std.fmt.bufPrint(
+            &self.positional_count_text,
+            "{d}",
+            .{self.shell_state.positionals.items.len},
+        ) catch unreachable;
         self.positional_count_text_len = count_text.len;
         self.option_flags_len = shellOptionFlags(self.shell_state.options, &self.option_flags_buffer).len;
     }
@@ -305,7 +327,14 @@ fn pathnameLookup(self: *ShellExpansion) expansion.PathnameLookup {
     };
 }
 
-fn listPathnameDir(opaque_context: ?*anyopaque, allocator: std.mem.Allocator, path: []const u8) !expansion.PathnameEntries {
+// ziglint-ignore: Z023 - signature is fixed by the listDirFn callback pointer
+// type; the opaque context must come first.
+fn listPathnameDir(
+    opaque_context: ?*anyopaque,
+    // ziglint-ignore: Z023 - opaque context must come first (callback ABI).
+    allocator: std.mem.Allocator,
+    path: []const u8,
+) !expansion.PathnameEntries {
     std.debug.assert(opaque_context != null);
     const self: *ShellExpansion = @ptrCast(@alignCast(opaque_context.?));
     const fs_port = self.fs_port orelse unreachable;
@@ -556,6 +585,8 @@ test "ShellExpansion uses semantic command-substitution callback without parent 
     defer shell_state.deinit();
 
     const Resolver = struct {
+        // ziglint-ignore: Z023 - signature is fixed by the resolveFn callback
+        // pointer type; the opaque context must come first.
         fn run(_: ?*anyopaque, allocator: std.mem.Allocator, script: []const u8) ![]const u8 {
             if (std.mem.eql(u8, script, "emit")) return allocator.dupe(u8, "one two\n\n");
             return allocator.alloc(u8, 0);

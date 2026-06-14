@@ -74,7 +74,12 @@ fn adapterFromContext(context: *anyopaque) *Adapter {
 fn open(context: *anyopaque, request: fd.OpenRequest) fd.OpenError!fd.OpenResult {
     _ = context;
     request.validate();
-    const descriptor = try std.posix.openat(request.directory, request.path, request.options.toPosixFlags(), request.options.mode);
+    const descriptor = try std.posix.openat(
+        request.directory,
+        request.path,
+        request.options.toPosixFlags(),
+        request.options.mode,
+    );
     return .{ .descriptor = descriptor };
 }
 
@@ -329,7 +334,10 @@ fn continueProcess(context: *anyopaque, request: process.ContinueProcessRequest)
     };
 }
 
-fn foregroundProcessGroup(context: *anyopaque, request: process.ForegroundProcessGroupRequest) process.JobControlError!process.ForegroundProcessGroupResult {
+fn foregroundProcessGroup(
+    context: *anyopaque,
+    request: process.ForegroundProcessGroupRequest,
+) process.JobControlError!process.ForegroundProcessGroupResult {
     _ = adapterFromContext(context);
     request.validate();
     const previous = try terminalGetProcessGroup(request.terminal);
@@ -402,7 +410,7 @@ const StdinWriter = struct {
     bytes: []const u8,
     err: ?anyerror = null,
 
-    fn run(self: *@This()) void {
+    fn run(self: *StdinWriter) void {
         defer self.file.close(self.io);
         if (self.bytes.len == 0) return;
 
@@ -454,7 +462,12 @@ fn run(context: *anyopaque, request: process.RunRequest) process.RunError!proces
 
     var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
     var multi_reader: std.Io.File.MultiReader = undefined;
-    multi_reader.init(request.allocator, adapter.io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    multi_reader.init(
+        request.allocator,
+        adapter.io,
+        multi_reader_buffer.toStreams(),
+        &.{ child.stdout.?, child.stderr.? },
+    );
     defer multi_reader.deinit();
 
     while (multi_reader.fill(4096, .none)) |_| {} else |err| switch (err) {
@@ -548,7 +561,13 @@ fn pathIdentity(path: []const u8, follow_symlinks: bool) ?fs.PathIdentity {
     if (comptime builtin.os.tag == .linux) {
         var statx_result: std.os.linux.Statx = undefined;
         const flags: u32 = if (follow_symlinks) 0 else std.c.AT.SYMLINK_NOFOLLOW;
-        if (std.c.statx(std.c.AT.FDCWD, &path_z, flags, std.os.linux.STATX.BASIC_STATS, &statx_result) != 0) return null;
+        if (std.c.statx(
+            std.c.AT.FDCWD,
+            &path_z,
+            flags,
+            std.os.linux.STATX.BASIC_STATS,
+            &statx_result,
+        ) != 0) return null;
         return .{
             .device = (@as(u64, statx_result.dev_major) << 32) | statx_result.dev_minor,
             .inode = statx_result.ino,
@@ -680,7 +699,12 @@ fn descriptorIsTty(descriptor: fd.Descriptor) fd.IsTtyError!bool {
         while (true) {
             var window_size: std.posix.winsize = undefined;
             const descriptor_arg: usize = @bitCast(@as(isize, descriptor));
-            const rc = std.os.linux.syscall3(.ioctl, descriptor_arg, std.os.linux.T.IOCGWINSZ, @intFromPtr(&window_size));
+            const rc = std.os.linux.syscall3(
+                .ioctl,
+                descriptor_arg,
+                std.os.linux.T.IOCGWINSZ,
+                @intFromPtr(&window_size),
+            );
             switch (std.os.linux.errno(rc)) {
                 .SUCCESS => return true,
                 .INTR => continue,
@@ -706,7 +730,10 @@ test "runtime posix adapter performs fd open duplicate close and pipe smoke oper
 
     var path_buffer: [128]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "rush-runtime-fd-{d}.tmp", .{std.c.getpid()});
-    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     const opened = try fd_port.open(.{
@@ -783,6 +810,7 @@ test "runtime posix adapter spawns and waits for a simple process" {
         .stderr = .ignore,
     })).child;
     const result = try process_port.wait(.{ .child = &child });
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(process.WaitStatus{ .exited = 7 }, result.status);
 }
 
@@ -804,6 +832,7 @@ test "runtime posix adapter starts and waits for a forked subshell callback" {
         .stderr = .inherit,
     })).child;
     const result = try process_port.wait(.{ .child = &child });
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(process.WaitStatus{ .exited = 6 }, result.status);
 }
 
@@ -819,6 +848,7 @@ test "runtime posix adapter runs a process with byte stdin and captured output" 
     });
     defer result.deinit();
 
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(process.WaitStatus{ .exited = 0 }, result.status);
     try std.testing.expectEqualStrings("captured stdin", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
@@ -835,7 +865,10 @@ test "runtime posix adapter runs stdin writer concurrently with stdout and stder
     const argv = [_][]const u8{
         "/bin/sh",
         "-c",
-        "dd if=/dev/zero bs=1024 count=128 2>/dev/null; dd if=/dev/zero bs=1024 count=128 1>&2 2>/dev/null; wc -c >/dev/null",
+        \\dd if=/dev/zero bs=1024 count=128 2>/dev/null
+        \\dd if=/dev/zero bs=1024 count=128 1>&2 2>/dev/null
+        \\wc -c >/dev/null
+        ,
     };
     var result = try process_port.run(.{
         .allocator = std.testing.allocator,
@@ -844,6 +877,7 @@ test "runtime posix adapter runs stdin writer concurrently with stdout and stder
     });
     defer result.deinit();
 
+    // ziglint-ignore: Z010 - anon `.{}` does not peer-resolve to the union in expectEqual
     try std.testing.expectEqual(process.WaitStatus{ .exited = 0 }, result.status);
     try std.testing.expectEqual(@as(usize, 128 * 1024), result.stdout.len);
     try std.testing.expectEqual(@as(usize, 128 * 1024), result.stderr.len);

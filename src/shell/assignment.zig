@@ -38,7 +38,11 @@ pub const TemporaryEnvironment = struct {
         return self.variables.items.len == 0;
     }
 
-    pub fn appendCommandAssignments(self: *TemporaryEnvironment, shell_state: state.ShellState, plan: command_plan.CommandPlan) !void {
+    pub fn appendCommandAssignments(
+        self: *TemporaryEnvironment,
+        shell_state: state.ShellState,
+        plan: command_plan.CommandPlan,
+    ) !void {
         plan.validate();
         std.debug.assert(plan.assignmentEffect() == .temporary);
         if (delta.firstReadonlyAssignment(shell_state, plan.assignments) != null) return error.ReadonlyVariable;
@@ -46,7 +50,13 @@ pub const TemporaryEnvironment = struct {
         const force_export = temporaryAssignmentsAreExported(plan);
         for (plan.assignments) |assignment| {
             const existing = shell_state.getVariable(assignment.name);
-            try self.put(assignment.name, assignment.value, force_export or shell_state.options.enabled(.allexport) or (existing != null and existing.?.exported));
+            try self.put(
+                assignment.name,
+                assignment.value,
+                force_export or
+                    shell_state.options.enabled(.allexport) or
+                    (existing != null and existing.?.exported),
+            );
         }
     }
 
@@ -81,7 +91,11 @@ pub const AssignmentEffects = struct {
     state_delta: delta.StateDelta,
     temporary_environment: TemporaryEnvironment,
 
-    pub fn init(allocator: std.mem.Allocator, target: context.ExecutionTarget, effect: command_plan.AssignmentEffect) AssignmentEffects {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        target: context.ExecutionTarget,
+        effect: command_plan.AssignmentEffect,
+    ) AssignmentEffects {
         return .{
             .allocator = allocator,
             .target = target,
@@ -136,7 +150,11 @@ pub const AssignmentResult = union(enum) {
     }
 };
 
-pub fn prepareCommandAssignments(allocator: std.mem.Allocator, shell_state: state.ShellState, plan: command_plan.CommandPlan) !AssignmentResult {
+pub fn prepareCommandAssignments(
+    allocator: std.mem.Allocator,
+    shell_state: state.ShellState,
+    plan: command_plan.CommandPlan,
+) !AssignmentResult {
     plan.validate();
 
     if (delta.firstReadonlyAssignment(shell_state, plan.assignments)) |name| {
@@ -209,7 +227,10 @@ test "assignments before special builtins persist in the command target" {
     defer shell_state.deinit();
 
     const assignments = [_]command_plan.Assignment{.{ .name = "SPECIAL", .value = "yes" }};
-    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &[_][]const u8{":"} } });
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{":"},
+    } });
 
     var result = try prepareCommandAssignments(std.testing.allocator, shell_state, plan);
     defer result.deinit();
@@ -227,7 +248,10 @@ test "assignments before regular builtins are explicit temporary environments" {
 
     const assignments = [_]command_plan.Assignment{.{ .name = "TEMP", .value = "builtin" }};
     const argv = [_][]const u8{ "echo", "hello" };
-    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &argv } });
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &argv,
+    } });
 
     var result = try prepareCommandAssignments(std.testing.allocator, shell_state, plan);
     defer result.deinit();
@@ -320,7 +344,10 @@ test "readonly temporary assignments fail before command execution" {
     try shell_state.setVariableReadonly("RO");
 
     const assignments = [_]command_plan.Assignment{.{ .name = "RO", .value = "new" }};
-    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &assignments, .argv = &[_][]const u8{"echo"} } });
+    const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{
+        .assignments = &assignments,
+        .argv = &[_][]const u8{"echo"},
+    } });
 
     var result = try prepareCommandAssignments(std.testing.allocator, shell_state, plan);
     defer result.deinit();
@@ -341,7 +368,9 @@ test "assignment export behavior separates persistent state from temporary envir
         .{ .name = "EXISTING", .value = "new" },
         .{ .name = "NEW", .value = "value" },
     };
-    const persistent_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .assignments = &persistent_assignments } });
+    const persistent_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .assignments = &persistent_assignments },
+    });
     var persistent_result = try prepareCommandAssignments(std.testing.allocator, shell_state, persistent_plan);
     defer persistent_result.deinit();
     try (try effectsFromResult(&persistent_result)).commitOrDiscard(&shell_state);
@@ -379,8 +408,18 @@ test "assignment matrix preserves commit discard and readonly invariants" {
         .{ .argv = &.{}, .expected_class = .assignment_only, .expected_effect = .persistent },
         .{ .argv = &[_][]const u8{":"}, .expected_class = .special_builtin, .expected_effect = .persistent },
         .{ .argv = &[_][]const u8{"echo"}, .expected_class = .regular_builtin, .expected_effect = .temporary },
-        .{ .argv = &[_][]const u8{"fn"}, .functions = &function_defs, .expected_class = .function, .expected_effect = .temporary },
-        .{ .argv = &[_][]const u8{"exe"}, .externals = &external_defs, .expected_class = .external, .expected_effect = .temporary },
+        .{
+            .argv = &[_][]const u8{"fn"},
+            .functions = &function_defs,
+            .expected_class = .function,
+            .expected_effect = .temporary,
+        },
+        .{
+            .argv = &[_][]const u8{"exe"},
+            .externals = &external_defs,
+            .expected_class = .external,
+            .expected_effect = .temporary,
+        },
     };
     const requested_targets = [_]context.ExecutionTarget{ .current_shell, .subshell, .child_process };
     const readonly_flags = [_]bool{ false, true };

@@ -215,17 +215,29 @@ pub const RedirectionStep = struct {
     ordinal: usize,
     effect: RedirectionEffect,
 
-    pub fn openPath(ordinal: usize, target_descriptor: fd.Descriptor, path: []const u8, options: fd.OpenOptions) RedirectionStep {
+    pub fn openPath(
+        ordinal: usize,
+        target_descriptor: fd.Descriptor,
+        path: []const u8,
+        options: fd.OpenOptions,
+    ) RedirectionStep {
         const step: RedirectionStep = .{
             .ordinal = ordinal,
-            .effect = .{ .open_path = .{ .target = target_descriptor, .path = DataSlice.borrowed(path), .options = options } },
+            .effect = .{ .open_path = .{
+                .target = target_descriptor,
+                .path = DataSlice.borrowed(path),
+                .options = options,
+            } },
         };
         step.validate();
         return step;
     }
 
     pub fn duplicate(ordinal: usize, target_descriptor: fd.Descriptor, source: fd.Descriptor) RedirectionStep {
-        const step: RedirectionStep = .{ .ordinal = ordinal, .effect = .{ .duplicate = .{ .target = target_descriptor, .source = source } } };
+        const step: RedirectionStep = .{
+            .ordinal = ordinal,
+            .effect = .{ .duplicate = .{ .target = target_descriptor, .source = source } },
+        };
         step.validate();
         return step;
     }
@@ -285,7 +297,11 @@ pub const RedirectionPlan = struct {
         return plan;
     }
 
-    pub fn build(allocator: std.mem.Allocator, specs: []const RedirectionSpec, options: PlanOptions) std.mem.Allocator.Error!PlanResult {
+    pub fn build(
+        allocator: std.mem.Allocator,
+        specs: []const RedirectionSpec,
+        options: PlanOptions,
+    ) std.mem.Allocator.Error!PlanResult {
         var steps: std.ArrayList(RedirectionStep) = .empty;
         errdefer steps.deinit(allocator);
 
@@ -346,7 +362,11 @@ pub const RedirectionPlan = struct {
         }
     }
 
-    pub fn apply(self: RedirectionPlan, allocator: std.mem.Allocator, port: fd.Port) std.mem.Allocator.Error!ApplyResult {
+    pub fn apply(
+        self: RedirectionPlan,
+        allocator: std.mem.Allocator,
+        port: fd.Port,
+    ) std.mem.Allocator.Error!ApplyResult {
         self.validate();
 
         var applied = AppliedRedirections.init(allocator, port);
@@ -484,9 +504,12 @@ pub const AppliedRedirections = struct {
             const saved = self.saved.items[index];
             saved.validate();
             if (saved.saved) |saved_descriptor| {
+                // ziglint-ignore: Z026 best-effort restoration cleanup
                 self.port.duplicateTo(.{ .source = saved_descriptor, .target = saved.target }) catch {};
+                // ziglint-ignore: Z026 best-effort restoration cleanup
                 self.port.close(.{ .descriptor = saved_descriptor }) catch {};
             } else {
+                // ziglint-ignore: Z026 best-effort restoration cleanup
                 self.port.close(.{ .descriptor = saved.target }) catch {};
             }
         }
@@ -498,6 +521,7 @@ pub const AppliedRedirections = struct {
         if (!self.active) return;
         for (self.saved.items) |saved| {
             saved.validate();
+            // ziglint-ignore: Z026 best-effort cleanup after committed redirections
             if (saved.saved) |saved_descriptor| self.port.close(.{ .descriptor = saved_descriptor }) catch {};
         }
         self.saved.clearRetainingCapacity();
@@ -524,10 +548,14 @@ pub const AppliedRedirections = struct {
         step.validate();
         if (try self.saveTarget(step.target)) |failure| return failure;
 
-        const opened = self.port.open(.{ .path = step.path.bytes, .options = step.options }) catch |err| return .{ .open = err };
+        const opened = self.port.open(.{
+            .path = step.path.bytes,
+            .options = step.options,
+        }) catch |err| return .{ .open = err };
         errdefer self.port.close(.{ .descriptor = opened.descriptor }) catch {};
         if (opened.descriptor == step.target) return null;
         self.port.duplicateTo(.{ .source = opened.descriptor, .target = step.target }) catch |err| {
+            // ziglint-ignore: Z026 preserve original duplicate failure while rolling back opened fd
             closeOpened(self.port, opened.descriptor) catch {};
             return .{ .duplicate = err };
         };
@@ -540,7 +568,10 @@ pub const AppliedRedirections = struct {
         if (step.source != step.target) {
             if (try self.saveTarget(step.target)) |failure| return failure;
         }
-        self.port.duplicateTo(.{ .source = step.source, .target = step.target }) catch |err| return .{ .duplicate = err };
+        self.port.duplicateTo(.{
+            .source = step.source,
+            .target = step.target,
+        }) catch |err| return .{ .duplicate = err };
         return null;
     }
 
@@ -585,7 +616,12 @@ const StepOrFailure = union(enum) {
     failure: PlanningFailure,
 };
 
-fn stepFromSpec(spec: RedirectionSpec, ordinal: usize, options: PlanOptions, consequence: FailureConsequence) StepOrFailure {
+fn stepFromSpec(
+    spec: RedirectionSpec,
+    ordinal: usize,
+    options: PlanOptions,
+    consequence: FailureConsequence,
+) StepOrFailure {
     const target = spec.descriptor orelse spec.operator.defaultDescriptor();
     fd.assertValidDescriptor(target);
 
@@ -625,10 +661,21 @@ fn stepFromSpec(spec: RedirectionSpec, ordinal: usize, options: PlanOptions, con
     };
 }
 
-fn pathOpenStep(operand: ExpandedOperand, ordinal: usize, target: fd.Descriptor, open_options: fd.OpenOptions, noclobber: bool, consequence: FailureConsequence) StepOrFailure {
+fn pathOpenStep(
+    operand: ExpandedOperand,
+    ordinal: usize,
+    target: fd.Descriptor,
+    open_options: fd.OpenOptions,
+    noclobber: bool,
+    consequence: FailureConsequence,
+) StepOrFailure {
     const fields = switch (operand) {
         .fields => |fields| fields,
-        .here_doc => return .{ .failure = .{ .kind = .wrong_operand_kind, .operand = "here-doc", .consequence = consequence } },
+        .here_doc => return .{ .failure = .{
+            .kind = .wrong_operand_kind,
+            .operand = "here-doc",
+            .consequence = consequence,
+        } },
     };
     if (singleField(fields)) |path| {
         const step: RedirectionStep = .{
@@ -643,26 +690,59 @@ fn pathOpenStep(operand: ExpandedOperand, ordinal: usize, target: fd.Descriptor,
         step.validate();
         return .{ .step = step };
     }
-    return .{ .failure = .{ .kind = .ambiguous_redirect, .operand = ambiguousOperand(fields), .consequence = consequence } };
+    return .{ .failure = .{
+        .kind = .ambiguous_redirect,
+        .operand = ambiguousOperand(fields),
+        .consequence = consequence,
+    } };
 }
 
-fn duplicateOrCloseStep(operand: ExpandedOperand, ordinal: usize, target: fd.Descriptor, consequence: FailureConsequence) StepOrFailure {
+fn duplicateOrCloseStep(
+    operand: ExpandedOperand,
+    ordinal: usize,
+    target: fd.Descriptor,
+    consequence: FailureConsequence,
+) StepOrFailure {
     const fields = switch (operand) {
         .fields => |fields| fields,
-        .here_doc => return .{ .failure = .{ .kind = .wrong_operand_kind, .operand = "here-doc", .consequence = consequence } },
+        .here_doc => return .{ .failure = .{
+            .kind = .wrong_operand_kind,
+            .operand = "here-doc",
+            .consequence = consequence,
+        } },
     };
-    const value = singleField(fields) orelse return .{ .failure = .{ .kind = .ambiguous_redirect, .operand = ambiguousOperand(fields), .consequence = consequence } };
+    const value = singleField(fields) orelse return .{ .failure = .{
+        .kind = .ambiguous_redirect,
+        .operand = ambiguousOperand(fields),
+        .consequence = consequence,
+    } };
     if (std.mem.eql(u8, value, "-")) return .{ .step = RedirectionStep.close(ordinal, target) };
-    const source = parseDescriptor(value) orelse return .{ .failure = .{ .kind = .bad_fd_operand, .operand = value, .consequence = consequence } };
+    const source = parseDescriptor(value) orelse return .{ .failure = .{
+        .kind = .bad_fd_operand,
+        .operand = value,
+        .consequence = consequence,
+    } };
     return .{ .step = RedirectionStep.duplicate(ordinal, target, source) };
 }
 
-fn hereDocStep(operand: ExpandedOperand, ordinal: usize, target: fd.Descriptor, consequence: FailureConsequence) StepOrFailure {
+fn hereDocStep(
+    operand: ExpandedOperand,
+    ordinal: usize,
+    target: fd.Descriptor,
+    consequence: FailureConsequence,
+) StepOrFailure {
     const data = switch (operand) {
         .here_doc => |data| data,
-        .fields => |fields| return .{ .failure = .{ .kind = .wrong_operand_kind, .operand = ambiguousOperand(fields), .consequence = consequence } },
+        .fields => |fields| return .{ .failure = .{
+            .kind = .wrong_operand_kind,
+            .operand = ambiguousOperand(fields),
+            .consequence = consequence,
+        } },
     };
-    const step: RedirectionStep = .{ .ordinal = ordinal, .effect = .{ .here_doc = .{ .target = target, .data = data } } };
+    const step: RedirectionStep = .{
+        .ordinal = ordinal,
+        .effect = .{ .here_doc = .{ .target = target, .data = data } },
+    };
     step.validate();
     return .{ .step = step };
 }
@@ -774,9 +854,16 @@ test "RedirectionPlan clone owns path and here-doc data" {
 }
 
 test "RedirectionPlan reports ambiguous redirects and bad fd operands as planning failures" {
-    const empty_fields = [_][]const u8{};
-    const ambiguous_specs = [_]RedirectionSpec{.{ .operator = .input, .operand = .{ .fields = .{ .fields = &empty_fields } } }};
-    const ambiguous = try RedirectionPlan.build(std.testing.allocator, &ambiguous_specs, .{ .failure_policy = .special_builtin_non_interactive });
+    const empty_fields: [0][]const u8 = .{};
+    const ambiguous_specs = [_]RedirectionSpec{.{
+        .operator = .input,
+        .operand = .{ .fields = .{ .fields = &empty_fields } },
+    }};
+    const ambiguous = try RedirectionPlan.build(
+        std.testing.allocator,
+        &ambiguous_specs,
+        .{ .failure_policy = .special_builtin_non_interactive },
+    );
     switch (ambiguous) {
         .failure => |failure| {
             try std.testing.expectEqual(PlanningFailureKind.ambiguous_redirect, failure.kind);
@@ -791,7 +878,10 @@ test "RedirectionPlan reports ambiguous redirects and bad fd operands as plannin
     }
 
     const bad_fd_fields = [_][]const u8{"not-a-fd"};
-    const bad_fd_specs = [_]RedirectionSpec{.{ .operator = .duplicate_output, .operand = .{ .fields = .{ .fields = &bad_fd_fields } } }};
+    const bad_fd_specs = [_]RedirectionSpec{.{
+        .operator = .duplicate_output,
+        .operand = .{ .fields = .{ .fields = &bad_fd_fields } },
+    }};
     const bad_fd = try RedirectionPlan.build(std.testing.allocator, &bad_fd_specs, .{});
     switch (bad_fd) {
         .failure => |failure| {
@@ -830,7 +920,8 @@ const FakeFdRuntime = struct {
     }
 
     fn setOpen(self: *FakeFdRuntime, descriptor: fd.Descriptor, open_value: bool) void {
-        std.debug.assert(descriptor >= 0 and descriptor < self.open_descriptors.len);
+        std.debug.assert(descriptor >= 0);
+        std.debug.assert(descriptor < self.open_descriptors.len);
         self.open_descriptors[@intCast(descriptor)] = open_value;
     }
 
@@ -902,8 +993,16 @@ test "RedirectionPlan application uses fd ports and restores saved descriptors" 
     const fields = [_][]const u8{"out"};
     const specs = [_]RedirectionSpec{
         .{ .operator = .output, .operand = .{ .fields = .{ .fields = &fields } } },
-        .{ .descriptor = 2, .operator = .duplicate_output, .operand = .{ .fields = .{ .fields = &[_][]const u8{"1"} } } },
-        .{ .descriptor = 0, .operator = .duplicate_input, .operand = .{ .fields = .{ .fields = &[_][]const u8{"-"} } } },
+        .{
+            .descriptor = 2,
+            .operator = .duplicate_output,
+            .operand = .{ .fields = .{ .fields = &[_][]const u8{"1"} } },
+        },
+        .{
+            .descriptor = 0,
+            .operator = .duplicate_input,
+            .operand = .{ .fields = .{ .fields = &[_][]const u8{"-"} } },
+        },
     };
     const result = try RedirectionPlan.build(std.testing.allocator, &specs, .{});
     var plan = switch (result) {

@@ -85,7 +85,12 @@ pub const CommandOutcome = struct {
         return outcome;
     }
 
-    pub fn withControlFlow(allocator: std.mem.Allocator, status_value: ExitStatus, state_delta: delta.StateDelta, control_flow: ControlFlow) CommandOutcome {
+    pub fn withControlFlow(
+        allocator: std.mem.Allocator,
+        status_value: ExitStatus,
+        state_delta: delta.StateDelta,
+        control_flow: ControlFlow,
+    ) CommandOutcome {
         var outcome: CommandOutcome = .{
             .allocator = allocator,
             .status = status_value,
@@ -153,7 +158,11 @@ pub const CommandOutcome = struct {
     }
 };
 
-pub fn readonlyVariableFailure(allocator: std.mem.Allocator, target: context.ExecutionTarget, name: []const u8) !CommandOutcome {
+pub fn readonlyVariableFailure(
+    allocator: std.mem.Allocator,
+    target: context.ExecutionTarget,
+    name: []const u8,
+) !CommandOutcome {
     state.assertValidVariableName(name);
 
     const state_delta = delta.StateDelta.init(allocator, target);

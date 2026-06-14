@@ -54,7 +54,9 @@ pub const JobMarkerMutation = struct {
     pub fn validate(self: JobMarkerMutation) void {
         if (self.current_job_id) |id| std.debug.assert(id != 0);
         if (self.previous_job_id) |id| std.debug.assert(id != 0);
-        std.debug.assert(self.current_job_id == null or self.previous_job_id == null or self.current_job_id.? != self.previous_job_id.?);
+        std.debug.assert(self.current_job_id == null or
+            self.previous_job_id == null or
+            self.current_job_id.? != self.previous_job_id.?);
     }
 };
 
@@ -190,7 +192,9 @@ pub const StateDelta = struct {
         for (self.background_job_updates.items) |job| try cloned.updateBackgroundJob(job);
         for (self.background_job_removals.items) |id| try cloned.removeBackgroundJob(id);
         for (self.job_notifications.items) |notification| try cloned.appendJobNotification(notification);
-        if (self.job_notification_consume_count != 0) cloned.consumeJobNotifications(self.job_notification_consume_count);
+        if (self.job_notification_consume_count != 0) {
+            cloned.consumeJobNotifications(self.job_notification_consume_count);
+        }
         if (self.job_markers) |markers| cloned.setJobMarkers(markers);
 
         return cloned;
@@ -225,7 +229,12 @@ pub const StateDelta = struct {
             self.job_markers == null;
     }
 
-    pub fn assignVariable(self: *StateDelta, name: []const u8, value: []const u8, attributes: state.VariableAttributes) !void {
+    pub fn assignVariable(
+        self: *StateDelta,
+        name: []const u8,
+        value: []const u8,
+        attributes: state.VariableAttributes,
+    ) !void {
         self.assertPending();
         state.assertValidVariableName(name);
 
@@ -449,7 +458,11 @@ pub const StateDelta = struct {
         self.clear_pending_exit = true;
     }
 
-    pub fn appendSignalDelivery(self: *StateDelta, shell_state: state.ShellState, signal: state.TrapSignal) !state.TrapDelivery {
+    pub fn appendSignalDelivery(
+        self: *StateDelta,
+        shell_state: state.ShellState,
+        signal: state.TrapSignal,
+    ) !state.TrapDelivery {
         self.assertPending();
         shell_state.validate();
         signal.validate();
@@ -576,7 +589,11 @@ pub const StateDelta = struct {
         return null;
     }
 
-    pub fn appendPersistentCommandAssignments(self: *StateDelta, shell_state: state.ShellState, assignments: []const command_plan.Assignment) !void {
+    pub fn appendPersistentCommandAssignments(
+        self: *StateDelta,
+        shell_state: state.ShellState,
+        assignments: []const command_plan.Assignment,
+    ) !void {
         self.assertPending();
         if (firstReadonlyAssignment(shell_state, assignments) != null) return error.ReadonlyVariable;
 
@@ -638,7 +655,9 @@ pub const StateDelta = struct {
         for (self.background_jobs.items) |job| try shell_state.appendBackgroundJob(job);
         for (self.background_job_updates.items) |job| try shell_state.replaceBackgroundJob(job);
         for (self.background_job_removals.items) |id| shell_state.removeBackgroundJobById(id);
-        if (self.job_notification_consume_count != 0) shell_state.consumeJobNotifications(self.job_notification_consume_count);
+        if (self.job_notification_consume_count != 0) {
+            shell_state.consumeJobNotifications(self.job_notification_consume_count);
+        }
         for (self.job_notifications.items) |notification| try shell_state.appendJobNotification(notification);
         if (self.job_markers) |markers| shell_state.setJobMarkers(markers.current_job_id, markers.previous_job_id);
 
@@ -695,7 +714,10 @@ fn findTrapMutation(delta: *StateDelta, name: []const u8) ?*TrapMutation {
     return null;
 }
 
-fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) !command_plan.FunctionDefinition {
+fn cloneFunctionDefinition(
+    allocator: std.mem.Allocator,
+    definition: command_plan.FunctionDefinition,
+) !command_plan.FunctionDefinition {
     return command_plan.cloneFunctionDefinition(allocator, definition);
 }
 
@@ -703,7 +725,10 @@ fn freeFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan
     command_plan.freeFunctionDefinition(allocator, definition);
 }
 
-pub fn firstReadonlyAssignment(shell_state: state.ShellState, assignments: []const command_plan.Assignment) ?[]const u8 {
+pub fn firstReadonlyAssignment(
+    shell_state: state.ShellState,
+    assignments: []const command_plan.Assignment,
+) ?[]const u8 {
     for (assignments) |assignment| {
         assignment.validate();
         if (shell_state.isVariableReadonly(assignment.name)) return assignment.name;
@@ -867,7 +892,10 @@ test "StateDelta commits signal delivery to pending traps default exit or ignore
     shell_state.clearTrapForSignal(.TERM);
     var default_delta = StateDelta.init(std.testing.allocator, .current_shell);
     defer default_delta.deinit();
-    try std.testing.expectEqual(state.TrapDelivery.default_action, try default_delta.appendSignalDelivery(shell_state, .TERM));
+    try std.testing.expectEqual(
+        state.TrapDelivery.default_action,
+        try default_delta.appendSignalDelivery(shell_state, .TERM),
+    );
     try default_delta.commit(&shell_state, .current_shell);
     try std.testing.expectEqual(@as(?state.ExitStatus, 143), shell_state.pending_exit);
 

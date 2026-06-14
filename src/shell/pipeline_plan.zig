@@ -20,15 +20,25 @@ pub const StatusAggregation = command_plan.StatusAggregation;
 pub const aggregateStatus = command_plan.aggregateStatus;
 
 test "PipelinePlan selects strategy and stage targets before runtime effects" {
-    const echo = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"echo"} } });
-    const true_plan = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"true"} } });
+    const echo = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"echo"} },
+    });
+    const true_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"true"} },
+    });
     const externals = [_]command_plan.ExternalResolution{
         .{ .name = "cat", .path = "/bin/cat" },
         .{ .name = "wc", .path = "/usr/bin/wc" },
     };
     const lookup: command_plan.LookupSnapshot = .{ .externals = &externals };
-    const cat = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"cat"} }, .lookup = lookup });
-    const wc = command_plan.classifyExpandedSimpleCommand(.{ .command = .{ .argv = &[_][]const u8{"wc"} }, .lookup = lookup });
+    const cat = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"cat"} },
+        .lookup = lookup,
+    });
+    const wc = command_plan.classifyExpandedSimpleCommand(.{
+        .command = .{ .argv = &[_][]const u8{"wc"} },
+        .lookup = lookup,
+    });
 
     const single = PipelinePlan.init(&[_]PipelineStagePlan{.{ .simple = echo }}, .{});
     try std.testing.expectEqual(PipelineExecutionStrategy.single_stage, single.strategy);
@@ -50,7 +60,10 @@ test "PipelinePlan selects strategy and stage targets before runtime effects" {
     try std.testing.expectEqual(context.ExecutionTarget.subshell, mixed.stageTarget(0));
     try std.testing.expectEqual(context.ExecutionTarget.child_process, mixed.stageTarget(1));
 
-    const background = PipelinePlan.init(&[_]PipelineStagePlan{ .{ .simple = cat }, .{ .simple = wc } }, .{ .background = .background });
+    const background = PipelinePlan.init(
+        &[_]PipelineStagePlan{ .{ .simple = cat }, .{ .simple = wc } },
+        .{ .background = .background },
+    );
     try std.testing.expectEqual(PipelineExecutionStrategy.background_deferred, background.strategy);
 }
 

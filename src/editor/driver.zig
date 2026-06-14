@@ -13,15 +13,21 @@ const signal = @import("signal.zig");
 const terminal = @import("terminal.zig");
 const worker = @import("worker.zig");
 
-extern "c" fn openpty(amaster: *c_int, aslave: *c_int, name: ?[*:0]u8, termp: ?*const std.posix.termios, winp: ?*const anyopaque) c_int;
+extern "c" fn openpty(
+    amaster: *c_int,
+    aslave: *c_int,
+    name: ?[*:0]u8,
+    termp: ?*const std.posix.termios,
+    winp: ?*const anyopaque,
+) c_int;
 extern "c" fn close(fd: c_int) c_int;
 
 const read_chunk_size = 4096;
-const semanticCommandStart = "\x1b]133;A;cl=w\x07";
-const semanticInputEnd = "\x1b]133;C\x07";
-const semanticInputCancel = "\x1b]133;D;err=CANCEL\x07";
-const completionProgressStart = "\x1b]9;4;3\x07";
-const completionProgressStop = "\x1b]9;4;0\x07";
+const semantic_command_start = "\x1b]133;A;cl=w\x07";
+const semantic_input_end = "\x1b]133;C\x07";
+const semantic_input_cancel = "\x1b]133;D;err=CANCEL\x07";
+const completion_progress_start = "\x1b]9;4;3\x07";
+const completion_progress_stop = "\x1b]9;4;0\x07";
 const completion_progress_delay_ms = 500;
 
 pub const DriverEvent = union(enum) {
@@ -59,25 +65,69 @@ pub const ReadLineOptions = struct {
     run_hooks: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror!HookResult = null,
     next_hook_interval_ms: ?*const fn (*anyopaque, std.Io) anyerror!?u64 = null,
     prompt_context: ?*anyopaque = null,
-    refresh_prompt: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror![]const u8 = null,
+    refresh_prompt: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+    ) anyerror![]const u8 = null,
     history: line_editor.HistoryView = .{},
     completion_context: ?*anyopaque = null,
-    complete: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8, usize) anyerror!completion.Application = null,
-    clone_completion_context: ?*const fn (*anyopaque, std.mem.Allocator, *completion.CancellationToken) anyerror!*anyopaque = null,
+    complete: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+        []const u8,
+        usize,
+    ) anyerror!completion.Application = null,
+    clone_completion_context: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        *completion.CancellationToken,
+    ) anyerror!*anyopaque = null,
     free_completion_context: ?*const fn (*anyopaque, std.mem.Allocator) void = null,
-    expand_abbreviation: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize, bool) anyerror!?completion.Edit = null,
+    expand_abbreviation: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        []const u8,
+        usize,
+        bool,
+    ) anyerror!?completion.Edit = null,
     path_expansion_context: ?*anyopaque = null,
-    expand_pathname: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8) anyerror!line_editor.PathExpansionMatches = null,
+    expand_pathname: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+        []const u8,
+    ) anyerror!line_editor.PathExpansionMatches = null,
     vi_alias_context: ?*anyopaque = null,
-    lookup_vi_alias: ?*const fn (*anyopaque, std.mem.Allocator, u21) anyerror!?[]const u8 = null,
+    lookup_vi_alias: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        u21,
+    ) anyerror!?[]const u8 = null,
     external_editor_command: []const u8 = "vi",
     external_editor_tmpdir: []const u8 = "/tmp",
     diagnostic_context: ?*anyopaque = null,
-    diagnose: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, []const u8) anyerror!?line_editor.DiagnosticRender = null,
+    diagnose: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+        []const u8,
+    ) anyerror!?line_editor.DiagnosticRender = null,
     theme: line_editor.UiTheme = .{},
     style_context: ?*anyopaque = null,
-    refresh_style: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, ColorScheme) anyerror!line_editor.UiTheme = null,
-    refresh_color_report: ?*const fn (*anyopaque, std.mem.Allocator, std.Io, ColorReport) anyerror!line_editor.UiTheme = null,
+    refresh_style: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+        ColorScheme,
+    ) anyerror!line_editor.UiTheme = null,
+    refresh_color_report: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+        ColorReport,
+    ) anyerror!line_editor.UiTheme = null,
 };
 
 pub const HookResult = struct {
@@ -185,7 +235,8 @@ pub const TerminalSession = struct {
     }
 
     pub fn deinit(self: *TerminalSession) void {
-        writeTtyAll(&self.tty, completionProgressStop) catch {};
+        // ziglint-ignore: Z026 best-effort terminal cleanup during deinit
+        writeTtyAll(&self.tty, completion_progress_stop) catch {};
         self.capabilities.reset(&self.tty);
         self.events.deinit(self.allocator);
         self.completion.deinit();
@@ -253,6 +304,7 @@ pub const TerminalSession = struct {
     }
 
     pub fn requestPromptRedraw(self: *TerminalSession) void {
+        // ziglint-ignore: Z026 best-effort wakeup; the next input event can redraw
         rawWriteAll(self.prompt_redraw.write.handle, "p") catch {};
     }
 
@@ -280,28 +332,58 @@ pub const TerminalSession = struct {
         defer session.deinit();
         session.vi_aliases = .{ .context = read_options.vi_alias_context, .lookup = read_options.lookup_vi_alias };
 
-        try writeTtyAll(&self.tty, semanticCommandStart);
-        try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
-        var next_prompt_refresh_ms: ?u64 = if (read_options.prompt_refresh_interval_ms) |interval_ms| nowMs(self.io) + interval_ms else null;
+        try writeTtyAll(&self.tty, semantic_command_start);
+        try renderSession(
+            self.allocator,
+            self.io,
+            &self.tty,
+            &self.renderer,
+            &session,
+            self.capabilities,
+            self.winsize,
+            read_options,
+        );
+        var next_prompt_refresh_ms: ?u64 = if (read_options.prompt_refresh_interval_ms) |interval_ms|
+            nowMs(self.io) + interval_ms
+        else
+            null;
         var next_completion_flash_clear_ms: ?u64 = null;
         var next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
         read_loop: while (true) {
             while (session.state == .editing or session.state == .history_search) {
                 var render_needed = false;
                 var loop_events: [8]event_loop.Event = undefined;
-                const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(self.io, next_prompt_refresh_ms, next_hook_interval_ms, self.completion.debounceWaitMs(self.io), next_completion_flash_clear_ms, self.completion.progressWaitMs(self.io)));
+                const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(
+                    self.io,
+                    next_prompt_refresh_ms,
+                    next_hook_interval_ms,
+                    self.completion.debounceWaitMs(self.io),
+                    next_completion_flash_clear_ms,
+                    self.completion.progressWaitMs(self.io),
+                ));
                 if (ready.len == 0 and self.completion.progressWaitMs(self.io) == 0) {
                     try self.startCompletionProgress();
                 }
-                if (ready.len == 0 and next_hook_interval_ms != null and promptRefreshWaitMs(self.io, next_hook_interval_ms) == 0) {
-                    if (try self.runHooks(read_options, &session, &render_needed)) return try self.finishInterruptedReadLine();
+                if (ready.len == 0 and
+                    next_hook_interval_ms != null and
+                    promptRefreshWaitMs(self.io, next_hook_interval_ms) == 0)
+                {
+                    if (try self.runHooks(read_options, &session, &render_needed)) {
+                        return self.finishInterruptedReadLine();
+                    }
                     next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
                 }
-                if (ready.len == 0 and next_completion_flash_clear_ms != null and promptRefreshWaitMs(self.io, next_completion_flash_clear_ms) == 0) {
+                if (ready.len == 0 and
+                    next_completion_flash_clear_ms != null and
+                    promptRefreshWaitMs(self.io, next_completion_flash_clear_ms) == 0)
+                {
                     render_needed = true;
                     next_completion_flash_clear_ms = null;
                 }
-                if (ready.len == 0 and next_prompt_refresh_ms != null and promptRefreshWaitMs(self.io, next_prompt_refresh_ms) == 0) {
+                if (ready.len == 0 and
+                    next_prompt_refresh_ms != null and
+                    promptRefreshWaitMs(self.io, next_prompt_refresh_ms) == 0)
+                {
                     render_needed = true;
                     session.invalidatePrompt();
                     next_prompt_refresh_ms = nowMs(self.io) + read_options.prompt_refresh_interval_ms.?;
@@ -333,7 +415,9 @@ pub const TerminalSession = struct {
                     }
                 }
                 if (hook_ready) {
-                    if (try self.runHooks(read_options, &session, &render_needed)) return try self.finishInterruptedReadLine();
+                    if (try self.runHooks(read_options, &session, &render_needed)) {
+                        return self.finishInterruptedReadLine();
+                    }
                     next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
                 }
                 var reported_invalid_utf8 = false;
@@ -343,25 +427,60 @@ pub const TerminalSession = struct {
                             render_needed = true;
                             if (isCompletionTab(key) and session.hasCompletionMenu()) {
                                 try session.handleKey(.{ .key = .tab, .modifiers = key.modifiers });
-                            } else if (isCompletionTab(key) and read_options.complete != null and read_options.completion_context != null) {
+                            } else if (isCompletionTab(key) and
+                                read_options.complete != null and
+                                read_options.completion_context != null)
+                            {
                                 _ = try expandAbbreviationBeforeAccept(&session, read_options, false);
-                                if (read_options.clone_completion_context != null and read_options.free_completion_context != null) {
-                                    try self.requestCompletion(read_options, session.editor.buffer.text(), session.editor.buffer.cursor_byte, .explicit);
+                                if (read_options.clone_completion_context != null and
+                                    read_options.free_completion_context != null)
+                                {
+                                    try self.requestCompletion(
+                                        read_options,
+                                        session.editor.buffer.text(),
+                                        session.editor.buffer.cursor_byte,
+                                        .explicit,
+                                    );
                                 } else {
-                                    const application = try read_options.complete.?(read_options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
+                                    const application = try read_options.complete.?(
+                                        read_options.completion_context.?,
+                                        self.allocator,
+                                        self.io,
+                                        session.editor.buffer.text(),
+                                        session.editor.buffer.cursor_byte,
+                                    );
                                     defer application.deinit(self.allocator);
                                     try session.applyCompletion(application);
                                 }
                             } else if (key.key == .enter and !session.hasCompletionMenu()) {
                                 _ = try expandAbbreviationBeforeAccept(&session, read_options, false);
                                 try session.handleKey(key);
-                            } else if (isSpaceAccept(key) and try expandAbbreviationBeforeAccept(&session, read_options, true)) {} else if (session.hasCompletionMenu() and shouldRefreshCompletionMenu(key) and read_options.complete != null and read_options.completion_context != null) {
+                            } else if (isSpaceAccept(key) and
+                                try expandAbbreviationBeforeAccept(&session, read_options, true))
+                            {} else if (session.hasCompletionMenu() and
+                                shouldRefreshCompletionMenu(key) and
+                                read_options.complete != null and
+                                read_options.completion_context != null)
+                            {
                                 try session.handleKey(key);
                                 if (session.hasCompletionMenu()) {
-                                    if (read_options.clone_completion_context != null and read_options.free_completion_context != null) {
-                                        try self.requestCompletion(read_options, session.editor.buffer.text(), session.editor.buffer.cursor_byte, .refresh);
+                                    if (read_options.clone_completion_context != null and
+                                        read_options.free_completion_context != null)
+                                    {
+                                        try self.requestCompletion(
+                                            read_options,
+                                            session.editor.buffer.text(),
+                                            session.editor.buffer.cursor_byte,
+                                            .refresh,
+                                        );
                                     } else {
-                                        const application = try read_options.complete.?(read_options.completion_context.?, self.allocator, self.io, session.editor.buffer.text(), session.editor.buffer.cursor_byte);
+                                        const application = try read_options.complete.?(
+                                            read_options.completion_context.?,
+                                            self.allocator,
+                                            self.io,
+                                            session.editor.buffer.text(),
+                                            session.editor.buffer.cursor_byte,
+                                        );
                                         defer application.deinit(self.allocator);
                                         try session.applyCompletion(application);
                                     }
@@ -401,8 +520,16 @@ pub const TerminalSession = struct {
                         .capability => |capability| {
                             render_needed = true;
                             try self.capabilities.apply(self.allocator, &self.tty, capability);
-                            if (capability == .da1 and read_options.refresh_style != null and read_options.style_context != null) {
-                                read_options.theme = try read_options.refresh_style.?(read_options.style_context.?, self.allocator, self.io, self.color_scheme);
+                            if (capability == .da1 and
+                                read_options.refresh_style != null and
+                                read_options.style_context != null)
+                            {
+                                read_options.theme = try read_options.refresh_style.?(
+                                    read_options.style_context.?,
+                                    self.allocator,
+                                    self.io,
+                                    self.color_scheme,
+                                );
                             }
                         },
                         .color_scheme => |scheme| {
@@ -410,13 +537,23 @@ pub const TerminalSession = struct {
                             try self.capabilities.requestColorReports(&self.tty);
                             try self.capabilities.sendQueries(&self.tty);
                             if (read_options.refresh_style != null and read_options.style_context != null) {
-                                read_options.theme = try read_options.refresh_style.?(read_options.style_context.?, self.allocator, self.io, scheme);
+                                read_options.theme = try read_options.refresh_style.?(
+                                    read_options.style_context.?,
+                                    self.allocator,
+                                    self.io,
+                                    scheme,
+                                );
                                 render_needed = true;
                             }
                         },
                         .color_report => |report| {
                             if (read_options.refresh_color_report != null and read_options.style_context != null) {
-                                read_options.theme = try read_options.refresh_color_report.?(read_options.style_context.?, self.allocator, self.io, report);
+                                read_options.theme = try read_options.refresh_color_report.?(
+                                    read_options.style_context.?,
+                                    self.allocator,
+                                    self.io,
+                                    report,
+                                );
                                 render_needed = true;
                             }
                         },
@@ -430,8 +567,15 @@ pub const TerminalSession = struct {
                 if (session.state == .editing or session.state == .history_search) {
                     try self.startReadyCompletion(read_options);
                     if (render_needed) {
-                        if (session.takePromptInvalidation() and read_options.refresh_prompt != null and read_options.prompt_context != null) {
-                            const prompt = try read_options.refresh_prompt.?(read_options.prompt_context.?, self.allocator, self.io);
+                        if (session.takePromptInvalidation() and
+                            read_options.refresh_prompt != null and
+                            read_options.prompt_context != null)
+                        {
+                            const prompt = try read_options.refresh_prompt.?(
+                                read_options.prompt_context.?,
+                                self.allocator,
+                                self.io,
+                            );
                             defer self.allocator.free(prompt);
                             try session.replacePrompt(.{
                                 .bytes = prompt,
@@ -443,8 +587,19 @@ pub const TerminalSession = struct {
                             try writeTtyAll(&self.tty, "\x1b[H\x1b[2J");
                         }
                         const rendered_completion_flash = session.hasCompletionFlash();
-                        try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
-                        if (rendered_completion_flash) next_completion_flash_clear_ms = nowMs(self.io) + completion_flash_ms;
+                        try renderSession(
+                            self.allocator,
+                            self.io,
+                            &self.tty,
+                            &self.renderer,
+                            &session,
+                            self.capabilities,
+                            self.winsize,
+                            read_options,
+                        );
+                        if (rendered_completion_flash) {
+                            next_completion_flash_clear_ms = nowMs(self.io) + completion_flash_ms;
+                        }
                     }
                 }
             }
@@ -458,7 +613,16 @@ pub const TerminalSession = struct {
                         try session.acceptExternalEditorResult(text);
                     } else {
                         session.resumeEditingAfterExternalEditor();
-                        try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
+                        try renderSession(
+                            self.allocator,
+                            self.io,
+                            &self.tty,
+                            &self.renderer,
+                            &session,
+                            self.capabilities,
+                            self.winsize,
+                            read_options,
+                        );
                         continue :read_loop;
                     }
                     continue :read_loop;
@@ -467,16 +631,25 @@ pub const TerminalSession = struct {
                     // Accepting the line may have rewritten the buffer (e.g.
                     // abbreviation expansion on Enter); paint the final text so
                     // the scrollback shows the command that actually runs.
-                    try renderSession(self.allocator, self.io, &self.tty, &self.renderer, &session, self.capabilities, self.winsize, read_options);
+                    try renderSession(
+                        self.allocator,
+                        self.io,
+                        &self.tty,
+                        &self.renderer,
+                        &session,
+                        self.capabilities,
+                        self.winsize,
+                        read_options,
+                    );
                     try self.handoffSubmittedInput();
                     self.renderer.reset(self.allocator);
-                    try writeTtyAll(&self.tty, semanticInputEnd ++ "\r\n");
+                    try writeTtyAll(&self.tty, semantic_input_end ++ "\r\n");
                     return .{ .submitted = session.takeSubmittedLine().? };
                 },
                 .canceled => {
                     try self.clearRenderedRowsAfterFirst();
                     self.renderer.reset(self.allocator);
-                    try writeTtyAll(&self.tty, semanticInputCancel ++ "^C\r\n");
+                    try writeTtyAll(&self.tty, semantic_input_cancel ++ "^C\r\n");
                     return .canceled;
                 },
                 .eof => {
@@ -493,11 +666,15 @@ pub const TerminalSession = struct {
     fn finishInterruptedReadLine(self: *TerminalSession) !ReadLineResult {
         try self.clearRenderedRowsAfterFirst();
         self.renderer.reset(self.allocator);
-        try writeTtyAll(&self.tty, semanticInputCancel ++ "\r\n");
+        try writeTtyAll(&self.tty, semantic_input_cancel ++ "\r\n");
         return .interrupted;
     }
 
-    fn runExternalEditor(self: *TerminalSession, options: ReadLineOptions, session: *line_editor.LineSession) ![]const u8 {
+    fn runExternalEditor(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+    ) ![]const u8 {
         const request = session.takeExternalEditorRequest() orelse return error.MissingExternalEditorRequest;
         defer request.deinit(self.allocator);
 
@@ -515,7 +692,12 @@ pub const TerminalSession = struct {
         return edited;
     }
 
-    fn runHooks(self: *TerminalSession, options: ReadLineOptions, session: *line_editor.LineSession, render_needed: *bool) !bool {
+    fn runHooks(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+        render_needed: *bool,
+    ) !bool {
         if (options.run_hooks == null or options.hook_context == null) return false;
         const hook_result = try options.run_hooks.?(options.hook_context.?, self.allocator, self.io);
         defer self.allocator.free(hook_result.output);
@@ -527,7 +709,11 @@ pub const TerminalSession = struct {
         return hook_result.stop;
     }
 
-    fn processPathExpansionRequest(self: *TerminalSession, options: ReadLineOptions, session: *line_editor.LineSession) !bool {
+    fn processPathExpansionRequest(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        session: *line_editor.LineSession,
+    ) !bool {
         const request = session.takePathExpansionRequest() orelse return false;
         defer request.deinit(self.allocator);
         const expand_pathname = options.expand_pathname orelse return false;
@@ -546,7 +732,7 @@ pub const TerminalSession = struct {
             return false;
         }
 
-        return try session.applyPathExpansion(request, matches);
+        return session.applyPathExpansion(request, matches);
     }
 
     fn clearRenderedRowsAfterFirst(self: *TerminalSession) !void {
@@ -602,6 +788,7 @@ pub const TerminalSession = struct {
 
     fn processTrapSignal(self: *TerminalSession) void {
         var buffer: [64]u8 = undefined;
+        // ziglint-ignore: Z026 best-effort signal-pipe drain
         _ = rawRead(self.trap_signal.read.handle, &buffer) catch {};
     }
 
@@ -609,7 +796,13 @@ pub const TerminalSession = struct {
         self.interrupt_signal.drain();
     }
 
-    fn requestCompletion(self: *TerminalSession, options: ReadLineOptions, source: []const u8, cursor: usize, reason: CompletionRequestReason) !void {
+    fn requestCompletion(
+        self: *TerminalSession,
+        options: ReadLineOptions,
+        source: []const u8,
+        cursor: usize,
+        reason: CompletionRequestReason,
+    ) !void {
         if (options.complete == null or options.completion_context == null) return;
         try self.completion.request(self.io, source, cursor, reason);
         try self.startReadyCompletion(options);
@@ -645,17 +838,19 @@ pub const TerminalSession = struct {
         if (self.completion.active == null or self.completion.progress_started) return;
         self.completion.progress_started = true;
         self.completion.progress_deadline_ms = null;
-        try writeTtyAll(&self.tty, completionProgressStart);
+        try writeTtyAll(&self.tty, completion_progress_start);
     }
 
     fn processCompletionResult(self: *TerminalSession, session: *line_editor.LineSession) !bool {
         var buffer: [32]u8 = undefined;
+        // ziglint-ignore: Z026 best-effort completion wake-pipe drain
         _ = rawRead(self.completion_wake.read.handle, &buffer) catch {};
         const completion_thread = self.completion.active orelse return false;
         if (!completion_thread.done.load(.acquire)) return false;
         self.completion.active = null;
         completion_thread.thread.join();
-        if (self.completion.progress_started) writeTtyAll(&self.tty, completionProgressStop) catch {};
+        // ziglint-ignore: Z026 best-effort terminal progress cleanup
+        if (self.completion.progress_started) writeTtyAll(&self.tty, completion_progress_stop) catch {};
         self.completion.progress_started = false;
         self.completion.progress_deadline_ms = null;
         const result = completion_thread.takeResult();
@@ -682,6 +877,7 @@ const ExternalEditorTempFile = struct {
     path: []const u8,
 
     fn deinit(self: ExternalEditorTempFile, allocator: std.mem.Allocator, io: std.Io) void {
+        // ziglint-ignore: Z026 best-effort temporary file cleanup
         self.dir.deleteFile(io, self.sub_path) catch {};
         self.dir.close(io);
         allocator.free(self.path);
@@ -689,7 +885,12 @@ const ExternalEditorTempFile = struct {
     }
 };
 
-fn editCommandWithExternalEditor(allocator: std.mem.Allocator, io: std.Io, options: ReadLineOptions, initial_text: []const u8) ![]const u8 {
+fn editCommandWithExternalEditor(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    options: ReadLineOptions,
+    initial_text: []const u8,
+) ![]const u8 {
     const temp = try createExternalEditorTempFile(allocator, io, options.external_editor_tmpdir, initial_text);
     defer temp.deinit(allocator, io);
 
@@ -697,7 +898,12 @@ fn editCommandWithExternalEditor(allocator: std.mem.Allocator, io: std.Io, optio
     return temp.dir.readFileAlloc(io, temp.sub_path, allocator, .limited(1024 * 1024));
 }
 
-fn createExternalEditorTempFile(allocator: std.mem.Allocator, io: std.Io, tmpdir: []const u8, initial_text: []const u8) !ExternalEditorTempFile {
+fn createExternalEditorTempFile(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    tmpdir: []const u8,
+    initial_text: []const u8,
+) !ExternalEditorTempFile {
     var dir = if (std.fs.path.isAbsolute(tmpdir))
         try std.Io.Dir.openDirAbsolute(io, tmpdir, .{})
     else
@@ -706,7 +912,11 @@ fn createExternalEditorTempFile(allocator: std.mem.Allocator, io: std.Io, tmpdir
 
     var attempts: usize = 0;
     while (attempts < 64) : (attempts += 1) {
-        const sub_path = try std.fmt.allocPrint(allocator, "rush-edit-{d}-{d}-{d}.sh", .{ std.c.getpid(), nowMs(io), attempts });
+        const sub_path = try std.fmt.allocPrint(
+            allocator,
+            "rush-edit-{d}-{d}-{d}.sh",
+            .{ std.c.getpid(), nowMs(io), attempts },
+        );
         errdefer allocator.free(sub_path);
         var file = dir.createFile(io, sub_path, .{
             .read = true,
@@ -728,7 +938,12 @@ fn createExternalEditorTempFile(allocator: std.mem.Allocator, io: std.Io, tmpdir
     return error.TemporaryNameExhausted;
 }
 
-fn runExternalEditorCommand(allocator: std.mem.Allocator, io: std.Io, editor_command: []const u8, path: []const u8) !void {
+fn runExternalEditorCommand(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    editor_command: []const u8,
+    path: []const u8,
+) !void {
     const command = try std.fmt.allocPrint(allocator, "exec {s} \"$1\"", .{editor_command});
     defer allocator.free(command);
     const argv = [_][]const u8{ "/bin/sh", "-c", command, "rush-editor", path };
@@ -758,9 +973,19 @@ fn shouldRefreshCompletionMenu(key: line_editor.KeyEvent) bool {
     };
 }
 
-fn expandAbbreviationBeforeAccept(session: *line_editor.LineSession, options: ReadLineOptions, append_space: bool) !bool {
+fn expandAbbreviationBeforeAccept(
+    session: *line_editor.LineSession,
+    options: ReadLineOptions,
+    append_space: bool,
+) !bool {
     if (options.expand_abbreviation == null or options.completion_context == null) return false;
-    const edit = try options.expand_abbreviation.?(options.completion_context.?, session.allocator, session.editor.buffer.text(), session.editor.buffer.cursor_byte, append_space) orelse return false;
+    const edit = try options.expand_abbreviation.?(
+        options.completion_context.?,
+        session.allocator,
+        session.editor.buffer.text(),
+        session.editor.buffer.cursor_byte,
+        append_space,
+    ) orelse return false;
     defer session.allocator.free(edit.replacement);
     try session.applyCompletion(.{ .edit = edit });
     return true;
@@ -851,7 +1076,16 @@ fn makeRawPreserveInput(fd: std.posix.fd_t) !std.posix.termios {
     return state;
 }
 
-fn renderSession(allocator: std.mem.Allocator, io: std.Io, tty: *vaxis.tty.PosixTty, renderer: *line_editor.FrameRenderer, session: *line_editor.LineSession, capabilities: TerminalCapabilities, winsize: vaxis.Winsize, options: ReadLineOptions) !void {
+fn renderSession(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    tty: *vaxis.tty.PosixTty,
+    renderer: *line_editor.FrameRenderer,
+    session: *line_editor.LineSession,
+    capabilities: TerminalCapabilities,
+    winsize: vaxis.Winsize,
+    options: ReadLineOptions,
+) !void {
     const diagnostic = if (options.diagnose != null and options.diagnostic_context != null)
         try options.diagnose.?(options.diagnostic_context.?, allocator, io, session.editor.buffer.text())
     else
@@ -867,7 +1101,9 @@ fn renderSession(allocator: std.mem.Allocator, io: std.Io, tty: *vaxis.tty.Posix
         .semantic_prompt_marks = true,
     });
     defer frame.deinit(allocator);
-    const rendered = try renderer.render(allocator, frame, .{ .synchronized_output = capabilities.synchronized_output });
+    const rendered = try renderer.render(allocator, frame, .{
+        .synchronized_output = capabilities.synchronized_output,
+    });
     defer allocator.free(rendered);
     try writeTtyAll(tty, rendered);
 }
@@ -879,10 +1115,22 @@ fn appendOscText(writer: *std.Io.Writer, text: []const u8) !void {
     };
 }
 
-fn testExpandAbbreviation(context: *anyopaque, allocator: std.mem.Allocator, source: []const u8, cursor: usize, append_space: bool) !?completion.Edit {
+fn testExpandAbbreviation(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 parameter order is fixed by the expand_abbreviation callback signature
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    cursor: usize,
+    append_space: bool,
+) !?completion.Edit {
     _ = context;
     if (cursor < source.len or !std.mem.eql(u8, source, "gs")) return null;
-    return .{ .replace_start = 0, .replace_end = 2, .replacement = try allocator.dupe(u8, "git status"), .append_space = append_space };
+    return .{
+        .replace_start = 0,
+        .replace_end = 2,
+        .replacement = try allocator.dupe(u8, "git status"),
+        .append_space = append_space,
+    };
 }
 
 test "abbreviation expansion seam rewrites the edit buffer" {
@@ -903,7 +1151,7 @@ test "abbreviation expansion seam rewrites the edit buffer" {
 
 test "external editor helper writes reads and removes temporary command file" {
     const tmpdir = "rush-editor-test-tmp";
-    std.Io.Dir.cwd().deleteTree(std.testing.io, tmpdir) catch {};
+    try std.Io.Dir.cwd().deleteTree(std.testing.io, tmpdir);
     try std.Io.Dir.cwd().createDir(std.testing.io, tmpdir, .default_dir);
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tmpdir) catch {};
 
@@ -919,15 +1167,18 @@ test "external editor helper writes reads and removes temporary command file" {
 
 test "external editor helper rejects failed editor commands" {
     const tmpdir = "rush-editor-fail-test-tmp";
-    std.Io.Dir.cwd().deleteTree(std.testing.io, tmpdir) catch {};
+    try std.Io.Dir.cwd().deleteTree(std.testing.io, tmpdir);
     try std.Io.Dir.cwd().createDir(std.testing.io, tmpdir, .default_dir);
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tmpdir) catch {};
 
-    try std.testing.expectError(error.ExternalEditorFailed, editCommandWithExternalEditor(std.testing.allocator, std.testing.io, .{
-        .prompt = "",
-        .external_editor_command = "false",
-        .external_editor_tmpdir = tmpdir,
-    }, "original"));
+    try std.testing.expectError(
+        error.ExternalEditorFailed,
+        editCommandWithExternalEditor(std.testing.allocator, std.testing.io, .{
+            .prompt = "",
+            .external_editor_command = "false",
+            .external_editor_tmpdir = tmpdir,
+        }, "original"),
+    );
 }
 
 test "raw terminal transitions preserve queued pty input" {

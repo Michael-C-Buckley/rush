@@ -204,6 +204,8 @@ pub const Port = struct {
         return result;
     }
 
+    // ziglint-ignore: Z015 - ListDirError is `pub`, but ziglint does not treat
+    // `||`-merged error sets as public type declarations (false positive).
     pub fn listDir(self: Port, request: ListDirRequest) ListDirError!ListDirResult {
         request.validate();
         const result = try self.list_dir_fn(self.context, request);

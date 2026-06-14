@@ -16,6 +16,7 @@ zigdoc vaxis.Window
 Use these commands for repository validation:
 
 ```bash
+zig build lint
 zig build test
 zig build compile-check
 ```
@@ -89,6 +90,9 @@ const output = try writer.toOwnedSlice();
 - preferred file order: `//!` module doc comment, `const Self = @This();`, imports, `const log = std.log.scoped(...)`
 - pass allocators explicitly; use `errdefer` for cleanup on error
 - keep tests inline with the code they cover; register them in `src/main.zig`
+- keep lines under 120 characters
+- prefer Zig multiline string literals over string concatenation with `++` for
+  long strings
 
 ## Architecture
 

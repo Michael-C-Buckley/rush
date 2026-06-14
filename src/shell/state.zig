@@ -1130,7 +1130,9 @@ pub const ShellState = struct {
         for (self.pending_job_notifications.items) |notification| notification.validate();
         if (self.current_job_id) |id| std.debug.assert(self.findBackgroundJobById(id) != null);
         if (self.previous_job_id) |id| std.debug.assert(self.findBackgroundJobById(id) != null);
-        if (self.current_job_id != null and self.previous_job_id != null) std.debug.assert(self.current_job_id.? != self.previous_job_id.?);
+        if (self.current_job_id != null and self.previous_job_id != null) {
+            std.debug.assert(self.current_job_id.? != self.previous_job_id.?);
+        }
         if (self.last_background_pid) |pid| std.debug.assert(pid > 0);
         if (self.logical_cwd.len != 0) assertValidLogicalCwd(self.logical_cwd);
     }
@@ -1152,7 +1154,14 @@ pub fn assertValidLogicalCwd(cwd: []const u8) void {
 pub fn assertValidAliasName(name: []const u8) void {
     std.debug.assert(name.len != 0);
     for (name) |byte| {
-        std.debug.assert(std.ascii.isAlphabetic(byte) or std.ascii.isDigit(byte) or byte == '!' or byte == '%' or byte == ',' or byte == '-' or byte == '@' or byte == '_');
+        std.debug.assert(std.ascii.isAlphabetic(byte) or
+            std.ascii.isDigit(byte) or
+            byte == '!' or
+            byte == '%' or
+            byte == ',' or
+            byte == '-' or
+            byte == '@' or
+            byte == '_');
     }
 }
 
@@ -1168,7 +1177,10 @@ fn freePositionals(allocator: std.mem.Allocator, args: []const []const u8) void 
     for (args) |arg| allocator.free(arg);
 }
 
-fn cloneFunctionDefinition(allocator: std.mem.Allocator, definition: command_plan.FunctionDefinition) !command_plan.FunctionDefinition {
+fn cloneFunctionDefinition(
+    allocator: std.mem.Allocator,
+    definition: command_plan.FunctionDefinition,
+) !command_plan.FunctionDefinition {
     return command_plan.cloneFunctionDefinition(allocator, definition);
 }
 

@@ -297,7 +297,14 @@ const Lexer = struct {
                 if (self.matchNext('-')) break :blk .dless_dash;
                 break :blk .dless;
             } else if (self.matchNext('&')) .less_and else if (self.matchNext('>')) .less_great else .less,
-            '>' => if (self.matchNext('>')) .dgreat else if (self.matchNext('&')) .greater_and else if (self.matchNext('|')) .clobber else .greater,
+            '>' => if (self.matchNext('>'))
+                .dgreat
+            else if (self.matchNext('&'))
+                .greater_and
+            else if (self.matchNext('|'))
+                .clobber
+            else
+                .greater,
             else => unreachable,
         };
 
@@ -391,7 +398,10 @@ const Lexer = struct {
             try self.consumeDollarSingleQuoted();
         } else if (self.source[self.index + 1] == '{') {
             try self.consumeParameterExpansion();
-        } else if (self.source[self.index + 1] == '(' and self.index + 2 < self.source.len and self.source[self.index + 2] == '(') {
+        } else if (self.source[self.index + 1] == '(' and
+            self.index + 2 < self.source.len and
+            self.source[self.index + 2] == '(')
+        {
             try self.consumeArithmeticExpansion();
         } else if (self.source[self.index + 1] == '(') {
             try self.consumeCommandSubstitution();
@@ -436,7 +446,10 @@ const Lexer = struct {
             },
             .incomplete_backquote => |backquote_start| {
                 self.index = self.source.len;
-                try self.addIncomplete(.init(backquote_start, self.source.len), "unterminated backquote command substitution");
+                try self.addIncomplete(
+                    .init(backquote_start, self.source.len),
+                    "unterminated backquote command substitution",
+                );
                 return;
             },
             .incomplete_arithmetic => {},
@@ -671,7 +684,10 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
     if (parameterCompletionContext(result.source, clamped_cursor)) |context| return context;
 
     for (result.diagnostics) |diagnostic| {
-        if (diagnostic.kind == .incomplete_input and diagnostic.span.touches(clamped_cursor) and diagnosticBlocksTokenCompletion(diagnostic)) {
+        if (diagnostic.kind == .incomplete_input and
+            diagnostic.span.touches(clamped_cursor) and
+            diagnosticBlocksTokenCompletion(diagnostic))
+        {
             return .{
                 .kind = .quoted_string,
                 .cursor = clamped_cursor,
@@ -685,13 +701,23 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
         if (token.kind == .word) {
             if (nodeKindForToken(result, token_index)) |node_kind| {
                 if (node_kind == .word and tokenHasNodeKind(result, token_index, .redirection)) {
-                    return .{ .kind = .redirect_target, .cursor = clamped_cursor, .token_index = token_index, .span = token.span };
+                    return .{
+                        .kind = .redirect_target,
+                        .cursor = clamped_cursor,
+                        .token_index = token_index,
+                        .span = token.span,
+                    };
                 }
                 if (node_kind == .assignment_word) {
                     return assignmentCompletionContext(result, token_index, clamped_cursor);
                 }
                 if (node_kind == .command_word) {
-                    return .{ .kind = .command, .cursor = clamped_cursor, .token_index = token_index, .span = token.span };
+                    return .{
+                        .kind = .command,
+                        .cursor = clamped_cursor,
+                        .token_index = token_index,
+                        .span = token.span,
+                    };
                 }
             }
         }
@@ -708,32 +734,72 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
         if (nodeKindForToken(result, previous)) |node_kind| {
             if (previous_token.span.end < clamped_cursor) {
                 if (node_kind == .assignment_word and !simpleCommandHasCommandWordForToken(result, previous)) {
-                    return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+                    return .{
+                        .kind = .command,
+                        .cursor = clamped_cursor,
+                        .token_index = previous,
+                        .span = .empty(clamped_cursor),
+                    };
                 }
                 if (node_kind == .command_word or node_kind == .word or node_kind == .assignment_word) {
-                    return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+                    return .{
+                        .kind = .argument,
+                        .cursor = clamped_cursor,
+                        .token_index = previous,
+                        .span = .empty(clamped_cursor),
+                    };
                 }
             }
             if (node_kind == .command_word) {
-                return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
+                return .{
+                    .kind = .command,
+                    .cursor = clamped_cursor,
+                    .token_index = previous,
+                    .span = previous_token.span,
+                };
             }
             if (node_kind == .assignment_word and previous_token.span.touches(clamped_cursor)) {
                 return assignmentCompletionContext(result, previous, clamped_cursor);
             }
-            if (node_kind == .word and previous_token.span.touches(clamped_cursor) and tokenHasNodeKind(result, previous, .redirection)) {
-                return .{ .kind = .redirect_target, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
+            if (node_kind == .word and
+                previous_token.span.touches(clamped_cursor) and
+                tokenHasNodeKind(result, previous, .redirection))
+            {
+                return .{
+                    .kind = .redirect_target,
+                    .cursor = clamped_cursor,
+                    .token_index = previous,
+                    .span = previous_token.span,
+                };
             }
             if (node_kind == .word or node_kind == .assignment_word) {
-                return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = previous_token.span };
+                return .{
+                    .kind = .argument,
+                    .cursor = clamped_cursor,
+                    .token_index = previous,
+                    .span = previous_token.span,
+                };
             }
         }
-        if (previous_token.span.end < clamped_cursor and commandControlWordStartsList(previous_token.lexeme(result.source))) {
-            return .{ .kind = .command, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+        if (previous_token.span.end < clamped_cursor and
+            commandControlWordStartsList(previous_token.lexeme(result.source)))
+        {
+            return .{
+                .kind = .command,
+                .cursor = clamped_cursor,
+                .token_index = previous,
+                .span = .empty(clamped_cursor),
+            };
         }
     }
 
     if (previous_token.kind.isRedirectOperator()) {
-        return .{ .kind = .redirect_target, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+        return .{
+            .kind = .redirect_target,
+            .cursor = clamped_cursor,
+            .token_index = previous,
+            .span = .empty(clamped_cursor),
+        };
     }
 
     if (previous_token.kind == .pipe or isListSeparator(previous_token.kind)) {
@@ -741,7 +807,12 @@ pub fn completionContext(result: ParseResult, cursor: usize) CompletionContext {
     }
 
     if (previous_token.kind.isOperator()) {
-        return .{ .kind = .separator, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
+        return .{
+            .kind = .separator,
+            .cursor = clamped_cursor,
+            .token_index = previous,
+            .span = .empty(clamped_cursor),
+        };
     }
 
     return .{ .kind = .argument, .cursor = clamped_cursor, .token_index = previous, .span = .empty(clamped_cursor) };
@@ -897,7 +968,10 @@ fn commandSubstitutionSpans(allocator: std.mem.Allocator, source: []const u8, sp
             '$' => {
                 if (dollarSingleQuotedEnd(source, span.end, index)) |end| {
                     index = end;
-                } else if (index + 1 < span.end and source[index + 1] == '(' and !(index + 2 < span.end and source[index + 2] == '(')) {
+                } else if (index + 1 < span.end and
+                    source[index + 1] == '(' and
+                    !(index + 2 < span.end and source[index + 2] == '('))
+                {
                     if (try commandSubstitutionEnd(allocator, source, span.end, index)) |end| {
                         try spans.append(allocator, .init(index, end));
                         index = end;
@@ -915,7 +989,12 @@ fn commandSubstitutionSpans(allocator: std.mem.Allocator, source: []const u8, sp
     return spans;
 }
 
-pub fn commandSubstitutionEnd(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!?usize {
+pub fn commandSubstitutionEnd(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    limit: usize,
+    start: usize,
+) std.mem.Allocator.Error!?usize {
     std.debug.assert(start + 1 < limit);
     std.debug.assert(source[start] == '$');
     std.debug.assert(source[start + 1] == '(');
@@ -948,12 +1027,18 @@ pub const ShellSubstitutionScanResult = union(enum) {
     incomplete: ShellSubstitutionKind,
 };
 
-pub fn shellSubstitutionAt(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!ShellSubstitutionScanResult {
+pub fn shellSubstitutionAt(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    limit: usize,
+    start: usize,
+) std.mem.Allocator.Error!ShellSubstitutionScanResult {
     std.debug.assert(limit <= source.len);
     if (start >= limit) return .none;
 
     if (source[start] == '`') {
-        const end = backquoteCommandSubstitutionEnd(source, limit, start) orelse return .{ .incomplete = .command_substitution };
+        const end = backquoteCommandSubstitutionEnd(source, limit, start) orelse
+            return .{ .incomplete = .command_substitution };
         return .{ .complete = .{
             .kind = .command_substitution,
             .span = .init(start, end),
@@ -965,7 +1050,8 @@ pub fn shellSubstitutionAt(allocator: std.mem.Allocator, source: []const u8, lim
     const next = start + 1;
     switch (source[next]) {
         '{' => {
-            const end = (try parameterExpansionEnd(allocator, source, limit, start)) orelse return .{ .incomplete = .parameter };
+            const end = (try parameterExpansionEnd(allocator, source, limit, start)) orelse
+                return .{ .incomplete = .parameter };
             return .{ .complete = .{
                 .kind = .parameter,
                 .span = .init(start, end),
@@ -974,14 +1060,16 @@ pub fn shellSubstitutionAt(allocator: std.mem.Allocator, source: []const u8, lim
         },
         '(' => {
             if (next + 1 < limit and source[next + 1] == '(') {
-                const end = (try arithmeticExpansionEnd(allocator, source, limit, start)) orelse return .{ .incomplete = .arithmetic };
+                const end = (try arithmeticExpansionEnd(allocator, source, limit, start)) orelse
+                    return .{ .incomplete = .arithmetic };
                 return .{ .complete = .{
                     .kind = .arithmetic,
                     .span = .init(start, end),
                     .value_span = .init(start + 3, end - 2),
                 } };
             }
-            const end = (try commandSubstitutionEnd(allocator, source, limit, start)) orelse return .{ .incomplete = .command_substitution };
+            const end = (try commandSubstitutionEnd(allocator, source, limit, start)) orelse
+                return .{ .incomplete = .command_substitution };
             return .{ .complete = .{
                 .kind = .command_substitution,
                 .span = .init(start, end),
@@ -1023,7 +1111,12 @@ fn backquoteCommandSubstitutionEnd(source: []const u8, limit: usize, start: usiz
     return null;
 }
 
-pub fn parameterExpansionEnd(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!?usize {
+pub fn parameterExpansionEnd(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    limit: usize,
+    start: usize,
+) std.mem.Allocator.Error!?usize {
     std.debug.assert(start + 1 < limit);
     std.debug.assert(source[start] == '$');
     std.debug.assert(source[start + 1] == '{');
@@ -1037,7 +1130,12 @@ pub fn parameterExpansionEnd(allocator: std.mem.Allocator, source: []const u8, l
     return scanner.scan();
 }
 
-pub fn arithmeticExpansionEnd(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!?usize {
+pub fn arithmeticExpansionEnd(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    limit: usize,
+    start: usize,
+) std.mem.Allocator.Error!?usize {
     switch (try arithmeticExpansionScan(allocator, source, limit, start)) {
         .complete => |end| return end,
         .incomplete_backquote, .incomplete_arithmetic => return null,
@@ -1050,7 +1148,12 @@ const ArithmeticExpansionScanResult = union(enum) {
     incomplete_arithmetic,
 };
 
-fn arithmeticExpansionScan(allocator: std.mem.Allocator, source: []const u8, limit: usize, start: usize) std.mem.Allocator.Error!ArithmeticExpansionScanResult {
+fn arithmeticExpansionScan(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    limit: usize,
+    start: usize,
+) std.mem.Allocator.Error!ArithmeticExpansionScanResult {
     std.debug.assert(start + 2 < limit);
     std.debug.assert(source[start] == '$');
     std.debug.assert(source[start + 1] == '(');
@@ -1084,7 +1187,10 @@ const ArithmeticExpansionScanner = struct {
                     self.index += 1;
                 },
                 ')' => {
-                    if (self.paren_depth == 0 and self.index + 1 < self.limit and self.source[self.index + 1] == ')') return .{ .complete = self.index + 2 };
+                    if (self.paren_depth == 0 and
+                        self.index + 1 < self.limit and
+                        self.source[self.index + 1] == ')')
+                        return .{ .complete = self.index + 2 };
                     if (self.paren_depth != 0) self.paren_depth -= 1;
                     self.index += 1;
                 },
@@ -1240,6 +1346,7 @@ const CommandSubstitutionScanner = struct {
 
     fn deinit(self: *CommandSubstitutionScanner) void {
         self.cases.deinit(self.allocator);
+        self.* = undefined;
     }
 
     fn scan(self: *CommandSubstitutionScanner) std.mem.Allocator.Error!?usize {
@@ -1502,8 +1609,12 @@ const CommandSubstitutionScanner = struct {
     fn operatorLen(self: CommandSubstitutionScanner) usize {
         if (self.index + 1 >= self.limit) return 1;
         return switch (self.source[self.index]) {
-            '<' => if (self.source[self.index + 1] == '<' or self.source[self.index + 1] == '&' or self.source[self.index + 1] == '>') 2 else 1,
-            '>' => if (self.source[self.index + 1] == '>' or self.source[self.index + 1] == '&' or self.source[self.index + 1] == '|') 2 else 1,
+            '<' => if (self.source[self.index + 1] == '<' or
+                self.source[self.index + 1] == '&' or
+                self.source[self.index + 1] == '>') 2 else 1,
+            '>' => if (self.source[self.index + 1] == '>' or
+                self.source[self.index + 1] == '&' or
+                self.source[self.index + 1] == '|') 2 else 1,
             else => 1,
         };
     }
@@ -1707,7 +1818,15 @@ fn expandAliasesIntoParsedSource(
     std.mem.sort(Span, skipped_spans.items, {}, lessThanSpanStart);
 
     if (parsed.diagnostics.len != 0) {
-        return expandAliasesIntoLexedSource(allocator, source, options, skipped_spans.items, output, active_aliases, true);
+        return expandAliasesIntoLexedSource(
+            allocator,
+            source,
+            options,
+            skipped_spans.items,
+            output,
+            active_aliases,
+            true,
+        );
     }
 
     return expandAliasesIntoParsedTokens(allocator, parsed, options, skipped_spans.items, output, active_aliases);
@@ -1732,16 +1851,33 @@ fn expandAliasesIntoParsedTokens(
         if (token.kind == .eof) break;
         if (token.span.end <= copied_until) continue;
 
-        if (try appendSkippedAliasSpan(allocator, parsed.source, skipped_spans, &skipped_span_index, &copied_until, token.span.start, output)) {
+        if (try appendSkippedAliasSpan(
+            allocator,
+            parsed.source,
+            skipped_spans,
+            &skipped_span_index,
+            &copied_until,
+            token.span.start,
+            output,
+        )) {
             continued_alias_position = false;
             if (token.span.end <= copied_until) continue;
         }
 
-        if (copied_until < token.span.start) try output.appendSlice(allocator, parsed.source[copied_until..token.span.start]);
+        if (copied_until < token.span.start)
+            try output.appendSlice(allocator, parsed.source[copied_until..token.span.start]);
 
         if (token.kind == .word) {
             if (command_word_tokens[token_index] or continued_alias_position) {
-                if (try appendAliasExpansion(allocator, token.lexeme(parsed.source), parsed.source, token.span.end, options, output, active_aliases)) |continues| {
+                if (try appendAliasExpansion(
+                    allocator,
+                    token.lexeme(parsed.source),
+                    parsed.source,
+                    token.span.end,
+                    options,
+                    output,
+                    active_aliases,
+                )) |continues| {
                     copied_until = token.span.end;
                     continued_alias_position = continues;
                     continue;
@@ -1783,7 +1919,10 @@ test "alias expansion indexes later command words" {
     try source.appendSlice(std.testing.allocator, "hit\n");
 
     var context: u8 = 0;
-    const expanded = try expandAliases(std.testing.allocator, source.items, .{ .context = &context, .lookup = AliasLookup.lookup });
+    const expanded = try expandAliases(std.testing.allocator, source.items, .{
+        .context = &context,
+        .lookup = AliasLookup.lookup,
+    });
     defer std.testing.allocator.free(expanded);
 
     const prefix_len = source.items.len - "hit\n".len;
@@ -1811,7 +1950,15 @@ fn expandAliasesIntoLexedSource(
         if (token.kind == .eof) break;
         if (token.span.end <= copied_until) continue;
 
-        if (try appendSkippedAliasSpan(allocator, source, skipped_spans, &skipped_span_index, &copied_until, token.span.start, output)) {
+        if (try appendSkippedAliasSpan(
+            allocator,
+            source,
+            skipped_spans,
+            &skipped_span_index,
+            &copied_until,
+            token.span.start,
+            output,
+        )) {
             command_position = false;
             if (token.span.end <= copied_until) continue;
         }
@@ -1819,7 +1966,15 @@ fn expandAliasesIntoLexedSource(
         if (copied_until < token.span.start) try output.appendSlice(allocator, source[copied_until..token.span.start]);
 
         if (token.kind == .word and command_position) {
-            if (try appendAliasExpansion(allocator, token.lexeme(source), source, token.span.end, options, output, active_aliases)) |continues| {
+            if (try appendAliasExpansion(
+                allocator,
+                token.lexeme(source),
+                source,
+                token.span.end,
+                options,
+                output,
+                active_aliases,
+            )) |continues| {
                 copied_until = token.span.end;
                 command_position = continues;
                 continue;
@@ -1844,7 +1999,9 @@ fn appendSkippedAliasSpan(
     token_start: usize,
     output: *std.ArrayList(u8),
 ) !bool {
-    while (skipped_span_index.* < skipped_spans.len and skipped_spans[skipped_span_index.*].end <= copied_until.*) : (skipped_span_index.* += 1) {}
+    while (skipped_span_index.* < skipped_spans.len and
+        skipped_spans[skipped_span_index.*].end <= copied_until.*) : (skipped_span_index.* += 1)
+    {}
     if (skipped_span_index.* >= skipped_spans.len) return false;
 
     const skipped = skipped_spans[skipped_span_index.*];
@@ -1923,10 +2080,16 @@ pub fn isAliasReservedWord(word: []const u8) bool {
 
 fn looksLikeFunctionDefinitionName(source: []const u8, after_word: usize) bool {
     var index = after_word;
-    while (index < source.len and (source[index] == ' ' or source[index] == '\t' or source[index] == '\r')) : (index += 1) {}
+    while (index < source.len and (source[index] == ' ' or
+        source[index] == '\t' or
+        source[index] == '\r')) : (index += 1)
+    {}
     if (index >= source.len or source[index] != '(') return false;
     index += 1;
-    while (index < source.len and (source[index] == ' ' or source[index] == '\t' or source[index] == '\r')) : (index += 1) {}
+    while (index < source.len and (source[index] == ' ' or
+        source[index] == '\t' or
+        source[index] == '\r')) : (index += 1)
+    {}
     return index < source.len and source[index] == ')';
 }
 
@@ -1950,7 +2113,11 @@ fn hereDocDelimiterFromRaw(allocator: std.mem.Allocator, raw: []const u8) ![]con
         if (quote) |active| {
             if (byte == active) {
                 quote = null;
-            } else if (active == '"' and byte == '\\' and index + 1 < raw.len and isDoubleQuotedQuoteRemovalBackslashEscaped(raw[index + 1])) {
+            } else if (active == '"' and
+                byte == '\\' and
+                index + 1 < raw.len and
+                isDoubleQuotedQuoteRemovalBackslashEscaped(raw[index + 1]))
+            {
                 index += 1;
                 try out.append(allocator, raw[index]);
             } else {
@@ -1977,7 +2144,13 @@ const HereDocBodyParse = struct {
     found_delimiter: bool,
 };
 
-fn parseHereDocBodySpan(source: []const u8, start: usize, delimiter: []const u8, strip_tabs: bool, allow_continuation: bool) HereDocBodyParse {
+fn parseHereDocBodySpan(
+    source: []const u8,
+    start: usize,
+    delimiter: []const u8,
+    strip_tabs: bool,
+    allow_continuation: bool,
+) HereDocBodyParse {
     var index = @min(start, source.len);
     var continued = false;
     while (index <= source.len) {
@@ -2034,6 +2207,7 @@ const SyntaxParser = struct {
         self.diagnostics.deinit(self.allocator);
         self.freePendingHereDocs();
         self.pending_here_docs.deinit(self.allocator);
+        self.* = undefined;
     }
 
     fn run(self: *SyntaxParser) !void {
@@ -2074,7 +2248,11 @@ const SyntaxParser = struct {
         return self.parseListUntil(&.{}, &.{});
     }
 
-    fn parseListUntil(self: *SyntaxParser, word_terminators: []const []const u8, token_terminators: []const TokenKind) anyerror!NodeId {
+    fn parseListUntil(
+        self: *SyntaxParser,
+        word_terminators: []const []const u8,
+        token_terminators: []const TokenKind,
+    ) anyerror!NodeId {
         const token_start = self.index;
         var list_children: std.ArrayList(SyntaxChild) = .empty;
         defer list_children.deinit(self.allocator);
@@ -2192,7 +2370,10 @@ const SyntaxParser = struct {
         try self.appendCurrentTokenChildTo(&if_children);
         const condition = try self.parseListUntil(&.{ "then", "elif", "else", "fi" }, &.{});
         if (self.features.strict_diagnostics and !self.listContainsCommand(condition)) {
-            const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
+            const span = if (!self.at(.eof))
+                self.current().span
+            else
+                spanForTokenRange(self.tokens, token_start, self.index);
             try self.appendParseError(span, "missing condition in if command");
         }
         try if_children.append(self.allocator, .{ .node = condition });
@@ -2201,7 +2382,10 @@ const SyntaxParser = struct {
             try self.appendCurrentTokenChildTo(&if_children);
             const then_body = try self.parseListUntil(&.{ "elif", "else", "fi" }, &.{});
             if (self.features.strict_diagnostics and !self.listContainsCommand(then_body)) {
-                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
+                const span = if (!self.at(.eof))
+                    self.current().span
+                else
+                    spanForTokenRange(self.tokens, token_start, self.index);
                 try self.appendParseError(span, "missing body in if command");
             }
             try if_children.append(self.allocator, .{ .node = then_body });
@@ -2212,7 +2396,10 @@ const SyntaxParser = struct {
             try self.appendCurrentTokenChildTo(&if_children);
             const elif_condition = try self.parseListUntil(&.{ "then", "elif", "else", "fi" }, &.{});
             if (self.features.strict_diagnostics and !self.listContainsCommand(elif_condition)) {
-                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, elif_token_start, self.index);
+                const span = if (!self.at(.eof))
+                    self.current().span
+                else
+                    spanForTokenRange(self.tokens, elif_token_start, self.index);
                 try self.appendParseError(span, "missing condition in elif clause");
             }
             try if_children.append(self.allocator, .{ .node = elif_condition });
@@ -2221,7 +2408,10 @@ const SyntaxParser = struct {
                 try self.appendCurrentTokenChildTo(&if_children);
                 const elif_body = try self.parseListUntil(&.{ "elif", "else", "fi" }, &.{});
                 if (self.features.strict_diagnostics and !self.listContainsCommand(elif_body)) {
-                    const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, elif_token_start, self.index);
+                    const span = if (!self.at(.eof))
+                        self.current().span
+                    else
+                        spanForTokenRange(self.tokens, elif_token_start, self.index);
                     try self.appendParseError(span, "missing body in elif clause");
                 }
                 try if_children.append(self.allocator, .{ .node = elif_body });
@@ -2230,7 +2420,10 @@ const SyntaxParser = struct {
                 self.incomplete = true;
                 try self.diagnostics.append(self.allocator, .{
                     .kind = .parse_error,
-                    .span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, elif_token_start, self.index),
+                    .span = if (!self.at(.eof))
+                        self.current().span
+                    else
+                        spanForTokenRange(self.tokens, elif_token_start, self.index),
                     .message = "missing then in elif clause",
                 });
             }
@@ -2240,7 +2433,10 @@ const SyntaxParser = struct {
             try self.appendCurrentTokenChildTo(&if_children);
             const else_body = try self.parseListUntil(&.{"fi"}, &.{});
             if (self.features.strict_diagnostics and !self.listContainsCommand(else_body)) {
-                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, else_token_start, self.index);
+                const span = if (!self.at(.eof))
+                    self.current().span
+                else
+                    spanForTokenRange(self.tokens, else_token_start, self.index);
                 try self.appendParseError(span, "missing body in else clause");
             }
             try if_children.append(self.allocator, .{ .node = else_body });
@@ -2418,7 +2614,14 @@ const SyntaxParser = struct {
             const child_start = self.children.items.len;
             try self.children.appendSlice(self.allocator, function_children.items);
             const span = spanForTokenRange(self.tokens, token_start, token_end);
-            return self.addNode(.function_definition, span, token_start, token_end, child_start, self.children.items.len);
+            return self.addNode(
+                .function_definition,
+                span,
+                token_start,
+                token_end,
+                child_start,
+                self.children.items.len,
+            );
         }
 
         var brace_depth: usize = 0;
@@ -2459,8 +2662,14 @@ const SyntaxParser = struct {
                     command_position = command_position and functionBodyWordContinuesCommandPosition(lexeme);
                 }
             } else if (token.kind != .whitespace and token.kind != .comment) {
-                if (saw_open_brace and brace_depth > 0 and command_position and (token.kind == .left_paren or token.kind.isRedirectOperator())) has_body_command = true;
-                command_position = isSimpleCommandSeparator(token.kind) or token.kind == .left_paren or token.kind == .right_paren;
+                if (saw_open_brace and
+                    brace_depth > 0 and
+                    command_position and
+                    (token.kind == .left_paren or token.kind.isRedirectOperator()))
+                    has_body_command = true;
+                command_position = isSimpleCommandSeparator(token.kind) or
+                    token.kind == .left_paren or
+                    token.kind == .right_paren;
             }
             try self.appendCurrentTokenChildTo(&function_children);
             if (closed) break;
@@ -2500,7 +2709,12 @@ const SyntaxParser = struct {
     }
 
     fn startsFunctionBodyCompoundCommand(self: SyntaxParser) bool {
-        return self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand();
+        return self.startsSubshell() or
+            self.startsBashTestCommand() or
+            self.startsIfCommand() or
+            self.startsLoopCommand() or
+            self.startsForCommand() or
+            self.startsCaseCommand();
     }
 
     fn parseFunctionBodyCompoundCommand(self: *SyntaxParser) !NodeId {
@@ -2690,7 +2904,10 @@ const SyntaxParser = struct {
         var saw_in = false;
         var saw_header_separator = false;
         var saw_non_separator_after_name = false;
-        while (!self.at(.eof) and !self.atForDoTerminator(saw_in, saw_header_separator, saw_non_separator_after_name) and !self.atForDoneBeforeDo(saw_in, saw_header_separator)) {
+        while (!self.at(.eof) and
+            !self.atForDoTerminator(saw_in, saw_header_separator, saw_non_separator_after_name) and
+            !self.atForDoneBeforeDo(saw_in, saw_header_separator))
+        {
             const token = self.current();
             if (token.kind == .word and !saw_in and std.mem.eql(u8, token.lexeme(self.source), "in")) {
                 saw_in = true;
@@ -2707,7 +2924,10 @@ const SyntaxParser = struct {
             try self.appendCurrentTokenChildTo(&for_children);
             const body = try self.parseListUntil(&.{"done"}, &.{});
             if (self.features.strict_diagnostics and !self.listContainsCommand(body)) {
-                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
+                const span = if (!self.at(.eof))
+                    self.current().span
+                else
+                    spanForTokenRange(self.tokens, token_start, self.index);
                 try self.appendParseError(span, "missing body in for command");
             }
             try for_children.append(self.allocator, .{ .node = body });
@@ -2751,7 +2971,12 @@ const SyntaxParser = struct {
         return self.addNode(.for_command, span, token_start, token_end, child_start, self.children.items.len);
     }
 
-    fn atForDoTerminator(self: SyntaxParser, saw_in: bool, saw_header_separator: bool, saw_non_separator_after_name: bool) bool {
+    fn atForDoTerminator(
+        self: SyntaxParser,
+        saw_in: bool,
+        saw_header_separator: bool,
+        saw_non_separator_after_name: bool,
+    ) bool {
         if (!self.atWord("do")) return false;
         if (saw_in) return saw_header_separator;
         return !saw_non_separator_after_name;
@@ -2772,8 +2997,14 @@ const SyntaxParser = struct {
         try self.appendCurrentTokenChildTo(&loop_children);
         const condition = try self.parseListUntil(&.{ "do", "done" }, &.{});
         if (self.features.strict_diagnostics and !self.listContainsCommand(condition)) {
-            const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
-            try self.appendParseError(span, if (std.mem.eql(u8, opener, "while")) "missing condition in while command" else "missing condition in until command");
+            const span = if (!self.at(.eof))
+                self.current().span
+            else
+                spanForTokenRange(self.tokens, token_start, self.index);
+            try self.appendParseError(span, if (std.mem.eql(u8, opener, "while"))
+                "missing condition in while command"
+            else
+                "missing condition in until command");
         }
         try loop_children.append(self.allocator, .{ .node = condition });
         if (self.atWord("do")) {
@@ -2781,8 +3012,14 @@ const SyntaxParser = struct {
             try self.appendCurrentTokenChildTo(&loop_children);
             const body = try self.parseListUntil(&.{"done"}, &.{});
             if (self.features.strict_diagnostics and !self.listContainsCommand(body)) {
-                const span = if (!self.at(.eof)) self.current().span else spanForTokenRange(self.tokens, token_start, self.index);
-                try self.appendParseError(span, if (std.mem.eql(u8, opener, "while")) "missing body in while command" else "missing body in until command");
+                const span = if (!self.at(.eof))
+                    self.current().span
+                else
+                    spanForTokenRange(self.tokens, token_start, self.index);
+                try self.appendParseError(span, if (std.mem.eql(u8, opener, "while"))
+                    "missing body in while command"
+                else
+                    "missing body in until command");
             }
             try loop_children.append(self.allocator, .{ .node = body });
         }
@@ -2797,7 +3034,10 @@ const SyntaxParser = struct {
             try self.diagnostics.append(self.allocator, .{
                 .kind = .parse_error,
                 .span = spanForTokenRange(self.tokens, token_start, self.index),
-                .message = if (std.mem.eql(u8, opener, "while")) "missing do in while command" else "missing do in until command",
+                .message = if (std.mem.eql(u8, opener, "while"))
+                    "missing do in while command"
+                else
+                    "missing do in until command",
             });
         }
         if (!closed) {
@@ -2805,7 +3045,10 @@ const SyntaxParser = struct {
             try self.diagnostics.append(self.allocator, .{
                 .kind = .incomplete_input,
                 .span = spanForTokenRange(self.tokens, token_start, self.index),
-                .message = if (std.mem.eql(u8, opener, "while")) "missing done to close while command" else "missing done to close until command",
+                .message = if (std.mem.eql(u8, opener, "while"))
+                    "missing done to close while command"
+                else
+                    "missing done to close until command",
             });
         }
 
@@ -2937,7 +3180,10 @@ const SyntaxParser = struct {
     }
 
     fn appendPipelineContinuationTrivia(self: *SyntaxParser, pipeline_children: *std.ArrayList(SyntaxChild)) !void {
-        while (self.current().kind == .whitespace or self.current().kind == .comment or self.current().kind == .newline) {
+        while (self.current().kind == .whitespace or
+            self.current().kind == .comment or
+            self.current().kind == .newline)
+        {
             const was_newline = self.at(.newline);
             try self.appendCurrentTokenChildTo(pipeline_children);
             if (was_newline) {
@@ -3006,7 +3252,8 @@ const SyntaxParser = struct {
                     }
                 }
 
-                const kind: NodeKind = if (!saw_command_word and isAssignmentWord(self.current().lexeme(self.source), self.features))
+                const kind: NodeKind = if (!saw_command_word and
+                    isAssignmentWord(self.current().lexeme(self.source), self.features))
                     .assignment_word
                 else if (!saw_command_word) blk: {
                     saw_command_word = true;
@@ -3080,13 +3327,23 @@ const SyntaxParser = struct {
         while (self.pending_here_docs.items.len != 0) {
             const doc = self.pending_here_docs.orderedRemove(0);
             defer self.allocator.free(doc.delimiter);
-            const body_start = if (self.index < self.tokens.len) self.tokens[self.index].span.start else self.source.len;
+            const body_start = if (self.index < self.tokens.len)
+                self.tokens[self.index].span.start
+            else
+                self.source.len;
             const body = parseHereDocBodySpan(self.source, body_start, doc.delimiter, doc.strip_tabs, !doc.quoted);
             const token_start = self.index;
             while (!self.at(.eof) and self.current().span.start < body.span.end) : (self.index += 1) {}
             const token_end = self.index;
             const child_start = self.children.items.len;
-            const body_node = try self.addNode(.here_doc_body, body.span, token_start, token_end, child_start, child_start);
+            const body_node = try self.addNode(
+                .here_doc_body,
+                body.span,
+                token_start,
+                token_end,
+                child_start,
+                child_start,
+            );
             try children_out.append(self.allocator, .{ .node = body_node });
             if (!body.found_delimiter and self.mode == .interactive) {
                 self.incomplete = true;
@@ -3107,7 +3364,14 @@ const SyntaxParser = struct {
     fn addLeafNode(self: *SyntaxParser, kind: NodeKind, token_index: usize) !NodeId {
         const child_start = self.children.items.len;
         try self.children.append(self.allocator, .{ .token = .init(token_index) });
-        return self.addNode(kind, self.tokens[token_index].span, token_index, token_index + 1, child_start, self.children.items.len);
+        return self.addNode(
+            kind,
+            self.tokens[token_index].span,
+            token_index,
+            token_index + 1,
+            child_start,
+            self.children.items.len,
+        );
     }
 
     fn addWordNode(self: *SyntaxParser, kind: NodeKind, token_index: usize) !NodeId {
@@ -3135,14 +3399,24 @@ const SyntaxParser = struct {
 
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, word_children.items);
-        return self.addNode(kind, spanForTokenRange(self.tokens, token_start, token_end), token_start, token_end, child_start, self.children.items.len);
+        return self.addNode(
+            kind,
+            spanForTokenRange(self.tokens, token_start, token_end),
+            token_start,
+            token_end,
+            child_start,
+            self.children.items.len,
+        );
     }
 
     fn addCommandSubstitutionNode(self: *SyntaxParser, token_index: usize, span: Span) !NodeId {
         var substitution_children: std.ArrayList(SyntaxChild) = .empty;
         defer substitution_children.deinit(self.allocator);
 
-        const inner = if (span.end >= span.start + 3) Span.init(span.start + 2, span.end - 1) else Span.empty(span.start + 2);
+        const inner = if (span.end >= span.start + 3)
+            Span.init(span.start + 2, span.end - 1)
+        else
+            Span.empty(span.start + 2);
         var nested = try commandSubstitutionSpans(self.allocator, self.source, inner);
         defer nested.deinit(self.allocator);
         for (nested.items) |nested_span| {
@@ -3152,10 +3426,25 @@ const SyntaxParser = struct {
 
         const child_start = self.children.items.len;
         try self.children.appendSlice(self.allocator, substitution_children.items);
-        return self.addNode(.command_substitution, span, token_index, token_index + 1, child_start, self.children.items.len);
+        return self.addNode(
+            .command_substitution,
+            span,
+            token_index,
+            token_index + 1,
+            child_start,
+            self.children.items.len,
+        );
     }
 
-    fn addNode(self: *SyntaxParser, kind: NodeKind, span: Span, token_start: usize, token_end: usize, child_start: usize, child_end: usize) !NodeId {
+    fn addNode(
+        self: *SyntaxParser,
+        kind: NodeKind,
+        span: Span,
+        token_start: usize,
+        token_end: usize,
+        child_start: usize,
+        child_end: usize,
+    ) !NodeId {
         const id = NodeId.init(self.nodes.items.len);
         try self.nodes.append(self.allocator, .{
             .kind = kind,
@@ -3177,7 +3466,11 @@ const SyntaxParser = struct {
         return self.at(.word) and std.mem.eql(u8, self.current().lexeme(self.source), word);
     }
 
-    fn atListTerminator(self: SyntaxParser, word_terminators: []const []const u8, token_terminators: []const TokenKind) bool {
+    fn atListTerminator(
+        self: SyntaxParser,
+        word_terminators: []const []const u8,
+        token_terminators: []const TokenKind,
+    ) bool {
         for (token_terminators) |kind| {
             if (self.at(kind)) return true;
         }
@@ -3190,7 +3483,16 @@ const SyntaxParser = struct {
     }
 
     fn startsListElement(self: SyntaxParser) bool {
-        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsPipeline() or (self.features.strict_diagnostics and self.atMisplacedRightParen());
+        return self.startsFunctionDefinition() or
+            self.startsBraceGroup() or
+            self.startsSubshell() or
+            self.startsBashTestCommand() or
+            self.startsIfCommand() or
+            self.startsLoopCommand() or
+            self.startsForCommand() or
+            self.startsCaseCommand() or
+            self.startsPipeline() or
+            (self.features.strict_diagnostics and self.atMisplacedRightParen());
     }
 
     fn bashCompoundArrayAssignmentTokenEnd(self: SyntaxParser) ?usize {
@@ -3224,7 +3526,13 @@ const SyntaxParser = struct {
     }
 
     fn startsPosixCompoundCommand(self: SyntaxParser) bool {
-        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand();
+        return self.startsFunctionDefinition() or
+            self.startsBraceGroup() or
+            self.startsSubshell() or
+            self.startsIfCommand() or
+            self.startsLoopCommand() or
+            self.startsForCommand() or
+            self.startsCaseCommand();
     }
 
     fn startsBraceGroup(self: SyntaxParser) bool {
@@ -3280,7 +3588,15 @@ const SyntaxParser = struct {
     }
 
     fn startsCommand(self: SyntaxParser) bool {
-        return self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand() or self.startsSimpleCommand();
+        return self.startsFunctionDefinition() or
+            self.startsBraceGroup() or
+            self.startsSubshell() or
+            self.startsBashTestCommand() or
+            self.startsIfCommand() or
+            self.startsLoopCommand() or
+            self.startsForCommand() or
+            self.startsCaseCommand() or
+            self.startsSimpleCommand();
     }
 
     fn startsPipeline(self: SyntaxParser) bool {
@@ -3322,9 +3638,21 @@ const SyntaxParser = struct {
     }
 
     fn startsSimpleCommand(self: SyntaxParser) bool {
-        if (self.startsFunctionDefinition() or self.startsBraceGroup() or self.startsSubshell() or self.startsBashTestCommand() or self.startsIfCommand() or self.startsLoopCommand() or self.startsForCommand() or self.startsCaseCommand()) return false;
+        if (self.startsFunctionDefinition() or
+            self.startsBraceGroup() or
+            self.startsSubshell() or
+            self.startsBashTestCommand() or
+            self.startsIfCommand() or
+            self.startsLoopCommand() or
+            self.startsForCommand() or
+            self.startsCaseCommand())
+        {
+            return false;
+        }
         if (self.atWord("!")) return false;
-        return self.at(.word) or self.current().kind.isRedirectOperator() or self.startsIoNumberRedirection();
+        return self.at(.word) or
+            self.current().kind.isRedirectOperator() or
+            self.startsIoNumberRedirection();
     }
 
     fn startsRedirection(self: SyntaxParser) bool {
@@ -3570,7 +3898,13 @@ fn expectTokens(expected: []const ExpectedToken, actual: []const Token) !void {
     }
 }
 
-fn expectNodes(expected: []const ExpectedNode, actual: []const Node, token_len: usize, child_len: usize, exact: bool) !void {
+fn expectNodes(
+    expected: []const ExpectedNode,
+    actual: []const Node,
+    token_len: usize,
+    child_len: usize,
+    exact: bool,
+) !void {
     if (exact) {
         try std.testing.expectEqual(expected.len, actual.len);
     } else {
@@ -3775,7 +4109,10 @@ test "completion context finds assignments and quoted strings" {
 }
 
 test "completion context starts commands after compound control words" {
-    var if_then = try parse(std.testing.allocator, "if true; then ", .{ .mode = .interactive, .cursor = "if true; then ".len });
+    var if_then = try parse(std.testing.allocator, "if true; then ", .{
+        .mode = .interactive,
+        .cursor = "if true; then ".len,
+    });
     defer if_then.deinit();
     try std.testing.expect(if_then.incomplete);
     try std.testing.expectEqual(CompletionKind.command, completionContext(if_then, "if true; then ".len).kind);
@@ -3785,7 +4122,10 @@ test "completion context starts commands after compound control words" {
     try std.testing.expect(for_do.incomplete);
     try std.testing.expectEqual(CompletionKind.command, completionContext(for_do, "for x do ".len).kind);
 
-    var if_else = try parse(std.testing.allocator, "if false; then :; else ", .{ .mode = .interactive, .cursor = "if false; then :; else ".len });
+    var if_else = try parse(std.testing.allocator, "if false; then :; else ", .{
+        .mode = .interactive,
+        .cursor = "if false; then :; else ".len,
+    });
     defer if_else.deinit();
     try std.testing.expect(if_else.incomplete);
     try std.testing.expectEqual(CompletionKind.command, completionContext(if_else, "if false; then :; else ".len).kind);
@@ -3813,7 +4153,10 @@ test "completion context finds parameter expansion prefixes" {
     try std.testing.expectEqual(@as(usize, "echo \"$".len), quoted_context.span.start);
     try std.testing.expectEqual(@as(usize, "echo \"$PA".len), quoted_context.span.end);
 
-    var single_quoted = try parse(std.testing.allocator, "echo '$PA", .{ .mode = .interactive, .cursor = "echo '$PA".len });
+    var single_quoted = try parse(std.testing.allocator, "echo '$PA", .{
+        .mode = .interactive,
+        .cursor = "echo '$PA".len,
+    });
     defer single_quoted.deinit();
     try std.testing.expect(completionContext(single_quoted, "echo '$PA".len).kind != .parameter);
 
@@ -3830,7 +4173,14 @@ test "parser builds a simple command node for a command word" {
         },
         .nodes = &.{
             .{ .kind = .root, .span = .init(0, 4), .token_start = 0, .token_end = 2 },
-            .{ .kind = .command_word, .span = .init(0, 4), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
+            .{
+                .kind = .command_word,
+                .span = .init(0, 4),
+                .token_start = 0,
+                .token_end = 1,
+                .child_start = 0,
+                .child_end = 1,
+            },
             .{ .kind = .simple_command, .span = .init(0, 4), .token_start = 0, .token_end = 1 },
         },
     });
@@ -3848,9 +4198,30 @@ test "parser classifies assignment words, command word, and arguments" {
         },
         .nodes = &.{
             .{ .kind = .root, .span = .init(0, 15), .token_start = 0, .token_end = 6 },
-            .{ .kind = .assignment_word, .span = .init(0, 7), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
-            .{ .kind = .command_word, .span = .init(8, 12), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
-            .{ .kind = .word, .span = .init(13, 15), .token_start = 4, .token_end = 5, .child_start = 2, .child_end = 3 },
+            .{
+                .kind = .assignment_word,
+                .span = .init(0, 7),
+                .token_start = 0,
+                .token_end = 1,
+                .child_start = 0,
+                .child_end = 1,
+            },
+            .{
+                .kind = .command_word,
+                .span = .init(8, 12),
+                .token_start = 2,
+                .token_end = 3,
+                .child_start = 1,
+                .child_end = 2,
+            },
+            .{
+                .kind = .word,
+                .span = .init(13, 15),
+                .token_start = 4,
+                .token_end = 5,
+                .child_start = 2,
+                .child_end = 3,
+            },
             .{ .kind = .simple_command, .span = .init(0, 15), .token_start = 0, .token_end = 5 },
         },
     });
@@ -4057,7 +4428,14 @@ test "parser builds redirection nodes with optional io number" {
         },
         .nodes = &.{
             .{ .kind = .root, .span = .init(0, 10), .token_start = 0, .token_end = 6 },
-            .{ .kind = .io_number, .span = .init(0, 1), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
+            .{
+                .kind = .io_number,
+                .span = .init(0, 1),
+                .token_start = 0,
+                .token_end = 1,
+                .child_start = 0,
+                .child_end = 1,
+            },
             .{ .kind = .word, .span = .init(2, 5), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
             .{ .kind = .redirection, .span = .init(0, 5), .token_start = 0, .token_end = 3 },
             .{ .kind = .command_word, .span = .init(6, 10), .token_start = 4, .token_end = 5 },
@@ -4228,7 +4606,11 @@ test "parser keeps nested brace groups inside POSIX function definitions" {
 }
 
 test "parser accepts compound commands as POSIX function bodies" {
-    var result = try parse(std.testing.allocator, "f() ( echo hi ); g() if true; then echo yes; fi; h() for i in 1 2; do echo $i; done", .{});
+    var result = try parse(
+        std.testing.allocator,
+        "f() ( echo hi ); g() if true; then echo yes; fi; h() for i in 1 2; do echo $i; done",
+        .{},
+    );
     defer result.deinit();
 
     var definitions: usize = 0;
@@ -4304,7 +4686,11 @@ test "strict parser diagnoses misplaced POSIX reserved words in command position
         .{ .source = ")", .span = .init(0, 1), .message = "misplaced )" },
         .{ .source = "echo ok | then", .span = .init(10, 14), .message = "misplaced reserved word" },
         .{ .source = "! then", .span = .init(2, 6), .message = "misplaced reserved word" },
-        .{ .source = "x=for; $x i in 1; do echo $i; done", .span = .init(18, 20), .message = "misplaced reserved word" },
+        .{
+            .source = "x=for; $x i in 1; do echo $i; done",
+            .span = .init(18, 20),
+            .message = "misplaced reserved word",
+        },
         .{ .source = "!", .span = .init(0, 1), .message = "missing command after !", .incomplete = true },
     };
 
@@ -4783,19 +5169,103 @@ test "parser builds lists and pipelines around simple commands" {
             .{ .kind = .eof, .span = .empty(27) },
         },
         .nodes = &.{
-            .{ .kind = .root, .span = .init(0, 27), .token_start = 0, .token_end = 16, .child_start = 26, .child_end = 28 },
-            .{ .kind = .command_word, .span = .init(0, 4), .token_start = 0, .token_end = 1, .child_start = 0, .child_end = 1 },
+            .{
+                .kind = .root,
+                .span = .init(0, 27),
+                .token_start = 0,
+                .token_end = 16,
+                .child_start = 26,
+                .child_end = 28,
+            },
+            .{
+                .kind = .command_word,
+                .span = .init(0, 4),
+                .token_start = 0,
+                .token_end = 1,
+                .child_start = 0,
+                .child_end = 1,
+            },
             .{ .kind = .word, .span = .init(5, 7), .token_start = 2, .token_end = 3, .child_start = 1, .child_end = 2 },
-            .{ .kind = .simple_command, .span = .init(0, 8), .token_start = 0, .token_end = 4, .child_start = 2, .child_end = 6 },
-            .{ .kind = .command_word, .span = .init(10, 14), .token_start = 6, .token_end = 7, .child_start = 6, .child_end = 7 },
-            .{ .kind = .word, .span = .init(15, 16), .token_start = 8, .token_end = 9, .child_start = 7, .child_end = 8 },
-            .{ .kind = .simple_command, .span = .init(10, 17), .token_start = 6, .token_end = 10, .child_start = 8, .child_end = 12 },
-            .{ .kind = .pipeline, .span = .init(0, 17), .token_start = 0, .token_end = 10, .child_start = 12, .child_end = 16 },
-            .{ .kind = .command_word, .span = .init(20, 24), .token_start = 12, .token_end = 13, .child_start = 16, .child_end = 17 },
-            .{ .kind = .word, .span = .init(25, 27), .token_start = 14, .token_end = 15, .child_start = 17, .child_end = 18 },
-            .{ .kind = .simple_command, .span = .init(20, 27), .token_start = 12, .token_end = 15, .child_start = 18, .child_end = 21 },
-            .{ .kind = .pipeline, .span = .init(20, 27), .token_start = 12, .token_end = 15, .child_start = 21, .child_end = 22 },
-            .{ .kind = .list, .span = .init(0, 27), .token_start = 0, .token_end = 15, .child_start = 22, .child_end = 26 },
+            .{
+                .kind = .simple_command,
+                .span = .init(0, 8),
+                .token_start = 0,
+                .token_end = 4,
+                .child_start = 2,
+                .child_end = 6,
+            },
+            .{
+                .kind = .command_word,
+                .span = .init(10, 14),
+                .token_start = 6,
+                .token_end = 7,
+                .child_start = 6,
+                .child_end = 7,
+            },
+            .{
+                .kind = .word,
+                .span = .init(15, 16),
+                .token_start = 8,
+                .token_end = 9,
+                .child_start = 7,
+                .child_end = 8,
+            },
+            .{
+                .kind = .simple_command,
+                .span = .init(10, 17),
+                .token_start = 6,
+                .token_end = 10,
+                .child_start = 8,
+                .child_end = 12,
+            },
+            .{
+                .kind = .pipeline,
+                .span = .init(0, 17),
+                .token_start = 0,
+                .token_end = 10,
+                .child_start = 12,
+                .child_end = 16,
+            },
+            .{
+                .kind = .command_word,
+                .span = .init(20, 24),
+                .token_start = 12,
+                .token_end = 13,
+                .child_start = 16,
+                .child_end = 17,
+            },
+            .{
+                .kind = .word,
+                .span = .init(25, 27),
+                .token_start = 14,
+                .token_end = 15,
+                .child_start = 17,
+                .child_end = 18,
+            },
+            .{
+                .kind = .simple_command,
+                .span = .init(20, 27),
+                .token_start = 12,
+                .token_end = 15,
+                .child_start = 18,
+                .child_end = 21,
+            },
+            .{
+                .kind = .pipeline,
+                .span = .init(20, 27),
+                .token_start = 12,
+                .token_end = 15,
+                .child_start = 21,
+                .child_end = 22,
+            },
+            .{
+                .kind = .list,
+                .span = .init(0, 27),
+                .token_start = 0,
+                .token_end = 15,
+                .child_start = 22,
+                .child_end = 26,
+            },
         },
         .nodes_exact = true,
     });
@@ -5006,7 +5476,8 @@ test "parser preserves non-special backslash in double-quoted here-doc delimiter
 }
 
 test "parser does not tokenize quoted here-doc body as shell syntax" {
-    const source = "cat <<'EOF'\nif then bad ; | &\n\"unterminated double\n'unterminated single\n$(unterminated command\n${unterminated\nEOF\necho after";
+    const source = "cat <<'EOF'\nif then bad ; | &\n\"unterminated double\n'unterminated single\n" ++
+        "$(unterminated command\n${unterminated\nEOF\necho after";
     var result = try parse(std.testing.allocator, source, .{});
     defer result.deinit();
 
@@ -5115,7 +5586,10 @@ test "shared shell substitution scanner recognizes recursive spans" {
     };
     try std.testing.expectEqual(ShellSubstitutionKind.parameter, parameter_substitution.kind);
     try expectSpan(.init(0, parameter.len), parameter_substitution.span);
-    try std.testing.expectEqualStrings("v:-$(printf '}'):$((1 + ${n:-2}))", parameter_substitution.value_span.slice(parameter));
+    try std.testing.expectEqualStrings(
+        "v:-$(printf '}'):$((1 + ${n:-2}))",
+        parameter_substitution.value_span.slice(parameter),
+    );
 
     const arithmetic = "$((1 + $(printf 2)))";
     const arithmetic_scan = try shellSubstitutionAt(std.testing.allocator, arithmetic, arithmetic.len, 0);
@@ -5206,14 +5680,24 @@ test "arithmetic expansion scanner honors arithmetic backslash escapes" {
     const escaped_parameter_end = std.mem.indexOf(u8, escaped_parameter, ")); ").? + 2;
     try std.testing.expectEqual(
         @as(?usize, escaped_parameter_end),
-        try arithmeticExpansionEnd(std.testing.allocator, escaped_parameter, escaped_parameter.len, escaped_parameter_start),
+        try arithmeticExpansionEnd(
+            std.testing.allocator,
+            escaped_parameter,
+            escaped_parameter.len,
+            escaped_parameter_start,
+        ),
     );
 
     const escaped_backquote = "echo $((1 + \\`printf 2` + 3)); echo after";
     const escaped_backquote_start = std.mem.indexOf(u8, escaped_backquote, "$((").?;
     try std.testing.expectEqual(
         @as(?usize, null),
-        try arithmeticExpansionEnd(std.testing.allocator, escaped_backquote, escaped_backquote.len, escaped_backquote_start),
+        try arithmeticExpansionEnd(
+            std.testing.allocator,
+            escaped_backquote,
+            escaped_backquote.len,
+            escaped_backquote_start,
+        ),
     );
 
     var escaped_backquote_parse = try parse(std.testing.allocator, escaped_backquote, .{});
@@ -5225,14 +5709,22 @@ test "arithmetic expansion scanner honors arithmetic backslash escapes" {
         .init(std.mem.findScalarLast(u8, escaped_backquote, '`').?, escaped_backquote.len),
         escaped_backquote_parse.diagnostics[0].span,
     );
-    try std.testing.expectEqualStrings("unterminated backquote command substitution", escaped_backquote_parse.diagnostics[0].message);
+    try std.testing.expectEqualStrings(
+        "unterminated backquote command substitution",
+        escaped_backquote_parse.diagnostics[0].message,
+    );
 
     const literal_backquote = "echo $((1 + \\`printf 2)); echo after";
     const literal_backquote_start = std.mem.indexOf(u8, literal_backquote, "$((").?;
     const literal_backquote_end = std.mem.indexOf(u8, literal_backquote, ")); ").? + 2;
     try std.testing.expectEqual(
         @as(?usize, literal_backquote_end),
-        try arithmeticExpansionEnd(std.testing.allocator, literal_backquote, literal_backquote.len, literal_backquote_start),
+        try arithmeticExpansionEnd(
+            std.testing.allocator,
+            literal_backquote,
+            literal_backquote.len,
+            literal_backquote_start,
+        ),
     );
 }
 
@@ -5401,14 +5893,14 @@ const gen_redirect_ops = [_][]const u8{
 const gen_heredoc_delims = [_][]const u8{ "EOF", "END", "HD" };
 
 // `inline` so each call site hashes to a distinct Smith decision point.
-inline fn pick(smith: *std.testing.Smith, comptime options: []const []const u8) []const u8 {
+inline fn pick(comptime options: []const []const u8, smith: *std.testing.Smith) []const u8 {
     return options[smith.index(options.len)];
 }
 
 fn genList(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
     genCommand(smith, out, depth);
     while (!smith.eosWeightedSimple(1, 2)) {
-        out.append(pick(smith, &gen_separators));
+        out.append(pick(&gen_separators, smith));
         genCommand(smith, out, depth);
     }
 }
@@ -5437,7 +5929,7 @@ fn genCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void
         },
         5 => { // for
             out.append("for ");
-            out.append(pick(smith, &gen_idents));
+            out.append(pick(&gen_idents, smith));
             out.append(" in ");
             genWord(smith, out, depth + 1);
             out.append(" ");
@@ -5470,7 +5962,7 @@ fn genCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void
             out.append("; }");
         },
         9 => { // function definition
-            out.append(pick(smith, &gen_idents));
+            out.append(pick(&gen_idents, smith));
             out.append("() { ");
             genList(smith, out, depth + 1);
             out.append("; }");
@@ -5489,7 +5981,7 @@ fn genCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void
 
 fn genSimpleCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
     if (smith.boolWeighted(3, 1)) { // leading assignment
-        out.append(pick(smith, &gen_idents));
+        out.append(pick(&gen_idents, smith));
         out.append("=");
         genWord(smith, out, depth);
         out.append(" ");
@@ -5504,13 +5996,13 @@ fn genSimpleCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize
 
 fn genRedirect(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
     out.append(" ");
-    if (smith.boolWeighted(2, 1)) out.append(pick(smith, &.{ "0", "1", "2", "3" }));
-    out.append(pick(smith, &gen_redirect_ops));
+    if (smith.boolWeighted(2, 1)) out.append(pick(&.{ "0", "1", "2", "3" }, smith));
+    out.append(pick(&gen_redirect_ops, smith));
     genWord(smith, out, depth);
 }
 
 fn genHereDocCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
-    const delim = pick(smith, &gen_heredoc_delims);
+    const delim = pick(&gen_heredoc_delims, smith);
     const dash = smith.boolWeighted(2, 1);
     out.append("cat <<");
     if (dash) out.append("-");
@@ -5530,26 +6022,26 @@ fn genHereDocCommand(smith: *std.testing.Smith, out: *SourceBuilder, depth: usiz
 
 fn genWord(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
     switch (smith.index(10)) {
-        0, 1, 2 => out.append(pick(smith, &gen_idents)),
+        0, 1, 2 => out.append(pick(&gen_idents, smith)),
         3 => {
             out.append("$");
-            out.append(pick(smith, &gen_idents));
+            out.append(pick(&gen_idents, smith));
         },
         4 => {
             out.append("${");
-            out.append(pick(smith, &gen_idents));
+            out.append(pick(&gen_idents, smith));
             out.append(":-");
-            out.append(pick(smith, &gen_idents));
+            out.append(pick(&gen_idents, smith));
             out.append("}");
         },
         5 => {
             out.append("'");
-            out.append(pick(smith, &gen_idents));
+            out.append(pick(&gen_idents, smith));
             out.append("'");
         },
         6 => {
             out.append("\"");
-            out.append(pick(smith, &gen_idents));
+            out.append(pick(&gen_idents, smith));
             if (depth < gen_max_depth and smith.boolWeighted(1, 1)) {
                 out.append("$(");
                 genSimpleCommand(smith, out, depth + 1);
@@ -5563,10 +6055,10 @@ fn genWord(smith: *std.testing.Smith, out: *SourceBuilder, depth: usize) void {
                 genList(smith, out, depth + 1);
                 out.append(")");
             } else {
-                out.append(pick(smith, &gen_idents));
+                out.append(pick(&gen_idents, smith));
             }
         },
-        8 => out.append(pick(smith, &.{ "*.zig", "$((x + 2))", "$'a\\n'", "`pwd`" })),
+        8 => out.append(pick(&.{ "*.zig", "$((x + 2))", "$'a\\n'", "`pwd`" }, smith)),
         9 => { // raw byte injection keeps lexical mutation reach inside grammar mode
             var raw: [2]u8 = undefined;
             smith.bytes(&raw);

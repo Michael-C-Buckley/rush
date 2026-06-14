@@ -5,6 +5,7 @@
 
 const std = @import("std");
 
+// ziglint-ignore: Z006 type alias
 pub const Descriptor = std.posix.fd_t;
 pub const current_working_directory: Descriptor = std.posix.AT.FDCWD;
 

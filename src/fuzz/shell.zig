@@ -152,7 +152,10 @@ fn fuzzShellConsequencePolicy(_: void, smith: *std.testing.Smith) anyerror!void 
             } else {
                 try std.testing.expectEqual(consequence.ErrorConsequence.normal_outcome, decision.consequence);
                 try std.testing.expectEqual(shell.ControlFlow.normal, decision.control_flow);
-                try std.testing.expectEqual(if (raw_status == 0) @as(?consequence.ShellErrorKind, null) else .nonzero_status, decision.kind);
+                try std.testing.expectEqual(
+                    if (raw_status == 0) @as(?consequence.ShellErrorKind, null) else .nonzero_status,
+                    decision.kind,
+                );
             }
         },
         1 => {
@@ -174,9 +177,15 @@ fn fuzzShellConsequencePolicy(_: void, smith: *std.testing.Smith) anyerror!void 
             }
         },
         2 => {
-            const failure_consequence: redirection_plan.FailureConsequence = if (smith.boolWeighted(1, 1)) .command_failure else .fatal_shell_error;
+            const failure_consequence: redirection_plan.FailureConsequence =
+                if (smith.boolWeighted(1, 1)) .command_failure else .fatal_shell_error;
             const status = consequence.statusForRedirectionFailure(failure_consequence);
-            const decision = consequence.decideForRedirectionFailure(options, eval_context, failure_consequence, status);
+            const decision = consequence.decideForRedirectionFailure(
+                options,
+                eval_context,
+                failure_consequence,
+                status,
+            );
             decision.validate(eval_context);
             try std.testing.expectEqual(status, decision.status);
             try std.testing.expectEqual(consequence.ShellErrorKind.redirection_error, decision.kind.?);
@@ -210,12 +219,21 @@ fn fuzzShellRedirectionRollback(_: void, smith: *std.testing.Smith) anyerror!voi
     const step_count = switch (failure_mode) {
         0 => prefix_len,
         1 => blk: {
-            steps[prefix_len] = redirection_plan.RedirectionStep.openPath(prefix_len, generatedTarget(smith), "missing", .{ .access = .read_only });
+            steps[prefix_len] = redirection_plan.RedirectionStep.openPath(
+                prefix_len,
+                generatedTarget(smith),
+                "missing",
+                .{ .access = .read_only },
+            );
             rollbacks[prefix_len] = .{ .ordinal = prefix_len, .target = steps[prefix_len].target() };
             break :blk prefix_len + 1;
         },
         2 => blk: {
-            steps[prefix_len] = redirection_plan.RedirectionStep.duplicate(prefix_len, generatedTarget(smith), closed_duplicate_source);
+            steps[prefix_len] = redirection_plan.RedirectionStep.duplicate(
+                prefix_len,
+                generatedTarget(smith),
+                closed_duplicate_source,
+            );
             rollbacks[prefix_len] = .{ .ordinal = prefix_len, .target = steps[prefix_len].target() };
             break :blk prefix_len + 1;
         },
@@ -333,14 +351,14 @@ fn fuzzShellEvalPipelineInvariants(_: void, smith: *std.testing.Smith) anyerror!
 fn populateInitialState(smith: *std.testing.Smith, shell_state: *shell.ShellState) !void {
     for (variable_names) |name| {
         if (!smith.boolWeighted(1, 1)) continue;
-        try shell_state.putVariable(name, pickValue(smith, &variable_values), .{
+        try shell_state.putVariable(name, pickValue(&variable_values, smith), .{
             .exported = smith.boolWeighted(1, 1),
         });
     }
 
     for (alias_names) |name| {
         if (!smith.boolWeighted(1, 2)) continue;
-        try shell_state.setAlias(name, pickValue(smith, &alias_values));
+        try shell_state.setAlias(name, pickValue(&alias_values, smith));
     }
 
     for (shell_options) |option| shell_state.options.set(option, smith.boolWeighted(1, 1));
@@ -452,7 +470,12 @@ fn shellErrorIsFatal(kind: consequence.ShellErrorKind, eval_context: shell.EvalC
 fn generatedRedirectionStep(smith: *std.testing.Smith, ordinal: usize) redirection_plan.RedirectionStep {
     const target = generatedTarget(smith);
     return switch (smith.index(3)) {
-        0 => redirection_plan.RedirectionStep.openPath(ordinal, target, generatedPath(smith), .{ .access = .write_only, .create = true, .truncate = true }),
+        0 => redirection_plan.RedirectionStep.openPath(
+            ordinal,
+            target,
+            generatedPath(smith),
+            .{ .access = .write_only, .create = true, .truncate = true },
+        ),
         1 => redirection_plan.RedirectionStep.duplicate(ordinal, target, generatedSource(smith)),
         2 => redirection_plan.RedirectionStep.close(ordinal, target),
         else => unreachable,
@@ -490,8 +513,10 @@ const EvalSubject = union(enum) {
 };
 
 const EvalPlanStorage = struct {
-    redirection_steps: [eval_max_redirection_plans][eval_max_redirection_steps]redirection_plan.RedirectionStep = undefined,
-    rollback_steps: [eval_max_redirection_plans][eval_max_redirection_steps]redirection_plan.RestorationStep = undefined,
+    redirection_steps: [eval_max_redirection_plans][eval_max_redirection_steps]redirection_plan.RedirectionStep =
+        undefined,
+    rollback_steps: [eval_max_redirection_plans][eval_max_redirection_steps]redirection_plan.RestorationStep =
+        undefined,
     redirection_plan_count: usize = 0,
     assignments: [eval_max_commands][1]shell.Assignment = undefined,
     argv: [eval_max_commands][1][]const u8 = undefined,
@@ -522,7 +547,11 @@ const EvalPlanStorage = struct {
         return plan;
     }
 
-    fn simpleCommand(self: *EvalPlanStorage, smith: *std.testing.Smith, target: shell.ExecutionTarget) shell.CommandPlan {
+    fn simpleCommand(
+        self: *EvalPlanStorage,
+        smith: *std.testing.Smith,
+        target: shell.ExecutionTarget,
+    ) shell.CommandPlan {
         std.debug.assert(self.command_count < eval_max_commands);
         const index = self.command_count;
         self.command_count += 1;
@@ -533,7 +562,7 @@ const EvalPlanStorage = struct {
             1, 2 => blk: {
                 self.assignments[index][0] = .{
                     .name = eval_assignment_names[smith.index(eval_assignment_names.len)],
-                    .value = pickValue(smith, &variable_values),
+                    .value = pickValue(&variable_values, smith),
                 };
                 break :blk shell.ExpandedSimpleCommand{
                     .assignments = self.assignments[index][0..1],
@@ -565,7 +594,11 @@ const EvalPlanStorage = struct {
         };
     }
 
-    fn braceGroup(self: *EvalPlanStorage, smith: *std.testing.Smith, target: shell.ExecutionTarget) shell.CompoundCommandPlan {
+    fn braceGroup(
+        self: *EvalPlanStorage,
+        smith: *std.testing.Smith,
+        target: shell.ExecutionTarget,
+    ) shell.CompoundCommandPlan {
         const command_count = 1 + smith.index(eval_max_stage_commands);
         const commands = self.commandSlice(smith, target, command_count);
         const plan: shell.CompoundCommandPlan = .{
@@ -589,7 +622,12 @@ const EvalPlanStorage = struct {
         return plan;
     }
 
-    fn commandSlice(self: *EvalPlanStorage, smith: *std.testing.Smith, target: shell.ExecutionTarget, count: usize) []const shell.CommandPlan {
+    fn commandSlice(
+        self: *EvalPlanStorage,
+        smith: *std.testing.Smith,
+        target: shell.ExecutionTarget,
+        count: usize,
+    ) []const shell.CommandPlan {
         std.debug.assert(self.command_count + count <= eval_max_commands);
         const start = self.command_count;
         for (0..count) |index| {
@@ -637,8 +675,18 @@ fn generatePipelineSubject(smith: *std.testing.Smith, storage: *EvalPlanStorage,
 fn generatedEvalRedirectionStep(smith: *std.testing.Smith, ordinal: usize) redirection_plan.RedirectionStep {
     const target = @as(fd.Descriptor, @intCast(smith.index(6)));
     return switch (smith.index(6)) {
-        0 => redirection_plan.RedirectionStep.openPath(ordinal, target, generatedPath(smith), .{ .access = .write_only, .create = true, .truncate = true }),
-        1 => redirection_plan.RedirectionStep.openPath(ordinal, target, generatedPath(smith), .{ .access = .read_write, .create = true }),
+        0 => redirection_plan.RedirectionStep.openPath(
+            ordinal,
+            target,
+            generatedPath(smith),
+            .{ .access = .write_only, .create = true, .truncate = true },
+        ),
+        1 => redirection_plan.RedirectionStep.openPath(
+            ordinal,
+            target,
+            generatedPath(smith),
+            .{ .access = .read_write, .create = true },
+        ),
         2 => redirection_plan.RedirectionStep.openPath(ordinal, target, "missing", .{ .access = .read_only }),
         3, 4 => redirection_plan.RedirectionStep.duplicate(ordinal, target, generatedEvalSource(smith)),
         5 => redirection_plan.RedirectionStep.close(ordinal, target),
@@ -677,7 +725,8 @@ const FuzzFdRuntime = struct {
     }
 
     fn setIdentity(self: *FuzzFdRuntime, descriptor: fd.Descriptor, identity_value: ?u16) void {
-        std.debug.assert(descriptor >= 0 and descriptor < self.table.len);
+        std.debug.assert(descriptor >= 0);
+        std.debug.assert(descriptor < self.table.len);
         self.table[@intCast(descriptor)] = identity_value;
     }
 
@@ -778,7 +827,7 @@ fn expectShellStatesEqual(expected: shell.ShellState, actual: shell.ShellState) 
     }
 }
 
-fn pickValue(smith: *std.testing.Smith, comptime values: []const []const u8) []const u8 {
+fn pickValue(comptime values: []const []const u8, smith: *std.testing.Smith) []const u8 {
     return values[smith.index(values.len)];
 }
 

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ziglint = @import("ziglint");
 
 const compile_check_targets = [_][]const u8{
     "x86_64-linux-gnu",
@@ -25,12 +26,25 @@ pub fn build(b: *std.Build) void {
 
     // System config dir, GNU sysconfdir convention: defaults to <prefix>/etc
     // so non-root installs stay self-contained; packagers pass -Dsysconfdir=/etc.
-    const sysconfdir = b.option([]const u8, "sysconfdir", "Directory for system-wide configuration (default: <prefix>/etc)") orelse
+    const sysconfdir = b.option(
+        []const u8,
+        "sysconfdir",
+        "Directory for system-wide configuration (default: <prefix>/etc)",
+    ) orelse
         b.getInstallPath(.prefix, "etc");
     const build_config = b.addOptions();
     build_config.addOption([]const u8, "sysconfdir", sysconfdir);
 
-    const exe_module = createRushRootModule(b, target, optimize, vaxis, zeit, build_config, use_system_sqlite, .{ .link_libc = true });
+    const exe_module = createRushRootModule(
+        b,
+        target,
+        optimize,
+        vaxis,
+        zeit,
+        build_config,
+        use_system_sqlite,
+        .{ .link_libc = true },
+    );
     const exe = b.addExecutable(.{
         .name = "rush",
         .root_module = exe_module,
@@ -77,6 +91,13 @@ pub fn build(b: *std.Build) void {
 
     const compile_check_step = b.step("compile-check", "Compile-check Linux/macOS/BSD targets");
     addCompileChecks(b, compile_check_step, optimize, build_config, use_system_sqlite);
+
+    const ziglint_dep = b.dependency("ziglint", .{ .optimize = .ReleaseFast });
+    const lint_step = b.step("lint", "Run ziglint");
+    lint_step.dependOn(ziglint.addLint(b, ziglint_dep, &.{
+        b.path("build.zig"),
+        b.path("src"),
+    }));
 }
 
 const RushRootModuleOptions = struct {
@@ -204,7 +225,12 @@ const shell_fuzz_targets = [_]FuzzTargetOptions{
     },
 };
 
-fn addFuzzTarget(b: *std.Build, umbrella: *std.Build.Step, target: std.Build.ResolvedTarget, options: FuzzTargetOptions) void {
+fn addFuzzTarget(
+    b: *std.Build,
+    umbrella: *std.Build.Step,
+    target: std.Build.ResolvedTarget,
+    options: FuzzTargetOptions,
+) void {
     // Zig 0.16.0's bundled fuzz runner fails to compile in Debug mode through
     // the self-hosted backend. ReleaseSafe uses LLVM and preserves runtime
     // safety checks, so fuzzing still catches parser/runtime bugs without a

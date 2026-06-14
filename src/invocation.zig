@@ -81,16 +81,51 @@ pub fn parse(args: []const []const u8) ?ShellInvocation {
         if (operands.len == 0) return null;
         const arg_zero = if (operands.len >= 2) operands[1] else args[0];
         const positionals = if (operands.len >= 3) operands[2..] else &.{};
-        return .{ .kind = .command_string, .source = operands[0], .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = arg_zero, .positionals = positionals, .interactive = interactive_mode };
+        return .{
+            .kind = .command_string,
+            .source = operands[0],
+            .features = features,
+            .shell_options = shell_options,
+            .monitor_option_explicit = monitor_option_explicit,
+            .arg_zero = arg_zero,
+            .positionals = positionals,
+            .interactive = interactive_mode,
+        };
     }
     if (standard_input) {
-        return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = args[0], .positionals = operands, .interactive = interactive_mode };
+        return .{
+            .kind = .standard_input,
+            .source = "-",
+            .features = features,
+            .shell_options = shell_options,
+            .monitor_option_explicit = monitor_option_explicit,
+            .arg_zero = args[0],
+            .positionals = operands,
+            .interactive = interactive_mode,
+        };
     }
     if (operands.len != 0) {
         const path = operands[0];
-        return .{ .kind = .script_file, .source = path, .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = path, .positionals = operands[1..], .interactive = interactive_mode };
+        return .{
+            .kind = .script_file,
+            .source = path,
+            .features = features,
+            .shell_options = shell_options,
+            .monitor_option_explicit = monitor_option_explicit,
+            .arg_zero = path,
+            .positionals = operands[1..],
+            .interactive = interactive_mode,
+        };
     }
-    return .{ .kind = .standard_input, .source = "-", .features = features, .shell_options = shell_options, .monitor_option_explicit = monitor_option_explicit, .arg_zero = args[0], .interactive = interactive_mode };
+    return .{
+        .kind = .standard_input,
+        .source = "-",
+        .features = features,
+        .shell_options = shell_options,
+        .monitor_option_explicit = monitor_option_explicit,
+        .arg_zero = args[0],
+        .interactive = interactive_mode,
+    };
 }
 
 pub fn shouldRunInteractiveStandardInput(invocation: ShellInvocation, stdin_is_tty: bool, stderr_is_tty: bool) bool {

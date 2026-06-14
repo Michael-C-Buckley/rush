@@ -40,8 +40,23 @@ pub fn setShellOptions(shell_options: *shell.ShellOptions, monitor_option_explic
     shell_options.noexec = false;
 }
 
-pub fn sourceDefaultConfig(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) !runner.CommandResult {
-    return runner.runShellStateScript(allocator, io, shell_state, embedded_config, embedded_config_path, arg_zero, features, .capture);
+pub fn sourceDefaultConfig(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    arg_zero: []const u8,
+    features: compat.Features,
+) !runner.CommandResult {
+    return runner.runShellStateScript(
+        allocator,
+        io,
+        shell_state,
+        embedded_config,
+        embedded_config_path,
+        arg_zero,
+        features,
+        .capture,
+    );
 }
 
 const ConfigService = struct {
@@ -51,10 +66,22 @@ const ConfigService = struct {
     arg_zero: []const u8 = "rush",
     features: compat.Features = .{},
 
-    fn init(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, arg_zero: []const u8, features: compat.Features) ConfigService {
+    fn init(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        shell_state: *shell.ShellState,
+        arg_zero: []const u8,
+        features: compat.Features,
+    ) ConfigService {
         shell_state.validate();
         std.debug.assert(shell_state.scope == .current_shell);
-        return .{ .allocator = allocator, .io = io, .shell_state = shell_state, .arg_zero = arg_zero, .features = features };
+        return .{
+            .allocator = allocator,
+            .io = io,
+            .shell_state = shell_state,
+            .arg_zero = arg_zero,
+            .features = features,
+        };
     }
 
     fn load(self: ConfigService, options: Options) !void {
@@ -94,7 +121,12 @@ const ConfigService = struct {
     }
 
     fn sourceOptional(self: ConfigService, path: []const u8) !void {
-        const contents = std.Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+        const contents = std.Io.Dir.cwd().readFileAlloc(
+            self.io,
+            path,
+            self.allocator,
+            .limited(1024 * 1024),
+        ) catch |err| switch (err) {
             error.FileNotFound => return,
             else => {
                 try writeConfigReadWarning(self.io, path, err);
@@ -107,7 +139,16 @@ const ConfigService = struct {
     }
 
     fn sourceScript(self: ConfigService, contents: []const u8, source_path: []const u8) !void {
-        var result = try runner.runShellStateScript(self.allocator, self.io, self.shell_state, contents, source_path, self.arg_zero, self.features, .capture);
+        var result = try runner.runShellStateScript(
+            self.allocator,
+            self.io,
+            self.shell_state,
+            contents,
+            source_path,
+            self.arg_zero,
+            self.features,
+            .capture,
+        );
         defer result.deinit();
         if (result.stdout.len != 0) try writeAll(self.io, .stdout, result.stdout);
         if (result.stderr.len != 0) try writeAll(self.io, .stderr, result.stderr);
@@ -125,13 +166,21 @@ const ConfigService = struct {
         return userStartupPathForShellState(self.allocator, self.shell_state.*, file_name);
     }
 
-    fn userStartupPathForShellState(allocator: std.mem.Allocator, shell_state: shell.ShellState, file_name: []const u8) !?[]const u8 {
+    fn userStartupPathForShellState(
+        allocator: std.mem.Allocator,
+        shell_state: shell.ShellState,
+        file_name: []const u8,
+    ) !?[]const u8 {
         shell_state.validate();
         if (shell_state.getVariable("XDG_CONFIG_HOME")) |xdg_config_home| {
-            if (xdg_config_home.value.len != 0) return try std.fs.path.join(allocator, &.{ xdg_config_home.value, "rush", file_name });
+            if (xdg_config_home.value.len != 0) {
+                return try std.fs.path.join(allocator, &.{ xdg_config_home.value, "rush", file_name });
+            }
         }
         if (shell_state.getVariable("HOME")) |home| {
-            if (home.value.len != 0) return try std.fs.path.join(allocator, &.{ home.value, ".config", "rush", file_name });
+            if (home.value.len != 0) {
+                return try std.fs.path.join(allocator, &.{ home.value, ".config", "rush", file_name });
+            }
         }
         return null;
     }
@@ -151,7 +200,11 @@ const ConfigService = struct {
         var adapter = runtime.PosixAdapter.init(self.io);
         var expansion = shell.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
-            .eval_context = shell.EvalContext.init(.{ .target = .current_shell, .source = .interactive, .interactive = true }),
+            .eval_context = shell.EvalContext.init(.{
+                .target = .current_shell,
+                .source = .interactive,
+                .interactive = true,
+            }),
             .fs_port = runtime.posixPorts(&adapter).fs,
             .features = features,
             .arg_zero = self.arg_zero,
@@ -165,7 +218,13 @@ pub fn loadConfig(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.
     try ConfigService.init(allocator, io, shell_state, options.arg_zero, options.features).load(options);
 }
 
-pub fn sourceOptionalConfig(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, path: []const u8, arg_zero: []const u8) !void {
+pub fn sourceOptionalConfig(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    path: []const u8,
+    arg_zero: []const u8,
+) !void {
     try ConfigService.init(allocator, io, shell_state, arg_zero, .{}).sourceOptional(path);
 }
 
@@ -173,7 +232,10 @@ fn writeConfigReadWarning(io: std.Io, path: []const u8, err: anyerror) !void {
     var buffer: [4096]u8 = undefined;
     var writer = std.Io.File.stderr().writer(io, &buffer);
     defer writer.interface.flush() catch {};
-    try writer.interface.print("rush: warning: cannot read {s}: {s}; skipping\n", .{ path, configReadErrorMessage(err) });
+    try writer.interface.print(
+        "rush: warning: cannot read {s}: {s}; skipping\n",
+        .{ path, configReadErrorMessage(err) },
+    );
 }
 
 fn configReadErrorMessage(err: anyerror) []const u8 {
@@ -185,7 +247,14 @@ fn configReadErrorMessage(err: anyerror) []const u8 {
     };
 }
 
-pub fn sourceConfigScript(allocator: std.mem.Allocator, io: std.Io, shell_state: *shell.ShellState, contents: []const u8, source_path: []const u8, arg_zero: []const u8) !void {
+pub fn sourceConfigScript(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    shell_state: *shell.ShellState,
+    contents: []const u8,
+    source_path: []const u8,
+    arg_zero: []const u8,
+) !void {
     try ConfigService.init(allocator, io, shell_state, arg_zero, .{}).sourceScript(contents, source_path);
 }
 
@@ -211,7 +280,12 @@ const StderrGuard = struct {
     }
 };
 
-fn sourceOptionalConfigCapturingStderr(allocator: std.mem.Allocator, shell_state: *shell.ShellState, path: []const u8, stderr_path: []const u8) ![]u8 {
+fn sourceOptionalConfigCapturingStderr(
+    allocator: std.mem.Allocator,
+    shell_state: *shell.ShellState,
+    path: []const u8,
+    stderr_path: []const u8,
+) ![]u8 {
     var stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{ .truncate = true });
     var stderr_file_open = true;
     defer if (stderr_file_open) stderr_file.close(std.testing.io);
@@ -264,17 +338,25 @@ test "interactive startup initializes prompt variables and sources expanded ENV"
 }
 test "interactive startup warns and skips user config path directory" {
     const root = "rush-test-config-directory-startup";
-    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().deleteTree(std.testing.io, root);
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     try std.Io.Dir.cwd().createDirPath(std.testing.io, root ++ "/rush/config.rush");
 
     var shell_state = shell.ShellState.init(std.testing.allocator);
     defer shell_state.deinit();
 
-    const stderr = try sourceOptionalConfigCapturingStderr(std.testing.allocator, &shell_state, root ++ "/rush/config.rush", root ++ "/stderr");
+    const stderr = try sourceOptionalConfigCapturingStderr(
+        std.testing.allocator,
+        &shell_state,
+        root ++ "/rush/config.rush",
+        root ++ "/stderr",
+    );
     defer std.testing.allocator.free(stderr);
 
-    try std.testing.expectEqualStrings("rush: warning: cannot read " ++ root ++ "/rush/config.rush: is a directory; skipping\n", stderr);
+    try std.testing.expectEqualStrings(
+        "rush: warning: cannot read " ++ root ++ "/rush/config.rush: is a directory; skipping\n",
+        stderr,
+    );
 }
 test "embedded default config sets prompt defaults without clobbering inherited values" {
     var shell_state = shell.ShellState.init(std.testing.allocator);

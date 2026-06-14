@@ -27,7 +27,10 @@ pub const Signal = enum {
     }
 
     pub fn fromName(name_value: []const u8) ?Signal {
-        return if (std.mem.eql(u8, name_value, "EXIT")) .EXIT else if (std.mem.eql(u8, name_value, "HUP")) .HUP else if (std.mem.eql(u8, name_value, "INT")) .INT else if (std.mem.eql(u8, name_value, "QUIT")) .QUIT else if (std.mem.eql(u8, name_value, "TERM")) .TERM else if (std.mem.eql(u8, name_value, "USR1")) .USR1 else if (std.mem.eql(u8, name_value, "USR2")) .USR2 else null;
+        for (signal_names) |entry| {
+            if (std.mem.eql(u8, name_value, entry.name)) return entry.signal;
+        }
+        return null;
     }
 
     pub fn fromRuntimeNumber(number: u8) ?Signal {
@@ -69,6 +72,21 @@ pub const Signal = enum {
         std.debug.assert(Signal.fromName(self.name()) == self);
         if (self.runtimeNumber()) |number| std.debug.assert(Signal.fromRuntimeNumber(number) == self);
     }
+};
+
+const SignalName = struct {
+    name: []const u8,
+    signal: Signal,
+};
+
+const signal_names = [_]SignalName{
+    .{ .name = "EXIT", .signal = .EXIT },
+    .{ .name = "HUP", .signal = .HUP },
+    .{ .name = "INT", .signal = .INT },
+    .{ .name = "QUIT", .signal = .QUIT },
+    .{ .name = "TERM", .signal = .TERM },
+    .{ .name = "USR1", .signal = .USR1 },
+    .{ .name = "USR2", .signal = .USR2 },
 };
 
 pub const ActionKind = enum {

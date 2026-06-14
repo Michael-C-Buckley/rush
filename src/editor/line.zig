@@ -25,6 +25,7 @@ pub const RenderOptions = render.RenderOptions;
 pub const DiagnosticSeverity = render.DiagnosticSeverity;
 pub const DiagnosticSpan = render.DiagnosticSpan;
 pub const DiagnosticRender = render.DiagnosticRender;
+// ziglint-ignore: Z006 public re-export keeps existing API spelling
 pub const semanticPromptEnd = render.semantic_prompt_end;
 pub const parseUiStyle = render.parseUiStyle;
 pub const visibleWidth = render.visibleWidth;
@@ -263,6 +264,7 @@ pub const HistoryView = struct {
         text: []const u8,
         when: i64 = 0,
 
+        // ziglint-ignore: Z012 Z023 method receiver must stay first; type is public as HistoryView.HistoryEntry
         pub fn deinit(self: HistoryEntry, allocator: std.mem.Allocator) void {
             allocator.free(self.text);
         }
@@ -290,12 +292,17 @@ pub const CompletionMenu = struct {
 
     const no_selection = std.math.maxInt(usize);
 
+    // ziglint-ignore: Z030 reset to a reusable empty state; clear()/replace() read fields after deinit
     pub fn deinit(self: *CompletionMenu, allocator: std.mem.Allocator) void {
         if (self.candidates.len != 0) completion.freeCandidates(allocator, self.candidates);
         self.* = .{};
     }
 
-    pub fn replace(self: *CompletionMenu, allocator: std.mem.Allocator, candidates: []const completion.Candidate) !void {
+    pub fn replace(
+        self: *CompletionMenu,
+        allocator: std.mem.Allocator,
+        candidates: []const completion.Candidate,
+    ) !void {
         self.deinit(allocator);
         self.candidates = try completion.cloneCandidates(allocator, candidates);
         self.selected = no_selection;
@@ -414,7 +421,12 @@ pub const LineSession = struct {
         return initWithEditingMode(allocator, prompt, history, .emacs);
     }
 
-    pub fn initWithEditingMode(allocator: std.mem.Allocator, prompt: Prompt, history: HistoryView, editing_mode: EditingMode) !LineSession {
+    pub fn initWithEditingMode(
+        allocator: std.mem.Allocator,
+        prompt: Prompt,
+        history: HistoryView,
+        editing_mode: EditingMode,
+    ) !LineSession {
         return .{
             .allocator = allocator,
             .prompt = .{
@@ -509,7 +521,11 @@ pub const LineSession = struct {
                 self.completion_menu.clear(self.allocator);
             },
             .delete_to_end => {
-                try self.killRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte);
+                try self.killRange(
+                    self.editor.buffer.cursor_byte,
+                    self.editor.buffer.text().len,
+                    self.editor.buffer.cursor_byte,
+                );
                 self.completion_menu.clear(self.allocator);
             },
             .delete_previous_word => {
@@ -533,14 +549,19 @@ pub const LineSession = struct {
                 self.completion_menu.clear(self.allocator);
             },
             .right, .end => {
-                if (self.editor.buffer.cursor_byte == self.editor.buffer.text().len and try self.acceptAutosuggestion()) {
+                if (self.editor.buffer.cursor_byte == self.editor.buffer.text().len and
+                    try self.acceptAutosuggestion())
+                {
                     self.completion_menu.clear(self.allocator);
                     return;
                 }
                 try self.editor.handleKey(event);
                 self.completion_menu.clear(self.allocator);
             },
-            .up => if (self.completion_menu.isOpen()) self.completion_menu.selectPrevious() else try self.historyPrevious(),
+            .up => if (self.completion_menu.isOpen())
+                self.completion_menu.selectPrevious()
+            else
+                try self.historyPrevious(),
             .down => if (self.completion_menu.isOpen()) self.completion_menu.selectNext() else try self.historyNext(),
             .tab => if (self.completion_menu.isOpen()) {
                 if (event.modifiers.shift) self.completion_menu.selectPrevious() else self.completion_menu.selectNext();
@@ -682,7 +703,10 @@ pub const LineSession = struct {
             .replace => {
                 const count = self.takeViCountOrDefault(1);
                 if (try self.viReplaceCharacters(event.text, count) and !self.vi_replaying_repeat) {
-                    try self.setViLastRepeat(.{ .replace = .{ .text = try self.allocator.dupe(u8, event.text), .count = count } });
+                    try self.setViLastRepeat(.{ .replace = .{
+                        .text = try self.allocator.dupe(u8, event.text),
+                        .count = count,
+                    } });
                 }
                 self.vi_pending = .none;
                 return;
@@ -702,7 +726,10 @@ pub const LineSession = struct {
                 return;
             },
             .find => |find| {
-                try self.applyViFind(.{ .direction = find.direction, .placement = find.placement, .char = command }, self.takeViCountOrDefault(1));
+                try self.applyViFind(
+                    .{ .direction = find.direction, .placement = find.placement, .char = command },
+                    self.takeViCountOrDefault(1),
+                );
                 self.vi_pending = .none;
                 return;
             },
@@ -722,7 +749,8 @@ pub const LineSession = struct {
             't' => self.vi_pending = .{ .find = .{ .direction = .forward, .placement = .before_character } },
             'T' => self.vi_pending = .{ .find = .{ .direction = .backward, .placement = .after_character } },
             ';' => if (self.vi_last_find) |find| try self.applyViFind(find, self.takeViCountOrDefault(1)),
-            ',' => if (self.vi_last_find) |find| try self.applyViFind(reverseViFind(find), self.takeViCountOrDefault(1)),
+            ',' => if (self.vi_last_find) |find|
+                try self.applyViFind(reverseViFind(find), self.takeViCountOrDefault(1)),
             'i' => {
                 const count = self.takeViCountOrDefault(1);
                 try self.saveViUndo();
@@ -760,15 +788,27 @@ pub const LineSession = struct {
             'r' => self.vi_pending = .replace,
             'x' => {
                 const count = self.takeViCountOrDefault(1);
-                if (try self.viDeleteForward(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .delete_forward = count });
+                if (try self.viDeleteForward(count) and !self.vi_replaying_repeat) {
+                    try self.setViLastRepeat(.{ .delete_forward = count });
+                }
             },
             'X' => {
                 const count = self.takeViCountOrDefault(1);
-                if (try self.viDeleteBackward(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .delete_backward = count });
+                if (try self.viDeleteBackward(count) and !self.vi_replaying_repeat) {
+                    try self.setViLastRepeat(.{ .delete_backward = count });
+                }
             },
-            'D' => if (try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte) and !self.vi_replaying_repeat) try self.setViLastRepeat(.delete_to_end),
+            'D' => if (try self.viDeleteRange(
+                self.editor.buffer.cursor_byte,
+                self.editor.buffer.text().len,
+                self.editor.buffer.cursor_byte,
+            ) and !self.vi_replaying_repeat) try self.setViLastRepeat(.delete_to_end),
             'C' => {
-                _ = try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte);
+                _ = try self.viDeleteRange(
+                    self.editor.buffer.cursor_byte,
+                    self.editor.buffer.text().len,
+                    self.editor.buffer.cursor_byte,
+                );
                 try self.beginViInsertRepeat(.change_to_end);
                 self.enterViInsertModeAtCursor();
             },
@@ -784,17 +824,23 @@ pub const LineSession = struct {
             'Y' => try self.viYankRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len),
             'p' => {
                 const count = self.takeViCountOrDefault(1);
-                if (try self.viPutAfter(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .put_after = count });
+                if (try self.viPutAfter(count) and !self.vi_replaying_repeat) {
+                    try self.setViLastRepeat(.{ .put_after = count });
+                }
             },
             'P' => {
                 const count = self.takeViCountOrDefault(1);
-                if (try self.viPutBefore(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .put_before = count });
+                if (try self.viPutBefore(count) and !self.vi_replaying_repeat) {
+                    try self.setViLastRepeat(.{ .put_before = count });
+                }
             },
             'u' => try self.restoreViUndo(),
             'U' => try self.restoreViLineUndo(),
             '~' => {
                 const count = self.takeViCountOrDefault(1);
-                if (try self.viToggleCase(count) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .toggle_case = count });
+                if (try self.viToggleCase(count) and !self.vi_replaying_repeat) {
+                    try self.setViLastRepeat(.{ .toggle_case = count });
+                }
             },
             'k', '-' => try self.viHistoryPrevious(self.takeViCountOrDefault(1)),
             'j', '+' => try self.viHistoryNext(self.takeViCountOrDefault(1)),
@@ -873,7 +919,12 @@ pub const LineSession = struct {
         if (request.command == .list or matches.items.len == 0) return false;
         const replacement = switch (request.command) {
             .list => unreachable,
-            .complete => try pathExpansionCompletionReplacement(self.allocator, request.word, matches.items, request.replacement_style),
+            .complete => try pathExpansionCompletionReplacement(
+                self.allocator,
+                request.word,
+                matches.items,
+                request.replacement_style,
+            ),
             .expand_all => try pathExpansionAllReplacement(self.allocator, matches.items, request.replacement_style),
         };
         defer self.allocator.free(replacement);
@@ -919,6 +970,7 @@ pub const LineSession = struct {
         if (self.editor.buffer.cursor_byte == self.editor.buffer.text().len) {
             self.editor.buffer.moveLeft();
         }
+        // ziglint-ignore: Z026 best-effort undo snapshot for mode transition
         self.captureViLineUndo() catch {};
         self.completion_menu.clear(self.allocator);
     }
@@ -926,6 +978,7 @@ pub const LineSession = struct {
     fn enterViInsertModeAtCursor(self: *LineSession) void {
         self.vi_state = .insert;
         self.resetViCommandPrefix();
+        // ziglint-ignore: Z026 best-effort undo snapshot for mode transition
         self.captureViLineUndo() catch {};
         self.completion_menu.clear(self.allocator);
     }
@@ -979,7 +1032,11 @@ pub const LineSession = struct {
                 var remaining = insert.text_count -| 1;
                 while (remaining != 0) : (remaining -= 1) try self.applyViInputRepeat(input, .insert);
                 if (!self.vi_replaying_repeat) {
-                    try self.setViLastRepeat(.{ .insert = .{ .placement = insert.placement, .input = input, .text_count = insert.text_count } });
+                    try self.setViLastRepeat(.{ .insert = .{
+                        .placement = insert.placement,
+                        .input = input,
+                        .text_count = insert.text_count,
+                    } });
                     stored = true;
                 }
             },
@@ -1004,7 +1061,11 @@ pub const LineSession = struct {
             },
             .operator_change => |change| {
                 if (!self.vi_replaying_repeat) {
-                    try self.setViLastRepeat(.{ .operator_change = .{ .motion_command = change.motion_command, .count = change.count, .input = input } });
+                    try self.setViLastRepeat(.{ .operator_change = .{
+                        .motion_command = change.motion_command,
+                        .count = change.count,
+                        .input = input,
+                    } });
                     stored = true;
                 }
             },
@@ -1065,9 +1126,17 @@ pub const LineSession = struct {
             },
             .delete_forward => |count| _ = try self.viDeleteForward(count),
             .delete_backward => |count| _ = try self.viDeleteBackward(count),
-            .delete_to_end => _ = try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte),
+            .delete_to_end => _ = try self.viDeleteRange(
+                self.editor.buffer.cursor_byte,
+                self.editor.buffer.text().len,
+                self.editor.buffer.cursor_byte,
+            ),
             .change_to_end => |input| {
-                _ = try self.viDeleteRange(self.editor.buffer.cursor_byte, self.editor.buffer.text().len, self.editor.buffer.cursor_byte);
+                _ = try self.viDeleteRange(
+                    self.editor.buffer.cursor_byte,
+                    self.editor.buffer.text().len,
+                    self.editor.buffer.cursor_byte,
+                );
                 try self.applyViInputRepeat(input, .insert);
                 self.finishViInputRepeat(input);
             },
@@ -1079,8 +1148,20 @@ pub const LineSession = struct {
             },
             .operator_delete => |operator| try self.applyViOperator(.delete, operator.motion_command, operator.count),
             .operator_change => |operator| {
-                const motion = viMotion(self.editor.buffer.text(), self.editor.buffer.cursor_byte, operator.motion_command, operator.count) orelse return;
-                const range = viOperatorMotionRange(self.editor.buffer.text(), self.editor.buffer.cursor_byte, .change, operator.motion_command, operator.count, motion);
+                const motion = viMotion(
+                    self.editor.buffer.text(),
+                    self.editor.buffer.cursor_byte,
+                    operator.motion_command,
+                    operator.count,
+                ) orelse return;
+                const range = viOperatorMotionRange(
+                    self.editor.buffer.text(),
+                    self.editor.buffer.cursor_byte,
+                    .change,
+                    operator.motion_command,
+                    operator.count,
+                    motion,
+                );
                 if (!try self.viDeleteRange(range.start, range.end, range.cursor_after_delete)) return;
                 try self.applyViInputRepeat(operator.input, .insert);
                 self.finishViInputRepeat(operator.input);
@@ -1133,14 +1214,23 @@ pub const LineSession = struct {
 
     fn applyViMotionCommand(self: *LineSession, command: u21) !void {
         const count = self.takeViCountOrDefault(1);
-        const motion = viMotion(self.editor.buffer.text(), self.editor.buffer.cursor_byte, command, count) orelse return;
+        const motion = viMotion(
+            self.editor.buffer.text(),
+            self.editor.buffer.cursor_byte,
+            command,
+            count,
+        ) orelse return;
         self.editor.buffer.cursor_byte = motion.cursor;
     }
 
     fn applyViOperator(self: *LineSession, operator: ViOperator, motion_command: u21, count: usize) !void {
-        if ((operator == .delete and motion_command == 'd') or (operator == .change and motion_command == 'c') or (operator == .yank and motion_command == 'y')) {
+        if ((operator == .delete and motion_command == 'd') or
+            (operator == .change and motion_command == 'c') or
+            (operator == .yank and motion_command == 'y'))
+        {
             switch (operator) {
-                .delete => if (try self.viClearLine(false) and !self.vi_replaying_repeat) try self.setViLastRepeat(.clear_line_delete),
+                .delete => if (try self.viClearLine(false) and !self.vi_replaying_repeat)
+                    try self.setViLastRepeat(.clear_line_delete),
                 .change => {
                     _ = try self.viClearLine(false);
                     try self.beginViInsertRepeat(.clear_line_change);
@@ -1150,13 +1240,33 @@ pub const LineSession = struct {
             }
             return;
         }
-        const motion = viMotion(self.editor.buffer.text(), self.editor.buffer.cursor_byte, motion_command, count) orelse return;
-        const range = viOperatorMotionRange(self.editor.buffer.text(), self.editor.buffer.cursor_byte, operator, motion_command, count, motion);
+        const motion = viMotion(
+            self.editor.buffer.text(),
+            self.editor.buffer.cursor_byte,
+            motion_command,
+            count,
+        ) orelse return;
+        const range = viOperatorMotionRange(
+            self.editor.buffer.text(),
+            self.editor.buffer.cursor_byte,
+            operator,
+            motion_command,
+            count,
+            motion,
+        );
         switch (operator) {
-            .delete => if (try self.viDeleteRange(range.start, range.end, range.cursor_after_delete) and !self.vi_replaying_repeat) try self.setViLastRepeat(.{ .operator_delete = .{ .motion_command = motion_command, .count = count } }),
+            .delete => if (try self.viDeleteRange(range.start, range.end, range.cursor_after_delete) and
+                !self.vi_replaying_repeat)
+                try self.setViLastRepeat(.{ .operator_delete = .{
+                    .motion_command = motion_command,
+                    .count = count,
+                } }),
             .change => {
                 if (!try self.viDeleteRange(range.start, range.end, range.cursor_after_delete)) return;
-                try self.beginViInsertRepeat(.{ .operator_change = .{ .motion_command = motion_command, .count = count } });
+                try self.beginViInsertRepeat(.{ .operator_change = .{
+                    .motion_command = motion_command,
+                    .count = count,
+                } });
                 self.enterViInsertModeAtCursor();
             },
             .yank => try self.viYankRange(range.start, range.end),
@@ -1224,7 +1334,9 @@ pub const LineSession = struct {
         if (self.editor.buffer.text().len == 0) return false;
         var end = self.editor.buffer.cursor_byte;
         var remaining = count;
-        while (remaining != 0 and end < self.editor.buffer.text().len) : (remaining -= 1) end = nextGraphemeEnd(self.editor.buffer.text(), end);
+        while (remaining != 0 and end < self.editor.buffer.text().len) : (remaining -= 1) {
+            end = nextGraphemeEnd(self.editor.buffer.text(), end);
+        }
         return self.viDeleteRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
     }
 
@@ -1232,7 +1344,9 @@ pub const LineSession = struct {
         if (self.editor.buffer.text().len <= 1 or self.editor.buffer.cursor_byte == 0) return false;
         var start = self.editor.buffer.cursor_byte;
         var remaining = count;
-        while (remaining != 0 and start != 0) : (remaining -= 1) start = previousGraphemeStart(self.editor.buffer.text(), start);
+        while (remaining != 0 and start != 0) : (remaining -= 1) {
+            start = previousGraphemeStart(self.editor.buffer.text(), start);
+        }
         return self.viDeleteRange(start, self.editor.buffer.cursor_byte, start);
     }
 
@@ -1243,7 +1357,9 @@ pub const LineSession = struct {
         try self.kill_ring.appendSlice(self.allocator, self.editor.buffer.text()[start..end]);
         try self.editor.buffer.replaceRange(start, end, "");
         self.editor.buffer.cursor_byte = @min(cursor_after_delete, self.editor.buffer.text().len);
-        if (self.vi_state == .command and self.editor.buffer.cursor_byte == self.editor.buffer.text().len) self.editor.buffer.moveLeft();
+        if (self.vi_state == .command and self.editor.buffer.cursor_byte == self.editor.buffer.text().len) {
+            self.editor.buffer.moveLeft();
+        }
         self.completion_menu.clear(self.allocator);
         return true;
     }
@@ -1295,7 +1411,10 @@ pub const LineSession = struct {
             const cursor = self.editor.buffer.cursor_byte;
             const byte = self.editor.buffer.text()[cursor];
             if (std.ascii.isAlphabetic(byte)) {
-                self.editor.buffer.bytes.items[cursor] = if (std.ascii.isLower(byte)) std.ascii.toUpper(byte) else std.ascii.toLower(byte);
+                self.editor.buffer.bytes.items[cursor] = if (std.ascii.isLower(byte))
+                    std.ascii.toUpper(byte)
+                else
+                    std.ascii.toLower(byte);
             }
             if (self.editor.buffer.cursor_byte == self.editor.buffer.text().len - 1) break;
             self.editor.buffer.moveRight();
@@ -1324,6 +1443,7 @@ pub const LineSession = struct {
             }
         }
         self.editor.buffer.moveHome();
+        // ziglint-ignore: Z026 best-effort undo snapshot for history navigation
         self.captureViLineUndo() catch {};
         self.completion_menu.clear(self.allocator);
     }
@@ -1354,6 +1474,7 @@ pub const LineSession = struct {
             }
         }
         self.editor.buffer.moveHome();
+        // ziglint-ignore: Z026 best-effort undo snapshot for history navigation
         self.captureViLineUndo() catch {};
         self.completion_menu.clear(self.allocator);
     }
@@ -1369,6 +1490,7 @@ pub const LineSession = struct {
         self.history_index = @intCast(index);
         try self.editor.buffer.replace(self.history.entries[index]);
         self.editor.buffer.moveHome();
+        // ziglint-ignore: Z026 best-effort undo snapshot for history navigation
         self.captureViLineUndo() catch {};
         self.completion_menu.clear(self.allocator);
     }
@@ -1410,7 +1532,10 @@ pub const LineSession = struct {
             },
             .backspace => {
                 if (self.vi_history_search_query.items.len != 0) {
-                    const start = previousCodepointStart(self.vi_history_search_query.items, self.vi_history_search_query.items.len);
+                    const start = previousCodepointStart(
+                        self.vi_history_search_query.items,
+                        self.vi_history_search_query.items.len,
+                    );
                     self.vi_history_search_query.items.len = start;
                 }
             },
@@ -1431,10 +1556,19 @@ pub const LineSession = struct {
             return;
         }
         const direction = if (reverse) reverseViHistoryDirection(last_direction) else last_direction;
-        try self.applyViHistoryPatternSearch(direction, self.vi_last_history_search_pattern.items, self.takeViCountOrDefault(1));
+        try self.applyViHistoryPatternSearch(
+            direction,
+            self.vi_last_history_search_pattern.items,
+            self.takeViCountOrDefault(1),
+        );
     }
 
-    fn applyViHistoryPatternSearch(self: *LineSession, direction: ViHistoryDirection, pattern: []const u8, count: usize) !void {
+    fn applyViHistoryPatternSearch(
+        self: *LineSession,
+        direction: ViHistoryDirection,
+        pattern: []const u8,
+        count: usize,
+    ) !void {
         if (pattern.len == 0) return;
         if (self.history_index == null) {
             self.saved_edit.clearRetainingCapacity();
@@ -1455,21 +1589,34 @@ pub const LineSession = struct {
         self.history_index = entry.id;
         try self.editor.buffer.replace(entry.text);
         self.editor.buffer.moveHome();
+        // ziglint-ignore: Z026 best-effort undo snapshot for history search
         self.captureViLineUndo() catch {};
         self.completion_menu.clear(self.allocator);
     }
 
-    fn findViHistoryPatternMatch(self: *LineSession, direction: ViHistoryDirection, pattern: []const u8, cursor: ?i64) !?HistoryView.HistoryEntry {
+    fn findViHistoryPatternMatch(
+        self: *LineSession,
+        direction: ViHistoryDirection,
+        pattern: []const u8,
+        cursor: ?i64,
+    ) !?HistoryView.HistoryEntry {
         if (self.history.context != null) {
             switch (direction) {
-                .backward => if (self.history.previous != null) return self.queryViHistoryPatternMatch(direction, pattern, cursor),
-                .forward => if (self.history.next != null) return self.queryViHistoryPatternMatch(direction, pattern, cursor),
+                .backward => if (self.history.previous != null)
+                    return self.queryViHistoryPatternMatch(direction, pattern, cursor),
+                .forward => if (self.history.next != null)
+                    return self.queryViHistoryPatternMatch(direction, pattern, cursor),
             }
         }
         return self.findStaticViHistoryPatternMatch(direction, pattern, cursor);
     }
 
-    fn queryViHistoryPatternMatch(self: *LineSession, direction: ViHistoryDirection, pattern: []const u8, start_cursor: ?i64) !?HistoryView.HistoryEntry {
+    fn queryViHistoryPatternMatch(
+        self: *LineSession,
+        direction: ViHistoryDirection,
+        pattern: []const u8,
+        start_cursor: ?i64,
+    ) !?HistoryView.HistoryEntry {
         var cursor = start_cursor;
         while (true) {
             const entry = switch (direction) {
@@ -1482,10 +1629,21 @@ pub const LineSession = struct {
         }
     }
 
-    fn findStaticViHistoryPatternMatch(self: LineSession, direction: ViHistoryDirection, pattern: []const u8, cursor: ?i64) !?HistoryView.HistoryEntry {
+    fn findStaticViHistoryPatternMatch(
+        self: LineSession,
+        direction: ViHistoryDirection,
+        pattern: []const u8,
+        cursor: ?i64,
+    ) !?HistoryView.HistoryEntry {
         const index = switch (direction) {
-            .backward => self.findPreviousHistoryPatternMatch(staticHistoryStart(self.history.entries.len, cursor), pattern),
-            .forward => if (cursor) |after| self.findNextHistoryPatternMatch(@as(usize, @intCast(after)) + 1, pattern) else null,
+            .backward => self.findPreviousHistoryPatternMatch(
+                staticHistoryStart(self.history.entries.len, cursor),
+                pattern,
+            ),
+            .forward => if (cursor) |after|
+                self.findNextHistoryPatternMatch(@as(usize, @intCast(after)) + 1, pattern)
+            else
+                null,
         } orelse return null;
         return .{ .id = @intCast(index), .text = try self.allocator.dupe(u8, self.history.entries[index]) };
     }
@@ -1534,8 +1692,13 @@ pub const LineSession = struct {
     }
 
     fn previousViHistoryEntry(self: *LineSession) !?HistoryView.HistoryEntry {
-        if (self.history.context != null and self.history.previous != null) return self.queryPreviousHistoryBefore("", self.history_index);
-        const index = self.findPreviousHistoryMatch(staticHistoryStart(self.history.entries.len, self.history_index), "") orelse return null;
+        if (self.history.context != null and self.history.previous != null) {
+            return self.queryPreviousHistoryBefore("", self.history_index);
+        }
+        const index = self.findPreviousHistoryMatch(
+            staticHistoryStart(self.history.entries.len, self.history_index),
+            "",
+        ) orelse return null;
         return .{ .id = @intCast(index), .text = try self.allocator.dupe(u8, self.history.entries[index]) };
     }
 
@@ -1557,7 +1720,10 @@ pub const LineSession = struct {
     }
 
     fn snapshotBuffer(self: LineSession) !BufferSnapshot {
-        return .{ .text = try self.allocator.dupe(u8, self.editor.buffer.text()), .cursor_byte = self.editor.buffer.cursor_byte };
+        return .{
+            .text = try self.allocator.dupe(u8, self.editor.buffer.text()),
+            .cursor_byte = self.editor.buffer.cursor_byte,
+        };
     }
 
     fn restoreViUndo(self: *LineSession) !void {
@@ -1642,7 +1808,10 @@ pub const LineSession = struct {
             },
             .none => {
                 self.completion_menu.clear(self.allocator);
-                self.completion_flash = completionFlashForCursor(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
+                self.completion_flash = completionFlashForCursor(
+                    self.editor.buffer.text(),
+                    self.editor.buffer.cursor_byte,
+                );
             },
         }
     }
@@ -1683,7 +1852,9 @@ pub const LineSession = struct {
         render_options.cursor_shape = self.cursorShape();
         render_options.completion_menu = self.completion_menu.candidates;
         render_options.completion_selection = self.completion_menu.selected;
-        render_options.completion_window_start = self.completion_menu.visibleWindowStart(render_options.menuCandidateRows());
+        render_options.completion_window_start = self.completion_menu.visibleWindowStart(
+            render_options.menuCandidateRows(),
+        );
         render_options.completion_flash = self.completion_flash;
         self.completion_flash = null;
         if (self.state == .history_search) {
@@ -1697,7 +1868,12 @@ pub const LineSession = struct {
             }
             if (self.history_search_matches.items.len != 0) {
                 for (self.history_search_matches.items) |entry| {
-                    const label = try styledHistorySearchLabel(allocator, entry.text, self.history_search_query.items, render_options.theme);
+                    const label = try styledHistorySearchLabel(
+                        allocator,
+                        entry.text,
+                        self.history_search_query.items,
+                        render_options.theme,
+                    );
                     try styled_labels.append(allocator, label);
                     history_label_width = @max(history_label_width, visibleWidth(label, render_options.width_method));
                     const description = try historySearchDescription(allocator, self.history.now, entry.when);
@@ -1732,7 +1908,10 @@ pub const LineSession = struct {
             render_options.completion_menu = history_candidates.items;
             render_options.completion_selection = self.history_search_selected;
             render_options.completion_window_start = 0;
-            render_options.completion_label_width = @min(history_label_width, @as(usize, @intCast(render_options.width)) -| 3);
+            render_options.completion_label_width = @min(
+                history_label_width,
+                @as(usize, @intCast(render_options.width)) -| 3,
+            );
             return frameFromLine(allocator, self.editor, render_options);
         } else if (self.state == .editing) {
             // Ghost suggestions are editing aids; an accepted line must show
@@ -1852,7 +2031,10 @@ pub const LineSession = struct {
                 if (self.selectedHistorySearchMatch()) |entry| try self.editor.buffer.replace(entry.text);
                 self.finishHistorySearch();
             },
-            .tab => if (event.modifiers.shift) self.selectPreviousHistorySearchMatch() else self.selectNextHistorySearchMatch(),
+            .tab => if (event.modifiers.shift)
+                self.selectPreviousHistorySearchMatch()
+            else
+                self.selectNextHistorySearchMatch(),
             .escape, .ctrl_c => {
                 try self.editor.buffer.replace(self.history_search_original.items);
                 self.finishHistorySearch();
@@ -1920,7 +2102,9 @@ pub const LineSession = struct {
                 try self.history_search_matches.append(self.allocator, entry);
             }
         }
-        if (self.history_search_matches.items.len != 0) self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
+        if (self.history_search_matches.items.len != 0) {
+            self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
+        }
     }
 
     fn refreshHistorySearchNext(self: *LineSession, after: ?i64) !void {
@@ -1931,41 +2115,62 @@ pub const LineSession = struct {
         const search_next = self.history.search_next orelse return try self.refreshHistorySearch(null);
         var cursor = after;
         while (self.history_search_matches.items.len < 20) {
-            const entry = try search_next(context, self.allocator, self.history_search_query.items, cursor) orelse break;
+            const entry = try search_next(
+                context,
+                self.allocator,
+                self.history_search_query.items,
+                cursor,
+            ) orelse break;
             cursor = entry.id;
             try self.history_search_matches.append(self.allocator, entry);
         }
         if (self.history_search_matches.items.len == 0 and after != null) {
             cursor = null;
             while (self.history_search_matches.items.len < 20) {
-                const entry = try search_next(context, self.allocator, self.history_search_query.items, cursor) orelse break;
+                const entry = try search_next(
+                    context,
+                    self.allocator,
+                    self.history_search_query.items,
+                    cursor,
+                ) orelse break;
                 cursor = entry.id;
                 try self.history_search_matches.append(self.allocator, entry);
             }
         }
-        if (self.history_search_matches.items.len != 0) self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
+        if (self.history_search_matches.items.len != 0) {
+            self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
+        }
     }
 
     fn selectedHistorySearchMatch(self: LineSession) ?HistoryView.HistoryEntry {
         if (self.history_search_matches.items.len == 0) return null;
-        return self.history_search_matches.items[@min(self.history_search_selected, self.history_search_matches.items.len - 1)];
+        return self.history_search_matches.items[
+            @min(self.history_search_selected, self.history_search_matches.items.len - 1)
+        ];
     }
 
     fn selectNextHistorySearchMatch(self: *LineSession) void {
         if (self.history_search_matches.items.len == 0) return;
-        self.history_search_selected = @min(self.history_search_selected + 1, self.history_search_matches.items.len - 1);
+        self.history_search_selected = @min(
+            self.history_search_selected + 1,
+            self.history_search_matches.items.len - 1,
+        );
+        // ziglint-ignore: Z026 best-effort interactive history-search update
         self.replaceHistorySearchMatchFromSelection() catch {};
     }
 
     fn selectPreviousHistorySearchMatch(self: *LineSession) void {
         if (self.history_search_matches.items.len == 0) return;
         self.history_search_selected = if (self.history_search_selected == 0) 0 else self.history_search_selected - 1;
+        // ziglint-ignore: Z026 best-effort interactive history-search update
         self.replaceHistorySearchMatchFromSelection() catch {};
     }
 
     fn replaceHistorySearchMatchFromSelection(self: *LineSession) !void {
         self.clearHistorySearchMatch();
-        if (self.selectedHistorySearchMatch()) |entry| self.history_search_match = try cloneHistoryEntry(self.allocator, entry);
+        if (self.selectedHistorySearchMatch()) |entry| {
+            self.history_search_match = try cloneHistoryEntry(self.allocator, entry);
+        }
     }
 
     fn clearHistorySearchMatches(self: *LineSession) void {
@@ -2094,7 +2299,10 @@ pub const LineSession = struct {
 
     fn consumePendingRemovableSuffix(self: *LineSession, event: KeyEvent) !bool {
         const pending = self.pending_removable_suffix orelse return false;
-        if (pending.end > self.editor.buffer.text().len or self.editor.buffer.cursor_byte != pending.end or !std.mem.eql(u8, self.editor.buffer.text()[pending.start..pending.end], pending.text)) {
+        if (pending.end > self.editor.buffer.text().len or
+            self.editor.buffer.cursor_byte != pending.end or
+            !std.mem.eql(u8, self.editor.buffer.text()[pending.start..pending.end], pending.text))
+        {
             self.clearPendingRemovableSuffix();
             return false;
         }
@@ -2218,8 +2426,14 @@ fn viHistoryPatternMatchesAt(pattern: []const u8, text: []const u8, pattern_inde
     switch (pattern[pattern_index]) {
         '\\' => {
             const literal_index = pattern_index + 1;
-            if (literal_index >= pattern.len) return text_index < text.len and text[text_index] == '\\' and viHistoryPatternMatchesAt(pattern, text, literal_index, text_index + 1);
-            return text_index < text.len and text[text_index] == pattern[literal_index] and viHistoryPatternMatchesAt(pattern, text, literal_index + 1, text_index + 1);
+            if (literal_index >= pattern.len) {
+                return text_index < text.len and
+                    text[text_index] == '\\' and
+                    viHistoryPatternMatchesAt(pattern, text, literal_index, text_index + 1);
+            }
+            return text_index < text.len and
+                text[text_index] == pattern[literal_index] and
+                viHistoryPatternMatchesAt(pattern, text, literal_index + 1, text_index + 1);
         },
         '*' => {
             var next_text = text_index;
@@ -2230,20 +2444,31 @@ fn viHistoryPatternMatchesAt(pattern: []const u8, text: []const u8, pattern_inde
             }
             return false;
         },
-        '?' => return text_index < text.len and viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, nextCodepointEnd(text, text_index)),
+        '?' => return text_index < text.len and
+            viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, nextCodepointEnd(text, text_index)),
         '[' => {
             if (matchViHistoryPatternBracket(pattern, pattern_index, text, text_index)) |matched| {
-                return matched.ok and viHistoryPatternMatchesAt(pattern, text, matched.next_pattern, nextCodepointEnd(text, text_index));
+                return matched.ok and
+                    viHistoryPatternMatchesAt(pattern, text, matched.next_pattern, nextCodepointEnd(text, text_index));
             }
-            return text_index < text.len and text[text_index] == '[' and viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, text_index + 1);
+            return text_index < text.len and
+                text[text_index] == '[' and
+                viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, text_index + 1);
         },
-        else => |byte| return text_index < text.len and text[text_index] == byte and viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, text_index + 1),
+        else => |byte| return text_index < text.len and
+            text[text_index] == byte and
+            viHistoryPatternMatchesAt(pattern, text, pattern_index + 1, text_index + 1),
     }
 }
 
 const ViHistoryPatternBracketMatch = struct { ok: bool, next_pattern: usize };
 
-fn matchViHistoryPatternBracket(pattern: []const u8, pattern_index: usize, text: []const u8, text_index: usize) ?ViHistoryPatternBracketMatch {
+fn matchViHistoryPatternBracket(
+    pattern: []const u8,
+    pattern_index: usize,
+    text: []const u8,
+    text_index: usize,
+) ?ViHistoryPatternBracketMatch {
     if (text_index >= text.len) return .{ .ok = false, .next_pattern = pattern_index + 1 };
     var index = pattern_index + 1;
     if (index >= pattern.len) return null;
@@ -2283,7 +2508,11 @@ fn matchViHistoryPatternBracket(pattern: []const u8, pattern_index: usize, text:
 
 const ViHistoryPatternBracketClassMatch = struct { ok: bool, end_index: usize };
 
-fn matchViHistoryPatternBracketCharacterClass(pattern: []const u8, index: usize, text: u8) ?ViHistoryPatternBracketClassMatch {
+fn matchViHistoryPatternBracketCharacterClass(
+    pattern: []const u8,
+    index: usize,
+    text: u8,
+) ?ViHistoryPatternBracketClassMatch {
     if (index + 3 >= pattern.len or pattern[index] != '[' or pattern[index + 1] != ':') return null;
     const name_start = index + 2;
     var name_end = name_start;
@@ -2347,14 +2576,27 @@ pub fn relativeAge(buffer: *[16]u8, now: i64, when: i64) []const u8 {
         @divTrunc(elapsed, 60 * 60)
     else
         @divTrunc(elapsed, 24 * 60 * 60);
-    const suffix: u8 = if (elapsed < 60) 's' else if (elapsed < 60 * 60) 'm' else if (elapsed < 24 * 60 * 60) 'h' else 'd';
+    const suffix: u8 = if (elapsed < 60)
+        's'
+    else if (elapsed < 60 * 60)
+        'm'
+    else if (elapsed < 24 * 60 * 60)
+        'h'
+    else
+        'd';
     return std.fmt.bufPrint(buffer, "{d}{c}", .{ value, suffix }) catch unreachable;
 }
 
-fn styledHistorySearchLabel(allocator: std.mem.Allocator, text: []const u8, query: []const u8, theme: UiTheme) ![]const u8 {
-    const positions = (try completion.fuzzyMatchPositions(allocator, text, query)) orelse return try allocator.dupe(u8, text);
+fn styledHistorySearchLabel(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    query: []const u8,
+    theme: UiTheme,
+) ![]const u8 {
+    const positions = (try completion.fuzzyMatchPositions(allocator, text, query)) orelse
+        return try allocator.dupe(u8, text);
     defer allocator.free(positions);
-    if (positions.len == 0) return try allocator.dupe(u8, text);
+    if (positions.len == 0) return allocator.dupe(u8, text);
 
     var label: std.ArrayList(u8) = .empty;
     errdefer label.deinit(allocator);
@@ -2406,25 +2648,49 @@ fn viMotion(bytes: []const u8, cursor_byte: usize, command: u21, count: usize) ?
 }
 
 fn viMotionRange(bytes: []const u8, cursor_byte: usize, motion: ViMotionResult) ViMotionRange {
-    if (motion.cursor < cursor_byte) return .{ .start = motion.cursor, .end = cursor_byte, .cursor_after_delete = motion.cursor };
+    if (motion.cursor < cursor_byte) return .{
+        .start = motion.cursor,
+        .end = cursor_byte,
+        .cursor_after_delete = motion.cursor,
+    };
     const end = if (motion.inclusive) nextGraphemeEnd(bytes, motion.cursor) else motion.cursor;
     return .{ .start = cursor_byte, .end = end, .cursor_after_delete = cursor_byte };
 }
 
-fn viOperatorMotionRange(bytes: []const u8, cursor_byte: usize, operator: ViOperator, motion_command: u21, count: usize, motion: ViMotionResult) ViMotionRange {
+fn viOperatorMotionRange(
+    bytes: []const u8,
+    cursor_byte: usize,
+    operator: ViOperator,
+    motion_command: u21,
+    count: usize,
+    motion: ViMotionResult,
+) ViMotionRange {
     if (operator == .change and (motion_command == 'w' or motion_command == 'W')) {
         return viChangeWordMotionRange(bytes, cursor_byte, motion_command, count, motion);
     }
-    if ((motion_command == 'w' or motion_command == 'W') and motion.cursor == lastGraphemeStart(bytes) and motion.cursor >= cursor_byte) {
+    if ((motion_command == 'w' or motion_command == 'W') and
+        motion.cursor == lastGraphemeStart(bytes) and
+        motion.cursor >= cursor_byte)
+    {
         return .{ .start = cursor_byte, .end = bytes.len, .cursor_after_delete = cursor_byte };
     }
     return viMotionRange(bytes, cursor_byte, motion);
 }
 
-fn viChangeWordMotionRange(bytes: []const u8, cursor_byte: usize, motion_command: u21, count: usize, motion: ViMotionResult) ViMotionRange {
+fn viChangeWordMotionRange(
+    bytes: []const u8,
+    cursor_byte: usize,
+    motion_command: u21,
+    count: usize,
+    motion: ViMotionResult,
+) ViMotionRange {
     if (bytes.len == 0 or motion.cursor <= cursor_byte) return viMotionRange(bytes, cursor_byte, motion);
     if (count == 1 and cursor_byte < bytes.len and isAsciiWhitespace(bytes[cursor_byte])) {
-        return .{ .start = cursor_byte, .end = nextCodepointEnd(bytes, cursor_byte), .cursor_after_delete = cursor_byte };
+        return .{
+            .start = cursor_byte,
+            .end = nextCodepointEnd(bytes, cursor_byte),
+            .cursor_after_delete = cursor_byte,
+        };
     }
     if (motion.cursor == lastGraphemeStart(bytes)) {
         return .{ .start = cursor_byte, .end = bytes.len, .cursor_after_delete = cursor_byte };
@@ -2455,14 +2721,18 @@ fn previousViCharacter(bytes: []const u8, cursor_byte: usize, count: usize) usiz
 fn nextViCharacter(bytes: []const u8, cursor_byte: usize, count: usize) usize {
     var cursor = cursor_byte;
     var remaining = count;
-    while (remaining != 0 and cursor < lastGraphemeStart(bytes)) : (remaining -= 1) cursor = nextGraphemeEnd(bytes, cursor);
+    while (remaining != 0 and cursor < lastGraphemeStart(bytes)) : (remaining -= 1) {
+        cursor = nextGraphemeEnd(bytes, cursor);
+    }
     return @min(cursor, lastGraphemeStart(bytes));
 }
 
 fn nthViCharacter(bytes: []const u8, count: usize) usize {
     var cursor: usize = 0;
     var remaining = count - 1;
-    while (remaining != 0 and cursor < lastGraphemeStart(bytes)) : (remaining -= 1) cursor = nextGraphemeEnd(bytes, cursor);
+    while (remaining != 0 and cursor < lastGraphemeStart(bytes)) : (remaining -= 1) {
+        cursor = nextGraphemeEnd(bytes, cursor);
+    }
     return cursor;
 }
 
@@ -2492,7 +2762,10 @@ fn nextViWordStart(bytes: []const u8, cursor_byte: usize, kind: ViWordKind) usiz
         while (cursor < bytes.len and !isAsciiWhitespace(bytes[cursor])) cursor = nextCodepointEnd(bytes, cursor);
     } else if (cursor_byte < bytes.len and !isAsciiWhitespace(bytes[cursor_byte])) {
         const class = viWordClass(bytes[cursor_byte]);
-        while (cursor < bytes.len and !isAsciiWhitespace(bytes[cursor]) and viWordClass(bytes[cursor]) == class) cursor = nextCodepointEnd(bytes, cursor);
+        while (cursor < bytes.len and
+            !isAsciiWhitespace(bytes[cursor]) and
+            viWordClass(bytes[cursor]) == class) : (cursor = nextCodepointEnd(bytes, cursor))
+        {}
     }
     while (cursor < bytes.len and isAsciiWhitespace(bytes[cursor])) cursor = nextCodepointEnd(bytes, cursor);
     return if (cursor >= bytes.len) lastGraphemeStart(bytes) else cursor;
@@ -2515,10 +2788,19 @@ fn nextViWordEnd(bytes: []const u8, cursor_byte: usize, kind: ViWordKind) usize 
     }
     if (cursor >= bytes.len) return lastGraphemeStart(bytes);
     if (kind == .bigword) {
-        while (nextCodepointEnd(bytes, cursor) < bytes.len and !isAsciiWhitespace(bytes[nextCodepointEnd(bytes, cursor)])) cursor = nextCodepointEnd(bytes, cursor);
+        while (nextCodepointEnd(bytes, cursor) < bytes.len and
+            !isAsciiWhitespace(bytes[nextCodepointEnd(bytes, cursor)]))
+        {
+            cursor = nextCodepointEnd(bytes, cursor);
+        }
     } else {
         const class = viWordClass(bytes[cursor]);
-        while (nextCodepointEnd(bytes, cursor) < bytes.len and !isAsciiWhitespace(bytes[nextCodepointEnd(bytes, cursor)]) and viWordClass(bytes[nextCodepointEnd(bytes, cursor)]) == class) cursor = nextCodepointEnd(bytes, cursor);
+        while (nextCodepointEnd(bytes, cursor) < bytes.len and
+            !isAsciiWhitespace(bytes[nextCodepointEnd(bytes, cursor)]) and
+            viWordClass(bytes[nextCodepointEnd(bytes, cursor)]) == class)
+        {
+            cursor = nextCodepointEnd(bytes, cursor);
+        }
     }
     return cursor;
 }
@@ -2768,8 +3050,21 @@ test "line session renders ambiguous completion menu" {
     defer session.deinit();
     try session.editor.buffer.replace("git che");
     var candidates = [_]completion.Candidate{
-        .{ .value = "checkout", .description = "switch branches", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
-        .{ .value = "cherry-pick", .display = "cherry", .description = "apply commits", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+        .{
+            .value = "checkout",
+            .description = "switch branches",
+            .kind = .subcommand,
+            .replace_start = 4,
+            .replace_end = 7,
+        },
+        .{
+            .value = "cherry-pick",
+            .display = "cherry",
+            .description = "apply commits",
+            .kind = .subcommand,
+            .replace_start = 4,
+            .replace_end = 7,
+        },
     };
     try session.applyCompletion(.{ .ambiguous = &candidates });
 
@@ -2792,7 +3087,13 @@ test "completion menu styles candidates by kind" {
     var candidates = [_]completion.Candidate{
         .{ .value = "--help", .description = "show help", .kind = .option, .replace_start = 0, .replace_end = 0 },
         .{ .value = "$HOME", .description = "home directory", .kind = .variable, .replace_start = 0, .replace_end = 0 },
-        .{ .value = "src/", .description = "source directory", .kind = .directory, .replace_start = 0, .replace_end = 0 },
+        .{
+            .value = "src/",
+            .description = "source directory",
+            .kind = .directory,
+            .replace_start = 0,
+            .replace_end = 0,
+        },
     };
     try session.applyCompletion(.{ .ambiguous = &candidates });
 
@@ -2804,10 +3105,13 @@ test "completion menu styles candidates by kind" {
 }
 
 test "ui style parser supports colors and attributes" {
-    const style = parseUiStyle("fg=bright-blue,bg=#112233,ul=dashed,ul_color=red,bold,dim,italic,reverse,strike") orelse return error.MissingStyle;
+    const spec = "fg=bright-blue,bg=#112233,ul=dashed,ul_color=red,bold,dim,italic,reverse,strike";
+    const style = parseUiStyle(spec) orelse return error.MissingStyle;
+    // ziglint-ignore: Z010 expectEqual cannot infer the anonymous struct type from peer resolution
     try std.testing.expectEqual(vaxis.Color{ .index = 12 }, style.fg.?);
     try std.testing.expectEqual(vaxis.Color.rgbFromUint(0x112233), style.bg.?);
     try std.testing.expectEqual(UnderlineStyle.dashed, style.ul);
+    // ziglint-ignore: Z010 expectEqual cannot infer the anonymous struct type from peer resolution
     try std.testing.expectEqual(vaxis.Color{ .index = 1 }, style.ul_color.?);
     try std.testing.expect(style.bold);
     try std.testing.expect(style.dim);
@@ -2878,8 +3182,22 @@ test "completion menu acceptance uses insertion text while rendering display tex
     defer session.deinit();
     try session.editor.buffer.replace("cat two\\ w");
     var candidates = [_]completion.Candidate{
-        .{ .value = "two words", .display = "two words", .insert = "two\\ words", .kind = .file, .replace_start = 4, .replace_end = "cat two\\ w".len },
-        .{ .value = "two ways", .display = "two ways", .insert = "two\\ ways", .kind = .file, .replace_start = 4, .replace_end = "cat two\\ w".len },
+        .{
+            .value = "two words",
+            .display = "two words",
+            .insert = "two\\ words",
+            .kind = .file,
+            .replace_start = 4,
+            .replace_end = "cat two\\ w".len,
+        },
+        .{
+            .value = "two ways",
+            .display = "two ways",
+            .insert = "two\\ ways",
+            .kind = .file,
+            .replace_start = 4,
+            .replace_end = "cat two\\ w".len,
+        },
     };
     try session.applyCompletion(.{ .ambiguous = &candidates });
 
@@ -3038,11 +3356,18 @@ test "completion edit clears rendered menu" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
     try session.editor.buffer.replace("git st");
-    var candidates = [_]completion.Candidate{.{ .value = "status", .kind = .subcommand, .replace_start = 4, .replace_end = 6 }};
+    var candidates = [_]completion.Candidate{
+        .{ .value = "status", .kind = .subcommand, .replace_start = 4, .replace_end = 6 },
+    };
     try session.applyCompletion(.{ .ambiguous = &candidates });
     try std.testing.expectEqual(@as(usize, 1), session.completion_menu.candidates.len);
 
-    try session.applyCompletion(.{ .edit = .{ .replace_start = 4, .replace_end = 6, .replacement = "status", .append_space = true } });
+    try session.applyCompletion(.{ .edit = .{
+        .replace_start = 4,
+        .replace_end = 6,
+        .replacement = "status",
+        .append_space = true,
+    } });
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
     try std.testing.expectEqualStrings("git status ", session.editor.buffer.text());
 }
@@ -3051,7 +3376,13 @@ test "removable completion suffix keeps remove and types through" {
     var keep = try LineSession.init(std.testing.allocator, "$ ");
     defer keep.deinit();
     try keep.editor.buffer.replace("tool bl");
-    try keep.applyCompletion(.{ .edit = .{ .replace_start = "tool ".len, .replace_end = "tool bl".len, .replacement = "blue,", .suffix = ",", .removable_suffix = true } });
+    try keep.applyCompletion(.{ .edit = .{
+        .replace_start = "tool ".len,
+        .replace_end = "tool bl".len,
+        .replacement = "blue,",
+        .suffix = ",",
+        .removable_suffix = true,
+    } });
     try std.testing.expectEqualStrings("tool blue,", keep.editor.buffer.text());
     try keep.handleKey(.{ .key = .text, .text = "," });
     try std.testing.expectEqualStrings("tool blue,", keep.editor.buffer.text());
@@ -3059,21 +3390,39 @@ test "removable completion suffix keeps remove and types through" {
     var remove = try LineSession.init(std.testing.allocator, "$ ");
     defer remove.deinit();
     try remove.editor.buffer.replace("tool bl");
-    try remove.applyCompletion(.{ .edit = .{ .replace_start = "tool ".len, .replace_end = "tool bl".len, .replacement = "blue,", .suffix = ",", .removable_suffix = true } });
+    try remove.applyCompletion(.{ .edit = .{
+        .replace_start = "tool ".len,
+        .replace_end = "tool bl".len,
+        .replacement = "blue,",
+        .suffix = ",",
+        .removable_suffix = true,
+    } });
     try remove.handleKey(.{ .key = .text, .text = " " });
     try std.testing.expectEqualStrings("tool blue ", remove.editor.buffer.text());
 
     var accept = try LineSession.init(std.testing.allocator, "$ ");
     defer accept.deinit();
     try accept.editor.buffer.replace("tool bl");
-    try accept.applyCompletion(.{ .edit = .{ .replace_start = "tool ".len, .replace_end = "tool bl".len, .replacement = "blue,", .suffix = ",", .removable_suffix = true } });
+    try accept.applyCompletion(.{ .edit = .{
+        .replace_start = "tool ".len,
+        .replace_end = "tool bl".len,
+        .replacement = "blue,",
+        .suffix = ",",
+        .removable_suffix = true,
+    } });
     try accept.handleKey(.{ .key = .enter });
     try std.testing.expectEqualStrings("tool blue", accept.submitted_line.?);
 
     var typed = try LineSession.init(std.testing.allocator, "$ ");
     defer typed.deinit();
     try typed.editor.buffer.replace("tool bl");
-    try typed.applyCompletion(.{ .edit = .{ .replace_start = "tool ".len, .replace_end = "tool bl".len, .replacement = "blue,", .suffix = ",", .removable_suffix = true } });
+    try typed.applyCompletion(.{ .edit = .{
+        .replace_start = "tool ".len,
+        .replace_end = "tool bl".len,
+        .replacement = "blue,",
+        .suffix = ",",
+        .removable_suffix = true,
+    } });
     try typed.handleKey(.{ .key = .text, .text = "x" });
     try std.testing.expectEqualStrings("tool blue,x", typed.editor.buffer.text());
 }
@@ -3498,7 +3847,12 @@ test "vi line session leaves out-of-range operator motions unchanged" {
 
 test "vi line session inserts previous history bigwords with underscore" {
     const entries = [_][]const u8{ "echo first", "git commit --amend" };
-    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    var session = try LineSession.initWithEditingMode(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        .{ .entries = &entries },
+        .vi,
+    );
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "run" });
@@ -3516,7 +3870,12 @@ test "vi line session inserts previous history bigwords with underscore" {
 
 test "vi line session searches history with POSIX patterns and n N" {
     const entries = [_][]const u8{ "echo one", "git status", "echo two", "git commit --amend" };
-    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    var session = try LineSession.initWithEditingMode(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        .{ .entries = &entries },
+        .vi,
+    );
     defer session.deinit();
 
     try session.handleKey(.{ .key = .escape });
@@ -3540,7 +3899,12 @@ test "vi line session searches history with POSIX patterns and n N" {
 
 test "vi line session question mark searches history forward" {
     const entries = [_][]const u8{ "echo one", "git status", "echo two", "git commit --amend" };
-    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    var session = try LineSession.initWithEditingMode(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        .{ .entries = &entries },
+        .vi,
+    );
     defer session.deinit();
 
     try session.handleKey(.{ .key = .escape });
@@ -3565,6 +3929,7 @@ const TestViAliasSet = struct {
     };
 };
 
+// ziglint-ignore: Z023 parameter order is fixed by the ViAliasView.lookup callback signature
 fn testLookupViAlias(context: *anyopaque, allocator: std.mem.Allocator, letter: u21) !?[]const u8 {
     const aliases: *const TestViAliasSet = @ptrCast(@alignCast(context));
     for (aliases.entries) |entry| {
@@ -3615,7 +3980,12 @@ test "vi line session ignores disabled command aliases" {
 
 test "vi line session requests external editor for current and numbered history commands" {
     const entries = [_][]const u8{ "echo one", "echo two" };
-    var current = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    var current = try LineSession.initWithEditingMode(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        .{ .entries = &entries },
+        .vi,
+    );
     defer current.deinit();
     try current.handleKey(.{ .key = .text, .text = "echo draft" });
     try current.handleKey(.{ .key = .escape });
@@ -3626,7 +3996,12 @@ test "vi line session requests external editor for current and numbered history 
     try std.testing.expectEqualStrings("echo draft", current_request.text);
     current.resumeEditingAfterExternalEditor();
 
-    var numbered = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{ .entries = &entries }, .vi);
+    var numbered = try LineSession.initWithEditingMode(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        .{ .entries = &entries },
+        .vi,
+    );
     defer numbered.deinit();
     try numbered.handleKey(.{ .key = .escape });
     try numbered.handleKey(.{ .key = .text, .text = "2" });
@@ -3781,7 +4156,9 @@ test "vi pathname star expands all matches and listing formats matches" {
     }, .{ .items = &.{ "rush-vi-a", "rush-vi-b/", "rush-vi-c" } }));
     try std.testing.expectEqualStrings("printf rush-vi-a rush-vi-b/ rush-vi-c ", session.editor.buffer.text());
 
-    const output = try pathExpansionListOutput(std.testing.allocator, .{ .items = &.{ "rush-vi-a", "rush-vi-b/", "rush-vi-c" } });
+    const output = try pathExpansionListOutput(std.testing.allocator, .{
+        .items = &.{ "rush-vi-a", "rush-vi-b/", "rush-vi-c" },
+    });
     defer std.testing.allocator.free(output);
     try std.testing.expectEqualStrings("rush-vi-a rush-vi-b/ rush-vi-c\n", output);
 }
@@ -3901,7 +4278,13 @@ const TestHistorySearch = struct {
     }
 };
 
-fn testSearchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, before: ?i64) !?HistoryView.HistoryEntry {
+fn testSearchHistoryEntry(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 parameter order is fixed by the HistoryView.search callback signature
+    allocator: std.mem.Allocator,
+    query: []const u8,
+    before: ?i64,
+) !?HistoryView.HistoryEntry {
     const history: *TestHistorySearch = @ptrCast(@alignCast(context));
     var index = if (before) |id| @as(usize, @intCast(id)) else history.entries.len;
     while (index > 0) {
@@ -3914,7 +4297,13 @@ fn testSearchHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, que
     return null;
 }
 
-fn testSearchNextHistoryEntry(context: *anyopaque, allocator: std.mem.Allocator, query: []const u8, after: ?i64) !?HistoryView.HistoryEntry {
+fn testSearchNextHistoryEntry(
+    context: *anyopaque,
+    // ziglint-ignore: Z023 parameter order is fixed by the HistoryView.search_next callback signature
+    allocator: std.mem.Allocator,
+    query: []const u8,
+    after: ?i64,
+) !?HistoryView.HistoryEntry {
     const history: *TestHistorySearch = @ptrCast(@alignCast(context));
     var index = if (after) |id| @as(usize, @intCast(id)) + 1 else 0;
     while (index < history.entries.len) : (index += 1) {
@@ -3930,7 +4319,11 @@ test "history search seeds query from current buffer and renders menu-style matc
     const entries = [_][]const u8{ "echo one", "git status", "git diff" };
     const whens = [_]i64{ 10, 60, 90 };
     var history: TestHistorySearch = .{ .entries = &entries, .whens = &whens };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .now = 120, .context = &history, .search = testSearchHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .now = 120,
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git" });
@@ -3954,7 +4347,10 @@ test "history search seeds query from current buffer and renders menu-style matc
 test "history search renders clean no-match menu state" {
     const entries = [_][]const u8{ "echo one", "git status" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "missing" });
@@ -3975,7 +4371,10 @@ test "history search cancel restores original and enter accepts match" {
     const entries = [_][]const u8{ "echo one", "git status", "git diff" };
     var history: TestHistorySearch = .{ .entries = &entries };
 
-    var cancel = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    var cancel = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
     defer cancel.deinit();
     try cancel.handleKey(.{ .key = .text, .text = "git" });
     try cancel.handleKey(.{ .key = .ctrl_r });
@@ -3983,7 +4382,10 @@ test "history search cancel restores original and enter accepts match" {
     try std.testing.expectEqual(LineSession.State.editing, cancel.state);
     try std.testing.expectEqualStrings("git", cancel.editor.buffer.text());
 
-    var accept = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    var accept = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
     defer accept.deinit();
     try accept.handleKey(.{ .key = .text, .text = "git" });
     try accept.handleKey(.{ .key = .ctrl_r });
@@ -3995,7 +4397,10 @@ test "history search cancel restores original and enter accepts match" {
 test "history search edits query while staying open" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git" });
@@ -4017,7 +4422,10 @@ test "history search edits query while staying open" {
 test "history search deletion edits query while staying open" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git st" });
@@ -4039,7 +4447,10 @@ test "history search deletion edits query while staying open" {
 test "history search transitions from no match to match as query changes" {
     const entries = [_][]const u8{ "git status", "git diff" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "missing" });
@@ -4058,7 +4469,11 @@ test "history search transitions from no match to match as query changes" {
 test "history search uses fuzzy query matching" {
     const entries = [_][]const u8{ "git status", "git checkout", "git diff" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+        .search_next = testSearchNextHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "gco" });
@@ -4084,7 +4499,11 @@ test "history search uses fuzzy query matching" {
 test "history search first tab advances the already-open menu" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+        .search_next = testSearchNextHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git" });
@@ -4124,7 +4543,10 @@ test "history search menu caps visible candidates at sixteen rows" {
         "cmd12", "cmd13", "cmd14", "cmd15", "cmd16", "cmd17",
     };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .ctrl_r });
@@ -4140,7 +4562,11 @@ test "history search menu caps visible candidates at sixteen rows" {
 test "history search ignores modifier-only text events" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+        .search_next = testSearchNextHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git" });
@@ -4159,7 +4585,11 @@ test "history search ignores modifier-only text events" {
 test "history search refreshes only when query changes" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+        .search_next = testSearchNextHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git" });
@@ -4178,7 +4608,11 @@ test "history search refreshes only when query changes" {
 test "history search shift tab clamps at first match" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+        .search_next = testSearchNextHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git" });
@@ -4199,7 +4633,11 @@ test "history search shift tab clamps at first match" {
 test "history search ctrl n and ctrl p clamp like completion" {
     const entries = [_][]const u8{ "git status", "git diff", "git show" };
     var history: TestHistorySearch = .{ .entries = &entries };
-    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{ .context = &history, .search = testSearchHistoryEntry, .search_next = testSearchNextHistoryEntry });
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+        .search_next = testSearchNextHistoryEntry,
+    });
     defer session.deinit();
 
     try session.handleKey(.{ .key = .text, .text = "git" });
@@ -4285,10 +4723,17 @@ test "prompt invalidation preserves edit state and redraws through session" {
     try std.testing.expectEqual(@as(usize, 4), session.editor.buffer.cursor_byte);
     try std.testing.expectEqual(@as(usize, 2), session.completion_menu.candidates.len);
 
-    const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false, .semantic_prompt_marks = true });
+    const rendered = try session.render(std.testing.allocator, .{
+        .synchronized_output = false,
+        .semantic_prompt_marks = true,
+    });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[34mrush> \x1b[0m" ++ semanticPromptEnd ++ "git status") != null);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        rendered,
+        "\x1b[34mrush> \x1b[0m" ++ semanticPromptEnd ++ "git status",
+    ) != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "stash") != null);
     try std.testing.expect(std.mem.endsWith(u8, rendered, "\r\x1b[10C"));
@@ -4311,7 +4756,10 @@ test "render line can omit synchronized output" {
     defer editor.deinit();
     try editor.handleKey(.{ .key = .text, .text = "界" });
 
-    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "> " }, .synchronized_output = false });
+    const rendered = try renderLine(std.testing.allocator, editor, .{
+        .prompt = .{ .bytes = "> " },
+        .synchronized_output = false,
+    });
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("\r\x1b[2K> 界\r\x1b[4C", rendered);
@@ -4322,7 +4770,10 @@ test "render line ignores ansi prompt bytes for cursor placement" {
     defer editor.deinit();
     try editor.handleKey(.{ .key = .text, .text = "x" });
 
-    const rendered = try renderLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "\x1b[34mrush> \x1b[0m" }, .synchronized_output = false });
+    const rendered = try renderLine(std.testing.allocator, editor, .{
+        .prompt = .{ .bytes = "\x1b[34mrush> \x1b[0m" },
+        .synchronized_output = false,
+    });
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("\r\x1b[2K\x1b[34mrush> \x1b[0mx\r\x1b[7C", rendered);
@@ -4363,7 +4814,10 @@ test "frame wrapping preserves prompt escape sequences" {
     defer editor.deinit();
     try editor.handleKey(.{ .key = .text, .text = "abcd" });
 
-    var frame = try frameFromLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "\x1b[34m$ \x1b[0m", .visible_width = 2 }, .width = 4 });
+    var frame = try frameFromLine(std.testing.allocator, editor, .{
+        .prompt = .{ .bytes = "\x1b[34m$ \x1b[0m", .visible_width = 2 },
+        .width = 4,
+    });
     defer frame.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 2), frame.lines.len);
@@ -4395,7 +4849,10 @@ test "frame renderer diffs changed input line" {
     var first_editor = Editor.init(std.testing.allocator);
     defer first_editor.deinit();
     try first_editor.handleKey(.{ .key = .text, .text = "a" });
-    var first = try frameFromLine(std.testing.allocator, first_editor, .{ .prompt = .{ .bytes = "$ " }, .synchronized_output = false });
+    var first = try frameFromLine(std.testing.allocator, first_editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .synchronized_output = false,
+    });
     defer first.deinit(std.testing.allocator);
     const first_output = try renderer.render(std.testing.allocator, first, .{ .synchronized_output = false });
     defer std.testing.allocator.free(first_output);
@@ -4404,7 +4861,10 @@ test "frame renderer diffs changed input line" {
     var second_editor = Editor.init(std.testing.allocator);
     defer second_editor.deinit();
     try second_editor.handleKey(.{ .key = .text, .text = "ab" });
-    var second = try frameFromLine(std.testing.allocator, second_editor, .{ .prompt = .{ .bytes = "$ " }, .synchronized_output = false });
+    var second = try frameFromLine(std.testing.allocator, second_editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .synchronized_output = false,
+    });
     defer second.deinit(std.testing.allocator);
     const second_output = try renderer.render(std.testing.allocator, second, .{ .synchronized_output = false });
     defer std.testing.allocator.free(second_output);
@@ -4483,7 +4943,9 @@ test "frame renderer diffs when frame removes lines" {
     try session.handleKey(.{ .key = .enter });
     var accepted_frame = try session.renderFrame(std.testing.allocator, .{ .synchronized_output = false });
     defer accepted_frame.deinit(std.testing.allocator);
-    const accepted_output = try renderer.render(std.testing.allocator, accepted_frame, .{ .synchronized_output = false });
+    const accepted_output = try renderer.render(std.testing.allocator, accepted_frame, .{
+        .synchronized_output = false,
+    });
     defer std.testing.allocator.free(accepted_output);
 
     try std.testing.expect(std.mem.indexOf(u8, accepted_output, "\x1b[J") == null);
@@ -4556,7 +5018,11 @@ test "submitted handoff moves to bottom of wrapped input without clearing it" {
     try editor.buffer.replace("abcdef");
     editor.buffer.moveHome();
 
-    var frame = try frameFromLine(std.testing.allocator, editor, .{ .prompt = .{ .bytes = "$ " }, .width = 5, .synchronized_output = false });
+    var frame = try frameFromLine(std.testing.allocator, editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .width = 5,
+        .synchronized_output = false,
+    });
     defer frame.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 2), frame.input_line_count);
     const rendered = try renderer.render(std.testing.allocator, frame, .{ .synchronized_output = false });

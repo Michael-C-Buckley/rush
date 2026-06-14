@@ -67,19 +67,43 @@ pub const Builtin = struct {
 
     pub fn validate(self: Builtin) void {
         std.debug.assert(self.name.len != 0);
-        switch (self.semantic_class) {
-            .unsupported => {},
-            .no_op => std.debug.assert(std.mem.eql(u8, self.name, ":")),
-            .status_constant => std.debug.assert(std.mem.eql(u8, self.name, "true") or std.mem.eql(u8, self.name, "false")),
-            .output => std.debug.assert(std.mem.eql(u8, self.name, "echo") or std.mem.eql(u8, self.name, "printf") or std.mem.eql(u8, self.name, "env") or std.mem.eql(u8, self.name, "pwd") or std.mem.eql(u8, self.name, "command")),
-            .predicate => std.debug.assert(std.mem.eql(u8, self.name, "test") or std.mem.eql(u8, self.name, "[")),
-            .declaration => std.debug.assert(std.mem.eql(u8, self.name, "export") or std.mem.eql(u8, self.name, "readonly") or std.mem.eql(u8, self.name, "unset")),
-            .shell_state => std.debug.assert(std.mem.eql(u8, self.name, ".") or std.mem.eql(u8, self.name, "eval") or std.mem.eql(u8, self.name, "set") or std.mem.eql(u8, self.name, "shift") or std.mem.eql(u8, self.name, "alias") or std.mem.eql(u8, self.name, "unalias") or std.mem.eql(u8, self.name, "trap") or std.mem.eql(u8, self.name, "local") or std.mem.eql(u8, self.name, "read") or std.mem.eql(u8, self.name, "cd") or std.mem.eql(u8, self.name, "abbr") or std.mem.eql(u8, self.name, "exec")),
-            .job_control => std.debug.assert(std.mem.eql(u8, self.name, "jobs") or std.mem.eql(u8, self.name, "fg") or std.mem.eql(u8, self.name, "bg")),
-            .control_flow => std.debug.assert(std.mem.eql(u8, self.name, "break") or std.mem.eql(u8, self.name, "continue") or std.mem.eql(u8, self.name, "exit") or std.mem.eql(u8, self.name, "return")),
-        }
+        std.debug.assert(semanticClassAcceptsName(self.semantic_class, self.name));
     }
 };
+
+fn semanticClassAcceptsName(semantic_class: BuiltinSemanticClass, name: []const u8) bool {
+    return switch (semantic_class) {
+        .unsupported => true,
+        .no_op => matchesName(name, &.{":"}),
+        .status_constant => matchesName(name, &.{ "true", "false" }),
+        .output => matchesName(name, &.{ "echo", "printf", "env", "pwd", "command" }),
+        .predicate => matchesName(name, &.{ "test", "[" }),
+        .declaration => matchesName(name, &.{ "export", "readonly", "unset" }),
+        .shell_state => matchesName(name, &.{
+            ".",
+            "eval",
+            "set",
+            "shift",
+            "alias",
+            "unalias",
+            "trap",
+            "local",
+            "read",
+            "cd",
+            "abbr",
+            "exec",
+        }),
+        .job_control => matchesName(name, &.{ "jobs", "fg", "bg" }),
+        .control_flow => matchesName(name, &.{ "break", "continue", "exit", "return" }),
+    };
+}
+
+fn matchesName(name: []const u8, candidates: []const []const u8) bool {
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, name, candidate)) return true;
+    }
+    return false;
+}
 
 pub const default_builtins = [_]Builtin{
     Builtin.initWithSemantics(":", .special, .no_op),
@@ -191,10 +215,25 @@ test "builtin registry classifies POSIX special builtins separately" {
     try std.testing.expect(regular.isSemanticallyNonMutating());
     try std.testing.expect(!regular.isSpecial());
     try std.testing.expect(!isSpecialBuiltin("echo"));
-    try std.testing.expectEqual(BuiltinSemanticClass.no_op, (lookup(":") orelse return error.TestExpectedEqual).semantic_class);
-    try std.testing.expectEqual(BuiltinSemanticClass.status_constant, (lookup("true") orelse return error.TestExpectedEqual).semantic_class);
-    try std.testing.expectEqual(BuiltinSemanticClass.status_constant, (lookup("false") orelse return error.TestExpectedEqual).semantic_class);
-    try std.testing.expectEqual(BuiltinSemanticClass.predicate, (lookup("test") orelse return error.TestExpectedEqual).semantic_class);
-    try std.testing.expectEqual(BuiltinSemanticClass.predicate, (lookup("[") orelse return error.TestExpectedEqual).semantic_class);
+    try std.testing.expectEqual(
+        BuiltinSemanticClass.no_op,
+        (lookup(":") orelse return error.TestExpectedEqual).semantic_class,
+    );
+    try std.testing.expectEqual(
+        BuiltinSemanticClass.status_constant,
+        (lookup("true") orelse return error.TestExpectedEqual).semantic_class,
+    );
+    try std.testing.expectEqual(
+        BuiltinSemanticClass.status_constant,
+        (lookup("false") orelse return error.TestExpectedEqual).semantic_class,
+    );
+    try std.testing.expectEqual(
+        BuiltinSemanticClass.predicate,
+        (lookup("test") orelse return error.TestExpectedEqual).semantic_class,
+    );
+    try std.testing.expectEqual(
+        BuiltinSemanticClass.predicate,
+        (lookup("[") orelse return error.TestExpectedEqual).semantic_class,
+    );
     try std.testing.expectEqual(@as(?Builtin, null), lookup("definitely-not-a-builtin"));
 }
