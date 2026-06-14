@@ -46,6 +46,29 @@
             .status = 7,
         },
         .{
+            .name = "assignment-only command expands assignments left-to-right",
+            .script =
+            \\unset a b
+            \\a=one b=$a
+            \\printf '%s:%s\n' "$a" "$b"
+            ,
+            .stdout =
+            \\one:one
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "assignment-only command uses last substitution status",
+            .script =
+            \\a=$(exit 3) b=$(exit 7)
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 7,
+        },
+        .{
             .name = "temporary assignment does not affect regular utility arguments or shell state",
             .script =
             \\x=outer
@@ -54,6 +77,21 @@
             ,
             .stdout =
             \\outer
+            \\outer
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "temporary assignment is exported to regular utility environment",
+            .script =
+            \\x=outer
+            \\x=inner sh -c 'printf "%s\n" "$x"'
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\inner
             \\outer
             \\
             ,
@@ -75,6 +113,45 @@
             .status = 0,
         },
         .{
+            .name = "temporary assignment is visible during function execution",
+            .script =
+            \\f() { printf '%s\n' "$x"; }
+            \\x=inner f
+            ,
+            .stdout =
+            \\inner
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "empty command-name expansion is skipped",
+            .script =
+            \\empty=
+            \\$empty printf '%s\n' ok
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "expanded command word can provide arguments",
+            .script =
+            \\cmd='printf %s\n'
+            \\$cmd ok
+            ,
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "redirection can precede command word",
             .script =
             \\>out printf '%s\n' hello
@@ -82,6 +159,23 @@
             ,
             .stdout =
             \\hello
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "regular utility redirection expands before assignment is applied",
+            .script =
+            \\x=old
+            \\x=new printf '%s\n' "$x" >"$x"
+            \\cat old
+            \\test ! -e new || printf 'new exists\n'
+            \\printf '%s\n' "$x"
+            ,
+            .stdout =
+            \\old
+            \\old
             \\
             ,
             .stderr = "",

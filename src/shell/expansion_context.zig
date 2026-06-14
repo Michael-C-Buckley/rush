@@ -64,6 +64,7 @@ pub const ShellExpansion = struct {
     parameter_error: expansion.ParameterError = .{},
     arithmetic_error: expansion.ArithmeticError = .{},
     diagnostics: std.ArrayList(outcome.Diagnostic) = .empty,
+    assignment_overrides: std.StringHashMapUnmanaged([]const u8) = .empty,
 
     last_status_text: [3]u8 = undefined,
     last_status_text_len: usize = 0,
@@ -117,6 +118,7 @@ pub const ShellExpansion = struct {
         self.arithmetic_error.clear(self.allocator);
         for (self.diagnostics.items) |diagnostic| self.allocator.free(diagnostic.message);
         self.diagnostics.deinit(self.allocator);
+        self.assignment_overrides.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -217,7 +219,22 @@ pub const ShellExpansion = struct {
             }
             assignments.deinit(self.allocator);
         }
-        for (assignment_words) |word| try assignments.append(self.allocator, try self.expandAssignmentWord(word));
+        errdefer self.assignment_overrides.clearRetainingCapacity();
+        for (assignment_words) |word| {
+            const assignment = try self.expandAssignmentWord(word);
+            self.assignment_overrides.put(self.allocator, assignment.name, assignment.value) catch |err| {
+                self.allocator.free(assignment.name);
+                self.allocator.free(assignment.value);
+                return err;
+            };
+            assignments.append(self.allocator, assignment) catch |err| {
+                _ = self.assignment_overrides.remove(assignment.name);
+                self.allocator.free(assignment.name);
+                self.allocator.free(assignment.value);
+                return err;
+            };
+        }
+        self.assignment_overrides.clearRetainingCapacity();
 
         const argv = try self.expandArgv(argv_words);
         errdefer freeFields(self.allocator, argv);
@@ -375,6 +392,7 @@ fn lookupEnv(opaque_context: ?*const anyopaque, name: []const u8) ?[]const u8 {
         return null;
     }
     if (!isValidVariableName(name)) return null;
+    if (self.assignment_overrides.get(name)) |value| return value;
     return if (self.shell_state.getVariable(name)) |variable| variable.value else null;
 }
 
@@ -632,4 +650,31 @@ test "ShellExpansion prevents invalid expanded simple command shapes" {
 
     const plan = command_plan.classifyExpandedSimpleCommand(.{ .command = command.command });
     plan.validate();
+}
+
+test "ShellExpansion expands assignment words left-to-right without changing argv expansion" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+    try shell_state.putVariable("A", "outer", .{});
+
+    var adapter = ShellExpansion.init(std.testing.allocator, .{
+        .shell_state = &shell_state,
+        .eval_context = context.EvalContext.forTarget(.current_shell),
+    });
+    defer adapter.deinit();
+
+    var command = try adapter.expandSimpleCommand(&.{ "A=one", "B=$A" }, &.{ "printf", "$A" });
+    defer command.deinit();
+    command.command.validate();
+
+    try std.testing.expectEqual(@as(usize, 2), command.command.assignments.len);
+    try std.testing.expectEqualStrings("A", command.command.assignments[0].name);
+    try std.testing.expectEqualStrings("one", command.command.assignments[0].value);
+    try std.testing.expectEqualStrings("B", command.command.assignments[1].name);
+    try std.testing.expectEqualStrings("one", command.command.assignments[1].value);
+    try std.testing.expectEqual(@as(usize, 2), command.command.argv.len);
+    try std.testing.expectEqualStrings("printf", command.command.argv[0]);
+    try std.testing.expectEqualStrings("outer", command.command.argv[1]);
+    try std.testing.expectEqualStrings("outer", shell_state.getVariable("A").?.value);
+    try std.testing.expectEqual(@as(?state.Variable, null), shell_state.getVariable("B"));
 }
