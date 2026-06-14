@@ -1,4 +1,0 @@
-printf 'a\nb\n' > in
-n=0
-while read line; do n=$((n + 1)); echo "$n:$line"; done < in
-echo done=$n

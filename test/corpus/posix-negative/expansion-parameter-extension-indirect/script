@@ -1,4 +1,0 @@
-target=value
-name=target
-echo ${!name}
-echo after

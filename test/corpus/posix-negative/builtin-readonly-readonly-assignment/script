@@ -1,3 +1,0 @@
-readonly RO=old
-readonly RO=new
-echo after

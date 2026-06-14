@@ -1,4 +1,0 @@
-: > rush-bracket-a.tmp
-: > rush-bracket-b.tmp
-: > rush-bracket-c.tmp
-echo rush-bracket-[a-b].tmp

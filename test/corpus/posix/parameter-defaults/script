@@ -1,1 +1,0 @@
-unset MISSING; EMPTY=; echo ${MISSING:-fallback}/${EMPTY-fallback}/${EMPTY:-fallback}

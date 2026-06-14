@@ -1,3 +1,0 @@
-printf '%q\n' value
-echo status:$?
-echo after

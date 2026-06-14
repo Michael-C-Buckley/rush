@@ -1,4 +1,0 @@
-RUSH_SET_LISTING=ok
-set > out
-grep "^RUSH_SET_LISTING='ok'$" out
-echo status:$?

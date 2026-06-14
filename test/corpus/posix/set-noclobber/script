@@ -1,6 +1,0 @@
-echo old > out
-set -C
-echo new > out
-echo status=$?
-echo forced >| out
-/bin/cat out

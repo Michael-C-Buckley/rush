@@ -1,9 +1,0 @@
-rm -rf t
-mkdir t
-cd t
-touch a
-set -fu
-echo *
-set +fu
-echo $RUSH_UNSET_FOR_TEST
-echo after

@@ -1,6 +1,0 @@
-alias 1='echo digit'
-alias bang!='echo bang'
-1
-bang!
-unalias 1 bang!
-echo done

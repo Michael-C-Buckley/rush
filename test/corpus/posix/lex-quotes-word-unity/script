@@ -1,5 +1,0 @@
-A='two words'
-empty=
-set -- pre"$A"post "x"' y'"z" a\ b '' "$empty"
-printf 'argc:%s\n' "$#"
-printf '<%s>\n' "$@"

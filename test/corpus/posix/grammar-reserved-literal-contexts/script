@@ -1,2 +1,0 @@
-for x in if then do done; do printf '<%s>\n' "$x"; done
-case x in x) printf 'case-body:%s\n' case esac in do done then fi ;; esac

@@ -1,5 +1,0 @@
-trap "" EXIT
-trap "" TERM
-trap
-/bin/kill -TERM $$
-echo after

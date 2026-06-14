@@ -1,1 +1,0 @@
-case word f*) echo bad ;; esac

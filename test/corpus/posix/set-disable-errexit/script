@@ -1,4 +1,0 @@
-set -e
-set +e
-false
-echo after

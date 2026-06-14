@@ -1,3 +1,0 @@
-printf 'before\n'
-x=for; $x i in 1; do echo $i; done
-printf 'after\n'

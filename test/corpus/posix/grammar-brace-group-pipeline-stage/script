@@ -1,2 +1,0 @@
-{ echo from-first; } | { read line; echo "brace:$line"; }
-echo simple | { read line; echo "last:$line"; }

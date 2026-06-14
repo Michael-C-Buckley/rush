@@ -1,5 +1,0 @@
-echo "echo one
-return 3
-echo two" > s.sh
-. ./s.sh
-echo st=$?

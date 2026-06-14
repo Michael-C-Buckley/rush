@@ -1,4 +1,0 @@
-f() { echo in:$A; A=changed; }
-A=outer
-A=tmp f
-echo out:$A

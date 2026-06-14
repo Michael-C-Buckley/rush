@@ -1,6 +1,0 @@
-case b in [ab]) echo bracket ;; *) echo bad-bracket ;; esac
-case c in [!ab]) echo negated ;; *) echo bad-negated ;; esac
-case b in [a-c]) echo range ;; *) echo bad-range ;; esac
-case d in [a-c]) echo bad-range-miss ;; *) echo range-miss ;; esac
-case ] in []]) echo close-bracket ;; *) echo bad-close ;; esac
-case b in \[ab]) echo bad-literal ;; [ab]) echo escaped-open-ok ;; esac

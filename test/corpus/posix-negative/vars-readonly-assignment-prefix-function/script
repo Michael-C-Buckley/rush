@@ -1,4 +1,0 @@
-readonly A=outer
-f(){ echo bad; }
-A=tmp f
-echo after

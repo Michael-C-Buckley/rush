@@ -1,1 +1,0 @@
-echo "$(f() { echo inner; }; f)"; if command -v f >/dev/null; then echo leak; else echo missing; fi

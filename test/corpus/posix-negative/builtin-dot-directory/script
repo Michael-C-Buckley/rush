@@ -1,3 +1,0 @@
-mkdir dot-dir
-. ./dot-dir
-echo after

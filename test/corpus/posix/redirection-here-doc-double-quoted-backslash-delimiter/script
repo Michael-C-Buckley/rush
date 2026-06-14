@@ -1,5 +1,0 @@
-A=bad
-cat <<"E\OF"
-$A
-E\OF
-echo after

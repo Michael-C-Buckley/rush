@@ -1,3 +1,0 @@
-rush: parse_error: missing in in case command
-  case word f*) echo bad ;; esac
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

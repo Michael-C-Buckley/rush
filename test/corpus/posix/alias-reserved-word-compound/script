@@ -1,9 +1,0 @@
-alias start='if'
-start true
-then echo alias-if-ok
-fi
-alias loop='while '
-count=0
-loop [ "$count" -lt 1 ]
-do echo alias-while-ok; count=$((count + 1))
-done

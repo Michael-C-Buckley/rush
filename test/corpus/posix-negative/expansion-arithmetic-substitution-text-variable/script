@@ -1,1 +1,0 @@
-x='${missing:-2} + 1'; echo before; echo $((x)); echo after

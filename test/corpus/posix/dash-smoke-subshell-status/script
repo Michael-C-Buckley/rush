@@ -1,3 +1,0 @@
-foo=outer
-( foo=inner; echo "$foo"; exit 3 )
-echo status=$?/foo=$foo

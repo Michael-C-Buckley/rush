@@ -1,6 +1,0 @@
-HOME=/tmp/rush-home
-unset A B
-command export A=~
-command command export B=~
-printf '%s\n' "$A" "$B"
-command echo C=~

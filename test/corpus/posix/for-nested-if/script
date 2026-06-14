@@ -1,1 +1,0 @@
-for x in a b; do if test "$x" = b; then echo hit; else echo miss; fi; done

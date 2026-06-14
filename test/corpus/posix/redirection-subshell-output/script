@@ -1,3 +1,0 @@
-( echo sub-one; echo sub-two ) > out
-echo after
-/bin/cat out

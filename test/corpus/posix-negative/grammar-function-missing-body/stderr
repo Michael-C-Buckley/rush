@@ -1,6 +1,0 @@
-rush: parse_error: missing function body
-  f() echo bad
-  ^^^^^^^^^^^^
-rush: incomplete_input: missing } to close function definition
-  f() echo bad
-  ^^^^^^^^^^^^

@@ -1,3 +1,0 @@
-set --
-for arg in $@; do echo bad; done
-echo done

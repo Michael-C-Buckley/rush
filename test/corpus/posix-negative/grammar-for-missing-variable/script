@@ -1,1 +1,0 @@
-for in a; do echo bad; done

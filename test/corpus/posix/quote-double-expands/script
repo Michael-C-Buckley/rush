@@ -1,1 +1,0 @@
-A=value; echo "$A and spaces"

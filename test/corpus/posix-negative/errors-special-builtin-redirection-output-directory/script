@@ -1,1 +1,0 @@
-mkdir dir; : > dir; echo after

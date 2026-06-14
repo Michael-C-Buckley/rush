@@ -1,4 +1,0 @@
-PATH=/nope
-command -p sh -c 'echo path-ok'
-printf '%s
-' "$PATH"

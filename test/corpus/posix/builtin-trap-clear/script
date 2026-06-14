@@ -1,4 +1,0 @@
-trap 'echo bye' EXIT
-trap - EXIT
-trap
-echo done

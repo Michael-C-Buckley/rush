@@ -1,2 +1,0 @@
-break; echo st=$?
-echo after

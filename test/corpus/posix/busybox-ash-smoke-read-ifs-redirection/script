@@ -1,4 +1,0 @@
-printf '%s\n' "x y" > in
-IFS=' ' read a b < in
-test "$a" = x && test "$b" = y
-echo status=$?

@@ -1,3 +1,0 @@
-rush: incomplete_input: missing done to close for command
-  for x in a; do echo $x
-  ^^^^^^^^^^^^^^^^^^^^^^

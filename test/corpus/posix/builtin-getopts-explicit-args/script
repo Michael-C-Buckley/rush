@@ -1,2 +1,0 @@
-while getopts ab: opt -a -b bee; do printf '%s/%s/%s\n' "$opt" "${OPTARG-}" "$OPTIND"; done
-echo done=$OPTIND

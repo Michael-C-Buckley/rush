@@ -1,3 +1,0 @@
-{ echo compound > out; } &
-wait $!
-cat < out

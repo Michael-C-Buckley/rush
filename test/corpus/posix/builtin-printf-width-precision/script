@@ -1,1 +1,0 @@
-printf '[%5s][%-5s][%.3s][%04d]' a b abcdef 7

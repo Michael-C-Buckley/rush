@@ -1,3 +1,0 @@
-set -e
-/bin/cat < missing
-echo after

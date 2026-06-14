@@ -1,3 +1,0 @@
-printf '%d\n' nope
-echo status:$?
-echo after

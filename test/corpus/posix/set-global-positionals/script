@@ -1,5 +1,0 @@
-set -- "a b" c ""
-echo "$1/$2/$#"
-for x in "$@"; do echo "<$x>"; done
-IFS=:; echo "<$*>"
-shift; echo "$1/$#"

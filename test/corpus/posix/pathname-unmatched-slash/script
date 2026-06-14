@@ -1,3 +1,0 @@
-mkdir rush-unmatched-dir
-: > rush-unmatched-dir/file.tmp
-echo rush-unmatched-dir/*.missing

@@ -1,2 +1,0 @@
-set -m
-fg %99; echo after

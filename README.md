@@ -2,13 +2,12 @@
 
 Rush is an experimental, POSIX-facing shell with Bash compatibility and
 interactive UX improvements under active development. It is early software: the
-implementation moves quickly, APIs may change, and the POSIX compliance numbers
-are planning evidence rather than certification.
+implementation moves quickly, APIs may change, and POSIX compatibility is a
+work in progress rather than a certification claim.
 
 ## Current focus
 
-- POSIX shell execution, expansion, redirection, job-control, and builtin
-  coverage tracked in [`test/compliance/posix-shell.tsv`](test/compliance/posix-shell.tsv).
+- POSIX shell execution, expansion, redirection, job-control, and builtins.
 - Incremental Bash-compatible features; Rush defaults to POSIX-facing behavior.
 - A terminal line editor with history search, emacs/vi editing modes, styled
   diagnostics, and a rebuilt interactive shell on top of `shell/` and
@@ -67,12 +66,8 @@ plumbing and tests.
 zig build test                         # unit tests
 zig build check                        # unit tests plus repo validation checks
 zig build fmt                          # Zig formatting check
-zig build compliance                   # POSIX compliance report and corpora
 zig build cross-check                  # native tests plus compile-only targets
 ```
-
-The POSIX differential corpus uses `dash` and/or `bash --posix` when they are
-available.
 
 ## Configuration
 

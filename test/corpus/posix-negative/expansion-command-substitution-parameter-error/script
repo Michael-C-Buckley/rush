@@ -1,5 +1,0 @@
-echo before
-echo $(echo ${RUSH_UNSET_FOR_TEST:?subst-bad}; echo inner-after)
-value=$(echo ${RUSH_UNSET_FOR_TEST:?assign-subst-bad}; echo inner-after)
-echo status=$?
-echo after

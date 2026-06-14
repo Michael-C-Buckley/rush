@@ -1,3 +1,0 @@
-rush: incomplete_input: missing done to close until command
-  until false; do echo bad
-  ^^^^^^^^^^^^^^^^^^^^^^^^

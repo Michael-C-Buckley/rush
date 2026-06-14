@@ -1,8 +1,0 @@
-/bin/sh -c 'printf "err-to-out\n" >&2' 2>&1
-/bin/sh -c 'printf "out-to-err\n"' 1>&2
-value=$(/bin/sh -c 'printf "stdout-to-stderr\n"' 1>&2)
-printf 'value:<%s>\n' "$value"
-/bin/sh -c 'printf "async-err-to-out\n" >&2' 2>&1 &
-wait
-/bin/sh -c 'printf "async-out-to-err\n"' 1>&2 &
-wait

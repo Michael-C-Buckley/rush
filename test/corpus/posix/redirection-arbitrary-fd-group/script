@@ -1,5 +1,0 @@
-{ echo fd3 >&3; } 3>out
-echo after
-/bin/cat out
-/bin/sh -c "echo leak >&3" 2>/dev/null
-echo status=$?

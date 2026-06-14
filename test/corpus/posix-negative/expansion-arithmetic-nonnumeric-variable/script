@@ -1,1 +1,0 @@
-x=abc; echo before; echo $((x + 3)); echo after

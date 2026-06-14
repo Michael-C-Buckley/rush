@@ -1,4 +1,0 @@
-set -e
-f(){ false && echo bad; }
-f
-echo after

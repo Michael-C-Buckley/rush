@@ -1,3 +1,0 @@
-echo "$(echo "a)b")"
-printf "%s\n" "$(printf "a\tb")"
-echo "$(echo "nested $(echo "deep)paren")")"

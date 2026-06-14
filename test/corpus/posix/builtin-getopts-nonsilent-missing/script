@@ -1,3 +1,0 @@
-OPTARG=old
-getopts a: opt -a 2>/dev/null
-echo "$opt/${OPTARG-unset}/$OPTIND/$?"

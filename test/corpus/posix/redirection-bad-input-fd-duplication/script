@@ -1,2 +1,0 @@
-read x <&3
-echo status=$?

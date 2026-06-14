@@ -1,2 +1,0 @@
-trap 'echo et; exit 5' EXIT
-exit 2

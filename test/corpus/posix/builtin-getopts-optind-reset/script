@@ -1,6 +1,0 @@
-set -- -a -b
-while getopts ab opt; do echo "$opt:$OPTIND"; done
-echo end:$OPTIND
-OPTIND=1
-while getopts ab opt; do echo "again:$opt:$OPTIND"; done
-echo done:$OPTIND

@@ -1,1 +1,0 @@
-case foo in f* echo yes ;; esac

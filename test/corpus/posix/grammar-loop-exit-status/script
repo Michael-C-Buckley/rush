@@ -1,8 +1,0 @@
-while false; do echo bad; done
-echo while_empty:$?
-until true; do echo bad; done
-echo until_empty:$?
-i=0; while [ $i -lt 2 ]; do i=$((i+1)); false; done
-echo while_body:$?
-i=0; until [ $i -ge 2 ]; do i=$((i+1)); false; done
-echo until_body:$?

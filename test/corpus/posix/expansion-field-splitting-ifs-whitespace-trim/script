@@ -1,3 +1,0 @@
-IFS=' '
-v='  a  b  '
-for x in $v; do echo "<$x>"; done

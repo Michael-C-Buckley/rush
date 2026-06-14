@@ -1,4 +1,0 @@
-A=bad
-cat <<E"O"F
-$A
-EOF

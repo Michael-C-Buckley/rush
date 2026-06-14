@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rush.horse/completion/schema/v1.schema.json",
   "title": "Rush Completion Manifest v1",
-  "description": "Structured completion manifest for Rush command completions. See https://rush.horse/docs/completion-manifest.html for human-readable documentation.",
+  "description": "Structured completion manifest for Rush command completions. See https://rush.horse/docs/completion-manifest.html for human-readable schema documentation.",
   "type": "object",
   "required": ["manifestVersion", "command"],
   "additionalProperties": false,

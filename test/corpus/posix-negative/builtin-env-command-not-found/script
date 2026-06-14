@@ -1,3 +1,0 @@
-env RUSH_ENV_VALUE=ok definitely-not-rush-env-command
-echo status:$?
-echo after

@@ -1,4 +1,0 @@
-echo bg > out &
-echo fg
-wait $!
-cat < out

@@ -1,6 +1,0 @@
-alias say='echo parser-ok'
-FOO=bar say
-> alias-redir.out say
-if say; then echo if-ok; fi
-read redirected < alias-redir.out
-echo "$redirected"

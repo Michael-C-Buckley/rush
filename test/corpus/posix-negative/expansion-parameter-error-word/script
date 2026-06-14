@@ -1,1 +1,0 @@
-MSG=why; echo ${RUSH_UNSET_FOR_TEST:?bad-${MSG}}; echo after

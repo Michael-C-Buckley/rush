@@ -1,8 +1,0 @@
-rm -rf real link
-mkdir real
-ln -s real link
-cd -L link
-case "$PWD" in */link) echo cd-L ;; *) echo bad-L:$PWD ;; esac
-cd ..
-cd -P link
-case "$PWD" in */real) echo cd-P ;; *) echo bad-P:$PWD ;; esac

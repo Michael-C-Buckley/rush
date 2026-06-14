@@ -1,3 +1,0 @@
-: > empty
-read line < empty
-echo status=$? value=${line-unset}

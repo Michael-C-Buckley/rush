@@ -1,5 +1,0 @@
-set -e
-false | true
-echo pipeline:$?
-true | false
-echo after

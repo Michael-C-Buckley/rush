@@ -1,9 +1,0 @@
-set -h
-case $- in
-  *h*) echo h:on ;;
-  *) echo h:ignored ;;
-esac
-set +h
-set -o nolog
-set +o nolog
-echo nolog:ignored

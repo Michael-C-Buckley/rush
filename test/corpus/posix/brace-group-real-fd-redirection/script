@@ -1,3 +1,0 @@
-{ echo one; echo two; } > out
-echo after
-/bin/cat out

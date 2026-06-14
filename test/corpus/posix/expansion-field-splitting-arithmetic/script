@@ -1,5 +1,0 @@
-IFS=2
-set -- $((12)) $((202))
-printf 'count:%s:' "$#"
-printf '<%s>' "$@"
-printf '\n'

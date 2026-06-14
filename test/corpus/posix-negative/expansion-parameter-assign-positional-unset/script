@@ -1,4 +1,0 @@
-set --
-echo before
-echo ${1:=fallback}
-echo after

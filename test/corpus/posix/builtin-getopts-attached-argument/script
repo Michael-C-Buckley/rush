@@ -1,2 +1,0 @@
-while getopts a: opt -avalue; do echo "$opt/$OPTARG/$OPTIND"; done
-echo done=$OPTIND

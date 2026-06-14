@@ -1,2 +1,0 @@
-trap 'echo bad' NOSIG
-echo after

@@ -1,9 +1,0 @@
-f() { return 7; }
-f
-echo status=$?
-h() { return " 5 "; }
-h
-echo trimmed=$?
-g() { false; return; }
-g
-echo default=$?

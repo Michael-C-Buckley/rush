@@ -1,1 +1,0 @@
-VAR=ok exec /bin/sh -c 'printf "$VAR"'

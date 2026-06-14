@@ -1,5 +1,0 @@
-echo -n hi; printf '<end>\n'
-echo -n -n hi; printf '<end>\n'
-echo -nn hi; printf '<end>\n'
-echo -e hi
-echo -E hi

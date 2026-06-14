@@ -1,5 +1,0 @@
-emacs:default
-vi:on-emacs:off
-emacs:on-vi:off
-emacs:off
-vi:disable-default

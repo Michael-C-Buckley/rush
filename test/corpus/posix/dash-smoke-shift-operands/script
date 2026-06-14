@@ -1,6 +1,0 @@
-set -- one two three
-shift 2
-echo "$1/$#"
-set -- a b c
-shift " 2 "
-echo "$1/$#/$?"

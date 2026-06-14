@@ -99,14 +99,6 @@
 
   <p><code>color dim COLOR PERCENT</code> blends a <code>#rrggbb</code> color toward black. <code>color blend COLOR COLOR PERCENT</code> blends the first color toward the second. Invalid input exits with status <code>2</code>, writes a diagnostic to stderr, and writes nothing to stdout. If that produces an invalid <code>rush_style_*</code> value, the host-side style parser ignores it and falls back to the default style for that role.</p>
 
-  <h2 id="parser-aware-completion"><a href="#parser-aware-completion">Parser-aware completion</a></h2>
-
-  <p>Rush completions are Rush scripts, but they are driven by the shell parser rather than by splitting the current line on whitespace. Completion code can see command position, option position, assignment context, redirections, command substitutions, and whether a word is being completed as a path or as a command.</p>
-
-  <p>That lets completions stay shell-like in edge cases: abbreviations expand before completion, directory candidates display only the part that should be inserted, and command-specific scripts can mix static candidates with dynamic shell logic.</p>
-
-  <p>See <a href="completion.html">Writing completions</a> for the reference API.</p>
-
   <h2 id="editor-feedback"><a href="#editor-feedback">Editor feedback</a></h2>
 
   <p>The line editor provides small pieces of immediate feedback without committing to a full-screen UI. Completion misses briefly flash the word being completed. Ctrl-C clears the current prompt when there is text, and otherwise leaves an empty prompt alone. Completion entries use role-specific styles so files, directories, options, variables, functions, descriptions, and the selected row can all be distinct while still following the terminal theme.</p>

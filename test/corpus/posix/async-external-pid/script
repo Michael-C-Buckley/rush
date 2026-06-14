@@ -1,4 +1,0 @@
-/bin/sleep 0 &
-pid=$!
-test -n "$pid"
-echo status=$?

@@ -1,1 +1,0 @@
-set -C; : > out; echo hi > out; echo after

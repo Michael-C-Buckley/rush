@@ -1,3 +1,0 @@
-read first rest <<EOF; printf '%s/%s\n' "$first" "$rest"
-one two three
-EOF

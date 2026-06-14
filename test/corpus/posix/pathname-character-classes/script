@@ -1,7 +1,0 @@
-rm -f rush-class-A.tmp rush-class-7.tmp rush-class-x.tmp
-: > rush-class-A.tmp
-: > rush-class-7.tmp
-: > rush-class-x.tmp
-echo rush-class-[[:upper:]].tmp
-echo rush-class-[![:digit:]].tmp
-rm -f rush-class-A.tmp rush-class-7.tmp rush-class-x.tmp

@@ -1,4 +1,0 @@
-mkdir rush-path-dir
-: > rush-path-dir/b.tmp
-: > rush-path-dir/a.tmp
-echo rush-path-dir/*.tmp

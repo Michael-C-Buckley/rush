@@ -1,3 +1,0 @@
-f() { read line; echo "$line"; }
-printf '%s\n' alpha > in
-f < in

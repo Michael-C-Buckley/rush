@@ -1,3 +1,0 @@
-echo before
-echo ${-:=fallback}
-echo after

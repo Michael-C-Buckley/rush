@@ -1,1 +1,0 @@
-unset v; echo ${v:?$(printf 'bad}msg')}; echo after

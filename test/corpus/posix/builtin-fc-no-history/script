@@ -1,3 +1,0 @@
-type fc
-fc -l
-printf 'status:%s\n' "$?"

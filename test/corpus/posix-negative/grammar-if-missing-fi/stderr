@@ -1,3 +1,0 @@
-rush: incomplete_input: missing fi to close if command
-  if true; then echo bad
-  ^^^^^^^^^^^^^^^^^^^^^^

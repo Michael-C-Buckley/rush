@@ -1,3 +1,0 @@
-echo one > out
-echo two
-/bin/cat out

@@ -1,6 +1,0 @@
-builtin=1
-function=1
-group=1
-external=37
-pipefail-first-stage=1
-last-stage=1

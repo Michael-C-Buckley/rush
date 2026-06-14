@@ -1,7 +1,0 @@
-set -m
-/bin/sleep 0 &
-/bin/sleep 0 &
-bg %-
-bg %2
-bg %%
-wait

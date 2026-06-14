@@ -1,9 +1,0 @@
-rm -f rc rn
-case x in x) echo hit ;; *) echo miss ;; esac >rc
-printf 'match:'
-cat rc
-case z in x) echo bad ;; esac >rn
-echo status:$?
-printf 'nomatch:'
-cat rn
-rm -f rc rn

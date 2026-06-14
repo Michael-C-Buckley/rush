@@ -1,1 +1,0 @@
-readonly R=v; for R in a b; do echo $R; done; echo after

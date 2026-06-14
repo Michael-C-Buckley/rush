@@ -1,2 +1,0 @@
-set -- "a b" "" c
-for arg in pre$@post; do printf '<%s>\n' "$arg"; done

@@ -1,6 +1,0 @@
-while true; do break; false; done
-echo break:$?
-i=0; while [ $i -lt 1 ]; do i=$((i+1)); continue; false; done
-echo continue:$?
-for x in a; do break; false; done
-echo for_break:$?

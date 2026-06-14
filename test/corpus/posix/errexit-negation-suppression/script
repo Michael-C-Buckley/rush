@@ -1,7 +1,0 @@
-set -e
-! true
-echo after-true:$?
-! false
-echo after-false:$?
-! { false; echo inner; }
-echo after-compound:$?

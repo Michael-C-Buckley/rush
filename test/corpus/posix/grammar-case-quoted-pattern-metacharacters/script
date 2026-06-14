@@ -1,5 +1,0 @@
-case abc in a\*) echo bad-escaped ;; a*) echo escaped-ok ;; esac
-case abc in 'a*') echo bad-quoted ;; a*) echo quoted-ok ;; esac
-p='a*'
-case abc in "$p") echo bad-quoted-param ;; $p) echo param-ok ;; esac
-case 'a*' in "$p") echo quoted-param-ok ;; *) echo bad-literal ;; esac

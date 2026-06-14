@@ -1,2 +1,0 @@
-printf '[%2$s:%1$d:%%][%3$.2s]\n' 7 two three 8 four five
-printf '<%3$s:%1$s:%3$s>\n' one ignored three

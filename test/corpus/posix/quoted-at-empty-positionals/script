@@ -1,3 +1,0 @@
-set --
-for x in "$@"; do echo bad; done
-echo empty-ok

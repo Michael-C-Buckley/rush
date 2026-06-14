@@ -1,5 +1,0 @@
-export RUSH_MARKED
-case "$(export -p)" in
-    *"export RUSH_MARKED"*) echo marked ;;
-    *) echo missing ;;
-esac

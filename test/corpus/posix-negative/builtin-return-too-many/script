@@ -1,3 +1,0 @@
-f() { return 1 2; echo after; }
-f
-echo after2

@@ -1,8 +1,0 @@
-/bin/sh -c 'sleep 0.05; echo done > out; exit 7' &
-wait
-echo status:$?
-cat < out
-set -e
-/bin/sh -c 'exit 8' &
-wait
-echo errexit-ok

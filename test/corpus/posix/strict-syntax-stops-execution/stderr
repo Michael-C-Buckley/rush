@@ -1,3 +1,0 @@
-rush: parse_error: missing then in if command
-  echo before; if true; echo bad; fi; echo after
-               ^^^^^^^^^^^^^^^^^^^^^

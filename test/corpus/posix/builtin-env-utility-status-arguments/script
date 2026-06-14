@@ -1,1 +1,0 @@
-env RUSH_ENV_STATUS=ok sh -c 'printf "%s/%s\n" "$1" "$RUSH_ENV_STATUS"; exit 7' sh arg

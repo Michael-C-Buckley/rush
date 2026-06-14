@@ -1,6 +1,0 @@
-alias quote="echo can\\'t stop"
-saved=$(alias quote)
-printf '<%s>\n' "$saved"
-unalias quote
-eval "alias $saved"
-quote

@@ -1,4 +1,0 @@
-echo old > out
-set -C
-echo next >> out
-/bin/cat out

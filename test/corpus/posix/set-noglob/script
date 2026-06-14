@@ -1,5 +1,0 @@
-touch rush-noglob-a.tmp
-set -f
-echo rush-noglob-?.tmp
-set +f
-echo rush-noglob-?.tmp

@@ -1,2 +1,0 @@
-set -- "" "b c"
-for x in pre"$@"post; do printf '<%s>\n' "$x"; done

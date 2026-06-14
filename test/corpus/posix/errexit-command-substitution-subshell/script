@@ -1,4 +1,0 @@
-set -e
-printf '<%s>\n' "$(false; echo bad)"
-( false; echo bad ) | cat
-echo after

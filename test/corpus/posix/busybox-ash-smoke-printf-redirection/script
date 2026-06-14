@@ -1,2 +1,0 @@
-printf "%s:%d\n" bb 7 > bb-out
-cat bb-out

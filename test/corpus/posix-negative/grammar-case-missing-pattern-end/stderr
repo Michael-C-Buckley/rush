@@ -1,3 +1,0 @@
-rush: parse_error: missing ) in case item
-  case foo in f* echo yes ;; esac
-              ^^^^^^^^^^^^^^

@@ -1,3 +1,0 @@
-rush: incomplete_input: unterminated dollar single quote
-  echo $'unterminated
-       ^^^^^^^^^^^^^^

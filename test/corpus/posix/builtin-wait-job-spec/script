@@ -1,4 +1,0 @@
-echo bg > out &
-wait %1
-echo status:$?
-cat < out

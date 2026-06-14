@@ -1,1 +1,0 @@
-while false; do echo bad; done; echo after

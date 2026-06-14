@@ -1,3 +1,0 @@
-printf '%s\n' ok >in
-read -- x <in
-echo "$x"

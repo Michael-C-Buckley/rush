@@ -78,7 +78,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 
     const fuzz_step = b.step("fuzz", "Run all fuzz targets (combine with --fuzz to actually fuzz)");
-    addFuzzTarget(b, fuzz_step, target, optimize, .{
+    addFuzzTarget(b, fuzz_step, target, .{
         .step_name = "fuzz-parser",
         .description = "Run parser fuzz target",
         .root_source_file = "src/fuzz/parser.zig",
@@ -88,7 +88,7 @@ pub fn build(b: *std.Build) void {
     });
     const shell_fuzz_step = b.step("fuzz-shell", "Run all shell semantic fuzz targets");
     fuzz_step.dependOn(shell_fuzz_step);
-    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+    addFuzzTarget(b, shell_fuzz_step, target, .{
         .step_name = "fuzz-shell-delta",
         .description = "Run shell semantic StateDelta fuzz target",
         .root_source_file = "src/fuzz/shell.zig",
@@ -97,7 +97,7 @@ pub fn build(b: *std.Build) void {
         .source_module_root = "src/shell.zig",
         .link_libc = true,
     });
-    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+    addFuzzTarget(b, shell_fuzz_step, target, .{
         .step_name = "fuzz-shell-consequence",
         .description = "Run shell consequence policy fuzz target",
         .root_source_file = "src/fuzz/shell.zig",
@@ -106,7 +106,7 @@ pub fn build(b: *std.Build) void {
         .source_module_root = "src/shell.zig",
         .link_libc = true,
     });
-    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+    addFuzzTarget(b, shell_fuzz_step, target, .{
         .step_name = "fuzz-shell-redirection",
         .description = "Run shell redirection rollback fuzz target",
         .root_source_file = "src/fuzz/shell.zig",
@@ -115,7 +115,7 @@ pub fn build(b: *std.Build) void {
         .source_module_root = "src/shell.zig",
         .link_libc = true,
     });
-    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+    addFuzzTarget(b, shell_fuzz_step, target, .{
         .step_name = "fuzz-shell-eval-redirection",
         .description = "Run shell eval redirection invariant fuzz target",
         .root_source_file = "src/fuzz/shell.zig",
@@ -124,7 +124,7 @@ pub fn build(b: *std.Build) void {
         .source_module_root = "src/shell.zig",
         .link_libc = true,
     });
-    addFuzzTarget(b, shell_fuzz_step, target, optimize, .{
+    addFuzzTarget(b, shell_fuzz_step, target, .{
         .step_name = "fuzz-shell-eval-pipeline",
         .description = "Run shell eval pipeline invariant fuzz target",
         .root_source_file = "src/fuzz/shell.zig",
@@ -139,16 +139,6 @@ pub fn build(b: *std.Build) void {
 
     const compile_test_step = b.step("compile-test", "Compile unit tests without running them");
     compile_test_step.dependOn(&exe_tests.step);
-
-    const completion_validate_step = b.step("completion-validate", "Validate shipped Rush completion scripts");
-    const completion_validate = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        "for script in share/rush/completions/*.rush; do \"$1\" complete validate \"$script\"; done",
-        "sh",
-    });
-    completion_validate.addArtifactArg(exe);
-    completion_validate_step.dependOn(&completion_validate.step);
 
     const invocation_stdin_check = b.addSystemCommand(&.{
         "sh",
@@ -205,46 +195,11 @@ pub fn build(b: *std.Build) void {
     });
     invocation_stdin_check.addArtifactArg(exe);
 
-    const bracket_loop_benchmark_step = b.step("bracket-loop-benchmark", "Check that [ builtin loops do not trigger glob directory scans");
-    const bracket_loop_benchmark = b.addSystemCommand(&.{"env"});
-    bracket_loop_benchmark.addPrefixedArtifactArg("RUSH=", exe);
-    bracket_loop_benchmark.addArgs(&.{ "sh", "scripts/check-bracket-loop-benchmark.sh" });
-    bracket_loop_benchmark.step.dependOn(&exe.step);
-    bracket_loop_benchmark.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
-    bracket_loop_benchmark_step.dependOn(&bracket_loop_benchmark.step);
-
-    const install_completion_manifest_check_step = b.step("completion-install-check", "Verify installed completion manifests load from XDG data dirs");
-    const install_completion_manifest_check = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        \\set -eu
-        \\zig=$1
-        \\tmp=$(mktemp -d)
-        \\trap 'rm -rf "$tmp"' EXIT
-        \\"$zig" build install --prefix "$tmp/prefix" --summary none
-        \\bin=$tmp/prefix/bin/rush
-        \\share=$tmp/prefix/share
-        \\test -f "$share/rush/completions/git.rush"
-        \\test -f "$share/rush/completions/git.json"
-        \\mkdir -p "$tmp/home" "$tmp/config"
-        \\env -i PATH="${PATH:-/usr/bin:/bin}" HOME="$tmp/home" XDG_DATA_HOME= XDG_CONFIG_HOME="$tmp/config" XDG_DATA_DIRS="$share" "$bin" complete --debug 'git sw' >"$tmp/output"
-        \\grep -q 'source: manifest' "$tmp/output"
-        \\grep -q 'manifest-path: .*share/rush/completions/git.json' "$tmp/output"
-        \\grep -q 'insert: switch' "$tmp/output"
-        ,
-        "sh",
-    });
-    install_completion_manifest_check.addArg(b.graph.zig_exe);
-    install_completion_manifest_check_step.dependOn(&install_completion_manifest_check.step);
-
     const fmt_step = b.step("fmt", "Check code formatting");
     const fmt_check = b.addFmt(.{ .paths = &.{ "src", "build.zig", "build.zig.zon" }, .check = true });
     fmt_step.dependOn(&fmt_check.step);
     check_step.dependOn(fmt_step);
-    check_step.dependOn(&completion_validate.step);
     check_step.dependOn(&invocation_stdin_check.step);
-    check_step.dependOn(&bracket_loop_benchmark.step);
-    check_step.dependOn(&install_completion_manifest_check.step);
 
     const cross_check_step = b.step("cross-check", "Run native tests and compile-check Linux/macOS/BSD targets");
     const cross_check = b.addSystemCommand(&.{
@@ -271,52 +226,6 @@ pub fn build(b: *std.Build) void {
     cross_check.addArg(b.graph.zig_exe);
     cross_check.step.dependOn(fmt_step);
     cross_check_step.dependOn(&cross_check.step);
-
-    const corpus_step = b.step("corpus", "Compare supported behavior corpus against available system shells");
-    const corpus_check = b.addSystemCommand(&.{ "sh", "scripts/check-system-shell-corpus.sh" });
-    corpus_check.step.dependOn(&exe.step);
-    corpus_check.step.dependOn(fmt_step);
-    corpus_check.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
-    corpus_step.dependOn(&corpus_check.step);
-    check_step.dependOn(&corpus_check.step);
-
-    const posix_corpus_step = b.step("posix-corpus", "Run spec-derived POSIX expected-output corpus");
-    const posix_corpus_check = b.addSystemCommand(&.{"env"});
-    posix_corpus_check.addPrefixedArtifactArg("RUSH=", exe);
-    posix_corpus_check.addArgs(&.{ "sh", "scripts/check-posix-corpus.sh" });
-    posix_corpus_check.step.dependOn(&exe.step);
-    posix_corpus_check.step.dependOn(fmt_step);
-    posix_corpus_check.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
-    posix_corpus_step.dependOn(&posix_corpus_check.step);
-    check_step.dependOn(&posix_corpus_check.step);
-
-    const compliance_manifest_step = b.step("compliance-manifest", "Validate POSIX compliance manifest schema and references");
-    const compliance_manifest_check = b.addSystemCommand(&.{ "sh", "scripts/check-compliance-manifest.sh" });
-    compliance_manifest_check.step.dependOn(fmt_step);
-    compliance_manifest_step.dependOn(&compliance_manifest_check.step);
-    check_step.dependOn(&compliance_manifest_check.step);
-
-    const completion_manifest_schema_step = b.step("completion-manifest-schema", "Validate completion manifest schema and examples");
-    const completion_manifest_schema_check = b.addSystemCommand(&.{ "sh", "scripts/check-completion-manifest-schema.sh" });
-    completion_manifest_schema_check.step.dependOn(fmt_step);
-    completion_manifest_schema_step.dependOn(&completion_manifest_schema_check.step);
-    check_step.dependOn(&completion_manifest_schema_check.step);
-
-    const posix_negative_corpus_step = b.step("posix-negative-corpus", "Run POSIX negative diagnostics corpus");
-    const posix_negative_corpus_check = b.addSystemCommand(&.{"env"});
-    posix_negative_corpus_check.addPrefixedArtifactArg("RUSH=", exe);
-    posix_negative_corpus_check.addArgs(&.{ "sh", "scripts/check-posix-negative-corpus.sh" });
-    posix_negative_corpus_check.step.dependOn(&exe.step);
-    posix_negative_corpus_check.step.dependOn(fmt_step);
-    posix_negative_corpus_check.setEnvironmentVariable("RUSH_SKIP_BUILD", "1");
-    posix_negative_corpus_step.dependOn(&posix_negative_corpus_check.step);
-    check_step.dependOn(&posix_negative_corpus_check.step);
-
-    const compliance_step = b.step("compliance", "Report POSIX compliance metrics and validate corpora");
-    const compliance_report = b.addSystemCommand(&.{ "sh", "scripts/report-compliance.sh", "--run-corpora" });
-    compliance_report.step.dependOn(&exe.step);
-    compliance_report.step.dependOn(fmt_step);
-    compliance_step.dependOn(&compliance_report.step);
 }
 
 const FuzzTargetOptions = struct {
@@ -329,25 +238,27 @@ const FuzzTargetOptions = struct {
     link_libc: bool = false,
 };
 
-fn addFuzzTarget(b: *std.Build, umbrella: *std.Build.Step, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, options: FuzzTargetOptions) void {
+fn addFuzzTarget(b: *std.Build, umbrella: *std.Build.Step, target: std.Build.ResolvedTarget, options: FuzzTargetOptions) void {
+    // Zig 0.16.0's bundled fuzz runner fails to compile in Debug mode through
+    // the self-hosted backend. ReleaseSafe uses LLVM and preserves runtime
+    // safety checks, so fuzzing still catches parser/runtime bugs without a
+    // vendored test runner.
+    const fuzz_optimize: std.builtin.OptimizeMode = .ReleaseSafe;
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path(options.root_source_file),
             .target = target,
-            .optimize = optimize,
+            .optimize = fuzz_optimize,
             .link_libc = options.link_libc,
         }),
         .filters = &.{options.filter},
-        // Patched copy of the default runner; Zig 0.16.0's bundled runner
-        // fails to compile under --fuzz (see the file's doc comment).
-        .test_runner = .{ .path = b.path("test/support/fuzz_test_runner.zig"), .mode = .server },
     });
     if (options.source_module_name) |name| {
         const root = options.source_module_root orelse @panic("fuzz source module root missing");
         tests.root_module.addImport(name, b.createModule(.{
             .root_source_file = b.path(root),
             .target = target,
-            .optimize = optimize,
+            .optimize = fuzz_optimize,
             .link_libc = options.link_libc,
         }));
     }

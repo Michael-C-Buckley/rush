@@ -1,6 +1,0 @@
-set -- $(printf '')
-echo bare:$#
-set -- x$(printf '')y
-echo embedded:$#:$1
-set -- "$(printf '')"
-echo quoted:$#:${1-unset}

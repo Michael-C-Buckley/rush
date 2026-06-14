@@ -1,1 +1,0 @@
-case b in a|b) echo hit ;; *) echo miss ;; esac

@@ -1,3 +1,0 @@
-alias ll='echo long'
-command -v ll
-command -V ll

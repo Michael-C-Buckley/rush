@@ -1,4 +1,0 @@
-PATH=/nope
-command -pv sh
-command -pV sh >/dev/null
-printf 'status:%s\n' "$?"

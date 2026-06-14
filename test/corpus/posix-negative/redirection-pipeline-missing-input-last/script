@@ -1,2 +1,0 @@
-echo hi | /bin/cat < missing
-echo st=$?

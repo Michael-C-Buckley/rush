@@ -1,3 +1,0 @@
-rush: incomplete_input: unterminated arithmetic expansion
-  echo $((1 + 2
-       ^^^^^^^^

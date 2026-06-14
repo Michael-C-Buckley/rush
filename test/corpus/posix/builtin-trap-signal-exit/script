@@ -1,3 +1,0 @@
-trap 'exit 9' TERM
-/bin/kill -TERM $$
-echo unreached

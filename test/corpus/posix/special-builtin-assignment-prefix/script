@@ -1,1 +1,0 @@
-FOO=regular echo ok; echo ${FOO:-unset}; FOO=special export BAR=value; echo $FOO/$BAR

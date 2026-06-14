@@ -1,9 +1,0 @@
-cd //
-pwd
-echo "$PWD"
-cd usr
-pwd
-cd ..
-pwd
-cd ///
-pwd

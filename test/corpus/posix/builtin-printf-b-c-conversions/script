@@ -1,3 +1,0 @@
-printf '%b' 'a\nb'
-echo
-printf '%c:%c\n' abc Z

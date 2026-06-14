@@ -1,6 +1,0 @@
-command -v echo printf
-printf 'status=%s\n' "$?"
-command -V echo printf >/dev/null
-printf 'verbose=%s\n' "$?"
-command -v echo rush-missing-command-name
-printf 'mixed=%s\n' "$?"

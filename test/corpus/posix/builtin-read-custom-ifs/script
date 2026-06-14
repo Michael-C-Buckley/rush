@@ -1,4 +1,0 @@
-IFS=: read a b c <<EOF
-one::three
-EOF
-echo "$a/$b/$c"

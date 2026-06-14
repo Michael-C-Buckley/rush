@@ -1,7 +1,0 @@
-u=~root
-case "$u" in
-  /*) echo user-abs ;;
-  "~root") echo user-literal ;;
-  *) echo user-other ;;
-esac
-OWNER=~root command -p env | grep ^OWNER= | sed 's|=.*|=ABS|'

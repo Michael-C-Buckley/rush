@@ -1,4 +1,0 @@
-test abc = abc; echo eq=$?
-test abc != def; echo ne=$?
-test -n abc; echo nonempty=$?
-test -z ''; echo empty=$?

@@ -1,1 +1,0 @@
-while getopts ab opt -ab; do echo "$opt:$OPTIND:${OPTARG-unset}"; done

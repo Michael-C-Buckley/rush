@@ -1,3 +1,0 @@
-set -- -a value rest
-while getopts a: opt; do echo "$opt/$OPTARG/$OPTIND"; done
-echo end=$OPTIND

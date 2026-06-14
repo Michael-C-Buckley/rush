@@ -1,3 +1,0 @@
-(exit " 5 ")
-echo "subshell=$?"
-exit "	7	"

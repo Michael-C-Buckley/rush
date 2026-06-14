@@ -1,2 +1,0 @@
-while true; do break nope; echo after1; done
-echo after2

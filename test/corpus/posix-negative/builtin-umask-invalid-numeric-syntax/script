@@ -1,6 +1,0 @@
-umask 077
-umask 0_22
-echo underscore:$?
-umask +022
-echo plus:$?
-umask

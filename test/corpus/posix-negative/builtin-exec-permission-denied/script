@@ -1,3 +1,0 @@
-printf 'echo nope\n' >cmd
-exec ./cmd
-echo after

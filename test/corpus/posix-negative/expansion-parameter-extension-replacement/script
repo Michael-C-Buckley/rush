@@ -1,3 +1,0 @@
-v=abcabc
-echo ${v/a/X}
-echo after

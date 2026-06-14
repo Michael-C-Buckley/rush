@@ -1,3 +1,0 @@
-/bin/sh -c 'exit 7' &
-wait $!
-echo status=$?

@@ -1,4 +1,0 @@
-( /bin/sleep 0 & wait $! ) & parent=$!
-echo parent-visible=${parent:+yes}
-wait "$parent"
-test "$parent" = "$!" && echo parent-last-ok

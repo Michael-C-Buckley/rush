@@ -1,1 +1,0 @@
-if true; then if false; then echo bad; else echo nested; fi; fi

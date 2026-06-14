@@ -1,2 +1,0 @@
-printf 'fmt:\x5a:\x9q:\xq:\101\n'
-printf '%b\n' 'arg:\x5a:\x9q:\xq:\0101'

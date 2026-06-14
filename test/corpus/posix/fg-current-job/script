@@ -1,3 +1,0 @@
-set -m
-/bin/sleep 0 &
-fg

@@ -1,4 +1,0 @@
-prefix_one=1
-prefix_two=2
-echo ${!prefix*}
-echo after

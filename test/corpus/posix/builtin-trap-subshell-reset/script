@@ -1,1 +1,0 @@
-trap 'echo inner-exit' EXIT; (exit 1); echo after

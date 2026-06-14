@@ -1,5 +1,0 @@
-empty=
-set -- $empty ${unset-}
-echo count:$#
-set -- "$empty" "${unset-}"
-echo "quoted:$#:<$1>:<$2>"

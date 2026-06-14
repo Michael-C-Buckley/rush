@@ -1,3 +1,0 @@
-readonly R=old
-R=new /bin/echo bad
-echo after

@@ -1,7 +1,0 @@
-f() {
-  echo before
-  return 7
-  echo after
-}
-f
-echo status=$?

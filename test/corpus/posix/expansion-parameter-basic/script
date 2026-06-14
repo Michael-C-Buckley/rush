@@ -1,6 +1,0 @@
-NAME=alpha
-NAME_SUFFIX=bad
-EMPTY=
-unset MISSING
-set -- one two
-printf '<%s>\n' "$NAME" "${NAME}" "${NAME}_suffix" "${NAME_SUFFIX}" "${EMPTY}" "${MISSING}" "$1/$2/$#"

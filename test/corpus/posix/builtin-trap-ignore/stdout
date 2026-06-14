@@ -1,3 +1,0 @@
-trap -- '' EXIT
-trap -- '' TERM
-after

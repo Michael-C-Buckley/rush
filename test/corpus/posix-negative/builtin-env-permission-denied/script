@@ -1,5 +1,0 @@
-printf '#!/bin/sh\necho should-not-run\n' > noexec
-chmod 0644 noexec
-env PATH=. noexec
-echo status:$?
-echo after

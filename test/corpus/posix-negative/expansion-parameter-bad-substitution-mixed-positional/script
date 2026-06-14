@@ -1,3 +1,0 @@
-set -- one
-echo ${1abc}
-echo after

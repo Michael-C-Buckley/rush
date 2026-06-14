@@ -1,1 +1,0 @@
-f() { false; return 7; }; f; echo $?

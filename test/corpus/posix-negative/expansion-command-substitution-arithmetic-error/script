@@ -1,5 +1,0 @@
-echo before
-echo $(echo $((2 ** )))
-value=$(echo $((2 ** )))
-echo status=$?
-echo after

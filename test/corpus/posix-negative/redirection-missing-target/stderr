@@ -1,3 +1,0 @@
-rush: parse_error: missing redirection target
-  echo hi >
-          ^

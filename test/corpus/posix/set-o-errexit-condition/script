@@ -1,3 +1,0 @@
-set -o errexit
-if false; then echo bad; else echo ok; fi
-echo after

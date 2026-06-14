@@ -1,1 +1,0 @@
-set -- a b; for x; do echo $x; done; set --; for x; do echo unexpected:$x; done; echo done

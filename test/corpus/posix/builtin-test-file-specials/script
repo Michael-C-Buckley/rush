@@ -1,7 +1,0 @@
-rm -f regular fifo
-: > regular
-mkfifo fifo
-test -c /dev/null; echo char=$?
-test -p fifo; echo fifo=$?
-test -b regular; echo block=$?
-test -S regular; echo sock=$?

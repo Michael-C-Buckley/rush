@@ -1,1 +1,0 @@
-echo before; echo $((9223372036854775807 + 1)); echo after

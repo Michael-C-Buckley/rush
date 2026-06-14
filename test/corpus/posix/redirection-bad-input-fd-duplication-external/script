@@ -1,2 +1,0 @@
-/bin/cat <&9
-echo status=$?

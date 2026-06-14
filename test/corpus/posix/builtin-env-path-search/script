@@ -1,4 +1,0 @@
-printf '#!/bin/sh\necho path-ok\n' > rush-env-path-cmd
-chmod +x rush-env-path-cmd
-env PATH=. rush-env-path-cmd
-rm -f rush-env-path-cmd

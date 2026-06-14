@@ -1,6 +1,0 @@
-test foo
-echo one:$?
-test ""
-echo empty:$?
-[ foo ]
-echo bracket:$?

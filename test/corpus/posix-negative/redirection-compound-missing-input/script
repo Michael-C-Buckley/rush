@@ -1,4 +1,0 @@
-{ echo brace; } < missing; echo brace=$?
-if true; then echo if-body; fi < missing; echo if=$?
-while false; do echo while-body; done < missing; echo while=$?
-for x in a; do echo for-body; done < missing; echo for=$?

@@ -1,3 +1,0 @@
-printf 'a\nb\n' | if read line; then echo "if-last:$line"; fi
-printf 'm\n' | if read line; then echo "middle:$line"; fi | { read line; echo "if-middle:$line"; }
-if true; then echo if-first; fi | { read line; echo "if-first:$line"; }

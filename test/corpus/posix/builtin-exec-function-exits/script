@@ -1,6 +1,0 @@
-f() {
-    exec /bin/sh -c 'printf exec-function-ok'
-    echo nope
-}
-f
-echo nope

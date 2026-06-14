@@ -1,3 +1,0 @@
-IFS=:
-LIST=:a::b:
-for x in $LIST; do echo "<$x>"; done

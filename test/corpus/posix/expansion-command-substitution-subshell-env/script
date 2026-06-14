@@ -1,3 +1,0 @@
-A=outer
-echo "$(A=inner; echo $A)"
-echo "$A"

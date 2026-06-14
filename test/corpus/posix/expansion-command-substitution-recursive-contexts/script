@@ -1,6 +1,0 @@
-printf '<%s>\n' "$(echo "nested $(echo "deep)x")")"
-printf '<%s>\n' `echo \`echo backquote\``
-printf '<%s>\n' `printf a\
-b`
-printf '<%s>\n' "$(if true; then printf if-ok; fi)"
-printf '<%s>\n' "$(for x in a b; do printf "%s" "$x"; done)"

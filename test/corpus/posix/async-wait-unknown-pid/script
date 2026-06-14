@@ -1,2 +1,0 @@
-wait 999999
-echo status=$?

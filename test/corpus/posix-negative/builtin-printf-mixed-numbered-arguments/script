@@ -1,3 +1,0 @@
-printf '%2$s %s\n' a b
-echo status:$?
-echo after

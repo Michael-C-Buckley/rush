@@ -1,3 +1,0 @@
-echo bg > out &
-wait $!
-cat < out

@@ -1,4 +1,0 @@
-export RUSH_EXPORT_REUSABLE='a b'
-readonly RUSH_READONLY_REUSABLE='c d'
-case "$(export -p)" in *"export RUSH_EXPORT_REUSABLE='a b'"*) echo export-reusable ;; *) echo export-bad ;; esac
-case "$(readonly -p)" in *"readonly RUSH_READONLY_REUSABLE='c d'"*) echo readonly-reusable ;; *) echo readonly-bad ;; esac

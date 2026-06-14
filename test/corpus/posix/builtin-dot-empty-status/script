@@ -1,4 +1,0 @@
-printf '' > empty.sh
-false
-. ./empty.sh
-echo st=$?

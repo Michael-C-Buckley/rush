@@ -1,5 +1,0 @@
-+ X=v
-+ echo v suffix
-v suffix
-+ set +x
-quiet

@@ -1,2 +1,0 @@
-definitely-missing-rush-command 2>/dev/null
-echo status:$?

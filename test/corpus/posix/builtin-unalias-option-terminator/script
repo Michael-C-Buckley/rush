@@ -1,4 +1,0 @@
-alias ll='echo ok'
-unalias -- ll
-alias ll >/dev/null 2>/dev/null
-echo status:$?

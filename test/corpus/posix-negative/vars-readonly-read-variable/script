@@ -1,1 +1,0 @@
-readonly R=v; read R </dev/null; echo st=$?

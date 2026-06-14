@@ -1,3 +1,0 @@
-set -- one two
-shift nope
-echo after

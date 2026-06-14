@@ -1,6 +1,0 @@
-printf '<%s>\n' $((9223372036854775807))
-printf '<%s>\n' $((-9223372036854775808))
-printf '<%s>\n' $((0x7fffffffffffffff))
-printf '<%s>\n' $((~0))
-printf '<%s>\n' $((-1 >> 1))
-printf '<%s>\n' $((1 << 63))

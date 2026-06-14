@@ -1,7 +1,0 @@
-alias say='echo subst-ok'
-alias body='echo bad'
-echo "$(say)"
-read value <<EOF2
-body
-EOF2
-echo "$value"

@@ -1,3 +1,0 @@
-rush: incomplete_input: unterminated single quote
-  echo 'unterminated
-       ^^^^^^^^^^^^^

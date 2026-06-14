@@ -1,3 +1,0 @@
-f() { printf "%s\n" "$1"; }
-f dash-smoke > out
-cat out

@@ -1,3 +1,0 @@
-trap 'echo bye' EXIT
-trap 'echo int' INT
-trap

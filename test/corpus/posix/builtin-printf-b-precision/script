@@ -1,1 +1,0 @@
-printf '[%.3b][%6.3b][%-6.3b][%.4b]\n' abcdef 'a\nbcd' abcdef 'x\141yz'

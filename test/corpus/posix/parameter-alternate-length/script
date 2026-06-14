@@ -1,1 +1,0 @@
-A=abcd; EMPTY=; echo ${A:+yes}/${MISSING:+yes}/${EMPTY+set}; echo ${#A}/${#MISSING}

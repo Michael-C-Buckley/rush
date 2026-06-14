@@ -1,9 +1,0 @@
-ll is an alias for echo long
-if is a shell keyword
-foo is a function
-type is a shell builtin
-export is a special shell builtin
-rush-type-cmd is ./rush-type-cmd
-status=0
-terminator=0
-missing=127

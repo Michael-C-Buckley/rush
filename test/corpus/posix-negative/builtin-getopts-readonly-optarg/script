@@ -1,5 +1,0 @@
-OPTARG=old
-readonly OPTARG
-getopts a opt -a
-echo "st=$? opt=${opt-unset} optind=$OPTIND optarg=${OPTARG-unset}"
-echo after

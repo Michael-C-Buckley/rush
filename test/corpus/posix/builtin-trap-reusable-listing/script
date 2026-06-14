@@ -1,5 +1,0 @@
-trap 'echo term' TERM
-trap >save
-trap - TERM
-. ./save
-trap

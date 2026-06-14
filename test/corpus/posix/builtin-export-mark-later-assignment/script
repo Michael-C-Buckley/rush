@@ -1,3 +1,0 @@
-export LATER
-LATER=ok
-command -p env | grep ^LATER=

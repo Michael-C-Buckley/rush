@@ -1,3 +1,0 @@
-A=ok; cat <<EOF
-$A $(echo hi) $((1 + 2))
-EOF

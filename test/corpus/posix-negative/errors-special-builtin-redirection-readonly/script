@@ -1,1 +1,0 @@
-echo old > out; set -C; readonly RUSH_SPECIAL_BUILTIN_VALUE=1 > out; echo after

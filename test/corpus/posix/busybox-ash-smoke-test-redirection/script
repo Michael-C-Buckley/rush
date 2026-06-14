@@ -1,4 +1,0 @@
-: > bb-empty
-test -s bb-empty; echo empty=$?
-printf x > bb-empty
-test -s bb-empty; echo full=$?

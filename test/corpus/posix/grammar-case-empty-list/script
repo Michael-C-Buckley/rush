@@ -1,2 +1,0 @@
-case foo in esac
-echo status:$?

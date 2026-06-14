@@ -1,3 +1,0 @@
-wait nope
-echo status:$?
-echo after

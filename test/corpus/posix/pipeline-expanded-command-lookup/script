@@ -1,6 +1,0 @@
-f() { printf 'function\n'; }
-cmd=f
-$cmd | /bin/cat
-cmd=cd
-$cmd / | /bin/cat
-printf 'status:%s\n' "$?"

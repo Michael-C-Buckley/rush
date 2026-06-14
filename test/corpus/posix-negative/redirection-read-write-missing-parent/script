@@ -1,2 +1,0 @@
-/bin/cat <> missing-dir/nope; echo external=$?
-echo builtin <> missing-dir/nope; echo builtin=$?

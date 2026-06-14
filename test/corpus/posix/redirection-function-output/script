@@ -1,4 +1,0 @@
-f() { echo fn-one; echo fn-two; }
-f > out
-echo after
-/bin/cat out

@@ -1,3 +1,0 @@
-rush: incomplete_input: missing esac to close case command
-  case word in f*) echo bad
-  ^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -1,3 +1,0 @@
-rush: parse_error: missing command in brace group
-  f() { { ; }; }
-        ^^^^^

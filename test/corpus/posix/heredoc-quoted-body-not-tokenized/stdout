@@ -1,6 +1,0 @@
-if then bad ; | &
-"unterminated double
-'unterminated single
-$(unterminated command
-${unterminated
-after

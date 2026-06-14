@@ -1,4 +1,0 @@
-set -o vi
-set -o | grep '^vi[[:space:]]*on' >/dev/null && echo vi:on
-set +o vi
-set -o | grep '^vi[[:space:]]*off' >/dev/null && echo vi:off

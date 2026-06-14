@@ -1,4 +1,0 @@
-: > bb-log
-printf '%s\n' one >> bb-log
-printf '%s\n' two >> bb-log
-cat bb-log

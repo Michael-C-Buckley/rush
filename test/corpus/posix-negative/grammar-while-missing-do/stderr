@@ -1,3 +1,0 @@
-rush: parse_error: missing do in while command
-  while true; echo bad; done
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^

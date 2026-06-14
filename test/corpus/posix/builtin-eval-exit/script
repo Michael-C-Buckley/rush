@@ -1,2 +1,0 @@
-eval 'echo before; exit 7; echo after'
-echo outside

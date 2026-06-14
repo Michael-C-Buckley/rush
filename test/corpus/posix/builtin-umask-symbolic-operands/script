@@ -1,7 +1,0 @@
-old=$(umask)
-umask u=rwx,g=rx,o=
-umask
-umask -S
-umask a=rx
-umask
-umask "$old"
