@@ -70,6 +70,45 @@
             .status = 0,
         },
         .{
+            .name = "dollar expands to the shell process id",
+            .script =
+            \\case $$ in
+            \\    ''|*[!0123456789]*) printf 'bad\n' ;;
+            \\    *) printf 'pid\n' ;;
+            \\esac
+            ,
+            .stdout =
+            \\pid
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "hyphen reflects set option flags",
+            .script =
+            \\case $- in *u*) printf 'bad-u\n' ;; *) printf 'no-u\n' ;; esac
+            \\set -u
+            \\case $- in *u*) printf 'has-u\n' ;; *) printf 'bad-no-u\n' ;; esac
+            \\set +u
+            \\case $- in *u*) printf 'bad-still-u\n' ;; *) printf 'cleared-u\n' ;; esac
+            \\set -f
+            \\case $- in *f*) printf 'noglob\n' ;; *) printf 'bad-glob\n' ;; esac
+            \\set +f
+            \\case $- in *f*) printf 'bad-still-f\n' ;; *) printf 'glob\n' ;; esac
+            ,
+            .stdout =
+            \\no-u
+            \\has-u
+            \\cleared-u
+            \\noglob
+            \\glob
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "shift discards leading positional parameters",
             .script =
             \\set -- one two three

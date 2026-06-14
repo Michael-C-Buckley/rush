@@ -41,17 +41,18 @@ pub const Evaluator = struct {
     signal_port: ?runtime.signal.Port = null,
     features: compat.Features = .{},
     arg_zero: []const u8 = "rush",
+    shell_pid: runtime.process.ProcessId,
     function_frame: ?*FunctionFrame = null,
     io: ?std.Io = null,
     read_stdin_from_fd: bool = false,
     external_stdio: ExternalStdio = .inherit,
 
     pub fn init(allocator: std.mem.Allocator) Evaluator {
-        return .{ .allocator = allocator };
+        return .{ .allocator = allocator, .shell_pid = currentProcessId() };
     }
 
     pub fn initWithFdPort(allocator: std.mem.Allocator, fd_port: runtime.fd.Port) Evaluator {
-        return .{ .allocator = allocator, .fd_port = fd_port };
+        return .{ .allocator = allocator, .fd_port = fd_port, .shell_pid = currentProcessId() };
     }
 
     pub fn initWithExternalPorts(
@@ -59,11 +60,16 @@ pub const Evaluator = struct {
         fd_port: runtime.fd.Port,
         process_port: runtime.process.Port,
     ) Evaluator {
-        return .{ .allocator = allocator, .fd_port = fd_port, .process_port = process_port };
+        return .{
+            .allocator = allocator,
+            .fd_port = fd_port,
+            .process_port = process_port,
+            .shell_pid = currentProcessId(),
+        };
     }
 
     pub fn initWithFsPort(allocator: std.mem.Allocator, fs_port: runtime.fs.Port) Evaluator {
-        return .{ .allocator = allocator, .fs_port = fs_port };
+        return .{ .allocator = allocator, .fs_port = fs_port, .shell_pid = currentProcessId() };
     }
 
     pub fn initWithRuntimePorts(allocator: std.mem.Allocator, ports: runtime.Ports) Evaluator {
@@ -73,13 +79,18 @@ pub const Evaluator = struct {
             .fs_port = ports.fs,
             .process_port = ports.process,
             .signal_port = ports.signal,
+            .shell_pid = currentProcessId(),
         };
     }
 
     pub fn initWithSignalPort(allocator: std.mem.Allocator, signal_port: runtime.signal.Port) Evaluator {
-        return .{ .allocator = allocator, .signal_port = signal_port };
+        return .{ .allocator = allocator, .signal_port = signal_port, .shell_pid = currentProcessId() };
     }
 };
+
+fn currentProcessId() runtime.process.ProcessId {
+    return @intCast(std.c.getpid());
+}
 
 pub const TrapActionBodyPayload = union(enum) {
     simple: command_plan.CommandPlan,
@@ -922,6 +933,7 @@ const TrapActionLowerer = struct {
 
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
+        var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
         var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
@@ -933,6 +945,7 @@ const TrapActionLowerer = struct {
             .features = self.owner.features,
             .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
+            .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
@@ -1132,6 +1145,7 @@ const TrapActionLowerer = struct {
         target: context.ExecutionTarget,
     ) !ExpandedFieldsLowering {
         const expansion_target = self.expansionTarget(target);
+        var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
@@ -1139,6 +1153,7 @@ const TrapActionLowerer = struct {
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
             .arg_zero = self.owner.arg_zero,
+            .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
@@ -1156,6 +1171,7 @@ const TrapActionLowerer = struct {
         target: context.ExecutionTarget,
     ) !HereDocLowering {
         const expansion_target = self.expansionTarget(target);
+        var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
         var expansion = shell_expand.ShellExpansion.init(self.allocator, .{
             .shell_state = self.shell_state,
@@ -1163,6 +1179,7 @@ const TrapActionLowerer = struct {
             .fs_port = self.owner.evaluator.fs_port,
             .features = self.owner.features,
             .arg_zero = self.owner.arg_zero,
+            .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
@@ -1216,6 +1233,7 @@ const TrapActionLowerer = struct {
     fn expandScalar(self: *TrapActionLowerer, raw: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
+        var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
         var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
@@ -1227,6 +1245,7 @@ const TrapActionLowerer = struct {
             .features = self.owner.features,
             .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
+            .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
@@ -1247,6 +1266,7 @@ const TrapActionLowerer = struct {
     ) !expand.ExpansionResult {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
+        var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
         var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
@@ -1258,6 +1278,7 @@ const TrapActionLowerer = struct {
             .features = self.owner.features,
             .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
+            .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
@@ -1270,6 +1291,7 @@ const TrapActionLowerer = struct {
     fn expandHereDoc(self: *TrapActionLowerer, text: []const u8, target: context.ExecutionTarget) ![]const u8 {
         const expansion_target = self.expansionTarget(target);
         const expansion_eval_context = self.eval_context.withTarget(expansion_target);
+        var process_id_buffer: [32]u8 = undefined;
         var last_background_pid_buffer: [32]u8 = undefined;
         var command_substitutions: TrapActionExpansionCommandSubstitutions = .{};
         command_substitutions.init(self, expansion_eval_context);
@@ -1281,10 +1303,15 @@ const TrapActionLowerer = struct {
             .features = self.owner.features,
             .command_substitution = command_substitutions.commandSubstitution(),
             .arg_zero = self.owner.arg_zero,
+            .process_id = self.processIdText(&process_id_buffer),
             .last_background_pid = self.lastBackgroundPidText(&last_background_pid_buffer),
         });
         defer expansion.deinit();
         return expansion.expandHereDocBody(text);
+    }
+
+    fn processIdText(self: TrapActionLowerer, buffer: []u8) []const u8 {
+        return std.fmt.bufPrint(buffer, "{d}", .{self.owner.evaluator.shell_pid}) catch "";
     }
 
     fn lastBackgroundPidText(self: TrapActionLowerer, buffer: []u8) []const u8 {
@@ -9059,10 +9086,11 @@ test "semantic parser trap resolver lowers arbitrary simple actions at delivery 
     defer shell_state.deinit();
     try shell_state.putVariable("TRAP_MESSAGE", "semantic", .{});
     shell_state.last_status = 23;
-    try shell_state.setTrapForSignal(.TERM, "TRAP_MUTATED=ok; echo \"$TRAP_MESSAGE\"");
+    try shell_state.setTrapForSignal(.TERM, "TRAP_MUTATED=ok; echo \"$TRAP_MESSAGE:$$\"");
     try shell_state.appendPendingTrap(.TERM);
 
     var evaluator = Evaluator.init(std.testing.allocator);
+    evaluator.shell_pid = 1234;
     var parser_resolver = ParserTrapActionResolver.init(&evaluator);
     var trap_outcome = (try executePendingTraps(
         &evaluator,
@@ -9074,7 +9102,7 @@ test "semantic parser trap resolver lowers arbitrary simple actions at delivery 
 
     try std.testing.expectEqual(@as(outcome.ExitStatus, 23), trap_outcome.status);
     try std.testing.expectEqual(outcome.ControlFlow.normal, trap_outcome.control_flow);
-    try std.testing.expectEqualStrings("semantic\n", trap_outcome.stdout.items);
+    try std.testing.expectEqualStrings("semantic:1234\n", trap_outcome.stdout.items);
     try trap_outcome.commitDelta(&shell_state, .current_shell);
     try std.testing.expectEqualStrings("ok", shell_state.getVariable("TRAP_MUTATED").?.value);
     try std.testing.expectEqual(@as(state.ExitStatus, 23), shell_state.last_status);
