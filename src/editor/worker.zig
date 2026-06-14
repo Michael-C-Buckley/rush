@@ -8,6 +8,13 @@ const completion = @import("completion.zig");
 const log = std.log.scoped(.editor_worker);
 const debounce_ms = 75;
 
+/// Completion providers must return an allocator-owned `Application`.
+///
+/// Returned slices must not borrow from `source`, provider context, or other
+/// temporary storage because successful applications cross the worker boundary
+/// and may be applied after the request and provider context are destroyed.
+/// The worker result owner deinitializes the application with the same
+/// allocator passed to the provider.
 pub const CompleteFn = *const fn (
     *anyopaque,
     std.mem.Allocator,
@@ -299,4 +306,70 @@ test "completion controller marks same-input active results stale when supersede
 
     try std.testing.expect(controller.hasSupersedingRequest(first.generation));
     try std.testing.expect(!controller.hasSupersedingRequest(controller.queued.?.generation));
+}
+
+fn ownedCompletionForTesting(
+    // ziglint-ignore: Z023 - signature is fixed by CompleteFn; opaque context must come first.
+    context: *anyopaque,
+    // ziglint-ignore: Z023 - signature is fixed by CompleteFn; opaque context must come first.
+    allocator: std.mem.Allocator,
+    // ziglint-ignore: Z023 - signature is fixed by CompleteFn; opaque context must come first.
+    io: std.Io,
+    source: []const u8,
+    cursor: usize,
+) !completion.Application {
+    _ = context;
+    _ = io;
+    _ = cursor;
+    const replacement = try allocator.dupe(u8, "owned-result");
+    errdefer allocator.free(replacement);
+    const suffix = try allocator.dupe(u8, " ");
+    errdefer allocator.free(suffix);
+    return .{ .edit = .{
+        .replace_start = 0,
+        .replace_end = source.len,
+        .replacement = replacement,
+        .suffix = suffix,
+    } };
+}
+
+test "completion worker result survives request teardown" {
+    var context_byte: u8 = 0;
+    var worker: Worker = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .complete = ownedCompletionForTesting,
+        .free_context = null,
+        .request = .{
+            .generation = 1,
+            .source = try std.testing.allocator.dupe(u8, "borrowed-source"),
+            .cursor = "borrowed-source".len,
+            .reason = .explicit,
+        },
+        .context = &context_byte,
+        .wake_fd = -1,
+    };
+
+    worker.run();
+    const maybe_result = worker.takeResult();
+    try std.testing.expect(maybe_result != null);
+    var result = maybe_result.?;
+    defer result.deinit(std.testing.allocator);
+
+    worker.deinit();
+
+    switch (result) {
+        .success => |payload| {
+            try std.testing.expectEqual(@as(u64, 1), payload.generation);
+            try std.testing.expectEqualStrings("borrowed-source", payload.source);
+            switch (payload.application) {
+                .edit => |edit| {
+                    try std.testing.expectEqualStrings("owned-result", edit.replacement);
+                    try std.testing.expectEqualStrings(" ", edit.suffix.?);
+                },
+                else => return error.ExpectedEditApplication,
+            }
+        },
+        .failed => return error.ExpectedCompletionSuccess,
+    }
 }

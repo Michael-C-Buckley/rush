@@ -218,6 +218,10 @@ pub const Edit = struct {
     append_space: bool = false,
 };
 
+/// Completion application data is owned by the allocator used to build it.
+/// Callers that receive an `Application` must deinitialize it after applying or
+/// discarding it; providers must not store borrowed slices in edit/candidate
+/// payloads unless the specific caller documents a shorter lifetime.
 pub const Application = union(enum) {
     none,
     edit: Edit,
