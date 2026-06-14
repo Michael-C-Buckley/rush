@@ -515,30 +515,92 @@ const TrapActionLowerer = struct {
 
         const statements = try self.allocator.alloc(command_plan.StatementListEntry, program.statements.len);
         for (program.statements, 0..) |statement, index| {
-            const payload = try self.lowerSingleTrapStatement(program, statement, target);
-            const plan = switch (payload) {
-                .simple => |simple| command_plan.StatementPlan{ .simple = simple },
-                .compound => |compound| command_plan.StatementPlan{ .compound = compound },
-                .pipeline => |pipeline| command_plan.StatementPlan{ .pipeline = pipeline },
-                .failure => |trap_failure| return .{ .failure = trap_failure },
-            };
             const op_before: command_plan.StatementListOperator = switch (statement.op_before) {
                 .sequence => .sequence,
                 .and_if => .and_if,
                 .or_if => .or_if,
             };
-            statements[index] = .{ .op_before = op_before, .plan = plan };
-            switch (payload) {
-                .simple => |simple| switch (simple.classification) {
-                    .function_definition => |definition| try self.rememberLocalFunction(definition),
-                    else => {},
-                },
-                .compound, .pipeline, .failure => {},
-            }
+            statements[index] = .{
+                .op_before = op_before,
+                .plan = .{ .source = .{
+                    .target = target,
+                    .source = statementSource(program, index),
+                    .targets_stdout = statementTargetsDescriptor(program, statement, 1),
+                    .targets_stderr = statementTargetsDescriptor(program, statement, 2),
+                } },
+            };
         }
         const list: command_plan.StatementList = .{ .statements = statements };
         list.validate();
         return .{ .list = list };
+    }
+
+    fn statementSource(program: ir.Program, statement_index: usize) []const u8 {
+        std.debug.assert(statement_index < program.statements.len);
+        const statement = program.statements[statement_index];
+        const start = statement.span.start;
+        var end = statement.span.end;
+        if (statementMayHaveHereDoc(program.source[start..end])) {
+            end = if (statement_index + 1 < program.statements.len)
+                program.statements[statement_index + 1].span.start
+            else
+                program.source.len;
+        }
+        std.debug.assert(start < end);
+        std.debug.assert(end <= program.source.len);
+        return program.source[start..end];
+    }
+
+    fn statementMayHaveHereDoc(source: []const u8) bool {
+        return std.mem.indexOf(u8, source, "<<") != null;
+    }
+
+    fn statementTargetsDescriptor(
+        program: ir.Program,
+        statement: ir.Statement,
+        descriptor: runtime.fd.Descriptor,
+    ) bool {
+        runtime.fd.assertValidDescriptor(descriptor);
+        return switch (statement.kind) {
+            .pipeline => pipelineTargetsDescriptor(program, program.pipelines[statement.index], descriptor),
+            .if_command => rawRedirectionsTargetDescriptor(
+                program.if_commands[statement.index].redirections,
+                descriptor,
+            ),
+            .loop_command => rawRedirectionsTargetDescriptor(
+                program.loop_commands[statement.index].redirections,
+                descriptor,
+            ),
+            .for_command => rawRedirectionsTargetDescriptor(
+                program.for_commands[statement.index].redirections,
+                descriptor,
+            ),
+            .case_command => rawRedirectionsTargetDescriptor(
+                program.case_commands[statement.index].redirections,
+                descriptor,
+            ),
+            .function_definition => rawRedirectionsTargetDescriptor(
+                program.function_definitions[statement.index].redirections,
+                descriptor,
+            ),
+            .brace_group => rawRedirectionsTargetDescriptor(
+                program.brace_groups[statement.index].redirections,
+                descriptor,
+            ),
+            .subshell => rawRedirectionsTargetDescriptor(program.subshells[statement.index].redirections, descriptor),
+            .bash_test_command => false,
+        };
+    }
+
+    fn pipelineTargetsDescriptor(
+        program: ir.Program,
+        pipeline: ir.Pipeline,
+        descriptor: runtime.fd.Descriptor,
+    ) bool {
+        for (pipeline.command_indexes) |command_index| {
+            if (rawRedirectionsTargetDescriptor(program.commands[command_index].redirections, descriptor)) return true;
+        }
+        return false;
     }
 
     fn lowerPipeline(
@@ -3671,7 +3733,36 @@ fn flushBuffersForStatementRedirections(
         .simple => |simple| try flushBuffersForRedirectionTargets(buffers, simple.redirections),
         .compound => |compound| try flushBuffersForRedirectionTargets(buffers, compound.redirections),
         .pipeline => {},
+        .source => |source| try flushBuffersForSourceRedirectionTargets(buffers, source),
     }
+}
+
+fn flushBuffersForSourceRedirectionTargets(
+    buffers: *EvaluationBuffers,
+    source: command_plan.SourceStatementPlan,
+) EvalError!void {
+    source.validate();
+    if (source.targets_stdout and buffers.stdout.items.len != 0) {
+        if (!writeAllDescriptor(1, buffers.stdout.items)) return error.Unimplemented;
+        buffers.stdout.items.len = 0;
+    }
+    if (source.targets_stderr and buffers.stderr.items.len != 0) {
+        if (!writeAllDescriptor(2, buffers.stderr.items)) return error.Unimplemented;
+        buffers.stderr.items.len = 0;
+    }
+}
+
+fn rawRedirectionsTargetDescriptor(redirections: []const ir.Redirection, descriptor: runtime.fd.Descriptor) bool {
+    for (redirections) |redirection| {
+        const operator = redirectionOperator(redirection.operator) orelse continue;
+        const target = if (redirection.io_number) |io_number| std.fmt.parseInt(
+            runtime.fd.Descriptor,
+            io_number.text,
+            10,
+        ) catch continue else operator.defaultDescriptor();
+        if (target == descriptor) return true;
+    }
+    return false;
 }
 
 fn evaluateStatementPlan(
@@ -3701,7 +3792,40 @@ fn evaluateStatementPlan(
             input,
         ),
         .pipeline => |pipeline| evaluatePipelinePlan(evaluator, shell_state, eval_context, pipeline),
+        .source => |source| evaluateSourceStatement(evaluator, shell_state, eval_context, source, input),
     };
+}
+
+fn evaluateSourceStatement(
+    evaluator: *Evaluator,
+    shell_state: *state.ShellState,
+    eval_context: context.EvalContext,
+    source_plan: command_plan.SourceStatementPlan,
+    input: *EvaluationInput,
+) EvalError!outcome.CommandOutcome {
+    shell_state.validate();
+    eval_context.validate();
+    source_plan.validate();
+    input.validate();
+    std.debug.assert(source_plan.target == eval_context.target);
+
+    var parser_resolver = ParserTrapActionResolver.init(evaluator);
+    parser_resolver.features = evaluator.features;
+    parser_resolver.arg_zero = evaluator.arg_zero;
+    const resolver = parser_resolver.resolver();
+    var body = (resolver.resolve(
+        evaluator.allocator,
+        source_plan.source,
+        .TERM,
+        eval_context,
+        shell_state,
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.Unimplemented,
+    }) orelse return error.Unimplemented;
+    defer body.deinit();
+
+    return evaluateTrapActionBodyWithInput(evaluator, shell_state, eval_context, body, input);
 }
 
 fn evaluateAndOrList(
@@ -9114,11 +9238,8 @@ test "semantic parser trap resolver classifies same-list function calls" {
     };
     try std.testing.expectEqual(@as(usize, 2), list.statements.len);
     switch (list.statements[1].plan) {
-        .simple => |plan| switch (plan.classification) {
-            .function => |definition| try std.testing.expectEqualStrings("fn", definition.name),
-            else => return error.ExpectedFunctionCall,
-        },
-        else => return error.ExpectedFunctionCall,
+        .source => |plan| try std.testing.expectEqualStrings("fn", plan.source),
+        else => return error.ExpectedSourceStatement,
     }
 
     var call_outcome = try evaluateTrapActionBody(&evaluator, &shell_state, eval_context, body);

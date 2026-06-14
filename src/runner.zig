@@ -1352,6 +1352,7 @@ fn semanticCommandListUnsupportedMessage(list: shell.StatementList, legacy_fallb
                 return message,
             .pipeline => |plan| if (semanticPipelineUnsupportedMessage(plan, legacy_fallback_gates)) |message|
                 return message,
+            .source => {},
         }
     }
     return null;

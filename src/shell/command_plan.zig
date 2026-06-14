@@ -242,13 +242,28 @@ pub const StatementPlan = union(enum) {
     simple: CommandPlan,
     compound: CompoundCommandPlan,
     pipeline: PipelinePlan,
+    source: SourceStatementPlan,
 
     pub fn validate(self: StatementPlan) void {
         switch (self) {
             .simple => |plan| plan.validate(),
             .compound => |plan| plan.validate(),
             .pipeline => |plan| plan.validate(),
+            .source => |plan| plan.validate(),
         }
+    }
+};
+
+pub const SourceStatementPlan = struct {
+    target: context.ExecutionTarget,
+    source: []const u8,
+    targets_stdout: bool = false,
+    targets_stderr: bool = false,
+
+    pub fn validate(self: SourceStatementPlan) void {
+        std.debug.assert(self.target.allowsShellStateCommit());
+        std.debug.assert(self.source.len != 0);
+        std.debug.assert(std.mem.indexOfScalar(u8, self.source, 0) == null);
     }
 };
 
@@ -796,6 +811,7 @@ fn cloneStatementPlan(allocator: std.mem.Allocator, plan: StatementPlan) std.mem
         .simple => |simple| .{ .simple = try cloneCommandPlan(allocator, simple) },
         .compound => |compound| .{ .compound = try cloneCompoundCommandPlan(allocator, compound) },
         .pipeline => |pipeline| .{ .pipeline = try clonePipelinePlan(allocator, pipeline) },
+        .source => |source| .{ .source = try cloneSourceStatementPlan(allocator, source) },
     };
 }
 
@@ -804,7 +820,25 @@ fn freeStatementPlan(allocator: std.mem.Allocator, plan: StatementPlan) void {
         .simple => |simple| freeCommandPlan(allocator, simple),
         .compound => |compound| freeCompoundCommandPlan(allocator, compound),
         .pipeline => |pipeline| freePipelinePlan(allocator, pipeline),
+        .source => |source| freeSourceStatementPlan(allocator, source),
     }
+}
+
+fn cloneSourceStatementPlan(
+    allocator: std.mem.Allocator,
+    plan: SourceStatementPlan,
+) std.mem.Allocator.Error!SourceStatementPlan {
+    plan.validate();
+    return .{
+        .target = plan.target,
+        .source = try allocator.dupe(u8, plan.source),
+        .targets_stdout = plan.targets_stdout,
+        .targets_stderr = plan.targets_stderr,
+    };
+}
+
+fn freeSourceStatementPlan(allocator: std.mem.Allocator, plan: SourceStatementPlan) void {
+    allocator.free(plan.source);
 }
 
 fn cloneCommandPlan(allocator: std.mem.Allocator, plan: CommandPlan) std.mem.Allocator.Error!CommandPlan {

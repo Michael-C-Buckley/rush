@@ -1,0 +1,51 @@
+.{
+    .name = "2.12 Shell Execution Environment",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "brace group commands execute in the current shell environment",
+            .script =
+            \\x=outer
+            \\{ x=inner; printf '<%s>\n' "$x"; }
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<inner>
+            \\<inner>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "subshell commands execute in a separate shell environment",
+            .script =
+            \\x=outer
+            \\( x=inner; printf '<%s>\n' "$x" )
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<inner>
+            \\<outer>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "command substitution executes in a subshell environment",
+            .script =
+            \\x=outer
+            \\printf '<%s>\n' "$(x=inner; printf '%s' "$x")"
+            \\printf '<%s>\n' "$x"
+            ,
+            .stdout =
+            \\<inner>
+            \\<outer>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}
