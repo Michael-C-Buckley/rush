@@ -75,6 +75,12 @@ pub const CommandOutcome = struct {
     state_delta: delta.StateDelta,
     control_flow: ControlFlow = .normal,
 
+    pub const ApplyOptions = struct {
+        /// Top-level command runners record exit/fatal control flow as a pending
+        /// shell exit after the command's semantic mutations are applied.
+        record_exit_control_flow: bool = false,
+    };
+
     pub fn init(allocator: std.mem.Allocator, status: ExitStatus, state_delta: delta.StateDelta) CommandOutcome {
         var outcome: CommandOutcome = .{
             .allocator = allocator,
@@ -156,6 +162,32 @@ pub const CommandOutcome = struct {
         self.validate();
         self.state_delta.discard(target);
     }
+
+    pub fn applyToShellState(
+        self: *CommandOutcome,
+        shell_state: *state.ShellState,
+        options: ApplyOptions,
+    ) !void {
+        self.validate();
+        shell_state.validate();
+
+        const target = self.state_delta.target;
+        if (target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(target)) {
+            try self.commitDelta(shell_state, target);
+        } else {
+            std.debug.assert(target.isIsolatedFromParent());
+            self.discardDelta(target);
+            shell_state.last_status = self.control_flow.status(self.status);
+        }
+
+        if (options.record_exit_control_flow) {
+            switch (self.control_flow) {
+                .exit, .fatal => |exit_status| shell_state.setPendingExit(exit_status),
+                .normal, .break_loop, .continue_loop, .return_from_scope => {},
+            }
+        }
+        shell_state.validate();
+    }
 };
 
 pub fn readonlyVariableFailure(
@@ -217,6 +249,43 @@ test "CommandOutcome owns diagnostics and commits or discards its delta" {
     try std.testing.expectEqual(delta.DeltaState.consumed, outcome.state_delta.state);
     try std.testing.expectEqualStrings("value", shell_state.getVariable("name").?.value);
     try std.testing.expectEqual(@as(ExitStatus, 5), shell_state.last_status);
+}
+
+test "CommandOutcome applies isolated command status without committing child delta" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    var state_delta = delta.StateDelta.init(std.testing.allocator, .child_process);
+    try state_delta.assignVariable("child_only", "value", .{});
+    state_delta.setLastStatus(7);
+
+    var command_outcome = CommandOutcome.init(std.testing.allocator, 7, state_delta);
+    defer command_outcome.deinit();
+
+    try command_outcome.applyToShellState(&shell_state, .{});
+    try std.testing.expectEqual(delta.DeltaState.consumed, command_outcome.state_delta.state);
+    try std.testing.expectEqual(@as(ExitStatus, 7), shell_state.last_status);
+    try std.testing.expect(shell_state.getVariable("child_only") == null);
+}
+
+test "CommandOutcome can record top-level exit control flow" {
+    var shell_state = state.ShellState.init(std.testing.allocator);
+    defer shell_state.deinit();
+
+    var state_delta = delta.StateDelta.init(std.testing.allocator, .current_shell);
+    state_delta.setLastStatus(3);
+
+    var command_outcome = CommandOutcome.withControlFlow(
+        std.testing.allocator,
+        3,
+        state_delta,
+        .{ .exit = 3 },
+    );
+    defer command_outcome.deinit();
+
+    try command_outcome.applyToShellState(&shell_state, .{ .record_exit_control_flow = true });
+    try std.testing.expectEqual(@as(ExitStatus, 3), shell_state.last_status);
+    try std.testing.expectEqual(@as(?ExitStatus, 3), shell_state.pending_exit);
 }
 
 test "CommandOutcome control-flow statuses are internally consistent" {

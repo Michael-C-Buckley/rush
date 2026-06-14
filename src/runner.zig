@@ -703,20 +703,7 @@ fn runSemanticLoweredProgram(
         try accumulated_stderr.appendSlice(allocator, command_outcome.stderr.items);
         status = command_outcome.status;
         control_flow = command_outcome.control_flow;
-        switch (control_flow) {
-            .exit, .fatal => |exit_status| shell_state.setPendingExit(exit_status),
-            .normal, .break_loop, .continue_loop, .return_from_scope => {},
-        }
-
-        const outcome_target = command_outcome.state_delta.target;
-        if (outcome_target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(outcome_target)) {
-            try command_outcome.commitDelta(shell_state, outcome_target);
-        } else {
-            std.debug.assert(outcome_target.isIsolatedFromParent());
-            command_outcome.discardDelta(outcome_target);
-            shell_state.last_status = status;
-        }
-        shell_state.validate();
+        try command_outcome.applyToShellState(shell_state, .{ .record_exit_control_flow = true });
         if (control_flow != .normal or body_failed) break;
     }
 
@@ -817,7 +804,7 @@ fn appendSemanticExitTrap(
     try stdout.appendSlice(allocator, trap_outcome.stdout.items);
     try stderr.appendSlice(allocator, trap_outcome.stderr.items);
     status.* = trap_outcome.status;
-    try trap_outcome.commitDelta(shell_state, trap_outcome.state_delta.target);
+    try trap_outcome.applyToShellState(shell_state, .{});
 }
 
 fn semanticScriptNeedsAliasTiming(script: []const u8) bool {

@@ -2237,17 +2237,10 @@ fn applyCommandSubstitutionOutcome(
     std.debug.assert(substitution_state.acceptsExecutionTarget(.subshell));
     const target = command_outcome.state_delta.target;
     std.debug.assert(target != .current_shell);
-    if (target.allowsShellStateCommit() and substitution_state.acceptsExecutionTarget(target)) {
-        command_outcome.commitDelta(substitution_state, target) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            error.ReadonlyVariable => unreachable,
-        };
-    } else {
-        std.debug.assert(target == .child_process);
-        command_outcome.discardDelta(target);
-        substitution_state.last_status = command_outcome.control_flow.status(command_outcome.status);
-    }
-    substitution_state.validate();
+    command_outcome.applyToShellState(substitution_state, .{}) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
 }
 
 fn commandSubstitutionResultFromOutcome(
@@ -2595,13 +2588,7 @@ fn runBackgroundSemanticSubshell(opaque_context: *anyopaque) u8 {
     defer result.deinit();
 
     const status = result.control_flow.status(result.status);
-    if (result.state_delta.target.allowsShellStateCommit() and
-        child_state.acceptsExecutionTarget(result.state_delta.target))
-    {
-        result.commitDelta(&child_state, result.state_delta.target) catch return 126;
-    } else {
-        result.discardDelta(result.state_delta.target);
-    }
+    result.applyToShellState(&child_state, .{}) catch return 126;
     return status;
 }
 
@@ -2920,16 +2907,10 @@ fn evaluateFallbackPipeline(
 
         try appendPipelineStageBuffers(buffers, stage_outcome, is_last_stage);
         statuses[index] = stage_outcome.control_flow.status(stage_outcome.status);
-        if (stage_target.allowsShellStateCommit() and stage_state.acceptsExecutionTarget(stage_target)) {
-            stage_outcome.commitDelta(&stage_state, stage_target) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
-                error.ReadonlyVariable => unreachable,
-            };
-        } else {
-            stage_outcome.discardDelta(stage_target);
-            stage_state.last_status = statuses[index];
-        }
-        stage_state.validate();
+        stage_outcome.applyToShellState(&stage_state, .{}) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.ReadonlyVariable => unreachable,
+        };
 
         if (!is_last_stage) {
             next_stdin.clearRetainingCapacity();
@@ -4030,17 +4011,11 @@ fn applyOutcomeToWorkingState(
     target: context.ExecutionTarget,
 ) EvalError!void {
     command_outcome.validate();
-    if (target.allowsShellStateCommit() and shell_state.acceptsExecutionTarget(target)) {
-        command_outcome.commitDelta(shell_state, target) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            error.ReadonlyVariable => unreachable,
-        };
-    } else {
-        std.debug.assert(target == .child_process or target == .subshell);
-        command_outcome.discardDelta(target);
-        shell_state.last_status = command_outcome.status;
-    }
-    shell_state.validate();
+    std.debug.assert(command_outcome.state_delta.target == target);
+    command_outcome.applyToShellState(shell_state, .{}) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadonlyVariable => unreachable,
+    };
 }
 
 fn appendOutcomeBuffers(buffers: *EvaluationBuffers, command_outcome: outcome.CommandOutcome) !void {
