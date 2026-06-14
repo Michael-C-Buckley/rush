@@ -1221,13 +1221,31 @@ const TrapActionLowerer = struct {
 
         const fs_port = self.owner.evaluator.fs_port orelse return null;
         const path_value = commandLookupPath(self.shell_state.*, command) orelse return null;
+        var first_found: ?[]const u8 = null;
+        errdefer if (first_found) |path| self.allocator.free(path);
         var parts = std.mem.splitScalar(u8, path_value, ':');
         while (parts.next()) |part| {
             const dir = if (part.len == 0) "." else part;
             const candidate = try std.mem.concat(self.allocator, u8, &.{ dir, "/", name });
             errdefer self.allocator.free(candidate);
-            if (isExecutableRegularFile(fs_port, candidate)) return .{ .name = name, .path = candidate };
-            self.allocator.free(candidate);
+            switch (externalCandidate(fs_port, candidate)) {
+                .missing => self.allocator.free(candidate),
+                .found_not_executable => {
+                    if (first_found == null) {
+                        first_found = candidate;
+                    } else {
+                        self.allocator.free(candidate);
+                    }
+                },
+                .executable => {
+                    if (first_found) |path| self.allocator.free(path);
+                    return .{ .name = name, .path = candidate };
+                },
+            }
+        }
+        if (first_found) |path| {
+            first_found = null;
+            return .{ .name = name, .path = path };
         }
         return null;
     }
@@ -1415,11 +1433,16 @@ fn commandLookupPath(shell_state: state.ShellState, command: command_plan.Expand
     return path.value;
 }
 
-fn isExecutableRegularFile(fs_port: runtime.fs.Port, path: []const u8) bool {
-    const metadata = fs_port.inspectPath(.{ .path = path }) catch return false;
-    if (metadata.stat.kind != .file) return false;
-    fs_port.access(.{ .path = path, .execute = true }) catch return false;
-    return true;
+const ExternalCandidate = enum {
+    missing,
+    found_not_executable,
+    executable,
+};
+
+fn externalCandidate(fs_port: runtime.fs.Port, path: []const u8) ExternalCandidate {
+    _ = fs_port.inspectPath(.{ .path = path }) catch return .missing;
+    fs_port.access(.{ .path = path, .execute = true }) catch return .found_not_executable;
+    return .executable;
 }
 
 pub const RuntimeSignalObservation = struct {
@@ -4676,12 +4699,13 @@ fn evaluateExternal(
     defer evaluator.allocator.free(argv);
 
     if (semanticHereDocInput(plan.redirections)) |stdin| {
-        var run_result = process_port.run(.{
-            .allocator = evaluator.allocator,
-            .argv = argv,
-            .environment = &environment,
-            .stdin = stdin,
-        }) catch |err| switch (err) {
+        var run_result = runExternalProcess(
+            evaluator,
+            process_port,
+            argv,
+            &environment,
+            stdin,
+        ) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => |run_err| {
                 const failure = runFailure(run_err);
@@ -4701,11 +4725,13 @@ fn evaluateExternal(
     if (!hasRedirections(plan) and
         (evaluator.external_stdio == .capture or evaluator.external_stdio == .capture_stdout))
     {
-        var run_result = process_port.run(.{
-            .allocator = evaluator.allocator,
-            .argv = argv,
-            .environment = &environment,
-        }) catch |err| switch (err) {
+        var run_result = runExternalProcess(
+            evaluator,
+            process_port,
+            argv,
+            &environment,
+            &.{},
+        ) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => |run_err| {
                 const failure = runFailure(run_err);
@@ -4745,13 +4771,7 @@ fn evaluateExternal(
         }
     }
 
-    var child = (process_port.spawn(.{
-        .argv = argv,
-        .environment = &environment,
-        .stdin = .inherit,
-        .stdout = .inherit,
-        .stderr = .inherit,
-    }) catch |err| switch (err) {
+    var child = (spawnExternalProcess(evaluator, process_port, argv, &environment) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => |spawn_err| {
             const failure = spawnFailure(spawn_err);
@@ -4820,12 +4840,13 @@ fn runExternalWithPipelineInput(
         }
     }
 
-    var run_result = process_port.run(.{
-        .allocator = evaluator.allocator,
-        .argv = argv,
-        .environment = &environment,
-        .stdin = buffers.stdin.takeRemaining(),
-    }) catch |err| switch (err) {
+    var run_result = runExternalProcess(
+        evaluator,
+        process_port,
+        argv,
+        &environment,
+        buffers.stdin.takeRemaining(),
+    ) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => |run_err| {
             const failure = runFailure(run_err);
@@ -4979,6 +5000,72 @@ fn externalArgv(
     @memcpy(argv[1..], plan.argv[1..]);
     assertExternalArgv(argv);
     return argv;
+}
+
+fn shellFallbackArgv(allocator: std.mem.Allocator, argv: []const []const u8) ![][]const u8 {
+    std.debug.assert(argv.len != 0);
+    const fallback_argv = try allocator.alloc([]const u8, argv.len + 1);
+    errdefer allocator.free(fallback_argv);
+    fallback_argv[0] = "/bin/sh";
+    fallback_argv[1] = argv[0];
+    @memcpy(fallback_argv[2..], argv[1..]);
+    assertExternalArgv(fallback_argv);
+    return fallback_argv;
+}
+
+fn runExternalProcess(
+    evaluator: *Evaluator,
+    process_port: runtime.process.Port,
+    argv: []const []const u8,
+    environment: *const std.process.Environ.Map,
+    stdin: []const u8,
+) runtime.process.RunError!runtime.process.RunResult {
+    return process_port.run(.{
+        .allocator = evaluator.allocator,
+        .argv = argv,
+        .environment = environment,
+        .stdin = stdin,
+    }) catch |err| switch (err) {
+        error.InvalidExe => {
+            const fallback_argv = try shellFallbackArgv(evaluator.allocator, argv);
+            defer evaluator.allocator.free(fallback_argv);
+            return process_port.run(.{
+                .allocator = evaluator.allocator,
+                .argv = fallback_argv,
+                .environment = environment,
+                .stdin = stdin,
+            });
+        },
+        else => |run_err| return run_err,
+    };
+}
+
+fn spawnExternalProcess(
+    evaluator: *Evaluator,
+    process_port: runtime.process.Port,
+    argv: []const []const u8,
+    environment: *const std.process.Environ.Map,
+) runtime.process.SpawnError!runtime.process.SpawnResult {
+    return process_port.spawn(.{
+        .argv = argv,
+        .environment = environment,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+    }) catch |err| switch (err) {
+        error.InvalidExe => {
+            const fallback_argv = try shellFallbackArgv(evaluator.allocator, argv);
+            defer evaluator.allocator.free(fallback_argv);
+            return process_port.spawn(.{
+                .argv = fallback_argv,
+                .environment = environment,
+                .stdin = .inherit,
+                .stdout = .inherit,
+                .stderr = .inherit,
+            });
+        },
+        else => |spawn_err| return spawn_err,
+    };
 }
 
 fn buildExternalEnvironment(
@@ -5580,13 +5667,31 @@ fn resolveExternalForEvaluation(
 
     const port = fs_port orelse return null;
     const path_value = commandLookupPath(shell_state, command) orelse return null;
+    var first_found: ?[]const u8 = null;
+    errdefer if (first_found) |path| allocator.free(path);
     var parts = std.mem.splitScalar(u8, path_value, ':');
     while (parts.next()) |part| {
         const dir = if (part.len == 0) "." else part;
         const candidate = try std.mem.concat(allocator, u8, &.{ dir, "/", name });
         errdefer allocator.free(candidate);
-        if (isExecutableRegularFile(port, candidate)) return .{ .name = name, .path = candidate };
-        allocator.free(candidate);
+        switch (externalCandidate(port, candidate)) {
+            .missing => allocator.free(candidate),
+            .found_not_executable => {
+                if (first_found == null) {
+                    first_found = candidate;
+                } else {
+                    allocator.free(candidate);
+                }
+            },
+            .executable => {
+                if (first_found) |path| allocator.free(path);
+                return .{ .name = name, .path = candidate };
+            },
+        }
+    }
+    if (first_found) |path| {
+        first_found = null;
+        return .{ .name = name, .path = path };
     }
     return null;
 }
