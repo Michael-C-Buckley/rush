@@ -69,5 +69,20 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "shift discards leading positional parameters",
+            .script =
+            \\set -- one two three
+            \\shift 2
+            \\printf '<%s>\n' "$#" "$1"
+            ,
+            .stdout =
+            \\<1>
+            \\<three>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

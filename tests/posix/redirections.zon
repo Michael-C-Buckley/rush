@@ -45,6 +45,20 @@
             .status = 0,
         },
         .{
+            .name = "input-output redirection opens a file for reading and writing",
+            .script =
+            \\printf '%s\n' old >rw
+            \\printf '%s\n' new 1<>rw
+            \\cat rw
+            ,
+            .stdout =
+            \\new
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "redirections are evaluated left to right when stdout is redirected before stderr duplication",
             .script =
             \\{ printf '%s\n' out; printf '%s\n' err >&2; } >both 2>&1

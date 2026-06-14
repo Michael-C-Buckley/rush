@@ -1,0 +1,96 @@
+.{
+    .name = "2.13 Pattern Matching Notation",
+    .mode = .posix,
+    .cases = .{
+        .{
+            .name = "question mark pattern matches a single pathname character",
+            .script =
+            \\: >a.c
+            \\: >b.c
+            \\: >aa.c
+            \\printf '<%s>\n' ?.c
+            ,
+            .stdout =
+            \\<a.c>
+            \\<b.c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "bracket expression matches any listed character",
+            .script =
+            \\: >a.c
+            \\: >b.c
+            \\: >c.c
+            \\printf '<%s>\n' [ab].c
+            ,
+            .stdout =
+            \\<a.c>
+            \\<b.c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "quoted pattern characters are matched literally",
+            .script =
+            \\: >a.c
+            \\printf '<%s>\n' '*.c'
+            ,
+            .stdout =
+            \\<*.c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case star pattern matches a string prefix",
+            .script =
+            \\case abc in
+            \\    a*) printf '%s\n' prefix ;;
+            \\    *) printf '%s\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\prefix
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case question marks match exact string length",
+            .script =
+            \\case abc in
+            \\    ???) printf '%s\n' length ;;
+            \\    *) printf '%s\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\length
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "case bracket expression matches any listed character",
+            .script =
+            \\case b in
+            \\    [ab]) printf '%s\n' bracket ;;
+            \\    *) printf '%s\n' bad ;;
+            \\esac
+            ,
+            .stdout =
+            \\bracket
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+    },
+}

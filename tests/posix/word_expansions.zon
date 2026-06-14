@@ -86,6 +86,21 @@
             .status = 0,
         },
         .{
+            .name = "tilde expansion applies at the start of a word and after assignment colon",
+            .script =
+            \\HOME=/tmp/posix-home
+            \\PATH=~/bin:/usr/bin
+            \\printf '<%s>\n' ~ "$PATH"
+            ,
+            .stdout =
+            \\</tmp/posix-home>
+            \\</tmp/posix-home/bin:/usr/bin>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution trims trailing newlines but preserves interior newlines",
             .script =
             \\x=$(printf 'a\n\nb\n\n')
