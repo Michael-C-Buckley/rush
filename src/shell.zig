@@ -16,6 +16,7 @@ pub const outcome = @import("shell/outcome.zig");
 pub const pipeline_plan = @import("shell/pipeline_plan.zig");
 pub const redirection_plan = @import("shell/redirection_plan.zig");
 pub const state = @import("shell/state.zig");
+pub const startup = @import("shell/startup.zig");
 pub const trap = @import("shell/trap.zig");
 
 pub const Builtin = builtin.Builtin;
