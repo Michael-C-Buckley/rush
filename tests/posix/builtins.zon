@@ -119,6 +119,23 @@
             .status = 0,
         },
         .{
+            .name = "command bypasses shell functions during command search",
+            .script =
+            \\printf() { echo function; }
+            \\printf ignored
+            \\command printf 'builtin\n'
+            \\command printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\function
+            \\builtin
+            \\<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "dot executes a file in the current environment",
             .script =
             \\printf '%s\n' 'sourced=value' >file.sh

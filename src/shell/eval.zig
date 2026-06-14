@@ -5186,7 +5186,14 @@ fn evaluateBuiltin(
         );
     }
     if (std.mem.eql(u8, definition.name, "command")) {
-        return normalEvaluation(try evaluateCommandBuiltin(plan.argv, &buffers.stdout, buffers));
+        return evaluateCommandBuiltin(
+            evaluator,
+            shell_state,
+            eval_context,
+            plan,
+            state_delta,
+            buffers,
+        );
     }
     if (std.mem.eql(u8, definition.name, "test") or
         std.mem.eql(u8, definition.name, "["))
@@ -5512,20 +5519,70 @@ fn evaluateCd(
 }
 
 fn evaluateCommandBuiltin(
-    argv: []const []const u8,
-    stdout: *std.ArrayList(u8),
+    evaluator: *Evaluator,
+    shell_state: state.ShellState,
+    eval_context: context.EvalContext,
+    plan: command_plan.CommandPlan,
+    state_delta: *delta.StateDelta,
     buffers: *EvaluationBuffers,
-) !outcome.ExitStatus {
+) EvalError!SimpleEvalResult {
+    const argv = plan.argv;
     std.debug.assert(argv.len != 0);
     std.debug.assert(std.mem.eql(u8, argv[0], "command"));
     if (argv.len == 3 and std.mem.eql(u8, argv[1], "-v")) {
         if (builtin.lookup(argv[2]) != null) {
-            try stdout.print(buffers.allocator, "{s}\n", .{argv[2]});
-            return 0;
+            try buffers.stdout.print(buffers.allocator, "{s}\n", .{argv[2]});
+            return normalEvaluation(0);
         }
-        return 1;
+        return normalEvaluation(1);
     }
-    return builtinUsageError(buffers, "command", "unsupported arguments");
+    if (argv.len == 1) return normalEvaluation(0);
+    if (std.mem.startsWith(u8, argv[1], "-") and !std.mem.eql(u8, argv[1], "-")) {
+        return normalEvaluation(try builtinUsageError(buffers, "command", "unsupported arguments"));
+    }
+
+    const command: command_plan.ExpandedSimpleCommand = .{
+        .assignments = plan.assignments,
+        .argv = argv[1..],
+        .last_command_substitution_status = plan.last_command_substitution_status,
+    };
+    const external = try resolveExternalForEvaluation(evaluator.allocator, evaluator.fs_port, shell_state, command);
+    defer if (external) |resolution| evaluator.allocator.free(resolution.path);
+    const externals: []const command_plan.ExternalResolution = if (external) |*resolution| &.{resolution.*} else &.{};
+    const target_plan = command_plan.classifyExpandedSimpleCommand(.{
+        .command = command,
+        .lookup = .{ .functions = &.{}, .externals = externals },
+        .target = eval_context.target,
+    });
+    var dispatch_state = shell_state;
+    return evaluateSimpleCommand(evaluator, &dispatch_state, eval_context, target_plan, state_delta, buffers);
+}
+
+fn resolveExternalForEvaluation(
+    allocator: std.mem.Allocator,
+    fs_port: ?runtime.fs.Port,
+    shell_state: state.ShellState,
+    command: command_plan.ExpandedSimpleCommand,
+) !?command_plan.ExternalResolution {
+    command.validate();
+    if (command.argv.len == 0) return null;
+    const name = command.argv[0];
+    if (name.len == 0) return null;
+    if (std.mem.findScalar(u8, name, '/') != null) {
+        return .{ .name = name, .path = try allocator.dupe(u8, name) };
+    }
+
+    const port = fs_port orelse return null;
+    const path_value = commandLookupPath(shell_state, command) orelse return null;
+    var parts = std.mem.splitScalar(u8, path_value, ':');
+    while (parts.next()) |part| {
+        const dir = if (part.len == 0) "." else part;
+        const candidate = try std.mem.concat(allocator, u8, &.{ dir, "/", name });
+        errdefer allocator.free(candidate);
+        if (isExecutableRegularFile(port, candidate)) return .{ .name = name, .path = candidate };
+        allocator.free(candidate);
+    }
+    return null;
 }
 
 const LoopControlKind = enum { break_loop, continue_loop };
